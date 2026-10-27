@@ -470,8 +470,6 @@ export class Tracker {
     this.rpc(ticket, '/resolve', { bug, ...said })
   archive = (ticket: string, bug: string) =>
     this.rpc(ticket, '/archive', { bug })
-  deployed = (ticket: string, app: string, version?: number) =>
-    this.rpc(ticket, '/deployed', { app, version })
   unseen = (ticket: string, app: string) =>
     this.rpc(ticket, `/unseen?app=${encodeURIComponent(app)}`)
   monitor = () => this.#run('monitor', this.#monitor)

@@ -3822,7 +3822,6 @@
       "packages/yaml/README.md: 1546c9b6fb48": 2.5
     },
     "workers/tracker/core_test.ts": {
-      "deployed resolves prior versions but keeps the serving version open": 11,
       "failed admission retries without ack and recovers on redelivery": 1.2,
       "queue commits full bundles then acks, duplicates preserve grouping and hits": 10.5,
       "queue isolates platform and each space; mixed or slug scopes never commit": 3,
@@ -3830,8 +3829,7 @@
     },
     "workers/tracker/door_test.ts": {
       "scoped RPC reads, resolves, archives and never exposes trusted intake": 10.9,
-      "tracker doors fail closed for other spaces, expired tickets and nonadmins": 3,
-      "uptime and heartbeat failures group and resolve without a yak binding": 12.2
+      "tracker doors fail closed for other spaces, expired tickets and nonadmins": 3
     },
     "workers/tracker/object_test.ts": {
       "postboot failure does not poison the object and reporting never throws": 4.2

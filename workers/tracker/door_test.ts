@@ -238,24 +238,25 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
   }
 })
 
-test('uptime and heartbeat failures group and resolve without a yak binding', async () => {
-  let g = fixture()
-  let now = Date.now()
-  await monitor(
-    g,
-    now - 300_001,
-    () => Promise.resolve(new Response(null, { status: 503 })),
-    now,
+// Answering again is not a cause: the outage's bugs stay open for an agent.
+let outage = fixture()
+let downAt = Date.now()
+await monitor(
+  outage,
+  downAt - 300_001,
+  () => Promise.resolve(new Response(null, { status: 503 })),
+  downAt,
+)
+await outage.drain()
+let opened = (await outage.unseen()).length
+let healthy = () => Promise.resolve(new Response(null, { status: 405 }))
+
+test('uptime and heartbeat failures group, and stay open once healthy, without a yak binding', async () => {
+  await monitor(outage, downAt, healthy, downAt)
+  equal(
+    [opened, (await outage.bugs(undefined, '.bug.status=open')).length],
+    [3, 3],
   )
-  await g.drain()
-  equal((await g.unseen()).length, 2)
-  await monitor(
-    g,
-    now,
-    () => Promise.resolve(new Response(null, { status: 405 })),
-    now,
-  )
-  equal((await g.unseen()).length, 0)
 })
 
 let marked = fixture()
@@ -285,7 +286,7 @@ let elsewhere = await sign({
   mark: true,
   exp: Date.now() / 1000 + 60,
 }, secret)
-for (let path of ['/resolve', '/archive', '/take', '/deployed']) {
+for (let path of ['/resolve', '/archive', '/take']) {
   for (
     let [kind, token] of [['reader', reader], ['intake', intakeOnly], [
       'other scope',
@@ -294,12 +295,7 @@ for (let path of ['/resolve', '/archive', '/take', '/deployed']) {
   ) {
     test(`tracker ${path} refuses ${kind} tickets without marking bugs`, async () => {
       equal(
-        (await markDoor(request(
-          path,
-          token,
-          path == '/deployed' ? { app: space } : { bug: other },
-        )))
-          .status,
+        (await markDoor(request(path, token, { bug: other }))).status,
         403,
       )
       let [bug] = await marked.graph.get([other], [

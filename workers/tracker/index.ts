@@ -41,9 +41,6 @@ export class Tracker extends DurableObject<Env> {
   archive(ticket: string, bug: string) {
     return this.tracker.archive(ticket, bug)
   }
-  deployed(ticket: string, app: string, version?: number) {
-    return this.tracker.deployed(ticket, app, version)
-  }
   unseen(ticket: string, app: string) {
     return this.tracker.unseen(ticket, app)
   }

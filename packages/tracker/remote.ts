@@ -68,9 +68,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...['resolve', 'archive', 'take', 'deployed'].includes(path)
-      ? { mark: true }
-      : {},
+    ...['resolve', 'archive', 'take'].includes(path) ? { mark: true } : {},
   }
   let last: unknown
   // Signing is deterministic: attempts within one second carry the same

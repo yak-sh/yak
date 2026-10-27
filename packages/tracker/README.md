@@ -46,13 +46,12 @@ but a full sha, at every door. The tool asks for `broke` too:
 yak bug resolve <bug> --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'
 ```
 
-The tracker resolves bugs itself in two places, and says why there too: a probe
-that passes again (workers/tracker `monitor`), and an app version deployed
-without the bug (`deployed`). A fixer resolves its bug as its last step
-([heal](../heal/README.md)). The resolved letter, the bug's page, `yak bug show`
-and `yak admin errors` read the same explanation (`explained` in
-`./resolution`). Bugs resolved before explanations were kept have none, and say
-so.
+A bug that stopped is not resolved: the tracker never resolves one itself, and
+one stays open until whoever finds its cause, or judges it a one-off, resolves
+it. A fixer resolves its bug as its last step ([heal](../heal/README.md)). The
+resolved letter, the bug's page, `yak bug show` and `yak admin errors` read the
+same explanation (`explained` in `./resolution`). Bugs resolved before
+explanations were kept have none, and say so.
 
 ## Host interface
 
@@ -299,7 +298,7 @@ interrupted and repeated delivery safe.
 
 A **standing pass** reads remote bug marks every thirty seconds and reconciles
 matching box groups by global eid or their fault and app. The Worker owns
-resolved, archived, taken, regressed and deployed marks; the box retains its own
+resolved, archived, taken and regressed marks; the box retains its own
 occurrences and counters. Remote-only bugs are not imported, and newer local
 evidence is not closed by an older remote snapshot. A guarded patch leaves a
 group changed concurrently for the next pass.

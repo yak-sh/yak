@@ -1,44 +1,11 @@
-// Healthy probes resolve outstanding faults once and leave settled history alone.
+// A failed door files its own bug; a healthy one resolves nothing.
 import type { Bundle } from '@yaks/graph'
-import { ram } from '@yaks/ram'
 import { equal, test } from '@yaks/testing'
-import { options, store, vocab } from './core.ts'
 import { monitor } from './monitor.ts'
 
 let now = Date.parse('2026-10-10T00:00:00Z')
-let uptime = 'tracker|platform-uptime', heartbeat = 'tracker|box-heartbeat'
-let fixture = async () => {
-  let storage = ram(vocab, options)
-  let tracker = store(storage, { sink: () => {} })
-  await tracker.graph.apply([
-    ...[uptime, heartbeat].flatMap((fault) =>
-      ['open', 'resolved', 'archived'].map((state) => ({
-        entity: { eid: `${fault}|${state}` },
-        bug: { fault },
-        ...state == 'open'
-          ? {}
-          : { [state]: state == 'resolved' ? { cause: 'c', recur: 'r' } : {} },
-      }))
-    ),
-    { entity: { eid: 'unrelated' }, bug: { fault: 'other' } },
-  ], { trusted: true })
-  let writes: Bundle[] = [], selected: Bundle[] = []
-  let read = tracker.graph.read
-  tracker.mark = (eid, name, said) => {
-    let patch = { entity: { eid }, [name]: { ...said } }
-    writes.push(patch)
-    storage.tx((tx) => tx.patch([patch]))
-    return Promise.resolve()
-  }
-  tracker.graph.read = async (...args) => {
-    let rows = await read(...args)
-    selected.push(...rows)
-    return rows
-  }
-  return { tracker, storage, writes, selected }
-}
-let healthy =
-  (() => Promise.resolve(new Response(null, { status: 405 }))) as typeof fetch
+let answer = (status: number) =>
+  (() => Promise.resolve(new Response(null, { status }))) as typeof fetch
 // An app's door that sends nothing: its fetch ends at the deadline, with the
 // error `AbortSignal.timeout` aborts one with.
 let late = new DOMException('timed out', 'TimeoutError')
@@ -46,53 +13,48 @@ let hangs =
   ((url: string) =>
     url.includes('/api/me')
       ? Promise.reject(late)
-      : healthy(url)) as typeof fetch
-let recovered = await fixture()
-await monitor(recovered.tracker, now, healthy, now)
-let recovering = await fixture()
-let hanging = await fixture()
+      : answer(405)(url)) as typeof fetch
+// What one pass files, as [fault, message] pairs.
+let filed = async (send: typeof fetch, last?: number) => {
+  let rows: Bundle[] = []
+  await monitor(
+    { ingest: (b) => (rows.push(...b), Promise.resolve()) },
+    last,
+    send,
+    now,
+  )
+  return JSON.parse(JSON.stringify(rows.filter((b) => b.error)))
+    .map((b: Bundle & { error: { fault: string } }) => [
+      b.error.fault,
+      (b.exception as { value: string }).value,
+    ])
+}
 
-test('healthy monitor after recovery reads no historical bugs and writes nothing', async () => {
-  recovered.writes.length = 0
-  recovered.selected.length = 0
-  await monitor(recovered.tracker, now, healthy, now)
-  equal(recovered.writes, [])
-  equal(recovered.selected, [])
+test('healthy doors and a fresh heartbeat file nothing and resolve nothing', async () => {
+  equal(await filed(answer(405), now), [])
 })
 
-test('monitor recovery resolves only open faults and selects their identities', async () => {
-  recovering.storage.tx((tx) =>
-    tx.patch(
-      [uptime, heartbeat].map((fault) => ({
-        entity: { eid: `${fault}|open` },
-        resolved: null,
-      })),
-    )
-  )
-  recovering.writes.length = 0
-  recovering.selected.length = 0
-  await monitor(recovering.tracker, now, healthy, now)
-  equal(
-    recovering.writes.map((b) => b.entity.eid).sort(),
-    [uptime, heartbeat].map((fault) => `${fault}|open`).sort(),
-  )
-  equal(recovering.selected.length, 2)
-  equal(recovering.selected.map((b) => Object.keys(b)), [['entity'], [
-    'entity',
+test('each door that fails files the bug of that door', async () => {
+  equal(await filed(answer(500)), [
+    ['tracker|platform-uptime|MCP', 'MCP probe: 500 from https://yaks.app/mcp'],
+    [
+      'tracker|platform-uptime|app',
+      'app probe: 500 from https://yourname.yaks.app/recipes/api/me',
+    ],
+  ])
+})
+
+test('a door that hangs past the deadline files the bug naming it', async () => {
+  equal(await filed(hangs), [[
+    'tracker|platform-uptime|app',
+    'app probe: no answer within 10 s from ' +
+    'https://yourname.yaks.app/recipes/api/me',
   ]])
 })
 
-test('a door that hangs past the deadline files the uptime bug naming it', async () => {
-  let { tracker } = hanging
-  let filed: Bundle[] = []
-  tracker.ingest = (rows) => (filed.push(...rows), Promise.resolve())
-  // No heartbeat yet: only the doors are asked.
-  await monitor(tracker, undefined, hangs, now)
-  let [row] = JSON.parse(JSON.stringify(filed.filter((b) => b.error)))
-  equal([row.error.fault, row.error.level, row.exception.value], [
-    uptime,
-    'fatal',
-    'app probe: no answer within 10 s from ' +
-    'https://yourname.yaks.app/recipes/api/me',
-  ])
+test('an overdue heartbeat files the heartbeat bug', async () => {
+  equal(await filed(answer(405), now - 300_001), [[
+    'tracker|box-heartbeat',
+    'Box heartbeat overdue',
+  ]])
 })

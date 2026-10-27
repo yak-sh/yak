@@ -9,7 +9,7 @@ import { comp, type Desk, str } from './model.ts'
 import type { Remote } from './remote.ts'
 import { type Page, signed, since } from './poll.ts'
 
-let marks = ['resolved', 'archived', 'taken', 'regressed', 'deployed'] as const
+let marks = ['resolved', 'archived', 'taken', 'regressed'] as const
 let app = (row: Bundle) => str(comp(row, 'bug').app ?? comp(row, 'during').app)
 
 /** Global ids survive transport; older migrated groups instead share fault

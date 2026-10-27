@@ -48,30 +48,28 @@ let bugs = await fetch(`${trackerUrl}/bugs?scope=${spaceEid}&app=${appEid}`, {
 ```
 
 Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
-`/vocab`, `/ws`, `POST /resolve` and `/archive` with `{bug}`, and
-`POST /deployed` with `{app}`. `/ws?scope=…&ticket=…` accepts subscriptions,
-unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
-General `/apply` is absent. `POST /resolve` and `/archive` require a separately
-signed `mark: true` capability and exactly `{bug: <global-bug-eid>}`.
-`POST /deployed` requires the same capability to resolve prior versions. Reader
-and intake tickets cannot mark bugs. Missing bugs are refused with 404;
-malformed marks with 400. Platform-only `POST /errors` accepts immutable error
-captures with a separately signed `ingest: true` capability; ordinary read
-tickets cannot submit captures. Box reporters retain their outbox until this
-intake admits their records. Retrying a capture preserves its global eid and
-counts it once. `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns
-bug bundles, filtered and ordered before its 1–100 limit. Without `query` it
-includes all bug statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug
-followed by its retained occurrences, or 404 when absent. Both forms are
-read-only, and both carry the store's **tag** as their `ETag`: it moves in the
-transaction of every commit beyond the effect pool's and the scheduler's
-bookkeeping and the traces, and is kept in the object's `server_meta`, since the
-object hibernates ten seconds after its last request and wakes as a new
-instance. A reader that sends the tag it holds as `If-None-Match` (compared
-weakly, since Cloudflare marks it `W/` when it compresses the answer) is
-answered 304 while it stands, reading only the tag's row; the box's poll and its
-reconciliation of standing both do, so a tracker whose bugs have not moved costs
-their 30 s polls a row each.
+`/vocab`, `/ws`, and `POST /resolve` and `/archive` with `{bug}`.
+`/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
+relay writes. `/query` returns graph bundles. General `/apply` is absent.
+`POST /resolve` and `/archive` require a separately signed `mark: true`
+capability and exactly `{bug: <global-bug-eid>}`. Reader and intake tickets
+cannot mark bugs. Missing bugs are refused with 404; malformed marks with 400.
+Platform-only `POST /errors` accepts immutable error captures with a separately
+signed `ingest: true` capability; ordinary read tickets cannot submit captures.
+Box reporters retain their outbox until this intake admits their records.
+Retrying a capture preserves its global eid and counts it once.
+`GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
+filtered and ordered before its 1–100 limit. Without `query` it includes all bug
+statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug followed by its
+retained occurrences, or 404 when absent. Both forms are read-only, and both
+carry the store's **tag** as their `ETag`: it moves in the transaction of every
+commit beyond the effect pool's and the scheduler's bookkeeping and the traces,
+and is kept in the object's `server_meta`, since the object hibernates ten
+seconds after its last request and wakes as a new instance. A reader that sends
+the tag it holds as `If-None-Match` (compared weakly, since Cloudflare marks it
+`W/` when it compresses the answer) is answered 304 while it stands, reading
+only the tag's row; the box's poll and its reconciliation of standing both do,
+so a tracker whose bugs have not moved costs their 30 s polls a row each.
 
 Beside the tag the store keeps the **moves**: each entity those commits wrote,
 under the count it moved the tag to, the latest thousand of them, with an
@@ -148,13 +146,15 @@ report errors; ordinary tracker work handles notifications independently.
 Platform-only `POST /heartbeat` renews the box heartbeat. Each minute the cron
 probes the MCP endpoint and an app's `api/me` (`PROBES` in monitor.ts), which
 reads the directory on every request, so a stalled directory fails it. A door
-that errors, or sends nothing within 10 s, files one fatal `platform-uptime`
-bug, resolved once every door answers again. The cron also tracks an activated
-box heartbeat older than five minutes. Each tracker graph sends one letter per
-new bug opening through its own `MAIL` binding, with `MAIL_FROM` and `MAIL_TO`
-configured at activation. Space bugs stream through their store's graph
-subscription and remain unseen until their caller marks notification in the
-platform integration.
+that errors, or sends nothing within 10 s, files a fatal occurrence on that
+door's own bug (`tracker|platform-uptime|MCP`, `…|app`), and an activated box
+heartbeat older than five minutes files one on `tracker|box-heartbeat`. A door
+that answers again resolves nothing: the bug stays open until an agent finds why
+it failed, and its last occurrence says when it stopped. Each tracker graph
+sends one letter per new bug opening through its own `MAIL` binding, with
+`MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs stream through
+their store's graph subscription and remain unseen until their caller marks
+notification in the platform integration.
 
 ## Activation and deployment
 

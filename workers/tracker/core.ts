@@ -23,7 +23,6 @@ import { caught, origin, type Sink } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
 import { type Explanation, resolutions } from '@yaks/tracker/resolution'
 import {
-  absent,
   after,
   and,
   conjoin,
@@ -352,36 +351,6 @@ export let store = (storage: Storage, config: Config) => {
     bug: (eid: string) => bug(g, eid),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
-    deployed: async (app: string, version?: number) => {
-      let bugs = await g.read(
-        and(eq('bug.app', app), absent('resolved'), every()),
-      )
-      let old: Bundle[] = []
-      for (let bug of bugs) {
-        let [current] = version == null ? [] : await g.read(and(
-          eq('error.bug', bug.entity.eid),
-          eq('error.version', version),
-          limit(1),
-        ))
-        if (!current) old.push(bug)
-      }
-      // Nobody looked at why; the new version simply has not hit it.
-      let release = version == null ? 'a new version' : `version ${version}`
-      if (old.length) {
-        await g.apply(
-          old.map((bug) => ({
-            entity: bug.entity,
-            resolved: {
-              cause:
-                `Not investigated: the app deployed ${release}, and it has not happened in it.`,
-              recur:
-                'It can: if it happens in a version it has not happened in before, it reopens.',
-            },
-          })),
-          { trusted: true },
-        )
-      }
-    },
   }
 }
 export type TrackerStore = ReturnType<typeof store>

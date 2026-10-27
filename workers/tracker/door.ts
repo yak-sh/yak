@@ -227,19 +227,5 @@ async (request: Request): Promise<Response> => {
     }
     return json({ ok: true })
   }
-  if (request.method == 'POST' && path == '/deployed') {
-    if (access.mark !== true) {
-      return json({ error: 'tracker bug marks denied' }, 403)
-    }
-    let body = await request.json()
-    if (typeof body.app != 'string') {
-      return json({ error: 'app eid required' }, 400)
-    }
-    await tracker.deployed(
-      body.app,
-      typeof body.version == 'number' ? body.version : undefined,
-    )
-    return json({ ok: true })
-  }
   return json({ error: 'tracker route not found' }, 404)
 }
