@@ -51,46 +51,64 @@ export let vocab = loadVocab([
   timingDoc,
 ], [kernelKeywords])
 export let options = { computed, derived: derived(), number: true }
+/** Where a store keeps a few facts of its own beside the graph (@yaks/sqlite
+ * `meta`): the tracker keeps its bugs' tag there. */
+export type Kept = {
+  get: (k: string) => string | undefined
+  set: (k: string, v: string) => void
+}
 export type Config = Options & {
   sink: Sink
   sender?: Sender
   report?: (error: unknown) => void | Promise<void>
+  /** where the bugs' tag is kept, so the instance a Durable Object wakes as
+   * after hibernating answers a reader as the one before did; without it,
+   * the tag lives as long as the store */
+  kept?: Kept
 }
 // What a reader of the bugs needs to read again: a commit that writes
-// anything beyond the effect pool's and the scheduler's bookkeeping. Each one
-// moves the store's tag, and the bugs door answers a reader that sends the
-// tag it holds with 304 and no row read (door.ts). A store's tag starts fresh
-// with each instance, so a reader of the one before is answered in full.
+// anything beyond the effect pool's and the scheduler's bookkeeping, where a
+// finished run's delete says what it was by its guard (`$was`). Each such
+// commit moves the store's tag in its own transaction, and the bugs door
+// answers a reader that sends the tag it holds with 304, reading only the
+// tag (door.ts). The tag is `era.count`; an era begins where no count was
+// kept before.
 let STAMPS = new Set(['entity', 'created', 'updated'])
 let BOOKKEEPING = new Set(['effect', 'lease', 'worker', 'wake', 'fired'])
-let tagging = () => {
-  let born = crypto.randomUUID().slice(0, 8), moved = 0
-  // The bookkeeping rows written since this instance began. A delete names
-  // only its eid, so a finished run's delete moves nothing only when its row
-  // is one of these; a row from before is read again once.
-  let kept = new Set<string>()
-  let moves = (b: Bundle) => {
-    let eid = b.entity.eid
-    if (b.$delete) return !kept.delete(eid)
-    let keys = Object.keys(b).filter((k) => !STAMPS.has(k) && k[0] != '$')
-    if (!keys.every((k) => BOOKKEEPING.has(k))) return kept.delete(eid), true
-    if (keys.length) kept.add(eid)
-    return false
-  }
+let TAG = 'bugs-tag'
+let only = (names: string[]) =>
+  names.length > 0 && names.every((k) => BOOKKEEPING.has(k))
+// A trace is read through its own doors (`traces`, `trace`), never the bugs'.
+let TRACED = ['trace', 'span']
+let news = (b: Bundle) =>
+  b.$delete
+    ? !only(Object.keys(b.$was ?? {}))
+    : !TRACED.some((k) => k in b) && !Object.keys(b).every((k) =>
+      STAMPS.has(k) || k[0] == '$' || BOOKKEEPING.has(k)
+    )
+let era = () => crypto.randomUUID().slice(0, 8)
+let memory = (): Kept => {
+  let held = new Map([[TAG, `${era()}.0`]])
+  return { get: (k) => held.get(k), set: (k, v) => void held.set(k, v) }
+}
+let tagging = (kept: Kept = memory()) => {
   let plugin: Plugin = {
     name: '@yaks/tracker/tag',
     hooks: {
-      effect: (bundles) => {
-        if (bundles.map(moves).includes(true)) moved++
+      commit: (bundles) => {
+        if (bundles.some(news)) {
+          let [at, n] = kept.get(TAG)?.split('.') ?? [era(), '0']
+          kept.set(TAG, `${at}.${Number(n) + 1}`)
+        }
         return bundles
       },
     },
   }
-  return { plugin, tag: () => `"${born}.${moved}"` }
+  return { plugin, tag: () => `"${kept.get(TAG) ?? '0'}"` }
 }
 
 export let store = (storage: Storage, config: Config) => {
-  let tags = tagging()
+  let tags = tagging(config.kept)
   let fx = effects(vocab, {
     singleOwner: true,
     defer: true,

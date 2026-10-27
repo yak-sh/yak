@@ -57,13 +57,15 @@ counts it once. `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns
 bug bundles, filtered and ordered before its 1–100 limit. Without `query` it
 includes all bug statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug
 followed by its retained occurrences, or 404 when absent. Both forms are
-read-only, and both carry the store's **tag** as their `ETag`: it moves with
-every commit beyond the effect pool's and the scheduler's bookkeeping, and
-starts fresh with each instance of the object. A reader that sends the tag it
-holds as `If-None-Match` (compared weakly, since Cloudflare marks it `W/` when
-it compresses the answer) is answered 304, with no row read, while it stands;
-the box's poll and its reconciliation of standing both do, so a tracker whose
-bugs have not moved costs their 30 s polls nothing.
+read-only, and both carry the store's **tag** as their `ETag`: it moves in the
+transaction of every commit beyond the effect pool's and the scheduler's
+bookkeeping and the traces, and is kept in the object's `server_meta`, since the
+object hibernates ten seconds after its last request and wakes as a new
+instance. A reader that sends the tag it holds as `If-None-Match` (compared
+weakly, since Cloudflare marks it `W/` when it compresses the answer) is
+answered 304 while it stands, reading only the tag's row; the box's poll and its
+reconciliation of standing both do, so a tracker whose bugs have not moved costs
+their 30 s polls a row each.
 `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns

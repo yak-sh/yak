@@ -139,6 +139,12 @@ export class Tracker {
       repo: 'https://github.com/yak-sh/yak',
       side: 'yaks.app',
       forwarded: ['box', 'app'],
+      // The object hibernates ten seconds after its last request, so the
+      // bugs' tag is kept in its storage, not its memory.
+      kept: {
+        get: (k) => this.#traceMeta().get(k),
+        set: (k, v) => this.#traceMeta().set(k, v),
+      },
       ...env.MAIL
         ? {
           sender: {
