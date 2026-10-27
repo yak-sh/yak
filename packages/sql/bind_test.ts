@@ -98,6 +98,20 @@ test('the derived hook supplies a computed property expression', () => {
   assertEquals(params, ['open'])
 })
 
+// A derived property is a program, not a seek, so the narrowing an OR's arms
+// are given leaves it beside them, written once.
+test('a derived test beside a disjunction is written once', () => {
+  let marked: Derived = {
+    'task.status': { tag: 'enum', values: ['open'], expr: () => lit('mark') },
+  }
+  let { sql } = compile(
+    parse('.task.status=open (.doc.title=a|.note.stars=1)'),
+    v,
+    { derived: marked },
+  )
+  assertEquals(sql.split(`'mark'`).length - 1, 1, sql)
+})
+
 test('a computed property with no registration declines loudly', () => {
   assertThrows(
     () => compile(parse('.task.status=open'), v),

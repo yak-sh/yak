@@ -2098,7 +2098,7 @@ let addressed = (
     c.kind == 'pred' && !c.not && !c.where && !claims(ctx, 'pred') &&
     (c.path.join('.') == 'entity.eid' && c.op == '=' && c.value != null ||
       c.path.length == 1 && c.op == '!' ||
-      c.path.length == 2 && needs(opOf(c), c.value))
+      c.path.length == 2 && needs(opOf(c), c.value) && carried(ctx, c))
   )
   return scope.length && !ctx.row
     ? cs.map((c) =>
@@ -2113,6 +2113,16 @@ let addressed = (
         : c
     )
     : cs
+}
+
+// Whether a value test narrows an arm it is carried into. A derived property
+// is a program of its own, not a seek: each arm would write and run it again,
+// and `.session.status=… (.entries.using|.entries.ask)` held three copies of
+// the status rule, 15 ms to prepare and seconds to run over the box's graph.
+// A ladder's status is presence and absence, which the arms are given anyway.
+let carried = (ctx: Ctx, c: Pred): boolean => {
+  let key = c.path.join('.')
+  return !ctx.derived[key] || ctx.derived[key] === ladders(ctx.v)[key]
 }
 
 // One filter clause compiled to a condition. Directives are removed before this
