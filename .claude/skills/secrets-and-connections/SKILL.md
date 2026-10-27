@@ -68,14 +68,13 @@ when its entity is deleted, and can be scoped by a sentinel.
 - **The box's backup leaves the vault out** (`bin/backup` carries the
   databases and the directories it names, never `secrets/`). A value kept only
   there is lost with the box.
-- **1Password**: a value written as `op://<vault>/<item>/<field>` is kept as
-  that reference and read with `op read` each time it is used, cached for 30
-  seconds (packages/secrets/op.ts, reveal.ts `TTL`). The value never rests on
-  the box. A failed read is a missing secret, never a fall to the environment;
-  it is kept as long, and reported to the host's tracker once until a read of
-  it succeeds (reveal.ts `faults`). The account allows 1,000 reads a day (`op
-  service-account ratelimit`), so a read in every process that starts uses it
-  up within hours: only a process that uses a value reads it.
+- **1Password**: a person's interactive command can read an `op://` reference
+  explicitly with `opRead` (packages/secrets/op.ts). Servers, timers and duties
+  read local vault values. The box's systemd units have no 1Password sign-in,
+  and background reads also exhaust the account's 1,000-read daily allowance.
+  A reference kept in a vault is unresolved: `reveal` and `peek` return
+  `undefined`, without reading 1Password or falling to another credential in
+  the environment. The reference is never returned as a credential.
 - **yaks.app**: the directory's store (`yak/platform`) seals into the `VAULT` D1
   database, every value encrypted under `VAULT_KEY` (packages/d1/vault.ts,
   workers/yak/vault.ts). An app's own store runs no secrets plugin and keeps no
@@ -84,20 +83,18 @@ when its entity is deleted, and can be scoped by a sentinel.
 
 ## Reading one
 
-`reveal(vault, name)` answers from three places, first match wins
-(packages/secrets/reveal.ts): the value the vault keeps, the `op://` reference
-it keeps (read now), then the environment variable of the same name. The
-fallback is why a name a service exports needs nothing written, and why writing
-the name through the graph overrides the export. It is a fallback, not where a
-new key goes, and on yaks.app there is no environment to fall to.
+`reveal(vault, name)` answers from the value the vault keeps, then the
+same-named environment variable when the vault has no value
+(packages/secrets/reveal.ts). The fallback is why a name a service exports needs
+nothing written, and why writing the name through the graph overrides the
+export. It is a fallback, not where a new key goes, and on yaks.app there is no
+environment to fall to. A kept `op://` reference stays unresolved.
 
 - **In a config** (`~/.yak/yak.json`, a plugin's `with`), a key is `{"secret":
   "NAME"}` where the value would go. The CLI host reads it each time the
-  property is read (packages/cli/host.ts `revealing`, @yaks/secrets `peek`); a
-  1Password one is read the first time a process reads the property, never as
-  the process starts, so naming one in a config costs nothing to a process
-  whose code never reads it. A plugin that
-  re-reads its options picks up a key written after start without a restart. A
+  property is read (packages/cli/host.ts `revealing`, @yaks/secrets `peek`). A
+  plugin that re-reads its options picks up a local vault value written after
+  start without a restart. A
   name nobody supplied reads `undefined`, and the plugin says what it is waiting
   for. Mail, tunnel and embedding take their tokens this way
   (packages/mail/README.md, packages/embedding/README.md).
@@ -119,21 +116,26 @@ is the secret's public face: listings show the name and the title, never the
 body, the value or even the handle (packages/secrets/views.ts), so the doc
 carries the purpose and nothing that is the credential.
 
-Write a reference, not a value:
+Values stay out of command arguments and transcripts. The plugin strips a
+value out of `graph_apply`'s own call record, but the command an agent typed is
+already in its transcript. @yaks/session imports transcripts into the graph,
+scrubbing only credential shapes it recognizes (packages/session/readers.ts
+`scrub`). A value an agent typed is a value leaked, and so is one the owner
+pasted into a chat.
 
-```sh
-yak graph apply --bundles '[{"entity":{"eid":"$s"},"secret":{"name":"NAME","value":"op://<vault>/<item>/<field>"},"doc":{"title":"Service access","body":"Used by the service integration to authenticate outgoing requests."}}]'
-```
+For a value held in 1Password, an interactive local script reads it with
+`opRead` and passes it directly into the box's vault in memory. It never prints
+the value or sends it to another machine. For an existing vault reference,
+`vault.lock(secretEid(name), ...)` holds the record while `vault.read` supplies
+its handle and `vault.seal` replaces its `op` field with `value`. Keep the same
+handle, name and vault salt, so authentication and sentinels keep working. A
+config continues to name the secret with `{"secret": "NAME"}`. Writing only an
+`op://` reference through the graph does not supply a runtime credential.
 
-The plugin also strips a value out of `graph_apply`'s own call record, so the
-graph never holds it either way. Your transcript does: the command you ran is
-in it, and @yaks/session imports transcripts into the graph, scrubbing only the
-credential shapes it recognizes (packages/session/readers.ts `scrub`). A value
-an agent typed is a value leaked, and so is one the owner pasted into a chat.
-So an agent writes an `op://` reference, and a person enters a value where no
-transcript sees it: `yak auth [name]` takes a sign-in's return URL as masked
-input, `yak auth --key` takes an agent grant or service key the same way, and
-yaks.app's connections page takes a pasted key.
+A person can also enter a value where no transcript sees it: `yak auth [name]`
+takes a sign-in's return URL as masked input, `yak auth --key` takes an agent
+grant or service key the same way, and yaks.app's connections page takes a
+pasted key.
 
 To check one: `yak graph query '.secret.name=NAME&*'`. It wears `provisional`
 while its value is on the way to the vault, with `content` explaining a retry,
@@ -164,7 +166,8 @@ signal to give it a row instead.
 
 - **An OAuth client** is a secret, `oauth_client <name>`. yaks.app's is kept
   with `yak admin client <name> <id> [secret] --as admin@bot.yak.sh`, whose id
-  and secret are `op://` references read there and never printed.
+  and secret are `op://` references read by that interactive command and never
+  printed. Servers do not run this command.
 - **On the box**, the harness's sign-ins (OpenAI, OpenRouter, MCP servers) are
   connections in the box's vault; `yak auth` lists them and signs in. Nothing on
   the box swaps a sentinel for an agent's own fetch yet (T-39537).
@@ -274,9 +277,9 @@ with the child it was handed to.
 - **A connection `broken`**: the service refused the grant; the person connects
   it again. A failure on the wire does not break it.
 - **`{"secret": "NAME"}` reads `undefined`**: nothing was written for that name,
-  no variable of that name is exported, or `op read` failed (reported to the
-  tracker as `op read`: `NAME could not be read from 1Password: …`). A probe's
-  own vault starts empty.
+  no variable of that name is exported, or the vault holds an unresolved
+  `op://` reference. Import the value into the box's vault interactively. A
+  probe's own vault starts empty.
 - **"OpenAI is not connected"**: the harness has no OpenAI sign-in; `yak auth`.
 
 When this skill is wrong or missing something, fix it in the same change.

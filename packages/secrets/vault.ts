@@ -13,14 +13,14 @@
 
 import type { Eid } from '@yaks/graph'
 
-/** What a vault keeps for one secret: the handle the graph holds for it, and
- * the value — or, for a value that lives in 1Password, the `op://` reference
- * it is read from at the moment it is used. */
+/** What a vault keeps for one secret: the handle the graph holds for it and
+ * the value. References are kept separately so they cannot be sent as values. */
 export type Sealed = {
   /** the secret's name, where the write carried it */
   name?: string
   handle: string
   value?: string
+  /** An unresolved 1Password reference; runtime readers return no value. */
   op?: string
 }
 

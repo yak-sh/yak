@@ -184,10 +184,10 @@ graph: one private file per secret in a `secrets` directory beside the database
 opens a graph without `compose`.
 
 At any depth in `with`, an object containing only `{ "secret": "NAME" }` reads
-that secret when the property is accessed: the value in the vault, the 1Password
-value it is bound to, or else the environment variable `NAME`. This keeps
-secrets out of the JSON file and lets a long-running plugin observe a value
-supplied after startup. A secret nobody supplied produces `undefined`; the
+that secret when the property is accessed: the local value in the vault, or else
+the environment variable `NAME`. Runtime reads never invoke 1Password. This
+keeps secrets out of the JSON file and lets a long-running plugin observe a
+value supplied after startup. A secret nobody supplied produces `undefined`; the
 plugin decides how to handle it.
 
 Plugin factories may omit functionality when configuration is unavailable. Any

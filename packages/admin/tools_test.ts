@@ -259,25 +259,20 @@ test('infrastructure rejects a throwaway but accepts the admin and own account w
   }
 })
 
-test('invalid basis points and credential values are rejected before reading accounts', async () => {
+for (let bps of ['2.5', '-5', 'lots']) {
   let { host, ask } = await box()
-  try {
-    for (let bps of ['2.5', '-5', 'lots']) {
+  test(`invalid basis points ${bps} are rejected before reading accounts`, async () => {
+    try {
       await assertRejects(
         () => ask('admin_fee', { bps }),
         CallError,
         'basis points',
       )
+    } finally {
+      await host.close()
     }
-    await assertRejects(
-      () => ask('admin_client', { name: 'google', id: 'plaintext' }),
-      CallError,
-      'op://',
-    )
-  } finally {
-    await host.close()
-  }
-})
+  })
+}
 
 test('an interrupted platform operation is cut off, not refused', () => {
   equal(assertThrows(() => ended('errors', 130), Interrupted).code, 'signal')

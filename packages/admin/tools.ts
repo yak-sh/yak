@@ -5,14 +5,7 @@ import { basename, dirname } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
-import {
-  isOpRef,
-  opRead,
-  records,
-  reveal,
-  sealed,
-  type Vault,
-} from '@yaks/secrets'
+import { reveal, sealed, type Vault } from '@yaks/secrets'
 import { CallError } from '@yaks/tools/errors'
 import { Interrupted } from '@yaks/tools/errors'
 import { said } from '@yaks/tools/result'
@@ -20,7 +13,8 @@ import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
-import { accountCredential, AccountError, authorize } from '@yaks/connections'
+import { authorize } from '@yaks/connections'
+import { type Account, account } from './account.ts'
 import { authorizeCLI } from '@yaks/connections/authorize-cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
 import { ADMIN, BOT } from '../../workers/yak/lib/bots.ts'
@@ -32,7 +26,6 @@ import {
   close,
   doomedIn,
   feeNow,
-  keepClient,
   linkFor,
   moveIn,
   renewing,
@@ -104,8 +97,6 @@ let pushNote = (p: PushProgress) => {
     )
   }
 }
-
-type Account = { address: string; bearer: string; session?: string }
 
 // Browser-only acts cannot synthesize a cookie from an OAuth bearer.
 let website = (at: Account): string => {
@@ -198,42 +189,7 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
 export let runs = (
   host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping'>,
 ): Runs => {
-  let acting = async (a: Args): Promise<Account> => {
-    let owner = await person(host)
-    if (!owner) throw new Refused('A configured person is required')
-    let at
-    try {
-      at = await accountCredential(host, owner, 'yaks.app', word(a, 'as'))
-    } catch (error) {
-      if (error instanceof AccountError) throw new Refused(error.message)
-      throw error
-    }
-    if (!at) {
-      throw new Refused(
-        'No yaks.app connection; sign in with yak auth yaks.app',
-      )
-    }
-    let address = String(
-      (at.connection.connection as Comp)?.account ?? '(unnamed account)',
-    )
-    if (at.session) {
-      renewing(async (fresh) => {
-        await records<{ website_session?: string }>(
-          host.graph,
-          host.vault,
-          '',
-          () => {},
-        ).update(
-          String((at.connection.secret as Comp)?.name),
-          (record) => {
-            record.website_session = fresh
-            return Promise.resolve()
-          },
-        )
-      })
-    }
-    return { address, bearer: at.bearer, session: at.session }
-  }
+  let acting = (a: Args) => account(host)(word(a, 'as'))
   // Infrastructure uses the box's Cloudflare/GitHub logins. Only the platform
   // admin or the configured person's own account may spend those credentials.
   let platform = async (a: Args) => {
@@ -428,30 +384,6 @@ export let runs = (
         name,
       )
       return [said(call, `${file.url} — ${file.bytes} bytes, ${file.mime}`)]
-    }),
-
-    // The id and the secret are named by their op:// references and read
-    // here, so neither is ever an argument: this graph keeps a call as its
-    // text. What is printed is the name the client is kept under, never it.
-    admin_client: verb(async (call) => {
-      let a = argsOf(call)
-      let name = word(a, 'name') ?? ''
-      let refs = { id: word(a, 'id') ?? '', secret: word(a, 'secret') }
-      for (let [arg, ref] of Object.entries(refs)) {
-        if (ref != null && !isOpRef(ref)) {
-          throw new CallError(
-            arg,
-            'an op:// reference, never the value itself',
-          )
-        }
-      }
-      let read = (ref: string) => opRead()(ref, AbortSignal.timeout(10_000))
-      let at = await acting(a)
-      await keepClient(at.bearer, name, {
-        id: await read(refs.id),
-        ...refs.secret ? { secret: await read(refs.secret) } : {},
-      })
-      return [said(call, `kept the ${name} OAuth client on ${zone()}`)]
     }),
 
     admin_push: verb(async (call) => {

@@ -86,7 +86,7 @@ import {
   split,
 } from '@yaks/fts'
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
-import { faults as secretFaults, type Local, peek } from '@yaks/secrets'
+import { type Local, peek } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
 import { faults } from '@yaks/api/refuse'
 import {
@@ -279,15 +279,13 @@ let secretIn = (value: unknown): string | undefined => {
 }
 
 // `{"secret": "NAME"}` anywhere in a plugin's options reads that secret at the
-// moment the value is accessed (@yaks/secrets `peek`): the value written
-// through the graph, the 1Password value it is bound to, or else the
-// environment variable of that name. It is the one thing a config file cannot
-// hold in the open, and the one thing that can arrive after the host is
-// already running, so a plugin that re-reads its options on each pass starts
-// the moment a key is written rather than needing a restart. A 1Password value
-// is read the first time its property is, waiting on `op` then, so a process
-// whose code never reads it never asks 1Password. A secret nobody has provided
-// reads as undefined rather than as a guess, so the plugin reports in its own
+// moment the value is accessed (@yaks/secrets `peek`): the local vault value,
+// or else the environment variable of that name. It is the one thing a config
+// file cannot hold in the open, and the one thing that can arrive after the
+// host is already running, so a plugin that re-reads its options on each pass starts
+// the moment a key is written rather than needing a restart. The value comes
+// from this box's vault; no config read starts a 1Password process. A secret
+// nobody has provided reads as undefined, so the plugin reports in its own
 // words what it is waiting for.
 let revealing = (value: unknown, vault: Local): unknown => {
   let name = secretIn(value)
@@ -432,16 +430,14 @@ let composed = async (
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined
   // What @yaks/api catches in this process and answers, or meets with nobody
-  // to answer (a page body that did not build, a socket, a subscription), and
-  // a secret @yaks/secrets could not read from 1Password, are reported here
-  // too, named by where they were caught.
+  // to answer (a page body that did not build, a socket, a subscription), are
+  // reported here too, named by where they were caught.
   let caught = (error: unknown, where: string) =>
     void report(error, {
       during: { process: selfEid() },
       tags: { step: where },
     })
-  let hooks = [faults(caught), secretFaults(caught)]
-  let unfault = () => hooks.forEach((unhook) => unhook())
+  let unfault = faults(caught)
   try {
     // An existing graph can refuse before any plugin runtime is imported.
     // Keep its connection; absent graphs wait for a valid assembly before
@@ -468,8 +464,8 @@ let composed = async (
       meet(config, required)
     }
     // Where this graph's secrets are kept (./vault.ts). Nothing is read from
-    // it now: an option naming a secret reads it when the option is read, so a
-    // process asks 1Password only for a secret its code uses.
+    // it here: an option naming a secret reads its local value when the
+    // option is read.
     part?.('vault')
     let trace = opts.process !== false && (config.tracker || path != ':memory:')
       ? await import('./traces.ts')

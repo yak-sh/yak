@@ -29,9 +29,10 @@
  * ```
  *
  * Trusted code asks for a value by name ({@link reveal}); a config names one
- * as `{"secret": "NAME"}` (@yaks/cli). A value may also be an `op://`
- * reference, read from 1Password each time it is used, and a name nothing was
- * written for falls back to the environment variable of that name.
+ * as `{"secret": "NAME"}` (@yaks/cli). A name nothing was written for falls
+ * back to the environment variable of that name. A kept `op://` reference
+ * stays unresolved; interactive commands can read one explicitly with
+ * {@link opRead}.
  *
  * This package says what a vault is ({@link Vault}) and keeps one in memory;
  * a vault that stores somewhere lives with that storage: private files on a
@@ -62,9 +63,8 @@ export {
   type Sealed,
   type Vault,
 } from './vault.ts'
-export { isOpRef, type OpRead, opRead, type OpReadNow } from './op.ts'
+export { isOpRef, type OpRead, opRead } from './op.ts'
 export {
-  faults,
   peek,
   reveal,
   sealed,

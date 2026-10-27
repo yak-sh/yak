@@ -60,7 +60,7 @@ let Secret = ({ e }: { e?: Ent }) => {
         type='password'
         aria-label={`${name || 'New secret'} value`}
         autocomplete='new-password'
-        placeholder='New value or op:// reference'
+        placeholder='New secret value'
         value={input.value.value}
         disabled={progress.busy}
         onInput={(ev: InputEvent) => {

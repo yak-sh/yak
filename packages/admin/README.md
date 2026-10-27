@@ -81,6 +81,17 @@ lock. Neither the bearer nor the cookie is included in graph text or tool
 answers. `delete` reads the website's list of what would be destroyed before
 submitting the space's name back to its deletion form.
 
+## OAuth clients
+
+`yak admin client` reads the supplied 1Password references in the terminal
+process and writes the client through the selected account's bearer. It is a
+terminal command, so no stored call can ask a background process to read
+1Password. Runtime credentials come from the box's vault.
+
+```sh
+yak admin client google 'op://vault/google/client id' 'op://vault/google/client secret' --as admin
+```
+
 ## Push a directory
 
 `push` makes an app hold exactly a directory's files and deploys them. Each

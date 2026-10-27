@@ -1,21 +1,10 @@
-// A value that lives in 1Password: the vault keeps its `op://` reference and
-// the value is read with `op read` at the moment it is used, so it never rests
-// on this machine at all.
-//
-// `op` is bounded on every axis it touches: no shell, a cleared environment
-// but for what the CLI needs to find its own session, stdin closed so it never
-// waits on a prompt, and a capped read. A read that is awaited has a deadline;
-// one answered on the spot (`opReadNow`) holds its thread until op gives up on
-// its own, about a minute for a network it cannot reach. A failure is a thrown
-// error with op's own words, never a stale value.
+// Explicit 1Password reads for a person's interactive command. Runtime
+// secret readers (reveal and peek) never start op. A read uses a cleared
+// environment, closed stdin, bounded output and the caller's abort signal.
 
 /** Resolve a reference to its value. Injectable, so a test needs no `op`. */
 export type OpRead = (reference: string, signal: AbortSignal) => Promise<string>
 
-/** The same, answered before it returns: for a value read on the spot. */
-export type OpReadNow = (reference: string) => string
-
-let DEADLINE_MS = 5000
 let MAX_OUT = 65_536
 
 /** Whether a written value is a reference rather than a value: `op://` and at
@@ -52,7 +41,7 @@ type Runtime = {
   Command: new (
     cmd: string,
     opts: Record<string, unknown>,
-  ) => { output(): Promise<Output>; outputSync(): Output }
+  ) => { output(): Promise<Output> }
   errors: { NotFound: new (...a: never[]) => Error }
   env: { get(name: string): string | undefined }
 }
@@ -99,18 +88,3 @@ export let opRead =
       .catch((e) => Promise.reject(absent(deno, e)))
     return answer(out)
   }
-
-/** `op read`, answered before it returns. */
-export let opReadNow = (env: Env = processEnv): OpReadNow => (reference) => {
-  let deno = runtime()
-  let out: Output
-  try {
-    out = read(deno, env, reference).outputSync()
-  } catch (e) {
-    throw absent(deno, e)
-  }
-  return answer(out)
-}
-
-/** The deadline one read is given. */
-export let deadline = (): AbortSignal => AbortSignal.timeout(DEADLINE_MS)
