@@ -139,9 +139,13 @@ async (request: Request): Promise<Response> => {
     // A reader that polls sends the tag it read: nothing it could read has
     // moved while the tag stands, so it is told so without a row read. The
     // tag is taken before the read, so a write during it leaves the answer's
-    // tag behind and the next poll reads again.
+    // tag behind and the next poll reads again. Tags compare weakly, as
+    // If-None-Match's do: Cloudflare marks the tag weak (`W/`) when it
+    // compresses the answer.
     let tag = tracker.tag()
-    if (request.headers.get('if-none-match') == tag) {
+    let held = request.headers.get('if-none-match')?.split(',')
+      .map((t) => t.trim().replace(/^W\//, ''))
+    if (held?.includes(tag)) {
       return new Response(null, { status: 304, headers: { etag: tag } })
     }
     try {

@@ -60,9 +60,10 @@ followed by its retained occurrences, or 404 when absent. Both forms are
 read-only, and both carry the store's **tag** as their `ETag`: it moves with
 every commit beyond the effect pool's and the scheduler's bookkeeping, and
 starts fresh with each instance of the object. A reader that sends the tag it
-holds as `If-None-Match` is answered 304, with no row read, while it stands; the
-box's poll and its reconciliation of standing both do, so a tracker whose bugs
-have not moved costs their 30 s polls nothing.
+holds as `If-None-Match` (compared weakly, since Cloudflare marks it `W/` when
+it compresses the answer) is answered 304, with no row read, while it stands;
+the box's poll and its reconciliation of standing both do, so a tracker whose
+bugs have not moved costs their 30 s polls nothing.
 `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns

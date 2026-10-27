@@ -32,6 +32,8 @@ let read = async (tag?: string) => {
 }
 let first = await read()
 let again = await read(first.tag)
+// The tag as a reader holds it once Cloudflare compressed the answer.
+let weak = await read(`W/${first.tag}`)
 // The pool's own bookkeeping is no news to a reader: a run written, and
 // deleted once done.
 let run = '00000000-0000-4000-8000-0000000000e1'
@@ -56,7 +58,7 @@ test('a reader holding the current tag is answered 304 with no body', () => {
   equal(first.status, 200)
   ok(JSON.parse(first.body).length == 1)
   equal([again.status, again.tag, again.body], [304, first.tag, ''])
-  equal(kept.status, 304)
+  equal([weak.status, kept.status], [304, 304])
 })
 
 test('a mark moves the tag, and the reader is answered in full', () => {
