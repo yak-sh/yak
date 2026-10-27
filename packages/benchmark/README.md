@@ -393,3 +393,21 @@ Those consume the completed run through a reporter. Writing JSON needs Deno
 filesystem permission; host metadata needs environment, read and Git execution
 permission. The root export targets Deno; the pure modules themselves have no
 machine effects.
+
+## Independent observation comparison
+
+`difference(reference, current, better, significance)` compares independent
+observations with an exact one-sided rank permutation test, retaining ties. It
+returns `slower`, `unconfirmed` or `inconclusive`, the probability and both
+medians. At least three observations on each side are needed. Consecutive rounds
+sharing one sitting's conditions must be aggregated into one observation. The
+caller owns reference provenance, load exclusion and correction for multiple
+comparisons.
+
+```ts
+import { difference } from '@yaks/benchmark'
+import { equal } from '@yaks/testing'
+
+equal(difference([100, 101, 102], [110, 111, 112]).verdict, 'slower')
+equal(difference([100], [110, 111, 112]).verdict, 'inconclusive')
+```

@@ -2,19 +2,16 @@
  * become slower, so @yaks/heal sends it to an agent like any other bug. It is
  * monitoring, not a gate: nothing waits on it and nothing is refused.
  *
- * A "got slower" bug means the code got slower. Each suite is screened against
- * its banked baseline with one run (`deno task bench:check <suite> --runs=1`),
- * and a regression counts only when a check taken as the baseline was banked
- * confirms it: each bench's best median of three runs, past its limit by more
- * than the noise both the baseline and the check measured (@yaks/benchmark's
- * ratchet). Nothing is measured while the box is loaded, and a run the box
- * became loaded for can confirm nothing and bank nothing: it is owed to a
- * later tick. A confirmed regression is reported with every figure over its
- * limit, how busy other work kept the box, and the commits since
- * the suite's last good run, and for a suite of the box's pages what each
- * page over its limit spent its paint on, profiled in Chrome; a suite that cannot run (no baseline, a crash, a
- * page that never paints, a run over its time cap) is reported as a failure,
- * since that bench is broken.
+ * Isolated suites compare both revisions under interleaved host conditions,
+ * even when their absolute budget passes. Live pages retain independent quiet
+ * sitting medians attached to the pinned product's source content. A reference
+ * freezes when product content changes; a candidate must separate statistically
+ * from it, and a proven speedup becomes that metric's reference. Missing or
+ * drifting evidence is inconclusive and carries no budget pass or new best.
+ * The box is sampled at rest, and a loaded measurement confirms nothing.
+ * An absolute breach alone is a screen, never evidence of a code regression.
+ * A confirmed regression reports its comparisons and the commits since the
+ * last good run. A suite that crashes or exceeds its cap reports a failure.
  * Each suite reports under one fault, so a suite that stays slow adds hits to
  * its open bug, and one that turns slow again after its bug was resolved
  * reopens it.
@@ -36,6 +33,7 @@ import {
   busy,
   incomparable,
   loaded,
+  median,
   type Regression,
   type Run,
 } from '@yaks/benchmark'
@@ -44,7 +42,9 @@ import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
 import { said, type Summary } from './cpu_profile.ts'
+import { runtimeBuild, runtimeContent } from '../packages/cli/runtime.ts'
 import { profiled } from './pages.ts'
+import { type History, judge, type Judgement } from './observations.ts'
 
 /** Every suite this box measures itself; the CI and platform deploy suites are
  * timed where they run. */
@@ -110,7 +110,12 @@ export let MEASURE: Record<string, string[]> = {
  * the benchmark lock was busy (`deferred`), the box was loaded (`loaded`), or
  * a paired comparison could not separate the revisions. */
 export type Outcome =
-  | { verdict: 'passed' | 'measured' | 'regressed'; run: Run }
+  | {
+    verdict: 'passed' | 'measured' | 'regressed'
+    run: Run
+    confirmed?: boolean
+    evidence?: string[]
+  }
   | { verdict: 'failed'; error: string }
   | { verdict: 'deferred' | 'loaded' | 'unconfirmed' | 'inconclusive' }
 export type Good = { commit: string; at: string }
@@ -146,10 +151,17 @@ export let regressed = (
   good: Good | undefined,
   commits: string[],
   profiles: string[] = [],
-): string =>
-  [
-    `${suite} got slower: ${over(run.regressions[0])}`,
-    ...run.regressions.slice(1).map((r) => `also ${over(r)}`),
+  evidence: string[] = [],
+): string => {
+  let describe = evidence.length
+    ? (r: Regression) =>
+      `${r.name} ${figure(r.current, r.unit)}, reference median ${
+        figure(r.baseline, r.unit)
+      }`
+    : over
+  return [
+    `${suite} got slower: ${describe(run.regressions[0])}`,
+    ...run.regressions.slice(1).map((r) => `also ${describe(r)}`),
     `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, ${
       run.busy == null
         ? 'how busy the box was is unknown'
@@ -163,12 +175,14 @@ export let regressed = (
       } (${good.at}):`
       : 'commits since its baseline was banked:',
     ...commits.length ? commits : ['(none: the box or the data changed)'],
+    ...evidence,
     ...profiles,
     `re-run: deno task bench:check ${suite}`,
   ].join('\n')
+}
 
 /** Screen each suite with one run, confirm a regression with a check taken as
- * its baseline was banked, report what is confirmed or broken, and say which
+ * its baseline was banked (unless already interleaved), report confirmed or broken suites, and say which
  * suites are good now. A check that could tell nothing reports nothing, banks
  * nothing and marks nothing good; it is owed to a later tick. */
 export let watch = async (
@@ -189,12 +203,19 @@ export let watch = async (
       }
     }
     let outcome = await safe(1)
-    if (outcome.verdict == 'regressed') outcome = await safe()
+    let confirmed = outcome.verdict == 'regressed'
+    if (confirmed && !('confirmed' in outcome && outcome.confirmed)) {
+      outcome = await safe()
+    }
+    if ('run' in outcome && loaded(outcome.run)) outcome = { verdict: 'loaded' }
     if (!('run' in outcome) && outcome.verdict != 'failed') {
       out[suite] = outcome.verdict
       continue
     }
-    if ('run' in outcome && !loaded(outcome.run)) {
+    if (
+      confirmed && 'run' in outcome && !outcome.confirmed &&
+      !loaded(outcome.run)
+    ) {
       try {
         await m.bank?.(suite, outcome.run)
       } catch (error) {
@@ -219,7 +240,16 @@ export let watch = async (
         `the pages could not be profiled: ${error}`,
       ]) ?? []
       await m.report(
-        new Error(regressed(suite, outcome.run, good, commits, profiles)),
+        new Error(
+          regressed(
+            suite,
+            outcome.run,
+            good,
+            commits,
+            profiles,
+            outcome.evidence,
+          ),
+        ),
         suite,
         'regressed',
       )
@@ -326,6 +356,12 @@ export let moving = (
       return {
         ...b,
         median: old && !worse ? better(b, old.median, b.median) : b.median,
+        tolerance: old && !worse
+          ? Math.max(
+            b.tolerance ?? source.tolerance,
+            old.tolerance ?? previous!.tolerance,
+          )
+          : b.tolerance,
       }
     }),
   }
@@ -365,6 +401,33 @@ let web = async (): Promise<string | undefined> => {
   return new TextDecoder().decode(stdout).trim().split(/\s+/)[0] || undefined
 }
 
+let builds = new Map<string, Promise<string>>()
+let serving = async (): Promise<
+  { key: string; commit?: string } | undefined
+> => {
+  let unit = await web()
+  if (!unit) return undefined
+  let { stdout, success } = await new Deno.Command('systemctl', {
+    args: ['--user', 'show', unit, '-p', 'MainPID', '--value'],
+    stdout: 'piped',
+    stderr: 'null',
+  }).output()
+  if (!success) return undefined
+  let build = await runtimeBuild(
+    Number(new TextDecoder().decode(stdout).trim()),
+  )
+  if (!build) return undefined
+  if (!builds.has(build.hash)) builds.set(build.hash, runtimeContent(build))
+  return { key: await builds.get(build.hash)!, commit: build.commit }
+}
+let PAIRED = [
+  'platform-waits',
+  'inbox-content',
+  'hook-waits',
+  'operation-commands',
+  'operation-scale',
+  'person-commands',
+]
 /** A half-hour tick admits work for 25 minutes; what it could not reach is
  * owed to the next. */
 export let WINDOW = 25 * 60_000
@@ -434,6 +497,57 @@ let profile = async (suite: string, run: Run): Promise<string[]> => {
   return [...lines, `profiles: ${dir}`]
 }
 
+/** Reference history is serialized across daily, hourly and restart lanes.
+ * Only screens enter it: a best-of-three confirmation has a different sampling
+ * distribution. The serving runtime's source content identifies the product. */
+let observations = async (
+  suite: string,
+  key: string,
+  run: Run,
+  record: boolean,
+): Promise<Judgement> => {
+  let path = `${home}/.cache/yak/bench/${suite}.history.json`
+  using lock = await Deno.open(`${path}.lock`, {
+    create: true,
+    read: true,
+    write: true,
+  })
+  await lock.lock(true)
+  try {
+    let history: History = {}
+    try {
+      history = JSON.parse(await Deno.readTextFile(path))
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+    }
+    let evidence = judge(history, key, run, record)
+    let temporary = `${path}.${Deno.pid}.tmp`
+    await Deno.writeTextFile(temporary, JSON.stringify(history, null, 2) + '\n')
+    await Deno.rename(temporary, path)
+    console.log(
+      `${suite}: between-sitting ${evidence.verdict}; reference ${
+        history.reference?.observations.length ?? 0
+      }, candidate ${
+        history.candidate?.observations.length ?? 0
+      }; evidence ${path}`,
+    )
+    // Legacy scalar baselines carry no independent observations. Their absolute
+    // breaches remain unconfirmed until quiet passes establish a reference.
+    if (
+      evidence.verdict != 'loaded' &&
+      (history.reference?.observations.length ?? 0) < 3
+    ) {
+      console.log(
+        `${suite}: reference not established; absolute breach is unconfirmed`,
+      )
+      return { verdict: 'inconclusive', slower: [], comparisons: [] }
+    }
+    return evidence
+  } finally {
+    await lock.unlock()
+  }
+}
+
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. A loaded box is not measured at all: the bench would add to the
  * load and its figures could tell nothing. */
@@ -442,6 +556,8 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
   if (loaded({ busy: await busy(2000) ?? null })) {
     return { verdict: 'loaded' }
   }
+  let live = suite == 'pages' || suite == 'page-content'
+  let product = live ? await serving() : undefined
   if (MEASURE[suite]) {
     let timed = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', ...MEASURE[suite]],
@@ -496,20 +612,18 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
   let keep = false
   try {
     let run: Run = JSON.parse(await Deno.readTextFile(results))
-    if (run.verdict == 'loaded') return { verdict: 'loaded' }
+    if (live) {
+      let after = await busy(1000)
+      if (after != null) run.busy = Math.max(run.busy ?? 0, after)
+    }
+    if (run.verdict == 'loaded' || loaded(run)) return { verdict: 'loaded' }
+    if (live && (!product || product.key != (await serving())?.key)) {
+      return { verdict: 'inconclusive' }
+    }
+    if (product?.commit) run.commit = product.commit
+    let details: string[] = []
     if (child.success || run.verdict == 'regressed') {
-      if (
-        run.verdict == 'regressed' && !runs &&
-        [
-          'platform-waits',
-          'inbox-content',
-          'hook-waits',
-          'operation-commands',
-          'operation-scale',
-          'person-commands',
-        ]
-          .includes(suite)
-      ) {
+      if (PAIRED.includes(suite)) {
         let evidence = results.replace('.results.json', '.paired.json')
         let prefix = measurement(suite)
         let paired = await new Deno.Command(prefix[0], {
@@ -540,17 +654,84 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
         console.log(
           `${suite}: paired ${comparison.verdict}; raw evidence ${evidence}`,
         )
-        if (
-          comparison.verdict == 'unconfirmed' ||
-          comparison.verdict == 'inconclusive'
-        ) {
+        if (comparison.verdict != 'changed') {
           return { verdict: comparison.verdict }
         }
+        run.regressions = run.benches.filter((b) =>
+          comparison.slower.includes(b.name)
+        ).map((b) => {
+          let samples = comparison.comparisons.find((c: { name: string }) =>
+            c.name == b.name
+          )
+          let reference = median([...samples.before, ...samples.after])
+          let current = median(samples.current)
+          return {
+            name: b.name,
+            unit: b.unit,
+            baseline: reference,
+            limit: reference,
+            current,
+            change: reference == 0
+              ? null
+              : (current / reference - 1) * (b.better == 'lower' ? 1 : -1),
+          }
+        })
+        run.verdict = 'regressed'
+        return {
+          verdict: 'regressed',
+          run,
+          confirmed: true,
+          evidence: [`interleaved reference evidence: ${evidence}`],
+        }
       }
-      return { verdict: run.verdict as 'passed', run }
+      if (suite == 'pages' || suite == 'page-content') {
+        let key = product?.key
+        if (key) {
+          let evidence = await observations(suite, key, run, runs == 1)
+          details = [
+            `between-sitting reference/candidate evidence: ${home}/.cache/yak/bench/${suite}.history.json`,
+            ...evidence.comparisons.map((b) =>
+              `${b.name}: one-sided rank probability ${
+                b.probability ?? 'insufficient observations'
+              }`
+            ),
+          ]
+          if (evidence.verdict != 'slower') return { verdict: evidence.verdict }
+          run.regressions = evidence.comparisons.filter((b) =>
+            b.verdict == 'slower'
+          ).map((b) => {
+            let metric = run.benches.find((c) => c.name == b.name)!
+            return {
+              name: b.name,
+              unit: metric.unit,
+              baseline: b.reference!,
+              limit: b.reference!,
+              current: b.current!,
+              change: b.reference == 0
+                ? null
+                : (b.current! / b.reference! - 1) *
+                  (metric.better == 'lower' ? 1 : -1),
+            }
+          })
+          run.verdict = 'regressed'
+          return {
+            verdict: 'regressed',
+            run,
+            confirmed: true,
+            evidence: details,
+          }
+        }
+      }
+      return { verdict: run.verdict as 'passed', run, evidence: details }
     }
-  } catch {
-    /* no run was written: the check failed before measuring */
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      keep = true
+      return {
+        verdict: 'failed',
+        error: `${error}; raw result retained at ${results}`,
+      }
+    }
   } finally {
     if (!keep) await Deno.remove(results).catch(() => {})
   }

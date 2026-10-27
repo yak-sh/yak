@@ -123,3 +123,25 @@ test('an admitted job keeps its active allowance while next job carries over', a
   equal(seen, ['a'])
   equal(q.jobs.map((j) => j.suite), ['b'])
 })
+
+test('an interleaved screen already confirmed settles once without another job', async () => {
+  let q: Queue = { jobs: [], screened: {} }, settled = 0
+  enqueue(q, ['s'], 0)
+  await drain(q, {
+    now: () => 0,
+    deadline: 1,
+    save: () => Promise.resolve(),
+    check: () =>
+      Promise.resolve({
+        verdict: 'regressed',
+        confirmed: true,
+        run: {} as never,
+      }),
+    settle: () => {
+      settled++
+      return Promise.resolve()
+    },
+  })
+  equal(settled, 1)
+  equal(q.jobs, [])
+})

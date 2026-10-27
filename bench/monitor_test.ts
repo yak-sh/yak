@@ -2,7 +2,13 @@
  * sequence of checks a suite can give it. */
 import type { Run } from '@yaks/benchmark'
 import { equal, test } from '@yaks/testing'
-import { committed, type Outcome, type State, watch } from './monitor.ts'
+import {
+  committed,
+  moving,
+  type Outcome,
+  type State,
+  watch,
+} from './monitor.ts'
 
 let steps = await committed('harness-steps')
 let expected = JSON.parse(
@@ -181,7 +187,7 @@ test('a busy measurement lock defers without reporting, banking, or marking good
   equal(verdicts, { s: 'deferred', t: 'passed' })
   equal(state.good.s, { commit: 'c1', at: 'at-c1' })
   equal(state.good.t, { commit: 'c2', at: 'at-c2' })
-  equal(banked, ['t'])
+  equal(banked, [])
   equal(reports, [])
 })
 
@@ -205,7 +211,7 @@ test('a loaded box is not confirmed, reported or banked', async () => {
   })
 })
 
-test('a pass on a box that grew loaded marks the suite good but banks nothing', async () => {
+test('a pass on a box that grew loaded marks nothing good and banks nothing', async () => {
   let state: State = { good: {} }, banked: string[] = []
   await watch(['s'], state, {
     check: () =>
@@ -217,7 +223,7 @@ test('a pass on a box that grew loaded marks the suite good but banks nothing', 
       return Promise.resolve()
     },
   })
-  equal([state.good.s?.commit, banked], ['c3', []])
+  equal([state.good.s?.commit, banked], [undefined, []])
 })
 
 for (let verdict of ['loaded', 'unconfirmed', 'inconclusive'] as const) {
@@ -244,3 +250,65 @@ for (let verdict of ['loaded', 'unconfirmed', 'inconclusive'] as const) {
     equal(reported, false)
   })
 }
+
+test('a one-run screen never banks its lucky minimum', async () => {
+  let banked = false
+  await watch(['s'], { good: {} }, {
+    check: () => Promise.resolve(outcome('passed')),
+    since: () => Promise.resolve([]),
+    report: () => Promise.resolve(),
+    bank: () => {
+      banked = true
+      return Promise.resolve()
+    },
+  })
+  equal(banked, false)
+})
+
+let source = {
+  version: 1 as const,
+  suite: 's',
+  metric: 'm',
+  workload: 1,
+  runtime: 'r',
+  cpu: 'c',
+  tolerance: .1,
+  benches: [{
+    name: 'work',
+    unit: 'ms',
+    better: 'lower' as const,
+    median: 100,
+    tolerance: .1,
+  }],
+}
+test('reading the committed baseline retains measured between-run slack', () => {
+  let previous = {
+    ...source,
+    benches: [{ ...source.benches[0], median: 90, tolerance: .3 }],
+  }
+  equal(moving(source, previous, source).benches[0].tolerance, .3)
+  let slower = { ...source, benches: [{ ...source.benches[0], median: 150 }] }
+  equal(moving(slower, previous, source).benches[0].tolerance, .1)
+})
+
+test('interleaved evidence already confirmed needs one check and never banks its screen', async () => {
+  let checked = 0, banked = 0, reports = 0
+  await watch(['s'], { good: {} }, {
+    check: () => {
+      checked++
+      return Promise.resolve(
+        { ...outcome('regressed'), confirmed: true } as Outcome,
+      )
+    },
+    bank: () => {
+      banked++
+      return Promise.resolve()
+    },
+    report: () => {
+      reports++
+      return Promise.resolve()
+    },
+    since: () => Promise.resolve([]),
+  })
+  equal([checked, banked, reports], [1, 0, 1])
+})

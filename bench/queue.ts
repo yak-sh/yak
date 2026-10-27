@@ -43,13 +43,16 @@ export let drain = async (q: Queue, io: {
       }
     }
     if (outcome.verdict == 'deferred' || outcome.verdict == 'loaded') return
-    if (!(job.phase == 'screen' && outcome.verdict == 'regressed')) {
+    if (
+      !(job.phase == 'screen' && outcome.verdict == 'regressed' &&
+        !outcome.confirmed)
+    ) {
       await io.settle(job, outcome)
     }
     q.jobs.shift()
     if (job.phase == 'screen') {
       q.screened[job.suite] = io.now()
-      if (outcome.verdict == 'regressed') {
+      if (outcome.verdict == 'regressed' && !outcome.confirmed) {
         q.jobs.push({ ...job, phase: 'confirm' })
       }
     }

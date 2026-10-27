@@ -1,11 +1,11 @@
 /** Contemporaneous code comparisons for isolated fixtures. Raw wall time and its
  * absolute ratchet remain untouched: this evidence measures revision differences
  * beside a contemporaneous reference, and can never bank a new best or declare a budget passed. */
-import { host, median, type Run, type Samples } from '@yaks/benchmark'
+import { host, loaded, median, type Run, type Samples } from '@yaks/benchmark'
 
 export type Pair = { before: Run; current: Run; after: Run }
 export type Evidence = {
-  verdict: 'changed' | 'unconfirmed' | 'inconclusive'
+  verdict: 'changed' | 'unconfirmed' | 'inconclusive' | 'loaded'
   slower: string[]
   comparisons: {
     name: string
@@ -28,6 +28,9 @@ export let compare = ({ before, current, after }: Pair): Evidence => {
       throw Error('Paired workloads differ')
     }
   }
+  if ([before, current, after].some(loaded)) {
+    return { verdict: 'loaded', slower: [], comparisons: [] }
+  }
   let comparisons = current.benches.map((b, i) => ({
     name: b.name,
     before: before.benches[i].rounds.map((r) => r.median),
@@ -46,6 +49,14 @@ export let compare = ({ before, current, after }: Pair): Evidence => {
     median(b.after) > Math.max(...b.before)
   )
   let slower = comparisons.filter((b, i) => {
+    let paired = b.current.length >=
+        Math.max(6, Math.ceil(Math.log2(20 * comparisons.length))) &&
+      b.current.every((n, round) =>
+        current.benches[i].better == 'lower'
+          ? n > Math.max(b.before[round], b.after[round])
+          : n < Math.min(b.before[round], b.after[round])
+      )
+    if (paired) return true
     let reference = [...b.before, ...b.after]
     return current.benches[i].better == 'lower'
       ? Math.min(...b.current) > Math.max(...reference)
@@ -76,6 +87,8 @@ export let bracket = async <T>(
     await close()
   }
 }
+
+class Loaded extends Error {}
 
 let command = async (cwd: string, cmd: string, args: string[]) => {
   let out = await new Deno.Command(cmd, {
@@ -173,7 +186,19 @@ export let collect = async (
       roots.push(target)
     }
     let observations: Record<string, Samples>[][] = [[], [], []]
+    let pressure: number[] = []
+    let resting = async () => {
+      let use = await context.busy?.()
+      if (use != null) pressure.push(use)
+      if (loaded({ busy: use ?? null })) {
+        throw new Loaded('the box became loaded during the paired measurement')
+      }
+    }
+    let baseline = JSON.parse(
+      await Deno.readTextFile(`${root}/bench/${suite}.baseline.json`),
+    )
     let measure = async (at: number, slot: number) => {
+      await resting()
       let dir = roots[at]
       let direct = [
         'hook-waits',
@@ -208,8 +233,13 @@ export let collect = async (
         }
       }
       observations[slot].push(...rounds)
+      await resting()
     }
-    for (let round = 0; round < 3; round++) {
+    for (
+      let round = 0;
+      round < Math.max(6, Math.ceil(Math.log2(20 * baseline.benches.length)));
+      round++
+    ) {
       await bracket(
         (revision) =>
           measure(
@@ -225,9 +255,6 @@ export let collect = async (
     }
     let aggregate = async (slot: number): Promise<Run> => {
       let { run } = await import('@yaks/benchmark')
-      let baseline = JSON.parse(
-        await Deno.readTextFile(`${root}/bench/${suite}.baseline.json`),
-      )
       return await run({
         name: suite,
         metric: baseline.metric,
@@ -235,7 +262,7 @@ export let collect = async (
         benches: baseline.benches,
         collect: (round: number) => observations[slot][round],
       }, {
-        rounds: 3,
+        rounds: observations[slot].length,
         output: `${scratch}/run.json`,
         reporters: () => [],
         host: () => ({
@@ -245,7 +272,10 @@ export let collect = async (
           runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
           cpu: context.cpu,
           load: context.load,
-          busy: context.busy,
+          busy: () =>
+            Promise.resolve(
+              pressure.length ? Math.max(...pressure) : undefined,
+            ),
         }),
       })
     }
@@ -275,6 +305,14 @@ if (import.meta.main) {
   try {
     evidence = await collect(suite, new URL('../', import.meta.url).pathname)
   } catch (error) {
+    if (error instanceof Loaded) {
+      await Deno.writeTextFile(
+        output,
+        JSON.stringify({ verdict: 'loaded', error: error.message }) + '\n',
+      )
+      console.log(`${suite}: paired loaded; no result judged or banked`)
+      Deno.exit(0)
+    }
     let diagnostic = error instanceof Error
       ? error.stack ?? error.message
       : String(error)

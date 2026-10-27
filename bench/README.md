@@ -34,26 +34,52 @@ such a run, and a check there past its limit says `loaded`, not `regressed`.
 
 ## The monitor
 
-Nothing gates on a bench; bench/monitor.ts watches them instead, and a "got
-slower" bug it files means the code got slower. It checks every suite the box
-measures itself (`SUITES`) with one run, confirms a regression with a check of
-three runs before it counts, and reports a confirmed one to the tracker as a
-bug: each figure over its limit, how busy other work kept the box, and the
-commits since the suite's last good run. It measures nothing while the box is
-loaded (judged from two seconds it samples while idle), so it never adds to a
-busy box's load, and a check the box became loaded for confirms nothing and
-banks nothing; the check is owed to a later run. A suite that cannot run (no
-baseline, a crash, a page that never paints, a run past its time cap) is
-reported as a failure, since its bench is broken. @yaks/heal sends both to an
-agent like any other bug. Cron runs it from the main checkout through
-bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
-(`--hourly`), and pages after each web-unit change (`--restarted`, checked every
-15 minutes). The user-facing suites collect serially under the box-wide lock, so
-fixtures never measure one another. The hourly lane holds a persistent queue in
-`~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
-collecting and saving it. Each tick stops admitting work after 25 minutes; an
-admitted collection keeps its ten-minute limit. A busy box lock or a loaded box
-leaves the exact job owed and ends the tick.
+Nothing gates on a bench; bench/monitor.ts watches them instead. Isolated suites
+with paired fixtures compare the baseline revision and current revision on every
+screen, including when the absolute budget passes. The same driver runs
+reference/current/reference brackets under the box-wide lock. A completed
+comparison is settled once; it does not enqueue another confirmation or bank its
+single-run screen. The report names only metrics the paired evidence found
+slower. Load is sampled before and after the actual probes, not afterward while
+their results are aggregated.
+
+Live `pages` and `page-content` retain quiet one-run sitting medians in
+`~/.cache/yak/bench/<suite>.history.json`. A source fingerprint of the serving
+process's pinned runtime identifies the product; checkout commits, runtime slots
+and restarts alone do not change it. CSS, HTML, dependency configuration and
+production package, Worker and app sources participate; docs and tests do not.
+The fingerprint is read before and after measurement so a mixed-build run
+confirms nothing. Screens within fifteen minutes count as one sitting;
+best-of-three confirmations cannot enter this distribution.
+
+A quiet absolute pass starts a missing reference. Three independent reference
+observations are needed before comparison, and suspicious observations never
+initialize a reference. A changed product's candidate observations accumulate
+across ticks against the frozen reference. An exact one-sided rank permutation
+test compares medians, with its 5% significance divided among the suite's
+metrics; a statistically proven speedup replaces that metric's reference. The
+last twelve observations of each distribution are retained with revision, time,
+load and CPU-use evidence. This can detect persistent shifts inside the absolute
+ratchet's noise margin. Insufficient evidence is inconclusive, keeps its
+observations, and neither reports a code regression nor banks a best. A missing
+reference is logged explicitly; scalar baseline values are never fabricated into
+samples. A comparison is statistical evidence, not a guarantee of instant
+detection or zero false positives.
+
+Other suites screen against the absolute ratchet and confirm with three runs. A
+one-run pass never banks a new minimum. The monitor measures nothing while the
+box is loaded and loaded results confirm nothing, bank nothing and mark nothing
+good. A suite that cannot run (no baseline, a crash, a page that never paints, a
+run past its time cap) reports a failure. @yaks/heal sends confirmed regressions
+and failures to an agent like any other bug. Cron runs it from the main checkout
+through bin/bench-monitor: every suite at 02:23, user-facing suites every 30
+minutes (`--hourly`), and pages after each web-unit change (`--restarted`,
+checked every 15 minutes). The user-facing suites collect serially under the
+box-wide lock, so fixtures never measure one another. The hourly lane holds a
+persistent queue in `~/.cache/yak/bench/hourly-queue.json`, with one lane lock
+around loading, collecting and saving it. Each tick stops admitting work after
+25 minutes; an admitted collection keeps its ten-minute limit. A busy box lock
+or a loaded box leaves the exact job owed and ends the tick.
 
 All screens in a cohort precede their confirmations. An hour-old confirmation
 gets priority over fresh arrivals so repeated screens cannot starve it.
@@ -69,7 +95,8 @@ holder.
 
 The monitor keeps its best measurements in `~/.cache/yak/bench/best/`: each
 bench's committed median, or a better one a quiet run of the monitor's found
-past the noise, held to the slack the committed baseline measured. A slower
+past the noise, retaining the wider slack its quiet measurements learned.
+Reading the committed baseline does not erase measured slack. A slower
 observation never raises it, but a committed median that got worse since the
 monitor last read it (kept beside it as `<suite>.committed.json`) was banked
 slower on purpose, and the best takes it. Normal checks never rewrite the
@@ -404,26 +431,31 @@ from the test suite.
 
 A **paired confirmation** runs the same current benchmark driver against the
 product revision where its baseline was banked and the current product revision.
-The monitor uses it after an absolute regression in `platform-waits` or
-`inbox-content`. It holds the box-wide lock across three interleaved
-reference/current/reference rounds. Each probe owns its seeded graph; no live
-database is copied. Historical product code includes its historical probe
-adapter, so an incompatible adapter fails the comparison with a diagnostic.
+The monitor uses it on each screen of `platform-waits`, `inbox-content`,
+`hook-waits`, `operation-commands`, `operation-scale` and `person-commands`. It
+holds the box-wide lock across interleaved reference/current/reference rounds
+(at least six, increasing with metric count for the within-bracket sign
+comparison). Each probe owns its seeded graph; no live database is copied.
+Historical product code includes its historical probe adapter, so an
+incompatible adapter fails the comparison with a diagnostic.
 
 Raw milliseconds, baseline limits and the absolute regression remain in the
 saved results. The paired result is separate evidence, never adjusted
 milliseconds. It records the two revisions, current driver hash, actual host CPU
-and all round observations. Disjoint current/reference ranges show a measured
-revision difference conditional on the bracket, not proof of code causality:
-contention concentrated in the current windows can still mislead it. Reference
-ranges and their central observations must overlap. Drift in any metric makes
-the whole comparison inconclusive, including otherwise separated metrics.
+and all round observations. Disjoint current/reference ranges, or a consistent
+deterioration within every bracket beyond both flanking references, show a
+measured revision difference conditional on the bracket, not proof of code
+causality: contention concentrated in the current windows can still mislead it.
+Reference ranges and their central observations must overlap. Drift in any
+metric makes the whole comparison inconclusive, including otherwise separated
+metrics.
 
 An overlapping current range is _unconfirmed_, not equivalent and not a budget
 pass. An unconfirmed or inconclusive comparison neither banks a best nor marks a
 last-good run. Adapter failures remain reported with their diagnostics. The next
-scheduled measurement retries. Live `pages` and `page-content` cannot use this
-comparison: their changing graph and backend are not an isolated fixture.
+scheduled measurement retries. Live `pages` and `page-content` use the
+independent sitting comparison above: their changing graph and backend are not
+an isolated paired fixture.
 
 To inspect one directly while holding the shared measurement lock:
 

@@ -134,3 +134,31 @@ test('bracket orders reference/current/reference and closes on a failed adapter'
     }), 'missing API')
   equal(seen, ['reference', 'current', 'closed'])
 })
+
+test('interleaved small slowdowns survive wide drift shared by both revisions', () => {
+  let shared = [100, 130, 110, 125, 105, 120]
+  equal(
+    compare({
+      before: run(shared),
+      current: run(shared.map((n) => n * 1.05)),
+      after: run(shared),
+    }).verdict,
+    'changed',
+  )
+  equal(
+    compare({ before: run(shared), current: run(shared), after: run(shared) })
+      .verdict,
+    'unconfirmed',
+  )
+})
+
+test('load observed during paired probes cannot confirm code differences', () => {
+  equal(
+    compare({
+      before: run([10, 11, 12]),
+      current: { ...run([20, 21, 22]), busy: .8 },
+      after: run([10, 11, 12]),
+    }).verdict,
+    'loaded',
+  )
+})
