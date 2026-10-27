@@ -8,7 +8,7 @@ import type { Mark } from './letter.ts'
 
 export type Said =
   | { start: Remote }
-  | { id: number; params: string }
+  | { id: number; params: string; tag?: string }
   | { id: number; bug: string; name: Mark; said: Record<string, string> }
   | { abort: number }
 
@@ -61,7 +61,7 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
     return w
   }
   let ask = (
-    call: { params: string } | {
+    call: { params: string; tag?: string } | {
       bug: string
       name: Mark
       said: Record<string, string>
@@ -93,8 +93,8 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
     })
   }
   return {
-    bugs: (params, signal) =>
-      ask({ params: params.toString() }, signal) as Promise<Read>,
+    bugs: (params, signal, tag) =>
+      ask({ params: params.toString(), tag }, signal) as Promise<Read>,
     mark: (bug, name, said) => ask({ bug, name, said }),
     close: () => {
       closed = true

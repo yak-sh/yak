@@ -1,7 +1,9 @@
 // The platform tracker is a Worker behind signed doors, with no subscription a
 // box process can hold. A follower polls its `bugs` read instead and gets the
-// shape of a client watch: the whole answer, paged by global eid, on every
-// poll. Marks go through the same signed transport.
+// shape of a client watch: the whole answer, paged by global eid. Each poll
+// sends the tag of the answer it holds, and a tracker where nothing moved
+// since says so with no row read, so a quiet tracker costs a poll nothing.
+// Marks go through the same signed transport.
 import type { Bundle } from '@yaks/graph'
 import { mark, type Remote } from './remote.ts'
 import { type Read, read } from './routes.ts'
@@ -30,8 +32,13 @@ export type Polled = {
 
 /** The Worker's doors a poll asks: a page of its bugs, and a mark. */
 export type Doors = {
-  /** a page of the bugs `params` asks for (`limit`, `query`) */
-  bugs: (params: URLSearchParams, signal: AbortSignal) => Promise<Read>
+  /** a page of the bugs `params` asks for (`limit`, `query`), or that
+   * nothing moved since `tag` */
+  bugs: (
+    params: URLSearchParams,
+    signal: AbortSignal,
+    tag?: string,
+  ) => Promise<Read>
   /** a mark on one bug and what it says: a resolution's explanation, the
    * fixer's `task` with `taken` */
   mark: (
@@ -43,7 +50,8 @@ export type Doors = {
 
 /** The Worker's doors over the signed transport (./remote.ts), through `go`. */
 export let signed = (remote: Remote, go: typeof fetch = fetch): Doors => ({
-  bugs: (params, signal) => read({ remote }, 'bugs', params, signal, go),
+  bugs: (params, signal, tag) =>
+    read({ remote }, 'bugs', params, signal, go, tag),
   mark: (bug, name, said) => mark(remote, bug, name, go, said),
 })
 
@@ -114,6 +122,8 @@ export let poll = (
   let doors = opts.doors ?? thread!
   let timer = opts.timer ?? timeout
   let value: Bundle[] = [], ready = false
+  // The tag `value` was read at.
+  let held: string | undefined
   let listeners = new Set<(bundles: Bundle[]) => void>()
   let stop = new AbortController()
   // A page past its deadline aborts as `AbortSignal.timeout` would, so the
@@ -126,7 +136,11 @@ export let poll = (
     )
     return { signal: AbortSignal.any([stop.signal, late.signal]), cancel }
   }
-  let page = async (asked: string, after: string): Promise<Bundle[]> => {
+  let page = async (
+    asked: string,
+    after: string,
+    tag?: string,
+  ): Promise<Extract<Read, { ok: true }>> => {
     let params = new URLSearchParams({
       limit: String(PAGE),
       query: `${asked} .order=entity.eid${after ? ` .after=${after}` : ''}`,
@@ -135,25 +149,34 @@ export let poll = (
       ? deadline(opts.timeout)
       : { signal: stop.signal, cancel: () => {} }
     try {
-      let result = await doors.bugs(params, signal)
+      let result = await doors.bugs(params, signal, tag)
       if (!result.ok) throw Error(result.error)
-      return result.value as Bundle[]
+      return result
     } finally {
       cancel()
     }
   }
+  // The whole answer and the tag its first page was read at, or nothing when
+  // nothing moved since the tag held.
   let all = async () => {
-    let rows: Bundle[] = [], after = ''
+    let rows: Bundle[] = [], after = '', tag: string | undefined
     for (;;) {
-      let got = await page(query, after)
-      rows.push(...got)
-      if (got.length < PAGE) return rows
-      after = got.at(-1)!.entity.eid
+      let got = await page(query, after, after ? undefined : held)
+      if (got.unchanged) return
+      tag ??= got.tag
+      let some = got.value as Bundle[]
+      rows.push(...some)
+      if (some.length < PAGE) return { rows, tag }
+      after = some.at(-1)!.entity.eid
     }
   }
   let pass = async () => {
     try {
-      value = await all()
+      let read = await all()
+      if (read) {
+        value = read.rows
+        held = read.tag
+      }
       ready = true
     } catch (error) {
       if (stop.signal.aborted) return
@@ -209,7 +232,9 @@ export let poll = (
       let rows: Bundle[] = []
       for (let at = 0; at < eids.length; at += PAGE) {
         let some = eids.slice(at, at + PAGE).join(',')
-        rows.push(...await page(`.bug .entity.eid=${some}`, ''))
+        rows.push(
+          ...(await page(`.bug .entity.eid=${some}`, '')).value as Bundle[],
+        )
       }
       return rows
     },

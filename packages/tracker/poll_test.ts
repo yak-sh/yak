@@ -112,3 +112,31 @@ test('a poll that hangs settles as failed, and says it timed out', async () => {
   ]])
   open.close()
 })
+
+// A Worker that tags its answer: a poll holding the tag is told nothing moved.
+let tags = worker(150)
+let sent: (string | undefined)[] = []
+let quiet = poll(remote, '.bug', {
+  every: 0,
+  doors: {
+    ...tags.doors,
+    bugs: async (params, signal, tag) => {
+      sent.push(tag)
+      return tag == '"t1"'
+        ? { ok: true, tag, unchanged: true }
+        : { ...await tags.doors.bugs(params, signal), tag: '"t1"' }
+    },
+  },
+})
+let heard = await new Promise<number[]>((done) => {
+  let lengths: number[] = []
+  let off = quiet.subscribe((value) => {
+    lengths.push(value.length)
+    if (lengths.length == 3) off(), done(lengths)
+  })
+})
+quiet.close()
+test('a poll sends the tag of the answer it holds, and keeps that answer while nothing moves', () => {
+  equal(heard, [150, 150, 150])
+  equal(sent.slice(0, 4), [undefined, undefined, '"t1"', '"t1"'])
+})

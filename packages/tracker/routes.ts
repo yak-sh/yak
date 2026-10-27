@@ -7,9 +7,12 @@ import { late, type Remote, request as upstream } from './remote.ts'
 export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** What a read answered: its value, or the refusal and the status it is. */
+/** What a read answered: its value and the tag it was read at, or that
+ * nothing moved since the tag it was asked with, or the refusal and the
+ * status it is. */
 export type Read =
-  | { ok: true; value: unknown }
+  | { ok: true; value: unknown; tag?: string; unchanged?: false }
+  | { ok: true; value?: undefined; tag: string; unchanged: true }
   | { ok: false; error: string; status: number }
 let refused = (error: string, status: number): Read => ({
   ok: false,
@@ -24,6 +27,9 @@ export let read = async (
   query: URLSearchParams,
   signal?: AbortSignal,
   go: typeof fetch = fetch,
+  /** the tag of the answer the caller holds: a remote with nothing moved
+   * since answers that, reading nothing */
+  tag?: string,
 ): Promise<Read> => {
   let remote = options.remote
   if (!remote?.url) return refused('Remote tracker is not configured', 503)
@@ -57,14 +63,28 @@ export let read = async (
     params.set('query', query.get('query')!)
   }
   try {
-    let response = await upstream(remote, path, params, { signal }, go)
+    let response = await upstream(
+      remote,
+      path,
+      params,
+      { signal, ...tag ? { headers: { 'if-none-match': tag } } : {} },
+      go,
+    )
+    let etag = response.headers.get('etag') ?? undefined
+    if (response.status == 304 && etag) {
+      return { ok: true, tag: etag, unchanged: true }
+    }
     if (!response.ok) {
       return refused(
         `Remote tracker refused the read (${response.status})`,
         response.status == 404 ? 404 : 502,
       )
     }
-    return { ok: true, value: await response.json() }
+    return {
+      ok: true,
+      value: await response.json(),
+      ...etag ? { tag: etag } : {},
+    }
   } catch (error) {
     // Neither a credential, ticket, configured URL nor upstream body is an error report.
     return late(error)

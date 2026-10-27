@@ -111,6 +111,8 @@ export let service = async (
       stop,
     )
   let outward = health('delivery'), inward = health('standing')
+  // The tag of the remote standing the last whole reconciliation applied.
+  let seen: { tag?: string } = {}
 
   let run = async (
     pass: () => Promise<void>,
@@ -147,7 +149,7 @@ export let service = async (
       await run(
         () =>
           inward(() =>
-            reconcile(host.graph, options.remote!, options.fetch, stop)
+            reconcile(host.graph, options.remote!, options.fetch, stop, seen)
           ),
         true,
       )
@@ -163,7 +165,13 @@ export let service = async (
           run(
             () =>
               inward(() =>
-                reconcile(host.graph, options.remote!, options.fetch, stop)
+                reconcile(
+                  host.graph,
+                  options.remote!,
+                  options.fetch,
+                  stop,
+                  seen,
+                )
               ),
             true,
             options.reconcileEvery ?? 30_000,

@@ -66,17 +66,23 @@ export let standing = (local: Bundle, remote: Bundle): Bundle | undefined => {
 const PAGE = 100, PAGES = 100
 
 /** One bounded pass through remote bugs (including open and closed groups).
- * Each page uses the existing signed read transport. A raced local group is
- * left for the next pass; failures propagate to the service's health report. */
+ * Each page uses the existing signed read transport. A pass that applied
+ * everything it read keeps the tag the remote read it at in `seen`, and the
+ * next pass sends it: a remote where nothing moved since says so with no row
+ * read, and the pass ends there. A raced local group is left for the next
+ * pass, which then reads in full; failures propagate to the service's health
+ * report. */
 export let reconcile = async (
   g: Desk,
   remote: Remote,
   go: typeof fetch = fetch,
   signal?: AbortSignal,
+  seen: { tag?: string } = {},
 ): Promise<void> => {
-  let cursor = ''
+  let cursor = '', tag: string | undefined, raced = false
   for (let page = 0; page < PAGES; page++) {
     signal?.throwIfAborted()
+    let since = !cursor && seen.tag
     let response = await request(
       remote,
       'bugs',
@@ -85,9 +91,11 @@ export let reconcile = async (
         limit: String(PAGE),
         query: `.bug * .order=entity.eid${cursor ? ` .after=${cursor}` : ''}`,
       }),
-      { signal },
+      { signal, ...since ? { headers: { 'if-none-match': since } } : {} },
       go,
     )
+    if (response.status == 304) return
+    tag ??= response.headers.get('etag') ?? undefined
     if (!response.ok) {
       await response.body?.cancel()
       throw Error(`Remote tracker refused reconciliation (${response.status})`)
@@ -136,9 +144,13 @@ export let reconcile = async (
         await g.apply([patch], { trusted: true, stamp: false })
       } catch (error) {
         if (!(error instanceof Stale)) throw error
+        raced = true
       }
     }
-    if (rows.length < PAGE) return
+    if (rows.length < PAGE) {
+      seen.tag = raced ? undefined : tag
+      return
+    }
     cursor = next!
   }
   throw Error('Remote tracker reconciliation exceeded 100 pages')

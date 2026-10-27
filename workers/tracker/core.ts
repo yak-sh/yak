@@ -1,7 +1,7 @@
 // Tracker stores compose the portable graph and downstream effect pool. Intake
 // preserves reporter eids; bounded passes leave unfinished effects recoverable.
 
-import type { Bundle, Comp, Storage } from '@yaks/graph'
+import type { Bundle, Comp, Plugin, Storage } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -56,7 +56,41 @@ export type Config = Options & {
   sender?: Sender
   report?: (error: unknown) => void | Promise<void>
 }
+// What a reader of the bugs needs to read again: a commit that writes
+// anything beyond the effect pool's and the scheduler's bookkeeping. Each one
+// moves the store's tag, and the bugs door answers a reader that sends the
+// tag it holds with 304 and no row read (door.ts). A store's tag starts fresh
+// with each instance, so a reader of the one before is answered in full.
+let STAMPS = new Set(['entity', 'created', 'updated'])
+let BOOKKEEPING = new Set(['effect', 'lease', 'worker', 'wake', 'fired'])
+let tagging = () => {
+  let born = crypto.randomUUID().slice(0, 8), moved = 0
+  // The bookkeeping rows written since this instance began. A delete names
+  // only its eid, so a finished run's delete moves nothing only when its row
+  // is one of these; a row from before is read again once.
+  let kept = new Set<string>()
+  let moves = (b: Bundle) => {
+    let eid = b.entity.eid
+    if (b.$delete) return !kept.delete(eid)
+    let keys = Object.keys(b).filter((k) => !STAMPS.has(k) && k[0] != '$')
+    if (!keys.every((k) => BOOKKEEPING.has(k))) return kept.delete(eid), true
+    if (keys.length) kept.add(eid)
+    return false
+  }
+  let plugin: Plugin = {
+    name: '@yaks/tracker/tag',
+    hooks: {
+      effect: (bundles) => {
+        if (bundles.map(moves).includes(true)) moved++
+        return bundles
+      },
+    },
+  }
+  return { plugin, tag: () => `"${born}.${moved}"` }
+}
+
 export let store = (storage: Storage, config: Config) => {
+  let tags = tagging()
   let fx = effects(vocab, {
     singleOwner: true,
     defer: true,
@@ -72,7 +106,11 @@ export let store = (storage: Storage, config: Config) => {
       }
     },
   })
-  let g = graph({ vocab, storage, plugins: [fx, resolutions()] })
+  let g = graph({
+    vocab,
+    storage,
+    plugins: [fx, resolutions(), tags.plugin],
+  })
   fx.handle({
     ...handlers({ graph: g }, config),
     ...config.sender ? { mail_post: sending({ sender: config.sender }) } : {},
@@ -112,6 +150,8 @@ export let store = (storage: Storage, config: Config) => {
   }
   return {
     graph: g,
+    /** The bugs' tag: it moves with every commit a reader may need to see. */
+    tag: tags.tag,
     ingest: (rows: Bundle[]) => ingest(g, rows),
     // One aborted pool pass handles a bounded window. Several passes let
     // grouping's newly owed notifications finish in this wake too.

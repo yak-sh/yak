@@ -118,3 +118,29 @@ test('a signed full-standing read reconciles migrated ids without remote imports
   equal(comp(got, 'bug').hits, 9)
   equal(await desk.get([remoteId]), [])
 })
+
+// A remote that tags its answer, and answers 304 to a reader holding the tag.
+let tagged = { at: '"t1"' }
+let asked: (string | null)[] = []
+let quiet = ((_url: string | URL | Request, init?: RequestInit) => {
+  let since = new Headers(init?.headers).get('if-none-match')
+  asked.push(since)
+  return Promise.resolve(
+    since == tagged.at
+      ? new Response(null, { status: 304, headers: { etag: tagged.at } })
+      : Response.json([{ ...fixed, entity: { eid: remoteId } }], {
+        headers: { etag: tagged.at },
+      }),
+  )
+}) as typeof fetch
+let seen: { tag?: string } = {}
+let remote = { url: 'https://tracker.example', secret: 'test' }
+await reconcile(desk, remote, quiet, undefined, seen)
+await reconcile(desk, remote, quiet, undefined, seen)
+tagged.at = '"t2"'
+await reconcile(desk, remote, quiet, undefined, seen)
+
+test('a pass sends the tag the last whole pass read, and a remote that has not moved ends it', () => {
+  equal(asked, [null, '"t1"', '"t1"'])
+  equal(seen.tag, '"t2"')
+})

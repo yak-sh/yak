@@ -136,8 +136,16 @@ async (request: Request): Promise<Response> => {
         return json({ error: `${key} must be a global eid` }, 400)
       }
     }
+    // A reader that polls sends the tag it read: nothing it could read has
+    // moved while the tag stands, so it is told so without a row read. The
+    // tag is taken before the read, so a write during it leaves the answer's
+    // tag behind and the next poll reads again.
+    let tag = tracker.tag()
+    if (request.headers.get('if-none-match') == tag) {
+      return new Response(null, { status: 304, headers: { etag: tag } })
+    }
     try {
-      return json(
+      let answer = json(
         params.has('bug')
           ? await tracker.bug(params.get('bug')!)
           : await tracker.bugs(
@@ -146,6 +154,8 @@ async (request: Request): Promise<Response> => {
             n,
           ),
       )
+      answer.headers.set('etag', tag)
+      return answer
     } catch (error) {
       if (error instanceof CallError && error.code == 'bug') {
         return json({ error: 'bug not found' }, 404)

@@ -21,7 +21,11 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
   void (async () => {
     try {
       let value = 'params' in data
-        ? await doors.bugs(new URLSearchParams(data.params), stop.signal)
+        ? await doors.bugs(
+          new URLSearchParams(data.params),
+          stop.signal,
+          data.tag,
+        )
         : await doors.mark(data.bug, data.name, data.said)
       tell({ id: data.id, value })
     } catch (error) {
