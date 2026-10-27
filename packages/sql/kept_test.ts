@@ -4,6 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import {
   and,
   eq,
+  gt,
   le,
   limit,
   list,
@@ -356,6 +357,7 @@ let timed = loadVocab([...vocab.docs, {
         next: { type: 'string', format: 'date-time' },
         at: { type: 'number', format: 'date-time' },
         handler: { type: 'string' },
+        seq: { type: 'integer' },
       },
     },
   },
@@ -415,6 +417,21 @@ for (
         value: list(...ids.map(eid)),
       } as Pred, limit(1))
       timedSame(q, { now: moments[0], unordered: true })
+    }
+  })
+}
+
+// Each call's bounds on a number, asked in turn of one shape: a cursor read
+// from the line after the last one read.
+for (let calls of [[5, 6, 70], [0, 1, 2], [7, 7, 8], [9, 3, 2 ** 40]]) {
+  test(`a kept statement binds each call's bounds on a number: ${calls}`, () => {
+    for (let [k, n] of calls.entries()) {
+      let q = and(
+        gt('run.seq', n),
+        le('run.seq', calls[(k + 1) % calls.length]),
+        eq('run.handler', 'h'),
+      )
+      timedSame(q, { now: moments[0] })
     }
   })
 }

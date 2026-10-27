@@ -1,15 +1,17 @@
 // A query compiled once per shape. Lowering a query is the expensive part of
 // a read, and a read is asked again and again with only its values changed: the
 // effects pool asks for each handler's due run at a new `now` every pass, a
-// write scopes its effects to the entities it touched. So `compile` keeps the
-// statement each shape lowered to and binds the next call's values into it.
+// write scopes its effects to the entities it touched, a transcript is read
+// from the line after the last one read. So `compile` keeps the statement each
+// shape lowered to and binds the next call's values into it.
 //
-// A shape is the AST with every generated id it compares against stood in for
-// by its place, plus every input the lowering reads: the options' data, the
+// A shape is the AST with every generated id it compares against, and every
+// whole number a numeric property is compared above or below, stood in for by
+// its place, plus every input the lowering reads: the options' data, the
 // registries by identity, the extensions' hooks, the archetype catalog's
 // answers, and the census's choice of road (./bind.ts `walks`). The values a
 // kept statement binds anew are the clock, the root candidates (`eids`), those
-// ids, and the integer ids they resolve to.
+// ids and numbers, and the integer ids the ids resolve to.
 //
 // Where each value lands is proved, never inferred from the binder's code: a
 // shape seen a second time is lowered twice more, at two fixed instants, with
@@ -31,7 +33,7 @@
 // the order the lowering asked it: a statement is kept only while each answer
 // stands.
 
-import { type And, map, type Value } from '@yaks/query/core'
+import { type And, map, type Pred, type Value } from '@yaks/query/core'
 import type { Presence, Vocab } from '@yaks/vocab'
 import { parse } from '@yaks/id'
 import { type Param, type Raw, raw, type Stmt } from './ast.ts'
@@ -221,8 +223,26 @@ let watched = (ext: Extension[] | undefined, begins: boolean) =>
 // The ids a lowering treats as opaque: a uuid or a content hash.
 let generated = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$|^[0-9a-f]{40,64}$/i
 
-// The AST with every generated id a predicate compares against renamed.
-let renamed = (ast: And, name: (id: string) => string): And => {
+// A whole number as a numeric column reads it back.
+let whole = (raw: string) =>
+  /^\d+$/.test(raw) && Number.isSafeInteger(+raw) && String(+raw) == raw
+
+// The whole number a predicate holds a numeric property above or below.
+let bounds = (vocab: Vocab, p: Pred): string | undefined => {
+  let v = p.value
+  if (
+    v?.kind == 'scalar' && whole(v.raw) && /^[<>]=?$/.test(p.op) &&
+    p.path.length == 2 && vocab.prop(p.path[0], p.path[1])?.scalar == 'number'
+  ) return v.raw
+}
+
+// The AST with every generated id a predicate compares against renamed, and
+// every whole number one bounds a numeric property by.
+let renamed = (
+  ast: And,
+  vocab: Vocab,
+  name: (id: string) => string,
+): And => {
   let value = (v: Value): Value =>
     v.kind == 'scalar'
       ? generated.test(v.raw) ? { ...v, raw: name(v.raw) } : v
@@ -231,15 +251,19 @@ let renamed = (ast: And, name: (id: string) => string): And => {
       : v.kind == 'range'
       ? { ...v, lo: value(v.lo), hi: value(v.hi) }
       : v
-  return map(
-    ast,
-    (c) => c.kind == 'pred' && c.value ? { ...c, value: value(c.value) } : c,
-  )
+  return map(ast, (c) => {
+    if (c.kind != 'pred' || !c.value) return c
+    let n = bounds(vocab, c)
+    return n == null
+      ? { ...c, value: value(c.value) }
+      : { ...c, value: { kind: 'scalar', raw: name(n) } }
+  })
 }
 
-// A stand-in for an id, of its form, unlike any id in use. `family` keeps the
-// two probes apart.
+// A stand-in for an id or a number, of its form, unlike any in use. `family`
+// keeps the two probes apart.
 let stand = (id: string, family: number, k: number): string => {
+  if (whole(id)) return String(2 ** 52 + family * 2 ** 32 + k)
   let tail = family.toString(16) + k.toString(16).padStart(11, '0')
   return id.includes('-')
     ? `ffffffff-ffff-4fff-bfff-${tail}`
@@ -257,10 +281,10 @@ let PROBES = [
 
 // The call this is, and the shape it has; undefined for a call whose ids the
 // lowering reads as more than opaque (a human id, a computed row's id).
-let called = (ast: And, opts: BindOpts, p: Prepared) => {
+let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
   let o = p.opts
   let place = new Map<string, number>(), operands: string[] = []
-  let shape = renamed(ast, (id) => {
+  let shape = renamed(ast, vocab, (id) => {
     let k = place.get(id)
     if (k == null) {
       place.set(id, k = operands.length)
@@ -272,9 +296,8 @@ let called = (ast: And, opts: BindOpts, p: Prepared) => {
   let virtual = (eid: string) =>
     backed.some((b) => b.tag && idOf(b.tag, eid) != null)
   let roots = o.eids ? [...o.eids] : undefined
-  if (operands.some((id) => parse(id) || virtual(id)) || roots?.some(virtual)) {
-    return
-  }
+  let opaque = (id: string) => whole(id) || !parse(id) && !virtual(id)
+  if (!operands.every(opaque) || roots?.some(virtual)) return
   let refs = operands.map((id) =>
     o.references && Object.hasOwn(o.references, id)
       ? o.references[id]
@@ -292,7 +315,7 @@ let called = (ast: And, opts: BindOpts, p: Prepared) => {
       id,
       k,
     ) => [
-      id.length,
+      whole(id) ? 'number' : id.length,
       id.includes('-'),
       refs[k] === undefined ? 0 : refs[k] === null ? 1 : 2,
     ]),
@@ -366,6 +389,8 @@ let slot = (
     let { call } = probes[i]
     let k = call.operands.indexOf(v as string)
     if (k >= 0 && typeof v == 'string') return (c) => c.operands[k]
+    k = typeof v == 'number' ? call.operands.indexOf(String(v)) : -1
+    if (k >= 0) return (c) => Number(c.operands[k])
     k = call.roots.indexOf(v as string)
     if (k >= 0 && typeof v == 'string') return (c) => c.roots[k]
     k = call.refs.indexOf(v as number)
@@ -435,7 +460,7 @@ let proven = (
     let out = within(touched, () =>
       render(
         prepared(
-          renamed(ast, (id) => operands[asking.operands.indexOf(id)]),
+          renamed(ast, vocab, (id) => operands[asking.operands.indexOf(id)]),
           vocab,
           { ...opts, now, eids: opts.eids && roots, references },
           undefined,
@@ -524,7 +549,7 @@ export let compile = (
       }),
   )
   let lowered = () => within(touched, () => render(p.lower()))
-  let shaped = called(ast, opts, p)
+  let shaped = called(ast, vocab, opts, p)
   if (!shaped) return lowered()
   let { key, call } = shaped
   let s = shelf(vocab), held = s.get(key)
