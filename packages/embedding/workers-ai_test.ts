@@ -3,7 +3,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Refused } from './embedder.ts'
+import { retries } from './remote.ts'
 import { workersAi } from './workers-ai.ts'
+
+retries.waits = [0, 0]
 
 // A stand-in binding: a vector per text, [length, 1, 0, 0], and every run it
 // was asked for.
@@ -38,6 +41,11 @@ test('an input the model will not take is Refused; an outage is not', async () =
   await assertRejects(() => e(refused.ai).embed('x'), Refused)
   let error = await assertRejects(() => e(down.ai).embed('x'))
   assertEquals(error instanceof Refused, false)
+  assertEquals(
+    (error as Error).message.split(' — ')[0],
+    '@yaks/embedding: workers-ai m failed embedding 1 text, asked 3 times',
+  )
+  assertEquals([refused.runs.length, down.runs.length], [1, 3])
 })
 
 test('a text too big for the model is asked again as its opening half', async () => {

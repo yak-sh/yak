@@ -12,10 +12,13 @@
 // nothing else here differs. Which server speaks which is the provider row's
 // to say (./options.ts), not this file's.
 //
-// A failure — an error status, an unexpected body, a timeout — is thrown,
-// because the sweep is what decides what an unreachable embedder means (it
-// stops, and the corpus stays stale), and a vector invented here to avoid the
-// error would be worse than no vector at all. A status saying the input itself
+// A failure — an error status, an unexpected body, a timeout — is first sent
+// again after each pause of {@link retries}, since a provider's own failure (a
+// 503, Workers AI's "3048: Unknown internal error") usually passes in seconds
+// ({@link retrying}). One that outlasts them is thrown once, naming the model
+// and the call, because the sweep is what decides what an unreachable
+// embedder means (it stops, and the corpus stays stale), and a vector
+// invented here to avoid the error would be worse than no vector at all. A status saying the input itself
 // was refused throws {@link Refused}, which the sweep treats as one text it
 // cannot embed rather than a model it cannot reach. A server may refuse a text
 // past its model's context rather than truncate it, as Ollama does for some
@@ -91,6 +94,11 @@ export let LOAD = 128_000
 /** The shortest text asked again after a refusal: one refused at this
  * length is refused for more than its length. */
 export let SHORTEST = 256
+
+/** The pauses before a call that failed on the provider's side is sent again,
+ * one per resend: about eight seconds in all, which a passing failure rarely
+ * outlasts. A test replaces them. */
+export let retries: { waits: number[] } = { waits: [500, 2_000, 6_000] }
 
 // The statuses that mean the input was refused, not the request: malformed,
 // too large, or unprocessable.
@@ -206,7 +214,7 @@ export type Batched = Omit<Embedder, 'embed'> & {
  */
 export let batched = (
   model: string,
-  ask: (input: string[]) => Promise<Float32Array[]>,
+  ask: Ask,
   load: Load = {},
 ): Batched => {
   type Wait = {
@@ -246,13 +254,62 @@ export let batched = (
   }
 }
 
+/** What asks a provider: texts in, a vector each out, in order. */
+export type Ask = (input: string[]) => Promise<Float32Array[]>
+
+/**
+ * `ask`, sent again after each of `waits` (default {@link retries}) while it fails other than
+ * {@link Refused}, since a refused input is refused every time. A failure that
+ * outlasts them throws once, naming `who` was asked (the provider and model)
+ * and for what, with the last failure as its cause.
+ *
+ * ```ts
+ * import { assertEquals, assertRejects } from '@std/assert'
+ * let sent = 0
+ * let flaky = retrying('workers-ai @cf/m', () =>
+ *   ++sent < 3 ? Promise.reject(Error('3048: Unknown internal error'))
+ *     : Promise.resolve([new Float32Array([1])]), [0, 0])
+ * assertEquals([[...(await flaky(['x']))[0]], sent], [[1], 3])
+ * let down = retrying('workers-ai @cf/m', () =>
+ *   Promise.reject(Error('4009: An internal server error occured.')), [0])
+ * await assertRejects(() => down(['x', 'y']), Error,
+ *   'workers-ai @cf/m failed embedding 2 texts, asked 2 times — 4009')
+ * ```
+ */
+export let retrying = (
+  who: string,
+  ask: Ask,
+  waits?: number[],
+): Ask =>
+async (input) => {
+  let pauses = waits ?? retries.waits
+  for (let sent = 1;; sent++) {
+    try {
+      return await ask(input)
+    } catch (error) {
+      if (error instanceof Refused) throw error
+      if (sent > pauses.length) {
+        let n = input.length
+        throw new Error(
+          `@yaks/embedding: ${who} failed embedding ${n} text${
+            n == 1 ? '' : 's'
+          }, asked ${sent == 1 ? 'once' : `${sent} times`} — ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          { cause: error },
+        )
+      }
+      let pause = pauses[sent - 1]
+      if (pause > 0) await new Promise((ok) => setTimeout(ok, pause))
+    }
+  }
+}
+
 /** `ask`, where one text asked alone and {@link Refused} is asked again as
  * its opening half, down to {@link SHORTEST}: a model that will not take a
  * whole text still embeds what it can read of it. */
-export let halving = (
-  ask: (input: string[]) => Promise<Float32Array[]>,
-): (input: string[]) => Promise<Float32Array[]> => {
-  let fit = async (input: string[]): Promise<Float32Array[]> => {
+export let halving = (ask: Ask): Ask => {
+  let fit: Ask = async (input) => {
     try {
       return await ask(input)
     } catch (error) {
@@ -273,7 +330,7 @@ export let remote = (said: Remote): Batched => {
   let root = said.base.trim().replace(/\/+$/, '')
   let go: Fetch = said.fetch ?? (fetch as unknown as Fetch)
   // One request: texts in, a vector each out, in order.
-  let ask = async (input: string[]): Promise<Float32Array[]> => {
+  let ask: Ask = async (input) => {
     let headers: Record<string, string> = {
       'content-type': 'application/json',
     }
@@ -300,5 +357,10 @@ export let remote = (said: Remote): Batched => {
       said.dim,
     )
   }
-  return batched(said.space ?? space(said), halving(ask), said)
+  let who = `${said.api} ${said.model}`
+  return batched(
+    said.space ?? space(said),
+    halving(retrying(who, ask)),
+    said,
+  )
 }

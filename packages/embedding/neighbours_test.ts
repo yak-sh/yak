@@ -8,8 +8,10 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
 import { compose, type Plug } from '@yaks/cli/host'
 import { answerOf, toolEid, worded } from '@yaks/tools'
-import { hashEmbedder, searched, sweep } from './mod.ts'
+import { hashEmbedder, retries, searched, sweep } from './mod.ts'
 import { fields } from './fields.ts'
+
+retries.waits = [0]
 
 let PLUGINS: Plug[] = [
   '@yaks/kernel',

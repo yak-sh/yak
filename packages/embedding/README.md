@@ -227,7 +227,12 @@ part of the stored model name (`qwen3-embedding-0.6b#256`). `chars` (default
 model's context rather than truncate it, as Ollama does for some texts on a
 512-token model, so a text refused alone is asked again as its opening half,
 down to 256 characters. A status saying the input was refused (400, 413, 422)
-rejects with `Refused`; any other failure rejects with the error.
+rejects with `Refused`. Any other failure is the provider's, which usually
+passes in seconds, so the request is sent again after each pause of
+`retries.waits` (half a second, two, then six); one that outlasts them rejects
+once, naming the provider, the model and how many texts it was asked for, with
+the last failure as its `cause`. `retrying(who, ask, waits?)` is that, for any
+`ask`.
 
 `{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
 runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):
@@ -239,9 +244,11 @@ kept in the platform's cache. Its space is the pinned model and its width
 `workersAi({ model: '@cf/qwen/qwen3-embedding-0.6b', dim: 256, ai })` asks
 Cloudflare Workers AI through a Worker's `AI` binding: the binding is the
 credential, so a Worker makes this embedder itself. Texts asked together ride
-one `run(model, { text })`, as over HTTP. Outside a Worker, Workers AI is an
-OpenAI-compatible endpoint for `remote`. `batched(model, ask, load?)` is the
-batching both share, for any provider that answers many texts at once.
+one `run(model, { text })`, as over HTTP, and a failure on Workers AI's side
+(`3048: Unknown internal error`) is asked again the same way. Outside a Worker,
+Workers AI is an OpenAI-compatible endpoint for `remote`.
+`batched(model, ask, load?)` is the batching both share, for any provider that
+answers many texts at once.
 
 ## The sweep
 

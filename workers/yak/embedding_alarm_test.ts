@@ -1,9 +1,12 @@
 // A failed embedding pass must honor its retry interval, not an earlier
 // crash-recovery alarm it armed before the provider answered.
 import { assert, assertEquals } from '@std/assert'
+import { retries } from '@yaks/embedding'
 import { test, until } from '@yaks/testing'
 import { Store } from './graph.ts'
 import { state } from './testing.ts'
+
+retries.waits = [0]
 
 const headers = {
   'x-store': 'ada/embedding-alarm',
@@ -53,6 +56,14 @@ test('an embedding failure honors the store retry interval across reboot', async
     return at != null && at >= began + Store.RETRY ? at : null
   })
   assert(alarm >= began + Store.RETRY, `${alarm - began}ms`)
+  // The embedder asked again before it gave up, and gave up once: a write
+  // before the retry is due queues its text and leaves the model alone.
+  assertEquals(failures, 2)
+  let more = [{ entity: { eid: 'more' }, doc: { title: 'Another note' } }]
+  assertEquals((await post('/apply', more)).status, 200)
+  await store.alarm()
+  while (ctx.pending.size) await Promise.allSettled([...ctx.pending])
+  assertEquals(failures, 2)
   await ctx.storage.deleteAlarm()
   began = Date.now()
   let count = failures

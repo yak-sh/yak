@@ -4,10 +4,13 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { service } from './service.ts'
 import { TABLE } from './ddl.ts'
+import { retries } from './remote.ts'
 import { insert, type Statements, tally } from '@yaks/sql'
 import { entity } from '../sqlite/testing.ts'
 import type { Options, Rows } from './options.ts'
 import { none, serving, shelf, shop } from './testing.ts'
+
+retries.waits = [0]
 
 let count = (db: Statements) => tally(db, TABLE)
 

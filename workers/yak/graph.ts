@@ -995,6 +995,10 @@ export class Store {
   }
   #vectorWork: Promise<void> | null = null
   #vectorAgain = false
+  // When a failed drain's retry is due: until then a write or a sooner alarm
+  // leaves the model alone and keeps the retry armed, so one failure is one
+  // report.
+  #vectorRetry = 0
   // The planner statistics a deployment pass owed (@yaks/sqlite `analyze`),
   // a table at a time, answering how many stay owed; and whether any do, once
   // asked this incarnation (`#analyzing`).
@@ -3508,8 +3512,10 @@ export class Store {
   // back on the alarm for the rest: the first wake after this shipped, every
   // store owes a vector for each text it holds, and it catches up behind its
   // own traffic.
-  // A drain that fails goes to the tracker and comes back a minute later; `.near`
-  // ranks whatever is stored meanwhile.
+  // The embedder asks again through a passing failure of the model's own
+  // (@yaks/embedding `retrying`). A drain that fails even so goes to the
+  // tracker once and comes back a minute later, and nothing else starts one
+  // meanwhile; `.near` ranks whatever is stored.
   static EMBED = 10_000
 
   // Whether a text is owed its vector, which seeks one queued row. An object whose
@@ -3522,6 +3528,16 @@ export class Store {
     if (this.#dormant) return
     let model = embedder(this.#bind)
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
+    if (Date.now() < this.#vectorRetry) {
+      // An alarm sooner than the retry spends the one the failure armed.
+      let name = this.#name()
+      void this.#arming(
+        new Date(this.#vectorRetry).toISOString(),
+        'embedding retry',
+      )
+        .catch((e) => defect(e, { request: 'embedding retry', store: name }))
+      return
+    }
     if (this.#vectorWork) {
       if (this.#owes()) this.#vectorAgain = true
       return
@@ -3560,8 +3576,9 @@ export class Store {
       }
     })().catch(async (error) => {
       defect(error, { request: 'embedding', store: name })
+      this.#vectorRetry = Date.now() + Store.RETRY
       await this.#arming(
-        new Date(Date.now() + Store.RETRY).toISOString(),
+        new Date(this.#vectorRetry).toISOString(),
         'embedding retry',
       )
         .catch((e) => defect(e, { request: 'embedding retry', store: name }))

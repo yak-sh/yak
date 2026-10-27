@@ -2,8 +2,10 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { cut, type Fetch, remote } from './remote.ts'
+import { cut, type Fetch, remote, retries } from './remote.ts'
 import { Refused } from './embedder.ts'
+
+retries.waits = [0]
 
 // Float32 stores what it can: compare a vector at the precision it has.
 let round = (v: Float32Array) => [...v].map((n) => Math.round(n * 1e6) / 1e6)

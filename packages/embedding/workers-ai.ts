@@ -13,8 +13,10 @@
 // A text the model will not take is `Refused`, as a 4xx is over HTTP: a batch
 // it rode in is asked again a text at a time (./sweep.ts), a text alone is
 // asked again as its opening half (./remote.ts `halving`), and one refused
-// even then is dropped while the sweep carries on. Anything else the binding throws —
-// a rate limit, an outage — is thrown as it came, and the work stays owed.
+// even then is dropped while the sweep carries on. Anything else the binding
+// throws (Workers AI failing on its side, a rate limit, an outage) is asked
+// again after each pause of ./remote.ts `retries`; one that outlasts
+// them is thrown once, naming the model, and the work stays owed.
 
 import { Refused } from './embedder.ts'
 import {
@@ -23,6 +25,7 @@ import {
   batched,
   halving,
   type Load,
+  retrying,
   space,
 } from './remote.ts'
 
@@ -53,7 +56,7 @@ let unfit = (e: unknown) =>
 export let workersAi = (said: WorkersAi): Batched =>
   batched(
     space(said),
-    halving(async (input) => {
+    halving(retrying(`workers-ai ${said.model}`, async (input) => {
       let got: unknown
       try {
         got = await said.ai.run(said.model, { text: input })
@@ -67,6 +70,6 @@ export let workersAi = (said: WorkersAi): Batched =>
         (got as { data?: number[][] } | null)?.data,
         said.dim,
       )
-    }),
+    })),
     said,
   )
