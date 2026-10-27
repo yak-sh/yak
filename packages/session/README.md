@@ -245,12 +245,16 @@ transcript at once.
 
 With a durable pool, each `session_run` effect performs one leased step. Inputs,
 completed requests, context checkpoints and final tool results owe subsequent
-steps in the transaction that records them. `session_input` performs the same
-step for a new input that inherits `using`, leaving an input that selects
-`using` to `session_run` so it owes only one turn. Each `session_tool` effect
-claims and executes one call independently, so several calls can run together. A
-background call (`tool_async`) is answered by `PENDING` ("Pending; its result
-will follow."), which a request derives from the call. A model turn starts while
+steps in the transaction that records them. A run owed while this process is
+already stepping the transcript joins that step, and the step's run owes one
+more afterwards, unless the step wrote every change that joined it and left no
+turn owed: a step's own reply wakes its transcript, and the step that wrote it
+has answered that wake already. `session_input` performs the same step for a new
+input that inherits `using`, leaving an input that selects `using` to
+`session_run` so it owes only one turn. Each `session_tool` effect claims and
+executes one call independently, so several calls can run together. A background
+call (`tool_async`) is answered by `PENDING` ("Pending; its result will
+follow."), which a request derives from the call. A model turn starts while
 calls run only when there is something new to read: an input, a result, or the
 Pending entry (`tool_progress`) a call is given when it outlasts its patience
 (`PATIENCE`, 10 seconds; `Deps.patience`), since a call that has run that long

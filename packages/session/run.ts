@@ -426,8 +426,11 @@ export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
 // Each owed effect owns one step. Waiting effects retain their durable pool
 // claim; a crash leaves it available to the next worker. Duplicate wakes join
 // that obligation without holding pool slots, including while this worker
-// waits on another worker's session lease. One durable followup preserves them.
-type Advance = { done: Promise<void>; again: boolean }
+// waits on another worker's session lease. One durable followup preserves them,
+// unless the step taken wrote every change that joined it and left its
+// transcript owing no turn: a step's own reply wakes its transcript, and a
+// followup would find only the step already taken.
+type Advance = { done: Promise<void>; joined: Eid[]; took?: Step }
 let steps = new WeakMap<Graph, Map<Eid, Advance>>()
 let advancing = (g: Graph) => {
   let here = steps.get(g)
@@ -435,15 +438,26 @@ let advancing = (g: Graph) => {
   return here
 }
 
-let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
+// Whether the step a pass took already answers every wake that joined it.
+let covered = ({ joined, took }: Advance) =>
+  !!took && took.status != 'pending' &&
+  joined.every((eid) => took.added.some((b) => b.entity.eid == eid))
+
+/** One step owed to a transcript by a change to `cause`. */
+let advance = (
+  g: Graph,
+  session: Eid,
+  r: Runner,
+  cause: Eid,
+): Promise<void> => {
   looking(g).get(session)?.()
   let here = advancing(g)
   let previous = here.get(session)
   if (previous) {
-    previous.again = true
+    previous.joined.push(cause)
     return Promise.resolve()
   }
-  let pass: Advance = { done: Promise.resolve(), again: false }
+  let pass: Advance = { done: Promise.resolve(), joined: [] }
   here.set(session, pass)
   let done = Promise.resolve().then(async () => {
     if (!await answering(g, session, r)) {
@@ -473,13 +487,13 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
         return
       }
       if (!await admitted(g, session, r)) return
-      let s = await step(g, session, { ...r, stopping })
+      let s = pass.took = await step(g, session, { ...r, stopping })
       await r.each?.(s, session)
       if (ENDED.includes(s.status)) await ended(g, session, r)
     })
   }).finally(async () => {
     if (here.get(session) == pass) here.delete(session)
-    if (pass.again || r.stopping?.aborted) {
+    if ((pass.joined.length && !covered(pass)) || r.stopping?.aborted) {
       let status = await currentStatus(g, session)
       if (['pending', 'running', 'queued'].includes(status)) {
         await enqueue(g, 'session_run', session)
@@ -648,11 +662,11 @@ export let running = (g: Graph, runner: Runner): Handlers => {
     // request to ask again among them, is thrown once the others are.
     let thrown: unknown
     for (let session of await about(g, e)) {
-      await (pooled ? advance : answer)(g, session, { ...r, attempt }).catch(
-        (err) => {
+      await (pooled
+        ? advance(g, session, { ...r, attempt }, e.entity.eid)
+        : answer(g, session, { ...r, attempt })).catch((err) => {
           thrown ??= err
-        },
-      )
+        })
     }
     if (thrown) throw thrown
   }

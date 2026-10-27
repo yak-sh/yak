@@ -215,6 +215,59 @@ test('a later line inherits using and gets exactly one model turn', () => {
   ])
 })
 
+// A step's own reply wakes its transcript as it lands, while that step's run
+// is still going. The step already taken answers that wake: the pool is owed
+// no further run until the background call's result lands.
+let replied = await (async () => {
+  let held = Promise.withResolvers<string>()
+  let tools = [{
+    name: 'wait',
+    description: 'Answers once the test lets it',
+    parameters: { type: 'object', properties: {} },
+    run: () => held.promise,
+  }]
+  let { model, asks } = script((n) =>
+    n == 1 ? [{ kind: 'call', id: 'c1', name: 'wait', args: '{}' }] : done
+  )
+  let steps = 0
+  let p = proc(store(), 'w1', model, {
+    tools,
+    // The first step's run goes on until its reply's wake has joined it, as
+    // it does when a provider's reply comes in over the network.
+    each: async () => {
+      if (++steps > 1) return
+      await until(() =>
+        p.fx.running().filter((r) => r.handler == 'session_run').length == 1
+      )
+    },
+  })
+  let owed: string[] = []
+  p.fx.created('effect', (e) => {
+    if (e.comp?.kind == 'matched') owed.push(String(e.comp.handler))
+  })
+  let stop = new AbortController()
+  let working = p.fx.work(p.g, stop.signal)
+  try {
+    await p.g.apply(ask('replied'))
+    await until(async () => (await p.g.read('.call&.execution')).length == 1)
+    held.resolve('ok')
+    await until(async () =>
+      statusOf(await transcript(p.g, 'replied')) == 'settled'
+    )
+    return { owed, asks: asks() }
+  } finally {
+    held.resolve('ok')
+    stop.abort()
+    await working
+    await p.fx.idle()
+  }
+})()
+
+test('a step answers the wake its own reply owes', () => {
+  assertEquals(replied.asks, 2)
+  assertEquals(replied.owed, [])
+})
+
 // A process working the pool on a clock the test moves, with `s1` asked.
 let clocked = async (model: Model) => {
   let clock = { t: 0 }
