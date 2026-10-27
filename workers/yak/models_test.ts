@@ -16,6 +16,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted, BUDGET, countedMedia, monthOf } from './meter.ts'
 import { identityEid } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 import {
   mediaReceipts,
   type MediaRecord,
@@ -69,6 +70,7 @@ let vale = async (
     manifest = {} as unknown,
     models = 0,
     env = {} as Partial<Env>,
+    deploy = true,
   } = {},
 ) => {
   let asked: Asked[] = []
@@ -151,13 +153,17 @@ let vale = async (
       return rows.length ? rows : null
     }, { label: q })
   // Deployed the way app_deploy deploys: its words, then its commands.
-  assertEquals((await send('/vocab', manifest)).status, 200)
   let words = Object.entries((manifest as VocabDoc).$defs ?? {})
     .filter(([, d]) => d.component).map(([name]) => name)
-  assertEquals(
-    (await send('/tools', parseTools(manifest, words))).status,
-    200,
-  )
+  let deployed = async () => {
+    assertEquals((await send('/vocab', manifest)).status, 200)
+    assertEquals(
+      (await send('/tools', parseTools(manifest, words))).status,
+      200,
+    )
+    await p.settled()
+  }
+  if (deploy) await deployed()
   // `./api/ai/run` at the app's own address, as a page posts it: signed in
   // as `person`, or signed out.
   let run = async (
@@ -188,6 +194,7 @@ let vale = async (
     run,
     read,
     landed,
+    deployed,
     spent: async () => (await dir.space('ada'))!,
     settled: p.settled,
     close: p[Symbol.asyncDispose],
@@ -553,6 +560,90 @@ let line = (session: string): Bundle[] => [{
 }]
 
 let said = (b: Bundle) => (b.content as Comp | undefined)?.body
+
+// Exercise the first write before a deploy installs any provider identities.
+// Keep the outcomes so each case asserts one behavior without timing boot.
+let firstTurns = await (async () => {
+  let v = await vale(() => ({ response: 'Welcome, traveller.' }), {
+    deploy: false,
+  })
+  try {
+    let before = await v.read('.provider')
+    let ask = async (model: string, provider?: string) => {
+      let session = crypto.randomUUID()
+      let rows = asking(session, model)
+      rows[1].using = { model, ...provider ? { provider } : {} }
+      let response = await v.send('/apply', rows)
+      await v.settled()
+      return {
+        status: response.status,
+        body: await response.json(),
+        rows: await v.read(`.entry.session=${session}&*`),
+        session: (await v.read(`.entity.eid=${session}&.session`))[0],
+      }
+    }
+    let first = await ask(FLASH)
+    let known = await ask(FLASH)
+    let typed = await ask(JEV)
+    let unknown = await ask('unknown-model')
+    let unsupported = await ask(FLASH, crypto.randomUUID())
+    let space = (await v.dir.space('ada'))!
+    let store = metaOf(appStore(v.env.STORE, space, v.app, v.env), KERNEL)
+    let provider = identityEid('provider', ['openrouter'])
+    let model = identityEid('model', [FLASH])
+    await store.apply([{
+      entity: { eid: edgeEid(provider, 'serves', model) },
+      edge: { from: provider, to: model },
+      serves: { name: FLASH },
+    }])
+    let ambiguous = await ask(FLASH)
+    await v.deployed()
+    return {
+      before,
+      first,
+      known,
+      typed,
+      unknown,
+      unsupported,
+      ambiguous,
+      asked: v.asked,
+    }
+  } finally {
+    await v.close()
+  }
+})()
+
+test('a model name without a provider gets its first turn before deployment', () => {
+  assertEquals(firstTurns.before, [])
+  assertEquals(firstTurns.first.status, 200)
+  assertEquals(firstTurns.first.rows.filter((b) => b.output).map(said), [
+    'Welcome, traveller.',
+  ])
+  assertEquals((firstTurns.first.session.session as Comp).status, 'settled')
+})
+
+test('a providerless model resolves an existing offering or a Workers AI partner', () => {
+  assertEquals(firstTurns.known.rows.filter((b) => b.output).map(said), [
+    'Welcome, traveller.',
+  ])
+  assertEquals(firstTurns.asked.map((a) => a.model), [FLASH, FLASH, JEV])
+})
+
+for (let name of ['unknown', 'ambiguous'] as const) {
+  test(`an ${name} model selection receives a provider refusal`, () => {
+    let turn = firstTurns[name]
+    assertEquals(turn.status, 200)
+    let [no] = turn.rows.filter((b) => b.refusal)
+    assertEquals((no.refusal as Comp).code, 'provider')
+    assert(said(no))
+    assertEquals((turn.session.session as Comp).status, 'failed')
+  })
+}
+
+test('an unknown provider reference is refused by the write with its reason', () => {
+  assertEquals(firstTurns.unsupported.status, 400)
+  assert(firstTurns.unsupported.body.message.includes('provider'))
+})
 
 test('a page asks its store for a turn and the answer lands beside it', async () => {
   let v = await vale(() => ({

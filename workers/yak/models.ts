@@ -3,7 +3,7 @@ import type { Handlers } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import {
-  answers,
+  offers,
   providerResolver,
   running,
   type Tool,
@@ -347,22 +347,52 @@ export let asking = (at: Stored): Handlers => {
       return row?.price as Price | undefined
     }),
   }
+  let resolveModel = providerResolver(
+    at.graph,
+    lent,
+    undefined,
+    (provider) => lending(at, provider),
+  )
   let run = running(at.graph, {
     holder: at.app,
     model: served,
-    resolveModel: providerResolver(
-      at.graph,
-      lent,
-      undefined,
-      (provider) => lending(at, provider),
-    ),
-    answers: answers(at.graph, lent),
+    resolveModel: async (using, model) => {
+      // A turn may precede the app's first deploy. Provider identities are
+      // needed to dispatch it; only a successful answer creates an offering.
+      let rows = await planting(at.graph.read, at)
+      if (rows.length) await at.graph.apply(rows, { trusted: true })
+      if (
+        !using?.provider &&
+        !(await offers(at.graph, model.entity.eid, lent)).length
+      ) {
+        let name = String((model.model as Comp).name)
+        if (name.startsWith('@cf/') || name == 'typesafe/jev') {
+          using = { ...using, provider: identityEid('provider', [PROVIDER]) }
+        } else {
+          return {
+            name,
+            model: () =>
+              Promise.reject(
+                new ModelError(
+                  'provider',
+                  `No provider found for ${name}; set using.provider to ` +
+                    'workers-ai, openrouter or openai',
+                ),
+              ),
+          }
+        }
+      }
+      return resolveModel(using, model)
+    },
+    // This store owns every model turn in its app. There is no other host
+    // to wait for: an unresolved selection must reach the runner's refusal.
+    answers: () => Promise.resolve(true),
     tools: [],
     toolSnapshot: () => Promise.resolve(tooled(at)),
     report: (error, _, phase) => at.broke(`model ${phase}`, error),
   })
   return {
-    session_run: (e, tx, write) => run.session_run(e, tx, write),
+    session_run: run.session_run,
   }
 }
 

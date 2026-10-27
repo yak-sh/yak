@@ -21,14 +21,16 @@ A transcript is any entity with a `session` component. Each line of it is an
 `entry`. An entry that names a model with `using` asks for a turn, and `sending`
 on the same entry sets what the model is sent:
 
-    let smith = '$smith'
+    import { apply, subscribe } from './api/client.js'
+
+    let smith = crypto.randomUUID()
     await apply([
       { entity: { eid: smith }, doc: { title: 'The smith' }, session: {} },
       {
         entity: { eid: '$said' },
         entry: { session: smith },
         content: { body: 'A stranger walks up to the forge.' },
-        using: { model: '@cf/zai-org/glm-5.3-flash' },
+        using: { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3-flash' },
         sending: {
           instructions: 'You are the village smith: gruff, kind, brief.',
         },
@@ -36,11 +38,17 @@ on the same entry sets what the model is sent:
     ])
 
 `using` selects the model and holds only `provider`, `model` and `effort`.
-`using.model` is any model name its selected provider serves. `sending` holds
-what the model is sent, and `sending.instructions` is what a conversational
-model is told before the transcript. The store refuses `instructions` or
-`window` written inside `using`, as it refuses any property the vocabulary does
-not declare.
+`using.model` is any model name its selected provider serves. Name the provider
+explicitly: `workers-ai` for platform models, `openrouter` for the app's
+connected OpenRouter account, or `openai` for OpenAI. Without `using.provider`,
+the store uses the model's sole known provider; an untried `@cf/` model or
+`typesafe/jev` resolves to `workers-ai`. An unknown or ambiguous selection
+receives a `refusal` entry and the transcript becomes `failed`.
+
+`sending` holds what the model is sent, and `sending.instructions` is what a
+conversational model is told before the transcript. The store refuses
+`instructions` or `window` written inside `using`, as it refuses any property
+the vocabulary does not declare.
 
 `using` and `sending` stay in force for the rest of the transcript: each turn
 uses the newest `using` and the newest `sending` that any entry carries. After
@@ -56,7 +64,11 @@ whole transcript, so each new line makes a long conversation more expensive.
 Flash accepts `low`, `high` or `max` (its default), and every reasoning token is
 billed as output.
 
-    using: { model: '@cf/zai-org/glm-5.3-flash', effort: 'low' },
+    using: {
+      provider: 'workers-ai',
+      model: '@cf/zai-org/glm-5.3-flash',
+      effort: 'low',
+    },
     sending: {
       instructions: 'You are the village smith: gruff, kind, brief.',
       window: 16,
@@ -69,7 +81,11 @@ The store writes its response as more entries in the same transcript:
 
 A page receives the reply through a subscription, like any other change:
 
-    subscribe(`.entry.session=${smith}&?content`, (rows) => draw(rows))
+    subscribe(`.entry.session=${smith}&?content&?refusal`, (rows) => {
+      for (let row of rows) {
+        if (row.content) console.log(row.content.body)
+      }
+    })
 
 No polling is needed: the write that asks returns at once, and the reply arrives
 through the subscription shortly after. Each turn sends the model the
@@ -90,7 +106,7 @@ the entry:
       entity: { eid: '$next' },
       entry: { session: smith },
       content: { body: 'Evening falls. The stranger has gone.' },
-      using: { model: 'typesafe/jev' },
+      using: { provider: 'workers-ai', model: 'typesafe/jev' },
       questions: {
         asked: {
           plan: {
@@ -130,7 +146,10 @@ OpenRouter key. The entry's text is the sound prompt; this model does not use
       entity: { eid: '$sound' },
       entry: { session: smith },
       content: { body: 'A forge hammer ringing on an anvil' },
-      using: { model: 'bytedance-seed/seed-audio-1-0' },
+      using: {
+        provider: 'openrouter',
+        model: 'bytedance-seed/seed-audio-1-0',
+      },
     })
 
 The reply is an `entry` with `attachment.artifact` pointing to an `artifact`
@@ -295,6 +314,10 @@ its `vocab.json`:
 
 Then anyone who may write the app may ask, which on an `open` app is anyone with
 the link, and every turn they ask for spends the owner's budget.
+
+Since every line after a `using` asks for a turn, a visitor to an `open` app
+writes entries only in transcripts they started; a line in a member's transcript
+is refused, whatever `models` says.
 
 ## Models and pricing
 
