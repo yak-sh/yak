@@ -2,14 +2,14 @@
 // object, and which of them are ours to fix.
 //
 // The runtime moves an object to a new instance whenever it likes: a runtime
-// update, another machine, a deploy, a failure inside its own storage. The
-// instance that was moved fails what it had in flight, and whoever owns that
-// work runs it again: a caller fetches again on a fresh stub, the runtime
-// retries an alarm that failed. Cloudflare documents the move as part of an
-// object's life, so what the moved instance meets is no defect. A live object
-// that meets the words from an object it called has run out of retries, and
-// that is a failure; so is a reset our own code caused: a storage operation
-// over its timeout, or a kill for the CPU or memory limit.
+// update, another machine, a deploy, a failure inside its own storage or in
+// starting that storage up. The instance that was moved fails what it had in
+// flight, and whoever owns that work runs it again: a caller fetches again on
+// a fresh stub, the runtime retries an alarm that failed. Cloudflare documents
+// the move as part of an object's life, so what the moved instance meets is no
+// defect. A live object that meets the words from an object it called has run
+// out of retries, and that is a failure; so is a reset our own code caused: a
+// storage operation over its timeout, or a kill for the CPU or memory limit.
 
 import { sleep } from '@yaks/fp'
 
@@ -17,6 +17,7 @@ let MOVED = [
   'Durable Object instance is no longer active',
   'Durable Object reset because',
   'Internal error in Durable Object storage',
+  'Internal error while starting up Durable Object storage',
 ]
 let RESETS = [
   ...MOVED,
@@ -42,6 +43,8 @@ let says = (e: unknown, words: string[]) =>
  * assertEquals(moved(new Error('Durable Object reset because its code was updated.')), true)
  * assertEquals(moved(new Error('Internal error in Durable Object storage ' +
  *   'caused object to be reset; reference = 48q6hau1fptrm6g69pk2lqqh')), true)
+ * assertEquals(moved(new Error('Internal error while starting up Durable ' +
+ *   'Object storage caused object to be reset; reference = k6485n9h')), true)
  * assertEquals(moved(new Error('Durable Object storage operation exceeded ' +
  *   'timeout which caused object to be reset.')), false)
  * assertEquals(moved(null), false)

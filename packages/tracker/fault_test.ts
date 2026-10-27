@@ -40,6 +40,14 @@ let failures = [
     'internal error; reference = abc123',
     'internal error; reference = #',
   ],
+  [
+    'Internal error while starting up Durable Object storage caused object ' +
+    'to be reset; reference = k6485n9hkq5dtpqlkoqrhvt1',
+    'Internal error while starting up Durable Object storage caused object ' +
+    'to be reset; reference = 48q6hau1fptrm6g69pk2lqqh',
+    'internal error while starting up durable object storage caused object ' +
+    'to be reset; reference = #',
+  ],
 ]
 
 test('provider occurrence ids normalize to the same fault', () => {

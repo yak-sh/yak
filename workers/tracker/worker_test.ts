@@ -106,18 +106,23 @@ let marked = async (failures: Error[]) => {
   )
   return [response.status, bodies, sent.length]
 }
-// What a send to the object meets: its connection lost, the object reset,
-// the runtime's opaque refusal while it moves the object, and a failure no
-// resend mends.
+// What a send to the object meets: its connection lost, the object reset (by
+// the runtime's flag, or in words alone when its storage failed to start), the
+// runtime's opaque refusal while it moves the object, and a failure no resend
+// mends.
 let lost = Error('Network connection lost.')
 let reset = Object.assign(Error('reset'), { retryable: true })
+let unstarted = Error(
+  'Internal error while starting up Durable Object storage caused object ' +
+    'to be reset; reference = k6485n9hkq5dtpqlkoqrhvt1',
+)
 let refused = Error('internal error; reference = c7hprk25808kaqd3nagvsed3')
 let broken = Error('boot failed')
 
 test('a mark lost, reset or refused on its way to the object is sent again', async () => {
-  equal(await marked([lost, refused, reset]), [
+  equal(await marked([lost, refused, reset, unstarted]), [
     200,
-    Array(4).fill('{"bug":"b"}'),
+    Array(5).fill('{"bug":"b"}'),
     0,
   ])
   equal((await marked(Array(backoff.pauses.length + 1).fill(lost)))[0], 503)
@@ -147,7 +152,11 @@ let stood = async (failures: Error[]) => {
 }
 
 test("a canary's read of a moving object waits it out, unreported", async () => {
-  equal(await stood([refused, lost, reset]), [200, { arrived: false }, 0])
+  equal(await stood([refused, lost, reset, unstarted]), [
+    200,
+    { arrived: false },
+    0,
+  ])
   equal(
     await stood(Array(backoff.pauses.length + 1).fill(refused)),
     [503, { error: 'tracker temporarily unavailable' }, 1],
@@ -176,7 +185,7 @@ let ran = async (door: 'monitor' | 'ingest', failures: Error[]) => {
 
 test("the minute's monitor and a queue's intake wait out a moving object, unreported", async () => {
   for (let door of ['monitor', 'ingest'] as const) {
-    equal(await ran(door, [lost, refused, reset]), [4, 0])
+    equal(await ran(door, [lost, refused, reset, unstarted]), [5, 0])
     equal(await ran(door, [broken]), [1, 1])
   }
 })
