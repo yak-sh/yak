@@ -221,20 +221,3 @@ export let standalone: Registration[] = [
     floor: 0,
   },
 ]
-
-/** A bench file remains a convenient entry point for the shared CLI. */
-export let standaloneMain = async (name: string): Promise<void> => {
-  let child = await new Deno.Command(Deno.execPath(), {
-    args: [
-      'run',
-      '-A',
-      new URL('./run.ts', import.meta.url).pathname,
-      name,
-      ...(Deno.args.length ? ['--', ...Deno.args] : []),
-    ],
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  }).spawn().status
-  Deno.exit(child.code)
-}

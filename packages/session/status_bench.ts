@@ -8,7 +8,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 if (import.meta.main) {
   await standaloneMain('session-status')

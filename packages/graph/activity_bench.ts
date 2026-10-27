@@ -9,7 +9,7 @@ import { parse } from '@yaks/query'
 import { books, memory } from './testing.ts'
 import type { Graph } from './graph.ts'
 import type { Samples } from '@yaks/benchmark'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
   _args: string[] = [],

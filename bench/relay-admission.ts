@@ -2,7 +2,7 @@
 // Supply a checkout path to compare the same fixture across revisions.
 import { RELAY_ENTITIES, relayFixture } from './relay-fixture.ts'
 import type { Samples } from '@yaks/benchmark'
-import { standaloneMain } from './standalone.ts'
+import { standaloneMain } from './standalone-main.ts'
 
 export async function measure(
   args: string[] = [],

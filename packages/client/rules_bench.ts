@@ -10,7 +10,7 @@
 import { type Bundle } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { client } from './client.ts'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 if (import.meta.main) {
   await standaloneMain('client-rules')

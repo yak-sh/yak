@@ -6,7 +6,7 @@ import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'
 import type { Samples } from '@yaks/benchmark'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
   args: string[] = [],

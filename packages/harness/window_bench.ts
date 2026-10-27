@@ -5,7 +5,7 @@
 import { remote } from './remote.ts'
 import { at, harness } from './testing.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
   args: string[] = [],

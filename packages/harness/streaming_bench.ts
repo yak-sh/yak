@@ -5,7 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { subscriptions } from '@yaks/api'
 import type { Samples } from '@yaks/benchmark'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
   _args: string[] = [],

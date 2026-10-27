@@ -9,7 +9,7 @@ import { docs as doc } from '@yaks/doc/vocab'
 import { docs as task } from '@yaks/task/vocab'
 import { docs as project } from '@yaks/project/vocab'
 import { docs as session } from '@yaks/session/vocab'
-import { standaloneMain } from '../../bench/standalone.ts'
+import { standaloneMain } from '../../bench/standalone-main.ts'
 
 if (import.meta.main) {
   await standaloneMain('web-client')

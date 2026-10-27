@@ -275,7 +275,7 @@ if (typeof Deno != 'undefined') {
         ),
       )
     } else {
-      await (await import('../../bench/standalone.ts')).standaloneMain(
+      await (await import('../../bench/standalone-main.ts')).standaloneMain(
         'client-frame',
       )
     }
