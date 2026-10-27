@@ -4,7 +4,6 @@ import type { Directory, Seat } from './directory.ts'
 import type { Env } from './env.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
-import { parseHTML } from 'linkedom'
 
 let env = { SESSION_SECRET: 'install-test' } as Env
 let cookie = `yak_session=${await sign({
@@ -46,16 +45,27 @@ test('install sign-in keeps the chosen app as its return address', async () => {
   )
 })
 
+// The page's one form, read from its markup: a DOM parser's first parse
+// costs this file several times its budget.
+let FORM = /<form([^>]*)>([\s\S]*?)<\/form>/
+let formOf = (html: string) => {
+  let [, attrs = '', body = ''] = html.match(FORM) ?? []
+  let attr = (name: string) =>
+    attrs.match(new RegExp(` ${name}="([^"]*)"`))?.[1]
+  return {
+    method: attr('method'),
+    action: attr('action'),
+    options: [...body.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]),
+  }
+}
+
 test('an install page offers only writable spaces without making a copy', async () => {
   let response = await answer(request('GET'), env, dir)
-  let { document } = parseHTML(await response.text())
-  let form = document.querySelector('form')!
-  assertEquals(form.getAttribute('method'), 'post')
-  assertEquals(form.getAttribute('action'), '/install?name=trip-plan')
-  assertEquals([...form.querySelectorAll('option')].map((o) => o.value), [
-    'owner',
-    'editor',
-  ])
+  assertEquals(formOf(await response.text()), {
+    method: 'post',
+    action: '/install?name=trip-plan',
+    options: ['owner', 'editor'],
+  })
 })
 
 test('a gallery install with several destinations asks where to put the copy', async () => {
