@@ -90,6 +90,7 @@ import {
   not,
   notNull,
   or,
+  type Param,
   type Query,
   type Raw,
   raw,
@@ -3197,31 +3198,32 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
       )
     ) return []
     let empty = emptyOf(cs)
-    if (empty.length > 6) return []
-    let modes = empty.reduce<Map<string, boolean>[]>(
-      (sets, c) =>
-        sets.flatMap((s) =>
-          [true, false].map((nil) =>
-            new Map([...s, [ctx.d.col(c.path[0], c.path[1], ctx.v)!, nil]])
-          )
-        ),
-      [new Map()],
-    )
-    return modes.map((mode) => ({ cs, empty, mode }))
+    return empty.length > 6 ? [] : [{ cs, empty }]
   })
   // An unsupported arm must never disappear from the answer.
   if (
-    !choices.length || choices.length > 64 ||
-    arms.some((a) => !choices.some((c) => c.cs == a))
+    choices.length != arms.length ||
+    choices.reduce((n, c) => n + 2 ** c.empty.length, 0) > 64
   ) return
-  let parts: Query[] = choices.map(({ cs, empty, mode }) => {
+  // An empty text test seeks one mode at a time, absent or empty, so an arm
+  // is asked once for each of its tests' modes. Each asks the one statement,
+  // its tests comparing with `is` to a bound null or '', so the arm is lowered
+  // once and its modes bind their values into it, in place of a mark per
+  // column: a parameter no other value is, found again by identity.
+  let parts: Query[] = choices.flatMap(({ cs, empty }) => {
+    let marks = new Map(
+      empty.map((c) => [
+        ctx.d.col(c.path[0], c.path[1], ctx.v)!,
+        new Uint8Array(),
+      ]),
+    )
     let branch: Ctx = {
       ...ctx,
       d: {
         ...ctx.d,
         eq: (c, v, tag, affinity) =>
-          mode.has(c) && blank(v)
-            ? { sql: `${c} ${mode.get(c) ? 'is null' : "= ''"}`, params: [] }
+          marks.has(c) && blank(v)
+            ? { sql: `${c} is ?`, params: [marks.get(c)!] }
             : ctx.d.eq(c, v, tag, affinity),
       },
       tables: new Set(),
@@ -3230,9 +3232,29 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
       row: true,
     }
     let q = lower({ kind: 'and', clauses: [...cs, limit] }, branch, [])
-    return select({
-      from: from({ ...q, cols: [raw(`${ctx.d.ownerKey('entity')} as id`)] }),
+    let arm = render({
+      ...q,
+      cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
     })
+    let held: Param[] = [...marks.values()]
+    return held
+      .reduce<boolean[][]>(
+        (modes) => modes.flatMap((m) => [[...m, true], [...m, false]]),
+        [[]],
+      )
+      .map((nils) =>
+        select({
+          from: from(raw(
+            arm.sql,
+            arm.params.map((p) => {
+              let k = held.indexOf(p)
+              return k < 0 ? p : nils[k] ? null : ''
+            }),
+            arm.table,
+            arm.origin,
+          )),
+        })
+      )
   })
   while (parts.length > ARMS) {
     parts = cut(parts, ARMS).map((parts) =>
