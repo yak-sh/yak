@@ -1,9 +1,9 @@
 ---
 name: storage
-description: "What players see, and what is kept (yaks.app). Choose which component values stay in one page, reach the store, or are relayed to other pages. Learn sync, durable, pace and save through Mossvale's saved positions and Holdfast's timed creatures, including disconnects, local drafts and the difference between relay and storage."
+description: "Realtime Sync and Persistence (yaks.app). Choose which component values stay in one page, reach the store, or are relayed to other pages. Learn sync, durable, pace and save through Mossvale's saved positions and Holdfast's timed creatures, including disconnects, local drafts and the difference between relay and storage."
 ---
 
-# What players see, and what is kept
+# Realtime Sync and Persistence
 
 A multiplayer app has values that belong in different places: a player's earned
 items, their moving position, and the panel open on their screen. Choose for
@@ -15,7 +15,7 @@ Back to the map: <https://yaks.app/docs.md>. Declaring components and their
 properties: <https://yaks.app/docs/components.md>. Reading and writing them from
 a page: <https://yaks.app/docs/store.md>.
 
-## Choose who hears a write: sync
+## Who receives a write: `sync`
 
 **`sync`** says who is told about a component's writes. Declare it beside
 `properties` in `vocab.json`:
@@ -35,7 +35,7 @@ every visitor receives every value, and it is not an access setting.
 Use the same `apply` operation for all three. The client routes each component
 according to its declaration; don't send a fetch on every animation frame.
 
-## Choose how long it lives: durable
+## How long a value is kept: `durable`
 
 **`durable`** says how long a value lives, to the place responsible for keeping
 it. It is independent of `sync`. Its default is `forever`.
@@ -59,10 +59,10 @@ memory. Don't use a local duration as a countdown timer, or `durable` on a
 server component as a scheduled deletion. Those declarations do not schedule
 store deletion.
 
-### Keep typed input: drafts
+### Keeping typed input: drafts
 
-A person's unsent input is precious. Keep it in the store as a **draft**, not in
-a browser-only component. Import the public client and bind a field:
+A person's unsent input must not be lost. Keep it in the store as a **draft**,
+not in a browser-only component. Import the public client and bind a field:
 
 ```js ignore
 import { drafts } from './api/client.js'
@@ -89,9 +89,9 @@ permissions and stale-value guards your ordinary write needs. Do not clear
 
 Choose place names that stay the same across renders and devices, such as
 `cooking:<step-eid>:seconds`. Do not mint draft ids or copy platform internals:
-this door uses <https://jsr.io/@yaks/draft>'s desk and merge implementation.
+`drafts` uses <https://jsr.io/@yaks/draft>'s desk and merge implementation.
 
-## Choose how often it travels: pace
+## Write rate limits: `pace`
 
 **`pace`** is the minimum interval at which a writer's value is taken. What
 happens inside that interval depends on `sync`:
@@ -107,11 +107,12 @@ happens inside that interval depends on `sync`:
   is not another write. See the refusal and writer identity details in
   <https://yaks.app/docs/components.md>.
 
-Don't put `pace` on `sync: none`: nobody takes that value, and the declaration
-is refused. A peer pace reduces traffic, not the number of local simulation
-steps. It is not an anti-cheat rule or a server-side permission check.
+Don't put `pace` on `sync: none`: no other page or store receives that value,
+and the declaration is refused. A peer pace reduces traffic, not the number of
+local simulation steps. It is not an anti-cheat rule or a server-side permission
+check.
 
-## Save a relayed value without storing every movement
+## Saving snapshots of relayed values: `save`
 
 **`save`** is a query the entity's _stored state_ must match before the server
 stores the latest admitted relayed value. It requires `sync: peers` and
@@ -170,7 +171,7 @@ Use a timestamp belonging to this component for a component's save interval. An
 unrelated write can change `updated.at`, so testing that instead may keep
 postponing a position save.
 
-## Let another page continue
+## Taking over relayed values from another page
 
 Holdfast gives `conductor`, `creep`, `shot` and `firing` the declarations
 `sync: peers` and `durable: 5s`, without `save`. These are live wave values, not

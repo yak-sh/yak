@@ -60,7 +60,7 @@ test('/docs draws the guide with a link to every page', async () => {
   }
   // The technical page is one of them, and the one rule is said at the foot
   // for the reader who wants the file rather than the page.
-  assertStringIncludes(html, '<a href="/docs/technical">Technical details</a>')
+  assertStringIncludes(html, '<a href="/docs/technical">Technical Details</a>')
   assertStringIncludes(html, '<a href="/docs.md">/docs.md</a>')
   // A guide page is linked at the page beside this one, never at its .md.
   assertStringIncludes(html, 'href="/docs/querying"')
@@ -68,9 +68,7 @@ test('/docs draws the guide with a link to every page', async () => {
 })
 
 // A page is titled by the heading it opens with, which is the page's own name
-// for itself — clipping.md is filed as "Saving from another site" and opens
-// "Saving a page from another site", and the page a person lands on says the
-// second.
+// for itself and the same words as the title it is filed under.
 let heading = (slug: string) =>
   /^# (.+)$/m.exec(
     Deno.readTextFileSync(
@@ -153,7 +151,7 @@ test('the technical page is markdown drawn like the rest', async () => {
     undefined,
   )
   let html = await read(pathOf('technical'))
-  assertStringIncludes(html, '<title>Technical details · yaks.app</title>')
+  assertStringIncludes(html, '<title>Technical Details · yaks.app</title>')
   assertStringIncludes(
     html,
     `href="${pathOf('technical')}" aria-current="page"`,

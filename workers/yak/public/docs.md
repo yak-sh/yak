@@ -23,7 +23,7 @@ This page is the map. Each section says what a subject is and names the page
 that covers it; the pages are the reference. Add `.md` to any page's address for
 the markdown an assistant reads.
 
-## The store, from a page
+## Frontend Data
 
 Every app is served a client at `./api/client.js` with six functions, all
 talking to the app's own store: `apply` saves, `query` lists, `search` searches,
@@ -48,24 +48,25 @@ the eid creates one. Who may read and write is the app's `access`: `public`,
 Deeper: <https://yaks.app/docs/store.md> — every function of the client, the
 HTTP endpoints underneath, and who may read and write.
 
-## A page that loads at once
+## Performance
 
-A page waits on the network in rounds, and a read that waits for another's
-answer is a round more. So a page subscribes to what it draws, every kind in one
-line, and asks `me()` at the same moment rather than first:
+A page's load time is set by its network round trips, and a read that waits for
+another read's answer adds a round trip. So a page subscribes to what it draws,
+every kind in one line, and calls `me()` at the same time rather than first:
 
     subscribe('(.recipe|.chore)&?doc', draw)   // its first rows over HTTP
     let who = await me()                       // beside them, not ahead
 
-That loads in one round. `subscribe(...).ready` is the first rows, for a page
-that must have them before it goes on, so it never queries a line and then
-subscribes to it too.
+That loads in one round trip. `subscribe(...).ready` resolves with the first
+rows, for a page that needs them before it continues, so a page never queries a
+filter and then subscribes to the same filter.
 
-Deeper: <https://yaks.app/docs/speed.md> — why that is one round, how to see a
-slow page's rounds and the `Server-Timing` on every answer, and what else slows
-a page: chains of module imports, pictures, and work done on every change.
+Deeper: <https://yaks.app/docs/speed.md> — why that is one round trip, how to
+see a slow page's round trips and the `Server-Timing` header on every response,
+and what else slows a page: chains of module imports, images, and work done on
+every change.
 
-## Files
+## Files and Uploads
 
 `app_deploy` releases the app's draft. Open pages get a `yak-release` event with
 `{version, reload}` and an optional or required Reload notice, never an
@@ -83,7 +84,7 @@ Deeper: <https://yaks.app/docs/files.md> — releases, `yak-release`,
 `app_deploy`'s `reload`, the app's icon, uploads, pictures, and a gallery that
 never shows one twice.
 
-## Components
+## Components and vocab.json
 
 A component is a named set of properties an entity carries. The platform's own,
 `doc`, `task`, `completed`, `comment`, `person`, `attachment`, `image` and the
@@ -98,12 +99,12 @@ A later deploy may add a property; one that already has rows is never dropped or
 retyped. A new capability is a new component, not a new tool.
 
 Deeper: <https://yaks.app/docs/components.md> — every component with its
-properties, and vocab.json for components of your own.
+properties, and vocab.json for declaring an app's own components.
 
 Deeper: <https://yaks.app/docs/storage.md> — `sync`, `durable`, `pace` and
 `save`: what players see, what stays in a browser, and what the store keeps.
 
-## Games
+## Multiplayer Games
 
 A game's page reads the graph, computes rules and writes bundles. `@yaks/game`
 provides rules, controls and HUD parts; `@yaks/stage` draws ordinary geometry
@@ -113,18 +114,18 @@ advances shared creatures; the others draw their relayed values.
 Deeper: <https://yaks.app/docs/games.md> — Holdfast's working multiplayer
 pattern, toolkit dependencies, shared time, owner handoff and dropped orders.
 
-## Coming back later
+## Scheduling
 
-An app has no cron and nothing sitting awake. Any row can carry a `wake`
-component naming a time and a recurrence, and the store comes back to it then,
-stamping it `fired`. What a firing does is a rule declared in `vocab.json`, and
-an app's own commands can be scheduled the same way.
+An app has no cron job and no process that keeps running. Any row can carry a
+`wake` component with a time and a recurrence; at that time the store wakes and
+writes `fired` on the row. What a firing does is a rule declared in
+`vocab.json`, and an app's own commands can be scheduled the same way.
 
 Deeper: <https://yaks.app/docs/wakes.md> — every property, recurrence and time
 zones, pausing and resuming, what a rule may match, scheduling a command, and
 why there is no cron trigger to configure.
 
-## An entity spans apps
+## Cross-App Data
 
 An eid means the same entity everywhere. Apps in one space can each add their
 own component to it, or one app can use a component another app declares. Each
@@ -135,14 +136,14 @@ its part. `graph_query` with no app named reads every app the person can reach.
 Deeper: <https://yaks.app/docs/entities.md> — which app a component lives in,
 and a two-app pair end to end.
 
-## Commands of your own
+## App Commands
 
-An app can carry commands of its own, so the person's agent can act on it
-without a page open: a `$defs` entry of `vocab.json` marked `"tool": true`, the
-way a yaks package declares its tools, with a description, an argument schema,
-and one action, an `apply` template or a `query`. They are listed by `commands`
-and run by `command`; they never join the connector's own tool list, which is
-fixed and the same for everyone.
+An app can declare commands, so the person's agent can act on it without a page
+open: a `$defs` entry of `vocab.json` marked `"tool": true`, the way a yaks
+package declares its tools, with a description, an argument schema, and one
+action, an `apply` template or a `query`. They are listed by `commands` and run
+by `command`; they never join the connector's own tool list, which is fixed and
+the same for everyone.
 
     "log_run": {
       "tool": true,
@@ -156,7 +157,7 @@ fixed and the same for everyone.
 Deeper: <https://yaks.app/docs/tools.md> — the whole reference for a command,
 and the view protocol.
 
-## Asking a model
+## AI Models
 
 An app asks a model with rows, not a key: a page writes an `entry` in a
 transcript (any entity wearing `session`) with `using{model}` and
@@ -173,17 +174,18 @@ Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows tha
 come back, typed questions, one call at once, asking about a picture, who may
 ask, and the models and their prices.
 
-## Voice
+## Voice Calls
 
-The people in an app can talk: a page joins a call through the app's own
-`./api/rtc/` door with `@yaks/rtc`, publishes the microphone, and hears the
-voices it asks for. Who is speaking is the relayed `rtc` component on the entity
-they speak as. Every voice heard spends the same monthly allowance models do.
+People using an app can talk to each other by voice: a page joins a call through
+the app's own `./api/rtc/` door with `@yaks/rtc`, publishes the microphone, and
+hears the voices it asks for. Who is speaking is the relayed `rtc` component on
+the entity they speak as. Every voice received spends the same monthly budget
+models do.
 
 Deeper: <https://yaks.app/docs/voice.md> — speaking, hearing, placing a voice in
 space, who may speak, and what it costs.
 
-## The notes an app keeps
+## App Notes (NOTES.md)
 
 A rule the person wants followed every time goes in a `NOTES.md` beside
 `index.html`: weights in grams, one photo per recipe. Any agent that can reach
@@ -192,24 +194,24 @@ the app is given it, so the rule is stated once and followed from then on.
 Deeper: <https://yaks.app/docs/notes.md> — what belongs in the file, its size
 limit, and the three places it is handed over.
 
-## What the person said
+## Memories
 
-The other half is the person's own words, kept for the whole space:
-`store_memory_save` keeps a sentence verbatim with a line of context, and
-`store_memory_recall` finds it again by what it is about. Save what they say the
-moment they say how they want something built or handled.
+A memory keeps the person's own words for the whole space: `store_memory_save`
+stores a sentence verbatim with a line of context, and `store_memory_recall`
+finds it by what it is about. Save their words as soon as they say how they want
+something built or handled.
 
 Deeper: <https://yaks.app/docs/memory.md> — the shape of a memory, what context
 is for, and how a recall is ranked.
 
-## Code of your own
+## Backend Code
 
-An app is pages until you give it a `worker.js`, and then it has a server. Every
-request that is not `/api/...` reaches it first, and anything it answers with a
-404 falls through to the files. `env.STORE` is the app's own store as the person
+An app's backend code is a `worker.js` beside `index.html`. Every request that
+is not `/api/...` reaches it first, and any request it answers with a 404 falls
+through to the app's files. `env.STORE` is the app's own store as the person
 looking, and a key the person connected (`store_connection_need`) arrives as
-`env.NAME`. A key is no reason to write one: a page calls a connected service
-through `./api/fetch`, which puts the key in on the way out.
+`env.NAME`. Using a key does not need a worker: a page calls a connected service
+through `./api/fetch`, which adds the key to the outgoing request.
 
 A worker and a page's scripts may be TypeScript and may import npm packages:
 name the packages in a `package.json`, and `app_deploy` compiles them, pinning
@@ -218,7 +220,7 @@ the versions it installed in `package-lock.json`.
 Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, whole
 workers to copy, and TypeScript and npm packages.
 
-## Home
+## Front Page and Routing
 
 The space's front page, set with `app_set(app, home: true)`, is served at the
 bare address and is the space's router as well as its homepage: it sees every
@@ -229,17 +231,16 @@ Deeper: <https://yaks.app/docs/home.md> — the five steps a request goes throug
 the `first` globs, why a broken router fails open, and where the space's mail
 lands.
 
-## Saving from another site
+## Web Clipping
 
-An app can take a page off somebody else's website and keep it: a worker route
-that fetches the address and reads the metadata the page carries about itself,
-and a bookmarklet that opens that route with the address of the page the person
-is on.
+An app can save a page from another website: a worker route fetches the URL and
+reads the page's metadata, and a bookmarklet opens that route with the URL of
+the page the person is on.
 
 Deeper: <https://yaks.app/docs/clipping.md> — the whole clipper, the
 bookmarklet, and what to do when a site refuses.
 
-## Sharing an app
+## Access, Publishing and Installing
 
 Who may read and write an app is its `access` and its guest list; `member_add`
 invites someone by email. A deployed app can be published under a name the whole
@@ -250,7 +251,7 @@ until its owner updates it.
 Deeper: <https://yaks.app/docs/sharing.md> — access, members, publishing,
 installing, pinning.
 
-## Mail
+## Email
 
 Every app has a mailbox at `<space>.<app>@yaks.app`. Mail in both directions is
 rows in the store: sending is one `apply` with the recipient, the letter and a
@@ -260,7 +261,7 @@ subscribe to.
 Deeper: <https://yaks.app/docs/mail.md> — the bundle that sends a letter, what
 comes back, how an arriving letter is stored, and the limits.
 
-## Selling things
+## Payments
 
 A seller on Plus connects a Stripe account to their space once, and after that
 any app in the space posts a cart to `./api/pay/checkout` and sends the buyer to
@@ -270,7 +271,7 @@ written into the app's store as an `order` row.
 Deeper: <https://yaks.app/docs/selling.md> — connecting the account, the whole
 shape of the checkout endpoint, what an order contains, and who can read one.
 
-## A custom domain
+## Custom Domains
 
 A space, or one app of it, can also answer at a domain the person already owns,
 with the `.yaks.app` address still working. `domain_attach` gives the CNAME
@@ -282,30 +283,30 @@ Deeper: <https://yaks.app/docs/domains.md> — the records to add and where to
 type it at each registrar, the apex, moving DNS to Cloudflare, and what each
 pending state means.
 
-## The filter grammar
+## Query Syntax
 
-One grammar everywhere: `.doc` selects rows that have a component, `?doc` asks
-for one beside the rows selected, `.recipe.minutes<=30` filters a property, `&`
-joins, `.entity.eid=<eid>` fetches one entity whole, `.limit=` windows the
-answer, and a bare word is a full-text search. A row comes back with the
-components the filter names, so ask for what you will draw.
+Every read uses one query syntax: `.doc` selects rows that have a component,
+`?doc` asks for one beside the rows selected, `.recipe.minutes<=30` filters a
+property, `&` joins, `.entity.eid=<eid>` fetches one entity whole, `.limit=`
+windows the answer, and a bare word is a full-text search. A row comes back with
+the components the filter names, so ask for what you will draw.
 
 Deeper: <https://yaks.app/docs/querying.md> — every operator, with worked
 examples.
 
-## When something breaks
+## Errors and Rollback
 
 A refusal returns a code for you and a message for the person, and `client.js`
 throws the message. Every page the platform serves reports its own errors, so a
 break is kept for the app and the person's agent hears about it once;
 `app_errors` lists what is still open, and `app_list` says how many. Every
-destructive thing has a way back: the 30-day trash, `store_restore`, file
+destructive action can be undone: the 30-day trash, `store_restore`, file
 history, and `app_rollback`.
 
 Deeper: <https://yaks.app/docs/errors.md> — every refusal, app_errors, and
 rolling back.
 
-## Who visited
+## Visitor Analytics
 
 Every HTML page the platform answers for an app is counted, and nothing that
 could identify a visitor is kept. `app_stats` returns the visits per day, the
@@ -314,10 +315,10 @@ pages opened, the sites that linked there and the countries.
 Deeper: <https://yaks.app/docs/stats.md> — what a page view records, what it
 never does, and the three places to read it.
 
-## Feedback on yaks.app itself
+## Platform Feedback
 
-Anything either of you has to say about yaks.app itself, a tool that refused for
-no reason you could find, a page of this documentation that taught you the wrong
-thing, a wish, goes to `feedback(text, app?)`, and it reaches the people who run
-yaks.app as mail they can answer. An error inside the person's own app is not
-this; that is in `app_errors`, and fixing it is yours.
+Feedback about yaks.app itself, from you or the person (a tool that refused for
+no reason you could find, a page of this documentation that taught the wrong
+thing, a feature request), goes to `feedback(text, app?)`, and it reaches the
+people who run yaks.app as mail they can answer. An error inside the person's
+own app is not this; that is in `app_errors`, and fixing it is yours.

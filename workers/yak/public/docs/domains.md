@@ -1,81 +1,81 @@
 ---
 doc:
-  title: A custom domain
+  title: Custom Domains
 guide:
   slug: domains
-  brief: pointing a domain at a space or an app
+  brief: serving a space or an app at a custom domain (DNS, CNAME)
   description: >-
-    Pointing a domain the person already owns at their space or at one app
-    of it: the CNAME and ownership TXT record to add and where to type them at GoDaddy, Namecheap,
-    Squarespace and the rest, the apex problem and the three ways through
-    it, what each pending state means, and why a domain stays stuck.
+    Serving a space or one of its apps at a domain the person already owns:
+    domain_attach, domain_status and domain_detach, the CNAME and ownership TXT DNS records and where to add them at GoDaddy,
+    Namecheap, Squarespace and the other registrars, apex domains and the three
+    ways to serve one, what each provisioning status means, the HTTPS
+    certificate, and why a domain stays pending.
 ---
 
-# A custom domain
+# Custom Domains
 
-A space answers at `<space>.yaks.app` and each of its apps at
-`<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
-owns — `example.com`, or `www.example.com` — with the `.yaks.app` address still
-working.
+A space is served at `<space>.yaks.app` and each of its apps at
+`<space>.yaks.app/<app>/`. Either can also be served at a domain the person
+already owns, such as `example.com` or `www.example.com`, and the `.yaks.app`
+address keeps working.
 
-Two forms, and the difference is what you name:
+A domain can be attached in two ways, depending on what you name:
 
 - **The space.** `ourbookclub.com` serves the space exactly as
-  `yourname.yaks.app` does: the front page at `/`, every app at `/<app>/`. The
-  apps are directories of their own domain.
-- **One app.** `example.com` serves that app at the root of it, and nothing else
-  is there.
+  `yourname.yaks.app` does: the front page at `/`, every app at `/<app>/`. Each
+  app is a path under the domain.
+- **One app.** `example.com` serves that app at its root, and nothing else.
 
-A space can have both at once, and an app of it can still have a domain of its
-own — at that domain the app is the root, at the space's domain it is a
-directory.
+A space can have both at once, and an app in it can still have a domain of its
+own: at the app's domain the app is served at the root, and at the space's
+domain it is served at `/<app>/`.
 
-A domain is aimed at the space or the app itself, never at the `.yaks.app`
-address it happens to have. So `space_set(slug)` or `app_set(app, slug)` moves
-the `.yaks.app` address and the domain keeps serving exactly what it served
+A domain is attached to the space or the app itself, never to the `.yaks.app`
+address it currently has. So when `space_set(slug)` or `app_set(app, slug)`
+moves the `.yaks.app` address, the domain keeps serving exactly what it served
 before, with nothing to re-attach and no DNS to change
 (<https://yaks.app/docs/home.md>).
 
-This page is for you, the assistant. The person you are helping owns a domain
-and probably bought it years ago from GoDaddy or Namecheap or Squarespace. They
-do not know what a CNAME is and they should not have to. You already know what
-those control panels look like. So: attach the domain with `domain_attach`, then
-walk them through their registrar in their own words, or do it for them if you
-can reach it.
+This page is written for you, the assistant. The person you are helping owns a
+domain and probably bought it years ago from GoDaddy, Namecheap or Squarespace.
+They do not know what a CNAME is, and they should not need to. You already know
+what those registrars' control panels look like. Attach the domain with
+`domain_attach`, then guide them through their registrar's DNS settings in plain
+language, or make the changes yourself if you have access to them.
 
 Back to the map: <https://yaks.app/docs.md>
 
-## Before attaching a domain
+## Plan requirement
 
-Custom domains require Plus (or an explicitly exempt space). If the space is not
-eligible, `domain_attach` returns a message carrying the space's plan-settings
-link, and provisions no hostname. Give the person that settings link to compare
-paid plans; never link directly to checkout. It is their space's
-`https://yaks.app/manage/billing?space=<space>` page. If they need to sign in,
-the normal sign-in flow returns them to that page. The sign-in email already
-offers a single-use link; do not create or expose a login token in the
+Custom domains require the Plus plan (or a space that is explicitly exempt). If
+the space is not eligible, `domain_attach` returns a message carrying the
+space's plan-settings link, and provisions no hostname. Give the person that
+link to compare paid plans; never link directly to checkout. The link is their
+space's `https://yaks.app/manage/billing?space=<space>` page. If they need to
+sign in, the normal sign-in flow returns them to that page. The sign-in email
+already offers a single-use link; do not create or expose a login token in the
 conversation.
 
 Wait for the plan change before continuing with DNS setup. Keep using the
 existing `.yaks.app` address in the meantime.
 
-## The three tools
+## Tools: `domain_attach`, `domain_status`, `domain_detach`
 
-- `domain_attach(app?, hostname)` — provisions the hostname and tells you the
-  CNAME and ownership TXT record to add, including each full name and exact
-  value. Name an `app` and the domain is that app's; leave it out and the domain
-  is the space's. Only the space owner may attach one.
-- `domain_status(hostname?)` — what each domain points at, and where
-  provisioning has got to, split into the four things that can be outstanding.
-  Leave `hostname` out to get every domain in the space.
-- `domain_detach(hostname)` — hands the hostname back. What it served is
-  untouched: same data, same files, same `<space>.yaks.app` address.
+- `domain_attach(app?, hostname)` — provisions the hostname and returns the
+  CNAME and ownership TXT record to add, with each record's full name and exact
+  value. With `app`, the domain is attached to that app; without it, to the
+  space. Only the space owner may attach a domain.
+- `domain_status(hostname?)` — reports what each domain points at and how far
+  provisioning has progressed, as the four steps that can be outstanding
+  (described below). Omit `hostname` to list every domain in the space.
+- `domain_detach(hostname)` — releases the hostname. What it served is
+  unchanged: same data, same files, same `<space>.yaks.app` address.
 
-A domain points at one place, and a hostname belongs to one place across the
-whole platform. `www.example.com` and `example.com` are two hostnames, so attach
-both if they want both.
+A domain points at one space or app, and a hostname can be attached to only one
+place on the whole platform. `www.example.com` and `example.com` are two
+hostnames, so attach both if the person wants both.
 
-## The records
+## DNS records: CNAME and ownership TXT
 
 The **CNAME** directs traffic to yaks.app:
 
@@ -97,27 +97,27 @@ pointing here proves where traffic goes, not who owns the hostname. Existing
 active hostnames keep serving. After ownership is verified, the TXT record can
 be removed; keep the CNAME for as long as the domain should serve here.
 
-## The panels
+## Adding the records at each registrar
 
-The trap that catches people at half of these registrars: **the Name/Host field
-is a prefix, and the panel adds the domain itself.** Typing `www.example.com`
+The mistake people make at half of these registrars: **the Name/Host field is a
+prefix, and the panel appends the domain itself.** Typing `www.example.com`
 there produces `www.example.com.example.com`. When in doubt, type `www`, and
 check the record's full name after saving.
 
 **GoDaddy** — Domain Portfolio → the domain → **DNS** → **Add New Record**.
 Fields are Type, Name, Value, TTL. Name is the prefix (`www`), not the whole
-hostname. GoDaddy has no apex option at all: see below.
+hostname. GoDaddy has no apex option at all: see "Apex domains" below.
 
 **Namecheap** — Domain List → **Manage** → **Advanced DNS** → Host Records →
 **Add New Record**. Fields are Type, Host, Value, TTL. Host is a prefix and
 Namecheap appends the domain, so `www`, never `www.example.com`. Namecheap
-refuses a CNAME at `@` — it offers a URL Redirect record instead, which is the
+refuses a CNAME at `@`; it offers a URL Redirect record instead, which is the
 `www` approach below.
 
-**Squarespace** (which is also where Google Domains ended up — the migration is
-finished, and the panel is Squarespace's) — account.squarespace.com/domains →
+**Squarespace** (Google Domains was migrated to Squarespace; the migration is
+complete, and the panel is Squarespace's) — account.squarespace.com/domains →
 the domain → **DNS** → **Custom Records** → **Add Record**. Fields are Type,
-Name, Priority, TTL, Data — the target goes in **Data**. Name is a prefix and
+Name, Priority, TTL, Data; the target goes in **Data**. Name is a prefix and
 Squarespace appends the domain. Squarespace has no apex record at all.
 
 **Wix** — Domains → the domain's **Domain Actions** → **Manage DNS records**.
@@ -125,8 +125,8 @@ Wix's own instruction: where another vendor tells you to put `@` in Host Name,
 **leave Host Name blank instead**.
 
 **Hover** — the domain's **Overview** → **DNS** → **Add a record**. Fields are
-Type, Hostname, Target Name. Hover says plainly that it cannot hold a CNAME on
-the root domain. It also only manages DNS while the domain still uses Hover's
+Type, Hostname, Target Name. Hover states that it cannot hold a CNAME on the
+root domain. It also only manages DNS while the domain still uses Hover's
 nameservers.
 
 **Shopify** — admin → **Settings → Domains** → the domain → DNS settings →
@@ -134,30 +134,31 @@ nameservers.
 target.
 
 **Porkbun** — Domain Management → **DNS** → **Add Record**. Fields are Type,
-Host, Answer, TTL. Porkbun is the one consumer registrar in this list with a
+Host, Answer, TTL. Porkbun is the only consumer registrar in this list with a
 working apex option: pick the record type **ALIAS – CNAME flattening**, leave
 Host blank, and put `origin.saas.yaks.app` in Answer.
 
 **Cloudflare** — the zone → **DNS** → **Add record**. Type CNAME, Name `www` or
 `@`, Target `origin.saas.yaks.app`. Set **Proxy status** to **DNS only** (the
-grey cloud). Proxied, Cloudflare serves its own address in the person's own zone
-and the request never reaches us.
+grey cloud). When the record is proxied, Cloudflare answers with its own
+addresses in the person's zone and the request never reaches yaks.app.
 
-## The apex
+## Apex domains
 
-DNS does not allow a CNAME at a domain's apex — the bare `example.com`, with
-nothing in front of it. This is where a non-technical person gives up, so have
-the answer ready before they hit it. Three ways through:
+DNS does not allow a CNAME at a domain's apex: the bare `example.com`, with no
+subdomain in front of it. Non-technical people often give up at this step, so
+have the answer ready before they reach it. There are three ways to serve an
+apex domain:
 
-**Move their DNS to Cloudflare.** The best option, and the one to lead with.
-Cloudflare's DNS flattens a CNAME at the apex — it resolves the target and
-serves the addresses — so `example.com` simply works. It is free, it does not
-move the domain's registration, and it takes about ten minutes:
+**Move their DNS to Cloudflare.** This is the best option; recommend it first.
+Cloudflare's DNS flattens a CNAME at the apex (it resolves the target and serves
+its addresses), so `example.com` works. It is free, it does not transfer the
+domain's registration, and it takes about ten minutes:
 
 1. dash.cloudflare.com → **Add a domain** → type `example.com`.
 2. Choose the **Free** plan. Cloudflare scans the existing records; check that
-   their mail records came across before continuing, because a missing MX is how
-   this goes wrong.
+   their mail records were copied before continuing, because a missing MX record
+   is the usual way this step goes wrong.
 3. Cloudflare gives two nameservers. Copy both.
 4. At the registrar, replace the current nameservers with those two. Every panel
    above has this under a "Nameservers" or "DNS" heading.
@@ -165,76 +166,79 @@ move the domain's registration, and it takes about ten minutes:
 6. Then add the CNAME in Cloudflare's own DNS tab, as above.
 
 If the domain has DNSSEC turned on at the old registrar, turn it off there first
-and give it a day before changing nameservers; otherwise resolvers see a broken
-chain and the domain goes dark. Cloudflare can turn it back on afterwards.
+and wait a day before changing nameservers; otherwise resolvers see a broken
+DNSSEC chain and the domain stops resolving. Cloudflare can turn DNSSEC back on
+afterwards.
 
-**Use the registrar's ALIAS or ANAME.** Same value, a record type that is
-allowed at the apex. Porkbun has one. GoDaddy, Namecheap, Squarespace, Hover and
-Shopify do not.
+**Use the registrar's ALIAS or ANAME record.** It takes the same value as the
+CNAME, in a record type that is allowed at the apex. Porkbun has one. GoDaddy,
+Namecheap, Squarespace, Hover and Shopify do not.
 
 **Attach `www` instead.** `domain_attach(app, hostname: 'www.example.com')`, a
 CNAME at `www`, and a forwarding rule at the apex sending `example.com` to
-`www.example.com`. Every registrar above has domain forwarding under some name.
-It works and people accept it, but the address they give out is still the bare
-one, so offer Cloudflare first.
+`www.example.com`. Every registrar above offers domain forwarding under some
+name. It works and people accept it, but the address they share is still the
+bare domain, so offer Cloudflare first.
 
-While they are moving DNS, it is worth saying that Cloudflare's registrar
-charges what the registry charges, with no markup added — so transferring the
-domain there at its next renewal usually costs less than they pay now. A
-transfer needs the domain to be at least 60 days old, unlocked at the current
-registrar, and an authorization code from them, and it takes about five days.
-None of that is required to point the domain at yaks.app; it is just the thing
-they will ask about once their DNS is on Cloudflare.
+While they are moving DNS, tell them that Cloudflare's registrar charges what
+the registry charges, with no markup, so transferring the domain there at its
+next renewal usually costs less than they pay now. A transfer requires the
+domain to be at least 60 days old, unlocked at the current registrar, and an
+authorization code from that registrar, and it takes about five days. None of
+that is required to point the domain at yaks.app; people usually ask about it
+once their DNS is on Cloudflare.
 
-## Reading the status
+## Provisioning status
 
-`domain_status` reports four steps, each with `done`, `waiting` or `error`,
-because each one waits on somebody different:
+`domain_status` reports four steps, each `done`, `waiting` or `error`, because
+each step waits on a different party:
 
 - **ownership** — whether the ownership TXT record matches this attachment.
   Waiting means the person must add the exact TXT name and value the tool gives.
 - **dns** — whether the CNAME resolves to yaks.app. Waiting means the person has
   not added it yet, or it has not propagated. The ownership TXT record and CNAME
   are the two records the person adds.
-- **validation** — whether Cloudflare has accepted the hostname as one we may
-  serve. It follows dns.
-- **certificate** — whether the HTTPS certificate is issued. This is the step
-  that is still running after the record has arrived, and it needs nothing from
+- **validation** — whether Cloudflare has accepted the hostname as one yaks.app
+  may serve. It completes after dns.
+- **certificate** — whether the HTTPS certificate is issued. This step can still
+  be running after the records have propagated, and it needs no action from
   anybody.
 
 So "your CNAME hasn't propagated yet" and "the certificate is still issuing" are
-different answers, and the tool tells you which one is true. Tell them the one
-it reports. A step in `error` carries the reason as it was given, and those
-words are Cloudflare's, not a paraphrase.
+different answers, and the tool reports which one applies. Tell the person the
+one it reports. A step in `error` carries the reason as Cloudflare gave it, in
+Cloudflare's words, not a paraphrase.
 
-Timing: DNS is usually minutes and can be a day, depending on what the old
-record's TTL was. The certificate is usually minutes after that. Nothing needs
-doing in between — check again in five minutes rather than changing anything.
+Timing: DNS propagation usually takes minutes and can take a day, depending on
+the old record's TTL. The certificate is usually issued a few minutes after
+that. Nothing needs to be done in between; check again in five minutes rather
+than changing anything.
 
-## When it stays stuck
+## Troubleshooting a domain that stays pending
 
-- **A CAA record on their domain.** If they have one, it lists which certificate
-  authorities may issue for the domain, and ours has to be on the list. The
-  certificate step reports that.
-- **Another record at the same name.** DNS forbids a CNAME sitting beside an A,
-  AAAA or another CNAME at one name. An old A record at `www` pointing at a site
-  they replaced years ago has to be deleted, not left alongside.
-- **The domain is already on Cloudflare in somebody else's account, on hold.**
-  The error names it. Only that account's owner can lift it.
+- **A CAA record on their domain.** A CAA record lists which certificate
+  authorities may issue certificates for the domain, and the one yaks.app uses
+  has to be on the list. The certificate step reports this.
+- **Another record at the same name.** DNS forbids a CNAME beside an A, AAAA or
+  another CNAME at one name. An old A record at `www` pointing at a site they
+  replaced years ago has to be deleted, not left alongside.
+- **The domain is in somebody else's Cloudflare account, on hold.** The error
+  says so. Only that account's owner can remove the hold.
 - **An old custom hostname from a previous platform.** If they moved from
-  another site builder, the hostname may still be registered there and will keep
-  winning. They have to remove it at the old platform.
-- **The record went in with the domain doubled** —
-  `www.example.com.example.com`. See the panels above. This is the most common
-  one by a distance.
+  another site builder, the hostname may still be registered there, and that
+  registration keeps taking precedence. They have to remove it at the old
+  platform.
+- **The record was saved with the domain doubled**:
+  `www.example.com.example.com`. See "Adding the records at each registrar"
+  above. This is by far the most common cause.
 
-## Detaching
+## Detaching a domain
 
-`domain_detach(hostname)` gives the hostname back and leaves the app exactly as
-it was, still serving at `<space>.yaks.app`. It does not touch the person's DNS
-— those records are theirs, in their registrar. Tell them to delete the CNAME
-and ownership TXT record for the detached hostname.
+`domain_detach(hostname)` releases the hostname and leaves the app unchanged,
+still served at `<space>.yaks.app`. It does not change the person's DNS: those
+records are theirs, in their registrar. Tell them to delete the CNAME and
+ownership TXT record for the detached hostname.
 
-Detach before re-attaching a domain somewhere else. A hostname belongs to one
-app on the whole platform, and `domain_attach` refuses a name that is taken
-rather than moving it out from under whoever has it.
+Detach before attaching a domain somewhere else. A hostname belongs to one app
+on the whole platform, and `domain_attach` refuses a hostname that is already
+attached rather than moving it away from whoever holds it.

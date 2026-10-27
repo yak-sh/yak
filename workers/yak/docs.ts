@@ -41,8 +41,8 @@ export let DOCS = {
   path: PATH,
   title: 'Documentation · yaks.app',
   description:
-    'Everything an app on yaks.app can do: its store, queries, files, mail, ' +
-    'code of its own, domains — the same guide an assistant reads.',
+    'Everything an app on yaks.app can do: frontend data, queries, files, ' +
+    'email, backend code, domains — the same guide an assistant reads.',
 }
 
 // The technical page's row. Every other page says this much in its own
@@ -50,11 +50,11 @@ export let DOCS = {
 // the row it is listed and drawn by is written here instead.
 let TECHNICAL: Page = {
   slug: 'technical',
-  title: 'Technical details',
+  title: 'Technical Details',
   brief: 'hosting, storage, limits and exports',
   description:
-    'Where yaks.app runs, where your things are kept, what an app can do, ' +
-    "and what it can't do yet.",
+    'Where yaks.app runs, where data is stored, what an app can do, ' +
+    'and its current limitations.',
 }
 
 /** Every page of the documentation, in the order the contents offers them. */

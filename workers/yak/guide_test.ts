@@ -155,7 +155,7 @@ test('the guide imports the client relatively, every time it shows one', () => {
 let pairs = (s: string) =>
   [...s.matchAll(/`(\w+)` \(([^)]+)\)/g)].map((m) => [m[1], m[2]])
 let entries = () => {
-  let section = pageText('components').split("## The platform's vocabulary")[1]
+  let section = pageText('components').split('## Platform components')[1]
     ?.split('\n## ')[0] ?? ''
   return section.split('\n**`').slice(1).map((entry) => {
     let [head, ...said] = entry.replace(/\s+/g, ' ').split(' — ')
@@ -309,7 +309,7 @@ test('the components page prints every property of every component it lists', ()
 // tell the difference between that and waiting. The three tools have to be
 // named too: a verb nobody is pointed at is a verb nobody finds.
 test('the guide and its page point a domain where the code does', () => {
-  let section = guide.split('## A custom domain')[1]
+  let section = guide.split('## Custom Domains')[1]
     ?.split('\n## ')[0] ?? ''
   assert(section, 'the guide never teaches a custom domain')
   let page = pageText('domains')

@@ -107,6 +107,13 @@ its budget is T-131904.
 Copy is written for a stranger. "Each space is free or on the Plus plan"
 passes; "Free allowances are yours, not each space's" doesn't.
 
+The homepage and the marketing pages speak in the voice the owner asked for,
+verbatim (T-32746): "soft and friendly. not this AI-technical analytical modern
+nonsense." That voice stays on the marketing pages. The guide under
+public/docs is reference, explicit and technical; the owner, verbatim: "the
+docs are the place for explicitness and technicality!"
+(`writing-documentation`).
+
 - Define "space" before you use it.
 - Say "the Plus plan" (M-37846).
 - Use the one-liner as it stands (M-37845).

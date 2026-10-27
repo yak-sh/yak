@@ -211,7 +211,7 @@ test(
           'app_new',
           'app_files',
           'app_deploy',
-          "import { apply, query, search, subscribe } from './api/client.js'",
+          "import { apply, me, query, search, subscribe } from './api/client.js'",
           'vocab.json',
           "subscribe('.doc', draw)",
           'not localStorage',
@@ -292,7 +292,7 @@ test(
       // The map names the composition, and its page teaches it with the
       // person's own example: a book from one app wearing a loan from another
       // (T-32701).
-      assertStringIncludes(read.contents[0].text, '## An entity spans apps')
+      assertStringIncludes(read.contents[0].text, '## Cross-App Data')
       let spans = await agent.call('resources/read', { uri: uriOf('entities') })
       assertStringIncludes(spans.contents[0].text, '.book&?loan')
       assertStringIncludes(spans.contents[0].text, "store('/lending/api/')")

@@ -1,20 +1,19 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, a gallery that never shows one picture twice, and publish() for a file served to anyone at a path of the app's address, before the app and whatever its access."
+description: "Files and Uploads (yaks.app). app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access."
 ---
 
-# Files and pictures
+# Files and Uploads
 
-Files are the one thing an app's store cannot hold directly: you cannot write
-raw bytes into a component the way you write a title or a number. This page
-covers files: how you write the app's own files with `app_files`, then what
-`upload` accepts and returns for the files its visitors send, where those are
-served from, the two rows one upload writes, who may send and who may look, how
-to delete one, how the app says which files it takes and the downscale that
-makes a phone photo quick to send — and a gallery that does not show the same
-picture twice.
+An app's store cannot hold raw bytes: you cannot write a file into a component
+the way you write a title or a number. This page covers how you write the app's
+own files with `app_files`, then, for the files its visitors send, what `upload`
+accepts and returns, the URL they are served from, the two rows one upload
+writes, who may upload and who may read, how to delete an upload, how the app
+limits which files it accepts, downscaling a phone photo so it uploads quickly,
+and a photo gallery that does not show the same picture twice.
 
-## app_files, and what a write returns
+## Writing app files with `app_files`
 
 The app's own files — `index.html`, the css and js beside it, `vocab.json` — are
 written with `app_files`. **Writing a file needs no `op`**: give it a `path` and
@@ -26,15 +25,15 @@ previous files, vocabulary and worker serving together.
 bytes, then the live version and whether the draft differs from it: the number
 `app_deploy` takes as `base`.
 
-**Coming back to an app, read it in one call**: `app_files(app, op: 'read')`
-answers every text file in it, each under its path and SHA-256, up to 64 KB in
-all, and names the live version `app_deploy` takes as `base`. `paths: [...]`
-reads just those files. The answer names each file it left out and why: not
-text, no such file, or past the 64 KB. `paths` reads those in another call, and
-`path` reads one whole, as its text alone.
+**To read an existing app, use one call**: `app_files(app, op: 'read')` returns
+every text file in it, each under its path and SHA-256, up to 64 KB in all, and
+names the live version `app_deploy` takes as `base`. `paths: [...]` reads just
+those files. The answer names each file it left out and why: not text, no such
+file, or past the 64 KB. `paths` reads those in another call, and `path` reads
+one whole, as its text alone.
 
-**Every write reports what was stored**, so a file transcribed by hand is
-checked in the call that made it before the app serves it:
+**Every write reports what was stored**, so a file you wrote out by hand is
+checked in the same call, before the app serves it:
 
     wrote index.html → https://yourname.yaks.app/recipes/index.html
       — 4213 bytes, sha256 9f2a…
@@ -43,43 +42,44 @@ A `.json` file is parsed as well, and the reply reports `parsed` — or reports
 that it is not valid JSON, and where:
 `NOT valid JSON — Expected ',' or '}' after
 property value in JSON at position 45971`
-names the bracket that is wrong. That is a note in the reply, not a refusal: the
+gives the position of the error. That is a note in the reply, not a refusal: the
 file is still stored.
 
 **`op: patch` edits one file in place** — `path`, `find`, `replace`. `find` is
 exact text, not a pattern, and must match exactly once; anything else refuses
 saying how many matches there were, so lengthen `find` until it names one place.
-An empty `replace` removes the text. It is the cheap fix for the one line that
-came out wrong, where the alternative is re-sending the whole file.
+An empty `replace` removes the text. Use it to fix one wrong line without
+sending the whole file again.
 
-**`op: fetch` writes a URL's body to a path** — `path` and `url`, https only. It
-is how a third-party library is vendored into the app rather than transcribed:
+**`op: fetch` writes a URL's body to a path** — `path` and `url`, https only.
+Use it to vendor a third-party library into the app instead of writing it out by
+hand:
 
     app_files(app, op: 'fetch', path: 'chess.js',
               url: 'https://cdnjs.cloudflare.com/…/chess.min.js')
     → fetched … → https://yourname.yaks.app/chess/chess.js — 15234 bytes,
       sha256 3c1f…, text/javascript, integrity sha256-PB8…=
 
-The `integrity` is the same digest written the way a `<script integrity>`
-attribute expects, so a page that goes on loading the file from a CDN can be
-pinned to the bytes this fetch got. The content type the app serves it as comes
-from the path's extension, not from the response — name it `.js` and it is
-javascript.
+The `integrity` is the same digest in the format a `<script integrity>`
+attribute expects, so a page that keeps loading the file from a CDN can pin it
+to the bytes this fetch received. The app serves the file with a content type
+taken from the path's extension, not from the response: a path ending in `.js`
+is served as JavaScript.
 
 After `app_deploy`, local scripts, stylesheets, images, audio and video named by
 the page use a URL under `./api/assets/<release>/`. Local import-map targets and
 scopes, and relative URLs inside stylesheets and module scripts, stay in that
 release too, except one that names `./api/`: a module's
 `import … from './api/client.js'` still reaches the app's API. Those URLs keep
-the same bytes even after another deploy or a rollback, so a browser may keep
+the same bytes even after another deploy or a rollback, so a browser may cache
 them for a year. The page itself, app data, and the ordinary file addresses
 still revalidate; they show the current release. A page with its own `<base>`
 keeps its chosen URL behavior. App access is checked whenever a request reaches
 the server, including a request for an older release.
 
-## Pages and their addresses
+## Page URLs and 404 handling
 
-Every HTML file is a page, at the address a static host gives it:
+Every HTML file is a page, at the URL a static host would give it:
 
     index.html          /<app>/
     about.html          /<app>/about, and /<app>/about.html
@@ -87,12 +87,12 @@ Every HTML file is a page, at the address a static host gives it:
     404.html            any page that is not there, answered 404
 
 A path with no file behind it and no extension, `/<app>/recipes/42`, is a route:
-without a `404.html` the app's `index.html` answers it, so a page that draws
-itself at a place opens there. A missing stylesheet, script or picture is a 404,
-never a page.
+without a `404.html` the app's `index.html` answers it, so a page that renders
+its own routes opens at that URL. A missing stylesheet, script or picture is a
+404, never a page.
 
-**Choosing what a missing page answers.** The same `wrangler.jsonc` can say it,
-in Cloudflare's own key, `assets.not_found_handling`:
+**Choosing the response for a missing page.** A `wrangler.jsonc` beside
+`index.html` sets it, with Cloudflare's own key, `assets.not_found_handling`:
 
     { "assets": { "not_found_handling": "single-page-application" } }
 
@@ -102,35 +102,38 @@ in Cloudflare's own key, `assets.not_found_handling`:
   page's folder and then each folder above it; with none, a plain 404.
 - `"none"`: a plain 404.
 
-Unset, the rule above holds: the root's `404.html`, else `index.html` for a
-route. A missing file with an extension is a 404 in every mode.
+When it is unset, the default above applies: the root's `404.html`, else
+`index.html` for a route. A missing file with an extension is a 404 in every
+mode.
 
 Each page resolves its relative URLs from its own folder, as anywhere on the
 web: `docs/index.html` names `../style.css`, and reaches the client at
 `../api/client.js`.
 
 **Serving a folder.** A `wrangler.jsonc` beside `index.html` can name a folder
-of the app for its addresses to serve, in Cloudflare's own words:
+of the app to serve at the app's URLs, with Cloudflare's own key:
 
     { "assets": { "directory": "dist" } }
 
 Then `dist/index.html` is `/<app>/`, and nothing outside `dist/` is on the web.
-That is how a build sits beside the source that made it, and the code page shows
-one from the sandbox to the address: <https://yaks.app/docs/code.md>.
-`app_deploy` refuses a folder with no files in it.
+This lets a build's output sit beside the source that made it. Backend Code
+shows a build going from the sandbox to the app's URL:
+<https://yaks.app/docs/code.md>. `app_deploy` refuses a folder with no files in
+it.
 
-## Releases and open pages
+## Releases and reload notices for open pages
 
 `app_deploy` makes the draft a new release. An already-open page keeps its
 release's file URLs, but its data is live: a newer release may change the
-contract that page uses. The platform checks on a release push through the app's
-own socket, when that socket opens or reconnects, when the page becomes visible
-again, and on a persisted `pageshow` (returning from the browser's back-forward
-cache). The return checks run at most once a minute. A page with no socket that
-never hides does not hear a release until one of those moments.
+contract that page uses. The platform checks for a new release when one is
+pushed through the app's own socket, when that socket opens or reconnects, when
+the page becomes visible again, and on a persisted `pageshow` (returning from
+the browser's back-forward cache). The return checks run at most once a minute.
+A page with no socket that never hides does not learn of a release until one of
+those moments.
 
-The level is derived **from the page's version to the newest version**, not just
-from the last deploy:
+The reload level is derived by **comparing the page's version with the newest
+version**, not just from the last deploy:
 
 - Identical file manifests mean **no notice**, even after a rollback or an
   explicit required mark.
@@ -152,7 +155,7 @@ source releases it crosses. The identical-files rule still takes precedence.
 Neither operation rolls back saved data; plan any store migration with the
 release.
 
-### The default notice
+### The default reload notice
 
 The platform emits a cancelable **`yak-release` event on `window`**, once for
 each newly noticed version. Its `detail` includes `{version, reload}`: `version`
@@ -160,20 +163,20 @@ is the latest release number and `reload` is `'optional'` or `'required'`. More
 fields may be added; read the ones you use rather than assuming that is the
 whole object.
 
-Without a takeover, an optional notice says **"A new version of this app is
-out"**, with Reload and Dismiss. Dismiss holds for that version in that tab. A
-required notice says **"This app has changed. Reload to keep using it"**, with
-Reload only, and stays until the person reloads. Neither notice covers the
-page's input. **There is no automatic reload**, even for required changes: let
-the person save or copy unfinished work before choosing Reload.
+Unless the app draws its own notice, an optional notice says **"A new version of
+this app is out"**, with Reload and Dismiss. Dismiss holds for that version in
+that tab. A required notice says **"This app has changed. Reload to keep using
+it"**, with Reload only, and stays until the person reloads. Neither notice
+covers the page's input. **There is no automatic reload**, even for required
+changes: let the person save or copy unfinished work before choosing Reload.
 
-### Drawing your own notice
+### Custom reload notice
 
 Call `event.preventDefault()` **synchronously in the listener** to suppress the
-platform notice, then draw your own. Canceling is a takeover, not an
-acknowledgment: your app now owes the person a notice and a Reload action. Keep
-a required notice visible, and let only an optional notice be dismissed. Do not
-clear or replace the form while drawing it.
+platform notice, then draw your own. Canceling the event does not acknowledge
+the release; it hands the notice to your app, which must then show the person a
+notice and a Reload action. Keep a required notice visible, and let only an
+optional notice be dismissed. Do not clear or replace the form while drawing it.
 
 For example, put this notice in normal page flow, beside (not over) your form:
 
@@ -216,12 +219,13 @@ This event is for the app's own releases, not for platform releases or a
 borrowed app's releases. The script is supplied by the platform; there is no
 client library upgrade or app rebuild needed to receive it.
 
-## Every write keeps what it replaced
+## File history and restore
 
-**No write and no delete throws bytes away.** Before anything lands at a path,
-whatever was there is kept — addressed by its own sha256, beside the app — and
-noted in that path's history. So the file you just overwrote is one call away,
-and you never have to remember what it used to contain.
+**No write or delete discards bytes.** Before a write replaces what is at a
+path, the previous bytes are kept — addressed by their own sha256, beside the
+app — and recorded in that path's history. A file you just overwrote can be
+restored with one call, so you do not have to keep your own copy of what it
+contained.
 
     app_files(app, op: 'history', path: 'index.html')
     → index.html in yourname/recipes:
@@ -229,45 +233,44 @@ and you never have to remember what it used to contain.
       - until 2026-09-06T14:20:11Z — 3980 bytes, sha256 c41d…, by the owner
       - until 2026-09-04T09:02:47Z — 1204 bytes, sha256 7b19…, by the owner
 
-An entry reads **"the file was these bytes until then"** — the time and the name
-are the write that took them away. So the top entry is one step back from now,
-and `now` is what the app is serving this second.
+Each entry means **"the file was these bytes until this time"**: the time and
+the name belong to the write that replaced those bytes. So the top entry is the
+version before the current one, and `now` is what the app is serving at this
+moment.
 
-**`op: restore` puts one back.** With just a `path` it is the newest entry —
-undo the last write:
+**`op: restore` restores a version.** With only a `path`, it restores the newest
+entry, which undoes the last write:
 
     app_files(app, op: 'restore', path: 'index.html')
 
-`sha` names one exactly, off the history. `at` asks for a moment —
-`at: '2026-09-05T00:00:00Z'` puts the file back to what it was serving then,
-which is the useful form when what you know is _when_ it was still right and not
-_what_ it contained.
+`sha` picks one entry from the history by its hash. `at` picks a time:
+`at: '2026-09-05T00:00:00Z'` restores the file the app was serving then. Use
+`at` when you know _when_ the file was still right but not _what_ it contained.
 
-A restore is **itself a write**, so the bytes it replaces are kept in turn and a
-restore can be undone by another. Nothing rewrites the history.
+A restore is **itself a write**, so the bytes it replaces are kept in turn, and
+another restore can undo it. Nothing rewrites the history.
 
 The bytes are kept for **30 days**, and always at least the last 20 versions of
-a file, whichever reaches further back. After that a version is let go — and
-only ever a version nothing else needs: bytes a kept deploy names are never
-removed, so `app_rollback` keeps working for every version `app_versions` still
-lists.
+a file, whichever reaches further back. After that a version is deleted, but
+only if nothing else needs it: bytes a kept deploy names are never removed, so
+`app_rollback` keeps working for every version `app_versions` still lists.
 
-This is the file-sized way back. Beside it: `app_rollback` puts back every file
-of a whole deploy at once, `store_restore` puts back everything the app has
-_saved_, and `app_restore` brings back an app that was deleted.
+File history restores one file. The other restore tools: `app_rollback` restores
+every file of a whole deploy at once, `store_restore` restores everything the
+app has _saved_, and `app_restore` restores an app that was deleted.
 
-## An icon for the home screen
+## Home-screen icon: `icon.svg`
 
-Write an **`icon.svg` beside `index.html`** and the app has an icon everywhere.
-It is text, so it goes in as `content` like a page does:
+An **`icon.svg` beside `index.html`** is the app's icon everywhere. It is text,
+so it is written as `content`, like a page:
 
     app_files(app, files: [{path: 'icon.svg', content:
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
       '<rect width="24" height="24" fill="#4c773e"/>' +
       '<circle cx="12" cy="12" r="6" fill="#fdf7ee"/></svg>'}])
 
-The platform draws it as `icon.png`, 512×512, which is the address a home screen
-reads. The SVG is drawn when it is written, and refused with the reason if it
+The platform renders it as `icon.png`, 512×512, which is the URL a home screen
+reads. The SVG is rendered when it is written, and refused with the reason if it
 cannot be an icon:
 
 - its `<svg>` has `xmlns="http://www.w3.org/2000/svg"`, as any SVG file needs;
@@ -277,45 +280,45 @@ cannot be an icon:
 - it parses.
 
 Fill the square with a background of your own, a `<rect>` the size of the
-`viewBox`. Where the picture leaves the square bare it is drawn on white,
-because iOS fills a transparent icon with solid black.
+`viewBox`. Transparent areas are rendered white, because iOS fills a transparent
+icon with solid black.
 
-The page is served with the two links an installed app needs already in its
-head, at the app's own root:
+Each page is served with the two links an installed app needs already in its
+`<head>`, at the app's own root:
 
     <link rel="apple-touch-icon" href="/recipes/icon.png">
     <link rel="manifest" href="/recipes/manifest.webmanifest" crossorigin="use-credentials">
 
-iOS reads the first and nothing else — an icon named only in a manifest is not
-the one it uses — while everything else reads the second, which is generated
-from the app: its title as the `name`, its own address as `start_url` and
-`scope`, `display: standalone`, the icon at 512 and 192, and the colour the page
-sets in `<meta name="theme-color">` where it sets one.
+iOS reads only the first; it does not use an icon named only in a manifest.
+Other browsers and platforms read the second, a manifest generated from the app:
+its title as the `name`, its own address as `start_url` and `scope`,
+`display: standalone`, the icon at 512 and 192, and the colour the page sets in
+`<meta name="theme-color">` where it sets one.
 
-**What the app writes is kept.** Each link is added only where the page has
-none, so an app that writes its own `apple-touch-icon` keeps it and still gets
-the manifest link, and an app that ships its own `manifest.webmanifest` is
-served that file rather than the generated one. A manifest link on the app's own
-address that names no `crossorigin` is given `crossorigin="use-credentials"`, so
-a private app's manifest is fetched with its member's sign-in and answers them.
-An `icon.png` of the app's own is served in place of the drawing: a picture
-fetched with `op: fetch`, or one `sandbox_ship` copies in. A picture is read the
-way a browser would read it when it is written, and one that does not decode is
-refused: a PNG's bytes cannot be written out by hand, so an icon an assistant
-makes is an SVG.
+**The app's own links and files take precedence.** Each link is added only where
+the page has none, so an app that writes its own `apple-touch-icon` keeps it and
+still gets the manifest link, and an app that ships its own
+`manifest.webmanifest` is served that file rather than the generated one. A
+manifest link on the app's own address that names no `crossorigin` is given
+`crossorigin="use-credentials"`, so a private app's manifest is fetched with its
+member's sign-in and succeeds. An `icon.png` of the app's own is served instead
+of the rendered one: a picture fetched with `op: fetch`, or one `sandbox_ship`
+copies in. An image is decoded when it is written, as a browser would decode it,
+and one that does not decode is refused. A PNG's bytes cannot be written out by
+hand, so an icon an assistant makes is an SVG.
 
 Until an app writes an icon, `icon.png` serves the platform's own default tile,
-so an app somebody keeps on their phone is never a blank square.
+so an app somebody adds to their phone's home screen never shows a blank square.
 
-## upload, and what it returns
+## Uploading a file with `upload`
 
-`upload` comes from the client library every app is served:
+`upload` is exported by the client library served to every app:
 
     import { upload } from './api/client.js'
     let file = await upload(input.files[0])
 
-It accepts a `File` from an `<input type=file>`, or any `Blob` — one a canvas
-made, one a `fetch` returned. A second argument names it:
+It accepts a `File` from an `<input type=file>`, or any `Blob`, such as one from
+a canvas or a `fetch` response. A second argument sets its name:
 `upload(blob, { name: 'cake.jpg' })`. A `File` carries its own name; a bare
 `Blob` has none unless you give it one.
 
@@ -327,22 +330,21 @@ It returns one object:
       bytes: 51234,                        // how many there are
       w: 1600, h: 1200 }                   // pictures only
 
-`mime` is the blob's own `type` — the browser fills it in for a file off an
-input. When the type is empty or `application/octet-stream`, a recognized
-filename supplies it instead (`video/mp4` for `.mp4`, `audio/mpeg` for `.mp3`).
-An unknown name gets `application/octet-stream`. `w` and `h` are there only when
-the bytes are a picture that declares its size; otherwise both keys are simply
-absent.
+`mime` is the blob's own `type` — the browser sets it for a file from an input.
+When the type is empty or `application/octet-stream`, a recognized filename
+supplies it instead (`video/mp4` for `.mp4`, `audio/mpeg` for `.mp3`). An
+unknown name gets `application/octet-stream`. `w` and `h` are there only when
+the bytes are an image that declares its size; otherwise both keys are absent.
 
-## Content addressing, and what follows from it
+## Content addressing
 
-`eid` is the SHA-256 of the bytes, in hex. Nothing else decides it: not the
-name, not the mime, not who sent it. Three things follow.
+`eid` is the SHA-256 of the bytes, in hex. Nothing else affects it: not the
+name, not the mime, not who sent it. This has three consequences.
 
-**The same file twice is one upload.** Send the same photo from two pages, two
-devices, or twice from one form, and the second send lands on the same eid, the
-same object, and the same row — so a page need not remember what it has sent; it
-may send again and read what comes back.
+**Uploading the same file twice gives one upload.** Send the same photo from two
+pages, two devices, or twice from one form, and the second upload gets the same
+eid, the same object, and the same row — so a page does not need to track what
+it has sent; it can send again and read the result.
 
 **The bytes at an address can never change.** The mime and filename can change
 if the file is uploaded again, so `GET ./api/blob/<eid>` redirects to a URL that
@@ -352,19 +354,19 @@ browser responses are private to that browser's cache.
 
 **The address is not a secret.** Anyone who may read the app may read any blob
 in it, and someone holding the identical file can compute its eid without
-asking. So never treat a blob address as a permission to hold something private.
-What content addressing does not save is the sending: the upload endpoint reads
-every byte to hash them, so re-uploading a 4 MB photo costs 4 MB every time. A
-file big enough to go up in parts is the exception (below): the page names it
-first, and bytes the app already holds are not sent again.
+asking. So never use a blob address as access control for something private.
+Content addressing does not avoid the transfer: the upload endpoint reads every
+byte to hash them, so re-uploading a 4 MB photo costs 4 MB every time. A file
+large enough to be uploaded in parts is the exception (below): the page sends
+its SHA-256 first, and bytes the app already holds are not sent again.
 
-## The two rows one upload writes
+## The rows an upload writes: `blob` and `attachment`
 
 The upload endpoint writes two entities through the app's own `/apply` endpoint,
-recorded as written by the person who uploaded — so `.created` names them the
-way it names any other row. The **content** row sits at the bytes' own eid and
-records what is true of the bytes; the **use** row records the name this app
-gives them:
+recorded as written by the person who uploaded — so `.created` names the
+uploader, as for any other row. The **content** row has the bytes' own eid and
+records facts about the bytes; the **use** row records the name this app gives
+them:
 
     { entity: { eid: '9f2a…' },
       blob:  { bytes: 51234 },
@@ -374,50 +376,50 @@ gives them:
       attachment: { blob: '9f2a…', mime: 'image/jpeg', name: 'cake.jpg' } }
 
 The use row's eid is derived from the content's, as
-`sha256("attachment:" + sha)`, so it is stable without being the same eid. That
-is what makes a second upload of the same bytes rename the row that already
-exists rather than write a second one holding the same facts. A component may
-not point at its own entity, which is the other reason the two are apart.
+`sha256("attachment:" + sha)`, so it is stable but not the same eid. Because of
+this, a second upload of the same bytes renames the row that already exists
+instead of writing a second row with the same facts. A component may not point
+at its own entity, which is the other reason the two rows are separate.
 
-The rename is a patch: an upload that names nothing keeps the name it had. Send
+The rename is a patch: an upload with no name keeps the existing name. Send
 `cake.png`, then the same bytes as `the cake.png`, then a third time off a
 canvas with no name at all, and the row's name is `the cake.png`.
 
-**List the use, not the content.** `query('.attachment')` is every file the app
-holds:
+**To list uploads, query the use rows, not the content rows.**
+`query('.attachment')` returns every file the app holds:
 
     for (let f of await query('.attachment')) {
       draw(`./api/blob/${f.attachment.blob}`, f.attachment.name)
     }
 
-`.blob` is not that list — a long `doc.body` is a blob row too.
+`.blob` is not that list — a long `doc.body` is stored as a blob row too.
 
-## A picture's width and height
+## Image width and height: `image`
 
-`image` sits on the content row — at the very eid your own row points at —
-because a size is a fact about the bytes, however many attachments name them.
-The platform reads it out of the file's own header and never by decoding the
-image: png, jpeg, gif and webp each declare their size in the first few dozen
-bytes. Anything else gets no `image` at all — a guess would be worse than
-nothing, since a page can measure the bitmap itself but cannot tell that a
-stored number is wrong. A header declaring a zero is a broken file, and gets
-none either.
+`image` is on the content row — the eid your own row points at — because a size
+is a fact about the bytes, however many attachments name them. The platform
+reads it from the file's own header and never by decoding the image: png, jpeg,
+gif and webp each declare their size in the first few dozen bytes. Any other
+format gets no `image` at all, because a guessed size would be worse than none:
+a page can measure the bitmap itself but cannot tell that a stored number is
+wrong. A header that declares a size of zero is a broken file, and also gets no
+`image`.
 
-So a wall holds each photo's space open before a single byte of it arrives:
+So a gallery page can reserve each photo's space before any of its bytes arrive:
 
     let size = new Map((await query('.image'))
       .map((i) => [i.entity.eid, i.image]))
     let box = size.get(p.photo.blob)              // the eid the row holds
     if (box) { img.width = box.w; img.height = box.h }
 
-Two attributes and the browser reserves the right rectangle, so the page does
-not jump as the pictures land; `aspect-ratio: ${box.w} / ${box.h}` does the same
-for a fluid layout. The header is all the platform reads — no orientation, no
-capture date, no camera.
+With `width` and `height` set, the browser reserves the right rectangle, so the
+layout does not shift as the images load; `aspect-ratio: ${box.w} / ${box.h}`
+does the same for a fluid layout. The platform reads only the header: no
+orientation, no capture date, no camera.
 
-## Drawing a picture from a row
+## Showing an upload from your own component
 
-Point your own row at the bytes by their eid:
+Store the upload's eid in a component the app declares:
 
     await apply({ photo: { caption: 'the cake', blob: file.eid } })
 
@@ -429,19 +431,18 @@ Point your own row at the bytes by their eid:
           "blob":    { "type": "string" } } } } }
 
 An app's own properties are `text`, `number`, `bool`, `time` or `url`, so a
-blob's address is held as text. Then build the address from the eid, relative:
-`img.src = './api/blob/' + p.photo.blob`.
+blob's eid is stored as text. Then build the image URL from the eid, as a
+relative URL: `img.src = './api/blob/' + p.photo.blob`.
 
-`file.url` is fine to drop straight into an `<img src>` the moment the upload
-returns — it is the picture the person just picked, on the page they picked it
-on. It is the wrong thing to save in a row: it is path-absolute and carries this
-app's slug (`/photos/api/blob/9f2a…`), so a row holding it breaks the day
-someone installs a copy of the app at another address.
+`file.url` can be used directly as an `<img src>` as soon as the upload returns,
+on the page where the person picked the file. Do not save it in a row: it is
+path-absolute and includes this app's slug (`/photos/api/blob/9f2a…`), so a row
+holding it breaks when someone installs a copy of the app at another address.
 
-## The HTTP endpoints underneath
+## HTTP endpoints for uploads: `./api/blob`
 
-`upload` is one POST, and the bytes come back from one GET — ordinary
-same-origin HTTP, which `curl` or a worker can call too.
+`upload` sends one POST, and the bytes are read back with one GET — ordinary
+same-origin HTTP requests, which `curl` or a worker can also make.
 
     POST ./api/blob
     content-type: image/jpeg     ← the blob's own type, minus parameters
@@ -452,35 +453,35 @@ same-origin HTTP, which `curl` or a worker can call too.
     GET ./api/blob/9f2a…    → the bytes
     Range: bytes=100-199    → 206, those 100 bytes
 
-A header is ASCII and a file's name is not, so the name is sent percent-encoded
-and the endpoint decodes it; the mime is kept to 120 characters and the name to
-200. GET and HEAD return the mime and name from the attachment row. A single
-`Range: bytes=…` request gets `206` and `Content-Range`; a range beyond the end
-gets `416`. Responses include a revalidating cache header,
+A header must be ASCII and a file's name may not be, so the name is sent
+percent-encoded and the endpoint decodes it; the mime is kept to 120 characters
+and the name to 200. GET and HEAD return the mime and name from the attachment
+row. A single `Range: bytes=…` request gets `206` and `Content-Range`; a range
+beyond the end gets `416`. Responses include a revalidating cache header,
 `content-security-policy: sandbox; script-src 'none'` and
 `x-content-type-options: nosniff` — an uploaded HTML page or SVG opened in a tab
-cannot run anything. A path that is not 64 hex characters, or bytes this app
+cannot run any script. A path that is not 64 hex characters, or bytes this app
 never received, is `404 no_such_file`.
 
-## Big files go up in parts, and resume
+## Large files: uploading in parts and resuming
 
-`upload` sends a file of 32 MiB or more in parts, four at a time, and an upload
-that is cut short carries on instead of starting over. A part that fails because
+`upload` sends a file of 32 MiB or more in parts, four at a time, and an
+interrupted upload resumes instead of starting over. A part that fails because
 the connection dropped or the phone went to sleep is sent again once the browser
 is back online. If the tab closed, uploading the same file again, from any tab
-or device, sends only the parts that had not arrived. The page changes nothing:
-the same `upload(file)`, the same answer.
+or device, sends only the parts that had not arrived. The page code does not
+change: it calls the same `upload(file)` and gets the same result.
 
-An upload in parts is named by the file's SHA-256 before it begins, so the page
-reads the file once to compute it first. `digest(file)` from the client library
-is that hash, the eid the upload will answer.
+An upload in parts is identified by the file's SHA-256 before it begins, so the
+page reads the whole file once first to compute it. `digest(file)` from the
+client library computes that hash, which is the eid the upload will return.
 
-An upload nobody finishes is forgotten after seven days, and its parts never
+An upload nobody finishes is discarded after seven days, and its parts never
 count toward the space's photos and files.
 
-The endpoints, for a client of your own:
+The endpoints, for writing your own client:
 
-    POST ./api/blob/9f2a…          ← the file's SHA-256, and what it is
+    POST ./api/blob/9f2a…          ← the file's SHA-256; its size, name, type
     {"bytes": 41943040, "name": "talk.mp4", "mime": "video/mp4"}
     → {"part": 8388608, "need": [1, 2, 3, 4, 5]}
 
@@ -496,18 +497,19 @@ The endpoints, for a client of your own:
 bytes, a whole number of MiB. Every call may be sent again. A POST when nothing
 is missing assembles the parts and answers what `POST ./api/blob` answers.
 
-Each part is hashed as it arrives, on from the SHA-256 state its `x-yak-state`
-names: the eight 32-bit words of the hash after every byte before the part, as
-64 hex characters, which a SHA-256 written to be fed in pieces holds between
-them. The first part starts from SHA-256's own initial value
-(`6a09e667bb67ae85…5be0cd19`). The parts are assembled only when each one's
-state follows on from the one before it and the last ends at the address, so the
-bytes kept are the bytes the address names; parts that do not are dropped with a
-`400`, as is a part of the wrong length. `409 upload_gone` says the upload is no
-longer under way (seven days passed): POST again to begin it anew. The space's
-room and the most bytes the app takes are checked against `bytes` when it
-begins, with the same `space_full` and `too_large`, and the type the app takes
-once it is whole, with the same `415`.
+Each part is hashed as it arrives, continuing from the SHA-256 state named by
+its `x-yak-state` header: the eight 32-bit words of the hash after every byte
+before the part, as 64 hex characters, the state an incremental SHA-256
+implementation holds between pieces. The first part starts from SHA-256's own
+initial value (`6a09e667bb67ae85…5be0cd19`). The parts are assembled only when
+each part's starting state matches the end of the part before it and the last
+part ends at the file's SHA-256, so the bytes stored are the bytes the address
+names; a part that does not match is dropped with a `400`, as is a part of the
+wrong length. `409 upload_gone` means the upload is no longer in progress (seven
+days passed): POST again to start it over. The space's free storage and the
+app's size limit are checked against `bytes` when the upload begins, refused
+with the same `space_full` and `too_large`, and the app's accepted type once the
+file is complete, refused with the same `415`.
 
 Deployed audio and video files use media types from their extensions: `.mp4`,
 `.m4v`, `.mov`, `.webm`, `.mp3`, `.m4a`, `.aac`, `.wav`, `.ogg`, `.flac`, and
@@ -515,15 +517,16 @@ HLS `.m3u8` and `.ts` are recognized. File responses also support HEAD and byte
 ranges, so a browser can start playback and seek without downloading the whole
 file again.
 
-## Who may upload, who may read
+## Upload and read permissions
 
 Uploading is a write and reading the bytes is a read, so the app's `access`
 decides both, exactly as it decides `apply` and `query`: on `public` anyone with
 the link reads and an owner or editor uploads; on `open` anyone with the link
-does both, so a guest at the party adds their own photo without signing in; on
+does both, so a guest at a party can add their own photo without signing in; on
 `private` members read and an owner or editor uploads.
 
-Ask before they pick, not after they wait:
+Check whether the person may upload before they pick a file, not after the
+upload fails:
 
     let who = await me()
     if (!who.writes) {
@@ -540,11 +543,12 @@ member who is only a viewer,
     catch (e) { e.signIn ? location = e.signIn : show(e.message) }
 
 On an `open` app a signed-out guest's upload has no `created.by` at all. If the
-wall wants a byline, ask them for a name and save it in your own row.
+gallery shows who added each photo, ask them for a name and save it in your own
+row.
 
 ## Deleting an upload
 
-Delete the content row, at the upload's eid, and the upload is gone:
+To delete an upload, delete its content row, at the upload's eid:
 
     await apply({ entity: { eid: file.eid }, $delete: true })
 
@@ -568,49 +572,51 @@ properties holding the eid are text, and the platform does not read your files
 for `./api/blob/` addresses, so delete or change what still uses an upload
 before you delete it.
 
-Deleted bytes stop counting toward the space's photos-and-files ceiling. An app
-that replaces its uploads (a video rendered again, a photo cropped) deletes the
-ones it no longer uses the same way: list `.blob`, keep the eids its files and
-rows still use, and delete the rest, from a page with `apply` or from the
-assistant with `graph_apply`.
+Deleted bytes stop counting toward the space's storage limit for photos and
+files. An app that replaces its uploads (a video rendered again, a photo
+cropped) deletes the ones it no longer uses the same way: list `.blob`, keep the
+eids its files and rows still use, and delete the rest, from a page with `apply`
+or from the assistant with `graph_apply`.
 
-Who may delete an upload is who may delete its row: an owner or editor any
+Whoever may delete an upload's row may delete the upload: an owner or editor any
 upload, and on an `open` app, anyone else only what they uploaded. A refused
 delete throws like any refused `apply`. The same bytes sent twice are one
 upload, so deleting it deletes it for everyone who sent it.
 
 Deleting the app (`app_delete`) puts it in the trash and keeps every byte of it
 for 30 days, so `app_restore` brings the uploads back with everything else.
-After that — or straight away, with `forever: true` — the bytes go: every object
-under the app's own prefix, uploads included, and there is no undo.
+After that — or immediately, with `forever: true` — the bytes are deleted: every
+object under the app's own prefix, uploads included, and there is no undo.
 
-## Which files the app takes, and the downscale
+## Size and type limits, and downscaling images
 
-yaks.app puts no size or type of its own on an upload; the one bound is the
-space's room for photos and files. Which files an app takes is for its author to
-decide, in its `vocab.json`, in JSON Schema's own words for a file's bytes:
+yaks.app sets no size or type limit of its own on an upload; the only limit is
+the space's storage for photos and files. An app's author sets which files the
+app accepts, in its `vocab.json`, with JSON Schema's own keywords for a file's
+contents:
 
     {
       "blob": { "maxLength": 10485760, "contentMediaType": "image/*" },
       "$defs": { … }
     }
 
-- `maxLength` is the most bytes one file may hold.
-- `contentMediaType` is what it may be: one media type, or a list of them
-  (`["image/*", "application/pdf"]`), where `image/*` takes every kind of
-  picture, the way an `<input accept>` does.
+- `maxLength` is the largest size of one file, in bytes.
+- `contentMediaType` is the accepted type: one media type, or a list of them
+  (`["image/*", "application/pdf"]`), where `image/*` accepts every image type,
+  as in an `<input accept>`.
 
-Leave either out and anything is taken. The type is read off the bytes, never
-off the name or what the upload says it is, so a web page called `cake.png` is
-not a picture. A file too big is refused `413`, code `too_large`, before any of
-it is read; one of another type `415`, code `unsupported_media_type`. Each
-carries a message a guest can act on: "this app takes image/*, and this file is
-application/pdf". In parts, the size is checked when it begins and the type once
-it is whole. A letter's attachments are held to the same words, and one the app
-does not take is left off the letter. An empty body is a 400, code `no_bytes`.
+If either is left out, there is no limit of that kind. The type is detected from
+the bytes, never from the name or the type the upload declares, so a web page
+named `cake.png` is not an image. A file that is too large is refused with
+`413`, code `too_large`, before any of it is read; a file of another type with
+`415`, code `unsupported_media_type`. Each carries a message a guest can act on:
+"this app takes image/*, and this file is application/pdf". For an upload in
+parts, the size is checked when it begins and the type once it is complete. A
+letter's attachments are checked against the same keywords, and one the app does
+not accept is left off the letter. An empty body is a 400, code `no_bytes`.
 
-A phone photo is several megabytes, so a page that shows pictures downscales
-them before it sends them, to be quick to send and to show:
+A phone photo is several megabytes, so a page that shows images should downscale
+them before uploading, which makes them faster to send and to show:
 
     // A picture, at most 1600px on its long side, as a jpeg.
     let smaller = async (file, max = 1600) => {
@@ -628,19 +634,19 @@ them before it sends them, to be quick to send and to show:
 
     await upload(await smaller(file), { name: file.name })
 
-Three things worth keeping in that shape. `Math.min(1, …)` never blows a small
-picture up. A `Blob` off a canvas has no name, so pass the original's, or the
-attachment row will have none. And resized bytes are new bytes: a downscale that
-picks a different `max` or `quality` next time hashes differently and uploads
-again, so pick your numbers once and leave them alone.
+Three details of that function matter. `Math.min(1, …)` never enlarges a small
+image. A `Blob` from a canvas has no name, so pass the original's, or the
+attachment row will have none. And resized bytes are new bytes: a downscale with
+a different `max` or `quality` next time produces a different hash and uploads
+again, so choose the values once and keep them.
 
-A `413` with code `space_full` says the space is out of room, with a message
-naming the space; nothing about the file will fix that one. There is no
-server-side resizing, so the page's downscale is the whole of it.
+A `413` with code `space_full` means the space is out of storage, with a message
+naming the space; changing the file will not fix it. There is no server-side
+resizing, so downscaling happens only in the page.
 
-## Dropping files, and more than one
+## Drag-and-drop and multiple files
 
-A file input is one way in; a drag-and-drop is the other. Both hand you a
+Files arrive from a file input or from a drag-and-drop. Both give you a
 `FileList`:
 
     let took = async (files) => {                 // one at a time
@@ -653,13 +659,13 @@ A file input is one way in; a drag-and-drop is the other. Both hand you a
     })
 
 `dragover` must call `preventDefault` or the browser opens the file instead of
-giving it to you, and uploading one at a time keeps a dropped folder of twenty
-photos from making twenty requests at once.
+passing it to the page, and uploading one at a time keeps a dropped folder of
+twenty photos from making twenty requests at once.
 
-## A gallery, whole
+## Example: a complete photo gallery
 
-Pick, downscale, upload, look before writing, then draw the wall with each
-picture's space held open — the entire page.
+The whole page: pick files, downscale them, upload, check for an existing row
+before writing one, then render the gallery with each image's space reserved.
 
     <!doctype html>
     <meta charset="utf-8" />
@@ -680,8 +686,8 @@ picture's space held open — the entire page.
         try {
           say(`sending ${file.name}…`)
           let sent = await upload(await smaller(file), { name: file.name })
-          // The bytes dedupe themselves; a row of ours does not. Look
-          // before writing one, or the photo hangs on the wall twice.
+          // Identical bytes are stored once; our photo rows are not.
+          // Check before writing one, or the photo is shown twice.
           let [seen] = await query(`.photo.blob=${sent.eid}`)
           if (!seen) {
             await apply({ photo: { caption: file.name, blob: sent.eid } })
@@ -697,8 +703,9 @@ picture's space held open — the entire page.
         pick.value = ''
       })
 
-      // The wall and each picture's size, in one line, redrawn on every
-      // change — including one made on their phone while this page is open.
+      // The photos and each image's size, in one subscription, redrawn on
+      // every change — including one made on another device while this
+      // page is open.
       subscribe('.photo|.image', (rows) => {
         let size = new Map(rows.filter((r) => r.image)
           .map((r) => [r.entity.eid, r.image]))
@@ -713,8 +720,8 @@ picture's space held open — the entire page.
         }))
       })
 
-      // Only offer the input to someone this app accepts a write from, asked
-      // beside the wall rather than ahead of it.
+      // Show the input only to someone this app accepts a write from,
+      // checked after the subscription starts rather than before it.
       let who = await me()
       if (!who.writes) {
         pick.remove()
@@ -722,20 +729,20 @@ picture's space held open — the entire page.
       }
     </script>
 
-The line worth keeping is the check before the write: two visitors sending the
-identical picture are one blob and one `attachment` row for free, but a `photo`
-row of your own is a separate row, and two of them are two pictures on the wall.
-The wall and the sizes are one subscription, so the page loads in one round and
-a photo added later arrives with its box
-([a page that loads at once](./speed.md)).
+The important line is the check before the write: when two visitors send the
+identical image, the platform stores one blob and one `attachment` row, but a
+`photo` row the app declares is a separate row, and two of them show as two
+pictures in the gallery. The photos and their sizes come from one subscription,
+so the page loads its data in one round trip and a photo added later arrives
+with its size ([Performance](./speed.md)).
 
-## Publishing a file to anyone
+## Public files: `publish`
 
-A **public file** is a file an app publishes at a path of its own address. From
-then on that address answers it to anyone, before the app's worker runs and
-whatever the app's `access` says. So a private app puts a page on the public web
-without writing any auth of its own: a private blog editor publishes its posts,
-a private notebook publishes one page for a friend.
+A **public file** is a file an app publishes at a path under its own URL. From
+then on that URL serves the file to anyone, before the app's worker runs and
+regardless of the app's `access`. So a private app can put a page on the public
+web without writing any authentication of its own: a private blog editor
+publishes its posts, a private notebook publishes one page for a friend.
 
     import { publicFiles, publish, unpublish } from './api/client.js'
 
@@ -743,16 +750,16 @@ a private notebook publishes one page for a friend.
     let post = await publish(page, 'posts/hello')  // at the path you choose
     let link = await publish(page)                 // at a new UUID path
     // each → {path, url, sha, mime, size}; url is where it answers
-    await unpublish('posts/hello')                 // the address is the app's again
+    await unpublish('posts/hello')                 // the app serves the path again
     let all = await publicFiles()                  // every file it published
 
 - **A path** is from the app's root with no leading slash, in segments of
   letters, digits, `-`, `_` and single dots. It is never under `api/` or a
-  segment starting with `_`, and never `index.html` at the root, which would
-  answer before the app for its own people too. `posts/hello/index.html` answers
-  at `posts/hello/`.
-- **With no path**, the file goes to a new UUID path: a link only the people you
-  give it to know, and anyone holding it can pass it on.
+  segment starting with `_`, and never `index.html` at the root, which would be
+  served instead of the app to its own members too. `posts/hello/index.html`
+  answers at `posts/hello/`.
+- **With no path**, the file goes to a new UUID path: a link known only to the
+  people you give it to, and anyone holding it can pass it on.
 - **Its type** is the Blob's, so a page goes in a Blob of `text/html`; with
   none, the path's extension decides. A page is served with the reporter and, on
   the free plan, the badge, as every page of the app is.
@@ -761,29 +768,29 @@ a private notebook publishes one page for a friend.
 - **Only the app's owner and editors publish**, as writing its files is theirs:
   never a visitor of an `open` app, a guest invited to the one app, or a
   sandboxed copy's page.
-- **It is static**: the bytes as published, the same for everyone. A page that
-  should show newer rows is published again. Its scripts run on the app's own
-  address, so publish only what you would deploy.
+- **It is static**: the bytes as published, the same for everyone. To show newer
+  rows, publish the page again. Its scripts run on the app's own address, so
+  publish only what you would deploy.
 - Each is up to 25 MiB, counted against the space's photos and files.
 
-The doors underneath, at the app's own `/api/`:
+The HTTP endpoints, under the app's own `/api/`:
 
     PUT    ./api/public/<path>   the bytes, typed by their content-type
     POST   ./api/public          the same, at a new UUID path
     DELETE ./api/public/<path>
     GET    ./api/public          → [{path, url, sha, mime, size}]
 
-## What files do not do
+## Limitations
 
 - **No server-side resizing and no thumbnails.** What you upload is what is
-  served, at one size. The page downscales.
+  served, at one size. Downscale in the page.
 - **No listing of the bucket** and **no deleting bytes** short of deleting the
   app. `.attachment` is the listing; bytes nobody wrote a row about are
   reachable only by their address.
 - **No `image` for anything but png, jpeg, gif and webp** — a pdf, an svg or a
-  heic uploads fine and simply carries no size.
+  heic uploads, but has no size recorded.
 - **No progress events.** `upload` returns when it is done, so a page shows
   progress per file, not within one.
 
-The whole guide, everything else an app can do, is at
+The guide's map, with everything else an app can do, is at
 <https://yaks.app/docs.md>.

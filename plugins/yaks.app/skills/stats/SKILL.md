@@ -1,116 +1,121 @@
 ---
 name: stats
-description: "Who visited (yaks.app). Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it covers, the block on their space page, the endpoint a page reads its own numbers from, and why a small number is usually crawlers."
+description: 'Visitor Analytics (yaks.app). Visitor analytics for an app: what counts as a visit (a page view), the six fields each one records (app, space and slug, path, country, referrer hostname, client label) and what is never recorded (no IP address, no visitor id or cookie, no user-agent string), the app_stats tool and its days window, the Visits page in the app manager, the ./api/stats endpoint a page reads its own counts from, sampling, and why a small number is usually crawlers.'
 ---
 
-# Who visited
+# Visitor Analytics
 
-The map is at <https://yaks.app/docs.md>. This page is the whole of visitor
-counts: what is recorded, what deliberately is not, the three places you can
-read it, and what the numbers do and do not mean.
+The guide's index is at <https://yaks.app/docs.md>. This page covers all of
+visitor analytics: what is recorded, what is deliberately not recorded, the
+three places to read the counts, and how to interpret them.
 
-## What is counted
+## What counts as a visit
 
-One count per **page** the platform answers for an app. A page is HTML that came
-back 200 — `index.html`, a pretty path like `/about`, a page an app's own
-`worker.js` rendered. These are not pages and are never counted:
+The platform counts one visit for each **page** it serves for an app. A page is
+an HTML response with status 200: `index.html`, a pretty path like `/about`, or
+a page rendered by an app's own `worker.js`. These are not pages and are never
+counted:
 
 - a stylesheet, a script, an image, a font, a JSON file
-- anything under `./api/` — a store read, a write, a socket, an upload
+- anything under `./api/`: a store read, a write, a socket, an upload
 - a redirect, a refusal, a 404
 - the platform's own pages: the space's index, a sign-in, the trash
 
-So the number is "how many times somebody opened something", not "how many
-requests the app served". An app whose page fetches its rows twenty times still
-counts one visit.
+So the count is the number of times someone opened a page, not the number of
+requests the app served. A page that fetches its rows twenty times still counts
+as one visit.
 
-## What is recorded with it
+## Fields recorded with each visit
 
-Six things, and this list is the whole of it:
+Each visit records these six fields and nothing else:
 
-- the app it was a page of
+- the app the page belongs to
 - the space and the app's slug
 - the path that was opened
-- the country the request came from, as Cloudflare's own two letters
-- the **hostname** of the site that linked them to the app, and nothing else of
-  the referrer — no path, no query, so a search term somebody arrived on is gone
-  before it is written down
+- the country the request came from, as Cloudflare's two-letter country code
+- the **hostname** of the site that linked to the app, and no other part of the
+  referrer: no path and no query string, so a search term a visitor arrived with
+  is dropped before anything is written
 - one of three labels for the kind of client: `browser`, `bot` or `agent` (an AI
   assistant fetching the page)
 
 ## What is never recorded
 
-- **no IP address**, ever, in any form
+- **no IP address**, in any form
 - **no visitor id**, no cookie, no session, no fingerprint
-- **not the user-agent string** — a UA is a fingerprint, and only the one label
-  above survives it
+- **no user-agent string**: a user-agent string is a fingerprint, so only the
+  client label above is derived from it and kept
 - nothing that could be joined back to a person, on yaks.app or anywhere else
 
-That is a design choice, not a setting: there is no visitor identity in the
-data, so no query can produce one. If the person asks "who opened it?" or "did
-Dana see it?", the honest answer is that this cannot say, and that is on purpose
-— tell them so rather than reaching for something else.
+This is a design choice, not a setting: the data holds no visitor identity, so
+no query can produce one. If the person asks "who opened it?" or "did Dana see
+it?", tell them that visitor analytics cannot answer that, by design, rather
+than looking for another way to find out.
 
-Counts are kept for about three months and then gone.
+Counts are kept for about three months and then deleted.
 
-## Reading it: the tool
+## Reading visits with `app_stats`
 
     app_stats(app: 'recipes')
     app_stats(app: 'recipes', days: 7)
 
-It returns, for the window:
+It returns, for the window of days:
 
-- **total** visits, and **daily** — one entry per day, oldest first, including
-  the days nobody came
-- **pages** — the most-opened paths
-- **from** — the sites that linked to the app, busiest first
-- **countries** — where the visitors were
+- **total** visits, and **daily**: one entry per day, oldest first, including
+  days with no visits
+- **pages**: the most-opened paths
+- **from**: the sites that linked to the app, most visits first
+- **countries**: the visitors' countries
 
-`days` defaults to 30 and is clamped to 90, which is as far back as anything is
-kept. Only the app's own people may ask: being able to read a public app's pages
-is not being able to read its numbers.
+`days` defaults to 30 and is capped at 90, which is how far back counts are
+kept. Only the app's own people may call it: permission to read a public app's
+pages does not include permission to read its visit counts.
 
-## Reading it: the page, and the endpoint
+## The Visits page and the `./api/stats` endpoint
 
-The **Visits** page in their app manager shows each app's count, daily chart,
-and the same three lists.
+The **Visits** page in the person's app manager shows each app's total, a daily
+chart, and the same three lists.
 
-And the app's own page can read its numbers, for a member:
+An app's own page can also read its counts from `./api/stats` when the person
+viewing it is a member:
 
     let seen = await (await fetch('./api/stats')).json()
     if (seen.on) show(seen.total, seen.daily)
 
-Add `?days=7` for a shorter window. It returns `{on: false}` with a message when
-the platform has no analytics reader configured, which is the one thing to
-handle: show that message, do not treat it as a failure. Nothing about this
-endpoint is per-visitor either — a member reading it learns exactly what you
-learn.
+Add `?days=7` for a shorter window. When the platform has no analytics reader
+configured, it returns `{on: false}` with a message. That is the one case to
+handle: show the message, and do not treat it as an error. This endpoint returns
+no per-visitor data either: a member reading it gets the same numbers you get.
 
-## What the numbers mean, and do not
+## Accuracy, sampling and bots
 
-They are **approximate on purpose**. Under load the counter keeps a sample and
-records how many each kept row stands for, and every total in the report is
-already multiplied back out — so a big number is a good estimate and a small one
-is exact. Do not present them as a ledger.
+The counts are **approximate by design**. Under load the counter keeps a sample
+of visits and records how many visits each kept row represents, and every total
+in the report is already scaled back up by that number. A large count is a good
+estimate and a small one is exact. Do not present the counts as an exact record.
 
-Bots and AI agents are counted alongside people. A brand-new page with eleven
-visits and nobody who has been told about it is usually eleven crawlers, so read
-a small number carefully before telling the person it is an audience.
+Bots and AI agents are counted alongside people. A new page with eleven visits
+that nobody has been told about has usually been opened by eleven crawlers, so
+treat a small number with caution before telling the person it is an audience.
 
-And a quiet app is not a broken one. Before building something to chase the
-number, ask the person whether anyone has been given the link — most of the time
-the answer is no, and the fix is a link, not a feature.
+An app with few visits is not broken. Before building a feature to raise the
+number, ask the person whether anyone has been given the link. Usually nobody
+has, and the fix is to share the link, not to add a feature.
 
-## When to reach for it
+## When to check visits
 
-- they ask whether anyone is reading the thing
+- the person asks whether anyone is reading the app
 - they ask which page is worth working on, or where their readers come from
-- something was shared somewhere and they want to know whether it landed
+- they shared the app somewhere and want to know whether people opened it
 
-Not on every deploy, and not unasked. A count nobody wanted is noise.
+Do not check visits on every deploy, and do not report them unasked: a count
+nobody asked for is noise.
 
-## Nearby
+## Related pages
 
-- <https://yaks.app/docs/errors.md> — what broke, and rolling back
-- <https://yaks.app/docs/sharing.md> — who may read an app, and how one travels
-- <https://yaks.app/docs/home.md> — which app answers which address
+- <https://yaks.app/docs/errors.md> — Errors and Rollback: what broke, and
+  rolling back
+- <https://yaks.app/docs/sharing.md> — Access, Publishing and Installing: who
+  may read an app, and how it is published and installed
+- <https://yaks.app/docs/home.md> — Front Page and Routing: which app answers
+  which address

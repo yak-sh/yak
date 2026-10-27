@@ -15,167 +15,172 @@ import type { Words } from './tool.ts'
 export let PAGES: Record<string, Page> = {
   'clipping': {
     'slug': 'clipping',
-    'title': 'Saving from another site',
+    'title': 'Web Clipping',
     'description':
-      "Clipping a page somebody is reading into the app's store: a worker route that fetches it and reads its JSON-LD, Open Graph and title, a bookmarklet that opens it, why a script on another site cannot write to an app, and what to tell the person when a site refuses a robot.",
-    'brief': 'saving a page from another site',
+      "Web clipping, saving a page somebody is reading on another site into the app's store: a worker route that fetches the URL and reads its JSON-LD, Open Graph and meta tags and title with HTMLRewriter, one row per URL, a recipe example that keeps the picture, a bookmarklet that opens the app's clip page, why a script on another site cannot write to an app (no cross-origin writes), and what to tell the person when a site blocks the fetch.",
+    'brief': 'web clipping, saving a page from another site',
   },
   'code': {
     'slug': 'code',
-    'title': 'Code of your own',
+    'title': 'Backend Code',
     'description':
-      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy. And TypeScript and npm packages, in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. And the platform's own @yaks packages, named \"platform\", whose components the app's store takes too.",
+      "Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. The build sandbox, and deploying a site built with Vite, Astro, Eleventy or SvelteKit.",
     'brief':
-      "worker.js in front of an app's files; TypeScript and npm packages",
+      'backend code in worker.js, env bindings, API keys; TypeScript, npm',
   },
   'components': {
     'slug': 'components',
-    'title': "Components: the platform's, and your own",
+    'title': 'Components and vocab.json',
     'description':
-      'Every component an app already has, property by property, and vocab.json for components of your own: the property types, who may write one and how often, which rows belong to one person, what a later deploy may change, the names already taken, and when a property beats doc.body.',
-    'brief': "the platform's components, and your own",
+      "Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges.",
+    'brief':
+      "the platform's built-in components, and declaring your own in vocab.json",
   },
   'domains': {
     'slug': 'domains',
-    'title': 'A custom domain',
+    'title': 'Custom Domains',
     'description':
-      'Pointing a domain the person already owns at their space or at one app of it: the CNAME and ownership TXT record to add and where to type them at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.',
-    'brief': 'pointing a domain at a space or an app',
+      'Serving a space or one of its apps at a domain the person already owns: domain_attach, domain_status and domain_detach, the CNAME and ownership TXT DNS records and where to add them at GoDaddy, Namecheap, Squarespace and the other registrars, apex domains and the three ways to serve one, what each provisioning status means, the HTTPS certificate, and why a domain stays pending.',
+    'brief': 'serving a space or an app at a custom domain (DNS, CNAME)',
   },
   'entities': {
     'slug': 'entities',
-    'title': 'One entity, two apps',
+    'title': 'Cross-App Data',
     'description':
-      "Two of the person's apps writing about the same entity without copying it: which app a component lives in, how a page reads a sibling app, and how graph_query composes one bundle out of several.",
-    'brief': 'one entity across two apps',
+      "Sharing data between apps: two of the person's apps writing components on the same entity (one eid) without copying it; which app a component lives in and its home app in a space; type conflicts; components across spaces; how a page reads a sibling app with store(); and how graph_query with no app named combines several stores into one bundle per entity.",
+    'brief': 'one entity shared by several apps, and reading across apps',
   },
   'errors': {
     'slug': 'errors',
-    'title': 'When something breaks',
+    'title': 'Errors and Rollback',
     'description':
-      'What a refused call returns and how a page shows it, where a break is filed and how the agent hears about it once, app_errors, app_versions and app_rollback, the 30-day trash app_delete and space_delete put a thing in and app_restore and space_restore take it out of, and feedback for anything you or the person have to say about the platform itself.',
-    'brief': 'what broke, and rolling back',
+      'The error codes an ./api/ endpoint refuses with and how a page shows them, the error reporter in every page and POST ./api/report, where an error is filed and how the agent is told about it once, app_errors, app_versions and app_rollback, the 30-day trash (app_delete, space_delete, app_restore, space_restore), store_restore and file history, and feedback for anything you or the person have to say about the platform itself.',
+    'brief': 'error codes, error reports, rollback and the trash',
   },
   'files': {
     'slug': 'files',
-    'title': 'Files and pictures',
+    'title': 'Files and Uploads',
     'description':
-      "app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, a gallery that never shows one picture twice, and publish() for a file served to anyone at a path of the app's address, before the app and whatever its access.",
+      "app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access.",
     'brief':
-      'files, releases, yak-release, reload, uploads, big files in parts, resuming, deleting them, pictures',
+      'files, releases, yak-release, reload, uploads, large files in parts, resuming, deleting uploads, images',
   },
   'games': {
     'slug': 'games',
-    'title': 'Build a multiplayer game',
+    'title': 'Multiplayer Games',
     'description':
-      "Build on Holdfast's working multiplayer pattern: platform dependencies and their words, @yaks/game rules, controls and HUD, @yaks/stage presentation, @yaks/voxel geometry and its /three look, a shared clock, one page moving each creature, and recovering an order without charging twice.",
-    'brief': 'games with rules, controls, a HUD and a replaceable look',
+      'Building a multiplayer game, following Holdfast: platform dependencies and their vocabulary, game state in the graph, @yaks/game rules, input controls and HUD, @yaks/stage rendering, @yaks/voxel geometry and @yaks/voxel/three, the shared clock and fixed-step timing, owner election (one page simulates each entity), and retrying a lost write without charging twice.',
+    'brief':
+      'multiplayer games with rules, input controls, a HUD and rendering',
   },
   'home': {
     'slug': 'home',
-    'title': 'The front page, and routing the space',
+    'title': 'Front Page and Routing',
     'description':
-      "The app served at <space>.yaks.app/ and how it routes the space: the five steps a request goes through, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands.",
-    'brief': 'the front page, and routing a space',
+      "The front page (homepage) app served at <space>.yaks.app/ and how requests in a space are routed: app_set home, the five-step routing order, the first globs that send another app's paths to the front page's worker, the reserved platform paths, fail-open routing, changing a space's address with space_set, reserved names, and email sent to <space>@yaks.app.",
+    'brief':
+      "the app at a space's root address, and how a space routes requests",
   },
   'mail': {
     'slug': 'mail',
-    'title': "Mail: an app's own address",
+    'title': 'Email',
     'description':
-      "Sending and receiving email from an app: the address a space and an app make, the rows that send a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what the platform's mail does not do.",
-    'brief': "an app's own email address",
+      "Sending and receiving email from an app: the app's email address (<space>.<app>@yaks.app), the rows that send an email and who may send one, the delivered and bounced rows that record the outcome, replies and threading, how incoming email is stored with its attachments, the monthly email limit, and what yaks.app email does not support.",
+    'brief': "sending and receiving email at an app's own address",
   },
   'memory': {
     'slug': 'memory',
-    'title': 'What the person said',
+    'title': 'Memories',
     'description':
-      "store_memory_save and store_memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
-    'brief': 'the words a person wants remembered',
+      "store_memory_save and store_memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from an app's NOTES.md, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
+    'brief':
+      "store_memory_save and store_memory_recall, the person's words verbatim",
   },
   'models': {
     'slug': 'models',
-    'title': 'Asking a model',
+    'title': 'AI Models',
     'description':
-      "A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), one call answered at once through ./api/ai/run or a worker's ai binding, asking about a picture, the commands a model may call, who may ask, and how platform and connected models are paid for.",
-    'brief': "an app's own store asks a model, and the answer lands as rows",
+      "Calling AI models (LLMs) from an app with no API key: a page writes a transcript entry naming a model, the app's store calls the model, and the reply is written as rows in the same transcript for any subscribed page to receive. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), audio from a connected model, builders over stored rows, a single synchronous call through ./api/ai/run or a worker's AI binding, image input, the commands a model may call, who may call a model, and model prices and how platform and connected models are paid for.",
+    'brief': 'calling AI models from an app, with the answers written as rows',
   },
   'notes': {
     'slug': 'notes',
-    'title': 'The notes an app keeps',
+    'title': 'App Notes (NOTES.md)',
     'description':
-      'NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and a prompt named after the app give it to an agent, and what an installed copy carries.',
-    'brief': 'the notes an app keeps',
+      'NOTES.md beside index.html: what the person wants written down about how the app is kept, in prose, given to every agent that works on the app — where the file goes and who can read it, what belongs in it and what does not, the 4096-byte size limit, how about and an MCP prompt named after the app give it to an agent, and how a published or installed copy carries it.',
+    'brief': 'NOTES.md, the notes an app keeps for the agents that work on it',
   },
   'querying': {
     'slug': 'querying',
-    'title': 'Querying: the filter grammar',
+    'title': 'Query Syntax',
     'description':
-      'The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, windows, full text — and why a row carries only the components its filter named.',
-    'brief': 'the filter grammar, with examples',
+      'The filter grammar used everywhere a store is read (query(), subscribe(), ./api/query, graph_query, commands, workers), with examples: presence and absence, contains, comparisons, ranges, time phrases, following references and back-references, count, tally and distinct, limit, reading one entity by id, full-text search, similarity with .near — and why a row carries only the components its filter named.',
+    'brief': 'the query filter grammar, with examples',
   },
   'selling': {
     'slug': 'selling',
-    'title': 'Selling things',
+    'title': 'Payments',
     'description':
-      "Taking money for something: how a seller connects their own Stripe account to a space, the ./api/pay/checkout endpoint a page posts a cart to and what it returns, why a page never posts a price, the order row and the buyer's letter that land when the money moves, who can read an order afterwards, and why a card number never reaches your app.",
-    'brief': 'taking money for something an app sells',
+      "Accepting payments with Stripe: how a seller connects their own Stripe account to a space (Stripe Connect), the product component, the ./api/pay/checkout endpoint a page posts a cart to and what it returns, why a page never posts a price, the order row and the buyer's confirmation email written when the payment completes, refunds and disputes, who can read an order, test mode, and why a card number never reaches your app.",
+    'brief': 'accepting payments in an app through Stripe Checkout',
   },
   'sharing': {
     'slug': 'sharing',
-    'title': 'Publishing and installing an app',
+    'title': 'Access, Publishing and Installing',
     'description':
-      "Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandbox its owner can put it in, what pinning means, and what an update does to what people saved.",
-    'brief': 'publishing and installing an app',
+      "Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, and publishing and installing: app_publish, app_install, app_update, the gallery, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved.",
+    'brief':
+      'access settings, inviting people, publishing and installing an app',
   },
   'speed': {
     'slug': 'speed',
-    'title': 'A page that loads at once',
+    'title': 'Performance',
     'description':
-      "How a page loads its data in one round rather than a waterfall: subscribe to what it draws, every kind in one line with |, ask me() beside it, and wait on a subscription's ready when the rows must come first. How to see a slow page for yourself, its rounds and the Server-Timing on every answer, and what else slows one: chains of module imports, pictures, and work done on every change.",
-    'brief':
-      "loading a page's data in one round, and finding what makes one slow",
+      "Frontend performance for a yaks app: loading a page's data in one round trip instead of a request waterfall by subscribing to what it renders, querying every kind of row in one line with |, calling me() in parallel with the reads, and awaiting subscribe(...).ready when the rows must come first. Measuring a slow page with the browser's resource timings and the Server-Timing header on every response (gateway, cold, hops), and other causes of slowness: module import chains and modulepreload, images, and work done in a subscribe callback on every change.",
+    'brief': 'loading a page in one round trip, and measuring a slow page',
   },
   'stats': {
     'slug': 'stats',
-    'title': 'Who visited',
+    'title': 'Visitor Analytics',
     'description':
-      "Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it covers, the block on their space page, the endpoint a page reads its own numbers from, and why a small number is usually crawlers.",
-    'brief': 'who opened an app, and from where',
+      'Visitor analytics for an app: what counts as a visit (a page view), the six fields each one records (app, space and slug, path, country, referrer hostname, client label) and what is never recorded (no IP address, no visitor id or cookie, no user-agent string), the app_stats tool and its days window, the Visits page in the app manager, the ./api/stats endpoint a page reads its own counts from, sampling, and why a small number is usually crawlers.',
+    'brief': 'page view counts for an app, by page, referrer and country',
   },
   'storage': {
     'slug': 'storage',
-    'title': 'What players see, and what is kept',
+    'title': 'Realtime Sync and Persistence',
     'description':
       "Choose which component values stay in one page, reach the store, or are relayed to other pages. Learn sync, durable, pace and save through Mossvale's saved positions and Holdfast's timed creatures, including disconnects, local drafts and the difference between relay and storage.",
     'brief': 'sync, durable, pace and save for multiplayer state',
   },
   'store': {
     'slug': 'store',
-    'title': 'The store, from a page',
+    'title': 'Frontend Data',
     'description':
-      './api/client.js in full — apply, query, search, subscribe, upload and me — what a bundle of components looks like going in, patching and deleting, compare-and-set with $was so two writers cannot both spend one value, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP endpoints underneath.',
-    'brief': 'reading and writing from a page',
+      'The frontend data API, ./api/client.js, in full: apply, query, search, subscribe, upload, digest and me; the bundle of components a write sends; patching and deleting; compare-and-set with $was so two writers cannot both spend one value; read and write access; the created.by author stamp on a row; seed.json seed data and store_load imports; and the HTTP endpoints underneath.',
+    'brief': 'reading and writing the store from a page with ./api/client.js',
   },
   'tools': {
     'slug': 'tools',
-    'title': 'Commands of your own',
+    'title': 'App Commands',
     'description':
-      "Tool entries in vocab.json, so the person's agent can act on an app with no page open: an entry's description, its argument schemas and $var bindings, the apply and query actions, what a deploy refuses, the page an answer is drawn in, and how the commands and command tools carry them.",
-    'brief': 'commands of the app, for an agent',
+      "Tool entries in vocab.json that let the person's agent act on an app with no page open: the generated add_ and find_ commands, an entry's description, its argument schemas and $var bindings, the apply and query actions, what a deploy refuses, commands a model may call, the view page an answer is rendered in, and how the commands and command MCP tools list and run them.",
+    'brief': 'commands an app declares for an agent to call',
   },
   'voice': {
     'slug': 'voice',
-    'title': 'Voice',
+    'title': 'Voice Calls',
     'description':
-      "Voice between the people in an app: a page joins a call through the app's own ./api/rtc/ door with @yaks/rtc, publishes the microphone, and hears the voices it asks for. Who is speaking is the `rtc` component on the entity they speak as, relayed to every page watching it. Playing a voice through an audio element or placing it in space with Web Audio, mute and talking, who may speak, and what an hour of listening costs against the space's monthly allowance.",
-    'brief': 'the people in an app talk and hear each other',
+      "Voice calls (WebRTC audio) between the people in an app: a page joins a call through the app's ./api/rtc/ endpoint onto Cloudflare Realtime with @yaks/rtc, publishes the microphone, and receives the voices it requests. Who is speaking is the `rtc` component on the entity they speak as, relayed to every page watching it. Playing a voice through an audio element or as spatial audio with Web Audio, mute and talking state, who may join a call, and what an hour of listening costs against the space's monthly allowance.",
+    'brief': 'voice calls between the people in an app, over WebRTC',
   },
   'wakes': {
     'slug': 'wakes',
-    'title': 'Coming back later',
+    'title': 'Scheduling',
     'description':
-      "Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing, and one that sleeps while nobody is in it; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for.",
-    'brief': 'a row that records when to come back, and what happens then',
+      "Scheduling, timers and recurring jobs as data: a `wake` on any entity records when it is due, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing does. Recurrence with durations, cron expressions and time zones; pausing and resuming; scheduling a command to run later; an idle game world advancing offline every five minutes, catching up a missed stretch in one firing, and pausing while nobody is playing; where a firing runs and its time and CPU limits; why there is no Cron Trigger, no `scheduled()` and no queue.",
+    'brief':
+      'scheduling with a wake row, recurrence, cron lines, and rules that run on firing',
   },
 }
 

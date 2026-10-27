@@ -78,6 +78,12 @@ sign on a fence, there's usually a reason underneath it that's worth saying
 instead. And skip what any good engineer already knows: generic advice buries
 the parts that are ours.
 
+The vibe is in what you say, not in how ornate the sentence is. Say the
+attitude in plain, literal sentences, and give each section a heading that
+names its subject. Agents imitate a skill's phrasing when they write a guide
+page, a README or a comment, so a mannered sentence here spreads there
+(M-33081; the owner's words on it are in `writing-documentation`).
+
 ## A pattern language
 
 Christopher Alexander's *A Pattern Language* is the model for how a skill reads.
@@ -128,7 +134,7 @@ Think about who needs it, and when.
 A preloaded memory that only one area needs is a skill waiting to happen.
 Moving it changes the persona, so mention it to the owner first (M-31946).
 
-## The description is how it gets found
+## The description
 
 An agent reaches for a skill from its description alone, mid-task, while
 thinking about its work and not about skills. Agents under-reach, most of all
@@ -198,7 +204,7 @@ When the owner corrects something, the fix usually lives in that area's skill.
 Find the sentence that produced the miss and rewrite it, rather than adding a
 new one beside it (M-4404, M-14769).
 
-## Reach
+## Which agents load a skill
 
 A skill here reaches Claude Code, native harness sessions and agents on the
 box's MCP server; packages/harness/README.md has how each one finds and loads

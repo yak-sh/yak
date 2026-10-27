@@ -1,246 +1,249 @@
 ---
 doc:
-  title: The front page, and routing the space
+  title: Front Page and Routing
 guide:
   slug: home
-  brief: the front page, and routing a space
+  brief: the app at a space's root address, and how a space routes requests
   description: >-
-    The app served at <space>.yaks.app/ and how it routes the space: the
-    five steps a request goes through, app_set home, the first globs that
-    send another app's paths to it, why a broken router fails open, and
-    where the space's own mail lands.
+    The front page (homepage) app served at <space>.yaks.app/ and how requests
+    in a space are routed: app_set home, the five-step routing order, the first
+    globs that send another app's paths to the front page's worker, the
+    reserved platform paths, fail-open routing, changing a space's address with
+    space_set, reserved names, and email sent to <space>@yaks.app.
 ---
 
-# The front page, and routing the space
+# Front Page and Routing
 
-A space has one address of its own — `<space>.yaks.app/` — and one app can
-answer there. That app is the space's _front page_: it is served at that address
-rather than redirected to, and it also answers every path in the space that no
-other app claims.
+A space has one address of its own, `<space>.yaks.app/`, and one app can be
+served there. That app is the space's _front page_: it is served at that address
+(not redirected to), and it also answers every path in the space that no other
+app claims.
 
-So it is the space's router as well as its homepage. By default it routes by
-being the fall-through — the app whose name owns a path gets that path, and
-everything left over comes to the front page. It can also opt in to seeing paths
-another app owns, before that app does.
+So the front page is the space's router as well as its homepage. By default it
+is the fallback: a path whose first segment is an app's slug goes to that app,
+and every other path goes to the front page. It can also opt in to receiving
+paths another app owns, before that app does.
 
 Back to the map: <https://yaks.app/docs.md>
 
-## Which app it is
+## Choosing the front page
 
     app_set(app, home: true)      this app is what <space>.yaks.app/ opens
     app_set(app, home: false)     the space has no front page again
 
-No app becomes the front page by being made first. Until somebody sets one a
-space has none, and its bare address lists the apps a visitor may open;
-`app_list` reports which app it is, if any. Only the space owner may move it,
-since everyone handed the space itself lands there.
+No app becomes the front page automatically, not even the first one created.
+Until someone sets one, a space has no front page, and its bare address lists
+the apps a visitor may open; `app_list` reports which app is the front page, if
+any. Only the space owner may change it, since everyone given the space's
+address lands there.
 
 **Managing your apps.** <https://yaks.app/manage> opens your account's app
-library, and its pages beside it: assistant setup, connections, settings,
+library and the pages beside it: assistant setup, connections, settings,
 billing, and trash. It shows your own space; `?space=<space>` names another you
-own. It lives at the platform's address, not a space's, so no app, homepage or
-not, can replace it.
+own. It is served at the platform's address, not a space's, so no app, front
+page or not, can replace it.
 
-Being the front page is a component stored on the app, `home`, and at most one
-app in a space has it. Moving it takes effect on the next request: nothing is
-copied, no file moves, no address is rewritten. What changes is which app
-answers the bare hostname — and the front page's own `/<app>/`, which becomes a
-redirect to it.
+The front page is marked by a component stored on the app, `home`, and at most
+one app in a space has it. Moving it takes effect on the next request: nothing
+is copied, no file moves, no address is rewritten. What changes is which app
+answers the bare hostname, and the front page's own `/<app>/` path, which
+becomes a redirect to the bare hostname.
 
 That redirect is temporary, not permanent, because the owner can move `home` to
-another app at any time. Hand out the bare address; a link somebody already
-holds to `/<app>/` still arrives.
+another app at any time. Share the bare address; an existing link to `/<app>/`
+still works.
 
-**Getting back to the default.** `app_set(app, home: false)` puts the space back
-to its default page, and so does deleting the app: `home` is stored on the app,
-so a trashed app is nobody's front page and an erased one takes `home` with it.
-Restoring it makes it the front page again — `home` was never removed, only
-ignored while the app sat in the trash. `app_rollback` puts an earlier version
-of a front page back where it went wrong, and setting `home: true` on another
-app moves `home` there instead. With no front page, `/` is the platform's list
-of the space's apps again, a path no app claims is a 404, and a letter to
-`<space>@yaks.app` is refused by name — the sender is told to write to
+**Removing the front page.** `app_set(app, home: false)` returns the space to
+its default page, and so does deleting the app: `home` is stored on the app, so
+a trashed app is not the front page and an erased one takes `home` with it.
+Restoring the app makes it the front page again: `home` was never removed, only
+ignored while the app was in the trash. `app_rollback` restores an earlier
+version of a front page that broke, and setting `home: true` on another app
+moves `home` there instead. With no front page, `/` is the platform's list of
+the space's apps again, a path no app claims is a 404, and an email to
+`<space>@yaks.app` is refused with a message telling the sender to write to
 `<space>.<app>@yaks.app`.
 
-## The order a request is answered in
+## Request routing order
 
-For a request to `<space>.yaks.app<path>` — or to a domain of the person's own,
-which goes through the same five steps at their own address, whether that domain
-carries the space or one app mounted at its root
-(<https://yaks.app/docs/domains.md>) — the first step that answers wins:
+This applies to a request to `<space>.yaks.app<path>`, and to a request to a
+custom domain, which goes through the same five steps whether the domain serves
+the space or one app at its root (<https://yaks.app/docs/domains.md>). The first
+step that answers handles the request:
 
 1. **The platform's own paths.** `/login`, `/connect`, `/_yaks`, `/mcp`, and
    every app's `/api/…` store endpoints. The platform answers these and no app
    routes them.
-2. **An app's slug**, which owns the first path segment. `/garden/…` is the
-   garden app — its own `worker.js` first where it has one, its files behind
-   that. An address the app used to live at redirects to it.
-3. **The front page's files**, for every path no app claims. `/photo.png` is its
-   file and `/about` its page, at the bare hostname.
+2. **An app's slug**, which owns the first path segment. `/garden/…` goes to the
+   garden app: its own `worker.js` first, if it has one, then its files. An
+   address the app used to have redirects to it.
+3. **The front page's files**, for every path no app claims. `/photo.png` serves
+   its file and `/about` its page, at the bare hostname.
 4. **The space's index** at `/`, when the space has no front page or the front
    page has nothing at `/`. A space that exists always answers with a page,
    never a 404.
-5. **Everything else** goes to the front page's `worker.js` where it has one,
-   and is a 404 where it does not.
+5. **Everything else** goes to the front page's `worker.js` if it has one, and
+   is a 404 if it does not.
 
-Steps 3 and 5 are one request, and the front page is handled exactly the way
-step 2 handles any app: its worker first, its files behind it. A worker that
-returns 404 is how it passes the request back — it answers the routes it names
-and leaves the pages, stylesheets and pictures to the platform
-(<https://yaks.app/docs/code.md>).
+Steps 3 and 5 are handled as one request, the same way step 2 handles any app:
+the worker first, then the files. A worker passes a request back by returning
+404, so it answers the routes it handles and leaves the pages, stylesheets and
+images to the platform (<https://yaks.app/docs/code.md>).
 
-So step 4 is what is left when neither half of the front page has anything at
-`/`, and step 5's 404 is what is left when there is no front page at all.
+So step 4 applies when neither the front page's worker nor its files have
+anything at `/`, and step 5's 404 applies when there is no front page at all.
 
-Step 2 is the one to hold on to when you are writing the pages: an app's slug
-beats the front page at that address. A front page that wants a page at
-`/garden` has to be in a space with no app called garden — or claim the path
-with `first`.
+Remember step 2 when writing the front page: an app's slug takes precedence over
+the front page at that path. A front page that wants a page at `/garden` has to
+be in a space with no app called garden, or claim the path with `first`.
 
-## Answering first
+## Routing other apps' paths to the front page: `first`
 
-`first` is the opt-in: the paths the front page's worker sees before the app
-whose name owns them, written as globs.
+`first` is a list of globs: the paths the front page's worker receives before
+the app whose slug owns them. It is off until the owner sets it.
 
     app_set(app: 'home', first: ['/recipes/*', '/*/print'])
 
-Now `/recipes/lemon` reaches the front page's worker instead of the recipes app,
-and so does `/garden/print`. What the worker does with such a request is up to
-it: a redirect, a decoration, a page of its own — or a 404, which passes the
-request back down to the app that owns it, the same pass-through a worker makes
-everywhere else on yaks.app.
+With that setting, `/recipes/lemon` goes to the front page's worker instead of
+the recipes app, and so does `/garden/print`. The worker decides what to do with
+such a request: redirect it, decorate it, serve a page of its own, or return
+404, which passes the request on to the app that owns it, as a 404 from a worker
+does everywhere else on yaks.app.
 
-`*` matches any run of characters, slashes included. There is one wildcard and
-no other pattern syntax: `/recipes/*` is everything under `/recipes/`,
-`/*/print` is `/print` under anything.
+`*` matches any sequence of characters, including slashes. It is the only
+wildcard, and there is no other pattern syntax: `/recipes/*` matches everything
+under `/recipes/`, and `/*/print` matches `/print` under any path.
 
 The globs are stored in a property of the same `home` component that marks the
-front page, `home{first}` — a JSON list in one text property, since a property
+front page, `home{first}`: a JSON list in one text property, since a property
 holds a single value:
 
     { "entity": { "eid": "<the app>" },
       "home": { "first": "[\"/recipes/*\", \"/*/print\"]" } }
 
-One component, one place: an app is the front page _because_ it has `home`, and
-what it routes first is written in the same row. So only a front page can carry
-globs at all — `app_set(app, first: [...])` on an app that is not one is
-refused, and passing `home: true` with it makes the app the front page and sets
-its routing in one call.
+An app is the front page _because_ it has `home`, and its `first` globs are
+stored in the same component. So only a front page can have globs:
+`app_set(app, first: [...])` on an app that is not the front page is refused,
+and passing `home: true` in the same call makes the app the front page and sets
+its routing at once.
 
-`app_set(app, first: [])` puts every path back where it was, leaving the app the
-front page it was. Empty is the ordinary state — a front page is plain files
-like any other app until somebody changes that — so reach for `first` when the
-front page is meant to route the whole space, and not before. Setting
-`home: false` removes the `home` component altogether, globs with it.
+`app_set(app, first: [])` routes every path back to its default, and the app
+stays the front page. Empty is the default state: a front page is plain files
+like any other app until someone changes that. Use `first` only when the front
+page is meant to route the whole space. Setting `home: false` removes the `home`
+component entirely, including its globs.
 
-## What is never routable
+## Reserved platform paths
 
-A glob may not name a path the platform answers itself. These are those paths,
-and a glob overlapping one is refused whole, before anything is written:
+A glob may not name a path the platform answers itself. These are the reserved
+paths, and a glob overlapping one is refused, along with the whole call, before
+anything is written:
 
     /login      /login/*      /connect      /mcp
     /_yaks      /_yaks/*
     /api/*      /*/api/*      /platform     /platform/*
 
-`/api/*` is there beside `/*/api/*` because the front page is served at the bare
-hostname, where its own store endpoints are `/api/…` with no slug in front of
-them — one set of endpoints, two ways to write the address.
+`/api/*` is listed beside `/*/api/*` because the front page is served at the
+bare hostname, where its own store endpoints are `/api/…` with no slug in front
+of them: the same endpoints, at two addresses.
 
-The refusal names the glob and the path it collided with, so `/*` is refused for
-covering `/login` rather than for being broad. `/recipes/*` is fine even though
-a request under it could have gone somewhere else: a glob that merely contains a
-platform path still loses to that path when the request arrives.
+The refusal names the glob and the reserved path it overlaps, so `/*` is refused
+because it covers `/login`, not because it is broad. `/recipes/*` is accepted
+even though a request under it could belong somewhere else: when a glob merely
+contains a platform path, that path still takes precedence when the request
+arrives.
 
-## Two rules
+## Fail-open routing and visitor permissions
 
-**It fails open.** The platform stays the outer router and the front page's
-worker is middleware it consults. A worker that throws, returns 404, or takes
-longer than a second is skipped, and the platform routes as if it were not there
-— the request lands on the app that owns it, exactly as it did before anyone
-wrote a `first`. A break is recorded as an `exception` on the front page, so
-`app_errors` lists it and the person's agent hears about it
+**Routing fails open.** The platform remains the outer router, and the front
+page's worker is middleware the platform calls. A worker that throws, returns
+404, or takes longer than one second is skipped, and the platform routes the
+request as if the worker were not there: the request goes to the app that owns
+it, exactly as it would with no `first`. A failure is recorded as an `exception`
+on the front page, so `app_errors` lists it and the person's agent is notified
 (<https://yaks.app/docs/errors.md>).
 
-A broken router means the customizations stop applying. It never means the space
-is down.
+When the front page's worker breaks, its routing customizations stop applying.
+The space stays up.
 
-**It acts as the visitor.** The request the front page's worker sends onward
-carries the person looking, never the app it is routing to. `env.STORE` there
-reads and writes as them, the way it does in any app's worker, so a route may
-redirect, decorate or short-circuit — and cannot read a store the visitor could
-not have read themselves. Routing is not a way around another app's `access`.
+**The worker acts as the visitor.** A request the front page's worker forwards
+carries the visitor's identity, never the identity of the app it routes to.
+`env.STORE` there reads and writes as the visitor, as it does in any app's
+worker, so a route may redirect, decorate or short-circuit a request, and cannot
+read a store the visitor could not read themselves. Routing does not bypass
+another app's `access`.
 
-## Moving the space's address
+## Changing the space's address
 
     space_set(slug: 'ada-cooks')     the space is now ada-cooks.yaks.app
-    space_set(title: 'Ada cooks')    just the name it is called
+    space_set(title: 'Ada cooks')    changes only the space's display name
 
-A title, the space's or an app's, is its name: one line, up to 80 characters. A
-newline in one is folded to a space, and a longer one is refused with the count.
+A title, of a space or an app, is its display name: one line, up to 80
+characters. A newline in a title is converted to a space, and a longer title is
+refused with its character count.
 
-Only the space's owner may move it, and they may at any time, from here or from
-the address card on the space's settings page. Every app in the space moves with
-the address — files, data and all — and each keeps the path it had, so
+Only the space's owner may change the address, at any time, with `space_set` or
+from the address card on the space's settings page. Every app in the space moves
+with the address, with its files and data, and each keeps its path, so
 `ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.
 
-**The address it leaves keeps working until someone else takes it.** It
-redirects to the new one with the path and the query kept, so a link somebody
-was given a year ago still opens the page it always did. Letters to
-`<old>.<app>@yaks.app` still arrive, and so do webhooks and `git` fetches aimed
-at it. The old name is free the moment the space leaves it: another space may
-take it, and from then on everything aimed at it reaches that space. Tell the
-people who hold the old address about the new one.
+**The old address keeps working until another space takes it.** It redirects to
+the new address with the path and the query string kept, so a link somebody was
+given a year ago still opens the same page. Email to `<old>.<app>@yaks.app` is
+still delivered, and so are webhooks and `git` fetches sent to the old address.
+The old name is available to other spaces as soon as the space leaves it: if
+another space takes it, everything sent to it reaches that space from then on.
+Tell the people who use the old address about the new one.
 
     space_set(forget: 'ada')         the old address stops redirecting now
 
-Forgetting is the one part that breaks something at once: every link and every
-letter still aimed at that address stops finding anything. Only do it when the
-person has said they are done with it.
+`forget` is the only part of a move that breaks something immediately: every
+link and every email still sent to that address stops reaching anything. Only
+use it when the person has said they no longer need the old address.
 
-`app_set(app, slug)` is the same move one level down, for one app's path within
-the space.
+`app_set(app, slug)` does the same for one app's path within the space.
 
-A few addresses are kept for yaks.app itself, because at `<slug>.yaks.app` or
-`<slug>@yaks.app` they would read as the platform speaking: `login`, `support`,
-`security`, `billing`, `status`, `admin`, `www`, `mail`, `docs`, `api` and the
-like. `space_new`, `space_set`, `app_new`, `app_set` and `app_install` refuse
-one with a sentence saying so, and signing in as `support@…` gives the space
-`support2`.
+A few names are reserved for yaks.app itself, because at `<slug>.yaks.app` or
+`<slug>@yaks.app` they would look like addresses of the platform: `login`,
+`support`, `security`, `billing`, `status`, `admin`, `www`, `mail`, `docs`,
+`api` and similar names. `space_new`, `space_set`, `app_new`, `app_set` and
+`app_install` refuse one with a message saying so, and signing in as `support@…`
+gives the space `support2`.
 
-What a move never touches: the app's own data (its store is named for the app,
-not for the address), any domain of the person's own aimed at the space or one
-of its apps, who is a member, what is published, or what the stats have counted.
+A move never changes the app's data (its store is named for the app, not for the
+address), any custom domain attached to the space or one of its apps, the
+members, what is published, or what the stats have counted.
 
-## Mail at the space's own address
+## Email to the space's address
 
-`<space>@yaks.app` is the front page's mailbox — the same address every app has,
-with the app part left off (`<space>.<app>@yaks.app` is any other one). A letter
-written there lands in the front page's store, as the entity every arrival lands
-as: `doc` for the subject and the words, `mail` for the envelope, attachments
-filed as blobs and linked to it. <https://yaks.app/docs/mail.md> describes the
-whole shape.
+`<space>@yaks.app` is the front page's email address: the same form of address
+every app has, without the app part (any other app's is
+`<space>.<app>@yaks.app`). An email sent there is stored in the front page's
+store as the same entity every incoming email becomes: `doc` for the subject and
+the text, `mail` for the envelope, and attachments stored as blobs and linked to
+it. <https://yaks.app/docs/mail.md> describes the whole shape.
 
-Custom mail behavior for the space is whatever the front page does about those
-rows. A letter is an ordinary write to its store, so anything subscribed sees
-one land, and the front page's own code decides what happens next — file it,
-answer it, turn it into a row of the app's own. There is no mail router and no
-hook to register; the letters are simply in a store you can read.
+Custom email handling for the space is whatever the front page's code does with
+those rows. An incoming email is an ordinary write to its store, so any
+subscription sees it arrive, and the front page's own code decides what happens
+next: file it, reply to it, or turn it into a row of the app's own. There is no
+mail router and no hook to register; the emails are rows in a store you can
+read.
 
     subscribe('.mail&?doc', triage)
 
-Nothing about the mailbox itself changes with a front page. `mail_list` reads
-the same rows back from an agent's side, `store_mail_send` sends from the same
-address, and a space with no front page is named in the refusal when somebody
-writes to it, so the sender knows to write to `<space>.<app>@yaks.app` instead.
+The front page's mailbox works the same as any app's. `mail_list` reads the same
+rows from an agent's side, `store_mail_send` sends from the same address, and
+when somebody emails a space with no front page, the refusal names the space so
+the sender knows to write to `<space>.<app>@yaks.app` instead.
 
-## What a front page is not
+## What a front page does not do
 
-- **A way to shadow another app.** Step 2 is the rule; `first` is the exception
-  the owner writes down, glob by glob, and it is refused wherever it names the
-  platform's own paths.
-- **A gateway with more rights than a visitor.** It routes as whoever is
-  looking. If they may not read the app the request was going to, neither may
-  the route in front of it.
-- **Something a space needs.** Most spaces have no front page at all, and their
-  bare address lists the apps instead. Make one when there is a homepage to
-  make.
+- **It does not take over another app's paths by default.** Step 2 is the rule;
+  `first` is the exception the owner sets explicitly, glob by glob, and it is
+  refused wherever it names the platform's own paths.
+- **It has no more rights than the visitor.** It routes as the visitor. If the
+  visitor may not read the app the request was going to, neither may the front
+  page's route.
+- **It is not required.** Most spaces have no front page at all, and their bare
+  address lists the apps instead. Set one when the space needs a homepage.

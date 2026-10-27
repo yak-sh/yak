@@ -172,8 +172,8 @@ only the components its filter names — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe')
 returns recipes with no titles and query('.recipe&?doc') returns both. Ask
 for what the page will draw. Call guide for the map of all of this, and guide
-with a page name for one subject — querying, components, files, commands of
-your own, code of your own — so read the one the work calls for rather than
+with a page name for one subject — querying, components, files, tools (app
+commands), code (backend code) — so read the one the work calls for rather than
 guessing.
 It is a tool here, so nothing has to be fetched off the web; the same text
 is at ${url(env, '/docs.md')} for a person. graph_apply, graph_query and
@@ -275,8 +275,8 @@ input), the models the owner's account budget pays for (page models), never the
 account's Workers AI.
 
 Almost nothing else needs compiling: an app is html, css and js, served as
-written, TypeScript and npm packages compile at app_deploy, and reaching for a
-build step where none is needed is the commonest way to waste an afternoon.
+written, TypeScript and npm packages compile at app_deploy, and a build step
+added where none is needed is the most common way to waste time here.
 When something genuinely must be compiled — Rust
 to WebAssembly for a chess engine, an image codec, a solver — there is a
 sandbox: sandbox_write the sources, sandbox_shell the build (a Linux container
@@ -313,7 +313,8 @@ duration (30m, 1d), five cron fields (0 9 * * 1-5) or
 cron line; wake {at: null} pauses without forgetting the
 schedule. wake {while: [{match, every}]} repeats at the cadence of the first
 query that finds anything, and sleeps with no alarm when none does until a
-write makes one hold — a world that ticks only while somebody is in it. Call
+write makes one hold — for example, a game world that advances only while
+somebody is playing. Call
 guide with page wakes for the whole thing (${url(env, '/docs/wakes.md')}).
 
 One app in a space can be its front page — app_set(app, home: true) — and it is
@@ -355,7 +356,7 @@ their space page), and after that any app in it posts a cart to
 ./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered
 {url}, the Stripe payment page to send the buyer to. That endpoint reads
 price_cents and the title off each product row in the app's own store, so a page
-never posts a price: a price that travels is a price the buyer can edit. When
+never posts a price: a price sent from the page could be edited by the buyer. When
 the money moves an order {session, account, items, total_cents, fee_cents,
 email, status} row lands in that app's store — order is a component the platform
 declares, so no vocab.json declares it — and the buyer gets a confirmation from
@@ -388,8 +389,8 @@ Nothing here is lost by a simple mistake: every file write keeps what it
 replaced (app_files op history and op restore), every deploy can be rolled
 back, everything the app has saved can be put back to any moment in the last
 30 days (store_restore), and a deleted app or space sits in the trash for 30
-days. That is worth saying to the person when they hesitate — the risk they
-are weighing is usually not there.
+days. Tell the person this when they hesitate to make a change: a mistake can
+almost always be undone.
 
 When they ask whether anyone is reading the thing, app_stats answers: visits a
 day for the last month, the pages opened, the sites that linked there, the

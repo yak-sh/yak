@@ -5,11 +5,13 @@ description: >
   under workers/yak/public/docs, doc comments and a file's opening paragraph,
   and any prose that explains how something works. Use it whenever you write or
   edit a README or a guide page, describe a package, feature or term for a
-  reader, add or change an example, or name a concept in prose, even for a
-  one-line doc fix, and when a request says "document this", "write it up",
-  "explain how X works" or "update the README". Terms are defined where they
-  are first used and then used exactly, never a synonym, and every major
-  feature has a short example that runs. A skill is `skill-writing`, a design
+  reader, add or change an example, title a page or a heading, or name a
+  concept in prose, even for a one-line doc fix, and when a request says
+  "document this", "write it up", "explain how X works" or "update the
+  README". A title names its subject with the standard technical term, prose
+  says what it means directly, terms are defined where they are first used
+  and then used exactly, never a synonym, and every major feature has a short
+  example that runs. A skill is `skill-writing`, a design
   is `design-docs`, naming a component is `vocabulary`, which files a package
   carries is `packages-and-plugins`, and what yaks.app's marketing site
   promises and to whom is `yaks-app-business`.
@@ -20,15 +22,65 @@ description: >
 Documentation here is read by someone about to act on it: an agent in the
 middle of a task, a stranger opening a package on jsr.io, a person on yaks.app
 reading a guide page with their assistant. None of them can ask you what you
-meant. What they have is the words, and good technical writing gives them words
-that hold still. The owner, verbatim (T-64477):
+meant. What they have is the words: a title that names the subject, sentences
+that say what they mean, and terms that keep one meaning from the first page to
+the last. The owner, verbatim (T-64477):
 
 > I'm hoping to solve the "synonym telephone" problem: agents tend to use
 > synonyms and then it's tricky to keep everything straight, because that's not
 > usually how technical writing works: it should have clearly defined terms and
 > then those terms should always be used.
 
-## A term is a variable
+## Literal titles, plain sentences
+
+A reader decides from a title whether a page holds what they need, and from a
+sentence what it means, on the first read. An agent building someone's app
+scans the guide's list of titles for the word it has in mind: "backend",
+"performance", "email", "payments". The owner, verbatim (T-132747):
+
+> also, the docs need to have much better titles that are a bit more literal.
+> they're so vague and too quippy. "The store, from a page". "A page that loads
+> at once". huh? "Frontend Data" and "Performance". this quippy way of talking,
+> called "mannered prose" is so bad for comprehension. please fix up the docs
+
+> "Code of your own" -> "Backend Code"? this is crazy. who would ever write
+> this way?
+
+and, asked whether yaks.app's soft and friendly voice had spread into the
+guide:
+
+> well yes, but the docs are the place for explicitness and technicality!
+
+Mannered prose is writing arranged for effect instead of said (M-33081): a
+heading that is a little sentence ("The eid is the thing"), a possessive turn
+in place of a name ("Code of your own"), a scene in place of a subject ("A page
+that loads at once"), a paragraph that ends on an aphorism ("None of those is a
+ceiling"). The writer means it as style. The reader has to translate it back
+into the term they came looking for, and a search for "backend" never finds
+"Code of your own". You reach for these phrases because they sound well
+written; in documentation they make the text vague.
+
+- **A title is the subject's standard technical name**, the words an engineer
+  would type into a search box: Frontend Data, Backend Code, Performance, Query
+  Syntax, Custom Domains, Email, Payments, Scheduling. A guide page's
+  `doc.title`, its `#` heading and its section in the guide's map (docs.md)
+  are the same words. The title is the reader's word, and the page then
+  defines the platform's own term under it: Frontend Data introduces the
+  **store** and its client.
+- **A heading names what its section covers**: "Patching and deleting",
+  "Compare-and-set with `$was`", "Limits". It isn't a sentence about the
+  section, a teaser or a pun.
+- **A sentence states the fact**: what the thing is, what it does, what it
+  returns, what it refuses. When a literal phrase is available, use it. Leave
+  out metaphors, inverted word order and a last line written to sound good.
+- **Explicit and technical.** Name the function, the endpoint, the status code,
+  the limit and its number, with the standard term for each: backend, frontend,
+  API, request, query, schema. The guide is reference. The soft, friendly voice
+  the owner asked of yaks.app (M-32311, and for the homepage, T-32746: "soft and
+  friendly. not this AI-technical analytical modern nonsense.") belongs to the
+  homepage and the marketing pages (`yaks-app-business`), not the guide.
+
+## Defined terms
 
 A term in prose works like a name in code. It's bound once, where it's defined,
 and every later use refers to that binding. Rename it halfway through and the
@@ -75,8 +127,8 @@ that way:
 - **Words about words drift the same way.** Two different words are two names.
   A spelling is one of two ways to write the same word (`colour`, `color`).
 
-Your recall gives back the meaning; the string has to be found. This shows
-where a term is defined:
+You remember a term by its meaning, not its spelling, so search for the
+string. This shows where a term is defined:
 
 ```sh
 grep -rn '\*\*bundle\*\*' packages/*/README.md
@@ -139,18 +191,19 @@ it says why, and doesn't retell what the code already makes plain.
   assistants.
 - **Pointers, not copies.** A link to another package's documentation stays
   true when that package moves; a copy doesn't.
-- **Plain and short.** One idea per paragraph, sentences a stranger can use,
-  nothing the reader doesn't need in order to act. For emphasis, the owner
-  (M-37800, verbatim): "never use ALL CAPS for emphasis. use italics if
-  emphasis is necessary."
+- **Plain and short.** One idea per paragraph, said directly (see Literal
+  titles, plain sentences), nothing the reader doesn't need in order to act.
+  For emphasis, the owner (M-37800, verbatim): "never use ALL CAPS for
+  emphasis. use italics if emphasis is necessary."
 
 Every file opens with a paragraph saying what it owns, and a comment says why
 and the invariant rather than the next line. Both use the README's terms,
 looked up the same way.
 
-Then read it back as the stranger who opens it cold: is every term defined
-before it's leaned on, does each concept keep one name all the way through, does
-every major feature have an example, and does `deno task test packages/<name>`
-run them green?
+Then read it back as the stranger who opens it cold: does each title and
+heading say what it covers, does each sentence mean what it says on the first
+read, is every term defined before it's leaned on, does each concept keep one
+name all the way through, does every major feature have an example, and does
+`deno task test packages/<name>` run them green?
 
 When this skill is wrong or missing something, fix it in the same change.

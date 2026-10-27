@@ -1,22 +1,23 @@
 ---
 doc:
-  title: Build a multiplayer game
+  title: Multiplayer Games
 guide:
   slug: games
-  brief: games with rules, controls, a HUD and a replaceable look
+  brief: multiplayer games with rules, input controls, a HUD and rendering
   description: >-
-    Build on Holdfast's working multiplayer pattern: platform dependencies and
-    their words, @yaks/game rules, controls and HUD, @yaks/stage presentation,
-    @yaks/voxel geometry and its /three look, a shared clock, one page moving
-    each creature, and recovering an order without charging twice.
+    Building a multiplayer game, following Holdfast: platform dependencies and
+    their vocabulary, game state in the graph, @yaks/game rules, input controls
+    and HUD, @yaks/stage rendering, @yaks/voxel geometry and @yaks/voxel/three,
+    the shared clock and fixed-step timing, owner election (one page simulates
+    each entity), and retrying a lost write without charging twice.
 ---
 
-# Build a multiplayer game
+# Multiplayer Games
 
 A game is a yaks app whose page reads the graph, decides what happens next, and
 writes bundles back to the graph. The toolkit computes and draws values; it does
-not own your graph, world, economy or save rules. Keep those in the app, so
-another page can read the same play and a different look can draw it.
+not store your graph, world, economy or save rules. Keep those in the app, so
+another page can read the same game state and a different renderer can draw it.
 
 Start with the working examples:
 
@@ -34,7 +35,7 @@ which values other players see, which survive a disconnect, and which the store
 keeps. App files and compilation are in <https://yaks.app/docs/code.md>; the
 page's graph API is in <https://yaks.app/docs/store.md>.
 
-## Add the toolkit to the app
+## Platform dependencies and vocabulary
 
 A **platform dependency** is a package supplied by the running yaks.app release,
 named with `"platform"` instead of an npm version in `package.json`. Holdfast
@@ -67,25 +68,25 @@ page and toolkit, not a second engine instance inside each package. Import
 toolkit subpaths from their package, such as `@yaks/game/controls` or
 `@yaks/voxel/three`; declare the package root in `dependencies`.
 
-Dependencies also bring their **vocabulary**, the components and properties a
-graph understands. The store composes a dependency's stored and relayed
-components with the platform's and your `vocab.json`. Don't copy those
-components into `vocab.json`: a duplicate declaration refuses the deploy. A
-dependency adds no rules, tools or effects to the store just by being named.
-Removing a dependency does not erase rows already stored under its words. The
-complete composition and removal rules are in <https://yaks.app/docs/code.md>.
+A dependency also brings its **vocabulary**: the components and properties it
+declares. The store composes a dependency's stored and relayed components with
+the platform's and your `vocab.json`. Don't copy those components into
+`vocab.json`: a duplicate declaration refuses the deploy. A dependency adds no
+rules, tools or effects to the store just by being named. Removing a dependency
+does not erase rows already stored under its vocabulary. The complete
+composition and removal rules are in <https://yaks.app/docs/code.md>.
 
 `@yaks/game` supplies the page-only `Controls` component; the pure rules,
-`@yaks/stage` and `@yaks/voxel` add no stored game words. `Controls` has
+`@yaks/stage` and `@yaks/voxel` add no stored components. `Controls` has
 `sync: none`, so it does not enter the store's vocabulary. Compose the `docs`
 export from `@yaks/game/vocab` into the **page** vocabulary before using
 controls. Holdfast also composes `@yaks/ux/vocab` for page-only interface
 choices. Its `main.ts` adds only definitions absent from the fetched
-`./api/vocab.json`, rather than declaring server words twice.
+`./api/vocab.json`, so no component the server declares is declared twice.
 
-## Keep play in the graph
+## Game state in the graph
 
-Holdfast separates three kinds of component:
+Holdfast separates four kinds of component:
 
 | Kind                               | Holdfast components                                                                             | Declaration                                  |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------- |
@@ -104,10 +105,10 @@ Gold is the map's starting gold plus cleared-wave bounty minus `spent.gold`.
 Lives are starting lives minus recorded and current leaks. Don't store a second
 balance that can disagree with those rows. A build writes the tower and its
 spending receipt together; a sale deletes the tower and records a negative
-spend. The store's atomic batch and compare-and-set guard protect racing writes,
-not the animation loop.
+spend. The store's atomic batch and compare-and-set guard protect concurrent
+writes; they do not protect the animation loop.
 
-## Compute rules, then write their result
+## Game rules with `@yaks/game`
 
 `@yaks/game` and `@yaks/game/rules` export the same pure rules API. They need no
 DOM, graph or renderer. Use path following (`along`, `advance`, `aStar`),
@@ -118,13 +119,12 @@ the package does not fetch them.
 
 Holdfast's `rules.ts` reads snapshots supplied by `main.ts`. Its `build`,
 `upgrade`, `sell` and `startWave` return bundles. Its
-`step(rows, runId, now,
-dt)` advances play and returns a batch. Each simulation
-step applies its batch before reading the next snapshot. A shot decides its hit
-when released and carries a shared-clock `lands` deadline; the owner applies it
-when due.
+`step(rows, runId, now, dt)` advances the game state and returns a batch. Each
+simulation step applies its batch before reading the next snapshot. A shot
+decides its hit when released and carries a shared-clock `lands` deadline; the
+owner applies it when due.
 
-### One page moves each creature
+### Owner election with `ownerOf`
 
 The **owner rule** chooses the lexically first eligible page id. `ownerOf`
 accepts `[id, {x, z, awake}]` values, an entity's home and a horizontal radius;
@@ -132,7 +132,7 @@ it returns that id or `''` if nobody qualifies. Every page uses the same rule
 and only the chosen page advances that entity. Other pages draw relayed values,
 optionally predicting between updates with `follow`.
 
-This runnable rules example shows both election and a 20 Hz step plan:
+This runnable example shows owner election and a 20 Hz fixed-step plan:
 
 ```ts
 import { fixedStep, ownerOf } from '@yaks/game'
@@ -163,11 +163,11 @@ everyone leaves, live battle values expire; stored towers and cleared waves
 remain, and that wave can start again. A reload is not a durable save of every
 creep.
 
-Election is cooperation between pages, not a server lease or an anti-cheat
-boundary. Pages can briefly disagree about presence. Keep durable spending
-protected by store guards even when you expect only one conductor.
+Each page computes owner election on its own; it is not a server lease or an
+anti-cheat boundary. Pages can briefly disagree about presence. Keep durable
+spending protected by store guards even when you expect only one conductor.
 
-### Use the right clock
+### Shared clock and fixed-step timing
 
 `@yaks/sync` supplies the **shared clock**, an estimate of epoch milliseconds on
 the store's clock, through `front.wire.now()` on a server-connected
@@ -187,7 +187,7 @@ again on reconnect. Corrections can move either way. It is neither a
 subscription-readiness signal nor a security authority; wait for the run's
 subscriptions to be ready separately.
 
-## Controls and the HUD are controlled by the page
+## Input controls and the HUD
 
 `@yaks/game/controls` maps keyboard, pointer, touch and gamepad input to actions
 you name. **`Controls`** is the page-only component holding keys, gestures,
@@ -229,7 +229,7 @@ Project `read(dt).pick` through the look's picking function; controls know no
 world coordinates. Visible buttons should call the same app actions as keys and
 gamepads, so the canvas is not the only way to play.
 
-`@yaks/game/hud` supplies paint-only `Grid`, `Stats` and `Stick`, plus their
+`@yaks/game/hud` supplies display-only `Grid`, `Stats` and `Stick`, plus their
 `kit` of CSS and terminal sheets. Holdfast's `ui.ts` renders `Stats` from the
 run's derived gold, lives and wave values; its `main.ts` links the stylesheet
 URLs from `kit`. It uses general buttons and panels from `@yaks/ui` and
@@ -258,7 +258,7 @@ render(
 )
 ```
 
-## Keep the look replaceable
+## Rendering with `@yaks/stage` and `@yaks/voxel`
 
 `@yaks/stage` supplies Three.js presentation: `/render` for a renderer and frame
 scheduling, `/cam` for camera intent, `/aim` for picking, and `/ears`, `/sound`,
@@ -266,21 +266,22 @@ scheduling, `/cam` for camera intent, `/aim` for picking, and `/ears`, `/sound`,
 graph. You supply geometry, collision callbacks, clip URLs and camera values.
 
 `@yaks/voxel` turns grids and boxes into packed quads. Its root and geometry
-subpaths are safe in a worker. **`@yaks/voxel/three`** is the voxel look:
-`geometry` adapts packed quads to Three.js, `soft` supplies voxel material,
-box-part helpers assemble rigs, and `puppet` animates a supplied rig. Those
-rendering imports belong in the page, not a worker mesher.
+subpaths are safe in a worker. **`@yaks/voxel/three`** renders voxels with
+Three.js: `geometry` adapts packed quads to Three.js, `soft` supplies voxel
+material, box-part helpers assemble rigs, and `puppet` animates a supplied rig.
+Those rendering imports belong in the page, not a worker mesher.
 
-Holdfast's `look.ts` imports `renderer` from `@yaks/stage/render`, `geometry`,
-`soft` and `puppet` from `@yaks/voxel/three`, and ordinary Three.js from
-`three`. `createLook(canvas)` returns `draw`, `pick`, `sound` and `dispose`.
-`main.ts` hands `draw` a graph snapshot, run id, selected site, shared time and
-camera values. The look owns GPU and audio handles, not a second copy of play.
-Replacing it should leave `rules.ts`, spending receipts and saved runs
+Holdfast's **look**, `look.ts`, is the module that draws and picks the
+battlefield. It imports `renderer` from `@yaks/stage/render`, `geometry`, `soft`
+and `puppet` from `@yaks/voxel/three`, and ordinary Three.js from `three`.
+`createLook(canvas)` returns `draw`, `pick`, `sound` and `dispose`. `main.ts`
+hands `draw` a graph snapshot, run id, selected site, shared time and camera
+values. The look holds GPU and audio handles; it keeps no copy of the game
+state. Replacing it should leave `rules.ts`, spending receipts and saved runs
 unchanged. Dispose its resources and the controls when the page leaves.
 
-This browser-side boundary can draw ordinary geometry without any voxel imports.
-It needs a mounted `canvas`; the caller owns the loop and disposal:
+This browser-side example draws ordinary Three.js geometry without any voxel
+imports. It needs a mounted `canvas`; the caller owns the loop and disposal:
 
 ```ts ignore
 import * as THREE from 'three'
@@ -302,15 +303,16 @@ For a voxel look, replace the geometry and material construction with
 `packedQuads` generation in the app or a worker using `@yaks/voxel`; stage still
 receives ordinary Three.js geometry.
 
-## Recover a dropped order without charging twice
+## Recovering lost writes without charging twice
 
-There are two different losses to handle:
+There are two different failures to handle:
 
-1. **A peer order loses its socket.** Sync reconnects and resends values it
-   still owns. Keep the command's original entity id. Holdfast puts `reply` on
-   that same row; an already answered command is cleared, not executed again.
-   Don't create another command just because the connection dropped.
-2. **A stored transaction loses its answer.** The store may already have
+1. **A peer-synced command loses its socket.** Sync reconnects and resends
+   values it still owns. Keep the command's original entity id. Holdfast puts
+   `reply` on that same row; an already answered command is cleared, not
+   executed again. Don't create another command just because the connection
+   dropped.
+2. **The response to a stored transaction is lost.** The store may already have
    committed it. `WriteUnknown` from `@yaks/client` is an unknown outcome, not
    permission to plan and charge again. `WriteRefused` is a deliberate refusal,
    not the same condition.
@@ -319,7 +321,7 @@ Holdfast's `recovery.ts` retains the exact decided batch, its compare-and-set
 preconditions, an immutable `spent`, `cleared` or `run` receipt, and one write
 key. It sends with `front.mutate(batch, { optimistic: false, key })`. Every
 retry uses that same batch and key; it never allocates another purchase receipt
-or plans against an optimistic purse.
+or plans against an optimistic gold balance.
 
 After an unknown outcome it reads **authoritative server rows** for every
 affected id, bypassing the local replica. Matching all expected immutable
@@ -335,18 +337,18 @@ outcome, it checks the receipt again before treating the refusal as final. An
 unknown durable write with no immutable receipt is an error, not a safe blind
 replay.
 
-Keep unexpected failures reported and let subsequent frames continue from the
-graph. Don't turn a recoverable network interruption into instructions to
-reload. This is recovery while the page holds the batch, not a durable offline
-order queue that survives closing the page.
+Report unexpected failures, and let later frames continue from the graph. Don't
+turn a recoverable network interruption into instructions to reload. This is
+recovery while the page holds the batch, not a durable offline order queue that
+survives closing the page.
 
-## Check the game with two pages
+## Testing with two pages
 
 Open one Holdfast run link in two pages with editor access. Build from each;
-both should show the same towers and purse. Send a wave, then close the elected
-page: the other should continue the live wave. Leave every page long enough for
-its live values to expire, reopen, and check that towers and completed waves
-remain while the unfinished wave can restart.
+both should show the same towers and gold. Send a wave, then close the
+conductor's page: the other should continue the live wave. Leave every page long
+enough for its live values to expire, reopen, and check that towers and
+completed waves remain while the unfinished wave can restart.
 
 Test a lost stored-write response separately from an ordinary socket reconnect:
 the accepted receipt must finish the original order, without a second spend.

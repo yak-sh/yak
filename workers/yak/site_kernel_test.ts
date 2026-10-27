@@ -78,7 +78,7 @@ test('the apex answers the crawler and the model', async () => {
     let one = await onePage.text()
     assertStringIncludes(
       one,
-      '<title>Querying: the filter grammar · yaks.app</title>',
+      '<title>Query Syntax · yaks.app</title>',
     )
     // Every page of the documentation reads beside the list of them, and a
     // drawn page also beside its own sections, linked by the ids the renderer
@@ -88,11 +88,11 @@ test('the apex answers the crawler and the model', async () => {
     let jump = /<a href="#([^"]+)">/.exec(one)![1]
     assertStringIncludes(one, ` id="${jump}">`)
     let tech = await (await k.at('yaks.app', '/docs/technical')).text()
-    assertStringIncludes(tech, '<h1 id="technical-details">Technical details')
+    assertStringIncludes(tech, '<h1 id="technical-details">Technical Details')
     assertStringIncludes(tech, '<nav class="Page_Side SideNav Docs_Nav"')
     assertStringIncludes(
       tech,
-      '<a href="/docs/technical" aria-current="page">Technical details</a>',
+      '<a href="/docs/technical" aria-current="page">Technical Details</a>',
     )
 
     let publicPages: [string, Response][] = [

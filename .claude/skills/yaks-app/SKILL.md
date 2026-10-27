@@ -337,8 +337,10 @@ made-up scenarios"). The guide's list of taken words lives in
 `public/docs/components.md`, and `guide_test.ts` keeps it true.
 
 Guide pages live in `workers/yak/public/docs/<slug>.md`; their frontmatter
-supplies the connector's title, brief and description. Link each offered page
-from `workers/yak/public/docs.md` and add its slug to `PAGES` in
+supplies the connector's title, brief and description. A title is the
+subject's standard technical name (Frontend Data, Backend Code, Performance),
+and the page is explicit, technical reference (`writing-documentation`). Link
+each offered page from `workers/yak/public/docs.md` and add its slug to `PAGES` in
 `workers/yak/guide.ts`. After editing a page, run `deno task content`
 to regenerate `workers/yak/content.ts` and the connector skills under
 `plugins/yaks.app/`; don't edit those projections by hand. Examples and

@@ -1,16 +1,16 @@
 ---
 name: sharing
-description: "Publishing and installing an app (yaks.app). Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandbox its owner can put it in, what pinning means, and what an update does to what people saved."
+description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, and publishing and installing: app_publish, app_install, app_update, the gallery, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved."
 ---
 
-# Publishing and installing an app
+# Access, Publishing and Installing
 
-Two different questions get answered here. Who may read and write one app — its
-`access`, and its guest list. And how an app becomes a plugin anybody can take a
-copy of — `app_publish`, `app_install`, `app_update`, what a copy shares, and
-what an update does to what people already saved.
+This page covers two subjects. The first is who may read and write one app: its
+`access` setting and its guest list. The second is how an app becomes a plugin
+that anybody can install a copy of: `app_publish`, `app_install`, `app_update`,
+what a copy shares, and what an update does to the data people already saved.
 
-## Access: what a stranger with the link can do
+## Access settings
 
 Every app has one of three access settings. `app_new(access:)` sets it when the
 app is made, `app_set(access:)` changes it later, and both report what it means
@@ -19,30 +19,33 @@ in the person's own terms, so you can repeat it back to them.
 **`public`** — the default. Anyone with the link reads the app and its data.
 Only members write. A stranger's write is refused 401 with `not_a_writer` and a
 `signIn` address that comes back to the page they were on; a signed-in viewer's
-write is refused 403, because signing in is no longer the way through — the
-owner's is.
+write is refused 403, because signing in would not change the answer; only the
+owner can grant write access.
 
-**`open`** — anyone with the link adds to it too, signed in or not. This is what
-a vote page, a guest book or a signup sheet needs. A visitor (anyone the app
-lets write who is not its owner or an editor) adds rows, and changes or deletes
-only the rows they wrote; everybody else's rows are refused to them. The owner
-and editors change anything, as ever. A shared list that visitors tick off
-together is therefore a list whose ticks are rows of their own, one per tick,
-rather than an edit to somebody else's item.
+**`open`** — anyone with the link can also write, signed in or not. Use it for a
+vote page, a guest book or a signup sheet. A visitor (anyone the app lets write
+who is not its owner or an editor) can add rows, and can change or delete only
+the rows they wrote; a write to anybody else's row is refused. The owner and
+editors can change any row. So in a shared list that visitors tick off together,
+each tick is a row of its own, written by the visitor who ticked it, rather than
+an edit to somebody else's item.
 
-Three of the platform's own words stay out of a visitor's reach whatever the
-access: `product` is written by the owner and editors, an `order`'s properties
-only by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a
-letter, `deliver`, by the owner and editors (<https://yaks.app/docs/mail.md>). A
-component of your own says the same in its `vocab.json`: `"floor": "person"`
-takes it only from someone signed in, `"floor": "editor"` only from the owner
-and editors, and `"pace": "1s"` from each of them once a second
-(<https://yaks.app/docs/components.md>, "Who writes it, and how often").
+A visitor cannot write three of the platform's components under any access
+setting: `product` is written only by the owner and editors, an `order`'s
+properties only by the platform (<https://yaks.app/docs/selling.md>), and
+`deliver`, the request to send an email, only by the owner and editors
+(<https://yaks.app/docs/mail.md>). A component you declare in `vocab.json` can
+set the same kind of limit: `"floor": "person"` accepts writes only from someone
+signed in, `"floor": "editor"` only from the owner and editors, and
+`"pace": "1s"` accepts one write a second from each writer
+(<https://yaks.app/docs/components.md>, "Write permissions and rate limits:
+`floor` and `pace`").
 
-The cost of letting anyone in is a byline: a guest who never signed in is nobody
-yet, so their rows carry no `created.by` at all, and a row nobody signed is
-nobody's to change again. If the page wants to show who said what, it has to ask
-for a name on the page and save it in its own row.
+An `open` app does not record who wrote a visitor's rows. A visitor who never
+signed in has no identity, so their rows carry no `created.by`, and a row
+without `created.by` belongs to no visitor, so no visitor can change it later.
+If the page needs to show who wrote what, it has to ask for a name on the page
+and save it in its own row.
 
     let who = await me()
     if (!who.writes) {
@@ -51,180 +54,189 @@ for a name on the page and save it in its own row.
          : 'Only members of this app can post.')
     } else if (!who.person) show('<input name="who" placeholder="Your name">')
 
-Ask on load, not on refusal — that is the whole reason `me()` exists.
+Call `me()` when the page loads, not after a write is refused; that is what
+`me()` is for.
 
-**`private`** — members only, either way. The page itself is part of what only
-they see: a signed-out stranger asking for it is sent to the login page (303)
-holding that page as its return address, and someone signed in who is not a
-member of the space gets the same "Nothing here yet." a wrong address gets —
-whether the app exists at all is its owner's to tell. The app's `/api/`
-endpoints answer `not_a_reader` rather than pretending.
+**`private`** — only members can read or write. The page itself is visible only
+to members: a signed-out person who requests it is redirected (303) to the login
+page, with that page as the return address, and a signed-in person who is not a
+member of the space gets the same "Nothing here yet." page as a wrong address,
+so the answer does not reveal whether the app exists. The app's `/api/`
+endpoints answer `not_a_reader` rather than a not-found answer.
 
-Two things answer before that redirect. A file the app published is served to
-anyone at its path, which is how a private app puts a page on the public web
-([files](./files.md), "Publishing a file to anyone"). And the app's own
-`worker.js` runs before it, so a private app with a worker is an app whose
-gatekeeper is its own code. That is how a rule finer than one of the three
-settings gets written — an invitation code that opens one household's row and no
-other. See `env.APP` in [Code of your own](./code.md).
+Two things are served before that redirect. A file the app published is served
+to anyone at its path; that is how a private app puts a page on the public web
+([Files and Uploads](./files.md), "Public files: `publish`"). And the app's own
+`worker.js` runs before the redirect, so in a private app with a worker, the
+worker's code decides who gets in. Use it to write an access rule finer than the
+three settings, such as an invitation code that opens one household's row and no
+other. See `env.APP` in [Backend Code](./code.md).
 
-Sharing an app need not share what each person writes in it. A component of your
-own that declares `personal` keeps each person's rows to that person, the owner
-and editors included: <https://yaks.app/docs/components.md>, "Rows that belong
-to one person".
+Sharing an app does not have to share what each person writes in it. A component
+you declare with `personal` makes each person's rows readable only by that
+person, and the owner and editors cannot read them either:
+<https://yaks.app/docs/components.md>, "Private per-person rows: `personal`".
 
-One rule sits above all three: **writing an app's files is always a member's
-act**, whatever the app lets its visitors save into its store. An `open` app
-accepts a guest's rows and never a guest's deploy.
+One rule applies under all three settings: **only a member can write an app's
+files**, whatever the app lets its visitors save into its store. An `open` app
+accepts a visitor's rows, never a visitor's deploy.
 
-## The guest list
+## Inviting people: `member_add` and `member_remove`
 
     member_add(email, app?, name?, note?, role?, space?)
     member_remove(email, app?, space?)
 
-Only the space owner may invite; an editor writes the app's data and its files
-but does not hand out keys.
+Only the space owner may invite; an editor can write the app's data and its
+files but cannot invite anyone.
 
 `role` is `editor` (the default: reads and writes), `viewer` (reads only), or
 `owner` (may also invite). Inviting an address that is already a member changes
 their role, and the answer reports what it was before.
 
-An invitation is pending until its person accepts it, with the one click in the
-letter, signed in with the address it went to. Opened before they sign in, that
-link says what the letter said: who invited them to which app, and the address
-to sign in with. Until then nothing of the space is in their reach: it is not in
-their listing, a bare app name never resolves to it, and their agent is told
-nothing about it. Signed in with that address and opening the app, they are told
-their invitation is waiting in the letter, where anyone else would get "Nothing
-here yet." or a refusal; on a `public` app, `me()` answers the page
-`invited: true`, so it can tell them before they type. Calling `member_add`
-again for them says they had not accepted yet and sends another letter.
-`member_remove` withdraws a pending invitation the same way it removes a member.
+An invitation is pending until the invited person accepts it by clicking the
+link in the invitation email while signed in with the address it was sent to. If
+they open that link before signing in, the page shows what the email said: who
+invited them to which app, and the address to sign in with. Until they accept,
+they have no access to the space: it is not in their listing, a bare app name
+never resolves to it, and their agent is told nothing about it. If they sign in
+with that address and open the app, they are told their invitation is waiting in
+the email, where anyone else would get "Nothing here yet." or a refusal; on a
+`public` app, `me()` returns `invited: true` to the page, so it can tell them
+before they type. Calling `member_add` again for them reports that they have not
+accepted yet and sends another email. `member_remove` withdraws a pending
+invitation the same way it removes a member.
 
-In each space the caller owns, `app_list` names every invitation not accepted
-yet with the day its latest letter went, and counts everyone else. When someone
-says they cannot get in, that is the first thing to read. `app_list(app)` names
+In each space the caller owns, `app_list` lists every invitation not yet
+accepted, with the date its latest email was sent, and counts everyone else.
+When someone says they cannot get in, read this first. `app_list(app)` names
 everyone who can open that app, and `app_list(people: true)` names the members
 and each app's guests in every space the caller owns. The owner sees them all on
 the People page of their dashboard (yaks.app/manage/people), where a waiting
-invitation has a button that sends its letter again.
+invitation has a button that sends its email again.
 
-## One app, or the space
+## Inviting to one app or to the whole space
 
-`app` is the whole of the difference, and it is a difference in what they get:
+The `app` argument decides what the invited person gets access to:
 
-**Name it** and they are a guest of that one app. They open its page and read
-and write its data exactly as a member does, and the rest of the space is not
-theirs — its private apps are a wrong address to them, its public ones are what
-a stranger with the link sees. This is how a player joins one game, a household
-opens one list, a client sees one project. They are not on the space's member
-list at all, so they have no space to list and nothing of yours to browse.
+**With `app`**, they become a **guest** of that one app. They open its page and
+read and write its data exactly as a member does, and they have no access to the
+rest of the space: its private apps answer them as a wrong address does, and its
+public apps show them what anyone with the link sees. Use this for a player
+joining one game, a household sharing one list, or a client seeing one project.
+A guest is not on the space's member list at all, so they have no space to list
+and nothing else of yours to browse.
 
     member_add(email: 'player@example.com', app: 'idler-rpg', role: 'editor')
     member_remove(email: 'player@example.com', app: 'idler-rpg')
 
-**Leave it out** and they take a seat on the whole space, which reaches every
-app in it, now and every one you make later. That is a collaborator, not a
-guest.
+**Without `app`**, they become a member of the whole space, with access to every
+app in it, including every app you make later. That makes them a collaborator,
+not a guest.
 
-Two things a guest never gets, whatever role the invitation gave them. The app's
-files — writing an app's files stays a member's act, so an app accepts a guest's
-rows and never a guest's deploy. And a way in for their agent: a guest is
-somebody who opens a page, not somebody whose connector lists your apps.
+A guest never gets two things, whatever role the invitation gave them. The first
+is the app's files: only a member can write an app's files, so an app accepts a
+guest's rows and never a guest's deploy. The second is access for their agent: a
+guest uses the app's pages, and their connector does not list your apps.
 
-Inviting a member to one app is refused rather than quietly demoting them: take
-the seat back with `member_remove` first, and then the invitation is that app
-alone.
+Inviting an existing space member to one app is refused, rather than silently
+reducing their access: remove their space membership with `member_remove` first,
+and then the invitation is for that one app.
 
-Those three roles come from the space's member list, and a guest's grant uses
-the same three. What `me()` returns as `role` is what the caller holds on the
-app they are looking at — their seat on the space where they have one, their
-grant on that app where they do not. Inside an app's own store, `member` is a
-different thing again: two roles, `owner` and `member`, recording whether
-someone belongs. Write both with `member_add`, never by hand.
+The three roles come from the space's member list, and a guest's grant uses the
+same three. The `role` that `me()` returns is the caller's role on the app they
+are looking at: their role in the space if they are a member, otherwise their
+grant on that app. Inside an app's own store, `member` is something else: it has
+two roles, `owner` and `member`, and records whether someone belongs. Write both
+with `member_add`, never by hand.
 
-The letter follows `app` too: name it and the invitation carries that app's own
-link, leave it out and it carries the space's own address, which is its front
-page when it has one and a list of the apps they may open when it does not.
+The `app` argument also decides the link in the invitation email. With `app`, it
+links to that app; without it, it links to the space's own address, which shows
+the space's front page if it has one, and otherwise a list of the apps the
+person may open.
 
-`name` is what to call them — their apps show it beside what they write, so
-nobody sees an address. Pass it whenever the person says who they are inviting:
-left out, they go by the front of their address (`dana` from `dana@example.com`)
-until they change it themselves under Settings at yaks.app/manage/settings. It
-never renames someone who has already chosen.
+`name` is the invited person's display name: apps show it beside what they
+write, so nobody sees their email address. Pass it whenever the person says who
+they are inviting. Without it, the display name is the part of their address
+before the `@` (`dana` from `dana@example.com`) until they change it themselves
+under Settings at yaks.app/manage/settings. It never overwrites a name someone
+has already chosen.
 
-`note` is the inviter's own message, carried at the top of the letter, quoted
-and attributed to them so nobody reads it as the platform speaking. A line or
-two — 500 characters is the cap, and past it the call is refused rather than
-sending half a sentence in somebody's name. Read it back to the person before
-you send it: it is going out over their name.
+`note` is the inviter's own message, shown at the top of the email, quoted and
+attributed to them so nobody reads it as a message from the platform. Keep it to
+a line or two: the limit is 500 characters, and a longer note is refused rather
+than sent cut off in somebody's name. Read it back to the person before you send
+it, because it is sent in their name.
 
-Its subject is always "You have an invitation on yaks.app". The body names who
-invited them and what to, and carries the accept link. Clicking it signed in as
-that address accepts and lands them on the page it names; anyone else is asked
-to sign in with that address first, and the sign-in brings them back to accept.
-There is nothing to install and no account to make first.
+The email's subject is always "You have an invitation on yaks.app". The body
+names who invited them and to what, and carries the accept link. Clicking it
+while signed in with that address accepts the invitation and opens the page it
+names; anyone else is asked to sign in with that address first, and the sign-in
+returns them to accept. There is nothing to install and no account to create
+first.
 
-The accept link goes only to the invited address, so the answer never hands you
-one. If the letter cannot go, the invitation stands and asking again sends it.
+The accept link is sent only to the invited address, so the tool's answer never
+includes it. If the email cannot be sent, the invitation still stands, and
+calling `member_add` again sends it.
 
-Each invitation letter counts against the space's monthly emails, and one person
-may send 50 invitations an hour. Changing the role of somebody who has already
-accepted sends nothing and counts nothing.
+Each invitation email counts against the space's monthly email ceiling, and one
+person may send 50 invitations an hour. Changing the role of somebody who has
+already accepted sends no email and counts against nothing.
 
-`member_remove` refuses to remove the last owner: a space with nobody to decide
-who belongs is one nobody can open again. Removing someone leaves their sign-in
-intact — they lose this space, not the platform. Naming an app,
-`member_remove(email, app)`, takes back that one app and leaves the rest.
+`member_remove` refuses to remove the last owner, because a space with nobody to
+decide who belongs could never be opened again. Removing someone leaves their
+sign-in working: they lose access to this space, not to the platform.
+`member_remove(email, app)` removes access to that one app and leaves the rest.
 
-## Publishing
+## Publishing and installing
 
-An app is a plugin. Once it is deployed you can offer it to every other space on
-yaks.app, and anyone can take a copy into their own.
+An app is a plugin. Once it is deployed, you can publish it, which offers that
+version to every other space on yaks.app, and anyone can install a copy into
+their own space.
 
-**`app_publish(app, name?, about?, space?)`** — offer the version that is
-serving now.
+**`app_publish(app, name?, about?, space?)`** — offer the version that is live
+now.
 
-- The app must have been deployed. An app at v0 serves nothing an installer
-  could copy, and publishing it is refused.
-- `name` is the address the whole platform installs by. On a first publish it
+- The app must have been deployed. An app at v0 has no files for an installer to
+  copy, so publishing it is refused.
+- `name` is the platform-wide name others install it by. On a first publish it
   defaults to the app's own slug. On a republish it defaults to **the name the
-  offer already has** — a republish never quietly renames — and passing an
-  explicit `name` moves it, which leaves the old name resolving to nothing for
-  everyone who was told to install it. The answer reports which of the three
-  happened, in those terms, because a rename is the half nobody can see.
+  offer already has**, so a republish never renames silently. Passing an
+  explicit `name` renames the offer, and the old name then resolves to nothing
+  for everyone who was told to install it. The answer reports which of the three
+  cases happened (first publish, republish, rename), because nothing else shows
+  that a rename happened.
 - A name taken by somebody else's app is refused, naming the app that holds it.
-  One name, one app, platform-wide.
-- `about` is the line someone browsing reads. Leave it out on a republish and
-  the previous one stands.
-- Only the **space owner** may publish. Publishing hands the code to strangers,
-  so it is not an editor's call.
-- **A later `app_deploy` does not move the offer.** The offer stays pinned to
+  Each name belongs to one app across the whole platform.
+- `about` is the one-line description someone browsing reads. Leave it out on a
+  republish and the previous one stays.
+- Only the **space owner** may publish. Publishing gives the code to anyone, so
+  an editor cannot do it.
+- **A later `app_deploy` does not change the offer.** The offer stays pinned to
   the version you published, so installers keep getting that code until you
-  `app_publish` again. That is deliberate — an editor's deploy must not change
-  what the whole platform installs — and the deploy that leaves the offer behind
-  reports it in its answer. `app_versions` marks which version is `(live)` and
-  which is `(offered)`.
+  `app_publish` again. This is deliberate, so that an editor's deploy cannot
+  change what the whole platform installs, and a deploy that leaves the offer on
+  an older version says so in its answer. `app_versions` marks which version is
+  `(live)` and which is `(offered)`.
 
-**`app_unpublish(app, space?)`** — withdraw the offer. The app is untouched,
-every copy anyone took is untouched and keeps working, and the name is free
-again. Refused if the app was not published.
+**`app_unpublish(app, space?)`** — withdraw the offer. The app is unchanged,
+every installed copy is unchanged and keeps working, and the name becomes
+available again. Refused if the app was not published.
 
-**`app_published()`** — what is on offer, newest first. One line each:
+**`app_published()`** — lists published apps, newest first, one line each:
 
     - tally v1 — Tally: Count the votes (from yourname/tally, installs as
       tally, published 2026-08-14)
 
 Read it before you build something somebody may already have made.
 
-**`app_install(name, as?, space?)`** — take one.
+**`app_install(name, as?, space?)`** — install a copy of a published app.
 
 - `name` is the published name from `app_published`.
-- The address the copy lands at is, in order: `as` if you passed it; else the
-  source app's own slug, if nothing in the space holds that address; else the
-  published name, adding `-2`, `-3`, and so on until free. The source's slug
-  goes first on purpose — an app is written at its own address, and a copy that
-  reads like the app is easier to reason about. (A page written relatively works
+- The copy's address is the first of these that applies: `as` if you passed it;
+  else the source app's own slug, if nothing in the space holds that address;
+  else the published name, adding `-2`, `-3`, and so on until free. The source's
+  slug is preferred because an app is written for its own address, and a copy at
+  the same address is easier to reason about. (A page written relatively works
   either way; the platform gives every page a `<base href>` pointing at its own
   folder under the app's address.)
 - An explicit `as` already taken in the space — by an app, or by an address an
@@ -233,161 +245,164 @@ Read it before you build something somebody may already have made.
 - An installed app counts against the space's app ceiling like any other (the
   free tier allows five, the Plus plan has no limit, and trashed apps do not
   count).
-- The copy keeps the published app's `access`: an app written to be voted on has
-  to stay votable. `app_set` changes it afterwards.
+- The copy keeps the published app's `access` setting, so an app built for
+  anyone to vote on still accepts votes. `app_set` changes it afterwards.
 - The copy is not made the front page: `<space>.yaks.app/` lists the space's
   apps until somebody sets which app opens there (`app_set(app, home: true)`).
-- The install ends in a release of the copy: its `vocab.json` installed in its
-  own store, its commands listed under its own slug, its `worker.js` uploaded as
-  its own script. So the answer carries the deploy's own lines — components,
-  tools, worker — under the install's.
+- The install finishes by releasing the copy: its `vocab.json` is installed in
+  its own store, its commands are listed under its own slug, and its `worker.js`
+  is uploaded as its own script. So the answer includes the deploy's lines
+  (components, tools, worker) under the install's.
 
-The answer names the address, the file count, and the pin:
+The answer names the address, the file count, and the pinned version:
 
     installed tally v1 as ann/tally: https://ann.yaks.app/tally/ — 2 files,
     its own store and its own data, pinned to that version (app_update
     moves it)
 
-**`app_update(app, space?)`** — move an installed copy to whatever its publisher
-offers now. Below.
+**`app_update(app, space?)`** — update an installed copy to the version its
+publisher offers now. See "Updating an installed copy" below.
 
-## The gallery: being shown
+## The gallery
 
-Publishing makes an app installable. The gallery is the other half — being
-shown, on <https://yaks.app/gallery>, a public page of what people have made on
-yaks.app. They are deliberately two separate acts: an offer is between whoever
-made the app and whoever goes looking for one, and a listing is yaks.app putting
-somebody's app on its own front page.
+Publishing makes an app installable. The gallery, <https://yaks.app/gallery>, is
+a separate public page that shows apps people have made on yaks.app. Publishing
+and listing are deliberately separate: an offer is between whoever made the app
+and whoever goes looking for one, while a gallery listing is yaks.app showing
+somebody's app on its own page.
 
 **`app_publish(app, gallery: true)`**, or **`app_set(app, gallery: true)`**
-later, puts a published app forward. Only when the person has said they want it
-shown: it is their app, their name and their address on a public page, so it is
-never something to assume. The app must be published — a gallery entry nobody
-can install is a picture of an app. It also needs a picture: upload one through
-the app's `/api/blob` door and pass its returned `eid` to
+later, asks for a published app to be listed. Do this only when the person has
+said they want it shown: the listing puts their app, their name and their
+address on a public page, so never assume it. The app must be published, since a
+gallery entry that cannot be installed is of no use. It also needs a screenshot:
+upload one through the app's `/api/blob` endpoint and pass its returned `eid` to
 `app_set(app, screenshot: '<eid>')`. This takes effect without deploying the
 app. An existing `og:image` in its `index.html` works too, though a chosen
 screenshot takes precedence. The screenshot can be cleared with
 `app_set(app, screenshot: '')` after withdrawing a listed app.
 
-It is not listed on the spot. Asking sends a letter to yaks.app carrying the
-app's title, its address, the line its owner wrote about it and who made it,
-with two links to answer by. Nothing appears anywhere until somebody at yaks.app
-opens the link that approves it. That is the whole design and it does not have a
-faster path: the page is ours, under our name.
+The app is not listed immediately. The request sends an email to yaks.app with
+the app's title, its address, the line its owner wrote about it and who made it,
+and two links for the answer. Nothing is listed anywhere until somebody at
+yaks.app opens the link that approves it. There is no faster path, because the
+gallery is yaks.app's own page, published under its name.
 
-The tool reports where it stands, and so does the app's pill on the space's own
-page:
+The tool reports the listing's status, and so does the app's status pill on the
+space's own page:
 
     not in the gallery
     waiting on us: it is not listed until we say yes, and a letter is on its
       way to the desk that decides
     listed in the gallery — https://yaks.app/gallery
 
-**Taking it back** is `app_set(app, gallery: false)`, and it is immediate. So is
-`app_unpublish`: an app nobody can install is not on the page. Both clear the
-ask as well as the listing, so putting it back later asks yaks.app once more.
+**Removing a listing**: `app_set(app, gallery: false)` removes it immediately.
+So does `app_unpublish`, because an app nobody can install is not listed. Both
+clear the pending request as well as the listing, so listing the app again later
+sends a new request to yaks.app.
 
-**Deleting** it takes it off the page at once too, and that one is different:
-nothing is written. A trashed app — and every app in a trashed space — simply
-stops being shown, and `app_restore` puts the listing back exactly as it was,
-with nobody asked twice.
+**Deleting** the app also removes it from the gallery immediately, but in a
+different way: the listing itself is not changed. A trashed app, and every app
+in a trashed space, is simply not shown, and `app_restore` restores the listing
+exactly as it was, without a new request.
 
 **`gallery_search(words, limit?)`** searches the listings, matching your words
-against each one's name and the line its maker wrote. It needs no account —
-signed out, it is one of the few tools this connector answers at all — and each
-result carries the `app_install` line that gives the person their own copy. Read
-it before building something from scratch.
+against each one's name and the line its maker wrote. It needs no account: it is
+one of the few tools this connector answers when signed out. Each result
+includes the `app_install` call that gives the person their own copy. Search it
+before building something from scratch.
 
     - Tally — Count the votes
       https://yourname.yaks.app/tally/
       app_install(name: 'tally')
 
-## What a copy shares: the code, and nothing else
+## What an installed copy shares
 
-An installed app is an ordinary app of the installer's. Its own address, its own
-store, its own file prefix, its own worker script, its own version history
-starting at v1. Their first row goes into a graph nobody else has ever touched.
-Nothing is synced, nothing phones home, and the publisher never sees any of it.
+An installed copy shares nothing but the code. It is an ordinary app in the
+installer's space, with its own address, its own store, its own file prefix, its
+own worker script and its own version history starting at v1. Its store starts
+empty. Nothing is synced, the copy sends nothing back to the publisher, and the
+publisher never sees any of its data.
 
-What travels is the app's own files — the pages, the stylesheets, the
-`vocab.json`, the `worker.js`. What does not:
+Only the app's own files are copied: the pages, the stylesheets, the
+`vocab.json`, the `worker.js`. What is not copied:
 
 - **Data.** Every row the publisher's copy holds stays there.
 - **Uploads.** The photos a visitor sent to the publisher's copy are that app's
   data, not its code, and stay behind.
-- **Version history.** The copy earns its own from the release the install
+- **Version history.** The copy's history starts with the release the install
   makes.
-- **Keys.** A connection is the space's, and the copy is in another space. The
-  copy asks for each connection the app uses instead: the installer's
+- **Keys.** A connection belongs to a space, and the copy is in another space.
+  Instead, the copy asks for each connection the app uses: the installer's
   connections page lists each as needed, with how to get its key, under the name
   the app's code reads it by, and the copy works once they connect their own.
-  Opening a connection to anyone does not travel either; the installer opens
-  theirs. `app_update` asks for any connection the new version gained.
+  Opening a connection to anyone is not copied either; the installer opens their
+  own. `app_update` asks for any connection the new version gained.
 - **Members.** The copy belongs to the installer's space and its guest list.
 
-## How an installed app runs
+## How an installed app runs, and the sandbox
 
 An installed app runs like the space's own apps. It is served at
 `<space>.yaks.app/<app>/` on the space's origin, with the browser's own
 `localStorage`, `sessionStorage`, IndexedDB and the sign-in cookie, and its
-words are shared with the space's other apps the way theirs are. Like them, it
-can read and change everything in the space the person using it can: the space
-is the trust boundary.
+vocabulary is shared with the space's other apps the way theirs is. Like them,
+it can read and change everything in the space the person using it can: the
+space is the trust boundary.
 
-**The sandbox, as an option.** The space's owner can wall one installed app off:
-`app_set(app, sandboxed: true)`, and `sandboxed: false` lets it out again. Every
-answer it gives then carries
+**The sandbox.** The space's owner can isolate one installed app with
+`app_set(app, sandboxed: true)`, and `sandboxed: false` removes the isolation.
+Every response the app serves then carries
 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups`, so
 the browser runs it in an origin of its own. What changes:
 
-- **Its API hears a token, never the cookie.** The page's `<base href>` is
-  `/<app>/~<token>/`, so relative paths work (`./app.js`,
+- **Its API calls are authorized by a token, never the cookie.** The page's
+  `<base href>` is `/<app>/~<token>/`, so relative paths work (`./app.js`,
   `import './api/client.js'`) and an absolute `/<app>/app.js` does not load.
-- **Storage is the platform's.** `localStorage` keeps each signed-in person's
-  keys in the app's store, up to a megabyte; `sessionStorage` lasts as long as
-  the page. IndexedDB, `document.cookie` and service workers are refused, and so
-  is the camera (and in Chrome, notifications).
-- **It reaches nothing else in the space.** Another app's address sees it as a
-  stranger, its `/api/files/` endpoint refuses it, and from its next release
-  (`app_deploy`) its words are planted in its own store and no other app borrows
-  from it.
+- **Browser storage is provided by the platform.** `localStorage` keeps each
+  signed-in person's keys in the app's store, up to a megabyte; `sessionStorage`
+  lasts as long as the page. IndexedDB, `document.cookie` and service workers
+  are refused, and so is the camera (and in Chrome, notifications).
+- **It has no access to the rest of the space.** Another app's address treats it
+  as a stranger, its `/api/files/` endpoint refuses it, and from its next
+  release (`app_deploy`) its vocabulary is installed in its own store only, and
+  no other app uses it.
 
-## What pinning means
+## Version pinning
 
-A copy is **pinned** to the version it took. Publishing again does not move
-anybody: the installer's copy keeps serving exactly what it served yesterday
-until someone calls `app_update`. That is the whole point — a publisher cannot
-change an app out from under the people using it, and an app someone is relying
-on does not change while they sleep.
+An installed copy is **pinned** to the version it installed. Publishing again
+does not update any copy: the installer's copy keeps serving exactly the same
+files until someone calls `app_update`. That is the purpose of pinning: a
+publisher cannot change an app that people rely on, and the app does not change
+unless someone in their space updates it.
 
 `app_published` shows the version on offer; the copy's own `app_versions` shows
 the version it is at.
 
-## What an update does
+## Updating an installed copy
 
 `app_update` replaces the code and keeps the data.
 
-**Before a byte moves**, the publisher's `vocab.json` is checked against the
-copy's store. A vocabulary that only grew is applied additively. One that would
-retype a property the copy's rows were written under is refused with the same
-message a deploy gives — `vote.count is already number` — and nothing moves at
-all: not the files, not the pin. The copy is exactly as it was.
+**Before any file is written**, the publisher's `vocab.json` is checked against
+the copy's store. A vocabulary that only grew is applied additively. One that
+would retype a property the copy's rows were written under is refused with the
+same message a deploy gives, `vote.count is already number`, and nothing
+changes: neither the files nor the pinned version. The copy stays exactly as it
+was.
 
 Then every file of the publisher's version is written over the copy, and **every
 file the copy has that the publisher does not is deleted.** That includes
 anything you wrote into the copy yourself — a tweak to its stylesheet, a page
-you added. What serves after is what the publisher wrote.
+you added. After the update, the copy serves exactly the publisher's files.
 
 Then the copy is released like any deploy: components installed, commands
-registered, `worker.js` uploaded, a new version recorded, and breaks from
-earlier versions closed. Then the pin moves.
+registered, `worker.js` uploaded, a new version recorded, and errors from
+earlier versions closed. Then the pinned version moves to the new one.
 
-What survives, always: every row they saved, every file they uploaded, and
-anything the store learned along the way. The answer confirms that, and reports
-how many files were written and how many removed.
+An update always keeps every row they saved, every file they uploaded, and
+everything else the store holds. The answer confirms that, and reports how many
+files were written and how many removed.
 
-Three refusals worth knowing:
+Three cases where `app_update` does not update:
 
 - The app was not installed from anywhere — it is their own app, and
   `app_deploy` releases what you write in it.
@@ -395,13 +410,13 @@ Three refusals worth knowing:
   all, and there is nothing to update it to.
 - It is already at that version — answered, not refused: "nothing to update".
 
-## Before you build
+## Installing instead of building
 
 `app_published()` is one call and costs nothing. When the person asks for
-something ordinary — a vote page, a chore chart, a signup sheet — look first.
-Installing takes a second, gives them their own copy with their own data, and
-you can `app_files` their copy afterwards to make it theirs. The only thing an
-install costs is one of the space's app slots.
+something common, such as a vote page, a chore chart or a signup sheet, check it
+first. Installing takes a second and gives them their own copy with their own
+data, and you can change their copy afterwards with `app_files`. An install
+costs only one of the space's app slots.
 
 ---
 

@@ -1,32 +1,35 @@
 ---
 doc:
-  title: Saving from another site
+  title: Web Clipping
 guide:
   slug: clipping
-  brief: saving a page from another site
+  brief: web clipping, saving a page from another site
   description: >-
-    Clipping a page somebody is reading into the app's store: a worker route
-    that fetches it and reads its JSON-LD, Open Graph and title, a
-    bookmarklet that opens it, why a script on another site cannot write
-    to an app, and what to tell the person when a site refuses a robot.
+    Web clipping, saving a page somebody is reading on another site into the
+    app's store: a worker route that fetches the URL and reads its JSON-LD,
+    Open Graph and meta tags and title with HTMLRewriter, one row per URL, a
+    recipe example that keeps the picture, a bookmarklet that opens the app's
+    clip page, why a script on another site cannot write to an app (no
+    cross-origin writes), and what to tell the person when a site blocks the
+    fetch.
 ---
 
-# Saving a page from another site
+# Web Clipping
 
-Somebody is reading something on somebody else's website — a recipe, a flat to
-rent, a paper, a jacket — and wants it in their app. This page is how that is
-built with what the platform has today: a route on the app's own `worker.js`
-that fetches the address and reads the metadata the page carries about itself,
-and a link on their bookmarks bar that starts it.
+**Web clipping** saves a page the person is reading on another website (a
+recipe, a flat to rent, a paper, a jacket) into their app. This page shows how
+to build it with what the platform has today: a route on the app's own
+`worker.js` that fetches the address and reads the metadata the page carries
+about itself, and a bookmarklet on their bookmarks bar that starts it.
 
-It is the same shape whatever they are saving. Recipes are the worked example at
-the end because a recipe page carries more metadata than most, so it exercises
-all three levels; the first half is what you write for anything.
+The code is the same whatever they are saving. The worked example at the end is
+recipes, because a recipe page carries more metadata than most and so uses all
+three levels; the first half of the page is what you write for any site.
 
-## Why the app fetches it, and the other page does not send it
+## Why the app fetches the page: no cross-origin writes
 
-The obvious design — a button on the other site that posts into the app — is not
-one you can build on yaks.app yet, and it is worth knowing why before you try.
+The obvious design, a button on the other site that posts into the app, cannot
+be built on yaks.app yet. This is why.
 
 An app's endpoints under `./api/` accept **same-origin requests carrying the
 person's cookie**. The person's sign-in cookie is `SameSite=Lax` and the
@@ -36,46 +39,46 @@ request arrived at, so a script running on `some-recipe-site.example` cannot
 one endpoint open to a page on another site is `./api/query`, answered as a
 signed-out stranger with the credentials stripped: a read, never a write.
 
-So the bookmarklet **opens the app** rather than posting into it. It hands the
-app the address of the page they are on, and the app — which is signed in,
-because it is their own tab on their own site — does the reading and the
-writing. That is the whole trick, and it is why the flow is: press the button,
-land in the app, see what was saved.
+So the bookmarklet **opens the app** rather than posting into it. It passes the
+app the address of the page they are on, and the app, which is signed in because
+it runs in their own tab on its own origin, does the reading and the writing. So
+the flow is: press the bookmarklet, the app opens, and it shows what was saved.
 
-Do not build around a token or an extension. Neither exists on yaks.app today,
-and a page that tells the person to paste an API key somewhere is a page
-teaching them a bad habit for an endpoint that is closed anyway.
+Do not build around an API token or a browser extension. Neither exists on
+yaks.app today, and a page that tells the person to paste an API key somewhere
+teaches them a bad habit, for an endpoint that refuses cross-origin writes
+anyway.
 
-## The metadata a page carries about itself
+## Page metadata: JSON-LD, Open Graph and the title
 
 Almost every page carries a machine-readable description of itself, and there
 are three levels of it. Use the best one the page offers.
 
 **1. JSON-LD** — a `<script type="application/ld+json">` block holding
-schema.org objects. This is the good one: a recipe arrives with its ingredients
-in a list, an article with its author and date, a product with its price. Most
-publishing software emits it without anyone asking.
+schema.org objects. This is the most structured level: a recipe arrives with its
+ingredients in a list, an article with its author and date, a product with its
+price. Most publishing software emits it by default.
 
 **2. Open Graph and meta tags** — `og:title`, `og:description`, `og:image`,
 `og:site_name`, `article:published_time`, and plain `<meta name=description>`.
 Nearly universal, because it is what a link preview in a chat app reads. It
 gives you a title, a sentence and a picture, and nothing structured.
 
-**3. The `<title>` and the words on the page.** The fallback. You always have
-the address and usually the title, and that alone is worth saving — a link with
-a name is better than a link.
+**3. The `<title>` and the text on the page.** The fallback. You always have the
+address and usually the title, and that alone is worth saving: a link with a
+title is more useful than a bare link.
 
-Write all three. A clipper that only understands JSON-LD works on the sites that
-have it and silently does nothing on the rest, which the person experiences as
-"it's broken".
+Handle all three. A clipper that only reads JSON-LD works on the sites that have
+it and silently does nothing on the rest, which the person reports as "it's
+broken".
 
-## Reading a page, in one pass
+## Parsing the page with `HTMLRewriter`
 
 `HTMLRewriter` is in the Workers runtime, so there is no parser to install. It
-streams, which is what keeps a page with a megabyte of advertising inside the
-worker's 50ms of CPU — a regex over the whole body does not.
+streams, which keeps parsing a page with a megabyte of advertising within the
+worker's 50ms CPU limit; a regex over the whole body does not.
 
-    // Everything the page declares about itself, from one read of it.
+    // The page's JSON-LD blocks, meta tags and title, in one pass.
     let read = async (res) => {
       let ld = [], meta = {}, title = '', chunk = ''
       await new HTMLRewriter()
@@ -100,12 +103,12 @@ worker's 50ms of CPU — a regex over the whole body does not.
 
 A text node arrives in chunks, so `lastInTextNode` is what tells you a script
 block has ended; without it, a long JSON-LD block comes out cut in half. And
-`.arrayBuffer()` at the end is not there for the bytes — it is what pulls the
-body through the rewriter, so the handlers run.
+`.arrayBuffer()` at the end is not there for the bytes: reading the body is what
+streams it through the rewriter, so the handlers run.
 
-Two small helpers make the JSON-LD workable. A document may be one object, a
-list of them, or a `@graph` wrapping the list; and any value in it may be a
-string, an object, or a list of either.
+The helpers below handle JSON-LD's two variable shapes. A document may be one
+object, a list of them, or a `@graph` wrapping the list; and any value in it may
+be a string, an object, or a list of either.
 
     // Every object the page's JSON-LD holds, flattened.
     let things = (blocks) => {
@@ -120,14 +123,14 @@ string, an object, or a list of either.
       return out.filter((n) => n && typeof n == 'object')
     }
 
-    // The first thing in a value that reads as words.
+    // The first text in a value.
     let str = (v) =>
       typeof v == 'string' ? v.trim()
       : Array.isArray(v) ? str(v[0])
       : v && typeof v == 'object' ? str(v.text ?? v.name ?? v.url)
       : ''
 
-    // The first thing in a value that reads as an address.
+    // The first URL in a value.
     let src = (v) =>
       typeof v == 'string' ? v.trim()
       : Array.isArray(v) ? src(v[0])
@@ -137,31 +140,31 @@ string, an object, or a list of either.
     let typed = (node, want) =>
       [].concat(node['@type'] ?? []).includes(want)
 
-`try { } catch { continue }` earns its place: a good many sites ship JSON-LD
-with a trailing comma or a raw newline in a string, and one bad block must not
-lose you the page.
+`try { } catch { continue }` is needed: many sites ship JSON-LD with a trailing
+comma or a raw newline in a string, and one invalid block must not lose you the
+page.
 
-## What to save
+## Storing the source URL, one row per URL
 
-Whatever else the app keeps, keep **where it came from**. That is a component of
-its own, in the app's `vocab.json`:
+Whatever else the app keeps, store **where the page came from**, in a component
+of its own declared in the app's `vocab.json`:
 
     { "$defs": {
         "source": { "properties": {
           "url": { "type": "string", "format": "uri" },
           "at":  { "type": "string", "format": "date-time" } } } } }
 
-Two properties, because they are two facts: the address the text came from, and
-when this app made its copy. `source.url` is what tells a page where to send
-somebody who wants the original, and `.source` is the filter for everything
-clipped rather than typed.
+It has two properties for two facts: the address the text came from, and when
+this app made its copy. `source.url` is what tells a page where to send somebody
+who wants the original, and `.source` is the filter for everything clipped
+rather than typed.
 
-**The same address clipped twice should be one row.** The cheapest way is to
-make the entity's own eid the address's hash — an eid you mint yourself defines
-the entity the first time and patches it every time after, so nothing has to be
-looked up and nothing can be saved twice:
+**The same address clipped twice should be one row.** The cheapest way is to use
+the address's hash as the entity's eid: an eid you mint yourself creates the
+entity on the first write and patches it on every later write, so nothing has to
+be looked up and nothing can be saved twice:
 
-    // The row this address gets, forever.
+    // The eid for an address: the same address always gets the same eid.
     let idOf = async (key) => {
       let bytes = await crypto.subtle.digest(
         'SHA-256', new TextEncoder().encode(key))
@@ -171,14 +174,15 @@ looked up and nothing can be saved twice:
 
     let eid = await idOf('clip:' + from)
 
-The other way is to ask first — `query('.source.url="' + from + '"')`, quoted
-because an address is full of `&` — and patch what comes back. It costs a
-subrequest and it lets two clips at once make two rows, so prefer the hash.
+The other way is to query first, with `query('.source.url="' + from + '"')`
+(quoted because an address often contains `&`), and patch the row it returns.
+That costs a subrequest, and two clips at the same moment can create two rows,
+so prefer the hash.
 
-## A worker that clips anything
+## A generic clipping worker
 
-Here is the generic part in full. It fetches the page, reads the three levels of
-metadata, and writes one bundle:
+Here is the generic worker in full. It fetches the page, reads the three levels
+of metadata, and writes one bundle:
 
     export default {
       async fetch(req, env) {
@@ -196,9 +200,9 @@ metadata, and writes one bundle:
         let got = await fetch(from, {
           headers: { 'user-agent': 'yaks.app clipper', accept: 'text/html' },
         })
-        // A site that will not answer a robot is not this app breaking, so
-        // save what the browser already told us and report that. (Returning
-        // 5xx would file an exception in the person's app every time.)
+        // A site that blocks automated requests is not an error in this app,
+        // so save the title the browser sent and report that. (Returning 5xx
+        // would file an exception in the person's app every time.)
         let page = got.ok
           ? await read(got)
           : { ld: [], meta: {}, title: told }
@@ -229,17 +233,17 @@ metadata, and writes one bundle:
       },
     }
 
-The status returned for a refusing site is the line worth reading twice. A 5xx
-out of a worker is filed as a break in the person's app and reported to their
-agent; a site that blocks robots is not a break, it is an everyday thing. So the
+Note the status the route returns when the site refuses. A 5xx from a worker is
+filed as an error in the person's app and reported to their agent, but a site
+that blocks automated requests is common and is not an error in the app. So the
 route returns 200 with `thin: true`, the clip page explains what happened, and
 the person keeps the link.
 
-## The recipe example
+## Example: clipping recipes
 
-A recipe page's JSON-LD is a schema.org `Recipe`, and the fields worth taking
-are `name`, `recipeIngredient`, `recipeInstructions`, `recipeYield`, `totalTime`
-and `image`. The app declares what it will filter on:
+A recipe page's JSON-LD is a schema.org `Recipe`, and the useful fields are
+`name`, `recipeIngredient`, `recipeInstructions`, `recipeYield`, `totalTime` and
+`image`. The app declares what it will filter on:
 
     { "$defs": {
         "recipe": { "properties": {
@@ -250,12 +254,12 @@ and `image`. The app declares what it will filter on:
           "url": { "type": "string", "format": "uri" },
           "at":  { "type": "string", "format": "date-time" } } } } }
 
-The ingredients and the method go in `doc.body`, as markdown. That is the
-guide's own rule — a property for what you filter, sort or draw as a field; the
-body for the words a person reads — and here it buys something concrete:
-`search()` reads `doc` and nothing else, so ingredients in the body are what
-makes "what can I do with a lemon" answerable, and the same list in a property
-of its own would be invisible to it.
+The ingredients and the method go in `doc.body`, as markdown. That follows the
+guide's rule: a property for what you filter, sort or draw as a field, and the
+body for the text a person reads. Here it has a concrete benefit: `search()`
+reads `doc` and nothing else, so ingredients in the body let a search such as
+"what can I do with a lemon" find the recipe, and the same list in a property of
+its own would not be searched.
 
     let minutes = (iso) => {
       let m = /^P(?:.*?T)?(?:(\d+)H)?(?:(\d+)M)?/.exec(String(iso ?? ''))
@@ -263,7 +267,8 @@ of its own would be invisible to it.
     }
 
     // recipeInstructions is a string, a list of strings, a list of
-    // HowToStep, or HowToSections holding those. All four, flattened.
+    // HowToStep, or HowToSections holding those. This flattens all four into
+    // one list of steps.
     let steps = (v) => {
       if (typeof v == 'string') {
         return v.split('\n').map((s) => s.trim()).filter(Boolean)
@@ -294,9 +299,9 @@ of its own would be invisible to it.
       }
     }
 
-**The picture, kept.** The site's copy can move, expire or go behind a login, so
-fetch the bytes and put them in the app's own store. The blob endpoint accepts
-them from a worker exactly as it accepts them from a page:
+**Storing the picture.** The site's copy can move, expire or go behind a login,
+so fetch the bytes and upload them to the app's own store. The blob endpoint
+accepts them from a worker exactly as it accepts them from a page:
 
     let kept = async (env, at) => {
       if (!at) return ''
@@ -316,13 +321,13 @@ them from a worker exactly as it accepts them from a page:
       return saved.ok ? (await saved.json()).eid : ''
     }
 
-It returns the bytes' own eid, which is what `recipe.image` holds — the same
-`text` property a photo an app uploaded would use, drawn back with
-`./api/blob/<eid>`. Every one of these is a subrequest, and the budget is 50 per
-request: the page, the picture, the upload and the write is four.
+`kept` returns the eid of the uploaded bytes, which is what `recipe.image`
+holds: the same `text` property a photo an app uploaded would use, displayed
+with `./api/blob/<eid>`. Each fetch here is a subrequest, and the limit is 50
+per request: the page, the picture, the upload and the write make four.
 
-Then the route's middle grows two lines. Where the generic worker built `title`
-and `body` from the meta tags, a recipe page overrides them:
+Then the middle of the route gains two lines. Where the generic worker built
+`title` and `body` from the meta tags, a recipe page overrides them:
 
     let dish = cooking(page.ld)
     let title = dish?.title || str(ld.name) || m['og:title'] ||
@@ -339,18 +344,18 @@ and `body` from the meta tags, a recipe page overrides them:
       source: { url: from, at: new Date().toISOString() },
     }]
 
-A page with no `Recipe` in it is still saved — as a `doc` with a `source`,
-findable by search, improvable later. That is the behaviour to aim for in any
+A page with no `Recipe` in it is still saved, as a `doc` with a `source` that
+search finds and the person can edit later. Aim for that behaviour in any
 clipper you write: never refuse to save something because you did not recognise
 it.
 
-## The clip page
+## The clip page (`clip.html`)
 
 The page the bookmarklet opens. It calls the route, shows what was saved, and
-carries a box for pasting an address by hand. Save it as `clip.html` beside
-`index.html` — `/clip` is the worker's route and `clip.html` is a file, two
-different addresses, and the worker's routes are matched before the app's files
-are looked at.
+has a box for pasting an address by hand. Save it as `clip.html` beside
+`index.html`. `/clip` is the worker's route and `clip.html` is a file, so they
+are two different addresses, and the worker's routes are matched before the
+app's files are looked at.
 
     <!doctype html>
     <meta charset="utf-8" />
@@ -406,12 +411,12 @@ drawn here.)
 
 ## The bookmarklet
 
-A bookmark whose address is a little program. The person drags it to their
-bookmarks bar once; after that, one press on any page sends its address to the
-clip page in a new tab.
+A **bookmarklet** is a bookmark whose address is a `javascript:` URL. The person
+drags it to their bookmarks bar once; after that, one press on any page sends
+its address to the clip page in a new tab.
 
-Put the link on a page of the app — the app's own home is the natural place —
-with a line telling them to drag it up:
+Put the link on a page of the app, usually the app's home page, with a line
+telling them to drag it to the bookmarks bar:
 
     <p>Drag this to your bookmarks bar:
       <a id="tool">Clip to my recipe box</a> — then press it on any page.</p>
@@ -423,50 +428,50 @@ with a line telling them to drag it up:
         '+"&title="+encodeURIComponent(document.title)))'
     </script>
 
-Building the `href` in script rather than typing it into the HTML gets the app's
-own address right in an installed copy, which lives at whatever address the
-person who installed it chose. `open(...)` leaves the person's page where it is
-and puts the app in a new tab; `location.href = …` instead if you would rather
-take them straight there.
+Building the `href` in a script, rather than typing it into the HTML, gets the
+app's own address right in an installed copy, which is served at whatever
+address the person who installed it chose. `open(...)` leaves the person's page
+where it is and puts the app in a new tab; `location.href = …` instead if you
+would rather take them straight there.
 
-Two things to know. A bookmarklet cannot be installed for somebody — every
+Two things to know. A bookmarklet cannot be installed for somebody: every
 browser makes the person drag it themselves, so the app has to tell them to drag
-it. And `document.title` is why the bookmarklet still helps on a site the worker
-cannot read: the browser is already on the page, so the title comes along even
-when the fetch is refused.
+it. And because the bookmarklet sends `document.title`, it still helps on a site
+the worker cannot read: the browser is already on the page, so the title is sent
+even when the fetch is refused.
 
-## When a site refuses
+## When a site blocks the fetch
 
-Plenty of sites answer a robot with a 403, a challenge page, or HTML with
-nothing in it. There is no way around that from a worker, and it is not a bug in
-the app.
+Many sites answer an automated request with a 403, a challenge page, or empty
+HTML. A worker cannot get around that, and it is not a bug in the app.
 
-What to tell the person, in plain language rather than a status code: **that
-site would not let us read it, so we saved the link and the title.** Then show
-them the row with its address, and let them add a note. They lose the
-ingredients, not the recipe.
+Tell the person, in plain language rather than a status code: **that site would
+not let us read it, so we saved the link and the title.** Then show them the row
+with its address, and let them add a note. The ingredients are missing, but the
+recipe's link and title are saved.
 
-Do not retry, do not pretend to be a browser you are not, and do not return 5xx
-— that files a break in their app and tells their agent about it, once per
-clipped page.
+Do not retry, do not send a user agent that claims to be a browser, and do not
+return 5xx, which files an error in their app and tells their agent about it,
+once per clipped page.
 
-## On a phone
+## Clipping on a phone
 
-The bookmarklet is a desktop gesture: mobile browsers make bookmarks hard to
-press and some will not run one at all. What works today is the paste box on the
-clip page — the person shares or copies the address in their browser, opens the
-app, and pastes. Put the box on the app's home too, and it is two taps.
+The bookmarklet works on desktop browsers: mobile browsers make bookmarks hard
+to press and some will not run one at all. What works on a phone today is the
+paste box on the clip page: the person shares or copies the address in their
+browser, opens the app, and pastes. Put the box on the app's home page too, and
+it takes two taps.
 
 A web app manifest can declare a `share_target`, and the platform does serve a
-`.webmanifest` — but it only takes effect once a browser has installed the app
-to the home screen, which is not something to promise a person today. Give them
-the paste box, and say the sharing sheet is coming rather than shipping a button
-that does nothing on their phone.
+`.webmanifest`, but it only takes effect once a browser has installed the app to
+the home screen, which is not something to promise a person today. Give them the
+paste box, and say that sharing from the phone's share sheet is coming, rather
+than shipping a button that does nothing on their phone.
 
-## What is not built yet
+## Limitations
 
 - **No writing into an app from another site.** No API token, and no endpoint
-  that accepts a cross-origin write. The bookmarklet is the whole of it.
+  that accepts a cross-origin write. The bookmarklet is the only mechanism.
 - **No browser extension.** An app is pages and a worker; there is nothing that
   packages one.
 - **No headless browser.** The worker fetches HTML. A page that draws itself
@@ -476,9 +481,10 @@ that does nothing on their phone.
 
 ---
 
-Related: worker routes, `env.STORE` and the limits are
-<https://yaks.app/docs/code.md>; declaring `recipe` and `source` is
-<https://yaks.app/docs/components.md>; the blob endpoint and pictures are
-<https://yaks.app/docs/files.md>; the filter syntax, including quoting an
-address, is <https://yaks.app/docs/querying.md>. The whole guide:
-<https://yaks.app/docs.md>.
+Related pages: worker routes, `env.STORE` and the limits are in Backend Code
+(<https://yaks.app/docs/code.md>); declaring `recipe` and `source` is in
+Components and vocab.json (<https://yaks.app/docs/components.md>); the blob
+endpoint and pictures are in Files and Uploads
+(<https://yaks.app/docs/files.md>); the query syntax, including quoting an
+address, is in Query Syntax (<https://yaks.app/docs/querying.md>). The whole
+guide: <https://yaks.app/docs.md>.

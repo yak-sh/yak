@@ -9,9 +9,9 @@
   this page is wrong and somebody has to fix it — so it says as little as it
   can get away with, and points at the guide for the rest (M-14370).
 
-  It is also still yaks.app's voice: plain words, short sentences, no hype. It
-  is the page for the person who asked "but where does it actually run" — the
-  lead says out loud that nobody needs to read it.
+  It is reference, like the rest of the guide: explicit and technical, in plain
+  words and short sentences, with no hype. It is the page for the person who
+  asked "but where does it actually run".
 
   It is a page of the documentation (docs.ts, T-37752), drawn at
   /docs/technical from this file, which is served as it is written at
@@ -20,7 +20,7 @@
   app. /technical answers a 301 to it.
 -->
 
-# Technical details
+# Technical Details
 
 This page explains how yaks.app hosts apps, stores data, runs code, controls
 access, and applies limits. For setup and everyday use, see [Help](/help).
@@ -234,8 +234,7 @@ These limits apply to both plans:
 
 - **App email uses yaks.app addresses.** An app sends and receives at
   `<space>.<app>@yaks.app` — the space's front page at `<space>@yaks.app` — and
-  a domain of your own cannot receive app mail, even when it serves the app
-  pages.
+  a custom domain cannot receive app mail, even when it serves the app pages.
 - **No server-side image resizing.** An app can resize a photo in the browser
   before uploading it. yaks.app reads image dimensions but does not otherwise
   process the image.
