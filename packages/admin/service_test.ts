@@ -1,6 +1,6 @@
 // The deploy catch-up through its doors: a head Builds never deployed gets one
 // build and two reports, and a head that is live, holds the same Worker
-// source or was rolled back past gets none.
+// source, is still building or was rolled back past gets none.
 import { equal, match, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -33,6 +33,7 @@ let fixture = (
   let at = { now: landed }
   let looked = 0
   let started = 0
+  let building = false
   let reports: [Error, Record<string, unknown>][] = []
   let doors: Doors = {
     main: () => Promise.resolve({ sha: HEAD, at: landed }),
@@ -46,6 +47,7 @@ let fixture = (
       })
     },
     same: () => Promise.resolve(same),
+    building: () => Promise.resolve(building),
     start: () => {
       started++
       return Promise.resolve('build aa194fb5 queued')
@@ -74,6 +76,9 @@ let fixture = (
     },
     get started() {
       return started
+    },
+    set building(now: boolean) {
+      building = now
     },
   }
 }
@@ -131,6 +136,18 @@ test('a pending build answers the start and is not reported', async () => {
   equal(f.reports.length, 0)
   f.at.now += BOUND - MIN
   equal((await f.look()).step, 'wait')
+})
+
+test('a late head whose build is running waits for it, unreported', async () => {
+  let f = fixture()
+  f.building = true
+  f.at.now = landed + LATE
+  equal((await f.look()).step, 'wait')
+  equal([f.started, f.reports.length], [0, 0])
+  f.building = false
+  f.at.now += MIN
+  equal((await f.look()).step, 'rebuild')
+  equal(f.started, 1)
 })
 
 test('a live head, the same source or a newer rollback starts nothing', async () => {

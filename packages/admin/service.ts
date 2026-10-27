@@ -7,7 +7,12 @@
 // yak serves from wrangler, and compares the two in this checkout's git
 // through the build's watch paths. Wrangler is asked only about a late head
 // that is not yet live: its OAuth refresh rewrites one shared file without a
-// lock (deploys.ts `deploymentLists`), so its readers stay rare.
+// lock (deploys.ts `deploymentLists`), so its readers stay rare. Whether
+// Builds is running the head's build is read from the check run Builds keeps
+// on the commit in GitHub, `Workers Builds: yak`, which is in progress from
+// the moment the build runs until it ends. `gh` reads it as the box's own
+// GitHub sign-in, where Builds' own API would take one more credential, a
+// Workers CI token.
 //
 // The build is started through main's deploy hook, a URL that can do nothing
 // but start that build, kept in the vault and named by the config. The
@@ -36,6 +41,7 @@ import {
   stuck,
 } from './catchup.ts'
 import {
+  command,
   type Deployment,
   git,
   needGit,
@@ -85,6 +91,8 @@ export type Doors = {
   live: () => Promise<Omit<Live, 'has'>>
   /** whether two commits hold the same Worker source */
   same: (a: string, b: string) => Promise<boolean>
+  /** whether Workers Builds is running a build of a commit */
+  building: (sha: string) => Promise<boolean>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
   now: () => number
@@ -95,6 +103,9 @@ export type Doors = {
 type Report = NonNullable<Host['report']>
 
 let SHA = /^[0-9a-f]{40}\b/
+
+/** The check run Workers Builds keeps on a commit it builds for `yak`. */
+let CHECK = 'Workers Builds: yak'
 
 /** The box's doors: origin and this checkout's git, wrangler, the hook. */
 export let box = (
@@ -166,6 +177,17 @@ export let box = (
       }
       return r.code == 0
     },
+    building: async (sha) => {
+      let runs = `repos/{owner}/{repo}/commits/${sha}/check-runs?check_name=` +
+        `${encodeURIComponent(CHECK)}&status=in_progress`
+      let count = await command(
+        dir,
+        'gh',
+        ['api', runs, '--jq', '.total_count'],
+        stopping,
+      )
+      return Number(count) > 0
+    },
     start: async () => {
       let hook = options.hook
       if (!hook) return 'no deploy hook is configured, so none was started'
@@ -208,6 +230,7 @@ export let pass = async (
     ...served,
     has: served.sha == tip.sha || await doors.same(served.sha, tip.sha),
   }
+  if (!live.has) head.building = await doors.building(tip.sha)
   next = step(head, doors.now(), live, late, bound)
   let context = (fault: string, answer: string) => ({
     fault: `${fault}:yak`,

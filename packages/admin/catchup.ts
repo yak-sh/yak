@@ -4,23 +4,28 @@
 // failure, because nothing failed: main and production quietly disagree until
 // the next push. So the box looks (service.ts), and this decides.
 //
-// A head gets `LATE` to have its build under way, since Builds starts one
-// within seconds of a push. Past it, the catch-up asks main's deploy hook for
-// a build once, marking the commit `rebuilt{said}` with what Builds answered.
-// The hook starts none while one is pending, so a build that is merely slow
-// costs nothing and is not reported; a build the hook did start is. A `BOUND`
-// later, still not live, the catch-up marks the
+// A head gets `LATE` to go live, since Builds starts a build within seconds of
+// a push. Past it, a head Builds is still building waits: its build is under
+// way, only slower than LATE. Otherwise the catch-up asks main's deploy hook
+// for a build once, marking the commit `rebuilt{said}` with what Builds
+// answered. The hook starts none while one is queued or initializing, so a
+// build that is merely waiting its turn costs nothing and is not reported; a
+// build the hook did start is. The hook would start a second build beside a
+// running one (Cloudflare's deploy hooks page), which is why a running one is
+// read first. A `BOUND` later, still not live, the catch-up marks the
 // commit `failed{reason}`, reports that, and starts nothing more for it: the
 // build's own log says why, and the next push starts over. A rollback newer
 // than the head is an operator's choice and is left alone. Removing the marks
 // asks for another try.
 
-/** How long a push may go with no build under way. Builds queues one within
- * seconds of the push, and a build of `yak` takes 78 s at the median (248
- * successful ones, 2026-10-11 to 13). Asking early costs one more build of the
- * same commit at worst, and none while one is pending (the hook answers
- * `already_exists`). On 2026-10-21 two pushes got no build at all, during and
- * after a GitHub webhook delay, and waited 15 minutes for the catch-up. */
+/** How long a push may go not live before the catch-up looks for its build.
+ * Builds queues one within seconds of the push, and a build of `yak` took 78 s
+ * at the median (248 successful ones, 2026-10-11 to 13); on 2026-10-27 pushes
+ * went live 3 to 5 minutes after they landed, behind each other's builds.
+ * Looking early costs nothing while the head's build runs (it waits) or is
+ * queued (the hook answers `already_exists`). On 2026-10-21 two pushes got no
+ * build at all, during and after a GitHub webhook delay, and waited 15 minutes
+ * for the catch-up. */
 export let LATE = 3 * 60_000
 
 /** How long main's head may take to go live once its build was asked for:
@@ -29,11 +34,13 @@ export let LATE = 3 * 60_000
  * the median, 640 s at most. */
 export let BOUND = 15 * 60_000
 
-/** main's head: its commit, when origin first showed it (ms), and when the catch-up
- * started its build and gave up on it, if it has. */
+/** main's head: its commit, when origin first showed it (ms), whether Workers
+ * Builds is running a build of it (once read), and when the catch-up started
+ * its build and gave up on it, if it has. */
 export type Head = {
   sha: string
   at: number
+  building?: boolean
   rebuilt?: number
   failed?: boolean
 }
@@ -68,8 +75,10 @@ export type Step =
 /// step(h, LATE) -> 'look'
 /// step(h, LATE, { ...l, has: true }) -> 'live'
 /// step(h, LATE, l) -> 'rebuild'
+/// step({ ...h, building: true }, LATE, l) -> 'wait'
 /// step(h, LATE, { ...l, at: 1, rollback: true }) -> 'held'
 /// step({ ...h, rebuilt: BOUND }, BOUND + LATE) -> 'wait'
+/// step({ ...h, rebuilt: BOUND, building: true }, 2 * BOUND, l) -> 'wait'
 /// step({ ...h, rebuilt: BOUND }, 2 * BOUND, l) -> 'fail'
 /// step({ ...h, rebuilt: BOUND, failed: true }, 9 * BOUND, l) -> 'done'
 /** What to do about main's head at `now`, given what is live once read. */
@@ -90,7 +99,7 @@ export let step = (
     ? 'live'
     : live.rollback && live.at > head.at
     ? 'held'
-    : now - live.at < (head.rebuilt ? bound : late)
+    : head.building || now - live.at < (head.rebuilt ? bound : late)
     ? 'wait'
     : head.rebuilt
     ? 'fail'
@@ -135,9 +144,9 @@ export let missed = (head: Head, live: Live, answer: string, late = LATE) =>
   new NotLive(
     `main's head ${short(head.sha)} is not live ${
       minutes(late)
-    } after it was pushed; yak serves ${short(live.sha)}. No Workers Build ` +
-      `deployed it, so the deploy catch-up started main's build through its ` +
-      `deploy hook: ${answer}`,
+    } after it was pushed; yak serves ${short(live.sha)}. No Workers ` +
+      `Build of it is running or deployed it, so the deploy catch-up ` +
+      `started main's build through its deploy hook: ${answer}`,
   )
 
 /** Why the catch-up gave up on a commit whose build it started. */
