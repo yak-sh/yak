@@ -39,5 +39,6 @@ export {
   type ReportedRun,
   type Reporter,
   type Reporters,
+  waited,
 } from './host.ts'
 export { type Files, type Options, Regressed, run } from './runner.ts'

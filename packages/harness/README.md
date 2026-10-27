@@ -99,12 +99,15 @@ produces an overhead alert.
 Each phase uses the committed `steps.baseline.json` `tool-step` reference and
 the slack its noise measured. A whole benchmark step conservatively bounds each
 constituent phase. A session's own median never changes that fixed limit. Only
-samples for the current step are considered. A metric reports once per worker,
-on its second excess and never while the box is loaded (as a bench regression
-counts); the fixed-message report reaches the tracker, with numbers in tags.
-Judging the load samples a second of the box's CPU, beside the session: the next
-step never waits on it. Missing journal marks are omitted, not guessed. Bounded
-scalar transcript reads keep observation independent of transcript age.
+samples for the current step are considered. A phase is judged by what load does
+not move: its wall time less what the worker's thread waited for a CPU over it
+(@yaks/benchmark `waited`, read at each commit that writes a transcript line, a
+call's execution or an ask's attempt), so a loaded box neither hides an excess
+nor makes one. A metric reports once per worker, on its second excess; the
+fixed-message report reaches the tracker, with numbers in tags, and the next
+step never waits on its delivery. Missing journal marks are omitted, not
+guessed. Bounded scalar transcript reads keep observation independent of
+transcript age.
 
 ```sh
 deno task bench harness-steps

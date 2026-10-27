@@ -7,6 +7,7 @@ import {
   overheadExcess,
   overheadLimit,
   overheadSamples,
+  waits,
 } from './overhead.ts'
 const row = (
   eid: string,
@@ -82,18 +83,28 @@ test('input and missing execution marks are not guessed as harness overhead', ()
   )
   equal(overheadSamples(entries, []), [])
 })
-test('an excess while the load is judged is neither counted nor judged again', async () => {
-  const seen = new Map([['dispatch', 1]])
-  const load = Promise.withResolvers<boolean>()
-  let judged = 0
-  const crowded = () => (judged++, load.promise)
-  const first = overheadDue(seen, 'dispatch', crowded)
-  const second = overheadDue(seen, 'dispatch', crowded)
-  load.resolve(false)
-  equal([await first, await second, judged], [true, false, 1])
+test('a metric reports once, on its second excess', () => {
+  const seen = new Map<string, number>()
+  equal([1, 2, 3].map(() => overheadDue(seen, 'dispatch')), [
+    false,
+    true,
+    false,
+  ])
 })
-test('a loaded box leaves the next excess to be judged again', async () => {
-  const seen = new Map([['dispatch', 1]])
-  await overheadDue(seen, 'dispatch', () => Promise.resolve(true))
-  equal(await overheadDue(seen, 'dispatch'), true)
+test('time a phase waited for a CPU is not overhead; any other wait is', () => {
+  const slow = [row('a', 1, 0, { ask: {} }), row('c', 2, 10, { call: {} })]
+  const claimed = [mark('c', 210, 'execution', 'p')]
+  const dispatch = (wait: number) =>
+    overheadExcess(overheadSamples(slow, claimed, new Set(), () => wait))
+  equal([dispatch(190).length, dispatch(0).length], [0, 1])
+})
+test('what load took between two instants is read at the commits after each', () => {
+  const clock = [100, 200, 300]
+  const read = [5, 8, undefined, 20]
+  const load = waits(() => read.shift(), () => clock.shift()!)
+  for (let i = 0; i < 4; i++) load.note()
+  equal(
+    [load.between(150, 300), load.between(0, 150), load.between(150, 500)],
+    [12, 3, 0],
+  )
 })

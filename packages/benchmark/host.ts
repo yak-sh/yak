@@ -102,3 +102,18 @@ export let busy = async (ms = 1000): Promise<number | undefined> => {
     ? undefined
     : (after - before) / (took * 1000 * navigator.hardwareConcurrency)
 }
+
+/** How long the calling thread has waited for a CPU since it started, in ms:
+ * the time other work took from it, as Linux keeps it (schedstat's run delay);
+ * undefined where the platform does not say. Two readings bracket what load
+ * added to a span of the thread's work, so wall time less their difference is
+ * what the span would have taken on an idle box. */
+export let waited = (): number | undefined => {
+  try {
+    let delay = Deno.readTextFileSync('/proc/thread-self/schedstat')
+      .split(' ')[1]
+    return delay ? Number(delay) / 1e6 : undefined
+  } catch {
+    return undefined
+  }
+}

@@ -158,6 +158,11 @@ without making anything wait for a CPU. A loaded run banks nothing, and a loaded
 check past its limit is `loaded`, not `regressed`: it can tell nothing either
 way. A box's load average says less: a container's often reads its host's.
 
+A live observer cannot rest the box first, so it judges what load does not move
+instead: `waited()` is how long the calling thread has waited for a CPU (Linux's
+run delay), and wall time less what two readings add is what the work between
+them would have taken on an idle box.
+
 ```ts
 import { type Files, type Host, Regressed, run } from '@yaks/benchmark'
 import { equal, ok, throws } from '@yaks/testing'
@@ -379,7 +384,7 @@ try {
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
 | `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
-| `.`      | `busy`, `configure`, `host`                                                                                                                                                                                                                     | Process reporter factory and current host context. |
+| `.`      | `busy`, `waited`, `configure`, `host`                                                                                                                                                                                                           | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
 

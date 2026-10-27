@@ -1,15 +1,12 @@
 // Native harness overhead, excluding provider latency and the command itself.
 // Fixed bounds come from the same committed reference as the bench, with the
-// noise it measured, and an excess counts as the bench's does: repeated, on a
-// box that was not loaded.
+// noise it measured. A phase is judged by what load does not move: its wall
+// time less what this process's thread waited for a CPU over it, so a loaded
+// box neither hides an excess nor makes one.
 import type { Bundle, Comp } from '@yaks/graph'
+import { hook } from '@yaks/graph'
 import type { Host } from '@yaks/host'
-import {
-  type Baseline,
-  busy,
-  limit as benchmarkLimit,
-  loaded,
-} from '@yaks/benchmark'
+import { type Baseline, limit as benchmarkLimit, waited } from '@yaks/benchmark'
 import type { Runner, Step } from '@yaks/session'
 import { applied } from '@yaks/journal'
 import { logFor } from '@yaks/journal/graph'
@@ -30,13 +27,18 @@ export const overheadLimit: number = benchmarkLimit(
 const comp = (b: Bundle, k: string) => b[k] as Comp | undefined
 const at = (b: Bundle) => Date.parse(String(comp(b, 'created')?.at))
 export type Mark = { at: number; patch: Bundle }
+/** What load took from the work between two instants (ms since the epoch). */
+export type Wait = (from: number, to: number) => number
 
-/** Exact claim/release history; missing boundaries produce no estimate. */
+/** Exact claim/release history; missing boundaries produce no estimate. Each
+ * phase is its wall time less what `wait` says load took from it. */
 export const overheadSamples = (
   entries: Bundle[],
   marks: Mark[],
   inputs = new Set<string>(),
+  wait: Wait = () => 0,
 ): Overhead[] => {
+  const span = (from: number, to: number) => to - from - wait(from, to)
   const rows = entries.toSorted((a, b) =>
     Number(comp(a, 'entry')?.seq) - Number(comp(b, 'entry')?.seq)
   )
@@ -53,14 +55,14 @@ export const overheadSamples = (
     if (row.call) {
       const claim = history(id, 'execution', true)
       if (claim !== undefined && claim >= at(row)) {
-        samples.push({ step: id, metric: 'dispatch', ms: claim - at(row) })
+        samples.push({ step: id, metric: 'dispatch', ms: span(at(row), claim) })
       }
     }
     if (row.result) {
       const r = comp(row, 'result')!
       const claim = history(String(r.call), 'execution', true)
       if (claim !== undefined && typeof r.ms == 'number') {
-        const ms = at(row) - claim - r.ms
+        const ms = span(claim, at(row)) - r.ms
         if (ms >= 0) samples.push({ step: id, metric: 'tool-overhead', ms })
       }
     }
@@ -81,7 +83,7 @@ export const overheadSamples = (
       if (priorAsk && (release === undefined || at(priorAsk) > at(result))) {
         continue
       }
-      const ms = claim - Math.max(at(result), release ?? at(result))
+      const ms = span(Math.max(at(result), release ?? at(result)), claim)
       if (ms >= 0) samples.push({ step: id, metric: 'preflight', ms })
     }
   }
@@ -92,30 +94,39 @@ export const overheadSamples = (
 export const overheadExcess = (samples: Overhead[], limit = overheadLimit) =>
   samples.filter((s) => s.ms > limit)
 
-/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') ~> true
-/// overheadDue(new Map(), 'dispatch') ~> false
-/// overheadDue(new Map([['dispatch', 1]]), 'dispatch', async () => true) ~> false
+/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') -> true
+/// overheadDue(new Map(), 'dispatch') -> false
 /** Whether a metric's excess reports now: once, on its second excess in a
- * worker, and not while the box is loaded, when the excess is not counted and
- * the next one is judged again. One slow step is noise until another repeats
- * it, and a loaded box times its other work. `crowded` is asked only then; an
- * excess while it is asked counts toward nothing. */
-export const overheadDue = async (
-  seen: Map<string, number>,
-  metric: string,
-  crowded: () => Promise<boolean> = () => Promise.resolve(false),
-): Promise<boolean> => {
+ * worker. One slow step is noise until another repeats it. */
+export const overheadDue = (seen: Map<string, number>, metric: string) => {
   const n = (seen.get(metric) ?? 0) + 1
   seen.set(metric, n)
-  if (n != 2) return false
-  if (!await crowded()) return true
-  seen.set(metric, 1)
-  return false
+  return n == 2
 }
 
-/** Whether other work keeps the box loaded, from a second of its CPU use
- * (@yaks/benchmark `busy` and `loaded`). */
-const crowded = async () => loaded({ busy: await busy() ?? null })
+/** What load took from this thread between two instants, from readings of
+ * `waited` (@yaks/benchmark) noted at commits: the first reading at or after
+ * each instant. Where either has none, nothing is known and nothing taken. */
+export const waits = (
+  read: () => number | undefined = waited,
+  now: () => number = Date.now,
+  size = 1024,
+): { note: () => void; between: Wait } => {
+  const readings: [number, number][] = []
+  const after = (t: number) => readings.find(([at]) => at >= t)?.[1]
+  return {
+    note: () => {
+      const w = read()
+      if (w === undefined) return
+      readings.push([now(), w])
+      if (readings.length > size) readings.shift()
+    },
+    between: (from, to) => {
+      const a = after(from), b = after(to)
+      return a === undefined || b === undefined ? 0 : Math.max(0, b - a)
+    },
+  }
+}
 
 /** Read only a bounded scalar tail. One report per metric per worker; the fixed
  * message groups recurrence in the tracker, not one bug per observation. */
@@ -124,15 +135,30 @@ export const overheadEach = (
   each?: Runner['each'],
 ): NonNullable<Runner['each']> => {
   const seen = new Map<string, number>()
+  // Every phase starts and ends at a commit that writes a transcript line, a
+  // call's execution or an ask's attempt; a reading at each bounds its wait.
+  const load = waits()
+  host.graph.use({
+    name: '@yaks/harness/overhead',
+    admission: () => true,
+    hooks: {
+      commit: hook(
+        ['entry', 'execution', 'attempt'],
+        (bundles) => (load.note(), bundles),
+      ),
+    },
+  })
   const failed = (session: string, error: unknown) =>
     host.report?.(error, {
       during: { session },
       tags: { handler: 'native-overhead' },
     })
-  const judge = (session: string, sample: Overhead) =>
-    overheadDue(seen, sample.metric, crowded)
-      .then((due) =>
-        due && host.report?.(
+  const judge = (session: string, sample: Overhead) => {
+    if (!overheadDue(seen, sample.metric)) return
+    // The next step never waits on a report's delivery.
+    Promise.resolve()
+      .then(() =>
+        host.report?.(
           new Error(
             `Native ${sample.metric} overhead exceeded its benchmark reference`,
           ),
@@ -150,6 +176,7 @@ export const overheadEach = (
       )
       .catch((error) => failed(session, error))
       .catch((failure) => console.error('overhead reporter failed', failure))
+  }
   return async (step: Step, session?: string) => {
     await each?.(step, session)
     if (!session || step.did == 'nothing') return
@@ -188,13 +215,16 @@ export const overheadEach = (
       }
       for (
         const sample of overheadExcess(
-          overheadSamples(rows, marks, new Set(input.map((b) => b.entity.eid))),
+          overheadSamples(
+            rows,
+            marks,
+            new Set(input.map((b) => b.entity.eid)),
+            load.between,
+          ),
         )
       ) {
         if (!added.has(sample.step) && !needed.has(sample.step)) continue
-        // Judging the box's load takes a second of it: the next step never
-        // waits on the judgement of this one.
-        void judge(session, sample)
+        judge(session, sample)
       }
     } catch (error) {
       await failed(session, error)
