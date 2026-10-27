@@ -24,9 +24,22 @@ import {
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
-import { currentStatus, type Deps, react, type Step } from './react.ts'
+import {
+  currentStatus,
+  type Deps,
+  react,
+  type Reading,
+  reading,
+  type Step,
+} from './react.ts'
 import { hasAsk, openOf, usingOf } from './reach.ts'
-import { kindOf, seqOf, type TranscriptStatus } from './state.ts'
+import {
+  kindOf,
+  openCalls,
+  seqOf,
+  statusOf,
+  type TranscriptStatus,
+} from './state.ts'
 import { UnknownSession } from './unknown.ts'
 import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
 
@@ -252,7 +265,12 @@ let looking = (g: Graph) => {
 }
 
 // One step, aborted if its request is withdrawn while it runs.
-let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
+let step = async (
+  g: Graph,
+  session: Eid,
+  r: Runner,
+  read?: Reading,
+): Promise<Step> => {
   let stop = new AbortController()
   let signal = r.signal ? AbortSignal.any([r.signal, stop.signal]) : stop.signal
   let look = () =>
@@ -264,28 +282,53 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
   let tick = r.streaming ? setInterval(look, r.look ?? 1000) : undefined
   if (r.streaming) looking(g).set(session, look)
   try {
-    return await react(g, session, { ...r, owner: r.holder, signal })
+    return await react(g, session, { ...r, owner: r.holder, signal }, read)
   } finally {
     clearInterval(tick)
     if (looking(g).get(session) == look) looking(g).delete(session)
   }
 }
 
-// A cancelled task withdraws the work its transcript was doing.
+// A cancelled task withdraws the work its transcript was doing: it stops the
+// transcript, unless the status it was read in is stopped already. Answers
+// whether it did.
+let cancelled = async (
+  g: Graph,
+  session: Eid,
+  status: TranscriptStatus,
+): Promise<boolean> => {
+  if (status == 'stopped' || !holds(g)) return false
+  let held = await g.read(`.task&.claim.session=${session}&.cancelled`)
+  if (!held.length) return false
+  await g.apply([{
+    entity: { eid: derivedEid(`${session}:cancelled`) },
+    entry: { session },
+    [STOP_ENTRY]: {},
+  }], { trusted: true })
+  return true
+}
+
+// The status a pass that takes no step from it starts in.
 let prepared = async (g: Graph, session: Eid) => {
   let status = await currentStatus(g, session)
-  let held = holds(g)
-    ? await g.read(`.task&.claim.session=${session}&.cancelled`)
-    : []
-  if (held.length && status != 'stopped') {
-    await g.apply([{
-      entity: { eid: derivedEid(`${session}:cancelled`) },
-      entry: { session },
-      [STOP_ENTRY]: {},
-    }], { trusted: true })
-    status = await currentStatus(g, session)
+  return await cancelled(g, session, status)
+    ? await currentStatus(g, session)
+    : status
+}
+
+// What a pass that takes a step reads of its transcript, once (./react.ts
+// `reading`), and the status the step starts in: every check before the step
+// judges the reading the step then acts on.
+let readied = async (
+  g: Graph,
+  session: Eid,
+  deps: Deps,
+): Promise<{ read: Reading; status: TranscriptStatus }> => {
+  let read = await reading(g, session, deps)
+  if (await cancelled(g, session, statusOf(read.entries, read.ended))) {
+    read = await reading(g, session, deps)
   }
-  return status
+  return { read, status: statusOf(read.entries, read.ended) }
 }
 
 // The steps a held transcript takes: until one does nothing, or it ends.
@@ -384,8 +427,13 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
   }
   let p: Pass = { again: true, done: Promise.resolve() }
   here.set(session, p)
+  // Two passes here over one transcript, a settle and an advance, go one after
+  // the other, the later waiting on the earlier: the lease, held under this
+  // process's one holder, does not keep them apart.
+  let first = advancing(g).get(session)?.done
   p.done = (async () => {
     try {
+      await first?.catch(() => {})
       while (p.again && !r.stopping?.aborted) {
         p.again = false
         let seen = await held(g, session, r)
@@ -459,11 +507,14 @@ let advance = (
   }
   let pass: Advance = { done: Promise.resolve(), joined: [] }
   here.set(session, pass)
+  // A settle going here goes first, as one waits on an advance (`settle`).
+  let first = going(g).get(session)?.done
   let end = async () => {
     await ended(g, session, r)
     pass.told = true
   }
   let done = Promise.resolve().then(async () => {
+    await first?.catch(() => {})
     if (!await answering(g, session, r)) {
       let status = await prepared(g, session)
       if (ENDED.includes(status)) {
@@ -485,13 +536,13 @@ let advance = (
       report: (error) => r.report?.(error, session, 'lease'),
     }, async (stopping) => {
       if (stopping.aborted) return
-      let status = await prepared(g, session)
+      let { read, status } = await readied(g, session, r)
       if (ENDED.includes(status)) {
         await end()
         return
       }
       if (!await admitted(g, session, r)) return
-      let s = pass.took = await step(g, session, { ...r, stopping })
+      let s = pass.took = await step(g, session, { ...r, stopping }, read)
       await r.each?.(s, session)
       if (ENDED.includes(s.status)) await end()
     })
@@ -686,30 +737,28 @@ export let running = (g: Graph, runner: Runner): Handlers => {
           let [call] = await g.get([e.entity.eid])
           let session = (call?.entry as Comp | undefined)?.session
           if (!call?.tool_async || !session || !r.asyncTools) return
-          if (
-            ['stopped', 'failed'].includes(await prepared(g, String(session)))
-          ) return
-          if (
-            (await g.read(
-              `.result.call=${call.entity.eid} .limit=1 .fields=entity.eid`,
-            )).length
-          ) return
+          // The tool runner's claim, not the session's lease, serializes this call.
+          // A restarted effect inspects uncertain execution instead of replaying it.
+          let deps = {
+            ...r,
+            owner: r.holder,
+            asyncTools: false,
+            runCall: call.entity.eid,
+          }
+          let { read, status } = await readied(g, String(session), deps)
+          if (['stopped', 'failed'].includes(status)) return
+          // A call a result answers is done.
+          let open = openCalls(read.entries)
+          if (!open.some((b) => b.entity.eid == call.entity.eid)) return
           const source = (call.call as Comp | undefined)?.source
-          const [asked] = source ? await g.get([String(source)], ['using']) : []
+          const asked = read.entries.find((b) => b.entity.eid == source)
           if (
             r.answers && !await r.answers(asked?.using as Comp | undefined)
           ) {
             await attempt?.defer?.(1000)
             return
           }
-          // The tool runner's claim, not the session's lease, serializes this call.
-          // A restarted effect inspects uncertain execution instead of replaying it.
-          let s = await react(g, String(session), {
-            ...r,
-            owner: r.holder,
-            asyncTools: false,
-            runCall: call.entity.eid,
-          })
+          let s = await react(g, String(session), deps, read)
           await r.each?.(s, String(session))
         },
       }

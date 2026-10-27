@@ -92,6 +92,16 @@ type Known = Line & { found: Eid[] }
 const KEPT = 1024
 let memories = new WeakMap<Graph, Map<string, Known>>()
 
+// The tables each archetype holds, by its eid. An archetype is named by the
+// tables it holds (@yaks/archetype), so what one says never changes, and every
+// reading of a graph shares what any has read.
+let shaped = new WeakMap<Graph, Map<string, string[]>>()
+let shapesOf = (g: Graph) => {
+  let held = shaped.get(g)
+  if (!held || held.size > KEPT) shaped.set(g, held = new Map())
+  return held
+}
+
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
     ? o.comps ? [...new Set([...o.comps, CONTENT])] : undefined
@@ -104,7 +114,7 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
     names,
     fields: names ? names.map((n) => '?' + n).join('&') : '*',
     found: new Map(),
-    shapes: new Map(),
+    shapes: shapesOf(g),
     lines: new Map(),
   }
 }

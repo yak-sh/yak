@@ -343,21 +343,38 @@ export let currentStatus = (
   session: Eid,
 ): Promise<TranscriptStatus> => entryStatus(g, session)
 
-// A step reads the newest of a transcript and what it names (./reach.ts): a
-// model turn its context and the window it sends, a step running one call
-// (`Deps.runCall`) what its tool reads of the turn, never a window it does not
-// send. Prose comes with every entry when the host reads entries of its own,
-// and is loaded for the lines a turn sends alone otherwise.
-let stepEntries = async (
+/** What a step reads of its transcript and acts on: the newest entries and
+ * what they name (./reach.ts), a model turn's context and the window it sends,
+ * or for a step running one call (`Deps.runCall`) what its tool reads of the
+ * turn, never a window it does not send; and whether it was ended from outside
+ * (`session.ended`). Prose comes with every entry when the host reads entries
+ * of its own (`bodies`), and is loaded for the lines a turn sends alone
+ * otherwise. */
+export type Reading = { entries: Bundle[]; bodies: boolean; ended: boolean }
+
+/** A step's {@link Reading}, which a runner judges before handing it to
+ * {@link react}, so a pass reads its transcript once. The step acts on it
+ * while it stands: once a line has landed or the transcript has ended since
+ * (`moved`), the step reads again. */
+export let reading = async (
   g: Graph,
   session: Eid,
   deps: Deps,
-): Promise<{ entries: Bundle[]; bodies: boolean }> => {
+): Promise<Reading> => {
   let bodies = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
+  let [row] = await g.rows(`.entity.eid=${session}&.fields=session.ended`)
   let read = deps.runCall ? { call: true } : { turn: true }
-  return { entries: await reach(g, session, { ...read, bodies }), bodies }
+  return {
+    entries: await reach(g, session, { ...read, bodies }),
+    bodies,
+    ended: row?.['session.ended'] === true,
+  }
 }
+
+// The newest of a transcript's own lines among the entries a step read.
+let ownNewest = (entries: Bundle[], session: Eid) =>
+  entries.findLast((b) => comp(b, ENTRY)?.session == session)
 
 // Whether a transcript may have stopped since a step read it, `seen` being
 // the newest of its own lines read. A stop lands as a newer line or as
@@ -590,23 +607,28 @@ let saying = (question: string, a: Answer): string => {
 /**
  * One step of the runner over one transcript. Reads the newest entry, does the
  * one thing it calls for, appends the entries that record it, and reports what
- * it
- * did. Safe to call when there is nothing to do.
+ * it did. Safe to call when there is nothing to do. A runner that has read the
+ * transcript for this step already ({@link reading}) hands that reading in.
  */
 export let react = async (
   g: Graph,
   session: Eid,
   deps: Deps,
+  read?: Reading,
 ): Promise<Step> => {
-  let { entries, bodies } = await stepEntries(g, session, deps)
-  let status = statusOf(entries)
+  let stands = read &&
+    !await moved(g, session, ownNewest(read.entries, session))
+  let { entries, bodies, ended } = stands
+    ? read!
+    : await reading(g, session, deps)
+  let status = statusOf(entries, ended)
   let nothing: Step = { did: 'nothing', status, added: [] }
   // What the request this step sends carries (./parts.ts): the fixed part
   // (tools, instructions, the skills it lists) and the conversation, whole
   // even where an anchor leaves the provider holding its start.
   let sent: { fixed: Part[]; lines: Line[] } | undefined
   let newest = entries.at(-1)
-  let seen = entries.findLast((b) => comp(b, ENTRY)?.session == session)
+  let seen = ownNewest(entries, session)
   let asked = newestAsk(entries)
   let calls = openCalls(entries)
   let open = calls
@@ -1140,8 +1162,14 @@ export let react = async (
     // A superseded call with an execution record may have performed effects.
     // Leave it for inspection rather than replaying it.
     if (older.length) return inspect(older[0])
+    // The status this step read stands until a line lands or the transcript
+    // ends (`moved`): the first call reads nothing more to know it.
+    let stopped = async () =>
+      (await moved(g, session, seen)
+        ? await currentStatus(g, session)
+        : status) == 'stopped'
     for (const pending of open) {
-      if (await currentStatus(g, session) == 'stopped' && !pending.execution) {
+      if (!pending.execution && await stopped()) {
         added.push(
           ...await run.interruptCall(
             pending.entity.eid,

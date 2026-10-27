@@ -14,7 +14,9 @@ import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 import { reach } from './reach.ts'
 import { currentStatus, react } from './react.ts'
+import { running } from './run.ts'
 import { toolEid } from '@yaks/tools'
+import type { Event } from '@yaks/effects'
 import { sessionDerived } from './status.ts'
 
 let vocab = loadVocab(
@@ -25,6 +27,14 @@ let { driver, steps } = stepping()
 let s = storage(driver, vocab, { derived: sessionDerived(vocab) })
 s.install()
 let g = graph({ storage: s, vocab, plugins: [sessions()] })
+// What a step asks the graph, counted at its door: every read, row read and get.
+let asked = 0
+for (let door of ['read', 'rows', 'get'] as const) {
+  let through = g[door].bind(g) as (...a: unknown[]) => unknown
+  ;(g as unknown as Record<string, unknown>)[door] = (...a: unknown[]) => (
+    asked++, through(...a)
+  )
+}
 let M = identityEid('model', ['fake'])
 
 // A native transcript of `n` lines, as the box holds them: background tool
@@ -114,40 +124,60 @@ let landed = async () => {
 }
 let bulk = await landed()
 
-// A step running the call the newest ask made, after a step before it read the
-// transcript, and the VM steps it took.
+// A call the newest ask made, after a step before it read the transcript, run
+// by `run`, and the VM steps and the reads that took.
 let echo = {
   name: 'echo',
   description: 'say it',
   parameters: { type: 'object', properties: {} },
   run: () => 'ok',
 }
-let tool = async (session: string) => {
+let tool = async (
+  session: string,
+  n: number,
+  run: (call: string) => unknown,
+) => {
   await read(session)
   let [last] = await g.rows(
     `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   let [ask] = await g.apply([{
-    entity: { eid: `${session}.tool-ask` },
+    entity: { eid: `${session}.tool-ask-${n}` },
     entry: { session },
     ask: { to: M, through: String(last['entity.eid']) },
     using: { model: M },
   }])
+  let call = `${session}.tool-call-${n}`
   await g.apply([{
-    entity: { eid: `${session}.tool-call` },
+    entity: { eid: call },
     entry: { session },
     call: { to: toolEid('echo'), id: 'tool', args: {}, source: ask.entity.eid },
     tool_async: {},
   }])
-  let before = steps()
-  let step = await react(g, session, {
-    model: () => Promise.reject(new Error('a tool step asks no model')),
-    tools: [echo],
-    runCall: `${session}.tool-call`,
-  })
-  return { did: step.did, steps: steps() - before }
+  let before = steps(), was = asked
+  await run(call)
+  let spent = steps() - before, reads = asked - was
+  let ran = (await g.read(`.result.call=${call}&.fields=entity.eid`)).length
+  return { ran: ran == 1, steps: spent, reads }
 }
-let shortTool = await tool('tools'), longTool = await tool('turn')
+let deps = {
+  model: () => Promise.reject(new Error('a tool step asks no model')),
+  tools: [echo],
+}
+// The step alone, and the pass the pool runs it in (`session_tool`).
+let alone = (session: string) => (call: string) =>
+  react(g, session, { ...deps, runCall: call })
+let pool = running(g, { ...deps, holder: 'turn' })
+let pass = async (call: string) => {
+  await pool.session_tool(
+    { entity: { eid: call } } as Event,
+    undefined as never,
+    undefined as never,
+  )
+}
+let shortTool = await tool('tools', 1, alone('tools'))
+let longTool = await tool('turn', 1, alone('turn'))
+let passTool = await tool('turn', 2, pass)
 
 test('a step on a long transcript reads what one on a short transcript does', () => {
   ok(short.status == 'pending' && long.status == 'pending')
@@ -158,10 +188,18 @@ test('a step on a long transcript reads what one on a short transcript does', ()
 })
 
 test('a tool step of a long turn reads what one of a short turn does, not the window the turn sent', () => {
-  ok(shortTool.did == 'ran' && longTool.did == 'ran')
+  ok(shortTool.ran && longTool.ran)
   ok(
     longTool.steps < shortTool.steps * 1.5,
     `${longTool.steps} steps behind a 1,900-line window, ${shortTool.steps} on 60 lines`,
+  )
+})
+
+test("a tool step's pass reads its transcript once, as the step alone does", () => {
+  ok(passTool.ran)
+  ok(
+    passTool.reads < longTool.reads * 1.25,
+    `${passTool.reads} reads for the pass, ${longTool.reads} for the step alone`,
   )
 })
 

@@ -457,9 +457,12 @@ and no window: the turn sent that, not the call. What it looks for beyond those
 newest entries (the open calls, the newest `using`, `sending` and stop) a graph
 remembers, and the next reading asks only the lines appended since and the ones
 it found. A transcript with neither checkpoint nor window is its own context,
-and reaching it reads it all. `usingOf()` and `openOf()` ask for the model
-selection in force and the calls no result answers alone. `transcriptWindow()`
-reads a bounded page for user interfaces:
+and reaching it reads it all. A runner reads a step's transcript once a pass
+(`reading()`): its checks before the step (a stop, a cancelled task, an answered
+call) judge the reading that `react()` then acts on, unless a line has landed
+since. `usingOf()` and `openOf()` ask for the model selection in force and the
+calls no result answers alone. `transcriptWindow()` reads a bounded page for
+user interfaces:
 
 ```ts
 import { graph } from '@yaks/graph'
