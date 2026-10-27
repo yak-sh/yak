@@ -674,7 +674,8 @@
     font-weight: 800;
   }
 
-  /* Pricing stays narrower than the examples: there are only two plans. */
+  /* The plans, on the home page and the pricing page: narrower than the
+     examples, since there are only two. */
   .Cost {
     display: grid;
     gap: 1.25rem;
