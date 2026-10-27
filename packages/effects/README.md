@@ -904,4 +904,6 @@ semantics of repeating their external actions.
 `enqueue(graph, handler, target)` owes one invocation explicitly, for a resume
 or work left during draining. Ordinary component transitions owe their runs
 through declarations. The handler must be declared and the graph must keep a
-durable effect pool.
+durable effect pool. A run written this way, or put back to pending by a retry,
+wakes this process's worker as its commit lands, since a store's `watch` hears
+only other processes.

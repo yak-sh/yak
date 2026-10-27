@@ -6,6 +6,7 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { stub } from '@std/testing/mock'
 import { CAP, effectDoc, type PoolOpts } from './pool.ts'
 import { effects } from './registry.ts'
+import { enqueue } from './enqueue.ts'
 
 let vocab = loadVocab([pick(effectDoc, ['effect']), {
   $defs: {
@@ -110,6 +111,23 @@ for (let deferred of [false, true]) {
     equal(outcome, { interrupted: 1, count: 1 })
   })
 }
+
+// A run this process writes down outright is not heard by its store, which
+// hears only other processes; the commit itself wakes the worker.
+let written = fixture()
+await written.g.apply(seed)
+await written.fx.work(written.g)
+let taken = Promise.withResolvers<void>()
+written.fx.handle({ take: () => taken.resolve() })
+let outright = await napping(written, async (cleared) => {
+  await enqueue(written.g, 'take', 'a')
+  equal(cleared(), 1, 'the written run must interrupt the polling nap')
+  await taken.promise
+  return cleared()
+})
+test('a run this process writes outright wakes its sleeping worker', () => {
+  equal(outright, 1)
+})
 
 // Another process's commit passes no observer here; the store hears it land.
 let storage = ram(vocab), hear = () => {}

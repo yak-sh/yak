@@ -247,6 +247,13 @@ export type Effects = Plugin & {
 let warn: Report = (err, { handler }) =>
   console.warn(`effect ${handler} failed —`, err)
 
+// A run a bundle writes that is due now and that nobody holds: pending, with
+// no claim and no backoff. A claim, a renewal, a backoff or a deferral is not.
+let unheld = (b: Bundle): boolean => {
+  let run = b[EFFECT] as Comp | null | undefined
+  return run?.state == 'pending' && !run.lease_owner && !run.next
+}
+
 // Whether a slot is watching for this event. A pattern slot watches no single
 // event: its query is run against the graph instead (see `hits`).
 let watching = (s: Slot, e: Event): boolean =>
@@ -775,6 +782,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let watches = () =>
     slots.some((s) => !!s.run || !!pooled && owesAll && !!s.effect)
   let owe: Hook = (bundles, tx, _err, context) => {
+    // A run written down outright (`enqueue`, a retry) is due and nobody
+    // holds it. The store hears only other processes' commits (`watch`), so
+    // it is left work, as a run a slot owed and this worker could not claim.
+    if (bundles.some(unheld)) left.add(context?.transaction ?? bundles[0])
     if (generation(bundles) > depth) return bundles
     return after(
       matched(
