@@ -82,7 +82,12 @@ export function applyFixture(mode: 'file' | 'ram') {
   }
   store.tx((tx) => tx.patch(seeded()))
   // Warm the graph pipeline and both edited stamp shapes before sampling.
+  // Setup leaves the WAL near SQLite's 1000-page autocheckpoint, so how many
+  // pages it wrote would decide whether a checkpoint of them lands inside the
+  // timed batch. Checkpoint before the last warm write, which restarts the WAL
+  // (a header and its fsync), so every sample starts on a fresh one.
   for (let i = 0; i < 20; i++) {
+    if (i == 19) db?.query({ t: 'pragma', name: 'wal_checkpoint' })
     g.apply([{ entity: { eid: eid(1) }, doc: { title: `Warm ${i}` } }])
   }
   return {

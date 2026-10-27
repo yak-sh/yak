@@ -210,7 +210,9 @@ already exists; every created entity is absent. Creates cannot turn into edits
 or grow the corpus across samples. Each sample verifies the saved titles, stamps
 and archetype pointers after timing. Deno takes at least ten measured iterations
 and five warmup iterations per apply case. SQLite writes use ordinary commits;
-there is no enclosing rollback transaction.
+there is no enclosing rollback transaction. A file sample starts on a WAL
+checkpointed during warmup, so a checkpoint of setup's own pages never lands in
+its timed apply.
 
 The ratchet divides each Deno operation by N and records **ns/bundle**,
 displayed as **µs/bundle**. `counts` reports SQL statements per apply and per
