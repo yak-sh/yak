@@ -35,6 +35,26 @@ export type Embedder = {
 export class Refused extends Error {}
 
 /**
+ * What an embedder throws when its provider failed every time it was asked
+ * (./remote.ts `retrying`). One provider out is one failure, however many
+ * texts it was asked for or in which words it failed, so the message names
+ * only the provider: what varies rides `context` (the model, how many texts,
+ * how many tries), and the provider's last failure is the `cause`.
+ */
+export class Unanswered extends Error {
+  override name = 'Unanswered'
+  context: { model: string; texts: string; tries: string }
+  constructor(
+    provider: string,
+    context: Unanswered['context'],
+    cause: unknown,
+  ) {
+    super(`@yaks/embedding: ${provider} did not answer`, { cause })
+    this.context = context
+  }
+}
+
+/**
  * Names the exact embedding a stored row holds: FNV-1a over the model and the
  * text. It is what lets the sweep skip what has not changed without keeping a
  * second copy of the prose.

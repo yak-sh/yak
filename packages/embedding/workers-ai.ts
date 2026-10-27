@@ -16,7 +16,7 @@
 // even then is dropped while the sweep carries on. Anything else the binding
 // throws (Workers AI failing on its side, a rate limit, an outage) is asked
 // again after each pause of ./remote.ts `retries`; one that outlasts
-// them is thrown once, naming the model, and the work stays owed.
+// them is thrown once as `Unanswered`, and the work stays owed.
 
 import { Refused } from './embedder.ts'
 import {
@@ -56,7 +56,7 @@ let unfit = (e: unknown) =>
 export let workersAi = (said: WorkersAi): Batched =>
   batched(
     space(said),
-    halving(retrying(`workers-ai ${said.model}`, async (input) => {
+    halving(retrying('workers-ai', said.model, async (input) => {
       let got: unknown
       try {
         got = await said.ai.run(said.model, { text: input })

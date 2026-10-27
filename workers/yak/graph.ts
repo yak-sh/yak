@@ -185,6 +185,7 @@ import {
   remodel,
   schema as vectorSchema,
   semantic,
+  Unanswered,
   watch as watchEmbedding,
 } from '@yaks/embedding'
 import { after, isPromise } from '@yaks/fp'
@@ -3575,7 +3576,10 @@ export class Store {
         await this.#arming(this.#soon(), 'embedding continuation')
       }
     })().catch(async (error) => {
-      defect(error, { request: 'embedding', store: name })
+      // What varies across one outage (the model, how many texts, how many
+      // tries) is the occurrence's, not the bug's.
+      let context = error instanceof Unanswered ? error.context : {}
+      defect(error, { request: 'embedding', store: name, ...context })
       this.#vectorRetry = Date.now() + Store.RETRY
       await this.#arming(
         new Date(this.#vectorRetry).toISOString(),

@@ -2,7 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { Refused } from './embedder.ts'
+import { Refused, Unanswered } from './embedder.ts'
 import { retries } from './remote.ts'
 import { workersAi } from './workers-ai.ts'
 
@@ -42,9 +42,14 @@ test('an input the model will not take is Refused; an outage is not', async () =
   let error = await assertRejects(() => e(down.ai).embed('x'))
   assertEquals(error instanceof Refused, false)
   assertEquals(
-    (error as Error).message.split(' — ')[0],
-    '@yaks/embedding: workers-ai m failed embedding 1 text, asked 3 times',
+    (error as Error).message,
+    '@yaks/embedding: workers-ai did not answer',
   )
+  assertEquals((error as Unanswered).context, {
+    model: 'm',
+    texts: '1',
+    tries: '3',
+  })
   assertEquals([refused.runs.length, down.runs.length], [1, 3])
 })
 

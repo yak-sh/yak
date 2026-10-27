@@ -84,7 +84,11 @@ test('a status and a shapeless answer both throw, with the body in the words', a
     base: 'https://box',
     fetch: bad.go,
   })
-  await assertRejects(async () => await e.embed('x'), Error, '404')
+  let cause = (p: Promise<unknown>) =>
+    p.then(() => '', (e) => String((e as Error).cause))
+  assert(
+    (await cause(e.embed('x'))).includes('404 — {"error":"no such model"}'),
+  )
   let empty = answered({ embeddings: [] })
   let f = remote({
     api: 'ollama',
@@ -92,7 +96,7 @@ test('a status and a shapeless answer both throw, with the body in the words', a
     base: 'https://box',
     fetch: empty.go,
   })
-  await assertRejects(async () => await f.embed('x'), Error, 'no vector')
+  assert((await cause(f.embed('x'))).includes('no vector'))
 })
 
 test('calls made together ride together, split by count and in order', async () => {

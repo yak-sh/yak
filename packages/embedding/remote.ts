@@ -15,8 +15,8 @@
 // A failure — an error status, an unexpected body, a timeout — is first sent
 // again after each pause of {@link retries}, since a provider's own failure (a
 // 503, Workers AI's "3048: Unknown internal error") usually passes in seconds
-// ({@link retrying}). One that outlasts them is thrown once, naming the model
-// and the call, because the sweep is what decides what an unreachable
+// ({@link retrying}). One that outlasts them is thrown once as
+// {@link Unanswered}, the model and the call in its context, because the sweep is what decides what an unreachable
 // embedder means (it stops, and the corpus stays stale), and a vector
 // invented here to avoid the error would be worse than no vector at all. A status saying the input itself
 // was refused throws {@link Refused}, which the sweep treats as one text it
@@ -32,7 +32,7 @@
 // and rides in one request — split by {@link parts} into requests no longer
 // than a server takes.
 
-import { type Embedder, Refused } from './embedder.ts'
+import { type Embedder, Refused, Unanswered } from './embedder.ts'
 import { unit } from './vector.ts'
 
 /** The slice of `fetch` this file uses — the web one, and a Worker's. */
@@ -258,26 +258,29 @@ export let batched = (
 export type Ask = (input: string[]) => Promise<Float32Array[]>
 
 /**
- * `ask`, sent again after each of `waits` (default {@link retries}) while it fails other than
- * {@link Refused}, since a refused input is refused every time. A failure that
- * outlasts them throws once, naming `who` was asked (the provider and model)
- * and for what, with the last failure as its cause.
+ * `ask`, sent again after each of `waits` (default {@link retries}) while it
+ * fails other than {@link Refused}, since a refused input is refused every
+ * time. A failure that outlasts them throws once, as {@link Unanswered}.
  *
  * ```ts
  * import { assertEquals, assertRejects } from '@std/assert'
+ * import { Unanswered } from './embedder.ts'
  * let sent = 0
- * let flaky = retrying('workers-ai @cf/m', () =>
+ * let flaky = retrying('workers-ai', '@cf/m', () =>
  *   ++sent < 3 ? Promise.reject(Error('3048: Unknown internal error'))
  *     : Promise.resolve([new Float32Array([1])]), [0, 0])
  * assertEquals([[...(await flaky(['x']))[0]], sent], [[1], 3])
- * let down = retrying('workers-ai @cf/m', () =>
+ * let down = retrying('workers-ai', '@cf/m', () =>
  *   Promise.reject(Error('4009: An internal server error occured.')), [0])
- * await assertRejects(() => down(['x', 'y']), Error,
- *   'workers-ai @cf/m failed embedding 2 texts, asked 2 times — 4009')
+ * let error = await assertRejects(() => down(['x', 'y']), Unanswered,
+ *   '@yaks/embedding: workers-ai did not answer')
+ * assertEquals((error as Unanswered).context,
+ *   { model: '@cf/m', texts: '2', tries: '2' })
  * ```
  */
 export let retrying = (
-  who: string,
+  provider: string,
+  model: string,
   ask: Ask,
   waits?: number[],
 ): Ask =>
@@ -289,15 +292,8 @@ async (input) => {
     } catch (error) {
       if (error instanceof Refused) throw error
       if (sent > pauses.length) {
-        let n = input.length
-        throw new Error(
-          `@yaks/embedding: ${who} failed embedding ${n} text${
-            n == 1 ? '' : 's'
-          }, asked ${sent == 1 ? 'once' : `${sent} times`} — ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          { cause: error },
-        )
+        let texts = String(input.length), tries = String(sent)
+        throw new Unanswered(provider, { model, texts, tries }, error)
       }
       let pause = pauses[sent - 1]
       if (pause > 0) await new Promise((ok) => setTimeout(ok, pause))
@@ -357,10 +353,9 @@ export let remote = (said: Remote): Batched => {
       said.dim,
     )
   }
-  let who = `${said.api} ${said.model}`
   return batched(
     said.space ?? space(said),
-    halving(retrying(who, ask)),
+    halving(retrying(said.api, said.model, ask)),
     said,
   )
 }

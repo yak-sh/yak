@@ -230,9 +230,11 @@ down to 256 characters. A status saying the input was refused (400, 413, 422)
 rejects with `Refused`. Any other failure is the provider's, which usually
 passes in seconds, so the request is sent again after each pause of
 `retries.waits` (half a second, two, then six); one that outlasts them rejects
-once, naming the provider, the model and how many texts it was asked for, with
-the last failure as its `cause`. `retrying(who, ask, waits?)` is that, for any
-`ask`.
+once with `Unanswered`. Its message names only the provider
+(`@yaks/embedding: workers-ai did not answer`), so one outage reads as one
+failure however many texts it met or in which words; its `context` holds the
+model, how many texts and how many tries, and its `cause` is the provider's last
+failure. `retrying(provider, model, ask, waits?)` is that, for any `ask`.
 
 `{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
 runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):
