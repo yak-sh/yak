@@ -35,7 +35,7 @@ let CAL = {
 // What a face draws: its logo as an image, never as markup, its line, and its
 // site linked by its host.
 let drawn = [
-  `<img class="Connection_Logo" src="data:image/svg+xml,${
+  `<img class="Card_Mark" src="data:image/svg+xml,${
     encodeURIComponent(CAL.logo).replaceAll("'", '&#39;')
   }"`,
   'Your calendar. <a href="https://cal.test/">cal.test</a>',
@@ -185,16 +185,21 @@ test('connections: the space’s ask of each person offers nothing to connect, a
         built: [],
       },
     }, env).text()
-  let ask = await drawn(false)
+  // Only the connection's own card, not the page's box for a new key.
+  let card = (html: string) => {
+    let at = html.indexOf('data-connection="c"')
+    return html.slice(at, html.indexOf('</section>', at))
+  }
+  let ask = card(await drawn(false))
   assertStringIncludes(ask, 'Each person who uses Notes connects their own')
-  assertEquals(ask.includes('Paste the key for Weather'), false)
+  assertEquals(ask.includes('name="key"'), false)
   assertEquals(ask.includes('value="disconnect"'), false)
-  let own = await drawn(true)
-  assertStringIncludes(own, 'Paste the key for Weather')
+  let own = card(await drawn(true))
+  assertStringIncludes(own, 'name="key"')
   assertStringIncludes(own, 'value="disconnect">Remove')
-  assertStringIncludes(own, 'Notes reads it as <code>env.WEATHER</code>.')
-  assertStringIncludes(own, '3 calls out this month, of 10 allowed.')
-  assertEquals(ask.includes('calls out this month'), false)
+  assertStringIncludes(own, '<code>env.WEATHER</code>')
+  assertStringIncludes(own, '3 of 10 calls this month')
+  assertEquals(ask.includes('calls this month'), false)
   assertEquals(own.includes('Open to anyone'), false)
 })
 
@@ -256,9 +261,9 @@ test('connections: the person’s own, then this space with what it could add, t
   assertEquals(under(1), ['Weather', 'OpenRouter', 'Add a key'])
   assertEquals(under(2), ['Maps'])
   // Each posts for the space that keeps it; the person's own, for the page's.
-  let actions = [...document.querySelectorAll('form.Connection_Do')].map((f) =>
-    f.getAttribute('action')
-  )
+  let actions = [...document.querySelectorAll('form')].filter((f) =>
+    f.querySelector('input[name="connection"]')
+  ).map((f) => f.getAttribute('action'))
   assertEquals(
     new Set(actions),
     new Set([
@@ -272,7 +277,10 @@ test('connections: the person’s own, then this space with what it could add, t
   let posts = [...kept.querySelectorAll('form')].map((f) =>
     new URL(f.getAttribute('action')!, 'https://yaks.fyi')
   ).filter((to) => to.pathname == '/manage/connections')
-  assertEquals(posts.length, 8)
+  assertEquals(
+    posts.length,
+    document.querySelectorAll('form[action^="/manage/connections"]').length,
+  )
   assertEquals(
     new Set(posts.map((to) => to.searchParams.get('enable'))),
     new Set(['google-calendar']),
@@ -328,11 +336,11 @@ let listing = (
 test('connections: how to get a key sits open beside a connection needing one, and closed once connected', async () => {
   assertStringIncludes(
     await listing('needed'),
-    `<details class="Note Connection_Instructions" open><summary>How to get the key</summary>${HOW}</details>`,
+    `<details class="More" open><summary>How to get the key</summary><div class="More_Body">${HOW}</div></details>`,
   )
   assertStringIncludes(
     await listing('connected'),
-    `<details class="Note Connection_Instructions"><summary>How to get the key</summary>${HOW}</details>`,
+    `<details class="More"><summary>How to get the key</summary><div class="More_Body">${HOW}</div></details>`,
   )
 })
 
@@ -346,7 +354,7 @@ test('connections: a service the space added can be changed there, all but where
       'value="about">Save',
     ]
   ) assertStringIncludes(html, text)
-  let told = html.slice(html.indexOf('Connection_Told'))
+  let told = html.slice(html.indexOf('Change what Weather says'))
   assertEquals(
     told.slice(0, told.indexOf('</details>')).includes('name="hosts"'),
     false,
@@ -377,12 +385,15 @@ test('connections: a page opened to add one from the directory offers it first, 
       theirs: true,
     },
   })
-  let at = html.indexOf('<h2>ESV API</h2>')
-  assert(at > 0 && at < html.indexOf('<h2>Weather</h2>'), html)
-  let card = html.slice(at, html.indexOf('</form>', at))
+  let at = html.indexOf('>ESV API</h2>')
+  assert(at > 0 && at < html.indexOf('>Weather</h2>'), html)
+  let card = html.slice(
+    html.lastIndexOf('<form', at),
+    html.indexOf('</form>', at),
+  )
   for (
     let text of [
-      `<details class="Note Connection_Instructions" open><summary>How to get the key</summary>${HOW}`,
+      `<details class="More" open><summary>How to get the key</summary><div class="More_Body">${HOW}`,
       // Its site is its maker's word, linked as theirs.
       '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
       'name="integration" value="ESV"',
@@ -416,7 +427,7 @@ test('askConnect: the app, the service, the one form, and the way back', async (
   for (
     let text of [
       'Notes asks each person who uses it to connect their own Cal account',
-      'Yours is connected.',
+      'Yours is connected',
       'Connect again',
       'href="https://ada.yaks.fyi/notes/">Back to Notes',
       ...drawn,
@@ -437,7 +448,7 @@ test('connections: a built integration is offered by its face, and a site is lin
       },
     }, env).text()
   let html = await offered(CAL.site)
-  for (let text of ['<h2>Cal</h2>', ...drawn]) assertStringIncludes(html, text)
+  for (let text of ['>Cal</h2>', ...drawn]) assertStringIncludes(html, text)
   assertEquals((await offered('javascript:alert(1)')).includes('alert'), false)
 })
 

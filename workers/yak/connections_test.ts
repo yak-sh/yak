@@ -300,8 +300,8 @@ test('the owner can attach a connected space key to a live app from the page', a
     view: 'connections',
     connections: before,
   })).text()
-  assertStringIncludes(page, 'Let an app use this connection')
-  assertStringIncludes(page, 'Only the app’s members can use it')
+  assertStringIncludes(page, 'Let an app use it')
+  assertStringIncludes(page, 'Only its members can call out through it')
   assertEquals(
     await s.post({
       do: 'attach',
@@ -391,6 +391,12 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
   )
   assertStringIncludes(String(answer.text), 'Only app members')
   assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['WEATHER'])
+  // Attached again under a new name, its code reads it by that name.
+  await tool.run(
+    { env: s.p.env, dir: s.dir, person: s.person },
+    { space: 'ada', app: 'notes', connection, binding: 'SKY' },
+  )
+  assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['SKY'])
 })
 
 // A space whose Notes app asks each person to connect their own account

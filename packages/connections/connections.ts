@@ -374,11 +374,24 @@ export let attach = async (
   }
   let integration = String(grant.integration)
   let old = await using(read, { app: a.app, integration })
-  if (old?.entity.eid == a.connection) return []
   let previous = old?.entity.eid
   let oldLink = previous && (await read(
     `.entity.eid=${edgeEid(a.app, USES, previous)}&.${USES}${ALL}`,
   ))[0]
+  if (previous == a.connection) {
+    // Attached again, it is renamed when given a new name, and otherwise
+    // already is what was asked.
+    let had = comp(oldLink || undefined, USES).binding
+    if (a.binding == null || a.binding == had) return []
+    if (!NAME.test(a.binding)) {
+      throw new Error('The binding must be a name code can read')
+    }
+    return [{
+      entity: { eid: edgeEid(a.app, USES, previous) },
+      [USES]: { binding: a.binding },
+      $was: { [USES]: { binding: had == null ? null : token(had) } },
+    }]
+  }
   if (comp(oldLink || undefined, USES).direct) {
     throw new Error(
       'This app asks for the key itself; attach requires a sentinel',

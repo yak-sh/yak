@@ -207,7 +207,7 @@
       calc(var(--card-radius, .75rem) - 1px) 0 0;
     background: color-mix(in srgb, var(--ground), var(--paper) 55%);
   }
-  .Card_Head:only-child {
+  .Card_Head:last-child {
     margin-bottom: calc(-1 * var(--pad-block));
     border-bottom: 0;
     border-radius: inherit;
@@ -358,13 +358,13 @@
   .Form {
     display: grid;
     gap: .875rem;
-    max-width: 34rem;
     margin: 0;
   }
   .Form_Field {
     display: grid;
     gap: .35rem;
     min-width: 0;
+    max-width: 34rem;
   }
   .Form_Label {
     margin: 0;
@@ -450,6 +450,9 @@
     display: grid;
     gap: .875rem;
     margin-top: .75rem;
+  }
+  .More_Body > * {
+    margin: 0;
   }
 
   /* A line the page says back: what a press did, or why it did not. */

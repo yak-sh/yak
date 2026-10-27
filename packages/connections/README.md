@@ -123,7 +123,8 @@ existing connected space connection to an app. The host checks that the actor
 owns the space and that the app belongs to it; `attach` checks the connection's
 owner and requested OAuth scopes. It replaces an unmet ask, retains that ask's
 binding, removes the unused needed connection, and starts the new link
-members-only with a sentinel. The key stays in the vault.
+members-only with a sentinel. Attaching the connection an app already uses, with
+a new `binding`, renames that binding. The key stays in the vault.
 
 `set(read, {owner, integration, title?, tagline?, site?, instructions?, listed?})`
 plans an owner's change to what is said about a custom integration: each

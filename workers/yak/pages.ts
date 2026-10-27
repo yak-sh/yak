@@ -881,6 +881,7 @@ export let sentence = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1) +
   (/[.!?]$/.test(text) ? '' : '.')
 
+// How a connection stands, as its head says it.
 let STATUS = {
   needed: 'Needs connecting',
   connected: 'Connected',
@@ -891,9 +892,9 @@ let STATUS = {
 // SVG an <img> loads runs no script and fetches nothing.
 let logo = (f: Face) =>
   f.logo
-    ? `<img class="Connection_Logo" src="data:image/svg+xml,${
+    ? `<img class="Card_Mark" src="data:image/svg+xml,${
       esc(encodeURIComponent(f.logo))
-    }" alt="" width="28" height="28">`
+    }" alt="" width="24" height="24">`
     : ''
 
 // A line about a service and a link to its site, where it has them. Only an
@@ -905,7 +906,7 @@ let about = (f: Face) => {
     }</a>`
     : ''
   return f.tagline || site
-    ? `<p class="Connection_About">${esc(f.tagline)}${
+    ? `<p class="Card_Sub">${esc(f.tagline)}${
       f.tagline && site ? ' ' : ''
     }${site}</p>`
     : ''
@@ -915,16 +916,50 @@ let about = (f: Face) => {
 // key is still wanted.
 let howTo = (f: Face, open: boolean) =>
   f.instructions
-    ? `<details class="Note Connection_Instructions"${
+    ? `<details class="More"${
       open ? ' open' : ''
-    }><summary>How to get the key</summary>${f.instructions}</details>`
+    }><summary>How to get the key</summary><div class="More_Body">${f.instructions}</div></details>`
     : ''
 
-// One connection: which apps use it and where its key may go, whether its
-// key is still being saved or could not be, and what to do next. The space's
-// side of an app that asks each person to connect their own is only the ask:
-// nothing here connects it, and it stays while the app asks. Its buttons post
-// for the space that keeps it, or for the page's own when it is the person's.
+// Where a key may be sent, said once beside wherever it is pasted.
+let reach = (hosts: string[]) =>
+  hosts.length
+    ? `yaks.app keeps it and only ever sends it to ${
+      hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
+    }.`
+    : ''
+
+// The box a key is pasted in and the button that saves it, one line under
+// its label.
+let keyBox = (id: string, label: string, send: string, hint = '') =>
+  labeled(
+    id,
+    label,
+    `<div class="Form_Line"><input class="Field" id="${id}" name="key" type="password" autocomplete="off" spellcheck="false" required>${send}</div>`,
+    hint,
+  )
+
+// A button a connection's form sends: quiet unless it is the card's one
+// next step.
+let press = (value: string, label: string, quiet = true) =>
+  `<button class="Button${
+    quiet ? ' Button-quiet' : ''
+  }" type="submit" name="do" value="${value}">${label}</button>`
+
+let calls = (a: Using) =>
+  a.cap == null
+    ? `${a.calls} ${a.calls == 1 ? 'call' : 'calls'} this month`
+    : `${a.calls} of ${a.cap} calls this month`
+
+// One connection, as a card: its head says what it is and how it stands and
+// holds what acts on all of it (connecting, disconnecting); under it the key
+// it still wants, how to get one, the apps using it, a box to let one more
+// use it, and folded away what few people need: the name its code reads, a
+// new key, and for a service this space added, what it says and whether it
+// is listed. The space's side of an app that asks each person to connect
+// their own is only the ask: nothing here connects it, and it stays while
+// the app asks. Its forms post for the space that keeps it, or for the
+// page's own when it is the person's.
 let connection = (
   c: Shown,
   on: boolean,
@@ -932,170 +967,214 @@ let connection = (
   enable?: string[],
 ) => {
   let ask = c.each && !c.own
-  // An app that uses it: what its code reads and, for one it shares, who may
-  // call out through it there, which the person opens to anyone or closes to
-  // members, and the calls it made through it this month against any cap,
-  // which the space's side of an ask has none of. A person's own is only ever
-  // theirs to call out through.
-  let using = (a: Using) =>
-    `<p class="Connection_App">${esc(a.title)} reads it as <code>env.${
-      esc(a.binding)
-    }</code>${a.direct ? ', the key itself' : ''}.${
-      c.each
-        ? ''
-        : a.anyone
-        ? ' Anyone using the app may call out through it.'
-        : ' Only its members may call out through it.'
-    }${
-      ask
-        ? ''
-        : ` ${a.calls} ${a.calls == 1 ? 'call' : 'calls'} out this month${
-          a.cap == null ? '' : `, of ${a.cap} allowed`
-        }.`
-    }</p>${
-      c.each ? '' : form(
-        `<input type="hidden" name="app" value="${
-          esc(a.app)
-        }"><button class="Button Button-quiet" type="submit" name="do" value="${
-          a.anyone ? 'close' : 'open'
-        }">${a.anyone ? 'Members only' : 'Open to anyone'}</button>`,
-      )
-    }`
-  let form = (inner: string, kind = 'Connection_Do') =>
-    `<form class="${kind}" method="post" action="${
+  let id = (what: string) => `${what}-${esc(c.eid)}`
+  let form = (inner: string, at = '') =>
+    `<form method="post" action="${
       esc(enabling(managePath('connections', c.space ?? pick), enable))
-    }"><input type="hidden" name="connection" value="${
+    }"${at}><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
-  // Whether a service this space added is in the integration directory, for
-  // anyone to add with their own key: its owner lists it or takes it out.
-  let listing = c.about
-    ? form(
-      c.listed
-        ? `<p>In the <a href="${
-          esc(`${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`)
-        }">integration directory</a>, for anyone to add with their own key.</p><button class="Button Button-quiet" type="submit" name="do" value="unlist">Take it out</button>`
-        : `<button class="Button Button-quiet" type="submit" name="do" value="list">List in the integration directory</button><p>Anyone could then add it to a space of theirs, with their own key.</p>`,
-    )
-    : ''
-  // What is said about a service this space added, its owner's to change.
-  let told = c.about
-    ? `<details class="Note Connection_Told"><summary>Change what ${
-      esc(c.face.title)
-    } says</summary>${
-      form(
-        `${
-          (
-            [
-              ['title', 'Its name', 'What people call it'],
-              [
-                'tagline',
-                'One line about it',
-                'What it is, in a line',
-              ],
-              ['site', 'Its site', 'https://…'],
-            ] as const
-          ).map(([k, label, hint]) =>
-            `<label for="${k}-${
-              esc(c.eid)
-            }">${label}</label><input class="Field" id="${k}-${
-              esc(c.eid)
-            }" name="${k}" value="${esc(c.about![k] ?? '')}" placeholder="${
-              esc(hint)
-            }"${k == 'site' ? ' type="url" pattern="https://.*"' : ''}>`
-          ).join('\n')
-        }
-<label for="instructions-${
-          esc(c.eid)
-        }">How to get the key</label><textarea class="Field" id="instructions-${
-          esc(c.eid)
-        }" name="instructions" rows="6" placeholder="Where to sign up, which page gives the key, and what to paste">${
-          esc(c.about.instructions ?? '')
-        }</textarea>
-<p>Written for whoever connects it and the agent helping them, in markdown. Where its key may be sent stays as it is.</p>
-<button class="Button" type="submit" name="do" value="about">Save</button>`,
-        'Desk_Profile',
-      )
-    }</details>`
-    : ''
-  let keyForm = (label: string) =>
-    form(
-      `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="${label} for ${
-        esc(c.face.title)
-      }" placeholder="${label}" required>
-<button class="Button" type="submit" name="do" value="key">Save key</button>`,
-    )
   let open = c.status != 'connected' || !!c.failed
-  let act = ask || !on && c.keyed
-    ? ''
-    : c.keyed
-    ? open
-      ? keyForm('Paste the key')
-      : `<details class="Note"><summary>Replace the key</summary>${
-        keyForm('Paste the new key')
-      }</details>`
-    : open
-    ? form(
-      '<button class="Button" type="submit" name="do" value="signin">Connect</button>',
-    )
-    : ''
+  // A key is pasted here for a keyed connection this deploy can keep one for.
+  let keying = !ask && on && c.keyed
   // A connection an app shares and is waiting on is connected, not removed:
   // removing it would only leave the app a new one waiting. A person's own,
   // for an app that asks each person, is theirs to remove.
   let waiting = c.status == 'needed' && c.apps.length && !c.each
-  let drop = ask || waiting ? '' : form(
-    `<button class="Button Button-quiet" type="submit" name="do" value="disconnect">${
-      c.status == 'needed' ? 'Remove' : 'Disconnect'
-    }</button>`,
+  let actions =
+    (!ask && !c.keyed && open ? form(press('signin', 'Connect', false)) : '') +
+    (ask || waiting ? '' : form(
+      press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
+    ))
+  let stands = ask ? status('Each person connects their own') : status(
+    `${STATUS[c.status]}${c.account ? ` as ${esc(c.account)}` : ''}`,
+    c.status == 'connected' ? 'good' : 'warn',
   )
-  let attach = c.status == 'connected' && !c.own && c.available.length
+  let said = c.failed
+    ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
+    : c.saving
+    ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
+    : ''
+  let paste = keying && open
     ? form(
-      `<label for="attach-${esc(c.eid)}">Let an app use this connection</label>
-<select class="Field" id="attach-${esc(c.eid)}" name="app" required>
-<option value="">Choose an app</option>${
-        c.available.map((a) =>
-          `<option value="${esc(a.app)}">${esc(a.title)}</option>`
-        ).join('')
-      }</select>
-<label for="bind-${esc(c.eid)}">Name its code reads it by</label>
-<input class="Field" id="bind-${
-        esc(c.eid)
-      }" name="binding" autocomplete="off" spellcheck="false" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="${
-        esc(c.binding)
-      }">
-<p>Only the app’s members can use it. Its code receives a sentinel, never the key.</p>
-<button class="Button" type="submit" name="do" value="attach">Attach to app</button>`,
+      keyBox(
+        id('key'),
+        'Paste the key',
+        press('key', 'Save key', false),
+        reach(c.hosts),
+      ),
     )
     : ''
-  let apps = c.apps.map((a) => esc(a.title)).join(', ')
-  return `<section class="Card Connection"><header class="Connection_Head">${
-    logo(c.face)
-  }<h2>${
-    esc(c.face.title)
-  }</h2><span class="Connection_Status Connection_Status-${c.status}">${
-    ask ? 'Each person connects their own' : STATUS[c.status]
-  }${c.account ? ` as ${esc(c.account)}` : ''}</span></header>${about(c.face)}
-<p>${
-    !c.apps.length
-      ? 'No app uses it yet.'
-      : ask
-      ? `Each person who uses ${apps} connects their own account, from the app.`
+  // An app that uses it: what its code reads and, for one it shares, who may
+  // call out through it there, which the person opens to anyone or closes to
+  // members, and the calls it made through it this month against any cap. A
+  // person's own is only ever theirs to call out through.
+  let using = (a: Using) =>
+    `<li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
+      esc(a.title)
+    }</strong><span class="Rows_Meta">${
+      [
+        `<code>env.${esc(a.binding)}</code>${
+          a.direct ? ', the key itself' : ''
+        }`,
+        c.each
+          ? ''
+          : a.anyone
+          ? 'Anyone may call out'
+          : 'Only members call out',
+        calls(a),
+      ].filter(Boolean).join(' · ')
+    }</span></div>${
+      c.each ? '' : `<div class="Rows_Actions">${
+        form(
+          `<input type="hidden" name="app" value="${esc(a.app)}">${
+            press(
+              a.anyone ? 'close' : 'open',
+              a.anyone ? 'Members only' : 'Open to anyone',
+            )
+          }`,
+        )
+      }</div>`
+    }</li>`
+  let apps = ask
+    ? c.apps.length
+      ? `<p class="Card_Sub">Each person who uses ${
+        c.apps.map((a) => esc(a.title)).join(', ')
+      } connects their own account, from the app.</p>`
       : ''
-  }${
-    c.hosts.length
-      ? ` Its key is only ever sent to ${
-        c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
-      }.`
-      : ''
-  }${c.scopes.length ? ` Granted: ${c.scopes.map(esc).join(', ')}.` : ''}</p>${
+    : c.apps.length
+    ? `<ul class="Rows">${c.apps.map(using).join('')}</ul>`
+    : '<p class="Card_Sub">No app uses it yet.</p>'
+  // Letting one more app use it: the app, and, folded under the advanced
+  // options, the name its code reads it by, which most never change.
+  let attaching = c.status == 'connected' && !c.own && c.available.length > 0
+  let attach = attaching
+    ? form(
+      labeled(
+        id('attach'),
+        'Let an app use it',
+        `<div class="Form_Line"><select class="Field" id="${
+          id('attach')
+        }" name="app" required><option value="">Choose an app</option>${
+          c.available.map((a) =>
+            `<option value="${esc(a.app)}">${esc(a.title)}</option>`
+          ).join('')
+        }</select>${press('attach', 'Attach', false)}</div>`,
+        'Only its members can call out through it, and its code is handed a sentinel, never the key.',
+      ),
+      ` id="${id('attaching')}"`,
+    )
+    : ''
+  let named = attaching
+    ? labeled(
+      id('bind'),
+      'Name its code reads it by',
+      `<input class="Field" id="${id('bind')}" form="${
+        id('attaching')
+      }" name="binding" autocomplete="off" spellcheck="false" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="${
+        esc(c.binding)
+      }">`,
+      `Left empty, its code reads <code>env.${
+        esc(c.binding)
+      }</code>. An agent can rename it later.`,
+    )
+    : ''
+  let replace = keying && !open
+    ? form(
+      keyBox(
+        id('key'),
+        'Replace the key',
+        press('key', 'Save key'),
+        reach(c.hosts),
+      ),
+    )
+    : ''
+  // Where a key nobody pastes here goes, and what a sign-in granted.
+  let reached = !keying && (c.hosts.length || c.scopes.length)
+    ? `<p class="Form_Hint">${
+      c.hosts.length
+        ? `Its key is only ever sent to ${
+          c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
+        }.`
+        : ''
+    }${c.hosts.length && c.scopes.length ? ' ' : ''}${
+      c.scopes.length ? `Granted: ${c.scopes.map(esc).join(', ')}.` : ''
+    }</p>`
+    : ''
+  // Whether a service this space added is in the integration directory, for
+  // anyone to add with their own key: its owner lists it or takes it out.
+  let listing = c.about
+    ? `<div class="Form_Field"><span class="Form_Label">Integration directory</span><p class="Form_Hint">${
+      c.listed
+        ? `Listed in the <a href="${
+          esc(`${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`)
+        }">integration directory</a>, for anyone to add with their own key.`
+        : 'Once listed, anyone could add it to a space of theirs, with their own key.'
+    }</p>${
+      form(
+        `<div class="Form_Actions">${
+          c.listed
+            ? press('unlist', 'Take it out')
+            : press('list', 'List in the integration directory')
+        }</div>`,
+      )
+    }</div>`
+    : ''
+  // What is said about a service this space added, its owner's to change.
+  let told = c.about
+    ? `<details class="More"><summary>Change what ${
+      esc(c.face.title)
+    } says</summary>${
+      form(
+        `<div class="More_Body Form">${
+          (
+            [
+              ['title', 'Its name', 'What people call it'],
+              ['tagline', 'One line about it', 'What it is, in a line'],
+              ['site', 'Its site', 'https://…'],
+            ] as const
+          ).map(([k, label, hint]) =>
+            labeled(
+              id(k),
+              label,
+              `<input class="Field" id="${id(k)}" name="${k}" value="${
+                esc(c.about![k] ?? '')
+              }" placeholder="${esc(hint)}"${
+                k == 'site' ? ' type="url" pattern="https://.*"' : ''
+              }>`,
+            )
+          ).join('')
+        }${
+          labeled(
+            id('instructions'),
+            'How to get the key',
+            `<textarea class="Field" id="${
+              id('instructions')
+            }" name="instructions" rows="6" placeholder="Where to sign up, which page gives the key, and what to paste">${
+              esc(c.about.instructions ?? '')
+            }</textarea>`,
+            'Written for whoever connects it and the agent helping them, in markdown. Where its key may be sent stays as it is.',
+          )
+        }<div class="Form_Actions">${
+          press('about', 'Save', false)
+        }</div></div>`,
+      )
+    }</details>`
+    : ''
+  let folded = named + replace + reached + listing + told
+  return `<section class="Card" data-connection="${esc(c.eid)}">${
+    heading(esc(c.face.title), {
+      mark: logo(c.face),
+      status: stands,
+      actions,
+    })
+  }${about(c.face)}${said}${
     howTo(c.face, open && !ask)
-  }${ask ? '' : c.apps.map(using).join('')}${attach}${
-    c.failed
-      ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
-      : c.saving
-      ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
+  }${paste}${apps}${attach}${
+    folded
+      ? `<details class="More"><summary>Advanced options</summary><div class="More_Body">${folded}</div></details>`
       : ''
-  }${act}${drop}${listing}${told}</section>`
+  }</section>`
 }
 
 // The page: the person's own connections and the services that hold a
@@ -1109,39 +1188,66 @@ let connections = (at: DeskPage, env: Host) => {
     Number(b.status == 'connected' && !b.failed)
   )
   let action = esc(enabling(managePath('connections', at.pick), c.enable))
+  // A built service nothing here is connected to yet: a key to paste, or a
+  // sign-in to start from its head.
   let offer = (i: Connections['built'][number]) =>
-    `<form class="Card Connection" method="post" action="${action}"><header class="Connection_Head">${
-      logo(i.face)
-    }<h2>${esc(i.face.title)}</h2></header>${about(i.face)}${
-      howTo(i.face, true)
-    }<input type="hidden" name="integration" value="${
+    `<form class="Card" method="post" action="${action}"><input type="hidden" name="integration" value="${
       esc(i.name)
-    }"><div class="Connection_Do">${
+    }">${
+      heading(esc(i.face.title), {
+        mark: logo(i.face),
+        actions: i.keyed ? '' : press('add', 'Connect', false),
+      })
+    }${about(i.face)}${howTo(i.face, true)}${
       i.keyed
-        ? `<input class="Field" name="key" type="password" autocomplete="off" aria-label="Key for ${
-          esc(i.face.title)
-        }" placeholder="Paste the key" required><button class="Button" type="submit" name="do" value="add">Save key</button>`
-        : '<button class="Button" type="submit" name="do" value="add">Connect</button>'
-    }</div></form>`
-  let add = `<form class="Card Card-sectioned" method="post" action="${action}">
-<header class="Card_Header"><h2>Add a key</h2></header>
-<div class="Card_Body Desk_Profile"><p>For a service your apps call that isn't listed above. Your apps use it through yaks.app, which keeps the key and sends it only to the addresses you list. Services others have added are in the <a href="${
+        ? keyBox(
+          `add-${esc(i.name)}`,
+          'Paste the key',
+          press('add', 'Save key', false),
+        )
+        : ''
+    }</form>`
+  let add = `<form class="Card" method="post" action="${action}">${
+    heading('Add a key')
+  }<p class="Card_Sub">For a service your apps call that isn't listed above. Services others have added are in the <a href="${
     esc(url(env, INTEGRATIONS.path))
-  }">integration directory</a>.</p>
-<label for="new-name">Service</label><input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>
-<label for="new-hosts">Where it may be sent</label><input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>
-<label for="new-key">Key</label><input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>
-<label for="new-instructions">How to get the key <small>(optional)</small></label><textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>
-</div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
+  }">integration directory</a>.</p><div class="Form">${
+    labeled(
+      'new-name',
+      'Service',
+      '<input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>',
+    )
+  }${
+    labeled(
+      'new-hosts',
+      'Where it may be sent',
+      '<input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>',
+      'yaks.app keeps the key and only ever sends it to these addresses.',
+    )
+  }${
+    labeled(
+      'new-key',
+      'Key',
+      '<input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>',
+    )
+  }${
+    labeled(
+      'new-instructions',
+      'How to get the key <span class="Form_Optional">(optional)</span>',
+      '<textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>',
+    )
+  }<div class="Form_Actions">${
+    press('add', 'Save key', false)
+  }</div></div></form>`
   // The service the page was opened to add comes first under its space.
   let group = (title: string, cards: string, lead = '') =>
     lead + cards ? `<h2 class="Group">${esc(title)}</h2>${lead}${cards}` : ''
   let yours = first.filter((one) => one.own)
     .map((one) => connection(one, c.on, at.pick, c.enable)).join('') +
     c.services.map((s) =>
-      `<section class="Card Connection"><header class="Connection_Head"><h2>${
-        esc(s.name)
-      }</h2><span class="Connection_Status Connection_Status-connected">Connected</span></header><p>Signed in with your yaks.app account on ${
+      `<section class="Card">${
+        heading(esc(s.name), { status: status('Connected', 'good') })
+      }<p class="Card_Sub">Signed in with your yaks.app account on ${
         esc(day(new Date(s.connectedAt * 1000).toISOString()))
       }.</p></section>`
     ).join('')
@@ -1151,7 +1257,9 @@ let connections = (at: DeskPage, env: Host) => {
   return `${
     c.on
       ? ''
-      : `<section class="Card"><h2>Keys can't be saved here yet</h2><p>This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
+      : `<section class="Card">${
+        heading("Keys can't be saved here yet")
+      }<p class="Card_Sub">This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
   }${
     c.list.length || c.services.length
       ? ''
@@ -1676,19 +1784,21 @@ export let askConnect = (at: {
       esc(at.face.title)
     } account. Yours is used only when you use the app, and you can disconnect it from your own connections page.`,
     200,
-    `${
-      at.face.logo || about(at.face)
-        ? `<div class="Connection_Face">${logo(at.face)}${about(at.face)}</div>`
-        : ''
-    }${howTo(at.face, at.status != 'connected')}${
-      at.status == 'needed'
-        ? ''
-        : `<p class="Say${at.status == 'broken' ? ' Say-no' : ''}">${
-          at.status == 'broken'
-            ? 'Yours needs reconnecting.'
-            : 'Yours is connected.'
-        }</p>`
-    }${
+    `<section class="Card">${
+      heading(esc(at.face.title), {
+        mark: logo(at.face),
+        status: at.status == 'needed'
+          ? ''
+          : at.status == 'broken'
+          ? status('Yours needs reconnecting', 'warn')
+          : status('Yours is connected', 'good'),
+        actions: at.on && !at.keyed
+          ? `<form method="post"><button class="Button" type="submit">${
+            at.status == 'needed' ? 'Connect' : 'Connect again'
+          }</button></form>`
+          : '',
+      })
+    }${about(at.face)}${howTo(at.face, at.status != 'connected')}${
       at.say
         ? `<p class="Say${at.no ? ' Say-no' : ''}" role="status">${
           esc(at.say)
@@ -1696,18 +1806,19 @@ export let askConnect = (at: {
         : ''
     }${
       !at.on
-        ? "<p>Keys can't be saved here yet.</p>"
-        : `<form method="post">${
-          at.keyed
-            ? `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="Your key for ${
-              esc(at.face.title)
-            }" placeholder="Paste your key" required>
-<button class="Button" type="submit">Save key</button>`
-            : `<button class="Button" type="submit">${
-              at.status == 'needed' ? 'Connect' : 'Connect again'
-            }</button>`
+        ? `<p class="Card_Sub">Keys can't be saved here yet.</p>`
+        : at.keyed
+        ? `<form method="post">${
+          keyBox(
+            'key',
+            'Paste your key',
+            '<button class="Button" type="submit">Save key</button>',
+          )
         }</form>`
-    }<p class="Note"><a href="${esc(at.back)}">Back to ${esc(at.app)}</a></p>`,
+        : ''
+    }</section><p class="Note"><a href="${esc(at.back)}">Back to ${
+      esc(at.app)
+    }</a></p>`,
   )
 
 // A custom domain asking to sign in: consent names its host and its space.

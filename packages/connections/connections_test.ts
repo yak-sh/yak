@@ -193,6 +193,15 @@ test('a space owner can attach a connected account in place of an unmet ask', as
   )
   let sent = await envOf(c, 'app')
   assert(sent.SMS && sent.SMS != 'private-key')
+  await g.apply(
+    await attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+      binding: 'TEXTS_KEY',
+    }),
+  )
+  assertEquals(Object.keys(await envOf(c, 'app')), ['TEXTS_KEY'])
   assertEquals(
     await reveal(vault, String(of(await at(g, connected), 'secret').name)),
     'private-key',

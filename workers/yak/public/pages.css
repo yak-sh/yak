@@ -3,136 +3,576 @@
    page holds is the style guide's (controls.css, /style-guide); this is only
    what no other page draws. */
 @layer base {
-  * { box-sizing: border-box }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--ground); color: var(--ink); font: 400 var(--body)/1.6 var(--font); -webkit-font-smoothing: antialiased }
-  main { width: 100%; max-width: 34rem; padding: 2rem 1rem; text-align: center; overflow-wrap: anywhere }
-  h1 { font-size: 1.6rem; font-weight: 800; line-height: 1.25; margin: 0 0 .5rem }
-  h2, h3 { line-height: 1.3 }
-  p { color: var(--soft-ink); margin: 0 0 1rem }
-  a { color: var(--accent); text-underline-offset: .18em }
-  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px }
-  form { display: grid; gap: .75rem; margin: 1.5rem 0 1rem }
-  form p { margin: 0; font-size: var(--small) }
-  input { text-align: center }
-  code { font-family: var(--mono); font-size: .875em; background: var(--ground); border-radius: .35rem; padding: .1rem .35rem; overflow-wrap: anywhere }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 var(--body)/1.6 var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    width: 100%;
+    max-width: 34rem;
+    padding: 2rem 1rem;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 0 .5rem;
+  }
+  h2,
+  h3 {
+    line-height: 1.3;
+  }
+  p {
+    color: var(--soft-ink);
+    margin: 0 0 1rem;
+  }
+  a {
+    color: var(--accent);
+    text-underline-offset: .18em;
+  }
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  form {
+    display: grid;
+    gap: .75rem;
+    margin: 1.5rem 0 1rem;
+  }
+  form p {
+    margin: 0;
+    font-size: var(--small);
+  }
+  input {
+    text-align: center;
+  }
+  code {
+    font-family: var(--mono);
+    font-size: .875em;
+    background: var(--ground);
+    border-radius: .35rem;
+    padding: .1rem .35rem;
+    overflow-wrap: anywhere;
+  }
 }
 
 @layer sections {
-  .Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
-  .Again { margin-top: 0 }
-  .Away { font-size: var(--small) }
-  .Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: var(--small) }
-  main > .Card, main > .More { margin: 0 0 1rem; text-align: left }
-  .Card h2 { font-size: 1rem; font-weight: 800 }
-  .Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: var(--small) }
-  .Card li::marker { color: var(--accent); font-weight: 700 }
-  .Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
-  .Card form { margin: 0 }
-  .Note { font-size: var(--fine); margin: .75rem 0 0 }
-  .Card > .Note { margin: 0 }
-  .Pills { justify-content: center; margin: 0 0 1.25rem }
-  .Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.25rem 1rem; border: 2px dashed var(--edge); border-radius: .75rem; background: var(--ground); text-align: center; cursor: pointer }
-  .Drop_Zone-over { border-color: var(--accent); background: var(--paper) }
-  .Drop_File { min-width: 0; max-width: 100%; border: 0; padding: 0; background: none; cursor: pointer }
-  .Drop_Say { color: var(--soft-ink); font-size: var(--fine) }
-  .Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: var(--small) }
-  .Chat_Said { display: grid; gap: .45rem }
-  .Chat_Said:empty { display: none }
-  .Chat_Bubble { max-width: 90%; margin: 0; padding: .55rem .9rem; border-radius: 1.1rem; background: var(--ground); color: var(--ink); white-space: pre-wrap }
-  .Chat_Bubble-you { justify-self: end; background: var(--accent); color: var(--ground) }
-  .Chat_Bubble a { color: inherit }
-  .Chat_Tool { display: flex; gap: .4rem; align-items: baseline; margin: 0; padding: 0 .3rem; color: var(--soft-ink); font-size: var(--fine) }
-  .Chat_Tool-no { color: var(--warn) }
-  .Chat_Name { font-weight: 700; flex: none }
-  .Chat_Of { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .Chat_Built { margin: .4rem 0; padding: 1rem; border: 1px solid var(--accent); border-radius: .75rem; background: var(--ground); text-align: center }
-  .Chat_Built p { margin: 0 0 .6rem }
-  .Chat_Note { margin: 0; color: var(--soft-ink); font-size: var(--fine) }
-  .Chat_Ask { margin: 0 }
-  .Chat_Ask textarea { width: 100%; min-height: 4.5rem; resize: vertical }
-  .Chat_Ask textarea:disabled { opacity: .6 }
-  .Fields { display: grid; gap: .55rem; margin: 0 }
-  .Fields > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .65rem }
-  @media (max-width: 480px) { .Fields > div { grid-template-columns: minmax(0, 1fr); gap: .25rem } }
-  .Fields dt { color: var(--ink); font-size: var(--small); font-weight: 700 }
-  .Fields dd { min-width: 0; margin: 0 }
-  .Connect_Icon { display: flex; align-items: center; gap: .65rem }
-  .Connect_Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
-  .Connect_Setup { margin: 0 0 1.5rem; text-align: left }
-  .Connect_Setup > summary { margin: 0 0 .75rem }
-  .Connect_Path { margin: .25rem 0 0; font-size: var(--small); font-weight: 800 }
-  .Connect_Next { display: grid; gap: .5rem; padding-top: .75rem; border-top: 1px solid var(--line) }
-  .Connect_Next p { margin: 0; color: var(--ink); font-weight: 800 }
+  .Code {
+    letter-spacing: .5em;
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .Again {
+    margin-top: 0;
+  }
+  .Away {
+    font-size: var(--small);
+  }
+  .Url code {
+    display: inline-block;
+    padding: .5rem 1rem;
+    border-radius: 999px;
+    background: var(--paper);
+    font-size: var(--small);
+  }
+  main > .Card,
+  main > .More {
+    margin: 0 0 1rem;
+    text-align: left;
+  }
+  .Card h2 {
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  .Card ol {
+    display: grid;
+    gap: .4rem;
+    margin: 0;
+    padding-left: 1.2rem;
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+  .Card li::marker {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .Card pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font: inherit;
+    color: var(--soft-ink);
+    text-align: left;
+  }
+  .Card form {
+    margin: 0;
+  }
+  .Note {
+    font-size: var(--fine);
+    margin: .75rem 0 0;
+  }
+  .Card > .Note {
+    margin: 0;
+  }
+  .Pills {
+    justify-content: center;
+    margin: 0 0 1.25rem;
+  }
+  .Drop_Zone {
+    display: grid;
+    place-items: center;
+    gap: .5rem;
+    padding: 1.25rem 1rem;
+    border: 2px dashed var(--edge);
+    border-radius: .75rem;
+    background: var(--ground);
+    text-align: center;
+    cursor: pointer;
+  }
+  .Drop_Zone-over {
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .Drop_File {
+    min-width: 0;
+    max-width: 100%;
+    border: 0;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .Drop_Say {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Files {
+    display: grid;
+    gap: .3rem;
+    margin: 0;
+    padding-left: 1.2rem;
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+  .Chat_Said {
+    display: grid;
+    gap: .45rem;
+  }
+  .Chat_Said:empty {
+    display: none;
+  }
+  .Chat_Bubble {
+    max-width: 90%;
+    margin: 0;
+    padding: .55rem .9rem;
+    border-radius: 1.1rem;
+    background: var(--ground);
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+  .Chat_Bubble-you {
+    justify-self: end;
+    background: var(--accent);
+    color: var(--ground);
+  }
+  .Chat_Bubble a {
+    color: inherit;
+  }
+  .Chat_Tool {
+    display: flex;
+    gap: .4rem;
+    align-items: baseline;
+    margin: 0;
+    padding: 0 .3rem;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Chat_Tool-no {
+    color: var(--warn);
+  }
+  .Chat_Name {
+    font-weight: 700;
+    flex: none;
+  }
+  .Chat_Of {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .Chat_Built {
+    margin: .4rem 0;
+    padding: 1rem;
+    border: 1px solid var(--accent);
+    border-radius: .75rem;
+    background: var(--ground);
+    text-align: center;
+  }
+  .Chat_Built p {
+    margin: 0 0 .6rem;
+  }
+  .Chat_Note {
+    margin: 0;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Chat_Ask {
+    margin: 0;
+  }
+  .Chat_Ask textarea {
+    width: 100%;
+    min-height: 4.5rem;
+    resize: vertical;
+  }
+  .Chat_Ask textarea:disabled {
+    opacity: .6;
+  }
+  .Fields {
+    display: grid;
+    gap: .55rem;
+    margin: 0;
+  }
+  .Fields > div {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    align-items: center;
+    gap: .65rem;
+  }
+  @media (max-width: 480px) {
+    .Fields > div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: .25rem;
+    }
+  }
+  .Fields dt {
+    color: var(--ink);
+    font-size: var(--small);
+    font-weight: 700;
+  }
+  .Fields dd {
+    min-width: 0;
+    margin: 0;
+  }
+  .Connect_Icon {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+  }
+  .Connect_Icon img {
+    display: block;
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--line);
+    border-radius: .75rem;
+  }
+  .Connect_Setup {
+    margin: 0 0 1.5rem;
+    text-align: left;
+  }
+  .Connect_Setup > summary {
+    margin: 0 0 .75rem;
+  }
+  .Connect_Path {
+    margin: .25rem 0 0;
+    font-size: var(--small);
+    font-weight: 800;
+  }
+  .Connect_Next {
+    display: grid;
+    gap: .5rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--line);
+  }
+  .Connect_Next p {
+    margin: 0;
+    color: var(--ink);
+    font-weight: 800;
+  }
 
   /* The dashboard's frame: the side with the brand and the tabs, and the body
      the current tab leans into. What fills the body is the style guide's cards,
      rows and forms (public/controls.css); only what no other page draws is here. */
-  .Desk { display: block }
-  .Desk main { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; max-width: 80rem; min-height: 100vh; margin: auto; padding: 0; text-align: left }
-  .Desk_Side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2rem; min-height: 100vh; padding: 2rem 1.25rem; border-right: 1px solid var(--line) }
-  .Desk_Brand { display: flex; align-items: center; gap: .65rem; color: var(--ink); font-size: 1.25rem; font-weight: 800; text-decoration: none }
-  .Desk_Brand img { border-radius: .65rem }
-  .Desk_Count { margin-left: auto; font-size: var(--fine); opacity: .8 }
-  .Desk_Foot { margin-top: auto; display: grid; gap: .5rem; padding: .5rem .8rem; font-size: var(--fine) }
-  .Desk .SideNav { margin-right: calc(-1.25rem - 1px) }
-  .Desk_Body { min-width: 0; min-height: 100vh; background: var(--paper); padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem }
-  .Desk_Head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; max-width: 52rem; margin-bottom: 1.5rem }
-  .Desk_Head h1 { font-size: 1.75rem; line-height: 1.2; margin: .15rem 0 0 }
-  .Desk_Period { margin: .25rem 0 0; font-size: var(--small) }
-  .Desk_Address { font-size: var(--fine); text-decoration: none; color: var(--soft-ink) }
-  .Desk_Head .Button { flex: none }
-  .Desk_Content { display: grid; gap: var(--gap); max-width: 52rem; font-size: var(--small) }
-  .Desk_Content > * { margin: 0 }
-  .Desk input, .Desk textarea { text-align: left }
-  .Desk form > .Button { justify-self: start }
-  .Desk_Connect { border-color: var(--accent) }
-  .Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: var(--gap) }
-  .Apps_Item { position: relative; display: flex; flex-direction: column; align-items: start; gap: .35rem; min-width: 0; min-height: 10.5rem; padding: 1rem 1.1rem; border: 1px solid var(--edge); border-radius: .75rem; background: var(--paper); color: var(--ink); overflow-wrap: anywhere }
-  .Apps_Item:hover { border-color: var(--accent) }
-  .Apps_Item img { width: 40px; height: 40px; border-radius: .6rem; margin-bottom: .4rem }
-  .Apps_Item strong { font-size: 1rem; line-height: 1.3 }
-  .Apps_Open { color: inherit; text-decoration: none }
-  .Apps_Open::after { content: ''; position: absolute; inset: 0; border-radius: inherit }
-  .Apps_Open:focus-visible { outline: 0 }
-  .Apps_Open:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 3px }
-  .Apps_Path { color: var(--soft-ink); font-size: var(--fine) }
-  .Apps_Tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: auto; padding-top: .5rem; color: var(--soft-ink); font-size: var(--fine); line-height: 1.4 }
-  .Apps_Tag { padding: .05rem .45rem; border-radius: .35rem; background: var(--ground) }
-  .Apps.Apps-one { grid-template-columns: minmax(0, 18rem); justify-content: center; margin: 1.5rem 0 0; text-align: left }
-  .Apps-one .Apps_Item { min-height: 0 }
-  .Apps_Tags:empty { display: none }
-  .Apps_Tag-warn { position: relative; background: color-mix(in srgb, var(--warn) 12%, var(--paper)); color: var(--warn); font-weight: 700; text-decoration: none }
-  .Fix_Said { color: var(--ink); font-family: var(--mono); font-size: var(--fine); overflow-wrap: anywhere }
-  .Desk_Options { display: grid; gap: var(--gap); align-items: start }
-  @media (min-width: 1100px) { .Desk_Options { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
-  .Connection_Head { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem }
-  .Connection_Head h2 { margin: 0 }
-  .Connection_Logo { flex: none; width: 28px; height: 28px }
-  .Connection_About { margin: 0; font-size: var(--small) }
-  .Connection_Face { display: grid; justify-items: center; gap: .5rem; margin: 0 0 1rem }
-  .Connection_Face .Connection_Logo { width: 48px; height: 48px }
-  .Connection_Instructions .Markdown > :first-child { margin-top: .5rem }
-  .Connection_Instructions .Markdown > :last-child { margin-bottom: 0 }
-  .Connection_Told textarea { min-height: 8rem; resize: vertical }
-  .Connection_Status { font-size: var(--fine); font-weight: 700; color: var(--soft-ink) }
-  .Connection_Status-connected { color: var(--accent) }
-  .Connection_Status-needed, .Connection_Status-broken { color: var(--warn) }
-  .Desk .Connection_Do { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; max-width: none; margin: 0 }
-  .Connection_Do .Field { flex: 1 1 14rem }
-  .Desk_Skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem 1rem; background: var(--paper); z-index: 1 }
-  .Desk_Skip:focus { top: 1rem }
+  .Desk {
+    display: block;
+  }
+  .Desk main {
+    display: grid;
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    align-items: start;
+    max-width: 80rem;
+    min-height: 100vh;
+    margin: auto;
+    padding: 0;
+    text-align: left;
+  }
+  .Desk_Side {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    min-height: 100vh;
+    padding: 2rem 1.25rem;
+    border-right: 1px solid var(--line);
+  }
+  .Desk_Brand {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    color: var(--ink);
+    font-size: 1.25rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .Desk_Brand img {
+    border-radius: .65rem;
+  }
+  .Desk_Count {
+    margin-left: auto;
+    font-size: var(--fine);
+    opacity: .8;
+  }
+  .Desk_Foot {
+    margin-top: auto;
+    display: grid;
+    gap: .5rem;
+    padding: .5rem .8rem;
+    font-size: var(--fine);
+  }
+  .Desk .SideNav {
+    margin-right: calc(-1.25rem - 1px);
+  }
+  .Desk_Body {
+    min-width: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
+  }
+  .Desk_Head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 52rem;
+    margin-bottom: 1.5rem;
+  }
+  .Desk_Head h1 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    margin: .15rem 0 0;
+  }
+  .Desk_Period {
+    margin: .25rem 0 0;
+    font-size: var(--small);
+  }
+  .Desk_Address {
+    font-size: var(--fine);
+    text-decoration: none;
+    color: var(--soft-ink);
+  }
+  .Desk_Head .Button {
+    flex: none;
+  }
+  .Desk_Content {
+    display: grid;
+    gap: var(--gap);
+    max-width: 52rem;
+    font-size: var(--small);
+  }
+  .Desk_Content > * {
+    margin: 0;
+  }
+  .Desk input,
+  .Desk textarea,
+  .Card input,
+  .Card textarea {
+    text-align: left;
+  }
+  .Desk form > .Button {
+    justify-self: start;
+  }
+  .Desk_Connect {
+    border-color: var(--accent);
+  }
+  .Apps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: var(--gap);
+  }
+  .Apps_Item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: .35rem;
+    min-width: 0;
+    min-height: 10.5rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--edge);
+    border-radius: .75rem;
+    background: var(--paper);
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .Apps_Item:hover {
+    border-color: var(--accent);
+  }
+  .Apps_Item img {
+    width: 40px;
+    height: 40px;
+    border-radius: .6rem;
+    margin-bottom: .4rem;
+  }
+  .Apps_Item strong {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+  .Apps_Open {
+    color: inherit;
+    text-decoration: none;
+  }
+  .Apps_Open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .Apps_Open:focus-visible {
+    outline: 0;
+  }
+  .Apps_Open:focus-visible::after {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .Apps_Path {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Apps_Tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-top: auto;
+    padding-top: .5rem;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    line-height: 1.4;
+  }
+  .Apps_Tag {
+    padding: .05rem .45rem;
+    border-radius: .35rem;
+    background: var(--ground);
+  }
+  .Apps.Apps-one {
+    grid-template-columns: minmax(0, 18rem);
+    justify-content: center;
+    margin: 1.5rem 0 0;
+    text-align: left;
+  }
+  .Apps-one .Apps_Item {
+    min-height: 0;
+  }
+  .Apps_Tags:empty {
+    display: none;
+  }
+  .Apps_Tag-warn {
+    position: relative;
+    background: color-mix(in srgb, var(--warn) 12%, var(--paper));
+    color: var(--warn);
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .Fix_Said {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: var(--fine);
+    overflow-wrap: anywhere;
+  }
+  .Desk_Options {
+    display: grid;
+    gap: var(--gap);
+    align-items: start;
+  }
+  @media (min-width: 1100px) {
+    .Desk_Options {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  /* How to get a key, as its integration's markdown says it. */
+  .More_Body > .Markdown > :last-child {
+    margin-bottom: 0;
+  }
+  .Desk_Skip {
+    position: absolute;
+    top: -5rem;
+    left: 1rem;
+    padding: .6rem 1rem;
+    background: var(--paper);
+    z-index: 1;
+  }
+  .Desk_Skip:focus {
+    top: 1rem;
+  }
   @media (max-width: 700px) {
-    .Desk main { display: block }
-    .Desk_Side { position: static; min-height: 0; gap: 1rem; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line) }
-    .Desk_Brand { font-size: 1.1rem }
-    .Desk_Brand img { width: 30px; height: 30px }
-    .Desk .SideNav { margin-right: 0; display: flex; flex-wrap: wrap; gap: .3rem }
-    .Desk .SideNav a { padding: .45rem .65rem; font-size: var(--fine); gap: .4rem }
-    .Desk .SideNav hr, .Desk_Foot { display: none }
-    .Desk_Body { min-height: 0; padding: 1.5rem 1rem 2.5rem }
-    .Desk_Head { margin-bottom: 1.25rem }
-    .Desk_Head h1 { font-size: 1.5rem }
-    .Apps { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem }
-    .Apps_Item { min-height: 10rem; padding: .9rem }
+    .Desk main {
+      display: block;
+    }
+    .Desk_Side {
+      position: static;
+      min-height: 0;
+      gap: 1rem;
+      padding: 1rem;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .Desk_Brand {
+      font-size: 1.1rem;
+    }
+    .Desk_Brand img {
+      width: 30px;
+      height: 30px;
+    }
+    .Desk .SideNav {
+      margin-right: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .3rem;
+    }
+    .Desk .SideNav a {
+      padding: .45rem .65rem;
+      font-size: var(--fine);
+      gap: .4rem;
+    }
+    .Desk .SideNav hr,
+    .Desk_Foot {
+      display: none;
+    }
+    .Desk_Body {
+      min-height: 0;
+      padding: 1.5rem 1rem 2.5rem;
+    }
+    .Desk_Head {
+      margin-bottom: 1.25rem;
+    }
+    .Desk_Head h1 {
+      font-size: 1.5rem;
+    }
+    .Apps {
+      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+      gap: .75rem;
+    }
+    .Apps_Item {
+      min-height: 10rem;
+      padding: .9rem;
+    }
   }
 }
