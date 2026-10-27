@@ -39,8 +39,8 @@ The codes an endpoint returns, and what each means:
   says so.
 - **`not_a_reader`** — 401 signed out, with `signIn`; 403 signed in. A `private`
   app answering someone who is not a member.
-- **`not_found`** — 404. No such endpoint under `/api/`. The message lists the
-  endpoints that exist: apply, query, me, graph, ws, blob, files/`<path>`.
+- **`not_found`** — 404. No such endpoint under `/api/`. The endpoints are
+  listed on [Frontend Data](./store.md).
 - **`method_not_allowed`** — 405. The right endpoint, the wrong HTTP method:
   `apply` and `blob` are POST, `blob/<eid>` is GET, `files/<path>` is PUT.
 - **`expected_websocket`** — 426. `/api/ws` reached without an upgrade header.
@@ -52,8 +52,14 @@ The codes an endpoint returns, and what each means:
   sending it (<https://yaks.app/docs/files.md>).
 - **`unsupported_media_type`** — 415. An upload of a type the app does not take:
   its bytes are not one of the types `"blob"` lists in its `vocab.json`.
+- **`upload_gone`** — 409. An upload in parts that is no longer in progress
+  (seven days passed), or whose parts could not be assembled. POST `blob/<sha>`
+  again to start it over; `upload()` in `client.js` does this on its own when a
+  part is answered `upload_gone` (<https://yaks.app/docs/files.md>).
 - **`no_such_file`** — 404. `blob/<eid>` where the eid is not a sha-256, or
   names bytes this app does not hold.
+- **`blob_unavailable`** — 503. The app's store failed while `blob/<eid>` was
+  read. Nothing is wrong with the request; ask again.
 - **`space_full`** — 413. The space is at its app data ceiling (1 GB on the free
   plan, 10 GB on the Plus plan) or photos-and-files ceiling (1 GB on the free
   plan, 50 GB on the Plus plan). The message says which ceiling, how much the
@@ -70,8 +76,10 @@ The codes an endpoint returns, and what each means:
   complete sentence naming the cause: a component or property nobody declared, a
   `$was` that no longer matches, a row that is not theirs to change, a component
   whose `floor` they are below, or one written sooner than its `pace` lets them
-  (<https://yaks.app/docs/components.md>). Show the message; for a pace, send
-  the same write again once the pace interval has passed.
+  (<https://yaks.app/docs/components.md>). Show the message. A write refused for
+  a pace stays in the `outbox` of `client.js`, which sends it again a second
+  later until the pace has passed (<https://yaks.app/docs/store.md>), so don't
+  send it again yourself.
 
 A refusal is a deliberate answer, so **no refusal is filed as an error**, with
 two exceptions where the refusal means the page's own code is wrong: a query the
@@ -92,10 +100,14 @@ can show it without composing anything:
     try { await apply(bundle) }
     catch (e) { e.signIn ? location = e.signIn : show(e.message) }
 
-Those two lines are all a page needs. `e.message` is the endpoint's `message`,
-or its `code` when there was no message, or `<status> <a short line>` when the
-body was not a refusal at all, for example a 404 that returned the platform's
-HTML page, whose HTML is never put into an error message.
+Those two lines are all a page needs. `e.message` is the endpoint's `message`
+whole, with no status in front of it, or its `code` when there was no message.
+When the body was not a JSON error at all, `e.message` is the status followed by
+the first 120 characters of the body's text with any HTML tags removed. Two
+answers are like that: the plain-text 429 of a space that has used its monthly
+request units, given to anyone who is not one of its signed-in people, and the
+platform's HTML error page, a 500, when yaks.app itself fails. `e.status` is the
+HTTP status in every case.
 
 `e.signIn` is set only when signing in would allow the request, and the login
 page returns to the page they were on. Check it first: a signed-out visitor who

@@ -62,27 +62,39 @@ custom domain, which goes through the same five steps whether the domain serves
 the space or one app at its root (<https://yaks.app/docs/domains.md>). The first
 step that answers handles the request:
 
-1. **The platform's own paths.** `/login`, `/connect`, `/_yaks`, `/mcp`, and
-   every app's `/api/…` store endpoints. The platform answers these and no app
-   routes them.
+1. **The platform's own paths.** Every app's store endpoints, `/<app>/api/…`,
+   and the front page's, `/api/…`; `/_yaks` and every path under it, where a
+   service's webhooks arrive; `/<app>.git/…`, the address `git clone` uses;
+   `POST /deploy`, a zip dropped on the space's page; and, on a
+   `<space>.yaks.app` hostname, `/.well-known/…`, where nothing is served. The
+   platform answers these and no app routes them.
 2. **An app's slug**, which owns the first path segment. `/garden/…` goes to the
    garden app: its own `worker.js` first, if it has one, then its files. An
-   address the app used to have redirects to it.
-3. **The front page's files**, for every path no app claims. `/photo.png` serves
-   its file and `/about` its page, at the bare hostname.
-4. **The space's index** at `/`, when the space has no front page or the front
-   page has nothing at `/`. A space that exists always answers with a page,
-   never a 404.
-5. **Everything else** goes to the front page's `worker.js` if it has one, and
-   is a 404 if it does not.
+   address the app used to have redirects to it. The exception is a path the
+   front page names in its `first` globs, which the front page's `worker.js`
+   receives before the app does (see `first` below).
+3. **The front page, for every path no app claims**, at the bare hostname: its
+   `worker.js` first, if it has one, then its files. `/photo.png` serves its
+   file and `/about` its page.
+4. **The space's index at `/`**, the list of the space's apps the visitor may
+   open, when the space has no front page, or when the front page answers `/`
+   with a 404 because its worker passes and it has no `index.html`. A space that
+   exists always answers `/` with a page, never a 404.
+5. **Every other path is a missing page.** With no front page, a path no app
+   claims is a 404. With a front page, a path its worker passes on and none of
+   its files matches is answered the way any app answers an address with no
+   file: by default its `404.html` with status 404, else its `index.html` for a
+   route, and a 404 for a missing file with an extension ("Page URLs and 404
+   handling", <https://yaks.app/docs/files.md>).
 
-Steps 3 and 5 are handled as one request, the same way step 2 handles any app:
-the worker first, then the files. A worker passes a request back by returning
-404, so it answers the routes it handles and leaves the pages, stylesheets and
-images to the platform (<https://yaks.app/docs/code.md>).
+A worker passes a request on by returning 404, so it answers the routes it
+handles and leaves the pages, stylesheets and images to the platform
+(<https://yaks.app/docs/code.md>). The front page's worker is asked before its
+files, so it receives every path in step 3, including the paths its files have.
 
-So step 4 applies when neither the front page's worker nor its files have
-anything at `/`, and step 5's 404 applies when there is no front page at all.
+`/login`, `/connect` and `/mcp` are the platform's at `yaks.app` itself. On a
+space's hostname no app claims them, so the front page answers them (step 3),
+and a `first` glob may not name them (see Reserved platform paths).
 
 Remember step 2 when writing the front page: an app's slug takes precedence over
 the front page at that path. A front page that wants a page at `/garden` has to
@@ -126,36 +138,60 @@ component entirely, including its globs.
 
 ## Reserved platform paths
 
-A glob may not name a path the platform answers itself. These are the reserved
-paths, and a glob overlapping one is refused, along with the whole call, before
-anything is written:
+A glob may not name a reserved path. A glob that overlaps one is refused, along
+with the whole call, before anything is written. These are the reserved paths:
 
-    /login      /login/*      /connect      /mcp
+    /login      /login/*      /connect      /mcp        /deploy
     /_yaks      /_yaks/*
     /api/*      /*/api/*      /platform     /platform/*
 
-`/api/*` is listed beside `/*/api/*` because the front page is served at the
-bare hostname, where its own store endpoints are `/api/…` with no slug in front
-of them: the same endpoints, at two addresses.
+On a space's hostname the platform answers some of them itself, ahead of every
+app (step 1 of the routing order):
+
+- `/api/*` and `/*/api/*`, the store endpoints. `/api/*` is listed beside
+  `/*/api/*` because the front page is served at the bare hostname, where its
+  own store endpoints are `/api/…` with no slug in front of them: the same
+  endpoints, at two addresses.
+- `/_yaks` and every path under it, where a service's webhooks arrive.
+- `POST /deploy`, a zip dropped on the space's page. A request to `/deploy` with
+  any other method goes to the app named `deploy`, or to the front page.
+
+The others are reserved, but the platform does not answer them on a space's
+hostname:
+
+- `/login`, `/login/*`, `/connect` and `/mcp` are the platform's sign-in pages,
+  connector page and MCP endpoint at `yaks.app` itself. On a space's hostname no
+  app claims them, so the front page answers them (step 3).
+- `/platform` and `/platform/*` are the path of the app that holds yaks.app's
+  own directory, in the platform's own space, where nothing is served.
 
 The refusal names the glob and the reserved path it overlaps, so `/*` is refused
 because it covers `/login`, not because it is broad. `/recipes/*` is accepted
-even though a request under it could belong somewhere else: when a glob merely
-contains a platform path, that path still takes precedence when the request
-arrives.
+even though some paths under it are reserved, such as `/recipes/api/query`. The
+front page's worker is never asked first about a reserved path, so a request to
+one goes where it would go with no `first`.
 
 ## Fail-open routing and visitor permissions
 
-**Routing fails open.** The platform remains the outer router, and the front
-page's worker is middleware the platform calls. A worker that throws, returns
+**Routing through `first` fails open.** The platform remains the outer router.
+On a path named in `first`, the front page's worker is middleware the platform
+calls before the app that owns the path. A worker there that throws, returns
 404, or takes longer than one second is skipped, and the platform routes the
 request as if the worker were not there: the request goes to the app that owns
-it, exactly as it would with no `first`. A failure is recorded as an `exception`
-on the front page, so `app_errors` lists it and the person's agent is notified
+it, exactly as it would with no `first`. A 5xx answer is not skipped: the
+visitor receives it. A failure is recorded as an `exception` on the front page,
+so `app_errors` lists it and the person's agent is notified
 (<https://yaks.app/docs/errors.md>).
 
-When the front page's worker breaks, its routing customizations stop applying.
-The space stays up.
+When the front page's worker breaks, its `first` routing stops applying, and the
+apps that own those paths serve them as usual.
+
+**The front page's own paths do not fail open.** On a path no app claims (step 3
+of the routing order), the front page's worker runs the way any app's worker
+runs on that app's own paths. A worker that throws there ends the request with a
+500 error page, and the throw is recorded the same way. A 404 from the worker
+still passes the request on to the front page's files. The one-second limit
+applies only on paths named in `first`.
 
 **The worker acts as the visitor.** A request the front page's worker forwards
 carries the visitor's identity, never the identity of the app it routes to.
@@ -232,7 +268,7 @@ the sender knows to write to `<space>.<app>@yaks.app` instead.
 
 - **It does not take over another app's paths by default.** Step 2 is the rule;
   `first` is the exception the owner sets explicitly, glob by glob, and it is
-  refused wherever it names the platform's own paths.
+  refused wherever it names a reserved path.
 - **It has no more rights than the visitor.** It routes as the visitor. If the
   visitor may not read the app the request was going to, neither may the front
   page's route.

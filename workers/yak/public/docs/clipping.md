@@ -10,8 +10,9 @@ guide:
     Open Graph and meta tags and title with HTMLRewriter, one row per URL, a
     recipe example that keeps the picture, a bookmarklet that opens the app's
     clip page, why a script on another site cannot write to an app (no
-    cross-origin writes), and what to tell the person when a site blocks the
-    fetch.
+    cross-origin writes), what to tell the person when a site blocks the
+    fetch, and re-clipping a page on a schedule with a worker command and a
+    wake.
 ---
 
 # Web Clipping
@@ -308,7 +309,7 @@ accepts them from a worker exactly as it accepts them from a page:
       let got = await fetch(at)
       if (!got.ok) return ''
       let bytes = await got.arrayBuffer()
-      if (bytes.byteLength > 20_000_000) return ''   // the endpoint's ceiling
+      if (bytes.byteLength > 20_000_000) return ''   // this app's own limit
       let saved = await env.STORE.fetch('/blob', {
         method: 'POST',
         headers: {
@@ -325,6 +326,13 @@ accepts them from a worker exactly as it accepts them from a page:
 holds: the same `text` property a photo an app uploaded would use, displayed
 with `./api/blob/<eid>`. Each fetch here is a subrequest, and the limit is 50
 per request: the page, the picture, the upload and the write make four.
+
+The 20 MB check is this example's own choice, not the endpoint's: `POST /blob`
+sets no size limit of its own. It refuses an upload with `413` only when the
+bytes are larger than the `maxLength` the app declares for `blob` in its
+`vocab.json` (code `too_large`), or when the space's storage for photos and
+files is full (code `space_full`). `kept` returns an empty string for either
+refusal, as for any other, and the recipe is saved without its picture.
 
 Then the middle of the route gains two lines. Where the generic worker built
 `title` and `body` from the meta tags, a recipe page overrides them:
@@ -454,6 +462,69 @@ Do not retry, do not send a user agent that claims to be a browser, and do not
 return 5xx, which files an error in their app and tells their agent about it,
 once per clipped page.
 
+## Re-clipping a page on a schedule
+
+A clipped page can be read again on a schedule, so that a price or a listing
+stays current. This uses the platform's scheduling
+(<https://yaks.app/docs/wakes.md>): a command whose `worker` is the clip route,
+and a `call` with a `wake` on the clipped row that runs it.
+
+Declare the command in the app's `vocab.json`. `"worker": "/clip"` makes it call
+the `/clip` route in the app's `worker.js`:
+
+    "reclip": {
+      "tool": true,
+      "description": "Read a clipped page again and update its row",
+      "input": { "url": { "type": "string" } },
+      "required": ["url"],
+      "worker": "/clip" }
+
+The platform calls a command's route with a `POST` to that path, with the call's
+arguments as a JSON body, not with the `GET` and query string the clip page
+sends. So the route reads the address from whichever one it received, in place
+of the two `searchParams` lines of the generic worker:
+
+    let asked = req.method == 'POST'
+      ? await req.json()
+      : Object.fromEntries(url.searchParams)
+    let from = asked.url ?? ''
+    let told = asked.title ?? ''
+
+A scheduled run has no browser, so there is no title to fall back on when the
+site blocks the fetch, and the generic worker would replace the saved title with
+the bare address. Return before writing instead, right after the `fetch`:
+
+    // A scheduled re-clip that the site refused leaves the row as it was.
+    if (!got.ok && req.method == 'POST') {
+      return Response.json({ eid: await idOf('clip:' + from), thin: true })
+    }
+
+Then a page puts the schedule on the clipped row: a `call` naming the command
+and the address, and a `wake` saying how often to run it:
+
+    import { apply, query } from './api/client.js'
+
+    // Read the page behind a clipped row again every week.
+    let reclipWeekly = async (eid, from) => {
+      let [reclip] = await query('.tool.name=reclip')
+      await apply({
+        entity: { eid },
+        call: { to: reclip.entity.eid, args: { url: from } },
+        wake: { every: '@weekly' },
+      })
+    }
+
+`eid` is the one the route returned when the page was first clipped. Each week
+the store writes a call for that week and the platform POSTs `{ "url": … }` to
+`/clip`, with no page open. The route writes the same eid, the hash of the
+address, so the row is updated in place and `source.at` records when it was last
+read. A scheduled run gets up to 5 seconds of CPU time instead of 50 ms, with
+the same limit of 50 subrequests. A response with a 4xx or 5xx status fails that
+week's call, recorded as a `failed` execution.
+
+To stop re-clipping a page, remove the `call` and the `wake` together
+(`call: null, wake: null`), as Scheduling says for any standing request.
+
 ## Clipping on a phone
 
 The bookmarklet works on desktop browsers: mobile browsers make bookmarks hard
@@ -476,8 +547,6 @@ than shipping a button that does nothing on their phone.
   packages one.
 - **No headless browser.** The worker fetches HTML. A page that draws itself
   entirely in JavaScript arrives empty, and the meta tags are all you get.
-- **No scheduled re-clip.** Nothing runs on a timer; a page is read when
-  somebody presses the button.
 
 ---
 

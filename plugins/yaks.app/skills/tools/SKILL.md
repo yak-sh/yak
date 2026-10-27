@@ -130,10 +130,14 @@ not. A tool name added by a deploy after the submission would never appear in
 that snapshot. The `commands` and `command` tools let an app's own actions reach
 an agent through a tool list that does not change.
 
-The deploy reports the command names it registered:
+The deploy reports the command names it registered: the commands `vocab.json`
+declares, in the order it declares them, and then the generated `add_` and
+`find_` commands of each component. The run club app below declares `log_run`,
+`leaderboard` and `since`, and its `jog` component generates `add_jog` and
+`find_jog`:
 
     deployed yourname/runs v3: https://yourname.yaks.app/runs/
-    commands: log_run, leaderboard, since
+    commands: log_run, leaderboard, since, add_jog, find_jog
 
 **A caller sees the commands of every app in every space they belong to.** A
 `public` or `open` app in a space they do not belong to can be reached on the
@@ -149,20 +153,45 @@ that do exist, because each person's command list is different and no model can
 know it in advance:
 
     no command add_run — your apps offer yourname/runs: log_run, leaderboard,
-    since. commands lists them with their arguments.
+    since, add_jog, find_jog. commands lists them with their arguments.
 
-`commands` groups them by app and lists each one's arguments the way `command`
-accepts them, with a `?` on an optional argument. Its `app` argument — a slug,
-or `<space>/<app>` where two spaces both have an app of that name — narrows it
-to a single app; leave it out to list every app you can reach:
+`commands` groups them by app and prints one line per command: its arguments the
+way `command` accepts them, each with its type (and its `description` in
+parentheses, where it has one) and a `?` on an optional argument, then `reads`
+or `writes`, then the command's description with the app's title and address
+appended. A `query` command reads; an `apply` command writes. Its `app` argument
+— a slug, or `<space>/<app>` where two spaces both have an app of that name —
+narrows it to a single app; leave it out to list every app you can reach. For
+the run club app's whole `vocab.json` (the last section of this page) and the
+recipe app above, the listing is (each line wrapped here; `commands` prints it
+on one):
 
     ## yourname/runs
-    log_run(who, miles) — Log a run for the club leaderboard — Run club, an
-      app at yourname.yaks.app/runs/
+    log_run(who: string, miles: number, at?: string date-time) writes — Log a
+      run for the club leaderboard — Run club, an app at yourname.yaks.app/runs/
+    leaderboard() reads — Every run logged so far, with who logged it — Run
+      club, an app at yourname.yaks.app/runs/
+    since(since: string (a date, like 2026-09-01)) reads — Runs logged since a
+      date — Run club, an app at yourname.yaks.app/runs/
+    add_jog(title: string, body?: string, alias?: string, who?: string, miles?:
+      number, at?: string date-time) writes — Add a jog to yourname/runs — Run
+      club, an app at yourname.yaks.app/runs/
+    find_jog(words?: string, who?: string, miles?: number, at?: string
+      date-time, limit?: number) reads — Find jogs in yourname/runs. Words
+      match the title and body; leave out any filter you do not have — Run
+      club, an app at yourname.yaks.app/runs/
 
     ## yourname/recipes
-    add_recipe(title, body?, alias?, serves?) — Add a recipe to yourname/recipes
-      — Recipes, an app at yourname.yaks.app/recipes/
+    add_recipe(title: string, body?: string, alias?: string, serves?: number,
+      cuisine?: string) writes — Add a recipe to yourname/recipes — Recipes, an
+      app at yourname.yaks.app/recipes/
+    find_recipe(words?: string, serves?: number, cuisine?: string, limit?:
+      number) reads — Find recipes in yourname/recipes. Words match the title
+      and body; leave out any filter you do not have — Recipes, an app at
+      yourname.yaks.app/recipes/
+
+    Run one with command(name, args) — and app too where two apps spell the
+    same command.
 
 The listing includes the app's title, because the slug is often not the name the
 person uses for the app, and a model selects commands by their words. Its
@@ -181,10 +210,13 @@ resources, and `notifications/resources/list_changed` announces the change.
 ## Entry keys
 
 An entry has `"tool": true`, a `description`, its arguments (`input` and
-`required`), exactly one action (`apply` or `query`), an optional `view`, and an
-optional `"model": true`. A deploy refuses any other key by name instead of
-ignoring it, so a mistyped key is an error at deploy time rather than a command
-that does only part of what was intended.
+`required`), exactly one action (`apply`, `query` or `worker`), an optional
+`view`, an optional `"model": true`, and the optional access keys `floor`,
+`discoverable` and `readOnly` (below). It may also carry `revision`, a source
+version string, and `positional`, a command-line grammar for its arguments. A
+deploy refuses any other key by name instead of ignoring it, so a mistyped key
+is an error at deploy time rather than a command that does only part of what was
+intended.
 
 ### description
 
@@ -226,13 +258,37 @@ is written:
 An undeclared argument is dropped, not refused: it binds no variable, and
 refusing it would only make the model retry with another guess.
 
-### The action: `apply` or `query`
+### The action: `apply`, `query` or `worker`
 
-An entry has exactly one of `apply` or `query`. A deploy refuses an entry with
-neither or both:
+An entry has exactly one of `apply`, `query` or `worker`. A deploy refuses an
+entry with none or more than one:
 
-    log_run does one thing: apply (a bundle to write) or query (a filter
-    line to read)
+    log_run does one thing: apply (a bundle to write), query (a filter line
+    to read), or worker (a path in its server code)
+
+`apply` and `query` are templates over the app's store, described in the next
+sections. `worker` is an absolute path in the app's `worker.js`, such as
+`"/tick"`: a call to the command sends a `POST` to that path with the arguments
+as a JSON body, and the worker's response is the command's answer. The worker
+gets up to 5,000 ms of CPU per call, and a response that is not 2xx fails the
+call with the worker's status and body. A `worker` command is the one kind a
+template cannot express: it can call another service, compute, or write several
+bundles in steps. The worker side, its `env` and its limits are on
+[Backend Code](./code.md); running a command on a schedule is on
+[Scheduling](./wakes.md).
+
+### floor, discoverable and readOnly
+
+- **`floor`** is the least authority a caller needs: `"person"` (anyone signed
+  in), `"editor"` (a member who may write) or `"owner"`. Without it, anyone the
+  app's `access` lets in may call the command. The store and the worker still
+  check each read and write the command makes.
+- **`"discoverable": false`** leaves an internal command out of `commands`,
+  `./api/commands` and the list a refused call offers. It can still be run by
+  name with `command` (within its `floor`) and by scheduled work in the store.
+- **`"readOnly": true`** is only for a `worker` command, and says it leaves the
+  store unchanged, so `commands` lists it as `reads`. A `query` command always
+  reads and an `apply` command always writes, so neither takes it.
 
 ## Template variables
 
@@ -323,7 +379,7 @@ this call created:
 `query` is a filter written as a query string, the same grammar boards and
 `query()` use, and it returns the same listing a page gets:
 
-    "board": {
+    "leaderboard": {
       "tool": true,
       "description": "The leaderboard: every run, with who logged it",
       "query": ".jog&.created" },
@@ -342,9 +398,11 @@ this call created:
 
 A row carries only the components its filter names, so name every component the
 answer must show: `.jog` alone returns no titles, and `&?doc` adds the `doc`.
-`.created` gives the board its bylines: a reference to a person the store knows
-reads back as `{eid, name}`, so the answer names who ran instead of "someone".
-The answer gives the row count and the rows:
+`.created` gives the leaderboard its bylines: a reference to a person the store
+knows reads back as `{eid, name}`, so the answer names who ran instead of
+"someone". The answer's text starts with a line giving the command's name, the
+row count and the app, followed by each row's fields; its `structuredContent`
+holds the rows:
 
     leaderboard: 12 rows in yourname/runs
     { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…" },
@@ -577,8 +635,12 @@ The run club app's component and its commands, in one file:
 
 Two commands share one view: the connector lists the page once, and each
 command's answer is rendered in it. Deploy this file beside `index.html` and
-`leaderboard.html`, and the club has three commands that the person's agent can
-call in any conversation, with the same access the person has on the page.
+`leaderboard.html`, and the club has five commands that the person's agent can
+call in any conversation, with the same access the person has on the page: the
+three the file declares, and `add_jog` and `find_jog`, which `app_deploy`
+generates for the `jog` component. The deploy reports all five:
+
+    commands: log_run, leaderboard, since, add_jog, find_jog
 
 The whole guide, covering everything else an app can do, is at
 <https://yaks.app/docs.md>.

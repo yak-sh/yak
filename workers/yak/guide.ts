@@ -322,11 +322,12 @@ the space's router as well as its homepage: served at <space>.${apex(env)}/, and
 asked for every path no other app's slug claims, its worker first and its files
 behind it. app_set(app, home: true, first: ['/recipes/*']) opts it into paths
 another app owns, before that app sees them — only a front page routes, so an
-app that is not one is refused; the platform reserves /login, /connect, /mcp and
-every path under /api/, so a glob naming one is refused too. Deleting the front
-page puts the space back to its default page. A front-page worker that throws or
-answers 404 is skipped and the request routes as if it were not there, and it
-acts as the visitor, never as the app it routes to. Call guide with page home
+app that is not one is refused; the platform reserves /login, /connect, /mcp, /deploy and
+every path under /api/, so a glob naming one is refused too. On a path it named
+in first, a front-page worker that throws, answers 404 or takes over a second is
+skipped and the app that owns the path answers; the worker acts as the visitor,
+never as the app it routes to. Deleting the front page puts the space back to
+its default page. Call guide with page home
 for the whole thing (${url(env, '/docs/home.md')}).
 
 Every app has a mailbox, at ${mailFrom('<space>', '<app>', env)} — ${

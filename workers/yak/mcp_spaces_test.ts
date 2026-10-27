@@ -814,7 +814,7 @@ test('the front page says which paths it answers first', async () => {
     // the rule. Nothing in the batch lands — not even the globs beside it.
     for (
       let [glob, why] of [
-        ['/mcp', '/mcp names /mcp, which the platform answers itself'],
+        ['/mcp', '/mcp names /mcp, which is reserved for the platform'],
         ['/*/api/query', '/*/api/query names /*/api/*'],
         ['/*', '/* names /login'],
         ['recipes', 'recipes does not start with / — a glob is a path'],

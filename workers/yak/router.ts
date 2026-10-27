@@ -34,7 +34,12 @@ export let covers = (glob: string, path: string): boolean =>
   glob.includes('*') ? pattern(glob).test(path) : glob == path
 
 /**
- * The paths the kernel answers itself, which no app routes (D-34197 rung 1).
+ * The paths no `first` glob may name, and which the home app's router is never
+ * asked about first (apps.ts `claims`). On a space's hostname the kernel
+ * answers some of them itself (D-34197 rung 1): the store doors, `/_yaks` and
+ * the webhooks under it, and a POST to `/deploy` (kernel.ts `serve`).
+ * `/login`, `/connect` and `/mcp` are the kernel's at the apex only; on a
+ * space's hostname they reach the home app like any path no app claims.
  * `/api/*` is here beside `/<app>/api/*` because the home app is served at the
  * bare hostname, where its own store door is `/api/…` with no slug in front of
  * it (apps.ts `served`) — one door, two addresses.
@@ -120,8 +125,8 @@ export let globs = (first: unknown, kernels: string[]): string[] => {
     if (taken) {
       throw refuse(
         'arguments',
-        `${glob} names ${taken.glob}, which the platform answers itself — route ` +
-          "a path of the app's own",
+        `${glob} names ${taken.glob}, which is reserved for the platform — ` +
+          "route a path of the app's own",
       )
     }
     return glob

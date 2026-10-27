@@ -5,8 +5,10 @@ guide:
   slug: store
   brief: reading and writing the store from a page with ./api/client.js
   description: >-
-    The frontend data API, ./api/client.js, in full: apply, query, search,
-    subscribe, upload, digest and me; the bundle of components a write sends;
+    The frontend data API, ./api/client.js, in full: every function it
+    exports; apply, query, search, subscribe, upload, digest, me, the outbox of
+    unsaved writes and store(base) for another app's store; the bundle of
+    components a write sends;
     patching and deleting; compare-and-set with $was so two writers cannot
     both spend one value; read and write access; the created.by author stamp
     on a row; seed.json seed data and store_load imports; and the HTTP
@@ -45,11 +47,34 @@ URL resolves the way it does on any web page, wherever the app is served.
 `/recipes/42/`. A page in a folder, `admin/index.html`, reaches the same client
 at `../api/client.js`.
 
-`store(base)` returns the same six functions, pointed at the store at the
-address you pass. Every app in a space shares one hostname, so a sibling app
-(another app in the same space) is addressed by its path, with or without the
-trailing slash. The sibling answers according to its own `access` setting,
-whoever is asking:
+## Exports of `client.js`
+
+`client.js` exports fifteen names. These eleven are bound to the app's own
+store:
+
+- the functions `apply`, `query`, `search`, `subscribe`, `upload` and `me`, and
+  the `outbox` object, each documented below.
+- `drafts`, which keeps a person's typed input in the store
+  ([Realtime Sync and Persistence](./storage.md)).
+- `publish`, `unpublish` and `publicFiles`, which put a file on the public web
+  at a path of the app's address ([Files and Uploads](./files.md)).
+
+These four functions need no store:
+
+- `was(value)`, the hash a compare-and-set write names, documented under
+  Compare-and-set with `$was` below.
+- `digest(file)`, the SHA-256 of a file, documented below.
+- `draftEid(by, place)`, the eid of a person's draft at a place
+  ([Components and vocab.json](./components.md)).
+- `store(base)`, described next.
+
+`store(base)` returns an object holding the eleven names bound to a store
+(`apply`, `query`, `search`, `subscribe`, `upload`, `me`, `outbox`, `drafts`,
+`publish`, `unpublish` and `publicFiles`), pointed at the store at the address
+you pass. Every app in a space shares one hostname, so a sibling app (another
+app in the same space) is addressed by its path, with or without the trailing
+slash. The sibling answers according to its own `access` setting, whoever is
+asking:
 
     import { store } from './api/client.js'
 
@@ -74,10 +99,11 @@ with the properties the store stamped on it. The whole array is one batch (every
 bundle in one `apply` call is applied in one transaction), so if any bundle is
 refused, nothing in that call is written.
 
-If the app's store cannot apply a write right now (yaks.app itself is failing,
-not your data), the write is kept and applied once yaks.app recovers. `apply`
-then returns `{ ok: true, pending: true, aliases: {}, bundles: [] }`. Don't send
-the write again.
+If the answer is neither an acceptance nor a refusal (the request failed, or
+yaks.app itself is failing, not your data), `apply` throws an `Error`, and the
+write stays in the `outbox` (below), which sends it again on its own until the
+store answers it. Don't call `apply` with the write again: that is a second
+write.
 
 ### query(filter)
 
@@ -154,6 +180,36 @@ reads the file a few MiB at a time, so it works on a file larger than memory.
 Returns `{person, name, role, reads, writes, signIn, invited}` to any caller,
 including a signed-out visitor at a `private` app, so a page can always ask what
 the visitor may do. The fields are described below.
+
+### outbox
+
+    let off = outbox.onPending(() => drawUnsaved(outbox.pending()))
+
+The **outbox** holds every write `apply` has sent until the store accepts it. In
+a browser it is kept in IndexedDB, one outbox per store address and signed-in
+person, so a write survives a reload: the next page opened on the same store by
+the same person sends it again. Each write carries an `idempotency-key` header,
+and the store writes a write sent again under the same key only once. Writes are
+sent in the order they were made, so a write whose outcome is unknown holds back
+the writes after it.
+
+- `outbox.pending()` returns the writes not yet accepted, oldest first, each as
+  `{key, sent, state, at, refusal}`. `sent` is the `{entities: [...]}` that
+  `apply` sent, `state` is `pending` or `refused`, and `refusal` is
+  `{name, message}` on a refused write.
+- `outbox.onPending(fn)` calls `fn` whenever that list changes, and returns the
+  function that stops it.
+- `outbox.retry(key)` sends a refused write again, and `outbox.forget(key)`
+  discards a write.
+- `outbox.ready` is a promise that resolves once the kept writes are loaded, and
+  `outbox.close()` stops the outbox.
+
+A write stays `pending`, and is sent again a second later, while its outcome is
+unknown: the request failed, or the answer was a 202, a 408, 425 or 429, a
+status of 500 or more, or neither a receipt nor a JSON error. A refusal (any
+other JSON error, such as `refused` for an unknown property, or `not_a_writer`;
+see Error responses below) is kept as `refused` and is not sent again until
+`retry(key)`. Either way, `apply` throws.
 
 ## Bundle format
 
@@ -255,13 +311,20 @@ that hash, and is exported beside `apply`:
       return 'claimed'
     }
 
-The refusal is thrown as an ordinary error, and its message names the property
-that changed and its current value, so the page can read again and decide again
-instead of overwriting a write it never saw:
+The refusal is thrown as an ordinary error with `e.status` 409, and its message
+names the property that changed and its current value, so the page can read
+again and decide again instead of overwriting a write it never saw. The refused
+write stays in the [outbox](#outbox) as `refused` until the page forgets it, so
+forget it before trying again:
+
+    import { outbox } from './api/client.js'
 
     try { await claim(eid) } catch (e) {
-      if (/has moved since it was read/.test(e.message)) return claim(eid)
-      throw e
+      if (!/has moved since it was read/.test(e.message)) throw e
+      for (let w of outbox.pending()) {
+        if (w.refusal?.message == e.message) await outbox.forget(w.key)
+      }
+      return claim(eid)
     }
 
 Three more details. `null` is a guard too, meaning "I read no value": it guards
@@ -655,40 +718,82 @@ and without opening the app to everyone while it loads. Revoke it when the load
 is done: `grant(revoke: <id>)`, with the id its response named.
 
 Each endpoint is governed by the app's `access`: its read rule for `query`,
-`blob/<eid>` and the live socket, its write rule for `apply` and `blob`, and
-`me` answers everyone. The whole set, as the 404 itself lists, is apply, query,
-me, graph, ws, blob, and files/`<path>`; every request under `/api/` is handled
-by the platform, never by your worker.
+`vocab.json`, `blob/<eid>` and the live socket (`ws`), its write rule for
+`apply`, `blob` and an upload in parts (`blob/<sha>`,
+[Files and Uploads](./files.md)), and `me` answers everyone. Every request under
+`/api/` is handled by the platform, never by your worker, and a path it does not
+serve answers 404 `not_found`. The endpoints that belong to other features are
+documented on their own pages: `public` in [Files and Uploads](./files.md),
+`env`, `fetch` and `connections/<integration>` in [Backend Code](./code.md),
+`ai/run` in [AI Models](./models.md), `rtc/` in [Voice Calls](./voice.md),
+`pay/checkout` in [Payments](./selling.md), `commands` and `command` in
+[App Commands](./tools.md), `stats` in [Visitor Analytics](./stats.md), and
+`report` in [Errors and Rollback](./errors.md). `PUT ./api/files/<path>` writes
+one of the app's own files, as described under Read and write access above.
 
 ## Error responses
 
-Refusals reach the page in two formats, and the client turns both into a thrown
-`Error`.
-
-A refusal from the platform's own endpoints is JSON, and the client throws its
-message alone:
+Every error response from the endpoints on this page is JSON in one shape, with
+the two exceptions at the end of this section:
 
     {"error": {"code": "not_a_writer", "message": "sign in to change this app"}}
+
+`code` is a fixed word a program can test, and `message` is a sentence for the
+person. When signing in would allow the request, the object also holds `signIn`:
+the platform's login address, with this page already set as its return address.
+
+`client.js` throws each error response as an `Error`. `e.message` is the
+response's `message`, whole and without the status in front of it. `e.status` is
+the HTTP status, and `e.signIn` is set when the response held `signIn`:
 
     try { await apply(bundle) }
     catch (e) { e.signIn ? location = e.signIn : show(e.message) }
 
-`e.signIn` is set only when signing in would allow the request, and it already
-holds this page as its return address. The codes from these endpoints:
-`not_a_reader`, `not_a_writer` (401 to a stranger, 403 to a member who may not),
-`too_large`, `unsupported_media_type`, `no_bytes`, `space_full`, `no_such_file`,
-`method_not_allowed`, `not_found`.
+A refusal from the app's store (an unknown component, a property that does not
+exist, a value of the wrong type, a bundle that does not parse, a `$was` guard
+on a property that has changed) has the code `refused`. Its `message` is the
+store's own sentence, and its status is the store's: 400 for a request the store
+cannot apply, 403 for a write the app's rules forbid this person, 409 for a
+`$was` guard that no longer matches, and 429 for a component written again
+sooner than its `pace` allows. So for an unknown property or component,
+`e.message` is:
 
-A refusal from the store (an unknown component, a property that does not exist,
-a bundle that does not parse) is plain text with a 400, so the message the
-client throws is prefixed with the status and cut to 120 characters:
-
-    400 unknown property: doc.name — doc has title (string), body (string)
-    400 unknown component: recipy — a component of your own is declared…
+    unknown property: doc.name — doc has title (string), body (string)
+    unknown component: recipy — a component of your own is declared in vocab.json and planted by app_deploy: …
 
 Both messages explain how to fix the request: a bad property names the
 properties that do exist, and an undeclared component explains how to declare a
 component.
+
+The codes these endpoints answer, and their statuses:
+
+- `refused`: the store's status, as above.
+- `not_a_reader` and `not_a_writer`: 401 to a signed-out visitor, with `signIn`,
+  and 403 to a signed-in person who may not read or change the app.
+- `not_found`: 404, for a path under `./api/` that no endpoint serves, or an
+  address where no app is.
+- `method_not_allowed`: 405.
+- `expected_websocket`: 426, for a request to `ws` that is not a WebSocket
+  upgrade.
+- `space_full`: 413.
+- `no_bytes` (400), `too_large` (413), `unsupported_media_type` (415) and
+  `upload_gone` (409), from an upload.
+- `no_such_file`: 404.
+- `blob_unavailable`: 503, when the app's store fails while `blob/<eid>` is
+  read.
+
+[Errors and Rollback](./errors.md) says what each code means.
+
+Two answers are not JSON. A space that has used its monthly request units
+answers anyone who is not one of its signed-in people with a plain-text 429, and
+a failure of yaks.app itself answers the platform's HTML error page with a 500.
+For a body that is not a JSON error, `client.js` throws the status followed by
+the first 120 characters of the body's text, with any HTML tags removed. A write
+that gets either answer stays `pending` in the outbox, which sends it again.
+
+A bulk load sent as NDJSON is the one write answered otherwise: once it reaches
+the store its status is 200, and the store's refusal is its last line, as
+described under Bulk loading with NDJSON above.
 
 Errors are reported without any setup. The platform puts an error reporter in
 every page it serves, so a throw, an unhandled rejection, or a failed request is

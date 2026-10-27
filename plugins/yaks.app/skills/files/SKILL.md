@@ -552,11 +552,17 @@ To delete an upload, delete its content row, at the upload's eid:
 
     await apply({ entity: { eid: file.eid }, $delete: true })
 
-Its `attachment` row goes with it, and the platform deletes the bytes right
-after, so `./api/blob/<eid>` and every `file.url` it handed out answer
-`404 no_such_file`. There is no undo. A page listing `.attachment` deletes
-`f.attachment.blob`, not the attachment row's own eid: deleting the attachment
-row alone removes the name and keeps the bytes.
+The same write deletes its `attachment` row, and every other attachment that
+points at it by `blob`. From that write on, `./api/blob/<eid>` and every
+`file.url` it handed out answer `404 no_such_file`, with two exceptions on an
+app anyone may read (`public` or `open`): the platform caches its check that a
+`file.url` may be served for 30 seconds, so that URL can go on serving the bytes
+for up to 30 seconds after the delete, and a browser that already loaded a
+`file.url` keeps its own copy, because that response is cached as immutable.
+After the write commits, the platform deletes the bytes from the app's storage.
+There is no undo. A page listing `.attachment` deletes `f.attachment.blob`, not
+the attachment row's own eid: deleting the attachment row alone removes the name
+and keeps the bytes.
 
 Delete your own row that points at the upload in the same batch, so the page
 never draws a picture that is gone:
@@ -566,11 +572,12 @@ never draws a picture that is gone:
       { entity: { eid: p.photo.blob }, $delete: true },   // the upload
     ])
 
-The bytes stay while another attachment still points at them, by `blob` or by
-`artifact` (a picture a model made is one). Nothing else keeps them: your own
-properties holding the eid are text, and the platform does not read your files
-for `./api/blob/` addresses, so delete or change what still uses an upload
-before you delete it.
+The bytes stay while a row still names them: an attachment that points at them
+by `artifact` (a picture a model made is one), or the content row written again
+by an upload of the same file before the platform deletes them. Nothing else
+keeps them: your own properties holding the eid are text, and the platform does
+not read your files for `./api/blob/` addresses, so delete or change what still
+uses an upload before you delete it.
 
 Deleted bytes stop counting toward the space's storage limit for photos and
 files. An app that replaces its uploads (a video rendered again, a photo
@@ -784,9 +791,9 @@ The HTTP endpoints, under the app's own `/api/`:
 
 - **No server-side resizing and no thumbnails.** What you upload is what is
   served, at one size. Downscale in the page.
-- **No listing of the bucket** and **no deleting bytes** short of deleting the
-  app. `.attachment` is the listing; bytes nobody wrote a row about are
-  reachable only by their address.
+- **No listing of the bucket.** `.attachment` is the listing of uploads, and
+  bytes that no row names are not served at any address. To delete an upload's
+  bytes, delete its content row (Deleting an upload, above).
 - **No `image` for anything but png, jpeg, gif and webp** — a pdf, an svg or a
   heic uploads, but has no size recorded.
 - **No progress events.** `upload` returns when it is done, so a page shows

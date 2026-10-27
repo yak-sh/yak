@@ -17,7 +17,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'clipping',
     'title': 'Web Clipping',
     'description':
-      "Web clipping, saving a page somebody is reading on another site into the app's store: a worker route that fetches the URL and reads its JSON-LD, Open Graph and meta tags and title with HTMLRewriter, one row per URL, a recipe example that keeps the picture, a bookmarklet that opens the app's clip page, why a script on another site cannot write to an app (no cross-origin writes), and what to tell the person when a site blocks the fetch.",
+      "Web clipping, saving a page somebody is reading on another site into the app's store: a worker route that fetches the URL and reads its JSON-LD, Open Graph and meta tags and title with HTMLRewriter, one row per URL, a recipe example that keeps the picture, a bookmarklet that opens the app's clip page, why a script on another site cannot write to an app (no cross-origin writes), what to tell the person when a site blocks the fetch, and re-clipping a page on a schedule with a worker command and a wake.",
     'brief': 'web clipping, saving a page from another site',
   },
   'code': {
@@ -157,7 +157,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'store',
     'title': 'Frontend Data',
     'description':
-      'The frontend data API, ./api/client.js, in full: apply, query, search, subscribe, upload, digest and me; the bundle of components a write sends; patching and deleting; compare-and-set with $was so two writers cannot both spend one value; read and write access; the created.by author stamp on a row; seed.json seed data and store_load imports; and the HTTP endpoints underneath.',
+      "The frontend data API, ./api/client.js, in full: every function it exports; apply, query, search, subscribe, upload, digest, me, the outbox of unsaved writes and store(base) for another app's store; the bundle of components a write sends; patching and deleting; compare-and-set with $was so two writers cannot both spend one value; read and write access; the created.by author stamp on a row; seed.json seed data and store_load imports; and the HTTP endpoints underneath.",
     'brief': 'reading and writing the store from a page with ./api/client.js',
   },
   'tools': {

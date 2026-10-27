@@ -229,8 +229,8 @@ let SAYS: Record<string, string> = {
   method_not_allowed: 'that door does not answer this method',
   too_many_reports: 'this app has reported too many breaks this minute',
   expected_websocket: 'the live door takes a websocket upgrade',
-  not_found: "no such door: this app's api is apply, query, me, graph, ws, " +
-    'blob, and files/<path>',
+  // Names no doors: `api` below is their one list.
+  not_found: "no such door under this app's api",
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
   no_bytes: 'an upload needs a body: post the file itself',
@@ -2784,19 +2784,19 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 //     home app has at the same address, so a home page that wants `/garden`
 //     has to be in a space where no app is called garden. A former slug
 //     redirects here.
-//  3. The HOME app's files answer every path no app claims, at the bare
-//     hostname: `/photo.png` is its file, `/about` its page.
+//  3. The home app answers every path no app claims, at the bare hostname,
+//     asked exactly the way rung 2 asks an app: its worker first, its files
+//     behind it. `/photo.png` is its file, `/about` its page.
 //  4. The space's index is `/`'s last word — a space with no home app, or a
-//     home app with no front page — so a space that EXISTS is a door and not
-//     a 404 (pages.ts `spaceIndex`).
-//  5. Everything else is the home app's worker where it has one, else 404.
+//     home app whose worker passed and which has no index.html — so a space
+//     that exists is a door and not a 404 (pages.ts `spaceIndex`).
+//  5. Every other path is a missing page: a 404 where the space has no home
+//     app, and where it has one, the home app's own answer for an address with
+//     no file (files.ts `resolve`, which follows its `not_found_handling`).
 //
-// Rungs 3 and 5 are one call and the home app is asked exactly the way rung 2
-// asks an app: its worker first, its files behind it. That is what makes it
-// the space's router — a worker that sees every path no other app claims,
-// and answers 404 to pass (dispatch.ts `ran`), leaving the rest to its files.
-// So rung 4 is what is left when neither half of the home app has anything at
-// `/`, and rung 5's 404 is what is left when there is no home app at all.
+// Rungs 3 and 5 are one call. That is what makes the home app the space's
+// router — a worker that sees every path no other app claims, and answers 404
+// to pass (dispatch.ts `ran`), leaving the rest to its files.
 //
 // And one rung is opted into, between 1 and 2: the paths the home app named
 // in `home.first` are its worker's before they are the owning app's

@@ -59,14 +59,18 @@ test('globs: refuses a glob that names a platform path', () => {
     assertThrows(() => globs([glob], KERNELS), Error).message
   assertEquals(
     refused('/login'),
-    '/login names /login, which the platform answers itself — route a path ' +
-      "of the app's own",
+    '/login names /login, which is reserved for the platform — route a ' +
+      "path of the app's own",
   )
   assertEquals(refused('/login/*').startsWith('/login/* names /login/*'), true)
   assertEquals(refused('/connect').startsWith('/connect names /connect'), true)
   assertEquals(refused('/mcp').startsWith('/mcp names /mcp'), true)
   for (let path of ['/_yaks', '/_yaks/*', '/_yaks/settings']) {
-    assertThrows(() => globs([path], KERNELS), Error, 'platform answers itself')
+    assertThrows(
+      () => globs([path], KERNELS),
+      Error,
+      'reserved for the platform',
+    )
   }
   // The store doors, at both addresses: the home app's own at the bare
   // hostname, and every app's under its slug.

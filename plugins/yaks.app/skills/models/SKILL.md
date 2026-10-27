@@ -18,7 +18,8 @@ it is written.
 ## Transcripts, entries and turns
 
 A transcript is any entity with a `session` component. Each line of it is an
-`entry`, and an entry that names a model with `using` asks for a turn:
+`entry`. An entry that names a model with `using` asks for a turn, and `sending`
+on the same entry sets what the model is sent:
 
     let smith = '$smith'
     await apply([
@@ -27,18 +28,25 @@ A transcript is any entity with a `session` component. Each line of it is an
         entity: { eid: '$said' },
         entry: { session: smith },
         content: { body: 'A stranger walks up to the forge.' },
-        using: {
-          model: '@cf/zai-org/glm-5.3-flash',
+        using: { model: '@cf/zai-org/glm-5.3-flash' },
+        sending: {
           instructions: 'You are the village smith: gruff, kind, brief.',
         },
       },
     ])
 
-`using.model` is any model name its selected provider serves, and
-`sending.instructions` is what a conversational model is told before the
-transcript. Every entry that asks for a turn carries its own `using`, so each
-turn names its model and its instructions; an entry without one is part of the
-transcript the next turn reads, and asks for nothing.
+`using` selects the model and holds only `provider`, `model` and `effort`.
+`using.model` is any model name its selected provider serves. `sending` holds
+what the model is sent, and `sending.instructions` is what a conversational
+model is told before the transcript. The store refuses `instructions` or
+`window` written inside `using`, as it refuses any property the vocabulary does
+not declare.
+
+`using` and `sending` stay in force for the rest of the transcript: each turn
+uses the newest `using` and the newest `sending` that any entry carries. After
+the first entry with `using`, every new entry with `content` asks for another
+turn with the model and instructions in force, so a later entry carries `using`
+or `sending` only to change them.
 
 Two more properties limit what a turn costs. `sending.window` is how many of the
 transcript's newest lines the model reads, extended back to the line that began
@@ -48,12 +56,11 @@ whole transcript, so each new line makes a long conversation more expensive.
 Flash accepts `low`, `high` or `max` (its default), and every reasoning token is
 billed as output.
 
-    using: {
-      model: '@cf/zai-org/glm-5.3-flash',
+    using: { model: '@cf/zai-org/glm-5.3-flash', effort: 'low' },
+    sending: {
       instructions: 'You are the village smith: gruff, kind, brief.',
       window: 16,
-      effort: 'low',
-    }
+    },
 
 The store writes its response as more entries in the same transcript:
 
@@ -65,10 +72,13 @@ A page receives the reply through a subscription, like any other change:
     subscribe(`.entry.session=${smith}&?content`, (rows) => draw(rows))
 
 No polling is needed: the write that asks returns at once, and the reply arrives
-through the subscription shortly after. Every new entry with `using` starts
-another turn, and the model sees the whole transcript each time.
-`session.status` gives the transcript's state: `pending` while a turn is owed,
-`settled` once the model has answered, `failed` when it could not be asked.
+through the subscription shortly after. Each turn sends the model the
+transcript's lines: the entries written to it, the model's replies, and any
+command calls and their results, but not the `ask` entries, errors, or typed
+questions and answers. It sends all of them, or only the newest lines
+`sending.window` counts. `session.status` gives the transcript's state:
+`pending` while a turn is owed, `settled` once the model has answered, `failed`
+when it could not be asked.
 
 ## Typed questions and structured answers
 
