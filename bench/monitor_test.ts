@@ -96,6 +96,31 @@ test('a regression counts only when a check as banked confirms it', async () => 
   })
 })
 
+// The letter a confirmed regression sends, given what profiling said.
+let letter = async (profile: () => Promise<string[]>) => {
+  let sent: string[] = []
+  await watch(['s'], { good: {} }, {
+    check: () => Promise.resolve(outcome('regressed')),
+    since: () => Promise.resolve([]),
+    report: (error) => (sent.push(error.message), Promise.resolve()),
+    profile,
+  })
+  return sent[0].split('\n').slice(-3, -1)
+}
+
+test('a confirmed regression says what its pages spent, or why it cannot', async () => {
+  equal(
+    await letter(() =>
+      Promise.resolve(['task/warm profiled: …', 'profiles: d'])
+    ),
+    ['task/warm profiled: …', 'profiles: d'],
+  )
+  equal(await letter(() => Promise.reject(new Error('no Chrome'))), [
+    '(none: the box or the data changed)',
+    'the pages could not be profiled: Error: no Chrome',
+  ])
+})
+
 test('a suite that cannot run is reported, and others still run', async () => {
   equal(await monitor({ s: ['failed'], t: ['passed'] }), {
     reports: ['failed s: s could not be measured: did not paint'],

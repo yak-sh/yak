@@ -25,6 +25,7 @@ import type { CollectedSuite } from '@yaks/benchmark'
 import { compEid, packEid, propEid } from '../packages/inspect/schema.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { failedPage, requestTrail } from './page_diagnostics.ts'
+import { type CpuProfile, summary } from './cpu_profile.ts'
 
 /** A page and the mark that says it has painted, as a page expression. */
 export type Page = {
@@ -106,8 +107,18 @@ export let primer = () => {
   }
 }
 
-/** Open `page` in a new browser twice, and say how long each took to paint. */
-export let open = async (base: string, page: Page, prime: string) => {
+/** Open `page` in a new browser twice, and say how long each took to paint.
+ * Given `profile`, a directory, each paint is also profiled through the same
+ * DevTools session: its CPU profile is written there as
+ * `<page>-<cold|warm>.cpuprofile`, and what it spent (./cpu_profile.ts) as
+ * `<page>-<cold|warm>.json`. A profiled figure is slowed by the profiler, so
+ * it says where the time went, never how much there was. */
+export let open = async (
+  base: string,
+  page: Page,
+  prime: string,
+  profile?: string,
+) => {
   let dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'cdp-pages-' })
   let chrome = new Deno.Command('google-chrome', {
     args: [
@@ -159,6 +170,10 @@ export let open = async (base: string, page: Page, prime: string) => {
     )
     await tab.send('Fetch.enable', { patterns: [{ urlPattern: '*' }] })
     await tab.send('Page.enable')
+    if (profile) {
+      await tab.send('Performance.enable')
+      await tab.send('Profiler.enable')
+    }
     // Watched every frame from the document's first moment, so the figure is
     // the frame the mark appeared in, not when a poll happened to look.
     await tab.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -200,12 +215,24 @@ export let open = async (base: string, page: Page, prime: string) => {
         }`,
       )
     }
-    let paint = async () => {
+    let metrics = async () =>
+      Object.fromEntries(
+        ((await tab.send('Performance.getMetrics')).metrics as {
+          name: string
+          value: number
+        }[]).map((m) => [m.name, m.value]),
+      )
+    let paint = async (which: string) => {
       // The last document's mark must not answer for the next one.
       await tab.send('Runtime.evaluate', {
         expression: 'delete globalThis.__painted',
       })
-      return Math.round(
+      let before = profile ? await metrics() : {}
+      if (profile) {
+        await tab.send('Profiler.setSamplingInterval', { interval: 250 })
+        await tab.send('Profiler.start')
+      }
+      let ms = Math.round(
         await visit(
           base + page.path,
           'globalThis.__painted',
@@ -214,6 +241,18 @@ export let open = async (base: string, page: Page, prime: string) => {
           } never held`,
         ) as number,
       )
+      if (profile) {
+        let { profile: cpu } = await tab.send('Profiler.stop') as {
+          profile: CpuProfile
+        }
+        let at = `${profile}/${page.name}-${which}`
+        await Deno.writeTextFile(`${at}.cpuprofile`, JSON.stringify(cpu))
+        await Deno.writeTextFile(
+          `${at}.json`,
+          JSON.stringify({ ms, ...summary(cpu, before, await metrics()) }),
+        )
+      }
+      return ms
     }
     await visit(
       prime,
@@ -222,9 +261,9 @@ export let open = async (base: string, page: Page, prime: string) => {
       } && document.readyState == 'complete'`,
       `the blank page ${prime} did not load`,
     )
-    let cold = await paint()
+    let cold = await paint('cold')
     await sleep(SETTLE)
-    let warm = await paint()
+    let warm = await paint('warm')
     tab.close()
     return { [`${page.name}/cold`]: cold, [`${page.name}/warm`]: warm }
   } finally {
@@ -357,4 +396,32 @@ export let contentSuite = (args: string[] = []): CollectedSuite => {
       return out
     },
   }
+}
+
+/** The suites measured on the box's live server, each with the pages it
+ * opens, by the name its benches carry. */
+export let profiled: Record<string, () => Page[]> = {
+  pages: () => pages(),
+  'page-content': contentPages,
+}
+
+/** Open the pages of `suite` named in `names` as the suite does, each
+ * profiled into `dir` (`open`). */
+export let profile = async (suite: string, names: string[], dir: string) => {
+  let measured = (profiled[suite]?.() ?? []).filter((p) =>
+    names.includes(p.name)
+  )
+  await Deno.mkdir(dir, { recursive: true })
+  let blank = primer()
+  try {
+    for (let page of measured) await open(live(), page, blank.url, dir)
+  } finally {
+    await blank.close()
+  }
+}
+
+// deno run -A bench/pages.ts profile <suite> <dir> <page ...>
+if (import.meta.main && Deno.args[0] == 'profile') {
+  let [, suite, dir, ...names] = Deno.args
+  await profile(suite, names, dir)
 }

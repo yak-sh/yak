@@ -11,7 +11,8 @@
  * became loaded for can confirm nothing and bank nothing: it is owed to a
  * later tick. A confirmed regression is reported with every figure over its
  * limit, how busy other work kept the box, and the commits since
- * the suite's last good run; a suite that cannot run (no baseline, a crash, a
+ * the suite's last good run, and for a suite of the box's pages what each
+ * page over its limit spent its paint on, profiled in Chrome; a suite that cannot run (no baseline, a crash, a
  * page that never paints, a run over its time cap) is reported as a failure,
  * since that bench is broken.
  * Each suite reports under one fault, so a suite that stays slow adds hits to
@@ -41,6 +42,8 @@ import { diagnostic } from './diagnostic.ts'
 import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
+import { said, type Summary } from './cpu_profile.ts'
+import { profiled } from './pages.ts'
 
 /** Every suite this box measures itself; the CI and platform deploy suites are
  * timed where they run. */
@@ -122,6 +125,9 @@ export type Monitor = {
   /** Commits after `from` up to the checkout's head, one line each. */
   since: (suite: string, from?: string) => Promise<string[]>
   bank?: (suite: string, run: Run) => Promise<void>
+  /** What the benches over their limits spent their time on, a line each,
+   * for the letter a confirmed regression sends. */
+  profile?: (suite: string, run: Run) => Promise<string[]>
 }
 
 let numbers = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
@@ -138,6 +144,7 @@ export let regressed = (
   run: Run,
   good: Good | undefined,
   commits: string[],
+  profiles: string[] = [],
 ): string =>
   [
     `${suite} got slower: ${over(run.regressions[0])}`,
@@ -155,6 +162,7 @@ export let regressed = (
       } (${good.at}):`
       : 'commits since its baseline was banked:',
     ...commits.length ? commits : ['(none: the box or the data changed)'],
+    ...profiles,
     `re-run: deno task bench:check ${suite}`,
   ].join('\n')
 
@@ -206,8 +214,11 @@ export let watch = async (
     } else if (outcome.verdict == 'regressed') {
       let good = state.good[suite]
       let commits = await m.since(suite, good?.commit)
+      let profiles = await m.profile?.(suite, outcome.run).catch((error) => [
+        `the pages could not be profiled: ${error}`,
+      ]) ?? []
       await m.report(
-        new Error(regressed(suite, outcome.run, good, commits)),
+        new Error(regressed(suite, outcome.run, good, commits, profiles)),
         suite,
         'regressed',
       )
@@ -334,6 +345,57 @@ export let measurement = (suite: string): string[] => [
   '--kill-after=10',
   HOURLY.includes(suite) ? '600' : '10800',
 ]
+
+/** Where the monitor keeps the profiles it takes, the newest KEPT of them. */
+let PROFILES = `${home}/.cache/yak/bench/profiles`, KEPT = 20
+
+/** Profile, in Chrome, each page of a suite of the box's pages that is over
+ * its limit (bench/pages.ts `profile`), a run of its own so no figure is
+ * taken with the profiler on, and say what each bench spent: one line per
+ * bench, then where the profiles are. */
+let profile = async (suite: string, run: Run): Promise<string[]> => {
+  if (!profiled[suite]) return []
+  let names = [...new Set(run.regressions.map((r) => r.name.split('/')[0]))]
+  let dir = `${PROFILES}/${suite}-${run.at.replace(/[^\w-]/g, '')}`
+  let args = measurement(suite)
+  let child = await new Deno.Command(args[0], {
+    args: [
+      ...args.slice(1),
+      Deno.execPath(),
+      'run',
+      '-A',
+      'bench/pages.ts',
+      'profile',
+      suite,
+      dir,
+      ...names,
+    ],
+    cwd: root,
+    env,
+    stdout: 'inherit',
+    stderr: 'piped',
+  }).output()
+  if (child.code == 75) {
+    return ['the pages were not profiled: the benchmark lock was busy']
+  }
+  if (!child.success) {
+    return [
+      `the pages could not be profiled: ${
+        diagnostic(new TextDecoder().decode(child.stderr), child.code)
+      }`,
+    ]
+  }
+  let all = [...Deno.readDirSync(PROFILES)].map((e) => e.name).sort()
+  for (let old of all.slice(0, -KEPT)) {
+    await Deno.remove(`${PROFILES}/${old}`, { recursive: true }).catch(() => {})
+  }
+  let lines = await Promise.all(run.regressions.map(async (r) => {
+    let at = `${dir}/${r.name.replace('/', '-')}.json`
+    let s: Summary & { ms: number } = JSON.parse(await Deno.readTextFile(at))
+    return `${r.name} profiled (${s.ms} ms with the profiler on): ${said(s)}`
+  }))
+  return [...lines, `profiles: ${dir}`]
+}
 
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. A loaded box is not measured at all: the bench would add to the
@@ -479,6 +541,7 @@ if (import.meta.main) {
   })
   let monitor: Monitor = {
     check,
+    profile,
     bank: async (suite, run) => {
       let path = await reference(suite)
       let before = await Deno.readTextFile(path)
