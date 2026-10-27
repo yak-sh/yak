@@ -399,7 +399,7 @@ export let WORDS: Record<string, Words> = {
   'connection_attach': {
     'title': 'Let an app use an existing connection',
     'description':
-      "Give an app access to one connected connection its space already owns. Only the space's owner may do this. The app starts members-only, receives a sentinel rather than the credential, and reads it by binding (the name its code reads, env.NAME in worker.js and from ./api/env in a page): the one given, else any it already asked for, else the service's name in capitals. It reaches the running app at once, with no redeploy. Find the connection id with store_connection_list. No key or token passes through this tool or its answer. Documentation: https://yaks.app/docs/code.",
+      "Give an app access to one connected connection its space already owns. Only the space's owner may do this. The app starts members-only, receives a sentinel rather than the credential, and reads it by binding (the name its code reads, env.NAME in worker.js and from ./api/env in a page): the one given, else any it already asked for, else the service's name in capitals. Attaching a connection the app already uses, with a new binding, renames it. It reaches the running app at once, with no redeploy. Find the connection id with store_connection_list. No key or token passes through this tool or its answer. Documentation: https://yaks.app/docs/code.",
   },
   'integration_set': {
     'title': 'Describe or list a custom integration',
