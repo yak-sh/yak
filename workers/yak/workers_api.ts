@@ -22,12 +22,10 @@ export let resends = {
 let IDEMPOTENT = ['GET', 'HEAD', 'PUT', 'DELETE']
 
 // An answer that is Cloudflare's own failure rather than a refusal of the
-// call: its servers erred, it asked for a slower pace, or its authentication
-// failed a token the calls around it were taking ("Internal authentication
-// error: internal server error"). A token that is wrong fails each time, so
-// it costs the resends and reads as before.
-let passing = (status: number) =>
-  status >= 500 || [401, 403, 429].includes(status)
+// call: its servers erred, or it asked for a slower pace. A 401 or 403
+// refuses the token, which fails every time and is answered at once
+// (bindings.ts names the scope it lacks).
+let passing = (status: number) => status >= 500 || status == 429
 
 /** `fetch`, where an idempotent call that Cloudflare fails on its own side
  * (a passing status, or a connection that dropped) is sent again after each

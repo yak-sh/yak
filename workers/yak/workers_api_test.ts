@@ -26,16 +26,17 @@ let sends = async ([method, status]: [string, number | null]) => {
 test("Cloudflare's own failures are sent again; a refusal, a POST or a PATCH once", async () => {
   let calls: [string, number | null][] = [
     ['GET', 500],
-    ['PUT', 403],
+    ['PUT', 503],
     ['DELETE', 429],
     ['GET', null],
     ['GET', 200],
     ['GET', 404],
     ['PUT', 400],
+    ['DELETE', 403],
     ['POST', 500],
     ['PATCH', null],
   ]
   let got = []
   for (let call of calls) got.push(await sends(call))
-  assertEquals(got, [4, 4, 4, 4, 1, 1, 1, 1, 1])
+  assertEquals(got, [4, 4, 4, 4, 1, 1, 1, 1, 1, 1])
 })
