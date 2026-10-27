@@ -92,12 +92,14 @@ test('new app exposes separate build and upload forms below the agent route', as
   )
 })
 
+// The value a page's input named `name` is drawn with, read off the markup:
+// parsing a whole page into a document takes half a millisecond.
+let field = (html: string, name: string) =>
+  html.match(new RegExp(`<input\\b[^>]*\\bname="${name}"[^>]*>`))?.[0]
+    .match(/\bvalue="([^"]*)"/)?.[1]
+
 test('the app address can be changed from settings whatever the space holds', async () => {
-  let { document } = parseHTML(await block({ view: 'settings' }))
-  assertEquals(
-    document.querySelector('input[name=space]')?.getAttribute('value'),
-    'dana',
-  )
+  assertEquals(field(await block({ view: 'settings' }), 'space'), 'dana')
 })
 
 test('connected empty library offers a copyable request', async () => {
