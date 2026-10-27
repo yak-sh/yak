@@ -194,7 +194,9 @@ test(
       )
       if (!LIVE) {
         assertEquals(
-          letters(k, REPLY_TO).filter((l) => l.body.includes('roster suite says')),
+          letters(k, REPLY_TO).filter((l) =>
+            l.body.includes('roster suite says')
+          ),
           [],
           'no feedback letter went',
         )
