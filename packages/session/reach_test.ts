@@ -183,29 +183,31 @@ let called = (entries: Bundle[]) => {
   return rest
 }
 
+// What a model turn's step asks of the entries: everything where a turn is
+// owed, and what a tool call's does where none is.
+let turned = (entries: Bundle[]) =>
+  statusOf(entries) == 'pending' ? view(entries) : called(entries)
+
 for (let forked of [false, true]) {
   for (let seed = 1; seed <= 4; seed++) {
     let g = await world(script(seed, 80, forked))
     let session = forked ? 'child' : 's'
     let all = await transcript(g, session)
-    let whole = view(all)
+    let whole = view(all), turn = turned(all)
     // Capture the integration reads once; the case compares their answers to
     // the whole-transcript oracle, not the cost of composing that oracle.
-    let got = view(await reach(g, session, { turn: true }))
-    let bodies = view(await reach(g, session, { turn: true, bodies: true }))
+    let got = turned(await reach(g, session, { turn: true }))
+    let bodies = turned(await reach(g, session, { turn: true, bodies: true }))
     let call = called(await reach(g, session, { call: true }))
     let status = view(await reach(g, session))
     let using = await usingOf(g, session)
     let open = (await openOf(g, session)).map((b) => b.entity.eid).sort()
     let expectedOpen = whole.open.toSorted()
     test(`a turn and a tool call read what the whole transcript would say (seed ${seed}, fork: ${forked})`, () => {
-      for (let k of Object.keys(whole) as (keyof typeof whole)[]) {
-        assertEquals(got[k], whole[k], k)
+      for (let k of Object.keys(turn) as (keyof typeof turn)[]) {
+        assertEquals(got[k], turn[k], k)
       }
-      assertEquals(
-        bodies,
-        whole,
-      )
+      assertEquals(bodies, turn)
       assertEquals(call, called(all))
       assertEquals(
         [status.status, status.open, status.using],
@@ -220,20 +222,27 @@ for (let forked of [false, true]) {
   }
 }
 
-// Rows a read brings back, counted at the graph's door.
+// Entities a reading brings back, counted at the graph's door: a read's, and
+// a get's of the rows a query named.
 let counting = (g: Graph) => {
-  let rows = 0, read = g.read.bind(g)
-  g.read = async (q, o) => {
-    let got = await read(q, o)
-    rows += got.length
-    return got
+  let rows = 0
+  for (let door of ['read', 'get'] as const) {
+    let through = g[door].bind(g) as (...a: unknown[]) => Promise<unknown[]>
+    ;(g as unknown as Record<string, unknown>)[door] = async (
+      ...a: unknown[]
+    ) => {
+      let got = await through(...a)
+      rows += got.length
+      return got
+    }
   }
   return () => rows
 }
 
-// A thousand lines of turns, then a window or a checkpoint that bounds what a
-// model is sent.
-let long = (bound: 'window' | 'checkpoint'): Bundle[] => {
+// Four hundred lines of turns, then a window or a checkpoint that bounds what
+// a model is sent and a line that owes it a turn; or neither, and settled,
+// where a turn would be sent all of it.
+let long = (bound: 'window' | 'checkpoint' | 'neither'): Bundle[] => {
   let out: Bundle[] = [{ entity: { eid: 's' }, session: {} }]
   for (let i = 1; i <= 400; i += 3) {
     out.push(
@@ -268,24 +277,32 @@ let long = (bound: 'window' | 'checkpoint'): Bundle[] => {
       notice: {},
     })
   }
+  if (bound != 'neither') {
+    out.push({
+      entity: { eid: 'again' },
+      entry: { session: 's', seq: 404 },
+      content: { body: 'again' },
+    })
+  }
   return out
 }
 
-for (let bound of ['window', 'checkpoint'] as const) {
+for (let bound of ['window', 'checkpoint', 'neither'] as const) {
   let g = await world(long(bound))
-  let whole = view(await transcript(g, 's'))
+  let whole = await transcript(g, 's')
+  let want = { turn: turned(whole), status: statusOf(whole) }
   let rows = counting(g)
   // Keep separate row counts for both reads, including every production read.
   let before = rows()
-  let turn = view(await reach(g, 's', { turn: true }))
+  let turn = turned(await reach(g, 's', { turn: true }))
   let turnRows = rows() - before
   before = rows()
   let status = statusOf(await reach(g, 's'))
   let statusRows = rows() - before
   test(`a status and a model turn read a bounded part of a long transcript (${bound})`, () => {
-    assertEquals(turn, whole)
+    assertEquals(turn, want.turn)
     assertEquals(turnRows < 120, true)
-    assertEquals(status, 'settled')
+    assertEquals(status, want.status)
     assertEquals(statusRows < 120, true)
   })
 }

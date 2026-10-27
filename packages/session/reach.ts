@@ -12,8 +12,11 @@
 // came from, the newest `using` and `sending`, the prompts a checkpoint
 // retains), each by one query. A step running one call reads what its tool
 // reads of the turn (those prompts, `using` and `sending`) and stops where a
-// status does: it sends no window, so it never reads one. What it returns
-// answers every function of ./state.ts and ./compact.ts as the whole
+// status does: it sends no window, so it never reads one. Nor does a model
+// turn where none is owed: a transcript running its calls, settled, stopped
+// or failed is sent nothing, so its turn reads what a tool call's does, and
+// only a pending one reads on to its window. What it returns answers every
+// function of ./state.ts and ./compact.ts the step asks as the whole
 // transcript would; ./reach_test.ts holds the two together.
 //
 // Those lookups beyond the edge are remembered, so a step costs the lines
@@ -27,10 +30,10 @@
 // (`provisional` on an ask) is read each time.
 //
 // A fork reads through its segments (./window.ts): the parent up to the
-// anchor, then its own. A transcript with no checkpoint and no window is its
-// own context, so reaching it reads it all: the model is sent all of it too.
-// Entries without a `seq` belong to the oldest end and are reached when the
-// reading is.
+// anchor, then its own. A pending transcript with no checkpoint and no window
+// is its own context, so its turn reads it all: the model is sent all of it
+// too. Entries without a `seq` belong to the oldest end and are reached when
+// the reading is.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { stoppedNotice } from './claude-control.ts'
@@ -62,7 +65,9 @@ let comp = (b: Bundle | undefined, name: string) =>
 export type Reach = {
   /** read prose too: the lines a model is sent, their bodies in hand */
   bodies?: boolean
-  /** a model turn: its context (checkpoint, prompts, window) is reached too */
+  /** a model turn: its context (checkpoint, prompts, window) is reached too,
+   * where the transcript owes one (it is pending); elsewhere what `call`
+   * reaches */
   turn?: boolean
   /** a tool call: what a tool reads of the turn it came from (the prompts,
    * the model selection and `sending` in force), but not the window that
@@ -523,56 +528,40 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     window: async (rows) =>
       sendingBefore(await aspect(r, SENDING, rows))?.window,
   }
-  if (o.turn) {
-    let mark = held.filter((b) => b.checkpoint).at(-1)
-    if (mark) {
-      let through = comp(mark, 'checkpoint')?.through
-      let boundary = through == null
-        ? undefined
-        : await n.seqAt(String(through))
-      let at = boundary ?? Number(comp(mark, 'checkpoint')?.seq)
-      n.mark = Number.isSafeInteger(at) && at >= 1 ? at : -Infinity
-      if (through != null) held.push(...await fetch(r, [String(through)]))
+  let page = pages(r), size = FIRST, started = false
+  // Rows, newest first, down to the oldest seq a decision still reads: a
+  // status's, or with `turn` a model turn's as well.
+  let fill = async (turn: boolean) => {
+    while (true) {
+      if (started) {
+        let at = await floor(n, turn)
+        if (page.done || at != null && seqOf(rows[0]) <= at) return
+        // What the rows settle is a seq: read down to it at once, not by
+        // halves.
+        if (at != null && at > -Infinity) {
+          let older = await page.until(at)
+          if (!o.bodies) older = await withContent(g, older, r.shapes) ?? older
+          rows.unshift(...older.reverse())
+          let again = await floor(n, turn)
+          if (page.done || again != null && seqOf(rows[0]) <= again) return
+        }
+        size *= 2
+      }
+      started = true
+      let next = await page.next(size)
+      if (!o.bodies) next = await withContent(g, next, r.shapes) ?? next
+      rows.unshift(...next.reverse())
+      if (n.noAsk == null && !rows.some((b) => kindOf(b) == 'ask')) {
+        n.noAsk = !await newest(
+          { ...r, names: [ENTRY], fields: '?entry' },
+          `&.${ASK}`,
+        )
+      }
     }
   }
-  let page = pages(r), size = FIRST
-  while (true) {
-    let next = await page.next(size)
-    if (!o.bodies) next = await withContent(g, next, r.shapes) ?? next
-    rows.unshift(...next.reverse())
-    if (n.noAsk == null && !rows.some((b) => kindOf(b) == 'ask')) {
-      n.noAsk = !await newest(
-        { ...r, names: [ENTRY], fields: '?entry' },
-        `&.${ASK}`,
-      )
-    }
-    let at = await floor(n, !!o.turn)
-    if (page.done || at != null && seqOf(rows[0]) <= at) break
-    // What the rows settle is a seq: read down to it at once, not by halves.
-    if (at != null && at > -Infinity) {
-      let older = await page.until(at)
-      if (!o.bodies) older = await withContent(g, older, r.shapes) ?? older
-      rows.unshift(...older.reverse())
-      let again = await floor(n, !!o.turn)
-      if (page.done || again != null && seqOf(rows[0]) <= again) break
-    }
-    size *= 2
-  }
-  // Older entries the rows name: what a model selection is in force, the call
-  // a result answers, the ask a reply or call came from, and what the open
-  // calls have reported.
-  if (o.turn || o.call) {
-    held.push(
-      ...await aspect(r, USING, rows),
-      ...await aspect(r, SENDING, rows),
-    )
-  }
-  let open = held.filter((b) => b.call).map((b) => b.entity.eid)
-  if (open.length && g.vocab.comp(PROGRESS)) {
-    held.push(
-      ...await g.read(`.${PROGRESS}.call=${open.join(',')}&${r.fields}`),
-    )
-  }
+  // Older entries the rows name: the call a result answers, the ask a reply
+  // or call came from, and what the open calls have reported.
+  let reported = new Set<Eid>()
   let missing = (of: (b: Bundle) => unknown) => {
     let seen = new Set([...rows, ...held].map((b) => b.entity.eid))
     return [
@@ -584,21 +573,57 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       ),
     ]
   }
-  held.push(
-    ...await fetch(r, missing((b) => comp(b, CALL)?.source)),
-    ...await fetch(
-      r,
-      missing((b) => comp(b, RESULT)?.call ?? comp(b, PROGRESS)?.call),
-    ),
-    ...await fetch(r, missing((b) => comp(b, OUTPUT)?.source)),
-  )
-  let seen = new Set<Eid>()
-  let entries = ordered([...rows, ...held].filter((b) => {
-    if (seen.has(b.entity.eid)) return false
-    seen.add(b.entity.eid)
-    return true
-  }))
-  return { entries, shapes: r.shapes }
+  let gather = async () => {
+    let open = held.filter((b) => b.call && !reported.has(b.entity.eid))
+      .map((b) => b.entity.eid)
+    for (let eid of open) reported.add(eid)
+    if (open.length && g.vocab.comp(PROGRESS)) {
+      held.push(
+        ...await g.read(`.${PROGRESS}.call=${open.join(',')}&${r.fields}`),
+      )
+    }
+    held.push(
+      ...await fetch(r, missing((b) => comp(b, CALL)?.source)),
+      ...await fetch(
+        r,
+        missing((b) => comp(b, RESULT)?.call ?? comp(b, PROGRESS)?.call),
+      ),
+      ...await fetch(r, missing((b) => comp(b, OUTPUT)?.source)),
+    )
+    let seen = new Set<Eid>()
+    return ordered([...rows, ...held].filter((b) => {
+      if (seen.has(b.entity.eid)) return false
+      seen.add(b.entity.eid)
+      return true
+    }))
+  }
+  await fill(false)
+  // A model turn's context is read where a turn is owed: a transcript running
+  // its calls, settled, stopped or failed is sent nothing, so its reading is
+  // what a tool call's is.
+  if (o.turn && statusOf(await gather()) == 'pending') {
+    let mark = held.filter((b) => b.checkpoint).at(-1)
+    if (mark) {
+      let through = comp(mark, 'checkpoint')?.through
+      let boundary = through == null
+        ? undefined
+        : await n.seqAt(String(through))
+      let at = boundary ?? Number(comp(mark, 'checkpoint')?.seq)
+      n.mark = Number.isSafeInteger(at) && at >= 1 ? at : -Infinity
+      if (through != null && !find(String(through))) {
+        held.push(...await fetch(r, [String(through)]))
+      }
+    }
+    await fill(true)
+  }
+  // And what a model selection and `sending` in force are.
+  if (o.turn || o.call) {
+    held.push(
+      ...await aspect(r, USING, rows),
+      ...await aspect(r, SENDING, rows),
+    )
+  }
+  return { entries: await gather(), shapes: r.shapes }
 }
 
 // Re-read every membership/kind fact, including legacy rows and mutable fork
