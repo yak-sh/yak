@@ -550,6 +550,15 @@ test(
         offer,
       )
       assertStringIncludes(await tool('app_published', { words: offer }), offer)
+      // Reviewing a gallery listing is the platform admin's act, never its
+      // owner's.
+      assertStringIncludes(
+        await refused(tool, 'gallery_review', {
+          app: `${mine}/${app}`,
+          decision: 'approve',
+        }),
+        'platform admin',
+      )
       assertStringIncludes(
         await tool('app_install', { space: theirs, name: offer, as: app }),
         offer,
