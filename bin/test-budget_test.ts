@@ -9,6 +9,7 @@ import {
   retracted,
   shrunk,
   type Times,
+  unchanged,
 } from './test-budget.ts'
 import { fenceName, fences } from '../packages/testing/examples.ts'
 
@@ -95,6 +96,20 @@ test('a file holding a test the run fails has its pass taken back', () => {
   let slower = { deno: deno({ slow: 200 }) }
   equal(retracted(slower, failing(judge(list, slower), false)), [])
   equal(retracted(slower, failing(judge(list, slower), true)), ['a_test.ts'])
+})
+
+test('a file unchanged since it passed is spared, one changed is held', () => {
+  let runs = {
+    deno: deno({ over: 3, slow: 200, quick: 0.2 }),
+    browser: deno({ new: 2 }, 1000, 'b_test.ts'),
+  }
+  let j = judge(list, runs, unchanged(runs, { 'a_test.ts': 1 }))
+  equal([names(j.over), names(j.slower), names(j.spared)], [
+    ['new'],
+    [],
+    ['over', 'slow'],
+  ])
+  equal(retracted(runs, failing(j, true)), ['b_test.ts'])
 })
 
 test('a test the list does not name is held to the budget', () => {

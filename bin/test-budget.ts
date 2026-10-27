@@ -31,6 +31,14 @@
 // first test of a file pays for everything its file is the first to load. A
 // run with nothing over the line pays for no second pass.
 //
+// A test gets slower when its code does, or the code it runs: its file's key
+// (packages/testing/deps.ts). A file that ran with the key it had already
+// passed under, before the run began, is spared: the same code passed the
+// budget, so a time over the line now is the run's, not its tests'. Only a
+// run given `--all` runs such a file, as the gate's whole run does on every
+// commit; it holds each file the first time its code runs there, and each
+// file it failed until that file passes.
+//
 // The runner remembers a file whose tests all passed, and a later run leaves
 // it out (packages/testing/deps.ts). A file holding a test the budget failed
 // did not pass, so `measure` takes that back: the same paths, run again, run
@@ -55,7 +63,7 @@
 // run's own when it failed, and 1 when anything went over; `--report` says
 // what went over and holds the run to nothing but its own tests.
 
-import { forget } from '@yaks/testing/deps'
+import { forget, passed } from '@yaks/testing/deps'
 import type { Result } from './phases.ts'
 
 /** The flags the budget takes; the others are the runner's. */
@@ -128,6 +136,7 @@ type Seen = {
 export type Judged = {
   over: Seen[]
   slower: Seen[]
+  spared: Seen[]
   within: Seen[]
   faster: Seen[]
   gone: { file: string; key: string }[]
@@ -145,11 +154,28 @@ export let listed = (tests: { file: string; name: string }[]): string[] =>
     return at && at[2] != null ? `${file}: ${at[2]}` : name
   })
 
-/** What a run's times say against the list: the tests over the line, the
- * listed ones now within `leave` or faster than their record by more than its
- * slack, the listed ones that did not run, and each platform's wall against
- * its record. */
-export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
+/// unchanged({ deno: { wall: 1, tests: [], remembered: { 'a.ts': 'k1', 'b.ts': 'k2' } } }, { k1: 5 })
+///   -> ['a.ts']
+/** The files `runs` remembered under a key `before` already held: each ran
+ * the code it had passed with. */
+export let unchanged = (
+  runs: Record<string, Times>,
+  before: Record<string, number>,
+): string[] =>
+  Object.values(runs).flatMap((r) =>
+    Object.entries(r.remembered ?? {}).filter(([, key]) => key in before)
+      .map(([file]) => file)
+  )
+
+/** What a run's times say against the list: the tests over the line, those of
+ * them spared for running in a file `same` names, the listed ones now within
+ * `leave` or faster than their record by more than its slack, the listed ones
+ * that did not run, and each platform's wall against its record. */
+export let judge = (
+  b: Budget,
+  runs: Record<string, Times>,
+  same: string[] = [],
+): Judged => {
   let seen = new Map<string, Seen>()
   let ran = new Set<string>()
   for (let [platform, run] of Object.entries(runs)) {
@@ -169,13 +195,15 @@ export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
     })
   }
   let record = (s: Seen) => b.tests[s.file]?.[s.key]
-  let over: Seen[] = [], slower: Seen[] = [], within: Seen[] = []
-  let faster: Seen[] = []
+  let spare = new Set(same)
+  let over: Seen[] = [], slower: Seen[] = [], spared: Seen[] = []
+  let within: Seen[] = [], faster: Seen[] = []
   for (let s of seen.values()) {
     let r = record(s)
+    let held = spare.has(s.file) ? spared : r == null ? over : slower
     if (r == null) {
-      if (s.ms > b.budget) over.push(s)
-    } else if (s.ms > limit(b.slack.tests, r)) slower.push(s)
+      if (s.ms > b.budget) held.push(s)
+    } else if (s.ms > limit(b.slack.tests, r)) held.push(s)
     else if (s.ms <= b.leave) within.push(s)
     else if (limit(b.slack.tests, s.ms) < r) faster.push(s)
   }
@@ -188,7 +216,7 @@ export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
     ms: run.wall,
     record: b.platforms[platform] as number | undefined,
   }))
-  return { over, slower, within, faster, gone, walls }
+  return { over, slower, spared, within, faster, gone, walls }
 }
 
 /** The list as `--write` leaves it: tests within `leave` or gone taken out,
@@ -267,12 +295,14 @@ let said = (rows: Seen[], b: Budget) =>
   })
 
 /** What a run of the suite measured: each platform's times, the run's exit
- * code, what kind of run it was, and what it took in milliseconds. */
+ * code, what kind of run it was, the files it ran unchanged since they passed
+ * (`unchanged`), and what it took in milliseconds. */
 export type Measured = {
   code: number
   runs: Record<string, Times>
   gate: boolean
   whole: boolean
+  same?: string[]
   ms?: number
 }
 
@@ -308,8 +338,8 @@ let timed = async (suite: Suite, flags: string[], files?: string[]) => {
 
 /** Runs `suite` with its times taken. The files holding tests it would fail
  * run again, each test is held to the fastest of its times, and the files it
- * still fails have their passes taken back. A run a signal stopped says
- * nothing. */
+ * still fails have their passes taken back. A file that ran unchanged since
+ * it passed is spared. A run a signal stopped says nothing. */
 export let measure = async (
   b: Budget,
   suite: Suite,
@@ -319,9 +349,12 @@ export let measure = async (
   let gate = Deno.env.get('CI') == 'true'
   let gated = gate && whole
   let start = performance.now()
+  // Before the run: each runtime remembers what it passed as it ends.
+  let before = passed()
   let { code, stopped, runs } = await timed(suite, [])
   if (stopped) return { code, runs: {}, gate, whole }
-  let slow = failing(judge(b, runs), gated)
+  let same = unchanged(runs, before)
+  let slow = failing(judge(b, runs, same), gated)
   if (slow.length) {
     let files = [...new Set(slow.map((s) => s.file))]
     if (verbose) {
@@ -342,7 +375,7 @@ export let measure = async (
       }
     }
     runs = fastest(runs, again)
-    forget(retracted(runs, failing(judge(b, runs), gated)))
+    forget(retracted(runs, failing(judge(b, runs, same), gated)))
     if (stop != null) return { code: stop, runs: {}, gate, whole }
   }
   if (whole) {
@@ -353,10 +386,10 @@ export let measure = async (
     }
     await Deno.writeTextFile(
       `${KEPT}run.json`,
-      JSON.stringify({ gate, whole, code }),
+      JSON.stringify({ gate, whole, code, same }),
     )
   }
-  return { code, runs, gate, whole, ms: performance.now() - start }
+  return { code, runs, gate, whole, same, ms: performance.now() - start }
 }
 
 // A test on one line: what it took, its record, its name and file.
@@ -417,13 +450,13 @@ export let closing = (
  * would shrink. */
 export let hold = async (
   b: Budget,
-  { code, runs, gate, whole, ms }: Measured,
+  { code, runs, gate, whole, same, ms }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
   let report = args.includes('--report')
   let verbose = args.includes('--verbose')
-  let j = judge(b, runs)
+  let j = judge(b, runs, same)
   // Only a whole run knows which tests are gone, and only one that passed: a
   // runtime that died wrote no times, and every test it held would read as
   // gone. The records are held on the gate's, where they are taken.
@@ -434,6 +467,8 @@ export let hold = async (
     gated && w.record != null && w.ms > limit(b.slack.walls, w.record)
   )
   let shrinking = j.within.length + j.gone.length + j.faster.length
+  let spared =
+    'test(s) over the line in files unchanged since they passed, spared'
   let lines: string[] = []
   let section = (title: string, rows: string[]) => {
     if (rows.length) lines.push(`\n─── ${title} ───`, ...rows)
@@ -455,6 +490,15 @@ export let hold = async (
         : gated
         ? said(slower, b)
         : [...said(slower, b), '  Held on the gate, where records are taken.'],
+    )
+    section(
+      `${j.spared.length} ${spared}`,
+      j.spared.length
+        ? [
+          ...said(j.spared, b),
+          "  Each file passed the budget before with the same code: the time is the run's.",
+        ]
+        : [],
     )
     section(
       'platform wall clocks',
@@ -492,6 +536,9 @@ export let hold = async (
           gated ? '' : ', held on the gate'
         }: ${worst(slower, b)}`,
       )
+    }
+    if (j.spared.length) {
+      lines.push(`${j.spared.length} ${spared}: ${worst(j.spared, b)}`)
     }
     for (let w of wide) {
       lines.push(

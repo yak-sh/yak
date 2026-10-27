@@ -153,9 +153,14 @@ stronger.
   measured again first, in fresh runtimes with each file loaded twice, and
   fails only when it is over every time, so a loaded box doesn't fail it; a
   run with nothing over pays for no second pass. A file failed this way stays
-  unpassed, so the next run runs it again. The records are the gate's: its
-  whole run (`deno task test --all`) fails a listed test past its record
-  (times the list's slack) and workerd's wall past its own; a whole run
+  unpassed, so the next run runs it again. A file that runs unchanged since it
+  passed (only `--all` runs one, as the gate does) is spared: the same code
+  passed the budget, so a time over the line is the run's. A test gets slower
+  when its code or what it imports changes, which changes the file's key, so
+  the gate holds each file the first time its code runs there. The records
+  are the gate's: its whole run (`deno task test --all`) fails a listed test
+  past its record (times the list's slack) and workerd's wall past its own; a
+  whole run
   elsewhere says them without holding them, and a narrowed one says neither,
   since another box runs a process-spawning test several times slower. The
   other platforms' walls are said, not held, since their tests are each held
