@@ -2597,15 +2597,19 @@ let indexedRelation = (
       }
     }
   }
-  // Entity identity paging follows the entity's ordered EID index. Driving
-  // a presence table instead scans and sorts its entire history for each page.
-  // Keep the same presence guard, which binding elided for the planned spine.
+  // Entity identity paging can walk the entity's ordered EID index, probing
+  // each entity for the presence the binding elided for the planned spine,
+  // or drive from the presence table, reading and sorting every owner. The
+  // walk is the road for a dense component; for a sparse one it reads every
+  // entity to fill its page, or to its end for a page that never fills, as
+  // the platform tracker's bug pages did at 6.7B rows a day (T-132729).
   let eidOrder = flattened(clauses).some((c) =>
     c.kind == 'order' && (c.value == 'entity.eid' || c.value == '-entity.eid')
   )
+  let walk: Select | undefined
   if (!root && !ctx.candidates && ctx.present && eidOrder) {
     let entity = ctx.d.admitted ?? from
-    return {
+    walk = {
       ...s,
       from: raw(entity, [], 'entity'),
       where: and(
@@ -2692,7 +2696,7 @@ let indexedRelation = (
     : ctx.d.scoped
     ? ctx.d.owned?.(root.comp)
     : ctx.d.table(root.comp)
-  if (!src) return s
+  if (!src) return walk ?? s
   let gated = root.index && gatedList(ctx, root.pred, src)
   // Physical paging must seek the driving index, rather than test its joined
   // entity after visiting every earlier row in that handler's history.
@@ -2845,58 +2849,96 @@ let indexedRelation = (
         })),
       ],
     }
-    // A paged statement pages each arm in its own order too: an index that
-    // reads in that order then stops at the page, where the newest entry of
-    // a long session carrying a component read the whole session first.
-    let gated = (q: Select, enabled: Cond) => {
-      let gate = render({
-        ...q,
-        cols: [raw(ctx.d.ownerKey('entity') + ' as "id"')],
-        order: page == null ? undefined : q.order,
-        limit: {
-          t: 'case',
-          arms: [[enabled, val(page ?? -1)]],
-          else: val(0),
-        },
-      })
-      return {
-        t: 'select' as const,
-        cols: [raw('"id"')],
-        from: raw(`(${gate.sql})`, gate.params),
-      }
-    }
-    let arms = render({
-      t: 'compound',
-      op: 'union all',
-      parts: [gated(presence, not(dense)), gated(indexed, dense)],
+    return roads(ctx, s, from, root.comp, page, [
+      [presence, not(dense)],
+      [indexed, dense],
+    ])
+  }
+  if (!walk) return indexed
+  // The walk reads about page × entities / owners rows to fill its page; the
+  // drive reads each owner and its entity. Both are counted in the statement,
+  // the entities by the largest id and the owners by the table's own count,
+  // and the walk is taken only while it is the shorter: the box's 19k
+  // sessions among 3.2M entities page one at a time by walking, and the
+  // platform tracker's bugs page a hundred at a time by driving. A spine that
+  // can't be counted without its policy takes the drive, which is bounded.
+  let entities = ctx.d.admitted ?? (from == '"entity"' ? from : undefined)
+  if (!entities) return indexed
+  let held = ctx.d.owned?.(ctx.present!) ?? ctx.d.table(ctx.present!)
+  // The owners are a bare `count(*)`, which SQLite answers from the B-tree's
+  // cells without decoding a row; the largest id is one seek.
+  let largest = `(select coalesce(max("__entities"."id"), 0) from ${entities}` +
+    ` as "__entities")`
+  let counted = (of: string) =>
+    `(select ${of} from (select count(*) as "n" from ${held}))`
+  let walks: Cond = page == null
+    ? raw(`${largest} < ${counted('2 * "n"')}`)
+    : raw(`${largest} * ? < ${counted('2 * "n" * "n"')}`, [page])
+  return roads(ctx, s, from, root.comp, page, [
+    [walk, walks],
+    [indexed, not(walks)],
+  ])
+}
+
+// Alternative roads to one statement's rows, each taken only while its
+// condition holds: an arm whose condition fails stops at LIMIT 0 before it
+// reads a row. A paged statement pages each arm in its own order too: an
+// index that reads in that order then stops at the page, where the newest
+// entry of a long session carrying a component read the whole session first.
+let roads = (
+  ctx: Ctx,
+  s: Select,
+  from: string,
+  comp: string,
+  page: number | undefined,
+  arms: [Select, Cond][],
+): Select => {
+  let gated = (q: Select, enabled: Cond) => {
+    let gate = render({
+      ...q,
+      cols: [raw(ctx.d.ownerKey('entity') + ' as "id"')],
+      order: page == null ? undefined : q.order,
+      limit: {
+        t: 'case',
+        arms: [[enabled, val(page ?? -1)]],
+        else: val(0),
+      },
     })
     return {
-      ...s,
-      from: raw(`(${arms.sql}) as "__selected"`, arms.params),
-      where: TRUE,
-      joins: [
-        {
-          how: 'cross',
-          src: raw(from, [], 'entity'),
-          on: raw(`"__selected"."id" = ${ctx.d.ownerKey('entity')}`),
-        },
-        ...(s.joins ?? []).map((j): Join => ({
-          ...j,
-          // Each selected row came through its root's row, so that join is
-          // inner. An outer one after a scoped spine is planned on a tiny
-          // graph's statistics as a scan of the root's table per row.
-          how: j.src.t == 'raw' && j.src.sql == joining(ctx, root!.comp)
-            ? 'cross'
-            : j.how,
-          src:
-            j.src.t == 'raw' && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.src.sql)
-              ? raw(ctx.d.owned(j.src.sql.slice(1, -1)))
-              : j.src,
-        })),
-      ],
+      t: 'select' as const,
+      cols: [raw('"id"')],
+      from: raw(`(${gate.sql})`, gate.params),
     }
   }
-  return indexed
+  let union = render({
+    t: 'compound',
+    op: 'union all',
+    parts: arms.map(([q, enabled]) => gated(q, enabled)),
+  })
+  return {
+    ...s,
+    from: raw(`(${union.sql}) as "__selected"`, union.params),
+    where: TRUE,
+    joins: [
+      {
+        how: 'cross',
+        src: raw(from, [], 'entity'),
+        on: raw(`"__selected"."id" = ${ctx.d.ownerKey('entity')}`),
+      },
+      ...(s.joins ?? []).map((j): Join => ({
+        ...j,
+        // Each selected row came through its root's row, so that join is
+        // inner. An outer one after a scoped spine is planned on a tiny
+        // graph's statistics as a scan of the root's table per row.
+        how: j.src.t == 'raw' && j.src.sql == joining(ctx, comp)
+          ? 'cross'
+          : j.how,
+        src: j.src.t == 'raw' && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.src.sql)
+          ? raw(ctx.d.owned(j.src.sql.slice(1, -1)))
+          : j.src,
+      })),
+    ],
+  }
 }
 
 /** A query as the statement that answers it: the one function `compile`
