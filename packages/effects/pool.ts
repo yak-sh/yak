@@ -649,8 +649,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       return { started, more: false }
     }
     if (!budget) return { started, more: true }
-    // Pending includes other handlers' work and our own live runs. Neither
-    // owes this worker a scan of every handler's pending window.
+    // Every handler's ready runs but our own live ones, a page of them: what
+    // a pass can examine. A page that comes back short holds all there are.
     let live = [...running.keys()]
     let key = JSON.stringify([names, live])
     if (key != signature) {
@@ -661,12 +661,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           disabled: [...disabled],
           owner: me,
         }).clauses,
-        window(1),
+        window(page),
         ...live.length ? [ne('entity.eid', list(...live))] : [],
       )
     }
-    let [first] = await g.read(pending, { unordered: true, now })
-    if (!first) {
+    let found = await g.read(pending, { unordered: true, now })
+    if (!found.length) {
       return { started, more: false }
     }
     let examine = async (b: Bundle) => {
@@ -714,10 +714,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       admitting++
       reserved++
     }
+    // What the page holds of a handler's runs heads its backlog. A short page
+    // held them all, so a handler it holds none of is drained without a read;
+    // after a full one, a handler whose rows run out reads its own window.
     let drained = new Set<string>(), visited = new Set(live)
-    let heads = new Map<string, { rows: Bundle[]; full: boolean }>([
-      [String((first[EFFECT] as Comp).handler), { rows: [first], full: true }],
-    ])
+    let heads = new Map(
+      names.map((name) => [name, {
+        rows: [] as Bundle[],
+        full: found.length == page,
+      }]),
+    )
+    for (let b of found) {
+      heads.get(String((b[EFFECT] as Comp).handler))?.rows.push(b)
+    }
     try {
       while (
         member && running.size + admitting < max && budget > 0 &&

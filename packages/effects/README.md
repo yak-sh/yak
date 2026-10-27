@@ -371,11 +371,13 @@ work, whether claimed here or left pending. A host can keep its `work` promise
 alive through handler completion and wake another worker to drain the remaining
 runs.
 
-Each pass examines a bounded page of candidate runs, 32 by default. A candidate
-starts only when it is due, claimable and has a local slot. Selection shares
-turns among handled and explicitly disabled effects, so one handler's backlog
-does not crowd out the others. Disabled runs settle without spending attempts.
-The page bounds candidate reads; `max` separately limits concurrent handlers.
+Each pass examines a bounded page of candidate runs, 32 by default, read for
+every handler at once. A candidate starts only when it is due, claimable and has
+a local slot. Selection shares turns among handled and explicitly disabled
+effects, so one handler's backlog does not crowd out the others: where the page
+comes back full, a handler it holds no run of reads a window of its own on its
+turn. Disabled runs settle without spending attempts. The page bounds candidate
+reads; `max` separately limits concurrent handlers.
 
 `pool(ctx, options)` exposes the same operations for a caller supplying registry
 slots, a writer, and a reporter.

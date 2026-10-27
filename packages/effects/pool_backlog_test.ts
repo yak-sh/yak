@@ -11,10 +11,15 @@ import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { driver } from '../sqlite/native.ts'
 import { test, until } from '@yaks/testing'
+import { loadVocab, type Vocab } from '@yaks/vocab'
 import { effects, type Opts } from './registry.ts'
 import { pooledBlog } from './testing.ts'
 
-let fixture = (sqlite = false, opts: Partial<Opts> = {}) => {
+let fixture = (
+  sqlite = false,
+  opts: Partial<Opts> = {},
+  vocab: Vocab = pooledBlog,
+) => {
   let db = sqlite ? new Database(':memory:') : undefined
   let native = db ? driver(db) : undefined
   let steps = 0
@@ -66,16 +71,16 @@ let fixture = (sqlite = false, opts: Partial<Opts> = {}) => {
     }
     : undefined
   let store = counted
-    ? storage(counted, pooledBlog, { number: true })
-    : ram(pooledBlog, { number: true })
+    ? storage(counted, vocab, { number: true })
+    : ram(vocab, { number: true })
   let errors: unknown[] = []
-  let fx = effects(pooledBlog, {
+  let fx = effects(vocab, {
     write: (b) => g.apply(b, { trusted: true }),
     report: (e) => void errors.push(e),
     now: () => 0,
     ...opts,
   })
-  let g = graph({ storage: store, vocab: pooledBlog, plugins: [fx] })
+  let g = graph({ storage: store, vocab, plugins: [fx] })
   return {
     g,
     store,
@@ -178,6 +183,46 @@ test('a SQLite backlog cannot hide another handler or turn LIMIT into a full sca
     JSON.stringify({ small, large }),
   )
   assert(large.rows <= small.rows + 64, JSON.stringify({ small, large }))
+})
+
+// One pass over a short backlog, beside `idle` more handlers owed nothing:
+// whether it started the one run, and how many statements it read.
+let shortPass = async (idle: number) => {
+  let names = Array.from({ length: idle }, (_, i) => `post_idle_${i}`)
+  let f = fixture(
+    true,
+    {},
+    loadVocab([...pooledBlog.docs, {
+      $defs: Object.fromEntries(
+        names.map((n) => [n, { effect: true, removed: ['post'] }]),
+      ),
+    }]),
+  )
+  try {
+    await f.g.apply([{ entity: { eid: 'target' }, post: { title: 'Target' } }])
+    await f.g.apply([run('fast', 'post_gone')], { trusted: true })
+    let started = 0
+    f.fx.handle(Object.fromEntries(
+      [...names, 'post_note', 'post_swept'].map((n) => [n, () => {}]),
+    ))
+    f.fx.handle({
+      post_gone: () => {
+        started++
+      },
+    })
+    f.reset()
+    await f.fx.work(f.g, undefined, 1)
+    await f.fx.idle()
+    return { started, reads: f.counts().reads }
+  } finally {
+    await f.close()
+  }
+}
+let alone = await shortPass(0), among = await shortPass(20)
+
+test('a pass over a short backlog reads as much beside twenty idle handlers as beside none', () => {
+  assertEquals(alone.started, 1)
+  assertEquals(among, alone)
 })
 
 for (let sqlite of [false, true]) {
