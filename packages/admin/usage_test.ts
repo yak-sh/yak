@@ -1,6 +1,6 @@
 import { equal, match, test } from '@yaks/testing'
 import { type Answer, HOUR, jumps, readings, report } from './usage.ts'
-import { look } from './service.ts'
+import { analytics, look } from './service.ts'
 
 let at = Date.parse('2026-10-17T12:00:00Z')
 let iso = (ms: number) => new Date(ms).toISOString()
@@ -77,4 +77,11 @@ test('a look reports every jump it finds', async () => {
   )
   equal([jumped.length, sent.length], [1, 1])
   match(sent[0], /^UsageJump: yak-tracker's Durable Object o1/)
+})
+
+test('a look with no token to read analytics with passes its hour quietly', async () => {
+  let sent: unknown[] = []
+  let usage = analytics({ account: 'a', analytics: undefined })!
+  equal(await look(usage, (error) => void sent.push(error), at), [])
+  equal(sent, [])
 })

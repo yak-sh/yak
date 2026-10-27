@@ -16,15 +16,27 @@
 // `op read` is a secret that is missing right now, not an older value.
 //
 // A 1Password value is kept in memory for half a minute, so a burst of reads is
-// one `op` process and a rotation is picked up without a restart. `peek` is
-// the same question answered on the spot, for a config read inside a property
-// getter: it answers with what is kept, and a 1Password value it has not read
-// yet (see `warm`) is fetched for the next asker rather than waited for.
+// one `op` process and a rotation is picked up without a restart. A failed read
+// is kept as long, so a secret 1Password refuses is not asked for again by
+// every reader, and is reported once, to the reporter a host installed
+// (`faults`), until a read of it succeeds again.
+//
+// `peek` is the same question answered on the spot, for a config read inside a
+// property getter. A 1Password value this process has never read is read before
+// it answers, so 1Password is asked only by a process that uses the secret, and
+// never by every process that merely names it; one read before is answered at
+// once, and read again behind the answer once it is half a minute old.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { identityEid } from '@yaks/graph/identity'
-import { deadline, type OpRead, opRead } from './op.ts'
+import {
+  deadline,
+  type OpRead,
+  opRead,
+  type OpReadNow,
+  opReadNow,
+} from './op.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Vault } from './vault.ts'
 
@@ -45,10 +57,12 @@ export let unsealed = (name: string): Bundle => ({
   tombstone: {},
 })
 
-/** Where else a name may be found, and how 1Password is read. */
+/** Where else a name may be found, and how 1Password is read: awaited, and on
+ * the spot. */
 export type Sources = {
   env?: (name: string) => string | undefined
   op?: OpRead
+  opNow?: OpReadNow
 }
 
 // The process environment, where the runtime has one: a Worker has none.
@@ -62,30 +76,83 @@ let environment = (name: string): string | undefined => {
   }
 }
 
-let TTL = 30_000
-let cache = new Map<string, { value: string; until: number }>()
-let reading = new Map<string, Promise<string | undefined>>()
+// Where a failed read is told: the reporter a host installed last, else the
+// console.
+let reporters: ((error: unknown, where: string) => void)[] = []
 
-// One `op read` per reference at a time, remembered for TTL. A failure forgets
-// what was remembered and says why, once per failed read.
-let fromOp = (ref: string, read: OpRead): Promise<string | undefined> => {
+/** Report every 1Password read this process fails to `report`, with where it
+ * was caught: the host's own reporter, which tells its tracker. A reference
+ * that keeps failing is told once, until it reads again. The newest installed
+ * is the one told; the function returned removes it. */
+export let faults = (
+  report: (error: unknown, where: string) => void,
+): () => void => {
+  reporters.push(report)
+  return () => {
+    let at = reporters.lastIndexOf(report)
+    if (at >= 0) reporters.splice(at, 1)
+  }
+}
+
+let TTL = 30_000
+// What each reference last read as, for TTL: its value, or none for a failure.
+let cache = new Map<string, { value?: string; until: number }>()
+let reading = new Map<string, Promise<string | undefined>>()
+let failing = new Set<string>()
+
+let answered = (ref: string, value: string): string => {
+  cache.set(ref, { value, until: Date.now() + TTL })
+  failing.delete(ref)
+  return value
+}
+
+let failed = (ref: string, name: string, e: unknown): undefined => {
+  cache.set(ref, { until: Date.now() + TTL })
+  if (failing.has(ref)) return
+  failing.add(ref)
+  let error = new Error(
+    `${name} could not be read from 1Password: ${(e as Error).message}`,
+    { cause: e },
+  )
+  let report = reporters.at(-1)
+  let said = () => console.warn('@yaks/secrets —', error.message)
+  try {
+    if (report) report(error, 'op read')
+    else said()
+  } catch {
+    said()
+  }
+}
+
+// One `op read` per reference at a time, remembered for TTL.
+let fromOp = (
+  ref: string,
+  name: string,
+  read: OpRead,
+): Promise<string | undefined> => {
   let hit = cache.get(ref)
   if (hit && hit.until > Date.now()) return Promise.resolve(hit.value)
   let going = reading.get(ref)
   if (going) return going
   going = read(ref, deadline()).then(
-    (value) => {
-      cache.set(ref, { value, until: Date.now() + TTL })
-      return value
-    },
-    (e) => {
-      cache.delete(ref)
-      console.warn('@yaks/secrets — op read failed:', (e as Error).message)
-      return undefined
-    },
+    (value) => answered(ref, value),
+    (e) => failed(ref, name, e),
   ).finally(() => reading.delete(ref))
   reading.set(ref, going)
   return going
+}
+
+// The same read, answered before it returns.
+let fromOpNow = (
+  ref: string,
+  name: string,
+  read: OpReadNow,
+): string | undefined => {
+  try {
+    return answered(ref, read(ref))
+  } catch (e) {
+    return failed(ref, name, e)
+  }
 }
 
 /** A secret's value, by name. */
@@ -99,7 +166,7 @@ export let reveal = (
     (kept) =>
       kept?.value ??
         (kept?.op
-          ? fromOp(kept.op, s.op ?? opRead())
+          ? fromOp(kept.op, name, s.op ?? opRead())
           : (s.env ?? environment)(name)),
   )
 
@@ -113,7 +180,7 @@ export let sentinelOf = (
     kept ? sentinel(await vault.salt(), kept.handle) : undefined
   )
 
-/** The same, answered on the spot. */
+/** A secret's value, by name, answered on the spot. */
 export let peek = (
   vault: Local,
   name: string,
@@ -123,27 +190,7 @@ export let peek = (
   if (kept?.value != null) return kept.value
   if (!kept?.op) return (s.env ?? environment)(name)
   let hit = cache.get(kept.op)
-  if (!hit || hit.until <= Date.now()) void fromOp(kept.op, s.op ?? opRead())
-  return hit?.value
+  if (!hit) return fromOpNow(kept.op, name, s.opNow ?? opReadNow())
+  if (hit.until <= Date.now()) void fromOp(kept.op, name, s.op ?? opRead())
+  return hit.value
 }
-
-/** Read the 1Password values of the named secrets, so a `peek` for one that
- * follows answers with it. A host calls this once as it starts, with the names
- * its configuration binds: a command waits on 1Password only for a secret it
- * will read, never for every reference the vault happens to keep. */
-export let warm = (
-  vault: Vault,
-  names: string[],
-  s: Sources = {},
-): Promise<unknown> =>
-  Promise.all(
-    names.map((name) =>
-      after(
-        vault.read(secretEid(name)),
-        (kept) =>
-          kept?.op && kept.value == null
-            ? fromOp(kept.op, s.op ?? opRead())
-            : undefined,
-      )
-    ),
-  )

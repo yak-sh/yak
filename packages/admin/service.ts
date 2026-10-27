@@ -75,8 +75,8 @@ export type Options = {
    * (default {@link BOUND}) */
   bound?: number
   /** a Cloudflare token that reads the account's analytics,
-   * `{"secret": "CF_USAGE_TOKEN"}` in the config; without one there is no
-   * usage watch */
+   * `{"secret": "CF_USAGE_TOKEN"}` in the config, read at each hour's look;
+   * a look without one passes its hour */
   analytics?: string
   /** the Cloudflare account the usage watch reads */
   account?: string
@@ -326,16 +326,22 @@ let catchUp = async (
 }
 
 /** Where the usage watch reads: the account's analytics for an hour (ms, on
- * the hour) and the two days before it, or nothing to read. */
-export type Usage = ((hour: number) => Promise<Answer>) | undefined
+ * the hour) and the two days before it, nothing while it has no token to read
+ * them with, or no account to read at all. */
+export type Usage =
+  | ((hour: number) => Promise<Answer | undefined>)
+  | undefined
 
-/** Cloudflare's analytics, with the token read each time it is asked. */
+/** Cloudflare's analytics, with the token read each time it is asked, so a
+ * token that could not be read for one look is read again for the next. */
 export let analytics = (options: Options): Usage =>
-  options.analytics && options.account
+  options.account
     ? async (hour) => {
+      let token = options.analytics
+      if (!token) return undefined
       let data = answered(
         await ask<Answer>(
-          { CF_ANALYTICS_TOKEN: options.analytics },
+          { CF_ANALYTICS_TOKEN: token },
           QUERY,
           variables(options.account!, hour),
         ),
@@ -349,13 +355,16 @@ export let analytics = (options: Options): Usage =>
  * hold an hour within minutes of its end. */
 export let SETTLE = 10 * 60_000
 
-/** One look at an hour's usage: every jump it finds, reported. */
+/** One look at an hour's usage: every jump it finds, reported, or none
+ * without a token to look with. */
 export let look = async (
   usage: NonNullable<Usage>,
   report: Report,
   hour: number,
 ) => {
-  let { series, who } = readings(await usage(hour))
+  let answer = await usage(hour)
+  if (!answer) return []
+  let { series, who } = readings(answer)
   let found = jumps(series, hour)
   for (let jump of found) {
     let { error, context } = jumped(jump, who.get(jump.subject))
@@ -381,7 +390,8 @@ let watch = async (
         failing = false
       } catch (error) {
         // A failing look is one report until a look succeeds again, and the
-        // next look asks for the same hour.
+        // next look asks for the same hour. A look with no token passes its
+        // hour, so a token that cannot be read is asked for once an hour.
         if (!failing) await report(error, { tags: { duty: 'usage watch' } })
         failing = true
       }

@@ -62,8 +62,9 @@ export {
   type Sealed,
   type Vault,
 } from './vault.ts'
-export { isOpRef, type OpRead, opRead } from './op.ts'
+export { isOpRef, type OpRead, opRead, type OpReadNow } from './op.ts'
 export {
+  faults,
   peek,
   reveal,
   sealed,
@@ -71,6 +72,5 @@ export {
   sentinelOf,
   type Sources,
   unsealed,
-  warm,
 } from './reveal.ts'
 export { type Records, records } from './records.ts'

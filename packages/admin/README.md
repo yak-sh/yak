@@ -175,7 +175,8 @@ a jump in that tracker is still heard.
 ```
 
 `analytics` is an account-owned Cloudflare token with Account Analytics Read
-alone; without it, or without `account`, there is no usage watch.
+alone, read at each hour's look; an hour whose look finds no token is passed
+over, and without `account` there is no usage watch.
 
 ## Facets
 

@@ -13,6 +13,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { loadVocab } from '@yaks/vocab'
 import {
+  faults,
   isHandle,
   type Local,
   peek,
@@ -30,7 +31,6 @@ import {
   swap,
   unsealed,
   type Vault,
-  warm,
 } from './mod.ts'
 
 // The graph a host builds: the plugin over one vault, writing what it says
@@ -347,6 +347,18 @@ test('a secret inside a call is sealed when the call applies it', async () => {
   )
 })
 
+// What the reporter a host installs is told while `fn` runs.
+let told = async (fn: () => unknown) => {
+  let said: string[] = []
+  let unhook = faults((e, where) => void said.push(`${where}: ${e}`))
+  try {
+    await fn()
+  } finally {
+    unhook()
+  }
+  return said
+}
+
 let bound = setup()
 await bound.g.apply([
   sealed('A', 'op://v/item/key'),
@@ -364,23 +376,52 @@ test('a name resolves through the vault, then 1Password, then the environment', 
   assertEquals(vault.read(secretEid('A'))!.op, 'op://v/item/key')
   assertEquals(await reveal(vault, 'A', { env, op }), 'from-op')
   // bound to 1Password and failing: missing, never the environment
-  let warn = console.warn
-  console.warn = () => {}
-  try {
+  await told(async () =>
     assertEquals(await reveal(vault, 'B', { env, op }), undefined)
-  } finally {
-    console.warn = warn
-  }
+  )
 })
 
-test('peek answers on the spot, with 1Password values warmed first', async () => {
-  let { g, vault } = setup()
-  let op = () => Promise.resolve('warm')
-  await g.apply([sealed('A', 'plain'), sealed('B', 'op://v/item/warm')])
+// Each load of this file asks about references of its own, since what
+// 1Password answered is remembered for the whole process.
+let unread = () => `op://v/item/${crypto.randomUUID()}`
+
+let spot = setup()
+await spot.g.apply([sealed('A', 'plain'), sealed('B', unread())])
+test('peek reads a 1Password value the first time it is asked, and remembers it', () => {
+  let { vault } = spot
+  let reads = 0
+  let opNow = () => (reads++, 'spot')
   assertEquals(peek(vault, 'A', none), 'plain')
   assertEquals(peek(vault, 'C', { env: () => 'env' }), 'env')
-  await warm(vault, ['B'], { op })
-  assertEquals(peek(vault, 'B', { op }), 'warm')
+  assertEquals(
+    [peek(vault, 'B', { opNow }), peek(vault, 'B', { opNow }), reads],
+    ['spot', 'spot', 1],
+  )
+})
+
+let refusing = setup()
+await refusing.g.apply([sealed('R', unread())])
+let refused = new Error('Too many requests')
+test('a failed 1Password read is told once, until a read of it succeeds', async () => {
+  using time = new FakeTime()
+  let { vault } = refusing
+  let op = () => Promise.reject(refused)
+  let opNow = () => {
+    throw refused
+  }
+  let later = (s: Parameters<typeof reveal>[2]) => {
+    time.tick(31_000)
+    return reveal(vault, 'R', s)
+  }
+  let said = await told(async () => {
+    assertEquals(peek(vault, 'R', { opNow, env: () => 'env' }), undefined)
+    assertEquals(await later({ op }), undefined)
+    assertEquals(await later({ op: () => Promise.resolve('back') }), 'back')
+    assertEquals(await later({ op }), undefined)
+  })
+  let once = 'op read: Error: R could not be read from 1Password: ' +
+    'Too many requests'
+  assertEquals(said, [once, once])
 })
 
 // A record's write lands in the vault the way the plugin's seal puts it there

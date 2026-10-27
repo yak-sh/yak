@@ -71,7 +71,11 @@ when its entity is deleted, and can be scoped by a sentinel.
 - **1Password**: a value written as `op://<vault>/<item>/<field>` is kept as
   that reference and read with `op read` each time it is used, cached for 30
   seconds (packages/secrets/op.ts, reveal.ts `TTL`). The value never rests on
-  the box. A failed read is a missing secret, never a fall to the environment.
+  the box. A failed read is a missing secret, never a fall to the environment;
+  it is kept as long, and reported to the host's tracker once until a read of
+  it succeeds (reveal.ts `faults`). The account allows 1,000 reads a day (`op
+  service-account ratelimit`), so a read in every process that starts uses it
+  up within hours: only a process that uses a value reads it.
 - **yaks.app**: the directory's store (`yak/platform`) seals into the `VAULT` D1
   database, every value encrypted under `VAULT_KEY` (packages/d1/vault.ts,
   workers/yak/vault.ts). An app's own store runs no secrets plugin and keeps no
@@ -89,8 +93,10 @@ new key goes, and on yaks.app there is no environment to fall to.
 
 - **In a config** (`~/.yak/yak.json`, a plugin's `with`), a key is `{"secret":
   "NAME"}` where the value would go. The CLI host reads it each time the
-  property is read (packages/cli/host.ts `revealing`, @yaks/secrets `peek`), and
-  reads the 1Password ones it binds once at start (`warm`). A plugin that
+  property is read (packages/cli/host.ts `revealing`, @yaks/secrets `peek`); a
+  1Password one is read the first time a process reads the property, never as
+  the process starts, so naming one in a config costs nothing to a process
+  whose code never reads it. A plugin that
   re-reads its options picks up a key written after start without a restart. A
   name nobody supplied reads `undefined`, and the plugin says what it is waiting
   for. Mail, tunnel and embedding take their tokens this way
@@ -268,9 +274,9 @@ with the child it was handed to.
 - **A connection `broken`**: the service refused the grant; the person connects
   it again. A failure on the wire does not break it.
 - **`{"secret": "NAME"}` reads `undefined`**: nothing was written for that name,
-  no variable of that name is exported, or `op read` failed (the process that
-  read it logs `@yaks/secrets — op read failed`). A probe's own vault starts
-  empty.
+  no variable of that name is exported, or `op read` failed (reported to the
+  tracker as `op read`: `NAME could not be read from 1Password: …`). A probe's
+  own vault starts empty.
 - **"OpenAI is not connected"**: the harness has no OpenAI sign-in; `yak auth`.
 
 When this skill is wrong or missing something, fix it in the same change.
