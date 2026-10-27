@@ -78,11 +78,17 @@ await g.apply([
   arrive('c1', 'ana'),
   { ...arrive('c2', 'hello'), deliver: { to: 'ana' } },
   arrive('d1', 'hello'),
+  arrive('e1', 'hello'),
 ], { trusted: true })
 await g.apply([{
   entity: { eid: 'd2' },
   doc: { title: 'Re: feedback', body: 'Fixed.' },
   mail: { from: 'hello@books.example', reply_to: 'd1' },
+  deliver: { to: 'ana' },
+}, {
+  entity: { eid: 'e2' },
+  doc: { title: 'About your feedback', body: 'Fixed.' },
+  mail: { from: 'hello@books.example', target: 'e1' },
   deliver: { to: 'ana' },
 }], { trusted: true })
 
@@ -106,6 +112,7 @@ test('a letter reaching no project, or one going out, files nothing', async () =
   equal(await get(taskEid('c2')), undefined)
 })
 
-test('a delivered reply completes the task its letter filed', async () => {
+test('a delivered reply, or a letter sent about it, completes its task', async () => {
   equal(!!(await get(taskEid('d1')))?.completed, true)
+  equal(!!(await get(taskEid('e1')))?.completed, true)
 })

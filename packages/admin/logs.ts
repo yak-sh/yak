@@ -3,7 +3,13 @@
 import type { Route } from '@yaks/api'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { answers, arrived, automated, sender } from '@yaks/mail/answers'
+import {
+  answers,
+  answersSince,
+  arrived,
+  automated,
+  sender,
+} from '@yaks/mail/answers'
 import { CallError } from '@yaks/tools/errors'
 import { whom } from '@yaks/tracker/brief'
 import { fixes, fixtime, opened, span, spread } from '@yaks/tracker/fixtime'
@@ -256,7 +262,7 @@ let OURS = /@(?:[\w-]+\.)*(?:bot\.yak\.sh|yaks\.app)$/i
 let ours = (address: string) => OURS.test(address)
 
 // People's letters beside the bugs: each letter a person wrote to one of the
-// platform's addresses in the window, how long until a reply in its thread
+// platform's addresses in the window, how long until an answer to it
 // left (@yaks/mail/answers), and every one still waiting. Archiving a letter
 // says it needs no answer.
 let letters = async (
@@ -272,9 +278,7 @@ let letters = async (
     let who = sender(b), to = String((b.mail as Comp | undefined)?.to ?? '')
     return ours(to) && who && !ours(who) && !automated(who)
   })
-  let sent = await graph.read(
-    `.mail.reply_to .delivered.at>=${from} ?mail ?delivered .limit=1000`,
-  )
+  let sent = await graph.read(`${answersSince(from)} .limit=1000`)
   let paired = answers(got, sent), id = human(graph.vocab)
   let { count, median, worst } = spread(
     paired.flatMap((a) =>

@@ -10,8 +10,9 @@
 //                  (hello@yaks.app under yaks.app), files `task{}` +
 //                  `doc{title, body}` + `filed{project, priority}`, linked to
 //                  the letter by an `about` edge
-//   mail_answered  a reply this graph delivered completes the task its letter
-//                  filed
+//   mail_answered  a letter this graph delivered about it (./answers.ts
+//                  `answering`: its reply, or one sent about it) completes
+//                  the task the letter filed
 //
 // Both are declared under the `local` option: a graph whose addresses are
 // entities that read it (an agent, a project) is one where a letter is work
@@ -29,6 +30,7 @@ import type { Vocab } from '@yaks/vocab'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
+import { answering } from './answers.ts'
 
 /** The task a letter filed: derived from the letter, so it is found again. */
 export let taskEid = (letter: Eid): Eid => identityEid('mail_task', [letter])
@@ -62,9 +64,9 @@ let filing = (letter: Bundle, project: Eid): Bundle[] => {
         subject.length > 160 ? `${subject.slice(0, 160)}…` : subject
       }`,
       body: `A letter${from ? ` from ${from}` : ''} reached this project. ` +
-        `Read it with \`yak mail show ${eid}\`. Answering it with ` +
-        '`yak mail reply` completes this task; cancel it when the letter ' +
-        'needs no answer.',
+        `Read it with \`yak mail show ${eid}\`. A reply (\`yak mail ` +
+        'reply`) or a letter sent `--about` it completes this task; cancel ' +
+        'it when the letter needs no answer.',
     },
     filed: { project, priority: 1 },
   }]
@@ -90,9 +92,12 @@ export let work = (vocab?: Vocab): Handlers => ({
   mail_answered: async (event, tx, write) => {
     let reply = await one(tx, event.entity.eid)
     if (!reply?.[DELIVER] || !reply[DELIVERED]) return
-    let answered = str(comp(reply, MAIL).reply_to)
-    let task = answered ? await one(tx, taskEid(answered)) : undefined
-    if (!task?.task || task.completed || task.cancelled) return
-    await write([{ entity: { eid: task.entity.eid }, completed: {} }])
+    let tasks = await Promise.all(
+      answering(reply).map((letter) => one(tx, taskEid(letter))),
+    )
+    let open = tasks.filter((t) => t?.task && !t.completed && !t.cancelled)
+    if (open.length) {
+      await write(open.map((t) => ({ entity: t!.entity, completed: {} })))
+    }
   },
 })

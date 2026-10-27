@@ -320,9 +320,12 @@ the project hears the letter once on its bus (@yaks/session) and marks it
   `doc{title, body}` + `filed{project, priority: 1}` and an `about` edge from
   the task to the letter. The task's eid derives from the letter (`taskEid` in
   ./work.ts), so a run that is repeated writes nothing new.
-- `mail_answered`: once a reply whose `mail.reply_to` names that letter is
-  `delivered`, the task is completed. A letter that needs no answer is cancelled
-  by whoever reads it.
+- `mail_answered`: once a letter answering it is `delivered`, the task is
+  completed. A letter we sent answers one when its `mail.reply_to` names it (a
+  reply) or its `mail.target` does (one sent `about` it); `answering` in
+  @yaks/mail/answers is that one definition, and `yak admin errors` lists
+  unanswered letters by it too. A letter that needs no answer is cancelled by
+  whoever reads it.
 
 Both are declared with `"option": "local"`, so a graph whose mail a person reads
 in a mail client files nothing, and a graph without `task` or `filed.project`

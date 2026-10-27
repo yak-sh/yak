@@ -283,9 +283,9 @@
       "created": [
         "delivered"
       ],
-      "target": ".mail.reply_to",
+      "target": ".mail.reply_to | .mail.target",
       "option": "local",
-      "description": "Complete the task a letter filed once this graph has delivered a reply to it."
+      "description": "Complete the task a letter filed once this graph has delivered a letter answering it: its reply, or one sent about it."
     }
   }
 }

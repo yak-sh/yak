@@ -223,6 +223,7 @@ await mailbox.apply([
   got('bob', 'bob@example.com', 1),
   got('carl', 'carl@example.com', 2, { archived: {} }),
   got('fay', 'fay@example.com', 4),
+  got('gus', 'gus@example.com', 2),
   got('notice', 'noreply@notify.cloudflare.com', 1),
   got('ours', 'hello@bot.yak.sh', 1),
   got('dee', 'dee@example.com', 10 * 24),
@@ -234,6 +235,8 @@ await mailbox.apply([
   sent('ann-answer', 3, { to: 'ann@example.com', reply_to: 'ann' }),
   sent('fay-later', 0.25, { to: 'fay@example.com', reply_to: 'fay' }),
   sent('fay-answer', 0.5, { to: 'fay@example.com', reply_to: 'fay' }),
+  // A letter sent about gus's, not as a reply, answers it too.
+  sent('gus-answer', 1, { to: 'gus@example.com', target: 'gus' }),
   // A letter to bob that is not a reply answers nothing.
   sent('bob-notice', 0.5, { to: 'bob@example.com' }),
 ], { trusted: true })
@@ -313,7 +316,7 @@ test('errors times the first answer to each person who wrote in its window', () 
   )
   assertMatch(
     after[0],
-    /^People's letters in the last 7d: 4, answered 2, median 2h45m, worst 3h30m \(.+ from fay\)$/,
+    /^People's letters in the last 7d: 5, answered 3, median 2h, worst 3h30m \(.+ from fay\)$/,
   )
   assertEquals(after.length, 2)
   assertMatch(after[1], /^Unanswered 1h: .+ from bob@example\.com {2}from bob$/)
