@@ -284,14 +284,19 @@ export let named = (
 /** A row cut to what was asked for. The spine names it, its tombstone says it
  * is gone, a text query's `rank` is the answer's own word about it, and `$`
  * keys are the graph's notes on the row rather than components, so those ride
- * whatever the filter said. */
-export let only = (want: Set<string> | null) => (b: Bundle): Bundle => {
-  if (!want) return b
+ * whatever the filter said. A read cuts every row it answers, often twice
+ * (storage, then the graph), so a row allocates nothing to be looked at: a
+ * row that carries nothing else is its own answer. */
+export let only = (want: Set<string> | null): (b: Bundle) => Bundle => {
+  if (!want) return (b) => b
   let keep = (k: string) => reserved(k) || k == 'rank' || want.has(k)
-  let keys = Object.keys(b)
-  // A row that carries nothing else is its own answer.
-  if (keys.every(keep)) return b
-  let out: Bundle = { entity: b.entity }
-  for (let k of keys) if (keep(k)) out[k] = b[k]
-  return out
+  let cut = (b: Bundle): Bundle => {
+    let out: Bundle = { entity: b.entity }
+    for (let k in b) if (keep(k)) out[k] = b[k]
+    return out
+  }
+  return (b) => {
+    for (let k in b) if (!keep(k)) return cut(b)
+    return b
+  }
 }
