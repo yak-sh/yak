@@ -181,7 +181,7 @@ test('reads inherit an enclosing transaction while nested writes keep rollback',
   assertEquals(transactions, 2)
   transactions = 0
   assertEquals(comp((s.get(['p1']) as Bundle[])[0], 'doc').title, 'kept')
-  assertEquals(transactions, 1)
+  assertEquals(transactions, 0)
 })
 
 test('an empty identity lookup opens no transaction or SQL statement', () => {

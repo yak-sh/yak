@@ -29,6 +29,12 @@ let depth = new WeakMap<Driver, number>()
 // lock, so a lookup neither waits on a writer nor makes one wait. It must not
 // write — a deferred transaction that has read cannot take the lock once
 // another connection has committed.
+//
+// A read opens a transaction only where it isolates the read from someone: a
+// file other connections commit to. A read has nothing to roll back, so on a
+// connection nobody else writes (memory, a Durable Object's own storage) a
+// savepoint or a `transactionSync` around it is statements and a call that
+// buy nothing, paid on every lookup a write asks before its own transaction.
 export let unit = <R>(
   driver: Driver,
   body: () => R,
@@ -36,9 +42,9 @@ export let unit = <R>(
 ): R => {
   let tracing = context()
   let held = depth.get(driver) ?? 0
-  // A read already has the outer unit's snapshot. Opening another savepoint
-  // adds no isolation; writes still need their own rollback boundary.
-  if (mode == 'read' && held) return body()
+  // A read inside a unit already has its snapshot, and one on a connection no
+  // other commits to needs none. Writes still need their rollback boundary.
+  if (mode == 'read' && (held || !driver.file)) return body()
   if (driver.tx) {
     depth.set(driver, held + 1)
     let close = () => depth.set(driver, (depth.get(driver) ?? 1) - 1)

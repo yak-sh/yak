@@ -419,7 +419,10 @@ SQL transactions commit on callback completion and roll back on failure; a
 promise-returning callback is awaited. Nested calls use savepoints. A driver
 with `file: true` starts the outer transaction with `BEGIN IMMEDIATE`, acquiring
 the write lock before reads. A driver supplying its own `tx` controls
-transaction behavior; Durable Object callbacks must remain synchronous.
+transaction behavior; Durable Object callbacks must remain synchronous. A read
+on its own (`get`, `read`) opens a transaction only on a `file: true` driver,
+where it begins deferred for one snapshot; on any other connection nothing else
+commits between its statements, and a read has nothing to roll back.
 
 `base` includes `@yaks/sql` bind options (`derived`, `backed`, `extend`, `now`,
 and a custom dialect), merged with per-read options. A `derived` entry's `text`

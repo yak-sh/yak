@@ -176,7 +176,8 @@ test('SQL parents survive interleaved async hooks and tracker flushes', async ()
         prepare: async (b, tx) => {
           let i = Number((b[0].doc as { title: string }).title)
           await gates[i].promise
-          await tx.read('.product')
+          // An id nothing has named yet, so memory cannot answer for SQLite.
+          await tx.get([`unnamed-${i}`])
           return b
         },
       },
@@ -310,7 +311,8 @@ test('SQL remains under read spans after asynchronous query rewriting', async ()
       let run of [
         () => g.read('.product'),
         () => g.rows('.product'),
-        () => g.get(['sample'], ['product']),
+        // An id nothing has named yet, so memory cannot answer for SQLite.
+        () => g.get(['unnamed'], ['product']),
       ]
     ) {
       let captured = await record(g, run)
