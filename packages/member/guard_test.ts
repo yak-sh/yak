@@ -206,42 +206,57 @@ test('a visitor adds to an open thing and changes nobody else’s row', () => {
   assertEquals(titleOf(s, 'theirs'), 'Hi')
 })
 
-test('a visitor puts a kept row only inside a row of their own', () => {
-  let s = opened()
-  let g = graph({
-    storage: s,
-    vocab: club,
-    plugins: [
-      members({
-        app: ids.list,
-        space: ids.club,
-        vocab: club,
-        within: { pick: 'by' },
-      }),
-    ],
-  })
-  let put = (who: string | null, ...b: Bundle[]) =>
-    sync(g.apply(b.map((x) => authored(who ? { by: who } : null, x))))
-  let inside = (eid: string, by: string) => ({ entity: { eid }, pick: { by } })
-  // A row made in the same batch is theirs to fill.
+let authored = (actor: Actor | null, b: Bundle) => ({
+  ...b,
+  ...(actor ? { $actor: actor } : {}),
+})
+
+// A store whose visitors keep a pick only inside a pick of their own, made once
+// as the file's other stores are, with a row of Kim's and one inside it.
+let within = graph({
+  storage: opened(),
+  vocab: club,
+  plugins: [
+    members({
+      app: ids.list,
+      space: ids.club,
+      vocab: club,
+      within: { pick: 'by' },
+    }),
+  ],
+})
+let put = (who: string | null, ...b: Bundle[]) =>
+  sync(within.apply(b.map((x) => authored(who ? { by: who } : null, x))))
+let inside = (eid: string, by: string) => ({ entity: { eid }, pick: { by } })
+put(
+  ids.kim,
+  { entity: { eid: 'kims2' }, pick: { title: 'K' } },
+  inside('k3', 'kims2'),
+)
+
+test('a visitor puts a kept row inside a row of their own made in the same batch', () => {
   put(
     ids.kim,
     { entity: { eid: 'kims' }, pick: { title: 'K' } },
     inside('k1', 'kims'),
   )
-  put(ids.kim, inside('k2', 'kims'))
+})
+
+test('a visitor puts a kept row inside a row of their own made before', () => {
+  put(ids.kim, inside('k2', 'kims2'))
+})
+
+test('a member puts a kept row inside anyone’s row', () => {
+  put(ids.dana, inside('d1', 'kims2'))
+})
+
+test('a visitor puts a kept row nowhere else, nor moves one there', () => {
   for (let who of [null, ids.kim]) denied(() => put(who, inside('in', 'mine')))
-  // Nor moved there from a row of their own.
-  denied(() => put(ids.kim, inside('k2', 'mine')))
-  put(ids.dana, inside('d1', 'kims'))
+  denied(() => put(ids.kim, inside('k3', 'mine')))
 })
 
 let visitorStore = opened()
 let visitorGraph = guarded(visitorStore, ids.list)
-let authored = (actor: Actor | null, b: Bundle) => ({
-  ...b,
-  ...(actor ? { $actor: actor } : {}),
-})
 visitorGraph.apply([authored({ by: ids.kim }, {
   entity: { eid: 'kims' },
   pick: { title: 'One' },

@@ -46,12 +46,15 @@ test('SQLite fork window reads limited bodies and projects position metadata', a
 test('worker pages retained graph data and keeps initial transfer independent of transcript length', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
   let h = await harness(path)
+  // A long transcript is mostly a model's lines: each input line owes its
+  // transcript a look for a turn (session_input), which paging is not about.
   await h.g.apply([
     { entity: { eid: 's' }, session: {} },
     ...Array.from({ length: 300 }, (_, i) => ({
       entity: { eid: 'entry' + i },
       entry: { session: 's', seq: i + 1 },
       content: { body: String(i) + 'x'.repeat(10000) },
+      output: {},
     })),
   ])
   h.close()
@@ -321,6 +324,7 @@ test('detached windows receive frontier notices without loading new offscreen bo
       entity: { eid: 'e' + i },
       entry: { session: 's', seq: i + 1 },
       content: { body: String(i) },
+      output: {},
     })),
   ])
   store.close()
