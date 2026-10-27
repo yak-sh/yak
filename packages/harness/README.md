@@ -102,8 +102,9 @@ constituent phase. A session's own median never changes that fixed limit. Only
 samples for the current step are considered. A metric reports once per worker,
 on its second excess and never while the box is loaded (as a bench regression
 counts); the fixed-message report reaches the tracker, with numbers in tags.
-Missing journal marks are omitted, not guessed. Bounded scalar transcript reads
-keep observation independent of transcript age.
+Judging the load samples a second of the box's CPU, beside the session: the next
+step never waits on it. Missing journal marks are omitted, not guessed. Bounded
+scalar transcript reads keep observation independent of transcript age.
 
 ```sh
 deno task bench harness-steps

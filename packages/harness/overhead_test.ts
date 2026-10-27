@@ -3,6 +3,7 @@ import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import {
   type Mark,
+  overheadDue,
   overheadExcess,
   overheadLimit,
   overheadSamples,
@@ -80,4 +81,19 @@ test('input and missing execution marks are not guessed as harness overhead', ()
     false,
   )
   equal(overheadSamples(entries, []), [])
+})
+test('an excess while the load is judged is neither counted nor judged again', async () => {
+  const seen = new Map([['dispatch', 1]])
+  const load = Promise.withResolvers<boolean>()
+  let judged = 0
+  const crowded = () => (judged++, load.promise)
+  const first = overheadDue(seen, 'dispatch', crowded)
+  const second = overheadDue(seen, 'dispatch', crowded)
+  load.resolve(false)
+  equal([await first, await second, judged], [true, false, 1])
+})
+test('a loaded box leaves the next excess to be judged again', async () => {
+  const seen = new Map([['dispatch', 1]])
+  await overheadDue(seen, 'dispatch', () => Promise.resolve(true))
+  equal(await overheadDue(seen, 'dispatch'), true)
 })

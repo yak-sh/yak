@@ -98,16 +98,19 @@ export const overheadExcess = (samples: Overhead[], limit = overheadLimit) =>
 /** Whether a metric's excess reports now: once, on its second excess in a
  * worker, and not while the box is loaded, when the excess is not counted and
  * the next one is judged again. One slow step is noise until another repeats
- * it, and a loaded box times its other work. `crowded` is asked only then. */
+ * it, and a loaded box times its other work. `crowded` is asked only then; an
+ * excess while it is asked counts toward nothing. */
 export const overheadDue = async (
   seen: Map<string, number>,
   metric: string,
   crowded: () => Promise<boolean> = () => Promise.resolve(false),
 ): Promise<boolean> => {
   const n = (seen.get(metric) ?? 0) + 1
-  if (n == 2 && await crowded()) return false
   seen.set(metric, n)
-  return n == 2
+  if (n != 2) return false
+  if (!await crowded()) return true
+  seen.set(metric, 1)
+  return false
 }
 
 /** Whether other work keeps the box loaded, from a second of its CPU use
@@ -121,6 +124,32 @@ export const overheadEach = (
   each?: Runner['each'],
 ): NonNullable<Runner['each']> => {
   const seen = new Map<string, number>()
+  const failed = (session: string, error: unknown) =>
+    host.report?.(error, {
+      during: { session },
+      tags: { handler: 'native-overhead' },
+    })
+  const judge = (session: string, sample: Overhead) =>
+    overheadDue(seen, sample.metric, crowded)
+      .then((due) =>
+        due && host.report?.(
+          new Error(
+            `Native ${sample.metric} overhead exceeded its benchmark reference`,
+          ),
+          {
+            during: { session },
+            tags: {
+              metric: sample.metric,
+              step: sample.step,
+              ms: sample.ms,
+              limit: overheadLimit,
+              reference: 'harness-steps/tool-step',
+            },
+          },
+        )
+      )
+      .catch((error) => failed(session, error))
+      .catch((failure) => console.error('overhead reporter failed', failure))
   return async (step: Step, session?: string) => {
     await each?.(step, session)
     if (!session || step.did == 'nothing') return
@@ -162,31 +191,13 @@ export const overheadEach = (
           overheadSamples(rows, marks, new Set(input.map((b) => b.entity.eid))),
         )
       ) {
-        if (
-          (!added.has(sample.step) && !needed.has(sample.step)) ||
-          !(await overheadDue(seen, sample.metric, crowded))
-        ) continue
-        await host.report?.(
-          new Error(
-            `Native ${sample.metric} overhead exceeded its benchmark reference`,
-          ),
-          {
-            during: { session },
-            tags: {
-              metric: sample.metric,
-              step: sample.step,
-              ms: sample.ms,
-              limit: overheadLimit,
-              reference: 'harness-steps/tool-step',
-            },
-          },
-        )
+        if (!added.has(sample.step) && !needed.has(sample.step)) continue
+        // Judging the box's load takes a second of it: the next step never
+        // waits on the judgement of this one.
+        void judge(session, sample)
       }
     } catch (error) {
-      await host.report?.(error, {
-        during: { session },
-        tags: { handler: 'native-overhead' },
-      })
+      await failed(session, error)
     }
   }
 }
