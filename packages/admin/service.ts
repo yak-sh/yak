@@ -1,5 +1,8 @@
-// The deploy catch-up as a service (catchup.ts decides; this looks and acts).
-// One process takes it, under the `@yaks/admin` lease. Each minute it reads
+// The box's watch over yaks.app, as one service with two looks: the deploy
+// catch-up each minute, and the usage watch each hour (usage.ts). One process
+// takes it, under the `@yaks/admin` lease.
+//
+// The deploy catch-up (catchup.ts decides; this looks and acts) reads
 // main's head from origin; once that head is late, it reads what
 // yak serves from wrangler, and compares the two in this checkout's git
 // through the build's watch paths. Wrangler is asked only about a late head
@@ -41,6 +44,16 @@ import {
   shaIn,
   wrangler,
 } from './deploys.ts'
+import {
+  type Answer,
+  HOUR,
+  jumps,
+  QUERY,
+  readings,
+  report as jumped,
+  variables,
+} from './usage.ts'
+import { ask, said as answered } from '../../workers/yak/analytics.ts'
 
 /** How long the service waits between looks at main. */
 export let EVERY = 60_000
@@ -55,6 +68,12 @@ export type Options = {
   /** ms main's head may take to go live once its build was asked for
    * (default {@link BOUND}) */
   bound?: number
+  /** a Cloudflare token that reads the account's analytics,
+   * `{"secret": "CF_USAGE_TOKEN"}` in the config; without one there is no
+   * usage watch */
+  analytics?: string
+  /** the Cloudflare account the usage watch reads */
+  account?: string
 }
 
 /** Where the catch-up reads and acts: the box's own ({@link box}), or a
@@ -231,31 +250,40 @@ export let pass = async (
 
 let SETTLED: Step[] = ['live', 'held', 'done']
 
-/** Look at main every {@link EVERY} until shutdown, or once with an aborted
- * signal, the way a one-shot command runs a service. */
+/** Look at main every {@link EVERY}, and at the last hour's usage once an
+ * hour, until shutdown; or each once with an aborted signal, the way a
+ * one-shot command runs a service. */
 export let service = async (
   host: { graph: Graph } & Pick<Host, 'report'>,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
   doors: Doors = box(options, signal),
+  usage: Usage = analytics(options),
 ): Promise<void> => {
   let report: Report = async (error, context) => {
     try {
       if (host.report) await host.report(error, context)
-      else console.error('@yaks/admin deploy catch-up —', error)
+      else console.error('@yaks/admin —', error)
     } catch { /* a report that fails cannot stop the next look */ }
   }
+  await Promise.all([
+    catchUp(host.graph, options, signal, doors, report),
+    watch(usage, signal, doors, report),
+  ])
+}
+
+let catchUp = async (
+  g: Graph,
+  options: Options,
+  signal: AbortSignal,
+  doors: Doors,
+  report: Report,
+) => {
   let settled: string | undefined
   let failing = false
   for (;;) {
     try {
-      let done = await pass(
-        host.graph,
-        doors,
-        report,
-        options,
-        settled,
-      )
+      let done = await pass(g, doors, report, options, settled)
       if (SETTLED.includes(done.step)) settled = done.sha
       failing = false
     } catch (error) {
@@ -270,6 +298,73 @@ export let service = async (
     }
     if (signal.aborted) return
     await doors.wait(options.every ?? EVERY, signal)
+    if (signal.aborted) return
+  }
+}
+
+/** Where the usage watch reads: the account's analytics for an hour (ms, on
+ * the hour) and the two days before it, or nothing to read. */
+export type Usage = ((hour: number) => Promise<Answer>) | undefined
+
+/** Cloudflare's analytics, with the token read each time it is asked. */
+export let analytics = (options: Options): Usage =>
+  options.analytics && options.account
+    ? async (hour) => {
+      let data = answered(
+        await ask<Answer>(
+          { CF_ANALYTICS_TOKEN: options.analytics },
+          QUERY,
+          variables(options.account!, hour),
+        ),
+      )
+      if (!data) throw new Error('analytics answered no data')
+      return data
+    }
+    : undefined
+
+/** How long after an hour ends its analytics are read: Cloudflare's datasets
+ * hold an hour within minutes of its end. */
+export let SETTLE = 10 * 60_000
+
+/** One look at an hour's usage: every jump it finds, reported. */
+export let look = async (
+  usage: NonNullable<Usage>,
+  report: Report,
+  hour: number,
+) => {
+  let { series, who } = readings(await usage(hour))
+  let found = jumps(series, hour)
+  for (let jump of found) {
+    let { error, context } = jumped(jump, who.get(jump.subject))
+    await report(error, context)
+  }
+  return found
+}
+
+let watch = async (
+  usage: Usage,
+  signal: AbortSignal,
+  doors: Pick<Doors, 'now' | 'wait'>,
+  report: Report,
+) => {
+  if (!usage) return
+  let done = -Infinity, failing = false
+  for (;;) {
+    let hour = Math.floor((doors.now() - SETTLE) / HOUR) * HOUR - HOUR
+    if (hour > done) {
+      try {
+        await look(usage, report, hour)
+        done = hour
+        failing = false
+      } catch (error) {
+        // A failing look is one report until a look succeeds again, and the
+        // next look asks for the same hour.
+        if (!failing) await report(error, { tags: { duty: 'usage watch' } })
+        failing = true
+      }
+    }
+    if (signal.aborted) return
+    await doors.wait(5 * EVERY, signal)
     if (signal.aborted) return
   }
 }

@@ -136,10 +136,47 @@ build, kept in the vault. Without one the catch-up still reports, and says no
 build was started. Serve it with the box's other duties: `yak work` takes the
 `@yaks/admin` role.
 
+## The usage watch
+
+A Worker or a Durable Object that suddenly does far more than it used to costs
+money by the hour, and nothing fails while it does. The **usage watch**, the
+same service's other look, reads the account's usage from Cloudflare's GraphQL
+Analytics API ten minutes after each hour ends: each Worker's requests and CPU
+time, and each Durable Object's requests, rows read, rows written and duration.
+A **jump** is an hour at least twice its subject's normal, the median of the 48
+hours before, and past it by an amount worth a look (`METRICS` in usage.ts). It
+is reported to the box's tracker as a bug, one per subject and metric, saying
+the amount, the normal, the Worker, the object and, for an object, its entry
+points that hour (fetch, alarm, RPC):
+
+> yak-tracker's Durable Object 1711faaf1a26 read 423.8M rows in the hour from
+> 2026-10-17T12:00:00.000Z, 129.1 times its normal of 3.3M an hour, the median
+> of the 48 before (Cloudflare's analytics). Its entry points: 3,119 alarm,
+> 3,100 http, 98 jsrpc.
+
+The watch keeps nothing: Cloudflare holds the history, and an hour's report has
+an eid derived from the hour, so a look repeated after a restart lands once. It
+reports through the box's spool, never through the platform tracker's Worker, so
+a jump in that tracker is still heard.
+
+```json
+{
+  "use": "@yaks/admin",
+  "with": {
+    "hook": { "secret": "BUILD_HOOK" },
+    "analytics": { "secret": "CF_USAGE_TOKEN" },
+    "account": "0f9613dfd3f0451df0bd0f12a1372ea3"
+  }
+}
+```
+
+`analytics` is an account-owned Cloudflare token with Account Analytics Read
+alone; without it, or without `account`, there is no usage watch.
+
 ## Facets
 
 - `./vocab` declares the admin tools and the `rebuilt` mark.
 - `./tools` implements those tools over the host's graph, config and vault.
 - `./cli` binds the account selector to the admin tools' `as` input.
-- `./service` is the deploy catch-up.
+- `./service` is the deploy catch-up and the usage watch.
 - The root exports the platform API helpers, tools and vocabulary.
