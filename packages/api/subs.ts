@@ -1070,19 +1070,31 @@ export let subscriptions = (graph: Graph, opts: {
     else map.set(key, value)
   }
 
-  // A slow opening owns only its own read. A commit that crossed that read
-  // owes a fresh snapshot; a replaced or closed opening owes no answer.
+  // A slow opening owns only its own read; a replaced or closed opening owes
+  // no answer. One a commit crossed still answers with what it read, and is
+  // then read again in turn, as a live answer a commit invalidates is: an
+  // answer the box's commits move faster than it can be read would otherwise
+  // be read again for as long as they keep coming, and its page never hears it.
   let initial = <T>(
     sub: Sub,
     value: T,
     use: (value: T) => void | Promise<void>,
   ): void | Promise<void> => {
     if (held.get(sub.sink)?.get(sub.id) !== sub) return
-    if (sub.dirty) {
-      return open(sub.sink, sub.id, sub.raw ? true : sub.query, sub.opts)
-    }
+    let crossed = sub.dirty
+    sub.dirty = false
     sub.loading = false
-    return use(value)
+    let sent = use(value)
+    if (crossed && isPromise(sent)) sent.then(() => caughtUp(sub), () => {})
+    else if (crossed) caughtUp(sub)
+    return sent
+  }
+
+  // Not awaited by the opening: it is ordered work, and an opening may be
+  // part of ordered work itself (`resync`).
+  let caughtUp = (sub: Sub) => {
+    let out = ordered(() => attempt(sub, () => reread(sub, ask)))
+    if (isPromise(out)) out.catch((err) => fault(err, 'subscription catch-up'))
   }
 
   let open = (
@@ -1422,6 +1434,45 @@ export let subscriptions = (graph: Graph, opts: {
       ))
   }
 
+  // A live answer asked again whole, and what moved sent: the set as it now
+  // stands, what left it and what joined.
+  let reread = (
+    s: Sub,
+    load: (s: Sub, q: string) => Answer,
+  ): void | Promise<void> => {
+    // An answer asked again whole is no longer one kept current.
+    if (s.shared) unshare(s.shared)
+    if (s.kept) return
+    let reset = s.deferred
+    if (s.agg) return tell(s)
+    let loaded = s.view
+      ? viewed(s.view, reading(s))
+      : s.peer
+      ? after(read(s), answered)
+      : load(s, s.query)
+    return after(loaded, (answer) => {
+      s.deferred = false
+      let set = answer.found
+      let ids = new Set(set.map((b) => b.entity.eid))
+      let gone = [...s.members].filter((id) => !ids.has(id))
+      let joined = [...ids].filter((id) => !s.members.has(id))
+      s.members = ids
+      if (
+        reset && routable(s)
+      ) s.routed = network(s).add(s, queryOf(s), ids)
+      else if (s.routed) network(s).add(s, queryOf(s), ids)
+      if (s.routed) join(s, s.ast ?? parse(s.query), set)
+      rememberFields(s, set)
+      return s.send({
+        id: s.id,
+        ...framed(s, set, answer),
+        ...reset ? { reset: true } : {},
+        gone,
+        ...hail(s, joined),
+      })
+    })
+  }
+
   let commitNow = (txs: Bundle[][]) => {
     if (ending.signal.aborted) return
     flush()
@@ -1514,39 +1565,7 @@ export let subscriptions = (graph: Graph, opts: {
               over(queries, (s) =>
                 attempt(s, () => {
                   if (!relevant.has(s)) return
-                  if (invalidated.has(s)) {
-                    // An answer asked again whole is no longer one kept current.
-                    if (s.shared) unshare(s.shared)
-                    if (s.kept) return
-                    let reset = s.deferred
-                    if (s.agg) return tell(s)
-                    let loaded = s.view
-                      ? viewed(s.view, reading(s))
-                      : s.peer
-                      ? after(read(s), answered)
-                      : load(s, s.query)
-                    return after(loaded, (answer) => {
-                      s.deferred = false
-                      let set = answer.found
-                      let ids = new Set(set.map((b) => b.entity.eid))
-                      let gone = [...s.members].filter((id) => !ids.has(id))
-                      let joined = [...ids].filter((id) => !s.members.has(id))
-                      s.members = ids
-                      if (
-                        reset && routable(s)
-                      ) s.routed = network(s).add(s, queryOf(s), ids)
-                      else if (s.routed) network(s).add(s, queryOf(s), ids)
-                      if (s.routed) join(s, s.ast ?? parse(s.query), set)
-                      rememberFields(s, set)
-                      return s.send({
-                        id: s.id,
-                        ...framed(s, set, answer),
-                        ...reset ? { reset: true } : {},
-                        gone,
-                        ...hail(s, joined),
-                      })
-                    })
-                  }
+                  if (invalidated.has(s)) return reread(s, load)
                   if (s.routed && !s.reads?.via.size) {
                     let moved = routing.get(s)
                     if (moved) {

@@ -76,14 +76,20 @@ test('replacing and closing slow subscriptions cancel them without stale answers
 let written = fixture()
 let opening = written.subs.open(written.sink, 'page', '.book')
 await written.g.apply([{ entity: { eid: 'one' }, book: { price: 2 } }])
-test('a write during an opening replaces its old snapshot with fresh rows', async () => {
+// An answer the box's commits move faster than it can be read is still heard.
+test('a write during an opening answers what was read, then what the write moved', async () => {
   let f = written
   f.resume()
   f.release()
   await opening
-  equal(f.frames.map((f) => f.bundles?.[0].book), [{ price: 2 }])
+  await f.subs.check()
+  equal(f.frames.map((f) => f.bundles?.[0].book), [{ price: 1 }, { price: 2 }])
   await f.g.apply([{ entity: { eid: 'one' }, book: { price: 3 } }])
-  equal(f.frames.map((f) => f.bundles?.[0].book), [{ price: 2 }, { price: 3 }])
+  equal(f.frames.map((f) => f.bundles?.[0].book), [
+    { price: 1 },
+    { price: 2 },
+    { price: 3 },
+  ])
   await f.subs.drop(f.sink)
 })
 
@@ -106,7 +112,11 @@ revised.check()
 test('an external revision refreshes an initial snapshot still in flight', async () => {
   complete()
   await revising
-  equal(external.frames.map((f) => f.bundles?.[0].book), [{ price: 4 }])
+  await revised.check()
+  equal(external.frames.map((f) => f.bundles?.[0].book), [
+    { price: 1 },
+    { price: 4 },
+  ])
   await revised.drop(external.sink)
 })
 

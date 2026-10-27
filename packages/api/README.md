@@ -369,7 +369,10 @@ reference or a walk passes through, or deletes an entity the query could have
 read: a member of its answer, or any entity when the query reads past each
 entity alone. A query with a text term or `.near` is read again after every
 commit. Writes return at commit without waiting for subscriber reads; commits
-arriving during a read share the next pass.
+arriving during a read share the next pass. A subscription's first answer is
+sent when its read finishes, even when commits landed during it: those are
+caught up after, by reading it again and sending what moved, so an answer the
+store's writes move faster than it can be read is still heard.
 
 A small answer of a query tested one entity at a time is held in memory and kept
 current from what each commit moves. Subscriptions asking the same query with
