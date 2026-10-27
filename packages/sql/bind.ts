@@ -2049,10 +2049,13 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     rest.every((c) => c.kind != 'or')
   ) {
     for (let c of rest.filter((c) => keyTest(ctx, c))) {
-      let test = render(conditions.get(c)!)
+      let condition = conditions.get(c)!
+      let test = render(condition)
       ctx.candidates.sql += ` and (${test.sql})`
       ctx.candidates.params.push(...test.params)
-      conditions.delete(c)
+      // An indexed predicate may drive instead of these candidates. Keep the
+      // condition until the chosen source proves it through holding().
+      ctx.candidates.test = and(ctx.candidates.test, condition)
     }
   }
   if (!shape) {
