@@ -216,6 +216,21 @@ and the rest of the page can ask for it; `useState` keeps it where nothing else
 can see it. A person's half-typed text is a draft in @yaks/draft, kept and
 synced everywhere, so it's never lost (M-59093).
 
+## yaks.app's own pages
+
+The pages workers/yak serves (the dashboard at /manage, sign-in, the gallery,
+integrations, pricing) are HTML strings rather than this Preact tree, and
+their kit is yaks.app's style guide: workers/yak/public/controls.css, shown at
+yaks.app/style-guide, whose "One design language" section every one of them
+follows. Jeff, 2026-10-27 (T-132742): "the style-guide should decide on one
+design language and stick to it". A card is flat with a hairline, and its
+head (`heading()` in pages.ts) names it, says how it stands and holds its
+actions at the right; like things are `.Rows`; a field sits under its label
+(`labeled()`), never at the end of a sentence; what few people change folds
+under Advanced options with its default in place. A part a page lacks goes
+into controls.css with an example in the style guide (site_test checks that
+every one has one), not into one page's stylesheet.
+
 ## Looking at it
 
 A screen is done when it reads well to someone using it. What it does and how
