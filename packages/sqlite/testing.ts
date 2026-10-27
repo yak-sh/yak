@@ -38,6 +38,17 @@ import {
 // reference is rejected the way it would be in production.
 export let mem = (): Driver => open(':memory:')
 
+/** A Driver over a fresh in-memory database held to an engine's own `limits`
+ * (workerd's compound select of five: `{ compoundSelect: 5 }`), so a statement
+ * that engine would refuse is refused here too. */
+export let bounded = (limits: Limits): Driver => {
+  let db = new Database(':memory:')
+  limit(db, limits)
+  let d = driver(db)
+  d.query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
+  return d
+}
+
 /** A Driver over a fresh in-memory database, and the virtual machine steps its
  * statements have taken (counted by tens): what a read costs, however few the
  * rows it answers. */

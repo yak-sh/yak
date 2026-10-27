@@ -41,6 +41,7 @@ import {
   sub,
   table,
   unionAll,
+  unionAllWithin,
   val,
   when,
 } from '@yaks/sql'
@@ -234,8 +235,8 @@ let chosen = (
     )
   }
   // A workerd compound select holds five terms (@yaks/sql's compound.ts), so
-  // each kind of candidate takes one term per index, as the ranking always
-  // has, and the kinds are joined above them.
+  // each kind of candidate takes one term per index, nested to fit however
+  // many indexes the vocabulary has, and the kinds are joined above them.
   let kinds = [
     arms.map((_, i) => placed(i, limit)),
     arms.map(({ name }, i) => newest(name, i, t, limit, admitted)),
@@ -247,7 +248,7 @@ let chosen = (
     ...kinds.map((kind, k) =>
       select({
         cols: ['owner', 'rank', 'arm', 'named'].map((n) => col(n)),
-        from: from(unionAll(...kind), `__kind${k}`),
+        from: from(unionAllWithin(kind), `__kind${k}`),
       })
     ),
   )

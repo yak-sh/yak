@@ -1,3 +1,5 @@
+import { from, type Query, select, star, unionAll } from './ast.ts'
+
 // How many terms one compound SELECT may carry, and how a wider question is cut
 // up to fit.
 //
@@ -15,7 +17,9 @@
 // because terms are scarce and or is not — then cut what is left into
 // statements of {@link ARMS} terms each. What the caller does with the pieces
 // is its own business: the cascade asks them in rounds and unions the answers;
-// the `.refs=` predicate combines them with OR into one where clause.
+// the `.refs=` predicate combines them with OR into one where clause; a union
+// of rows nests them ({@link unionAllWithin}), as a search over every text
+// index does (@yaks/fts).
 
 /** How many terms one compound SELECT may carry. Workerd allows five, and a
  * seeded recursion spends one of them on the seed. This is the lowest limit any
@@ -53,3 +57,28 @@ export let arms = (refs: [string, string][]): Arm[] => {
  * wrapped them. */
 export let cut = <T>(xs: T[], n: number): T[][] =>
   xs.length <= n ? [xs] : [xs.slice(0, n), ...cut(xs.slice(n), n)]
+
+/** The rows of every part, as one `union all` of them, nested so that no
+ * compound SELECT carries more than `n` terms: each `n` parts become one term
+ * selecting from their compound, until `n` or fewer are left. The columns are
+ * the first part's, as in any compound.
+ *
+ * ```ts
+ * import { lit, render, select, unionAllWithin } from '@yaks/sql'
+ *
+ * let one = (i: number) => select({ cols: [lit(i)] })
+ * render(unionAllWithin([1, 2, 3].map(one), 2)).sql
+ * ```
+ */
+export let unionAllWithin = (parts: Query[], n: number = ARMS): Query =>
+  parts.length == 1 ? parts[0] : parts.length <= n ? unionAll(...parts) : (
+    unionAllWithin(
+      cut(parts, n).map((group, i) =>
+        group.length == 1 ? group[0] : select({
+          cols: [star()],
+          from: from(unionAll(...group), `__arms${i}`),
+        })
+      ),
+      n,
+    )
+  )
