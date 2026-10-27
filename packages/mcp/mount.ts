@@ -80,6 +80,13 @@ let refusing = (err: unknown, request: Request): Response => {
 let ID = 'mcp-session-id'
 let VIA = 'x-via'
 
+/** The connection's own actor wins over its login. An authenticated identity
+ * outside the graph remains a fallback when the connection names no actor. */
+export let writer = (session: Actor, login: Actor | null): Actor =>
+  !session.by && login?.by && login.by != login.via
+    ? { ...session, by: login.by }
+    : session
+
 // The header is an opaque connection id, not a graph address. A process can
 // restart between requests: the graph, rather than this handler, remembers it.
 let connected = async (
@@ -279,10 +286,9 @@ export let mcp = (opts: MountOptions): Handler => {
       ) {
         return refused('unknown MCP session', 404)
       }
-      let caller = conn ? await speaking(opts.sessions!, conn.session) : actor
-      if (conn && actor?.by && actor.by != actor.via) {
-        caller = { by: actor.by, via: conn.session.entity.eid }
-      }
+      let caller = conn
+        ? writer(await speaking(opts.sessions!, conn.session), actor)
+        : actor
       let exchange = { method: rpc.data.method }
       let built = server({
         ...opts,
