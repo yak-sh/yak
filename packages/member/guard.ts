@@ -14,8 +14,9 @@
 //      (`floor`, keywords.ts), and so may the program installing the guard
 //      (`floors`).
 //   3. Is the principal in only because the app is `open`? Then it adds rows,
-//      changes the rows it wrote, and answers a stored reference's request
-//      with a declared companion mark (`permit`).
+//      changes the rows it wrote, answers a stored reference's request with a
+//      declared companion mark (`permit`), and puts a row the program keeps
+//      `within` its parent only inside a parent of its own.
 //   4. Does a bundle write a component sooner than its `pace` lets this writer
 //      (pace.ts)?
 //
@@ -66,6 +67,13 @@ export type Guard = Where & {
    * an `open` app, and wins over a declared one. The access rows ask `owner`
    * whatever either says. */
   floors?: Floors
+  /** components a principal holding no writing level writes only inside a row
+   * of its own, each named with the reference to that row: `{ entry:
+   * 'session' }` keeps an `open` app's visitor writing lines in their own
+   * transcripts, where a line in someone else's would ask for a model's turn
+   * at the account's expense. A row created in the same batch is the
+   * principal's own. */
+  within?: Record<string, string>
   /** Current standing vouched by the receiving boundary. Null is an
    * authoritative absence; undefined asks the stored roster. */
   level?: (who: Viewer) => Level | null | undefined
@@ -133,6 +141,42 @@ let idle = (b: Bundle, row: Bundle) =>
     if (!comp) return held == null
     return !!held && Object.entries(comp).every(([prop, v]) => held[prop] == v)
   })
+
+// The parents the bundles put a kept row in, as their patches or stored rows
+// name them, must be the principal's own; one not stored yet is being made here.
+let inside = (
+  tx: Tx,
+  who: Viewer,
+  app: Eid,
+  bundles: Bundle[],
+  via: Eid | undefined,
+  within: Record<string, string>,
+  instrument: Instrument,
+) => {
+  let kept = bundles.filter((b) =>
+    !dead(b) && Object.keys(within).some((c) => b[c] !== undefined)
+  )
+  if (!kept.length) return bundles
+  return after(tx.get([...new Set(kept.map((b) => b.entity.eid))]), (rows) => {
+    let held = new Map(rows.map((r) => [r.entity.eid, r]))
+    let parents = new Set(
+      kept.flatMap((b) =>
+        Object.entries(within).flatMap(([c, prop]) => {
+          if (b[c] === null) return []
+          let ref = (b[c] as Comp | undefined)?.[prop] ??
+            (held.get(b.entity.eid)?.[c] as Comp | undefined)?.[prop]
+          return typeof ref == 'string' ? [ref] : []
+        })
+      ),
+    )
+    return after(parents.size ? tx.get([...parents]) : [], (rows) => {
+      if (rows.some((r) => !mine(r, who, via, instrument))) {
+        throw new Denied(who, app, 'editor')
+      }
+      return bundles
+    })
+  })
+}
 
 // A principal the mode admits and no level does: new rows, and its own.
 let adding = (
@@ -218,6 +262,7 @@ export let guarding = (where: Guard): Hook => {
   let permits = permitsIn(where.vocab)
   let paces = pacesIn(where.vocab)
   let instrument = where.instrument ?? ((via: Eid) => via)
+  let within = where.within ?? {}
   if (Object.keys(paces).length && !where.vocab.comp('_pace')) {
     throw new Error('stored pacing needs memberDoc in the graph vocabulary')
   }
@@ -238,15 +283,11 @@ export let guarding = (where: Guard): Hook => {
             if (comp) {
               throw new Denied(who, where.app, floors[comp], 'write', comp)
             }
+            let via = writerOf(bundles).via
             return after(
-              writes(level) ? bundles : adding(
-                tx,
-                who,
-                where.app,
-                bundles,
-                writerOf(bundles).via,
-                permits,
-                instrument,
+              writes(level) ? bundles : after(
+                inside(tx, who, where.app, bundles, via, within, instrument),
+                (b) => adding(tx, who, where.app, b, via, permits, instrument),
               ),
               (b) => pacing(paces, tx, b, Date.now(), where.instrument),
             )

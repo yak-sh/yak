@@ -206,6 +206,36 @@ test('a visitor adds to an open thing and changes nobody else’s row', () => {
   assertEquals(titleOf(s, 'theirs'), 'Hi')
 })
 
+test('a visitor puts a kept row only inside a row of their own', () => {
+  let s = opened()
+  let g = graph({
+    storage: s,
+    vocab: club,
+    plugins: [
+      members({
+        app: ids.list,
+        space: ids.club,
+        vocab: club,
+        within: { pick: 'by' },
+      }),
+    ],
+  })
+  let put = (who: string | null, ...b: Bundle[]) =>
+    sync(g.apply(b.map((x) => authored(who ? { by: who } : null, x))))
+  let inside = (eid: string, by: string) => ({ entity: { eid }, pick: { by } })
+  // A row made in the same batch is theirs to fill.
+  put(
+    ids.kim,
+    { entity: { eid: 'kims' }, pick: { title: 'K' } },
+    inside('k1', 'kims'),
+  )
+  put(ids.kim, inside('k2', 'kims'))
+  for (let who of [null, ids.kim]) denied(() => put(who, inside('in', 'mine')))
+  // Nor moved there from a row of their own.
+  denied(() => put(ids.kim, inside('k2', 'mine')))
+  put(ids.dana, inside('d1', 'kims'))
+})
+
 let visitorStore = opened()
 let visitorGraph = guarded(visitorStore, ids.list)
 let authored = (actor: Actor | null, b: Bundle) => ({

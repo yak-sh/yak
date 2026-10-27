@@ -116,17 +116,24 @@ let vale = async (
   }, { 'x-yak-role': 'owner' })
   let app = (await dir.app((await dir.space('ada'))!, 'vale'))!
   let store = p.env.STORE.get(p.env.STORE.idFromName('ada/vale'))
-  let as = (person: string | null) => ({
+  let as = (person: string | null, via?: string) => ({
     'x-store': 'ada/vale',
     'x-yak-app': app.eid,
     'x-yak-access': access,
     ...(person ? { 'x-yak-person': person, 'x-yak-role': 'owner' } : {}),
+    ...(via ? { 'x-yak-via': via } : {}),
   })
-  let send = (path: string, body: unknown, person: string | null = ADA) =>
+  // Sent as `person`, or signed out from the browser `via` names.
+  let send = (
+    path: string,
+    body: unknown,
+    person: string | null = ADA,
+    via?: string,
+  ) =>
     store.fetch(
       new Request(`http://store${path}`, {
         method: 'POST',
-        headers: as(person),
+        headers: as(person, via),
         body: typeof body == 'string' ? body : JSON.stringify(body),
       }),
     )
@@ -538,6 +545,13 @@ let asking = (
   },
 ]
 
+// A plain line in a transcript, which asks for a turn where `using` is in force.
+let line = (session: string): Bundle[] => [{
+  entity: { eid: crypto.randomUUID() },
+  entry: { session },
+  content: { body: 'and another thing' },
+}]
+
 let said = (b: Bundle) => (b.content as Comp | undefined)?.body
 
 test('a page asks its store for a turn and the answer lands beside it', async () => {
@@ -670,16 +684,26 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
   )
   assertEquals(refused.status, 403)
   assertEquals(shut.asked.length, 0)
+  // Nor by a plain line in a member's transcript, whose `using` is in force.
+  let ada = crypto.randomUUID()
+  await shut.send('/apply', asking(ada, FLASH))
+  await shut.landed(`.entry.session=${ada}&.output&*`)
+  assertEquals((await shut.send('/apply', line(ada), null)).status, 403)
 
   let open = await vale(answer, {
     access: 'open',
     manifest: { models: 'open' },
   })
-  let s = crypto.randomUUID()
-  assertEquals((await open.send('/apply', asking(s, FLASH), null)).status, 200)
+  let s = crypto.randomUUID(), guest = crypto.randomUUID()
+  let sent = (b: Bundle[]) => open.send('/apply', b, null, guest)
+  assertEquals((await sent(asking(s, FLASH))).status, 200)
   await until(async () =>
     (await open.read(`.entry.session=${s}&.output&*`)).some(said)
   )
+  assertEquals((await sent(line(s))).status, 200)
+  // Opened models are a visitor's to ask in their own transcript only.
+  await open.send('/apply', asking(ada, FLASH))
+  assertEquals((await sent(line(ada))).status, 403)
 })
 
 test('an account past its budget is told so, and the transcript rests', async () => {

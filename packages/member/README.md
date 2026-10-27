@@ -234,6 +234,15 @@ across several bundles in one batch. A missing or deleted target grants nothing,
 and a newly created request cannot supply its own permission. Owners and editors
 retain their ordinary rights; floors and access-control words remain protected.
 
+## A row kept within a row of one's own
+
+A program installing the guard may name components a principal holding no
+writing level writes only inside a row of its own, each with the reference
+property naming that row: `within: { entry: 'session' }` lets an `open` app's
+visitor add lines only to transcripts they started. The parent belongs to its
+`created.by`, or, with no byline, to its `created.via`; a parent created in the
+same batch is the writer's. Owners and editors write anywhere.
+
 ## How often a component may be written
 
 `pace` is @yaks/vocab's keyword: how often one instrument may write one entity's

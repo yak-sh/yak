@@ -861,12 +861,18 @@ export let floorsOf = (manifest: VocabDoc): Floors =>
     ? Object.fromEntries(Object.entries(FLOORS).filter(([k]) => k != 'using'))
     : FLOORS
 
+/** The rows an open app's visitor writes only inside a row of their own: a
+ * line of a transcript, since after an entry with `using` every line asks for
+ * a model's turn the space pays for. A visitor's lines, and so the turns they
+ * ask for, stay in transcripts they started. */
+let WITHIN = { entry: 'session' }
+
 /** The write guard an app's store holds every writer to: @yaks/member's rule,
  * over this platform's floors as the app's manifest leaves them
- * ({@link floorsOf}). `level` is the standing the door vouched for a writer,
- * and `ignore` the grant rows that standing has outlived. So an open app's
- * visitor adds rows and changes or deletes only their own (an upload's content
- * row, and so its bytes, included), and its owner any. */
+ * ({@link floorsOf}) and its {@link WITHIN}. `level` is the standing the door
+ * vouched for a writer, and `ignore` the grant rows that standing has outlived.
+ * So an open app's visitor adds rows and changes or deletes only their own (an
+ * upload's content row, and so its bytes, included), and its owner any. */
 export let appGuard = (
   app: string,
   vocab: Vocab,
@@ -878,6 +884,7 @@ export let appGuard = (
     vocab,
     instrument: instrumentEid,
     floors: floorsOf(manifest),
+    within: WITHIN,
     ...standing,
   })
 

@@ -308,6 +308,10 @@ its `vocab.json`:
 Then anyone who may write the app may ask, which on an `open` app is anyone with
 the link, and every turn they ask for spends the owner's budget.
 
+Since every line after a `using` asks for a turn, a visitor to an `open` app
+writes entries only in transcripts they started; a line in a member's transcript
+is refused, whatever `models` says.
+
 ## Models and pricing
 
 These platform models spend the owner's monthly yaks.app account budget:
