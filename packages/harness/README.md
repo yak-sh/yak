@@ -103,11 +103,12 @@ samples for the current step are considered. A phase is judged by what load does
 not move: its wall time less what the worker's thread waited for a CPU over it
 (@yaks/benchmark `waited`, read at each commit that writes a transcript line, a
 call's execution or an ask's attempt), so a loaded box neither hides an excess
-nor makes one. A metric reports once per worker, on its second excess; the
-fixed-message report reaches the tracker, with numbers in tags, and the next
-step never waits on its delivery. Missing journal marks are omitted, not
-guessed. Bounded scalar transcript reads keep observation independent of
-transcript age.
+nor makes one. A phase is over when the median of a session's newest five
+samples of it is, as the bench judges the median of its steps: one slow step is
+noise. It reports once per worker; the fixed-message report reaches the tracker,
+with numbers in tags, and the next step never waits on its delivery. Missing
+journal marks are omitted, not guessed. Bounded scalar transcript reads keep
+observation independent of transcript age.
 
 ```sh
 deno task bench harness-steps

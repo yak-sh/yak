@@ -6,7 +6,12 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { hook } from '@yaks/graph'
 import type { Host } from '@yaks/host'
-import { type Baseline, limit as benchmarkLimit, waited } from '@yaks/benchmark'
+import {
+  type Baseline,
+  limit as benchmarkLimit,
+  median,
+  waited,
+} from '@yaks/benchmark'
 import type { Runner, Step } from '@yaks/session'
 import { applied } from '@yaks/journal'
 import { logFor } from '@yaks/journal/graph'
@@ -90,18 +95,32 @@ export const overheadSamples = (
   return samples
 }
 
-/** A whole benchmark tool step conservatively bounds each constituent phase. */
-export const overheadExcess = (samples: Overhead[], limit = overheadLimit) =>
-  samples.filter((s) => s.ms > limit)
+/** How many of a session's newest samples of a phase are judged together. */
+export const RECENT = 5
 
-/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') -> true
-/// overheadDue(new Map(), 'dispatch') -> false
-/** Whether a metric's excess reports now: once, on its second excess in a
- * worker. One slow step is noise until another repeats it. */
-export const overheadDue = (seen: Map<string, number>, metric: string) => {
-  const n = (seen.get(metric) ?? 0) + 1
-  seen.set(metric, n)
-  return n == 2
+/// overheadDue(new Map([['s dispatch', [60, 60, 60, 60]]]), 's dispatch', 60) -> true
+/// overheadDue(new Map([['s dispatch', [60, 60, 9, 9]]]), 's dispatch', 9) -> false
+/// overheadDue(new Map(), 's dispatch', 999) -> false
+/** Whether a phase is over its reference now: the median of a session's
+ * newest {@link RECENT} samples of it (kept under `key` in `recent`) is over
+ * the limit, as the bench judges the median of its steps. A whole benchmark
+ * tool step conservatively bounds each constituent phase; one slow step is
+ * noise, and a typical one over the limit is not. */
+export const overheadDue = (
+  recent: Map<string, number[]>,
+  key: string,
+  ms: number,
+  limit = overheadLimit,
+): boolean => {
+  const newest = [...recent.get(key) ?? [], ms].slice(-RECENT)
+  recent.delete(key)
+  recent.set(key, newest)
+  // a worker keeps the phases of the sessions it ran most recently
+  for (const old of recent.keys()) {
+    if (recent.size <= 256) break
+    recent.delete(old)
+  }
+  return newest.length == RECENT && median(newest) > limit
 }
 
 /** What load took from this thread between two instants, from readings of
@@ -134,7 +153,10 @@ export const overheadEach = (
   host: Host,
   each?: Runner['each'],
 ): NonNullable<Runner['each']> => {
-  const seen = new Map<string, number>()
+  const recent = new Map<string, number[]>()
+  // A phase reports once per worker; a sample counts once, though both the
+  // step that wrote a line and the next one see it.
+  const reported = new Set<string>(), judged = new Set<string>()
   // Every phase starts and ends at a commit that writes a transcript line, a
   // call's execution or an ask's attempt; a reading at each bounds its wait.
   const load = waits()
@@ -154,7 +176,15 @@ export const overheadEach = (
       tags: { handler: 'native-overhead' },
     })
   const judge = (session: string, sample: Overhead) => {
-    if (!overheadDue(seen, sample.metric)) return
+    const id = `${sample.metric} ${sample.step}`
+    if (judged.has(id)) return
+    judged.add(id)
+    if (judged.size > 1024) judged.delete(judged.values().next().value!)
+    const key = `${session} ${sample.metric}`
+    if (!overheadDue(recent, key, sample.ms) || reported.has(sample.metric)) {
+      return
+    }
+    reported.add(sample.metric)
     // The next step never waits on a report's delivery.
     Promise.resolve()
       .then(() =>
@@ -168,6 +198,7 @@ export const overheadEach = (
               metric: sample.metric,
               step: sample.step,
               ms: sample.ms,
+              median: median(recent.get(key)!),
               limit: overheadLimit,
               reference: 'harness-steps/tool-step',
             },
@@ -214,13 +245,11 @@ export const overheadEach = (
         }
       }
       for (
-        const sample of overheadExcess(
-          overheadSamples(
-            rows,
-            marks,
-            new Set(input.map((b) => b.entity.eid)),
-            load.between,
-          ),
+        const sample of overheadSamples(
+          rows,
+          marks,
+          new Set(input.map((b) => b.entity.eid)),
+          load.between,
         )
       ) {
         if (!added.has(sample.step) && !needed.has(sample.step)) continue

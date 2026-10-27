@@ -4,9 +4,9 @@ import type { Bundle } from '@yaks/graph'
 import {
   type Mark,
   overheadDue,
-  overheadExcess,
   overheadLimit,
   overheadSamples,
+  RECENT,
   waits,
 } from './overhead.ts'
 const row = (
@@ -57,20 +57,21 @@ test('a result during model wait excludes the remaining provider time', () =>
     metric: 'preflight',
     ms: 5,
   }))
+// Whether a session's phase is over its reference after these samples.
+const over = (ms: number[], limit = overheadLimit) => {
+  const recent = new Map<string, number[]>()
+  return ms.map((m) => overheadDue(recent, 's dispatch', m, limit)).at(-1)
+}
 test('the fixed reference never changes to match session variance', () => {
-  equal(
-    overheadExcess([{ step: 'x', metric: 'dispatch', ms: overheadLimit }]),
-    [],
-  )
-  equal(
-    overheadExcess([{ step: 'x', metric: 'dispatch', ms: overheadLimit + 1 }])
-      .length,
-    1,
-  )
-  equal(
-    overheadExcess([{ step: 'x', metric: 'preflight', ms: 10 }], 5).length,
-    1,
-  )
+  equal(over(Array(RECENT).fill(overheadLimit)), false)
+  equal(over(Array(RECENT).fill(overheadLimit + 1)), true)
+  equal(over(Array(RECENT).fill(10), 5), true)
+})
+test('a phase is judged by the median of its newest steps, so one slow step is noise', () => {
+  const typical = Array(RECENT).fill(overheadLimit / 2)
+  equal(over([...typical, 999]), false)
+  equal(over([...typical, 999, 999, 999]), true)
+  equal(over(Array(RECENT - 1).fill(999)), false)
 })
 test('input and missing execution marks are not guessed as harness overhead', () => {
   equal(
@@ -83,20 +84,12 @@ test('input and missing execution marks are not guessed as harness overhead', ()
   )
   equal(overheadSamples(entries, []), [])
 })
-test('a metric reports once, on its second excess', () => {
-  const seen = new Map<string, number>()
-  equal([1, 2, 3].map(() => overheadDue(seen, 'dispatch')), [
-    false,
-    true,
-    false,
-  ])
-})
 test('time a phase waited for a CPU is not overhead; any other wait is', () => {
   const slow = [row('a', 1, 0, { ask: {} }), row('c', 2, 10, { call: {} })]
   const claimed = [mark('c', 210, 'execution', 'p')]
   const dispatch = (wait: number) =>
-    overheadExcess(overheadSamples(slow, claimed, new Set(), () => wait))
-  equal([dispatch(190).length, dispatch(0).length], [0, 1])
+    overheadSamples(slow, claimed, new Set(), () => wait)[0].ms
+  equal([dispatch(190), dispatch(0)], [10, 200])
 })
 test('what load took between two instants is read at the commits after each', () => {
   const clock = [100, 200, 300]
