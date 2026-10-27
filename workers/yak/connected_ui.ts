@@ -13,7 +13,7 @@ let destinations: Partial<Record<Brand, { href: string; label: string }>> = {
 // A row's way out: it revokes what the row stands for and comes back to
 // `back` (identity.ts answers the post).
 let disconnect = (agent: Agent | undefined, back: string) =>
-  `<form class="Agents_Disconnect" method="post" action="/oauth/agents/disconnect">
+  `<form method="post" action="/oauth/agents/disconnect">
 <input type="hidden" name="agent" data-agent-id value="${esc(agent?.id ?? '')}">
 <input type="hidden" name="return" value="${esc(back)}">
 <button class="Button Button-quiet" type="submit" data-agent-disconnect aria-label="Disconnect ${
@@ -31,35 +31,41 @@ let row = (agent?: Agent, links = false, back = '') => {
   } target="_blank" rel="noopener noreferrer"><span data-agent-action>${
     link?.label ?? ''
   }</span>${icon('external-link')}</a>`
-  return links ? `<li>${open}</li>` : `<li class="Agents_Row">
-<div class="Agents_Info"><strong data-agent-name>${
+  return links ? `<li>${open}</li>` : `<li class="Rows_Item">
+<div class="Rows_Main"><strong class="Rows_Name" data-agent-name>${
     esc(agent?.name ?? '')
   }</strong>
-<span class="Agents_State">${icon('check')}Connected</span></div>
-${open}${disconnect(agent, back)}</li>`
+<span class="Status Status-good">Connected</span></div>
+<div class="Rows_Actions">${open}${disconnect(agent, back)}</div></li>`
 }
 
 /**
- * The connected agents as rows, each with its Disconnect button returning
- * to `back`, or as launch links. Links leave out an agent with no web
- * destination (Claude Code, Cursor, the CLI), and a list with nothing in it
- * hides, so the page around it says what to do next.
+ * The connected agents as a card of rows, each with its Disconnect button
+ * returning to `back`, or as launch links. Links leave out an agent with no
+ * web destination (Claude Code, Cursor, the CLI), and a list with nothing in
+ * it hides, its card with it, so the page around it says what to do next.
  */
 export let agentList = (
   agents: Agent[],
   view: 'rows' | 'links' = 'rows',
   back = '',
 ) => {
-  let rows = agents.map((c) => row(c, view == 'links', back)).join('')
-  return `<div data-agents${
-    view == 'links' ? ' data-agent-links' : ''
-  } aria-live="polite">
-<ul class="Agents${
-    view == 'links' ? ' Agents-links' : ''
+  let links = view == 'links'
+  let rows = agents.map((c) => row(c, links, back)).join('')
+  let tag = links ? 'div' : 'section'
+  return `<${tag} ${
+    links
+      ? 'data-agent-links'
+      : `class="Card" data-connected${rows ? '' : ' hidden'}`
+  } data-agents aria-live="polite">${
+    links
+      ? ''
+      : '<header class="Card_Head"><h2 class="Card_Title">Connected agents</h2></header>'
+  }
+<ul class="Agents ${
+    links ? 'Agents-links' : 'Rows'
   }" aria-label="Connected agents"${rows ? '' : ' hidden'}>${rows}</ul>
-<template data-agent-row>${
-    row(undefined, view == 'links', back)
-  }</template></div>`
+<template data-agent-row>${row(undefined, links, back)}</template></${tag}>`
 }
 
 export let agentLive = (endpoint: string) =>

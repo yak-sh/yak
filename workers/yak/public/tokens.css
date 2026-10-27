@@ -37,13 +37,13 @@
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
 
-    /* Materials: light on a rim, shade under a raised edge, and depth in a field. */
+    /* Materials, for controls only: light on a rim, shade under a pressed
+       edge, and depth in a field. A surface is flat. */
     --highlight: white;
     --shadow: black;
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
     --shade: color-mix(in srgb, var(--ink) 16%, transparent);
-    --raised: inset 0 1px var(--rim), 0 2px 2px var(--shade), 0 5px 12px var(--shade);
     --inset: inset 0 2px 4px var(--shade), 0 1px var(--rim);
 
     /* Type. */
@@ -52,6 +52,7 @@
     --body: 1.0625rem;
     --lead: 1.125rem;
     --small: 0.9375rem;
+    --fine: 0.875rem; /* what describes a thing: a hint, a status, a count */
 
     /* Space and shape. The gaps derive from one number, and the frame a page
        is drawn in — header to footer, style.css — is the five that open the

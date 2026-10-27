@@ -237,7 +237,7 @@ test('connections: the person’s own, then this space with what it could add, t
       },
     }, env).text()
   let { document } = parseHTML(await drawn())
-  let groups = [...document.querySelectorAll('.Desk_Group')]
+  let groups = [...document.querySelectorAll('.Group')]
   assertEquals(groups.map((g) => g.textContent), [
     'Yours',
     'ada.yaks.fyi',
@@ -247,7 +247,7 @@ test('connections: the person’s own, then this space with what it could add, t
     let names = []
     for (
       let at = groups[i].nextElementSibling;
-      at && !at.classList.contains('Desk_Group');
+      at && !at.classList.contains('Group');
       at = at.nextElementSibling
     ) names.push(at.querySelector('h2')?.textContent)
     return names

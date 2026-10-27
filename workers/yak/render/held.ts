@@ -8,13 +8,23 @@ import { parse } from '@yaks/query'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { day } from '../html.ts'
 
+// A row's main part (the style guide's .Rows): the name, then one line of
+// where they stand, their address first.
 let who = <N>(h: H<N>, ctx: Context, ...standing: Child<N>[]) =>
   h(
     'div',
-    { class: 'People_Who' },
-    h('strong', null, String(ctx.name || ctx.email || 'Someone')),
-    ctx.email ? h('span', { class: 'People_Email' }, String(ctx.email)) : null,
-    h('span', { class: 'People_Role' }, ...standing),
+    { class: 'Rows_Main' },
+    h(
+      'strong',
+      { class: 'Rows_Name' },
+      String(ctx.name || ctx.email || 'Someone'),
+    ),
+    h(
+      'span',
+      { class: 'Rows_Meta' },
+      ctx.email ? `${ctx.email} · ` : null,
+      ...standing,
+    ),
   )
 
 export let seat: Renderer = {

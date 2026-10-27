@@ -1,7 +1,8 @@
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
 // where they sign in. One shell, three sentences, and an optional card of
-// markup under them. Shared controls and tokens come from public/controls.css.
+// markup under them. Shared controls and tokens come from public/controls.css,
+// and the column and the dashboard's frame from public/pages.css.
 // Errors are for the person's assistant to fix (D-32318 §Errors); the
 // dashboard marks the app they broke in and says what to ask it.
 //
@@ -38,10 +39,35 @@ let plusPrice = () => `$${count(PRICE.plus)}`
 
 let billButton = (door: string, label: string, target?: string) =>
   `<button type="button" class="Button Bill_Go${
-    door == 'portal' ? ' Bill_Go-quiet' : ''
+    door == 'portal' ? ' Button-quiet' : ''
   }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}>${
     esc(label)
   }</button>`
+
+// The style guide's parts (public/style-guide.html, One design language),
+// said once: a card's head, a status word, and a field under its label.
+
+/** A card's head: its mark, its title, how it stands, and what acts on the
+ * whole card, at the right. */
+let heading = (
+  title: string,
+  at: { mark?: string; status?: string; actions?: string; id?: string } = {},
+) =>
+  `<header class="Card_Head">${at.mark ?? ''}<h2 class="Card_Title"${
+    at.id ? ` id="${at.id}"` : ''
+  }>${title}</h2>${at.status ?? ''}${
+    at.actions ? `<div class="Card_Actions">${at.actions}</div>` : ''
+  }</header>`
+
+/** How something stands, in its role's colour. */
+let status = (word: string, tone?: 'good' | 'warn') =>
+  `<span class="Status${tone ? ` Status-${tone}` : ''}">${word}</span>`
+
+/** A field: its label, its control, and what explains it under both. */
+let labeled = (id: string, label: string, control: string, hint = '') =>
+  `<div class="Form_Field"><label class="Form_Label" for="${id}">${label}</label>${control}${
+    hint ? `<p class="Form_Hint">${hint}</p>` : ''
+  }</div>`
 
 export let shell = (
   env: Host,
@@ -64,87 +90,18 @@ export let shell = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="${url(env, '/controls.css')}">
-<style>
-@layer base {
-* { box-sizing: border-box }
-body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--ground); color: var(--ink); font: 400 1.05rem/1.6 'Nunito', system-ui, sans-serif }
-main { width: 100%; max-width: 34rem; padding: 2rem 1rem; text-align: center; overflow-wrap: anywhere }
-h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .5rem }
-p { color: var(--soft-ink); margin: 0 0 1rem }
-a { color: var(--accent); text-underline-offset: .18em }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px }
-form { display: grid; gap: .75rem; margin: 1.5rem 0 1rem }
-form p { margin: 0; font-size: .95rem }
-input { text-align: center }
-}
-@layer sections {
-.Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
-.Again { margin-top: 0 }
-.Away { font-size: .95rem }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
-.Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: .95rem }
-.Card { --card-pad: 1.1rem 1.25rem; margin: 0 0 1rem; text-align: left }
-.Card h2 { font-size: 1.05rem; font-weight: 800 }
-.Card > h2 { margin: 0 0 .6rem }
-.Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
-.Card li::marker { color: var(--accent); font-weight: 700 }
-.Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
-.Card form { margin: 1rem 0 0 }
-.Note { font-size: .9rem; margin: .75rem 0 0 }
-details.Note > summary { color: var(--accent); cursor: pointer }
-.Pills { justify-content: center; margin: 0 0 1.25rem }
-.Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
-.Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
-.Copy { display: flex; align-items: center; gap: .5rem }
-.Copy .Pick { flex: 1; margin: 0; border-radius: .7rem; background: var(--ground) }
-.Copy_Go { --control-pad-inline: .9rem; --button-fill: var(--paper); --button-ink: var(--accent); flex: none; font-size: .85rem; font-weight: 700 }
-.At { display: flex; align-items: center; justify-content: center; gap: .3rem }
-.At input { flex: 0 1 13rem; text-align: right }
-.At span { color: var(--soft-ink) }
-.Attach { margin: 0 0 1rem; text-align: left }
-.Attach > summary { font-weight: 800; font-size: 1.05rem; cursor: pointer; padding: .6rem 0; text-align: center }
-.Attach > p { margin: .75rem 0 1rem }
-.Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
-.Say-no { color: var(--warn) }
-.Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
-.Bill_Go-quiet { --button-fill: var(--paper); --button-ink: var(--accent) }
-.Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
-.Drop_Zone-over { border-color: var(--accent); background: var(--paper) }
-.Drop_File { min-width: 0; max-width: 100%; border: 0; padding: 0; background: none; cursor: pointer }
-.Drop_Say { color: var(--soft-ink); font-size: .9rem }
-.Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
-.Chat_Said { display: grid; gap: .45rem; margin: 0 0 1rem }
-.Chat_Said:empty { display: none }
-.Chat_Bubble { max-width: 90%; margin: 0; padding: .55rem .9rem; border-radius: 1.1rem; background: var(--ground); color: var(--ink); white-space: pre-wrap }
-.Chat_Bubble-you { justify-self: end; background: var(--accent); color: var(--ground) }
-.Chat_Bubble a { color: inherit }
-.Chat_Tool { display: flex; gap: .4rem; align-items: baseline; margin: 0; padding: 0 .3rem; color: var(--soft-ink); font-size: .9rem }
-.Chat_Tool-no { color: var(--warn) }
-.Chat_Name { font-weight: 700; flex: none }
-.Chat_Of { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.Chat_Built { margin: .4rem 0; padding: 1rem; border: 2px solid var(--accent); border-radius: 1.25rem; background: var(--ground); text-align: center }
-.Chat_Built p { margin: 0 0 .6rem }
-.Chat_Note { margin: 0; color: var(--soft-ink); font-size: .9rem }
-.Chat_Ask { margin: 0 }
-.Chat_Ask textarea { width: 100%; min-height: 4.5rem; resize: vertical }
-.Chat_Ask textarea:disabled { opacity: .6 }
-.Fields { display: grid; gap: .55rem; margin: .55rem 0 0 }
-.Fields > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .65rem }
-@media (max-width: 480px) { .Fields > div { grid-template-columns: minmax(0, 1fr); gap: .25rem } }
-.Fields dt { color: var(--ink); font-weight: 800 }
-.Fields dd { min-width: 0; margin: 0 }
-.Fields .Copy { min-width: 0 }
-.Connect_Icon { display: flex; align-items: center; gap: .65rem }
-.Connect_Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
-.Connect_Setup { margin-bottom: 1.5rem }
-.Connect_Setup > summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: .5rem 0; margin-bottom: .75rem }
-.Connect_Path { margin: .9rem 0 .4rem; font-size: 1rem; font-weight: 800 }
-.Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
-.Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
-${deskCss}${css}
-}
-</style>
+<link rel="stylesheet" href="${url(env, '/pages.css')}">
+${
+      css
+        ? `<style>@layer sections {
+${css}
+}</style>`
+        : ''
+    }
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
       lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`
@@ -384,8 +341,7 @@ let chatAsk = (to = '/api/build') =>
 // is at the apex, so its form names the space's door whole, and the script
 // opens its socket wherever the form points.
 let chat = (to: string) =>
-  `<section class="Card Chat">
-<h2>Build an app here</h2>
+  `<section class="Card Chat">${heading('Build an app here')}
 ${transcript([])}${chatAsk(to)}
 </section>`
 
@@ -582,8 +538,9 @@ export type Visits = {
 }
 
 let visits = (v: Visits, site: string) =>
-  `<article class="Stats" aria-labelledby="visits-${esc(v.slug)}">
-<header class="Stats_Head"><h2 class="Stats_Title" id="visits-${
+  `<article class="Card Stats" aria-labelledby="visits-${
+    esc(v.slug)
+  }"><header class="Card_Head"><h2 class="Card_Title" id="visits-${
     esc(v.slug)
   }"><a href="${site}/${
     encodeURIComponent(v.slug)
@@ -602,7 +559,7 @@ let visits = (v: Visits, site: string) =>
 
 let visited = (apps: Visits[] | null, off: string, site: string) =>
   apps == null
-    ? `<p class="Note">${esc(off)}</p>`
+    ? `<p class="Form_Hint">${esc(off)}</p>`
     : apps.map((v) => visits(v, site)).join('')
 
 // A space's front door shows the apps whoever is asking may open, and to
@@ -658,113 +615,6 @@ export type DeskPage = {
   shared?: (Listed & { space: string })[]
 }
 
-let deskCss = `
-.Desk { display: block }
-.Desk main { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; max-width: 80rem; min-height: 100vh; margin: auto; padding: 0; text-align: left }
-.Desk_Side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2rem; min-height: 100vh; padding: 2rem 1.25rem; border-right: 1px solid var(--line) }
-.Desk_Brand { display: flex; align-items: center; gap: .65rem; color: var(--ink); font-size: 1.25rem; font-weight: 800; text-decoration: none }
-.Desk_Brand img { border-radius: .65rem }
-.Desk_Count { margin-left: auto; font-size: .8rem; opacity: .8 }
-.Desk_Foot { margin-top: auto; display: grid; gap: .5rem; padding: .5rem .8rem; font-size: .85rem }
-.Desk .SideNav { margin-right: calc(-1.25rem - 1px) }
-.Desk_Body { min-width: 0; min-height: 100vh; background: var(--paper); padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
-.Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
-.Desk_Head h1 { font-size: 1.9rem; margin: .15rem 0 0 }
-.Desk_Period { margin: .35rem 0 0; font-size: .9rem }
-.Desk_Profile { display: grid; gap: .75rem; max-width: 34rem }
-.Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
-.Desk_Head .Button { --control-pad-inline: 1.2rem; flex: none; font-size: .95rem }
-.Desk_Content { max-width: 52rem }
-.Desk .Card { --card-pad: 1.5rem }
-.Desk .Card h2 { font-size: 1.15rem }
-.Desk .Card p:last-child { margin-bottom: 0 }
-.Desk .Card form { max-width: 34rem }
-.Desk input { text-align: left }
-.Desk form button { justify-self: start }
-.Desk form label { font-size: .95rem; font-weight: 700 }
-.Desk .At { justify-content: start }
-.Desk .At input { flex: 1; text-align: left }
-.Desk .Say:empty { display: none }
-.Desk .Says { margin-bottom: 0 }
-.Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--accent); border-radius: 1rem }
-.Desk_Connect h2 { margin: 0 0 .35rem; font-size: 1.1rem }
-.Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
-.Desk_Connect .Button { --control-pad-inline: 1.1rem; flex: none; font-size: .9rem }
-.Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem }
-.Apps_Item { position: relative; display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink) }
-.Apps_Item:hover { border-color: var(--accent) }
-.Apps_Item img { width: 44px; height: 44px; border-radius: .75rem; margin-bottom: .5rem }
-.Apps_Item strong { font-size: 1.05rem; line-height: 1.3 }
-.Apps_Open { color: inherit; text-decoration: none }
-.Apps_Open::after { content: ''; position: absolute; inset: 0; border-radius: inherit }
-.Apps_Open:focus-visible { outline: 0 }
-.Apps_Open:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 3px }
-.Apps_Path { color: var(--soft-ink); font-size: .85rem }
-.Apps_Tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: auto; padding-top: .5rem; font-size: .75rem; color: var(--soft-ink) }
-.Apps_Tag { padding: .1rem .5rem; border-radius: .35rem; background: var(--ground) }
-.Apps.Apps-one { grid-template-columns: minmax(0, 18rem); justify-content: center; margin: 1.5rem 0 0; text-align: left }
-.Apps-one .Apps_Item { min-height: 0 }
-.Apps_Tags:empty { display: none }
-.Apps_Tag-warn { position: relative; background: color-mix(in srgb, var(--warn) 12%, var(--paper)); color: var(--warn); font-weight: 700; text-decoration: none }
-.Fix_List { display: grid; gap: .75rem; margin: 0 0 1rem; padding: 0; list-style: none }
-.Fix_List p { margin: 0; font-size: .9rem }
-.Fix .Fix_Said { color: var(--ink); font-family: var(--mono); font-size: .85rem; overflow-wrap: anywhere }
-.Desk_Empty { padding: 2.5rem 1rem; text-align: center }
-.Desk_Empty h2 { margin: 0 0 .5rem; font-size: 1.25rem }
-.Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
-.Desk_Start { margin-bottom: 2rem }
-.Desk_Start h2 { margin: 0 0 .75rem; font-size: 1.15rem }
-.Desk_Start .Agents { margin-bottom: 1rem }
-.Desk_Options { display: grid; gap: 1rem; align-items: start }
-.Desk_Options > .Card { margin: 0 }
-.Desk_Options .Button { --button-fill: var(--paper); --button-ink: var(--ink) }
-@media (min-width: 1100px) { .Desk_Options { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
-.Desk_Trash { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; margin: 0; border-top: 1px solid var(--line) }
-.Desk_Trash:first-of-type { border-top: 0 }
-.Desk_Trash p { color: var(--ink) }
-.Desk_Trash small { display: block; color: var(--soft-ink) }
-.Desk .Desk_Trash { max-width: none; margin: 0 }
-.Desk_Group { margin: 2rem 0 .75rem; font-size: .95rem; color: var(--soft-ink) }
-.Desk_Content > .Desk_Group:first-child { margin-top: 0 }
-.Connection_Head { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin: 0 0 .5rem }
-.Connection_Head h2 { margin: 0 }
-.Connection_Logo { flex: none; width: 28px; height: 28px }
-.Connection_About { margin: 0 0 .5rem; font-size: .95rem }
-.Connection_Face { display: grid; justify-items: center; gap: .5rem; margin: 0 0 1rem }
-.Connection_Face .Connection_Logo { width: 48px; height: 48px }
-.Connection_Face .Connection_About { margin: 0 }
-.Connection_Instructions > summary { font-weight: 700 }
-.Connection_Instructions .Markdown > :first-child { margin-top: .5rem }
-.Connection_Instructions .Markdown > :last-child { margin-bottom: 0 }
-.Connection_Told { margin: 1rem 0 0 }
-.Connection_Told textarea { min-height: 8rem; resize: vertical }
-.Connection_Head .Apps_Tag { font-size: .8rem; color: var(--soft-ink) }
-.Connection_Status { font-size: .85rem; font-weight: 700; color: var(--soft-ink) }
-.Connection_Status-connected { color: var(--accent) }
-.Connection_Status-needed, .Connection_Status-broken { color: var(--warn) }
-.Desk .Connection_Do { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; max-width: none; margin: 1rem 0 0 }
-.Connection_Do .Field { flex: 1 1 14rem }
-.Connection_Do + .Connection_Do { margin-top: .6rem }
-.Desk_Skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem 1rem; background: var(--paper); z-index: 1 }
-.Desk_Skip:focus { top: 1rem }
-@media (max-width: 700px) {
-  .Desk main { display: block }
-  .Desk_Side { position: static; min-height: 0; gap: 1rem; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line) }
-  .Desk_Brand { font-size: 1.1rem }
-  .Desk_Brand img { width: 30px; height: 30px }
-  .Desk .SideNav { margin-right: 0; display: flex; flex-wrap: wrap; gap: .3rem }
-  .Desk .SideNav a { padding: .45rem .65rem; font-size: .85rem; gap: .4rem }
-  .Desk .SideNav hr, .Desk_Foot { display: none }
-  .Desk_Body { min-height: 0; padding: 1.5rem 1rem }
-  .Desk_Head { margin-bottom: 1.5rem }
-  .Desk_Head h1 { font-size: 1.55rem }
-  .Desk_Connect { align-items: start; flex-direction: column; gap: 1rem; padding: 1.1rem }
-  .Desk .Card { --card-pad: 1.1rem }
-  .Apps { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem }
-  .Apps_Item { min-height: 11rem; padding: 1rem }
-}
-`
-
 let navIcons = {
   apps: 'layout-grid',
   people: 'users',
@@ -817,11 +667,11 @@ let state = (connected: boolean, show: boolean) =>
   `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
 
 let connectCard = (at: DeskPage) =>
-  `<section class="Desk_Connect" ${state(false, !at.agents?.length)}>
-<div><h2>Connect your agent</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
-<a class="Button" href="${
+  `<section class="Card Desk_Connect" ${state(false, !at.agents?.length)}>
+<header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button" href="${
     managePath('connect', at.pick)
-  }">Connect agent</a></section>`
+  }">Connect agent</a></div></header>
+<p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></section>`
 
 // What broke in an app, for its owner: each break as its line says it to their
 // assistant, how often and when last, and the one thing to do, which is to
@@ -831,31 +681,39 @@ let fixing = (a: DeskPage['apps'][number]) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug
-  return `<section class="Card Fix" id="fix-${esc(a.slug)}"><h2>${
+  return `<section class="Card Fix" id="fix-${
+    esc(a.slug)
+  }"><header class="Card_Head"><h2 class="Card_Title">${
     esc(title)
-  } has ${n == 1 ? 'an error' : `${n} errors`}</h2><ul class="Fix_List">${
+  }</h2><span class="Status Status-warn">${
+    n == 1 ? '1 error' : `${n} errors`
+  }</span></header><ul class="Rows">${
     errors.slice(0, SHOWN).map((e) =>
-      `<li><p class="Fix_Said">${esc(e.said || 'No message')}</p><p>${
-        e.where ? `${esc(e.where)} · ` : ''
-      }${e.times == 1 ? 'once' : `${e.times} times`}${
+      `<li class="Rows_Item"><div class="Rows_Main"><span class="Fix_Said">${
+        esc(e.said || 'No message')
+      }</span><span class="Rows_Meta">${e.where ? `${esc(e.where)} · ` : ''}${
+        e.times == 1 ? 'once' : `${e.times} times`
+      }${
         day(e.at) ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}` : ''
-      }</p></li>`
+      }</span></div></li>`
     ).join('')
   }</ul>${
-    n > SHOWN ? `<p class="Note">And ${n - SHOWN} more.</p>` : ''
-  }<p>Ask your assistant to fix ${n == 1 ? 'it' : 'them'}. Try this:</p>${
+    n > SHOWN ? `<p class="Rows_Meta">And ${n - SHOWN} more.</p>` : ''
+  }<div class="Form_Field"><p class="Form_Label">Ask your assistant to fix ${
+    n == 1 ? 'it' : 'them'
+  }</p>${
     copyable(
       `Fix the errors in my ${title} app on yaks.app`,
       `the request to fix ${title}`,
     )
-  }</section>`
+  }</div></section>`
 }
 
 // What others let this person into: drawn by the same Tile as their own, each
 // with the address it lives at, since none of them lives at this space's.
 let sharedWith = (at: DeskPage, env: Host) =>
   at.shared?.length
-    ? `<h2 class="Desk_Group">Shared with you</h2><div class="Apps">${
+    ? `<h2 class="Group">Shared with you</h2><div class="Apps">${
       at.shared.map((a) => {
         let host = spaceHost(env, a.space)
         return tile(a, { at: `https://${host}`, host })
@@ -879,14 +737,12 @@ export let library = (at: DeskPage, env: Host) => {
         ).join('')
       }</div>${
         broken.length
-          ? `<h2 class="Desk_Group">Needs fixing</h2>${
-            broken.map(fixing).join('')
-          }`
+          ? `<h2 class="Group">Needs fixing</h2>${broken.map(fixing).join('')}`
           : ''
       }${sharedWith(at, env)}`
       : `${
         sharedWith(at, env)
-      }<section class="Desk_Empty"><h2>Your apps will live here</h2>
+      }<section class="Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
       }><p>Ask your agent for your first app. Try this:</p>${firstAsk}</div>
@@ -901,28 +757,35 @@ export let library = (at: DeskPage, env: Host) => {
 
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
-  return `<form class="Card Card-sectioned" method="post" action="${
-    managePath('settings', at.pick)
-  }">
-<header class="Card_Header"><h2>Profile</h2></header>
-<div class="Card_Body"><div class="Desk_Profile"><label for="your-name">Your name</label>
-<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
-    esc(at.name ?? '')
-  }">
-</div></div><footer class="Card_Footer"><button class="Button" type="submit">Save name</button></footer></form>
-<section class="Card"><h2>App address</h2><form method="post" action="${
-    managePath('settings', at.pick)
-  }">
-<label for="your-address">Your address</label>
-<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
-    esc(at.space)
-  }"><span>.${apex(env)}</span></span>
-<p class="Note">${MOVES}</p><button class="Button" type="submit">Save address</button></form></section>
-<section class="Card"><h2>Homepage</h2><p>${
+  let to = managePath('settings', at.pick)
+  return `<section class="Card">${heading('Profile')}
+<form class="Form" method="post" action="${to}">${
+    labeled(
+      'your-name',
+      'Your name',
+      `<div class="Form_Line"><input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
+        esc(at.name ?? '')
+      }"><button class="Button" type="submit">Save name</button></div>`,
+    )
+  }</form></section>
+<section class="Card">${heading('App address')}
+<form class="Form" method="post" action="${to}">${
+    labeled(
+      'your-address',
+      'Your address',
+      `<div class="Form_Line"><span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
+        esc(at.space)
+      }"><span>.${
+        apex(env)
+      }</span></span><button class="Button" type="submit">Save address</button></div>`,
+      MOVES,
+    )
+  }</form></section>
+<section class="Card">${heading('Homepage')}<p>${
     home
       ? `${esc(home.title || home.slug)} opens at your address.`
       : 'Your address opens your app library.'
-  }</p><p class="Note">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="${
+  }</p><p class="Form_Hint">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="${
     url(env, MANAGE)
   }">${apex(env)}${MANAGE}</a>.</p></section>`
 }
@@ -932,13 +795,41 @@ let selling = (at: DeskPage, env: Host) => {
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
   let stop = ready || (!at.plus && connected)
-  return `<section class="Card Bill"><h2>${
-    !at.plus
-      ? 'Take payments with Plus'
-      : ready
-      ? 'Payments are connected'
-      : 'Take payments in your apps'
-  }</h2>
+  let stripe = at.plus || connected
+    ? `<form method="post" action="${
+      managePath('selling', at.pick)
+    }"><input type="hidden" name="sell" value="${
+      stop ? 'stop' : 'start'
+    }"><button type="submit" class="Button${stop ? ' Button-quiet' : ''}">${
+      stop
+        ? 'Disconnect Stripe'
+        : at.sell == 'setup'
+        ? 'Continue setup'
+        : 'Connect Stripe'
+    }</button></form>`
+    : ''
+  let subscribe = at.plus ? '' : billButton(
+    'checkout',
+    `Subscribe — ${plusPrice()} a month`,
+    managePath('selling', at.pick),
+  )
+  return `<section class="Card Bill">${
+    heading(
+      !at.plus
+        ? 'Take payments with Plus'
+        : ready
+        ? 'Payments are connected'
+        : 'Take payments in your apps',
+      {
+        status: ready
+          ? status('Connected', 'good')
+          : at.sell == 'setup'
+          ? status('Setup unfinished', 'warn')
+          : '',
+        actions: subscribe + stripe,
+      },
+    )
+  }
 <p>${
     !at.plus
       ? connected
@@ -951,56 +842,39 @@ let selling = (at: DeskPage, env: Host) => {
       : 'Connect your Stripe account to accept payments from your customers.'
   }</p>${
     at.plus
-      ? `<p class="Note">yaks.app takes ${
+      ? `<p class="Form_Hint">yaks.app takes ${
         esc(at.fee ?? '')
       } of each sale. <a href="${
         url(env, '/pricing')
       }" target="_blank" rel="noopener">Pricing</a></p>`
       : `${
         at.fee
-          ? `<p class="Note">${
+          ? `<p class="Form_Hint">${
             esc(at.fee)
           } per sale, plus Stripe processing fees.</p>`
           : ''
-      }<p class="Bill_Doors">${
-        billButton(
-          'checkout',
-          `Subscribe — ${plusPrice()} a month`,
-          managePath('selling', at.pick),
-        )
-      }</p><p class="Say Bill_Say" role="status"></p>`
-  }${
-    at.plus || connected
-      ? `<form method="post" action="${
-        managePath('selling', at.pick)
-      }"><input type="hidden" name="sell" value="${
-        stop ? 'stop' : 'start'
-      }"><button type="submit" class="Button${stop ? ' Bill_Go-quiet' : ''}">${
-        stop
-          ? 'Disconnect Stripe'
-          : at.sell == 'setup'
-          ? 'Continue setup'
-          : 'Connect Stripe'
-      }</button></form>`
-      : ''
+      }<p class="Say Bill_Say" role="status"></p>`
   }</section>${at.plus ? '' : billing}`
 }
 
 let trash = (at: DeskPage) =>
   at.trash?.length
-    ? `<section class="Card"><p>Deleted apps can be restored for 30 days.</p>${
+    ? `<section class="Card">${
+      heading('Deleted apps')
+    }<p class="Card_Sub">Each is kept for 30 days, then erased for good. Restoring one brings back everything it held.</p><ul class="Rows">${
       at.trash.map((a) =>
-        `<form class="Desk_Trash" method="post" action="${
-          managePath('trash', at.pick)
-        }">
-<input type="hidden" name="restore" value="${esc(a.slug)}">
-<p>${esc(a.title || a.slug)}<small>${a.days} ${
+        `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${
+          esc(a.title || a.slug)
+        }</span><span class="Rows_Meta">${a.days} ${
           a.days == 1 ? 'day' : 'days'
-        } left</small></p>
-<button type="submit" class="Button Bill_Go-quiet">Restore</button></form>`
+        } left</span></div><form class="Rows_Actions" method="post" action="${
+          managePath('trash', at.pick)
+        }"><input type="hidden" name="restore" value="${
+          esc(a.slug)
+        }"><button type="submit" class="Button Button-quiet">Restore</button></form></li>`
       ).join('')
-    }</section>`
-    : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
+    }</ul></section>`
+    : '<section class="Empty"><h2>Trash is empty</h2><p>A deleted app waits here for 30 days.</p></section>'
 
 // A sentence out of a lowercase line: what a failed seal wrote beside it.
 export let sentence = (text: string) =>
@@ -1082,7 +956,7 @@ let connection = (
       c.each ? '' : form(
         `<input type="hidden" name="app" value="${
           esc(a.app)
-        }"><button class="Button Bill_Go-quiet" type="submit" name="do" value="${
+        }"><button class="Button Button-quiet" type="submit" name="do" value="${
           a.anyone ? 'close' : 'open'
         }">${a.anyone ? 'Members only' : 'Open to anyone'}</button>`,
       )
@@ -1100,8 +974,8 @@ let connection = (
       c.listed
         ? `<p>In the <a href="${
           esc(`${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`)
-        }">integration directory</a>, for anyone to add with their own key.</p><button class="Button Bill_Go-quiet" type="submit" name="do" value="unlist">Take it out</button>`
-        : `<button class="Button Bill_Go-quiet" type="submit" name="do" value="list">List in the integration directory</button><p>Anyone could then add it to a space of theirs, with their own key.</p>`,
+        }">integration directory</a>, for anyone to add with their own key.</p><button class="Button Button-quiet" type="submit" name="do" value="unlist">Take it out</button>`
+        : `<button class="Button Button-quiet" type="submit" name="do" value="list">List in the integration directory</button><p>Anyone could then add it to a space of theirs, with their own key.</p>`,
     )
     : ''
   // What is said about a service this space added, its owner's to change.
@@ -1170,7 +1044,7 @@ let connection = (
   // for an app that asks each person, is theirs to remove.
   let waiting = c.status == 'needed' && c.apps.length && !c.each
   let drop = ask || waiting ? '' : form(
-    `<button class="Button Bill_Go-quiet" type="submit" name="do" value="disconnect">${
+    `<button class="Button Button-quiet" type="submit" name="do" value="disconnect">${
       c.status == 'needed' ? 'Remove' : 'Disconnect'
     }</button>`,
   )
@@ -1261,9 +1135,7 @@ let connections = (at: DeskPage, env: Host) => {
 </div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
   // The service the page was opened to add comes first under its space.
   let group = (title: string, cards: string, lead = '') =>
-    lead + cards
-      ? `<h2 class="Desk_Group">${esc(title)}</h2>${lead}${cards}`
-      : ''
+    lead + cards ? `<h2 class="Group">${esc(title)}</h2>${lead}${cards}` : ''
   let yours = first.filter((one) => one.own)
     .map((one) => connection(one, c.on, at.pick, c.enable)).join('') +
     c.services.map((s) =>
@@ -1283,7 +1155,7 @@ let connections = (at: DeskPage, env: Host) => {
   }${
     c.list.length || c.services.length
       ? ''
-      : `<section class="Desk_Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
+      : `<section class="Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
   }${group('Yours', yours)}${
     spaces.map((space) =>
       group(
@@ -1308,7 +1180,7 @@ export let people = (at: DeskPage) => {
   if (!r) return ''
   let again = (p: Person) =>
     p.held == 'invite'
-      ? `<form class="People_Again" method="post" action="${
+      ? `<form class="Rows_Actions" method="post" action="${
         managePath('people', at.pick)
       }"><input type="hidden" name="again" value="${
         esc(p.eid)
@@ -1318,18 +1190,18 @@ export let people = (at: DeskPage) => {
       : ''
   let list = (title: string, all: Person[]) =>
     all.length
-      ? `<h2 class="Desk_Group">${esc(title)}</h2><ul class="People">${
-        all.map((p) => `<li class="People_Row">${holder(p)}${again(p)}</li>`)
+      ? `<section class="Card">${heading(esc(title))}<ul class="Rows">${
+        all.map((p) => `<li class="Rows_Item">${holder(p)}${again(p)}</li>`)
           .join('')
-      }</ul>`
+      }</ul></section>`
       : ''
   let apps = r.apps.map((a) =>
     list(`${a.app.title} · this app only`, [...a.guests, ...a.invited])
   ).join('')
   return `${list('Members · every app', [...r.members, ...r.invited])}${apps}${
     r.members.length < 2 && !r.invited.length && !apps
-      ? '<section class="Desk_Empty"><h2>Just you so far</h2><p>Ask your assistant to invite someone by their email address, to one app or to every app here.</p></section>'
-      : '<p class="Note">To invite someone else, or take someone off, ask your assistant.</p>'
+      ? '<section class="Empty"><h2>Just you so far</h2><p>Ask your assistant to invite someone by their email address, to one app or to every app here.</p></section>'
+      : '<p class="Form_Hint">To invite someone else, or take someone off, ask your assistant.</p>'
   }`
 }
 
@@ -1359,19 +1231,22 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     }${copying}${tabbing}`
   }
   if (view == 'new') {
-    body = `<section class="Desk_Start" ${state(true, !!at.agents?.length)}>
-<h2>Ask your agent for a new yaks app</h2>${
+    body = `<section class="Card Desk_Start" ${
+      state(true, !!at.agents?.length)
+    }>${heading('Ask your agent for a new yaks app')}${
       agentList(at.agents ?? [], 'links')
-    }<p>Try this:</p>${firstAsk}</section>${connectCard(at)}
+    }<div class="Form_Field"><p class="Form_Label">Try this</p>${firstAsk}</div></section>${
+      connectCard(at)
+    }
 <div class="Desk_Options">${chat(`${site}/api/build`)}
-<section class="Card"><h2>Upload your website</h2>${
+<section class="Card">${heading('Upload your website')}${
       dropZone(undefined, `${site}/deploy`)
     }</section></div>${chatLive('/build.js')}${dropping}`
   }
   if (view == 'visits') {
     body = at.apps.length
       ? visited(at.views ?? null, at.viewsOff ?? '', site)
-      : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
+      : '<section class="Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
   }
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
@@ -1913,15 +1788,20 @@ export type Yours = {
 // works with no script at all; the script below turns that into an inline
 // answer, which is what a person choosing a name expects.
 let mine = (y: Yours, env: Host) =>
-  `<section class="Card"><h2>Where your apps live</h2>
-<p class="Now">Your apps live at <b>${
-    esc(spaceHost(env, y.slug))
-  }</b>. ${MOVES}</p>
-<form class="Addr" method="post" action="/connect">
-<span class="At"><input class="Field" name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
-    esc(y.said ?? y.slug)
-  }"><span>.${apex(env)}</span></span>
-<button class="Button" type="submit">Save</button>
+  `<section class="Card">${heading('Where your apps live')}
+<p class="Now">Your apps live at <b>${esc(spaceHost(env, y.slug))}</b>.</p>
+<form class="Form Addr" method="post" action="/connect">${
+    labeled(
+      'your-space',
+      'Your address',
+      `<div class="Form_Line"><span class="At"><input class="Field" id="your-space" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
+        esc(y.said ?? y.slug)
+      }"><span>.${
+        apex(env)
+      }</span></span><button class="Button" type="submit">Save</button></div>`,
+      MOVES,
+    )
+  }
 <p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
 </form>
 </section>`
@@ -1970,15 +1850,19 @@ let plan = (
       : billButton('checkout', `Get Plus — ${plusPrice()} a month`, target),
     y.plan.known ? billButton('portal', 'Manage billing', target) : '',
   ].filter(Boolean).join('')
-  return `<section class="Card Bill" id="plan"><h2>Your plan</h2>
+  return `<section class="Card Bill" id="plan">${
+    heading('Your plan', {
+      status: y.plan.plus ? status('Plus', 'good') : status('Free'),
+      actions: doors,
+    })
+  }
 ${head}
 ${
     y.paid
-      ? '<p class="Note">Thanks — that went through. Your space moves to Plus ' +
+      ? '<p class="Say">Thanks — that went through. Your space moves to Plus ' +
         'in a moment.</p>'
       : ''
   }
-<p class="Bill_Doors">${doors}</p>
 <p class="Say Bill_Say" role="status"></p>
 </section>`
 }
@@ -2211,7 +2095,7 @@ ${
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
         a.details
-          ? `<details class="Note"><summary>${a.details.summary}</summary><div class="Note">${a.details.text}</div></details>`
+          ? `<details class="More"><summary>${a.details.summary}</summary><div class="More_Body Note">${a.details.text}</div></details>`
           : ''
       }
 <div class="Connect_Next"><p>Make your first app</p>
@@ -2231,7 +2115,9 @@ let agentSetup = (agents: Agent[], env: Host, back: string) =>
 <p ${
     state(false, !agents.length)
   }>Connect once, then build and keep improving your apps in your usual chats.</p>
-<details class="Connect_Setup" data-agent-setup${agents.length ? '' : ' open'}>
+<details class="More Connect_Setup" data-agent-setup${
+    agents.length ? '' : ' open'
+  }>
 <summary ${state(true, !!agents.length)}>Connect another agent</summary>
 ${doors(env)}</details>`
 
@@ -2331,9 +2217,9 @@ export let connect = (yours: Yours, status = 200, env: Host = {}) =>
     'Build and manage your apps from your usual chats.',
     status,
     `${agentSetup(yours.agents ?? [], env, '/connect')}
-<details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
+<details class="More Attach"${status != 200 || yours.paid ? ' open' : ''}>
 <summary>Your address and plan</summary>
-${mine(yours, env)}${plan(yours, env)}
+<div class="More_Body">${mine(yours, env)}${plan(yours, env)}</div>
 </details>
 <p class="Note"><a href="${url(env, MANAGE)}">Your apps and settings</a></p>
 <p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>

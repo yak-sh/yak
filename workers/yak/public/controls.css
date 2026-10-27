@@ -166,91 +166,370 @@
     font-weight: 800;
   }
 
+  /* A card: one surface holding related things, flat on the page. Depth
+     belongs to what is pressed or typed in, so a card casts no shadow; its
+     hairline is what draws it. What it holds stacks a gap apart, never by
+     margins of its own, and its head, when it has one, runs edge to edge
+     across the top: what it is on the left, its actions on the right. */
   .Card {
-    padding: var(--card-pad, 1.75rem);
+    --pad-block: 1rem;
+    --pad-inline: 1.25rem;
+    display: grid;
+    align-content: start;
+    gap: .75rem;
+    min-width: 0;
+    padding: var(--pad-block) var(--pad-inline);
     border: 1px solid var(--edge);
-    border-radius: var(--card-radius, .85rem);
-    background-color: var(--card-fill, var(--paper));
-    box-shadow: var(--card-shadow, var(--raised));
+    border-radius: var(--card-radius, .75rem);
+    background: var(--paper);
+    overflow-wrap: break-word;
+  }
+  .Card > * {
+    min-width: 0;
+    margin: 0;
   }
 
-  .Card-sectioned {
-    display: block;
-    padding: 0;
-    overflow: clip;
-  }
-  .Card_Header,
-  .Card_Body,
-  .Card_Footer {
-    padding: var(--card-pad, 1.75rem);
-  }
-  .Card_Header,
-  .Card_Footer {
-    padding-block: .85rem;
-    background: color-mix(in srgb, var(--ground), var(--paper) 55%);
-  }
-  .Card_Header {
-    border-bottom: 1px solid var(--line);
-  }
-  .Card_Footer {
+  /* The head: a mark, the title, how it stands, and then whatever acts on
+     the whole card, pushed to the right. Its controls are a size down, so a
+     head is one compact line however many it holds; it wraps on a phone. */
+  .Card_Head {
+    --control-height: 2rem;
+    --control-pad-inline: .7rem;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: .75rem;
-    border-top: 1px solid var(--line);
+    gap: .5rem .75rem;
+    min-height: 3rem;
+    margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline)) 0;
+    padding: .5rem var(--pad-inline);
+    border-bottom: 1px solid var(--line);
+    border-radius: calc(var(--card-radius, .75rem) - 1px)
+      calc(var(--card-radius, .75rem) - 1px) 0 0;
+    background: color-mix(in srgb, var(--ground), var(--paper) 55%);
   }
-  .Card_Header > :last-child,
-  .Card_Body > :last-child,
-  .Card_Footer > :last-child {
-    margin-bottom: 0;
+  .Card_Head:only-child {
+    margin-bottom: calc(-1 * var(--pad-block));
+    border-bottom: 0;
+    border-radius: inherit;
   }
-  .Card_Header > :first-child,
-  .Card_Body > :first-child,
-  .Card_Footer > :first-child {
-    margin-top: 0;
-  }
-
-  /* A report belongs to the page; its header, chart and rankings provide
-     hierarchy without an enclosing card. */
-  .Stats {
-    display: grid;
-    gap: 1.25rem;
-    padding-block: 1.75rem;
-    border-top: 1px solid var(--line);
-  }
-  .Stats_Head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .Stats_Title {
+  .Card_Title {
     margin: 0;
-    font-size: 1.2rem;
+    color: var(--ink);
+    font-size: 1rem;
     font-weight: 800;
     line-height: 1.3;
   }
-  .Stats_Title a {
-    color: var(--ink);
+  .Card_Title a {
+    color: inherit;
     text-decoration: none;
   }
-  .Stats_Title a:hover {
+  .Card_Title a:hover {
     color: var(--accent);
     text-decoration: underline;
-    text-underline-offset: .18em;
+  }
+  .Card_Mark {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: .35rem;
+  }
+  .Card_Actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 0 0 auto;
+  }
+  .Card_Actions form {
+    display: contents;
+  }
+  .Card_Actions .Button {
+    font-size: var(--fine);
+  }
+
+  /* What the card is, in a line, under its head. */
+  .Card_Sub {
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+
+  /* How something stands, as a word in its role's colour beside a dot:
+     -good when it works, -warn when it needs the person. */
+  .Status {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    color: var(--status, var(--soft-ink));
+    font-size: var(--fine);
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .Status::before {
+    content: '';
+    flex: none;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .Status-good {
+    --status: var(--accent);
+  }
+  .Status-warn {
+    --status: var(--warn);
+  }
+
+  /* Like things in rows, hairlines between them: each row its name and what
+     describes it on the left, what acts on it on the right. In a card the
+     rows run to its edges. */
+  .Rows {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .Rows_Item {
+    --control-height: 2rem;
+    --control-pad-inline: .7rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+    padding: .75rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .Rows_Item:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .Rows_Item:last-child {
+    padding-bottom: 0;
+  }
+  .Card > .Rows {
+    margin-inline: calc(-1 * var(--pad-inline));
+  }
+  .Card > .Rows > .Rows_Item {
+    padding-inline: var(--pad-inline);
+  }
+  .Rows_Main {
+    display: grid;
+    flex: 1 1 12rem;
+    gap: .15rem;
+    min-width: 0;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .Rows_Name {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .Rows_Meta {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Rows_Actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 0 0 auto;
+  }
+  .Rows_Actions form {
+    display: contents;
+  }
+  .Rows_Actions .Button {
+    font-size: var(--fine);
+  }
+
+  /* A heading over a run of cards that belong together. */
+  .Group {
+    margin: var(--gap) 0 0;
+    color: var(--soft-ink);
+    font-size: var(--small);
+    font-weight: 700;
+  }
+  .Group:first-child {
+    margin-top: 0;
+  }
+
+  /* A form: every field its label over its control over its hint, on one
+     left edge and one width, and what sends it at the end. A field never
+     trails a sentence: what explains it is its hint, under it. */
+  .Form {
+    display: grid;
+    gap: .875rem;
+    max-width: 34rem;
+    margin: 0;
+  }
+  .Form_Field {
+    display: grid;
+    gap: .35rem;
+    min-width: 0;
+  }
+  .Form_Label {
+    margin: 0;
+    color: var(--ink);
+    font-size: var(--small);
+    font-weight: 700;
+  }
+  .Form_Optional {
+    color: var(--soft-ink);
+    font-weight: 400;
+  }
+  .Form_Field > .Field {
+    width: 100%;
+  }
+  .Form_Hint {
+    margin: 0;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  /* One field and the button that sends it, on one line while they fit. */
+  .Form_Line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    margin: 0;
+  }
+  .Form_Line > .Field,
+  .Form_Line > .At {
+    flex: 1 1 12rem;
+  }
+  .Form_Actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  /* A field with a fixed ending beside it: the name an address takes. */
+  .At {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    min-width: 0;
+  }
+  .At > .Field {
+    flex: 1 1 auto;
+  }
+  .At > span {
+    flex: none;
+    color: var(--soft-ink);
+  }
+
+  /* What most people never need, folded under one line that says so. */
+  .More > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    color: var(--accent);
+    font-size: var(--small);
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+  }
+  .More > summary::-webkit-details-marker {
+    display: none;
+  }
+  .More > summary::before {
+    content: '';
+    flex: none;
+    width: .4rem;
+    height: .4rem;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: rotate(-45deg);
+    transition: transform .15s;
+  }
+  .More[open] > summary::before {
+    transform: rotate(45deg);
+  }
+  .More_Body {
+    display: grid;
+    gap: .875rem;
+    margin-top: .75rem;
+  }
+
+  /* A line the page says back: what a press did, or why it did not. */
+  .Say {
+    margin: 0;
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+  .Say:empty {
+    display: none;
+  }
+  .Say-no {
+    color: var(--warn);
+  }
+
+  /* Words to paste somewhere else, in a well, with the button that copies
+     them beside it (pages.ts `copyable`). */
+  .Copy {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .Pick {
+    flex: 1;
+    min-width: 0;
+    min-height: var(--control-height);
+    padding: .4rem .75rem;
+    border-radius: .45rem;
+    background: var(--ground);
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+  .Copy_Go {
+    --button-fill: var(--paper);
+    --button-ink: var(--accent);
+    flex: none;
+    font-size: var(--fine);
+  }
+
+  /* Nothing here yet: what will be, and how to start. */
+  .Empty {
+    display: grid;
+    justify-items: center;
+    gap: .5rem;
+    padding: 2rem 1.25rem;
+    border: 1px dashed var(--edge);
+    border-radius: var(--card-radius, .75rem);
+    color: var(--soft-ink);
+    text-align: center;
+  }
+  .Empty > * {
+    max-width: 30rem;
+    margin: 0;
+  }
+  .Empty h2 {
+    color: var(--ink);
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  /* A report: a card whose head names what it counts and says the total
+     where a card's actions would sit, then a bar a day and the short lists
+     under it. */
+  .Stats {
+    gap: 1.25rem;
   }
   .Stats_Total {
     flex: none;
-    margin: 0;
+    margin: 0 0 0 auto;
     color: var(--ink);
-    font-size: 1.8rem;
+    font-size: 1.25rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
   .Stats_Unit {
     color: var(--soft-ink);
-    font-size: .85rem;
+    font-size: var(--fine);
     font-weight: 400;
   }
   .Stats_Plot {
@@ -271,7 +550,7 @@
     display: flex;
     justify-content: space-between;
     color: var(--soft-ink);
-    font-size: .8rem;
+    font-size: var(--fine);
   }
   .Stats_Tops {
     display: grid;
@@ -281,7 +560,7 @@
   .Stats_Column h3 {
     margin: 0 0 .5rem;
     color: var(--soft-ink);
-    font-size: .8rem;
+    font-size: var(--fine);
     font-weight: 700;
   }
   /* One column as wide as the list's own, so a long name is cut short with
@@ -294,7 +573,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    font-size: .9rem;
+    font-size: var(--small);
   }
   .Stats_List li {
     display: flex;
@@ -381,7 +660,7 @@
     color: var(--ink);
   }
   .Tabs_Panel {
-    --card-radius: 0 0 .85rem .85rem;
+    --card-radius: 0 0 .75rem .75rem;
     order: 1;
     flex: 1 1 100%;
     min-width: 0;
@@ -410,7 +689,7 @@
     background: var(--paper);
   }
   .Tabs_Item > input:checked ~ .Tabs_Panel {
-    display: block;
+    display: grid;
   }
   .Tabs_Item > input:focus-visible ~ .Tabs_Tab {
     outline: 3px solid var(--accent);
@@ -568,94 +847,29 @@
     outline-offset: 3px;
   }
 
-  .Agents {
-    display: grid;
-    gap: var(--half-gap);
-    margin: 0 0 var(--gap);
-    padding: 0;
-    list-style: none;
-  }
+  /* The agents a person connected, as rows (connected_ui.ts), or the ones
+     with a web home as a line of links to open them. */
   .Agents-links {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem 1.5rem;
     margin: 0;
+    padding: 0;
+    list-style: none;
   }
-  .Agents_Row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--half-gap) var(--gap);
-    padding: var(--gap);
-    border: 1px solid var(--edge);
-    border-radius: var(--small-radius);
-    background: var(--paper);
-    box-shadow: inset 0 1px var(--rim);
-    text-align: left;
-  }
-  .Agents_Info {
-    display: grid;
-    flex: 1 1 10rem;
-    gap: var(--quarter-gap);
-    min-width: 0;
-    color: var(--ink);
-    overflow-wrap: anywhere;
-  }
-  .Agents_State,
   .Agents_Open {
     display: inline-flex;
     align-items: center;
     gap: var(--quarter-gap);
     color: var(--accent);
     font-size: var(--small);
-  }
-  .Agents_Open {
     font-weight: 700;
     text-underline-offset: .18em;
     white-space: nowrap;
   }
-  .Agents_Disconnect {
-    margin: 0;
-  }
 
-  /* People: who holds a place in a space or an app, a row each, with what
-     can be done about one at the row's end. */
-  .People {
-    display: grid;
-    gap: var(--half-gap);
-    margin: 0 0 var(--gap);
-    padding: 0;
-    list-style: none;
-  }
-  .People_Row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--half-gap) var(--gap);
-    padding: var(--gap);
-    border: 1px solid var(--edge);
-    border-radius: var(--small-radius);
-    background: var(--paper);
-    box-shadow: inset 0 1px var(--rim);
-    text-align: left;
-  }
-  .People_Who {
-    display: grid;
-    flex: 1 1 12rem;
-    gap: var(--quarter-gap);
-    min-width: 0;
-    color: var(--ink);
-    overflow-wrap: anywhere;
-  }
-  .People_Email,
-  .People_Role {
-    color: var(--soft-ink);
-    font-size: var(--small);
-  }
+  /* An invitation not yet taken, in a person's row (render/held.ts). */
   .People_Waiting {
     color: var(--warn);
-  }
-  .People_Again {
-    margin: 0;
   }
 }

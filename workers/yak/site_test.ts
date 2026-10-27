@@ -176,8 +176,10 @@ test('every jump names a section on its own page', () => {
 })
 
 test('the style guide demonstrates every shared component', () => {
-  let css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('@layer components {')[1].split('@layer sections {')[0]
+  let layer = (file: string) =>
+    read(file).replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('@layer components {')[1].split('@layer sections {')[0]
+  let css = layer('style.css') + layer('controls.css')
   let components = new Set(
     [...css.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1]),
   )

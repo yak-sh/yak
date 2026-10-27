@@ -78,6 +78,7 @@
           <ul class="Pills">
             <li><a class="Pill" href="#how-to">Using the system</a></li>
             <li><a class="Pill" href="#voice">Layout and voice</a></li>
+            <li><a class="Pill" href="#language">One design language</a></li>
             <li><a class="Pill" href="#paints">Paints</a></li>
             <li><a class="Pill" href="#roles">Roles</a></li>
             <li><a class="Pill" href="#type">Type</a></li>
@@ -103,7 +104,8 @@
           <li>
             <b>Use an existing component before writing new CSS.</b> The
             available titles, notes, pills, buttons, fields, tabs, sidebars,
-            bubbles, windows, cards, and prose styles are shown below.
+            bubbles, windows, cards, rows, forms, and prose styles are shown
+            below, and the rules they follow are under One design language.
           </li>
           <li>
             <b>Use colour roles outside the tokens layer.</b> Write
@@ -133,9 +135,10 @@
         <h2 id="voice" class="Title">Layout and voice</h2>
         <ul class="Guide_Rules">
           <li>
-            <b>Give controls a physical shape.</b> Raised buttons invite a
-            press; inset fields invite typing. Subtle texture and elevation
-            distinguish a surface from a control.
+            <b>Give controls a physical shape, and keep surfaces flat.</b>
+            Raised buttons invite a press; inset fields invite typing. A card
+            is a surface: a hairline draws it, and it casts no shadow, so
+            depth always means something can be pressed or typed in.
           </li>
           <li>
             <b>Make selection visible in the shape.</b> A selected tab joins
@@ -172,6 +175,68 @@
             <b>Make only claims the product can guarantee.</b> Distinguish an
             app hosted by yaks.app from ownership of a domain, source code, or
             exported data.
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="language">
+        <h2 id="language" class="Title">One design language</h2>
+        <p class="Note">
+          Every page yaks.app draws, the dashboard's tabs and the site's own
+          pages alike, is built from the same few parts in the same way. A
+          person who learns one page has learned them all.
+        </p>
+        <ul class="Guide_Rules">
+          <li>
+            <b>A card holds one thing.</b> A connection, a plan, the people
+            in a space, one app's visits: each is one
+            <code class="Pill Pill-code">.Card</code>. Cards stack one gap
+            apart, and a run of cards that belong together sits under a
+            <code class="Pill Pill-code">.Group</code> heading.
+          </li>
+          <li>
+            <b>A card's head says what it is and holds what acts on it.</b>
+            The head runs across the top: a mark, the title, its status,
+            then its actions at the right. Disconnect, Restore, Manage
+            billing and Connect go there, a size smaller than a form's
+            button, so a head stays one line.
+          </li>
+          <li>
+            <b>Hierarchy is four steps of type.</b> The page title; a card's
+            title at 1rem; what a thing says at
+            <code class="Pill Pill-code">--small</code> or the body size; and
+            what describes it (a hint, a status, a count, a date) at
+            <code class="Pill Pill-code">--fine</code> in
+            <code class="Pill Pill-code">--soft-ink</code>. The mono face is
+            only for what a person copies or types.
+          </li>
+          <li>
+            <b>Like things are rows.</b> The apps using a connection, the
+            people in a space, the agents connected, the apps in the trash:
+            <code class="Pill Pill-code">.Rows</code> in a card, hairlines
+            between them, each row's actions at its right.
+          </li>
+          <li>
+            <b>A field sits under its label, never at the end of a
+            sentence.</b> In a <code class="Pill Pill-code">.Form</code>
+            every field is its label, its control and its hint, on one left
+            edge at one width. One field and its button share a line
+            (<code class="Pill Pill-code">.Form_Line</code>); a longer form
+            ends with its button. What only a few people change folds under
+            <b>Advanced options</b> (<code class="Pill Pill-code">.More</code>)
+            with a sensible default already in place.
+          </li>
+          <li>
+            <b>Space comes from the container.</b> Cards, forms and rows set
+            the gap between what they hold; nothing inside carries a margin
+            of its own. A card's parts are .75rem apart, cards one gap,
+            groups two.
+          </li>
+          <li>
+            <b>Nothing overlaps at any width.</b> A name too long for its
+            column is cut with an ellipsis and keeps its whole text as a
+            title; a number is never cut and never wraps; a row that runs
+            out of room wraps its actions under it.
           </li>
         </ul>
       </section>
@@ -352,7 +417,13 @@
           </p>
           <p data-token="--small" style="font-size: var(--small)">
             <span class="Guide_Name">--small</span>
-            <span class="Guide_Value"></span> — captions, footers, and dates.
+            <span class="Guide_Value"></span> — captions, footers, and what a
+            card says.
+          </p>
+          <p data-token="--fine" style="font-size: var(--fine)">
+            <span class="Guide_Name">--fine</span>
+            <span class="Guide_Value"></span> — what describes a thing: a
+            hint, a status, a count, a date.
           </p>
         </div>
       </section>
@@ -620,76 +691,6 @@
           </p>
         </div>
 
-        <div class="Guide_Demo">
-          <p class="Guide_Name">
-            .Agents · .Agents_Row · .Agents_Info ·
-            .Agents_State · .Agents_Open · .Agents_Disconnect
-          </p>
-          <div aria-live="polite">
-            <ul class="Agents" aria-label="Connected agents">
-              <li class="Agents_Row">
-                <div class="Agents_Info">
-                  <strong>ChatGPT</strong>
-                  <span class="Agents_State">
-                    <svg class="Icon" aria-hidden="true"><use href="/icons.svg#check"></use></svg>
-                    Connected
-                  </span>
-                </div>
-                <a class="Agents_Open" href="https://chatgpt.com/"
-                  target="_blank" rel="noopener noreferrer">
-                  Open ChatGPT
-                  <svg class="Icon" aria-hidden="true"><use href="/icons.svg#external-link"></use></svg>
-                </a>
-                <form class="Agents_Disconnect" onsubmit="return false">
-                  <button class="Button Button-quiet" type="submit"
-                    aria-label="Disconnect ChatGPT">Disconnect</button>
-                </form>
-              </li>
-              <li class="Agents_Row">
-                <div class="Agents_Info">
-                  <strong>Claude Code</strong>
-                  <span class="Agents_State">
-                    <svg class="Icon" aria-hidden="true"><use href="/icons.svg#check"></use></svg>
-                    Connected
-                  </span>
-                </div>
-                <form class="Agents_Disconnect" onsubmit="return false">
-                  <button class="Button Button-quiet" type="submit"
-                    aria-label="Disconnect Claude Code">Disconnect</button>
-                </form>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="Guide_Demo">
-          <p class="Guide_Name">
-            .People · .People_Row · .People_Who · .People_Email ·
-            .People_Role · .People_Waiting · .People_Again
-          </p>
-          <ul class="People">
-            <li class="People_Row">
-              <div class="People_Who">
-                <strong>Dana</strong>
-                <span class="People_Email">dana@example.com</span>
-                <span class="People_Role">editor</span>
-              </div>
-            </li>
-            <li class="People_Row">
-              <div class="People_Who">
-                <strong>sam</strong>
-                <span class="People_Email">sam@example.com</span>
-                <span class="People_Role">viewer · <span
-                    class="People_Waiting">invited 13 October 2026, not
-                    accepted yet</span></span>
-              </div>
-              <form class="People_Again" onsubmit="return false">
-                <button class="Button Button-quiet"
-                  type="submit">Send again</button>
-              </form>
-            </li>
-          </ul>
-        </div>
 
         <div class="Guide_Demo">
           <p class="Guide_Name">.Agents-links · .Agents_Open</p>
@@ -781,41 +782,191 @@
             <p class="Title">How to connect</p>
             <p class="Note">Related content grouped in a card.</p>
           </div>
+          <p class="Note Note-small">
+            Flat, drawn by its hairline. What it holds stacks .75rem apart.
+          </p>
         </div>
 
         <div class="Guide_Demo">
           <p class="Guide_Name">
-            .Card-sectioned · .Card_Header · .Card_Body · .Card_Footer
+            .Card_Head · .Card_Mark · .Card_Title · .Status · .Status-good ·
+            .Status-warn · .Card_Actions · .Card_Sub
           </p>
-          <section class="Card Card-sectioned">
-            <header class="Card_Header">
-              <h3 class="Title">Profile</h3>
+          <section class="Card">
+            <header class="Card_Head">
+              <img class="Card_Mark" src="connector.svg" alt="" width="24"
+                height="24" />
+              <h3 class="Card_Title">Weather API</h3>
+              <span class="Status Status-good">Connected</span>
+              <div class="Card_Actions">
+                <button class="Button Button-quiet"
+                  type="button">Disconnect</button>
+              </div>
             </header>
-            <div class="Card_Body">
-              <label for="card-name">Your name</label>
-              <input class="Field" id="card-name" value="Dana"
-                autocomplete="off" />
-            </div>
-            <footer class="Card_Footer">
-              <button class="Button" type="button">Save name</button>
-            </footer>
+            <p class="Card_Sub">Forecasts for any place on Earth.</p>
+            <p class="Note Note-small">
+              Its key is only ever sent to
+              <code class="Pill Pill-code">api.weather.test</code>.
+            </p>
+          </section>
+          <section class="Card">
+            <header class="Card_Head">
+              <h3 class="Card_Title">Calendar</h3>
+              <span class="Status Status-warn">Needs connecting</span>
+              <div class="Card_Actions">
+                <button class="Button" type="button">Connect</button>
+              </div>
+            </header>
+            <p class="Card_Sub">Events from your own calendar.</p>
           </section>
           <p class="Note Note-small">
-            Use sections when a card has a heading, content, and actions.
-            Header and footer are optional. A report that fills a page can
-            use its own hierarchy without a card around it.
+            The head names the card, says how it stands and holds what acts
+            on the whole of it, at the right. Its controls are a size down.
           </p>
         </div>
 
         <div class="Guide_Demo">
           <p class="Guide_Name">
-            .Stats · .Stats_Head · .Stats_Title · .Stats_Total · .Stats_Unit ·
-            .Stats_Plot · .Stats_Chart · .Stats_Bar · .Stats_Span ·
-            .Stats_Tops · .Stats_Column · .Stats_List
+            .Rows · .Rows_Item · .Rows_Main · .Rows_Name · .Rows_Meta ·
+            .Rows_Actions
           </p>
-          <article class="Stats" aria-labelledby="stats-demo-title">
-            <header class="Stats_Head">
-              <h2 class="Stats_Title" id="stats-demo-title">Recipe Box</h2>
+          <section class="Card">
+            <header class="Card_Head">
+              <h3 class="Card_Title">Members · every app</h3>
+            </header>
+            <ul class="Rows">
+              <li class="Rows_Item">
+                <div class="Rows_Main">
+                  <strong class="Rows_Name">Dana</strong>
+                  <span class="Rows_Meta">dana@example.com · editor</span>
+                </div>
+              </li>
+              <li class="Rows_Item">
+                <div class="Rows_Main">
+                  <strong class="Rows_Name">sam</strong>
+                  <span class="Rows_Meta">sam@example.com · viewer ·
+                    <span class="People_Waiting">invited 13 October 2026,
+                      not accepted yet</span></span>
+                </div>
+                <div class="Rows_Actions">
+                  <button class="Button Button-quiet" type="button">Send
+                    again</button>
+                </div>
+              </li>
+            </ul>
+          </section>
+          <p class="Note Note-small">
+            Like things in a card: the name, one line describing it, and
+            what acts on it at the right. The rows run to the card's edges.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Form · .Form_Field · .Form_Label · .Form_Hint · .Form_Line ·
+            .Form_Actions · .At · .More · .More_Body
+          </p>
+          <section class="Card">
+            <header class="Card_Head">
+              <h3 class="Card_Title">App address</h3>
+            </header>
+            <form class="Form" onsubmit="return false">
+              <div class="Form_Field">
+                <label class="Form_Label" for="demo-address">Your
+                  address</label>
+                <div class="Form_Line">
+                  <span class="At"><input class="Field" id="demo-address"
+                      value="dana" /><span>.yaks.app</span></span>
+                  <button class="Button" type="submit">Save</button>
+                </div>
+                <p class="Form_Hint">Every app moves with it.</p>
+              </div>
+            </form>
+          </section>
+          <section class="Card">
+            <header class="Card_Head">
+              <h3 class="Card_Title">Add a key</h3>
+            </header>
+            <form class="Form" onsubmit="return false">
+              <div class="Form_Field">
+                <label class="Form_Label" for="demo-service">Service</label>
+                <input class="Field" id="demo-service"
+                  placeholder="Weather API" />
+              </div>
+              <div class="Form_Field">
+                <label class="Form_Label" for="demo-hosts">Where it may be
+                  sent</label>
+                <input class="Field" id="demo-hosts"
+                  placeholder="api.example.com" />
+                <p class="Form_Hint">The key goes to these addresses and
+                  nowhere else.</p>
+              </div>
+              <div class="Form_Field">
+                <label class="Form_Label" for="demo-how">How to get the key
+                  <span class="Form_Optional">(optional)</span></label>
+                <textarea class="Field" id="demo-how" rows="2"></textarea>
+              </div>
+              <details class="More">
+                <summary>Advanced options</summary>
+                <div class="More_Body">
+                  <div class="Form_Field">
+                    <label class="Form_Label" for="demo-binding">Name its
+                      code reads it by</label>
+                    <input class="Field" id="demo-binding"
+                      value="WEATHER_API" />
+                    <p class="Form_Hint">Already set; change it only if the
+                      app's code reads another name.</p>
+                  </div>
+                </div>
+              </details>
+              <div class="Form_Actions">
+                <button class="Button" type="submit">Save key</button>
+              </div>
+            </form>
+          </section>
+          <p class="Note Note-small">
+            Label over control over hint, one left edge, one width. One
+            field and its button share a line; a longer form ends with its
+            button. What few people change folds under Advanced options,
+            with its default already in place.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Group</p>
+          <h3 class="Group">yourname.yaks.app</h3>
+          <div class="Card">
+            <p class="Note">A card that belongs under it.</p>
+          </div>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Copy · .Pick · .Copy_Go · .Say · .Say-no</p>
+          <span class="Copy"><span class="Pick">Any yaks.app ideas you
+              think I'd like?</span><button class="Button Copy_Go"
+              type="button">Copy</button></span>
+          <p class="Say" role="status">Saved. Your apps live at
+            dana.yaks.app.</p>
+          <p class="Say Say-no" role="status">That name is taken.</p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Empty</p>
+          <section class="Empty">
+            <h2>Trash is empty</h2>
+            <p>Deleted apps wait here for 30 days.</p>
+          </section>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Stats · .Stats_Total · .Stats_Unit · .Stats_Plot · .Stats_Chart ·
+            .Stats_Bar · .Stats_Span · .Stats_Tops · .Stats_Column ·
+            .Stats_List
+          </p>
+          <article class="Card Stats" aria-labelledby="stats-demo-title">
+            <header class="Card_Head">
+              <h2 class="Card_Title" id="stats-demo-title">Recipe Box</h2>
               <p
                 class="Stats_Total">42 <span class="Stats_Unit">visits</span></p>
             </header>
@@ -863,8 +1014,10 @@
             </div>
           </article>
           <p class="Note Note-small">
-            A report with one summary, a chart, and supporting lists. Keep
-            the date range in the page heading when several reports share it.
+            A report is a card: its head names what it counts and gives the
+            total where actions would sit, then a bar a day and the short
+            lists. Keep the date range in the page heading when several
+            reports share it.
           </p>
         </div>
 

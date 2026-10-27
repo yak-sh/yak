@@ -139,8 +139,8 @@ test('compact agents render launch links and refresh without replacing drafts or
   let m = mount([chatgpt, local], 'links')
   let draft = m.document.querySelector('input')!
   assertEquals(m.list.children.length, 1)
-  assertEquals(m.list.querySelector('.Agents_Info'), null)
-  assertEquals(m.list.querySelector('.Agents_State'), null)
+  assertEquals(m.list.querySelector('.Rows_Main'), null)
+  assertEquals(m.list.querySelector('.Status'), null)
   assertEquals(m.list.querySelector('img'), null)
   assertEquals(m.list.querySelector('a')?.getAttribute('target'), '_blank')
   await m.run()

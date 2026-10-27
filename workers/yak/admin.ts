@@ -224,7 +224,7 @@ let rows = (d: Reading, all: Row[]) =>
     }</ul>`
     : ''
 let grouped = (d: Reading, title: string, all: Row[]) =>
-  all.length ? `<h2 class="Desk_Group">${esc(title)}</h2>${rows(d, all)}` : ''
+  all.length ? `<h2 class="Group">${esc(title)}</h2>${rows(d, all)}` : ''
 
 let lists = (c: Census): Record<List, Row[]> => ({
   people: c.people,
@@ -296,7 +296,7 @@ let list = (d: Reading, key: List, q: string) => {
     }<button class="Button Button-quiet" type="submit">Search</button></form>${toggle}</div>${
       found.length
         ? rows(d, found)
-        : `<section class="Desk_Empty"><h2>${
+        : `<section class="Empty"><h2>${
           q ? `Nothing here says “${esc(q)}”` : `No ${what} yet`
         }</h2></section>`
     }`,
@@ -403,7 +403,7 @@ export let answer = async (
       d,
       'Not in the directory',
       null,
-      '<section class="Desk_Empty"><h2>Nothing in the directory has that id</h2></section>',
+      '<section class="Empty"><h2>Nothing in the directory has that id</h2></section>',
       '',
       404,
     )
@@ -433,7 +433,7 @@ let css = `
 .Directory_Uses dd { margin: 0; font-variant-numeric: tabular-nums }
 .Directory_Facts > div { grid-template-columns: 10rem minmax(0, 1fr) }
 .Directory_Facts dt { font-weight: 700; color: var(--soft-ink) }
-.Directory_Content .Desk_Group { margin-top: 2rem }
+.Directory_Content .Group { margin-top: 2rem }
 @media (max-width: 700px) {
   .Directory_Row { grid-template-columns: minmax(0, 1fr) }
   .Directory_Uses { grid-template-columns: repeat(2, minmax(0, 1fr)) }
