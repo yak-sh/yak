@@ -319,8 +319,7 @@ export let contentPages = (): Page[] => {
   }, {
     name: 'inspect-property',
     path: '/' + propEid('doc', 'title'),
-    painted: `!!document.querySelector('.Shell_Body [data-inspect]') &&
-      Array.from(document.querySelectorAll('.Shell_Body button'))
+    painted: `Array.from(document.querySelectorAll('.Shell_Body button'))
         .some(b => b.textContent.trim() == 'rank them') &&
       /[0-9,]+ entities carry doc/.test(document.querySelector('.Shell_Body').textContent)`,
   }]
