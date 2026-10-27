@@ -26,6 +26,7 @@ export {
   best,
   compare,
   type Coverage,
+  incomparable,
   limit,
   loaded,
   spread,

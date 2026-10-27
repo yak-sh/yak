@@ -142,9 +142,10 @@ A baseline moves only toward better, and only past the noise: `accept` banks a
 bench's new median where the banked one would have regressed against it, and
 otherwise keeps the banked median with the wider of the two slacks.
 `slower: true` banks the measurement as it is, which is a decision about the
-product, not a measurement. A baseline banked on another runtime, CPU or
-workload version is no reference, and an exact acceptance banks the suite as
-measured.
+product, not a measurement; `slower: ['close']` makes that decision for the
+named benches only, and every other bench stays as banked. A baseline banked on
+another runtime, CPU or workload version is no reference, and an exact
+acceptance banks the suite as measured.
 
 A run is **loaded** when other work used more than `BUSY` (a quarter) of the
 box's CPUs (`loaded()`). Before each round of a check or an acceptance, inside

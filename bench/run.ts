@@ -63,12 +63,18 @@ export let main = async (args = Deno.args): Promise<number> => {
   rest = rest.filter((a) => a != '--lock-held')
   // The runner's own flags; everything else reaches the suite. A check and an
   // acceptance take three runs, so a check measures what banking measured.
-  let slower = rest.includes('--slower')
+  // `--slower` banks every bench as measured, `--slower=close,open` only those.
+  let named = rest.find((a) => a.startsWith('--slower='))
+  let slower = named
+    ? named.slice('--slower='.length).split(',')
+    : rest.includes('--slower')
   let runs = Number(
     rest.find((a) => a.startsWith('--runs='))?.slice('--runs='.length) ??
       (action == 'run' ? 1 : 3),
   )
-  rest = rest.filter((a) => a != '--slower' && !a.startsWith('--runs='))
+  rest = rest.filter((a) =>
+    a != '--slower' && !a.startsWith('--slower=') && !a.startsWith('--runs=')
+  )
   let recording = name == 'throughput' && rest.includes('--recording')
   let definition
   let rounds = 3, floor = FLOOR

@@ -4,7 +4,8 @@
  * past its reference by more than the noise of both measurements; a baseline
  * moves toward better only by as much, and never on a run the box measured
  * while loaded. Banking worse numbers is a separate, explicit choice
- * (`slower`), never what an ordinary acceptance does. */
+ * (`slower`, for the whole suite or the benches it names), never what an
+ * ordinary acceptance does. */
 import {
   type Baseline,
   type Direction,
@@ -158,14 +159,16 @@ export let past = (
  * previous baseline a bench moves only when its new median clears the noise
  * of both, that is when the banked median would have regressed against it;
  * otherwise it keeps its median and the wider slack. `slower` banks the
- * measurement as it is, worse or not. A run the box measured while loaded
+ * measurement as it is, worse or not: every bench's, or only the named ones',
+ * leaving every other bench as it was banked. A run the box measured while
+ * loaded
  * never banks, and a scoped acceptance retains the workloads it did not
  * measure. */
 export let baseline = (
   current: Run | readonly Run[],
   allowed: number,
   previous?: Baseline,
-  slower = false,
+  slower: boolean | readonly string[] = false,
 ): Baseline => {
   let runs: readonly Run[] = 'benches' in current ? [current] : current
   let last = runs.at(-1)
@@ -179,7 +182,17 @@ export let baseline = (
   if (previous) compare(previous, last, 'subset')
   let floor = tolerance(allowed)
   let one = runs.length == 1 ? last : best(runs)
+  let named = slower === true || !slower ? undefined : slower
+  for (let name of named ?? []) {
+    if (!one.benches.some((b) => b.name == name)) {
+      throw new Error(`No bench to bank slower: ${name}`)
+    }
+  }
   let banked = new Map(previous?.benches.map((b) => [b.name, b]))
+  // A choice of cost for some benches is not an acceptance of the others.
+  let measuring = one.benches.filter((b) =>
+    !named || named.includes(b.name) || !banked.has(b.name)
+  )
   let out: Baseline = {
     version: last.version,
     suite: last.suite,
@@ -187,12 +200,16 @@ export let baseline = (
     workload: last.workload,
     runtime: last.runtime,
     cpu: last.cpu,
-    tolerance: Math.min(floor, previous?.tolerance ?? floor),
-    benches: one.benches.map((b) => {
+    tolerance: named && previous
+      ? previous.tolerance
+      : Math.min(floor, previous?.tolerance ?? floor),
+    benches: measuring.map((b) => {
       // Rounded up to a tenth of a percent, so a baseline reads plainly.
       let noise = Math.ceil(NOISE * b.spread * 1000) / 1000
       let measured = Math.min(CAP, Math.max(floor, noise))
-      let old = slower ? undefined : banked.get(b.name)
+      let old = slower === true || named?.includes(b.name)
+        ? undefined
+        : banked.get(b.name)
       let wider = Math.min(
         CAP,
         Math.max(old?.tolerance ?? previous?.tolerance ?? 0, measured),
@@ -211,10 +228,10 @@ export let baseline = (
     }),
   }
   if (previous) {
-    let measured = new Set(out.benches.map((b) => b.name))
+    let fresh = new Map(out.benches.map((b) => [b.name, b]))
     out.benches = [
-      ...previous.benches.filter((b) => !measured.has(b.name)),
-      ...out.benches,
+      ...previous.benches.map((b) => fresh.get(b.name) ?? b),
+      ...out.benches.filter((b) => !banked.has(b.name)),
     ]
   }
   validate(out)

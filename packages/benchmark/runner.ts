@@ -66,10 +66,10 @@ export type Options = {
    * `baseline`), and a check compares it, allowing that spread as well, so a
    * check taken as its baseline was banked measures what it banked. */
   runs?: number
-  /** Bank the measurement as it is, even a worse median than the baseline's.
-   * Without it acceptance only moves a bench toward better, by more than the
-   * noise. */
-  slower?: boolean
+  /** Bank the measurement as it is, even a worse median than the baseline's:
+   * every bench's, or only the named benches'. Without it acceptance only
+   * moves a bench toward better, by more than the noise. */
+  slower?: boolean | readonly string[]
   host?: () => Host | Promise<Host>
   reporters?: Reporters
   files?: Files

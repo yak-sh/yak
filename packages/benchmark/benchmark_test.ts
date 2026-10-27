@@ -194,6 +194,28 @@ test('acceptance moves a baseline only toward better, past the noise, unless tol
   equal(banked(f), { work: [170, .2] })
 })
 
+test('a slower acceptance that names benches banks only those, as measured', async () => {
+  let f = fixture([
+    { name: 'chosen', unit: 'ms', sample: () => 100 },
+    { name: 'other', unit: 'ms', sample: () => 100 },
+  ])
+  let options = {
+    ...f.options,
+    rounds: 1,
+    mode: 'accept' as const,
+    tolerance: .2,
+  }
+  await run(f.suite, options)
+  f.suite.benches[0].sample = () => 150
+  f.suite.benches[1].sample = () => 50
+  await run(f.suite, { ...options, slower: ['chosen'] })
+  equal(banked(f), { chosen: [150, .2], other: [100, .2] })
+  await throws(
+    () => run(f.suite, { ...options, slower: ['chosen', 'gone'] }),
+    'gone',
+  )
+})
+
 test('repeated runs bank the best median and the slack their spread asks for', async () => {
   let f = fixture([
     { name: 'noisy', unit: 'ms', sample: costs(100, 125, 110) },

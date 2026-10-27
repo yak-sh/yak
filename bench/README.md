@@ -21,7 +21,8 @@ each bench's best median, so a check measures what its baseline banked;
 its median by more than the noise of both the baseline and the check. A baseline
 moves only toward faster, and only by more than that noise, so a lucky run never
 tightens it. Banking a slower one is a separate explicit operation (`--slower`),
-not monitoring.
+not monitoring; `--slower=close,open` banks only the named benches as measured,
+a cost chosen for one workload without accepting the others' figures.
 
 Nothing banks on a loaded box: one where other work used more than a quarter of
 its CPUs in a second sampled before a round while the bench rested (the
@@ -68,8 +69,10 @@ holder.
 
 The monitor keeps its best measurements in `~/.cache/yak/bench/best/`: each
 bench's committed median, or a better one a quiet run of the monitor's found
-past the noise, held to the slack the committed baseline measured. Neither
-slower observations nor a checkout raise it, and normal checks never rewrite the
+past the noise, held to the slack the committed baseline measured. A slower
+observation never raises it, but a committed median that got worse since the
+monitor last read it (kept beside it as `<suite>.committed.json`) was banked
+slower on purpose, and the best takes it. Normal checks never rewrite the
 committed baseline. Last good commits and the web unit are kept in
 `~/.cache/yak/bench/monitor.json`.
 

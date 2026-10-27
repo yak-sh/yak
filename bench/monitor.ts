@@ -34,6 +34,7 @@ import {
   type Baseline,
   baseline,
   busy,
+  incomparable,
   loaded,
   type Regression,
   type Run,
@@ -259,8 +260,9 @@ let save = async (state: State) => {
 
 /** Keep the monitor's moving best beside its state: each bench's committed
  * median, or the better one a quiet run of the monitor's found past the noise
- * (`baseline()`), held to the slack the committed baseline measured. Neither a
- * checkout nor a slower run raises it. */
+ * (`baseline()`), held to the slack the committed baseline measured. A slower
+ * run never raises it; a committed median banked slower on purpose
+ * (`--slower`) does (`moving`). */
 let bank = async (path: string, value: Baseline) => {
   let tmp = `${path}.${Deno.pid}.tmp`
   try {
@@ -276,38 +278,73 @@ export let committed = async (suite: string): Promise<Baseline> => {
   let path = entry?.baseline ?? `bench/${suite}.baseline.json`
   return JSON.parse(await Deno.readTextFile(`${root}${path}`))
 }
+type Bench = Baseline['benches'][number]
+/** The monitor's best of a committed baseline (`source`), given the best it
+ * kept (`previous`) and the committed baseline it last read (`read`): each
+ * bench's better median of the two, except where the committed one got worse
+ * since it was read, a slower banking, which the best takes as it is.
+ *
+ * ```ts
+ * import type { Baseline } from '@yaks/benchmark'
+ * import { moving } from './monitor.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let at = (median: number): Baseline => ({
+ *   version: 1, suite: 's', metric: 'm', workload: 1, runtime: 'r', cpu: 'c',
+ *   tolerance: .1,
+ *   benches: [{ name: 'b', unit: 'ms', better: 'lower', median }],
+ * })
+ * let best = (source: number, previous: number, read?: number) =>
+ *   moving(at(source), at(previous), read ? at(read) : undefined)
+ *     .benches[0].median
+ * equal(best(10, 8, 10), 8)
+ * equal(best(7, 8, 10), 7)
+ * equal(best(20, 8, 10), 20)
+ * equal(best(20, 8), 8)
+ * ```
+ */
+export let moving = (
+  source: Baseline,
+  previous?: Baseline,
+  read?: Baseline,
+): Baseline => {
+  // A protocol change gets its own source reference, not incomparable old data.
+  let find = (base: Baseline | undefined, b: Bench) =>
+    base && !incomparable(base, source)
+      ? base.benches.find((c) =>
+        c.name == b.name && c.unit == b.unit && c.better == b.better &&
+        c.resolution == b.resolution
+      )
+      : undefined
+  let better = (b: Bench, x: number, y: number) =>
+    b.better == 'lower' ? Math.min(x, y) : Math.max(x, y)
+  return {
+    ...source,
+    benches: source.benches.map((b) => {
+      let old = find(previous, b), was = find(read, b)
+      let worse = was && better(b, was.median, b.median) != b.median
+      return {
+        ...b,
+        median: old && !worse ? better(b, old.median, b.median) : b.median,
+      }
+    }),
+  }
+}
+let json = async (path: string): Promise<Baseline | undefined> => {
+  try {
+    return JSON.parse(await Deno.readTextFile(path))
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+}
 let reference = async (suite: string) => {
   let source = await committed(suite)
   let dir = `${home}/.cache/yak/bench/best`
   await Deno.mkdir(dir, { recursive: true })
   let path = `${dir}/${suite}.baseline.json`
-  let previous: Baseline | undefined
-  try {
-    previous = JSON.parse(await Deno.readTextFile(path))
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
-  }
-  // A protocol change gets its own source reference, not incomparable old data.
-  if (
-    previous && ['suite', 'metric', 'workload', 'runtime', 'cpu'].some(
-      (key) =>
-        previous![key as keyof Baseline] != source[key as keyof Baseline],
-    )
-  ) previous = undefined
-  let next = {
-    ...source,
-    benches: source.benches.map((b) => {
-      let old = previous?.benches.find((c) => c.name == b.name)
-      return {
-        ...b,
-        median: old && old.unit == b.unit && old.better == b.better &&
-            old.resolution == b.resolution
-          ? (b.better == 'lower' ? Math.min : Math.max)(old.median, b.median)
-          : b.median,
-      }
-    }),
-  }
-  await bank(path, next)
+  let read = `${dir}/${suite}.committed.json`
+  await bank(path, moving(source, await json(path), await json(read)))
+  await bank(read, source)
   return path
 }
 
