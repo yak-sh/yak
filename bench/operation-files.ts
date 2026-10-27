@@ -3,6 +3,7 @@
 import { link } from '@yaks/edge'
 import type { Comp } from '@yaks/graph'
 import { discover } from '@yaks/git/host'
+import { verify as vouch } from '@yaks/kernel'
 import type { Operation } from './operation-commands.ts'
 import type { OperationContext } from './operation-local.ts'
 export let FILE_FAMILIES = [
@@ -120,14 +121,18 @@ export let fileOperations = async (
       family: 'cites-check',
       tool: 'cites_check',
       command: ['cites', 'check'],
+      // The citation is vouched for as the project stands, then the project
+      // changes, so every sample checks a citation that moved, whichever
+      // family ran before it.
       prepare: async () => {
-        await graph.apply([{
+        let [project] = await graph.get([PROJECT])
+        await graph.apply([vouch(citation, project, graph.vocab), {
           entity: { eid: PROJECT },
           doc: { body: fresh('cited project changed') },
         }])
       },
       args: () => ({ of: PERSONA }),
-      verify: (text) => includes(text, 'never checked'),
+      verify: (text) => includes(text, 'cited content changed'),
     },
     {
       family: 'search',
