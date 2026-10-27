@@ -25,7 +25,7 @@ import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { currentStatus, type Deps, react, type Step } from './react.ts'
-import { hasAsk, usingOf } from './reach.ts'
+import { hasAsk, openOf, usingOf } from './reach.ts'
 import { kindOf, seqOf, type TranscriptStatus } from './state.ts'
 import { UnknownSession } from './unknown.ts'
 import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
@@ -296,8 +296,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
   // transcripts runnable and are queried explicitly when that matters.
   let status = await prepared(g, session)
   let older = status == 'settled' &&
-    (await g.read(`.entry.session=${session}&.call&!results&.limit=1`)).length >
-      0
+    (await openOf(g, session)).some((b) => comp(b, 'entry')?.session == session)
   if (ENDED.includes(status) && !older) {
     await ended(g, session, r)
     return newest(g, session)
@@ -429,8 +428,9 @@ export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
 // waits on another worker's session lease. One durable followup preserves them,
 // unless the step taken wrote every change that joined it and left its
 // transcript owing no turn: a step's own reply wakes its transcript, and a
-// followup would find only the step already taken.
-type Advance = { done: Promise<void>; joined: Eid[]; took?: Step }
+// followup would find only the step already taken. A pass a stop cut short
+// owes one too while its transcript owes a turn or the telling of its end.
+type Advance = { done: Promise<void>; joined: Eid[]; took?: Step; told?: true }
 let steps = new WeakMap<Graph, Map<Eid, Advance>>()
 let advancing = (g: Graph) => {
   let here = steps.get(g)
@@ -459,11 +459,15 @@ let advance = (
   }
   let pass: Advance = { done: Promise.resolve(), joined: [] }
   here.set(session, pass)
+  let end = async () => {
+    await ended(g, session, r)
+    pass.told = true
+  }
   let done = Promise.resolve().then(async () => {
     if (!await answering(g, session, r)) {
       let status = await prepared(g, session)
       if (ENDED.includes(status)) {
-        await ended(g, session, r)
+        await end()
         return
       }
       if (await usingOf(g, session) || await hasAsk(g, session)) {
@@ -483,19 +487,23 @@ let advance = (
       if (stopping.aborted) return
       let status = await prepared(g, session)
       if (ENDED.includes(status)) {
-        await ended(g, session, r)
+        await end()
         return
       }
       if (!await admitted(g, session, r)) return
       let s = pass.took = await step(g, session, { ...r, stopping })
       await r.each?.(s, session)
-      if (ENDED.includes(s.status)) await ended(g, session, r)
+      if (ENDED.includes(s.status)) await end()
     })
   }).finally(async () => {
     if (here.get(session) == pass) here.delete(session)
-    if ((pass.joined.length && !covered(pass)) || r.stopping?.aborted) {
+    let cut = r.stopping?.aborted
+    if ((pass.joined.length && !covered(pass)) || cut) {
       let status = await currentStatus(g, session)
-      if (['pending', 'running', 'queued'].includes(status)) {
+      if (
+        ['pending', 'running', 'queued'].includes(status) ||
+        cut && ENDED.includes(status) && !pass.told
+      ) {
         await enqueue(g, 'session_run', session)
       }
     }

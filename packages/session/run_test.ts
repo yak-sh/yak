@@ -651,6 +651,39 @@ test('a worker coming up runs what a restart left owed', async () => {
   assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
 })
 
+// A worker stopping as a child's stop lands takes the run the stop owed and
+// leaves before telling the child's end; the worker after it tells it.
+let told = await (async () => {
+  let s = store()
+  let g = graph({ storage: s, vocab, plugins: [sessions()] })
+  await g.apply([
+    { entity: { eid: 'root' }, session: { id: 'root' } },
+    ...child('c1', 1),
+    { entity: { eid: 'c1:stop' }, entry: { session: 'c1' }, stop: {} },
+  ])
+  let stop = new AbortController()
+  stop.abort()
+  await running(g, {
+    holder: 'w1',
+    model: fake().model,
+    tools: [],
+    stopping: stop.signal,
+  }).session_run(
+    { kind: 'matched', name: 'stop', entity: { eid: 'c1:stop' } },
+    g.outside,
+    (b) => g.apply(b, { trusted: true }),
+  )
+  let p = proc(s, 'w2', fake().model)
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  let [c1] = await p.g.get(['c1'], ['dispatch'])
+  return (c1.dispatch as Comp).state
+})()
+
+test('a pass a stop cuts short leaves a stopped child the telling of its end', () => {
+  assertEquals(told, 'settled')
+})
+
 test('a transcript ending releases its claims through the effects pool', async () => {
   let s = store()
   let p = proc(s, 'w1', fake().model)

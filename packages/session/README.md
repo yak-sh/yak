@@ -249,8 +249,10 @@ steps in the transaction that records them. A run owed while this process is
 already stepping the transcript joins that step, and the step's run owes one
 more afterwards, unless the step wrote every change that joined it and left no
 turn owed: a step's own reply wakes its transcript, and the step that wrote it
-has answered that wake already. `session_input` performs the same step for a new
-input that inherits `using`, leaving an input that selects `using` to
+has answered that wake already. A run a stopping worker cuts short owes one more
+too while its transcript owes a turn, or has ended and its end is not yet told
+(a child's parent, its dispatch). `session_input` performs the same step for a
+new input that inherits `using`, leaving an input that selects `using` to
 `session_run` so it owes only one turn. Each `session_tool` effect claims and
 executes one call independently, so several calls can run together. A background
 call (`tool_async`) is answered by `PENDING` ("Pending; its result will
@@ -449,10 +451,13 @@ the turns a retry counts, the last stop, the newest checkpoint and what follows
 it, the lines of a finite `sending.window`) and the older entries those name. It
 answers `statusOf`, `openCalls`, `usingBefore`, `sendingBefore` and a model
 turn's context as `transcript()` would, so a step costs the same on a short
-transcript and a long one. A transcript with neither checkpoint nor window is
-its own context, and reaching it reads it all. `usingOf()` and `openOf()` ask
-for the model selection in force and the calls no result answers alone.
-`transcriptWindow()` reads a bounded page for user interfaces:
+transcript and a long one. What it looks for beyond those newest entries (the
+open calls, the newest `using`, `sending` and stop) a graph remembers, and the
+next reading asks only the lines appended since and the ones it found. A
+transcript with neither checkpoint nor window is its own context, and reaching
+it reads it all. `usingOf()` and `openOf()` ask for the model selection in force
+and the calls no result answers alone. `transcriptWindow()` reads a bounded page
+for user interfaces:
 
 ```ts
 import { graph } from '@yaks/graph'

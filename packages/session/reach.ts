@@ -13,6 +13,15 @@
 // query. What it returns answers every function of ./state.ts and ./compact.ts
 // as the whole transcript would; ./reach_test.ts holds the two together.
 //
+// Those lookups beyond the edge are remembered, so a step costs the lines
+// appended since the last, not the transcript's length. A line is appended at
+// the next seq (./append.ts), and what each lookup selects changes only by a
+// line appended (a call, the result answering it, a stop, a checkpoint) or by
+// the lines it found: the next reading asks only those and the lines appended
+// since, each by name. A lookup on a transcript whose newest lines were
+// deleted, which may append at those seqs again, reads it whole. A mark set on
+// an older line (`provisional` on an ask) is read each time.
+//
 // A fork reads through its segments (./window.ts): the parent up to the
 // anchor, then its own. A transcript with no checkpoint and no window is its
 // own context, so reaching it reads it all: the model is sent all of it too.
@@ -60,7 +69,17 @@ type Read = {
   fields: string
   found: Map<string, Promise<Bundle | undefined>>
   shapes: Map<string, string[]>
+  /** the lines of a segment it looked at, by the query naming them */
+  lines: Map<string, Promise<Line[]>>
 }
+
+type Line = { eid: Eid; seq: number }
+
+// What a lookup found in a segment, and the line it was true through.
+type Known = Line & { found: Eid[] }
+
+const KEPT = 1024
+let memories = new WeakMap<Graph, Map<string, Known>>()
 
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
@@ -75,19 +94,28 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
     fields: names ? names.map((n) => '?' + n).join('&') : '*',
     found: new Map(),
     shapes: new Map(),
+    lines: new Map(),
   }
 }
 
 // Select identities separately, then gather the components actually present.
 // Projecting every optional component forces a scalar read for each declared
-// component, even though an entry carries only a handful of them.
-let selected = async (r: Read, q: string): Promise<Bundle[]> => {
-  let owners = await r.g.rows(
-    q +
-      (r.g.vocab.comp('archetype')
-        ? '&.fields=entity.eid,entity.archetype'
-        : '&.fields=entity.eid'),
-  )
+// component, even though an entry carries only a handful of them. Several
+// queries' entities are gathered at once; a query asked of named entities
+// alone carries them beside it.
+type Ask = string | { q: string; eids: Eid[] }
+let selected = async (r: Read, ...asks: Ask[]): Promise<Bundle[]> => {
+  let fields = r.g.vocab.comp('archetype')
+    ? '&.fields=entity.eid,entity.archetype'
+    : '&.fields=entity.eid'
+  let owners = []
+  for (let a of asks) {
+    owners.push(
+      ...typeof a == 'string'
+        ? await r.g.rows(a + fields)
+        : await r.g.rows(a.q + fields, { eids: a.eids }),
+    )
+  }
   let ids = owners.map((b) => String(b['entity.eid']))
   if (!ids.length) return []
   let names = r.names
@@ -159,16 +187,75 @@ let pages = (r: Read) => {
   }
 }
 
+// A segment's lines from `seq` up, newest first, or its newest line alone:
+// their identities, read once a reading.
+let tail = (r: Read, s: Segment, seq?: number): Promise<Line[]> => {
+  let q = within(s) + (seq == null ? '&.limit=1' : `&.entry.seq>=${seq}`)
+  let held = r.lines.get(q)
+  if (held) return held
+  let read =
+    (async () =>
+      (await r.g.rows(q + '&.order=-entry.seq&.fields=entity.eid,entry.seq'))
+        .map((row) => ({
+          eid: String(row['entity.eid']),
+          seq: Number(row['entry.seq']),
+        })))()
+  r.lines.set(q, read)
+  return read
+}
+
+// What a lookup in a segment found before, while the line it was true through
+// is still that line, and the segment's newest line now. `ask` is what the
+// lookup asks again: the lines it found and those appended since.
+let recall = async (
+  r: Read,
+  s: Segment,
+  qualifier: string,
+): Promise<{ known?: Known; edge?: Line; ask: Eid[] }> => {
+  let known = memories.get(r.g)?.get(within(s) + qualifier)
+  let lines = await tail(r, s, known?.seq)
+  let at = lines.at(-1)
+  if (!known || at?.seq != known.seq || at?.eid != known.eid) {
+    return { edge: lines[0], ask: [] }
+  }
+  return {
+    known,
+    edge: lines[0],
+    ask: [...lines.slice(0, -1).map((l) => l.eid), ...known.found],
+  }
+}
+
+// What a lookup found, true through `edge`, the newest line before it looked.
+let keep = (
+  r: Read,
+  s: Segment,
+  qualifier: string,
+  edge: Line | undefined,
+  found: Bundle[],
+) => {
+  let kept = memories.get(r.g) ?? new Map<string, Known>()
+  memories.set(r.g, kept)
+  let key = within(s) + qualifier
+  kept.delete(key)
+  if (!edge) return
+  kept.set(key, { ...edge, found: found.map((b) => b.entity.eid) })
+  if (kept.size > KEPT) kept.delete(kept.keys().next().value!)
+}
+
 // The newest entry a qualifier selects, and every one of them.
 let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
   let seen = r.found.get(qualifier)
   if (seen) return seen
   let found = (async () => {
     for (let s of r.segs.toReversed()) {
-      let [row] = await selected(
-        r,
-        `${within(s)}${qualifier}&.order=-entry.seq&.limit=1`,
-      )
+      let { known, edge, ask } = await recall(r, s, qualifier)
+      let q = `${within(s)}${qualifier}&.order=-entry.seq&.limit=1`
+      let page = async (eids?: Eid[]) =>
+        (await selected(r, eids ? { q, eids } : q))[0]
+      let row = !known ? await page() : ask.length ? await page(ask) : undefined
+      // What it found before is gone or no longer one: read it all again.
+      if (known?.found.length && !row) row = await page()
+      keep(r, s, qualifier, edge, row ? [row] : [])
       if (row) return row
     }
   })()
@@ -176,9 +263,17 @@ let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
   return found
 }
 let every = async (r: Read, qualifier: string): Promise<Bundle[]> =>
-  (await Promise.all(
-    r.segs.map((s) => selected(r, `${within(s)}${qualifier}`)),
-  )).flat()
+  (await Promise.all(r.segs.map(async (s) => {
+    let { known, edge, ask } = await recall(r, s, qualifier)
+    let q = within(s) + qualifier
+    let found = !known
+      ? await selected(r, q)
+      : ask.length
+      ? await selected(r, { q, eids: ask })
+      : []
+    keep(r, s, qualifier, edge, found)
+    return found
+  }))).flat()
 
 // The named entries that are lines of this transcript: an entry another
 // transcript holds, or one a fork left behind, is not among its entries.
@@ -288,18 +383,27 @@ export let newestOf = async (
 export let hasAsk = async (g: Graph, session: Eid): Promise<boolean> =>
   !!await newest(await chain(g, session, { comps: [ENTRY] }), `&.${ASK}`)
 
-// What a reading holds besides its newest rows, each found by one query for
-// all: the open calls (which no result answers), the asks the runner owes a
-// retry, and for a model turn the checkpoints and the prompts it retains.
+// What a reading holds besides its newest rows, found by one lookup for all:
+// the open calls (which no result answers), and for a model turn the
+// checkpoints and the prompts it retains; and for a model turn the asks the
+// runner owes a retry, by a query of their own, since that mark is set on an
+// ask already written. The mark is named first: a query is driven by the
+// first component it names, and the few marked entities are read where every
+// ask of the graph, or every line of the transcript, would be.
 let named = async (r: Read, turn: boolean): Promise<Bundle[]> => {
   let has = (name: string) => r.g.vocab.comp(name)
   let parts = [
     ...turn && has('checkpoint') ? ['.checkpoint'] : [],
     ...turn && has('prompt') ? ['.prompt'] : [],
-    ...turn && has('provisional') ? [`.${ASK} .provisional`] : [],
     ...has(CALL) && has(RESULT) ? [`.${CALL} !${RESULT}s`] : [],
   ]
-  return parts.length ? await every(r, `&(${parts.join('|')})`) : []
+  let retry = `&.provisional&.${ASK}`
+  return [
+    ...parts.length ? await every(r, `&(${parts.join('|')})`) : [],
+    ...turn && has('provisional')
+      ? await selected(r, ...r.segs.map((s) => within(s) + retry))
+      : [],
+  ]
 }
 
 /** The calls of a transcript no result answers. */
