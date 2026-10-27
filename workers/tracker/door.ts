@@ -148,6 +148,15 @@ async (request: Request): Promise<Response> => {
     if (held?.includes(tag)) {
       return new Response(null, { status: 304, headers: { etag: tag } })
     }
+    // A reader holding an older answer asks only which entities moved since
+    // its tag (`since`), and reads those again by id; read in the same turn
+    // as the tag, the moves are the ones it stands at. `moved: null` says the
+    // store no longer knows, and the reader reads whole.
+    if (params.has('since')) {
+      let answer = json({ moved: tracker.since(params.get('since')!) ?? null })
+      answer.headers.set('etag', tag)
+      return answer
+    }
     try {
       let answer = json(
         params.has('bug')

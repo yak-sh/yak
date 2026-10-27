@@ -3,6 +3,7 @@
 // fails or hangs is asked through the signed transport, which is what names
 // its failure.
 import { clock, equal, test } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
 import { type Doors, poll, type Polled, signed } from './poll.ts'
 
 let worker = (count: number) => {
@@ -139,4 +140,54 @@ quiet.close()
 test('a poll sends the tag of the answer it holds, and keeps that answer while nothing moves', () => {
   equal(heard, [150, 150, 150])
   equal(sent.slice(0, 4), [undefined, undefined, '"t1"', '"t1"'])
+})
+
+// A Worker that names what moved since a tag it knows, and then stops knowing.
+let moving = worker(150)
+let at = 1, knows = true, moves = new Map<string, number>()
+let asks: string[] = []
+let eid = (i: number) =>
+  `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+let renewing = poll(remote, '.bug', {
+  every: 0,
+  doors: {
+    ...moving.doors,
+    bugs: async (params, signal, tag) => {
+      let now = `"t${at}"`
+      if (tag == now) return { ok: true, tag, unchanged: true }
+      if (params.has('since')) {
+        asks.push('since')
+        let m = Number(tag!.slice(2, -1))
+        let moved = [...moves].filter(([, n]) => n > m).map(([e]) => e)
+        return { ok: true, tag: now, value: { moved: knows ? moved : null } }
+      }
+      asks.push(params.get('query')!.includes('.entity.eid=') ? 'id' : 'page')
+      return { ...await moving.doors.bugs(params, signal), tag: now }
+    },
+  },
+})
+let answers = await new Promise<Bundle[][]>((done) => {
+  let seen: Bundle[][] = []
+  let off = renewing.subscribe((value) => {
+    seen.push(value)
+    if (seen.length == 1) {
+      at = 2
+      moving.bugs[3].bug.fault = 'moved'
+      moving.bugs.splice(7, 1)
+      moving.bugs.push({ entity: { eid: eid(999) }, bug: { fault: 'new' } })
+      for (let i of [3, 7, 999]) moves.set(eid(i), 2)
+    }
+    if (seen.length == 2) at = 3, knows = false
+    if (seen.length == 4) off(), done(seen)
+  })
+})
+renewing.close()
+
+test('a poll holding a tag reads again only the bugs that moved since', () => {
+  equal(asks, ['page', 'page', 'since', 'id', 'since', 'page', 'page'])
+  equal(answers[1], moving.bugs)
+})
+
+test('a poll whose tag the Worker no longer knows reads whole', () => {
+  equal(answers.slice(2), [moving.bugs, moving.bugs])
 })

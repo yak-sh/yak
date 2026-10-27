@@ -119,28 +119,48 @@ test('a signed full-standing read reconciles migrated ids without remote imports
   equal(await desk.get([remoteId]), [])
 })
 
-// A remote that tags its answer, and answers 304 to a reader holding the tag.
-let tagged = { at: '"t1"' }
-let asked: (string | null)[] = []
-let quiet = ((_url: string | URL | Request, init?: RequestInit) => {
-  let since = new Headers(init?.headers).get('if-none-match')
-  asked.push(since)
+// A remote that tags its answer, answers 304 to a reader holding the tag, and
+// names what moved since an older one while it knows.
+let tagged = { at: '"t1"', moved: [] as string[] | null }
+let asked: string[] = []
+let quiet = ((url: string | URL | Request, init?: RequestInit) => {
+  let params = new URL(String(url)).searchParams
+  let held = new Headers(init?.headers).get('if-none-match')
+  let headers = { etag: tagged.at }
+  asked.push(
+    held == tagged.at
+      ? '304'
+      : params.has('since')
+      ? `since ${held}`
+      : params.get('query')!,
+  )
   return Promise.resolve(
-    since == tagged.at
-      ? new Response(null, { status: 304, headers: { etag: tagged.at } })
-      : Response.json([{ ...fixed, entity: { eid: remoteId } }], {
-        headers: { etag: tagged.at },
-      }),
+    held == tagged.at
+      ? new Response(null, { status: 304, headers })
+      : params.has('since')
+      ? Response.json({ moved: tagged.moved }, { headers })
+      : Response.json([{ ...fixed, entity: { eid: remoteId } }], { headers }),
   )
 }) as typeof fetch
 let seen: { tag?: string } = {}
 let remote = { url: 'https://tracker.example', secret: 'test' }
 await reconcile(desk, remote, quiet, undefined, seen)
 await reconcile(desk, remote, quiet, undefined, seen)
-tagged.at = '"t2"'
+Object.assign(tagged, { at: '"t2"', moved: [remoteId] })
+await reconcile(desk, remote, quiet, undefined, seen)
+Object.assign(tagged, { at: '"t3"', moved: null })
 await reconcile(desk, remote, quiet, undefined, seen)
 
-test('a pass sends the tag the last whole pass read, and a remote that has not moved ends it', () => {
-  equal(asked, [null, '"t1"', '"t1"'])
-  equal(seen.tag, '"t2"')
+test('a pass sends the tag it last read at, and reads only what moved since', () => {
+  equal(asked.slice(0, 4), [
+    '.bug * .order=entity.eid',
+    '304',
+    'since "t1"',
+    `.bug * .entity.eid=${remoteId} .order=entity.eid`,
+  ])
+})
+
+test('a pass whose tag the remote no longer knows reads whole', () => {
+  equal(asked.slice(4), ['since "t2"', '.bug * .order=entity.eid'])
+  equal(seen.tag, '"t3"')
 })

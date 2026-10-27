@@ -66,6 +66,17 @@ weakly, since Cloudflare marks it `W/` when it compresses the answer) is
 answered 304 while it stands, reading only the tag's row; the box's poll and its
 reconciliation of standing both do, so a tracker whose bugs have not moved costs
 their 30 s polls a row each.
+
+Beside the tag the store keeps the **moves**: each entity those commits wrote,
+under the count it moved the tag to, the latest thousand of them, with an
+occurrence (and what came with it) counted as a move of its bug.
+`GET /bugs?since=<tag>` answers which entities moved since a tag the reader
+holds, `{"moved": [eid, …]}` with the current tag as its `ETag`, and the reader
+reads only those again, a page of ids at a time
+(`query=<bug-query> .entity.eid=<eids>`). A tag from another era, or older than
+the moves reach, is answered `{"moved": null}`, and the reader reads whole. So a
+change to one bug costs each reader that bug, not every bug.
+
 `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns

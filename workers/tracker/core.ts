@@ -73,9 +73,16 @@ export type Config = Options & {
 // answers a reader that sends the tag it holds with 304, reading only the
 // tag (door.ts). The tag is `era.count`; an era begins where no count was
 // kept before.
+//
+// Beside the tag the store keeps the moves: the entities each such commit
+// wrote, under the count it moved the tag to, so a reader holding an older
+// tag of this era is told which to read again instead of reading every bug
+// (door.ts `since`). An occurrence, and what came with it, moves its bug,
+// whose counts it changes. The moves keep the latest `MOVES` entities; a tag
+// from before the oldest they dropped is answered whole.
 let STAMPS = new Set(['entity', 'created', 'updated'])
 let BOOKKEEPING = new Set(['effect', 'lease', 'worker', 'wake', 'fired'])
-let TAG = 'bugs-tag'
+let TAG = 'bugs-tag', MOVED = 'bugs-moved', MOVES = 1000
 let only = (names: string[]) =>
   names.length > 0 && names.every((k) => BOOKKEEPING.has(k))
 // A trace is read through its own doors (`traces`, `trace`), never the bugs'.
@@ -86,25 +93,104 @@ let news = (b: Bundle) =>
     : !TRACED.some((k) => k in b) && !Object.keys(b).every((k) =>
       STAMPS.has(k) || k[0] == '$' || BOOKKEEPING.has(k)
     )
+let OCCURRENCE = ['error', 'exception', 'during', 'breadcrumbs', 'request']
+let moving = (b: Bundle): string | undefined => {
+  if (b.bug || !OCCURRENCE.some((k) => k in b)) return b.entity.eid
+  let bug = (b.error as Comp | undefined)?.bug
+  return typeof bug == 'string' ? bug : undefined
+}
+
+/** The entities moved in an era, each with the count of its latest move,
+ * oldest first; nothing that moved after `floor` has been dropped. */
+export type Moves = { era: string; floor: number; moves: [string, number][] }
+
+/** The moves once the commit counted `n` moved `eids`, keeping the `most`
+ * latest; the floor rises to the latest count it drops.
+ *
+ * ```ts
+ * import { moved } from './core.ts'
+ * import { equal } from '@yaks/testing'
+ * let one = moved({ era: 'a', floor: 0, moves: [['x', 1], ['y', 2]] }, 3, ['x'])
+ * equal(one.moves, [['y', 2], ['x', 3]])
+ * equal(moved(one, 4, ['z'], 2), { era: 'a', floor: 2, moves: [['x', 3], ['z', 4]] })
+ * ```
+ */
+export let moved = (
+  log: Moves,
+  n: number,
+  eids: string[],
+  most = MOVES,
+): Moves => {
+  let now = new Set(eids)
+  let moves = [
+    ...log.moves.filter(([eid]) => !now.has(eid)),
+    ...[...now].map((eid): [string, number] => [eid, n]),
+  ]
+  let gone = moves.splice(0, Math.max(0, moves.length - most))
+  return { ...log, floor: Math.max(log.floor, gone.at(-1)?.[1] ?? 0), moves }
+}
+
+/** What moved after count `m`, or undefined when the moves no longer reach
+ * back that far.
+ *
+ * ```ts
+ * import { since } from './core.ts'
+ * import { equal } from '@yaks/testing'
+ * let log = { era: 'a', floor: 2, moves: [['x', 3], ['z', 4]] as [string, number][] }
+ * equal([since(log, 3), since(log, 4), since(log, 1)], [['z'], [], undefined])
+ * ```
+ */
+export let since = (log: Moves, m: number): string[] | undefined =>
+  m < log.floor ? undefined : log.moves.filter(([, n]) => n > m).map(([e]) => e)
+
 let era = () => crypto.randomUUID().slice(0, 8)
 let memory = (): Kept => {
   let held = new Map([[TAG, `${era()}.0`]])
   return { get: (k) => held.get(k), set: (k, v) => void held.set(k, v) }
 }
+// A tag's era and count, as the store keeps it or a reader sends it back
+// (quoted, and marked weak once Cloudflare compressed the answer).
+let counted = (tag?: string): [string, number] | undefined => {
+  let [at, n] = tag?.replace(/^W\//, '').replaceAll('"', '').split('.') ?? []
+  return at && Number.isSafeInteger(Number(n)) ? [at, Number(n)] : undefined
+}
 let tagging = (kept: Kept = memory()) => {
+  // The era's moves; a store that kept none of them knows none before `n`.
+  let log = (at: string, n: number): Moves => {
+    let held: Moves | undefined
+    try {
+      held = JSON.parse(kept.get(MOVED) ?? 'null') ?? undefined
+    } catch { /* kept by no release that wrote this shape */ }
+    return held?.era == at && Array.isArray(held.moves)
+      ? held
+      : { era: at, floor: n, moves: [] }
+  }
   let plugin: Plugin = {
     name: '@yaks/tracker/tag',
     hooks: {
       commit: (bundles) => {
-        if (bundles.some(news)) {
-          let [at, n] = kept.get(TAG)?.split('.') ?? [era(), '0']
-          kept.set(TAG, `${at}.${Number(n) + 1}`)
+        let some = bundles.filter(news)
+        if (some.length) {
+          let [at, n] = counted(kept.get(TAG)) ?? [era(), 0]
+          kept.set(TAG, `${at}.${n + 1}`)
+          let eids = some.map(moving).filter((e): e is string => !!e)
+          if (eids.length) {
+            kept.set(MOVED, JSON.stringify(moved(log(at, n), n + 1, eids)))
+          }
         }
         return bundles
       },
     },
   }
-  return { plugin, tag: () => `"${kept.get(TAG) ?? '0'}"` }
+  return {
+    plugin,
+    tag: () => `"${kept.get(TAG) ?? '0'}"`,
+    since: (tag: string) => {
+      let [at, n] = counted(kept.get(TAG)) ?? []
+      let held = counted(tag)
+      return at && held?.[0] == at ? since(log(at, n!), held[1]) : undefined
+    },
+  }
 }
 
 export let store = (storage: Storage, config: Config) => {
@@ -170,6 +256,9 @@ export let store = (storage: Storage, config: Config) => {
     graph: g,
     /** The bugs' tag: it moves with every commit a reader may need to see. */
     tag: tags.tag,
+    /** The entities that moved since a tag of this store, the latest last,
+     * or undefined when the store no longer knows. */
+    since: tags.since,
     ingest: (rows: Bundle[]) => ingest(g, rows),
     // One aborted pool pass handles a bounded window. Several passes let
     // grouping's newly owed notifications finish in this wake too.

@@ -6,7 +6,8 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { absent, and, eq, every, limit, or, order, present } from '@yaks/query'
 import { comp, type Desk, str } from './model.ts'
-import { type Remote, request } from './remote.ts'
+import type { Remote } from './remote.ts'
+import { type Page, signed, since } from './poll.ts'
 
 let marks = ['resolved', 'archived', 'taken', 'regressed', 'deployed'] as const
 let app = (row: Bundle) => str(comp(row, 'bug').app ?? comp(row, 'during').app)
@@ -63,15 +64,15 @@ export let standing = (local: Bundle, remote: Bundle): Bundle | undefined => {
   return changed ? patch : undefined
 }
 
-const PAGE = 100, PAGES = 100
-
-/** One bounded pass through remote bugs (including open and closed groups).
- * Each page uses the existing signed read transport. A pass that applied
- * everything it read keeps the tag the remote read it at in `seen`, and the
- * next pass sends it: a remote where nothing moved since says so with no row
- * read, and the pass ends there. A raced local group is left for the next
- * pass, which then reads in full; failures propagate to the service's health
- * report. */
+/** One pass over the remote bugs (open and closed groups alike) that moved
+ * since the last, through the poll's signed reads (./poll.ts `since`). A pass
+ * that applied everything it read keeps the tag the remote stood at in
+ * `seen`, and the next pass sends it: a remote where nothing moved since says
+ * so with no row read, and one where something did names what moved, and
+ * only those are read. The first pass, or one whose tag the remote no longer
+ * knows what moved since, reads every bug. A raced local group is left for
+ * the next pass, which asks again from the tag before it; failures propagate
+ * to the service's health report. */
 export let reconcile = async (
   g: Desk,
   remote: Remote,
@@ -79,79 +80,50 @@ export let reconcile = async (
   signal?: AbortSignal,
   seen: { tag?: string } = {},
 ): Promise<void> => {
-  let cursor = '', tag: string | undefined, raced = false
-  for (let page = 0; page < PAGES; page++) {
+  let doors = signed(remote, go)
+  // A stop ends the pass as itself, never as the read it cut short.
+  let page: Page = async (params, tag) => {
     signal?.throwIfAborted()
-    let since = !cursor && seen.tag
-    let response = await request(
-      remote,
-      'bugs',
-      new URLSearchParams({
-        scope: 'platform',
-        limit: String(PAGE),
-        query: `.bug * .order=entity.eid${cursor ? ` .after=${cursor}` : ''}`,
-      }),
-      { signal, ...since ? { headers: { 'if-none-match': since } } : {} },
-      go,
-    )
-    if (response.status == 304) return
-    tag ??= response.headers.get('etag') ?? undefined
-    if (!response.ok) {
-      await response.body?.cancel()
-      throw Error(`Remote tracker refused reconciliation (${response.status})`)
-    }
-    let rows: Bundle[] = await response.json()
-    if (
-      !Array.isArray(rows) || rows.length > PAGE ||
-      rows.some((row) =>
-        !row?.bug || typeof row.entity?.eid != 'string' ||
-        row.entity.eid <= cursor
-      )
-    ) throw Error('Remote tracker returned an invalid reconciliation page')
-    let next = rows.at(-1)?.entity.eid
-    if (
-      rows.some((row, i) => i > 0 && row.entity.eid <= rows[i - 1].entity.eid)
-    ) {
-      throw Error('Remote tracker reconciliation did not advance')
-    }
-    for (let row of rows) {
-      signal?.throwIfAborted()
-      let [local] = await g.get([row.entity.eid])
-      if (!local?.bug) {
-        let fault = str(comp(row, 'bug').fault)
-        if (!fault) continue
-        let scope = app(row)
-        let candidates = await g.read(and(
-          present('bug'),
-          eq('bug.fault', fault),
-          scope
-            ? or(
-              eq('bug.app', scope),
-              and(absent('bug.app'), eq('during.app', scope)),
-            )
-            : and(absent('bug.app'), absent('during.app')),
-          every(),
-          order('entity.eid'),
-          limit(2),
-        ))
-        // Ambiguous historical groups are not evidence that either is this bug.
-        if (candidates.length != 1) continue
-        local = candidates[0]
-      }
-      let patch = standing(local, row)
-      if (!patch) continue
-      try {
-        await g.apply([patch], { trusted: true, stamp: false })
-      } catch (error) {
-        if (!(error instanceof Stale)) throw error
-        raced = true
-      }
-    }
-    if (rows.length < PAGE) {
-      seen.tag = raced ? undefined : tag
-      return
-    }
-    cursor = next!
+    let got = await doors.bugs(params, signal, tag)
+    signal?.throwIfAborted()
+    if (!got.ok) throw Error(got.error)
+    return got
   }
-  throw Error('Remote tracker reconciliation exceeded 100 pages')
+  let fresh = await since(page, '.bug *', seen.tag)
+  if (!fresh) return
+  let raced = false
+  for (let row of fresh.rows) {
+    signal?.throwIfAborted()
+    let [local] = await g.get([row.entity.eid])
+    if (!local?.bug) {
+      let fault = str(comp(row, 'bug').fault)
+      if (!fault) continue
+      let scope = app(row)
+      let candidates = await g.read(and(
+        present('bug'),
+        eq('bug.fault', fault),
+        scope
+          ? or(
+            eq('bug.app', scope),
+            and(absent('bug.app'), eq('during.app', scope)),
+          )
+          : and(absent('bug.app'), absent('during.app')),
+        every(),
+        order('entity.eid'),
+        limit(2),
+      ))
+      // Ambiguous historical groups are not evidence that either is this bug.
+      if (candidates.length != 1) continue
+      local = candidates[0]
+    }
+    let patch = standing(local, row)
+    if (!patch) continue
+    try {
+      await g.apply([patch], { trusted: true, stamp: false })
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+      raced = true
+    }
+  }
+  if (!raced) seen.tag = fresh.tag
 }

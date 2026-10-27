@@ -1,10 +1,13 @@
 // The platform tracker is a Worker behind signed doors, with no subscription a
 // box process can hold. A follower polls its `bugs` read instead and gets the
 // shape of a client watch: the whole answer, paged by global eid. Each poll
-// sends the tag of the answer it holds, and a tracker where nothing moved
-// since says so with no row read, so a quiet tracker costs a poll nothing.
-// Marks go through the same signed transport.
+// sends the tag of the answer it holds: a tracker where nothing moved since
+// says so with no row read, and one where something did names what moved, so
+// the poll reads only those again. A whole read is left for the first poll,
+// and for a tag the tracker no longer knows what moved since. Marks go
+// through the same signed transport.
 import type { Bundle } from '@yaks/graph'
+import { minted } from '@yaks/graph/identity'
 import { mark, type Remote } from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
@@ -36,7 +39,7 @@ export type Doors = {
    * nothing moved since `tag` */
   bugs: (
     params: URLSearchParams,
-    signal: AbortSignal,
+    signal?: AbortSignal,
     tag?: string,
   ) => Promise<Read>
   /** a mark on one bug and what it says: a resolution's explanation, the
@@ -71,7 +74,112 @@ export type PollOpts = {
   timer?: (fn: () => void, ms: number) => () => void
 }
 
-const PAGE = 100
+const PAGE = 100, PAGES = 100
+
+/** A page of the bugs `params` asks for, or that nothing moved since `tag`;
+ * a refusal throws. */
+export type Page = (
+  params: URLSearchParams,
+  tag?: string,
+) => Promise<Extract<Read, { ok: true }>>
+
+/** What brings an answer read at a tag up to date: the rows read, at the tag
+ * the tracker stands at now. With `moved`, they are the answer among those
+ * entities, which moved since; without, the whole answer. */
+export type Fresh = { rows: Bundle[]; tag?: string; moved?: string[] }
+
+let asking = (query: string) =>
+  new URLSearchParams({ limit: String(PAGE), query })
+
+// A page in eid order past `after`, no longer than asked: anything else would
+// loop, or skip a bug.
+let checked = (value: unknown, after = ''): Bundle[] => {
+  let rows = value as Bundle[]
+  if (
+    !Array.isArray(rows) || rows.length > PAGE ||
+    rows.some((row, i) =>
+      !row?.bug || typeof row.entity?.eid != 'string' ||
+      row.entity.eid <= (i ? rows[i - 1].entity.eid : after)
+    )
+  ) throw Error('Remote tracker returned an invalid page of bugs')
+  return rows
+}
+
+/** Every bug `query` answers, a page at a time in eid order, and the tag its
+ * first page was read at. */
+let whole = async (page: Page, query: string): Promise<Fresh> => {
+  let rows: Bundle[] = [], after = '', tag: string | undefined
+  for (let n = 0; n < PAGES; n++) {
+    let got = await page(asking(
+      `${query} .order=entity.eid${after ? ` .after=${after}` : ''}`,
+    ))
+    tag ??= got.tag
+    let some = checked(got.value, after)
+    rows.push(...some)
+    if (some.length < PAGE) return { rows, tag }
+    after = some.at(-1)!.entity.eid
+  }
+  throw Error(`Remote tracker answered more than ${PAGES} pages of bugs`)
+}
+
+/** The bugs among `eids` that `query` answers, a page of ids to a request,
+ * which keeps each request's address short and its answer to one page. */
+let among = async (
+  page: Page,
+  query: string,
+  eids: string[],
+): Promise<Bundle[]> => {
+  let rows: Bundle[] = []
+  for (let at = 0; at < eids.length; at += PAGE) {
+    let some = eids.slice(at, at + PAGE).join(',')
+    let got = await page(
+      asking(`${query} .entity.eid=${some} .order=entity.eid`),
+    )
+    rows.push(...checked(got.value))
+  }
+  return rows
+}
+
+/** What brings the answer to `query` read at tag `held` up to date: nothing
+ * when nothing moved, the bugs among those that moved when the tracker names
+ * them, and otherwise, or with no tag held, the whole answer. */
+export let since = async (
+  page: Page,
+  query: string,
+  held?: string,
+): Promise<Fresh | undefined> => {
+  if (held) {
+    let got = await page(new URLSearchParams({ since: held }), held)
+    if (got.unchanged) return
+    let moved = (got.value as { moved?: unknown } | null)?.moved
+    if (
+      Array.isArray(moved) &&
+      moved.every((eid) => typeof eid == 'string' && minted(eid))
+    ) return { rows: await among(page, query, moved), tag: got.tag, moved }
+  }
+  return await whole(page, query)
+}
+
+/** The answer `rows` brought up to date by `fresh`, in eid order.
+ *
+ * ```ts
+ * import { renewed } from '@yaks/tracker/poll'
+ * import { equal } from '@yaks/testing'
+ * let bug = (eid: string, fault = eid) => ({ entity: { eid }, bug: { fault } })
+ * let rows = [bug('a'), bug('b'), bug('c')]
+ * equal(
+ *   renewed(rows, { rows: [bug('b', 'new'), bug('d')], moved: ['b', 'c', 'd'] }),
+ *   [bug('a'), bug('b', 'new'), bug('d')],
+ * )
+ * equal(renewed(rows, { rows: [bug('e')] }), [bug('e')])
+ * ```
+ */
+export let renewed = (rows: Bundle[], fresh: Fresh): Bundle[] => {
+  if (!fresh.moved) return fresh.rows
+  let moved = new Set(fresh.moved)
+  return [...rows.filter((b) => !moved.has(b.entity.eid)), ...fresh.rows]
+    .sort((a, b) => a.entity.eid < b.entity.eid ? -1 : 1)
+}
 
 let timeout = (fn: () => void, ms: number) => {
   let id = setTimeout(fn, ms)
@@ -136,15 +244,7 @@ export let poll = (
     )
     return { signal: AbortSignal.any([stop.signal, late.signal]), cancel }
   }
-  let page = async (
-    asked: string,
-    after: string,
-    tag?: string,
-  ): Promise<Extract<Read, { ok: true }>> => {
-    let params = new URLSearchParams({
-      limit: String(PAGE),
-      query: `${asked} .order=entity.eid${after ? ` .after=${after}` : ''}`,
-    })
+  let page: Page = async (params, tag) => {
     let { signal, cancel } = opts.timeout
       ? deadline(opts.timeout)
       : { signal: stop.signal, cancel: () => {} }
@@ -156,26 +256,12 @@ export let poll = (
       cancel()
     }
   }
-  // The whole answer and the tag its first page was read at, or nothing when
-  // nothing moved since the tag held.
-  let all = async () => {
-    let rows: Bundle[] = [], after = '', tag: string | undefined
-    for (;;) {
-      let got = await page(query, after, after ? undefined : held)
-      if (got.unchanged) return
-      tag ??= got.tag
-      let some = got.value as Bundle[]
-      rows.push(...some)
-      if (some.length < PAGE) return { rows, tag }
-      after = some.at(-1)!.entity.eid
-    }
-  }
   let pass = async () => {
     try {
-      let read = await all()
-      if (read) {
-        value = read.rows
-        held = read.tag
+      let fresh = await since(page, query, held)
+      if (fresh) {
+        value = renewed(value, fresh)
+        held = fresh.tag
       }
       ready = true
     } catch (error) {
@@ -226,17 +312,6 @@ export let poll = (
       }
       return bundles
     },
-    // A page's worth of ids at a time keeps each request's address short,
-    // and its answer to one page.
-    get: async (eids) => {
-      let rows: Bundle[] = []
-      for (let at = 0; at < eids.length; at += PAGE) {
-        let some = eids.slice(at, at + PAGE).join(',')
-        rows.push(
-          ...(await page(`.bug .entity.eid=${some}`, '')).value as Bundle[],
-        )
-      }
-      return rows
-    },
+    get: (eids) => among(page, '.bug', eids),
   }
 }

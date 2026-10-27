@@ -111,7 +111,7 @@ export let service = async (
       stop,
     )
   let outward = health('delivery'), inward = health('standing')
-  // The tag of the remote standing the last whole reconciliation applied.
+  // The tag of the remote standing the last reconciliation applied in full.
   let seen: { tag?: string } = {}
 
   let run = async (

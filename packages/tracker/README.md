@@ -297,6 +297,13 @@ occurrences and counters. Remote-only bugs are not imported, and newer local
 evidence is not closed by an older remote snapshot. A guarded patch leaves a
 group changed concurrently for the next pass.
 
+Both the standing pass and the poll below read what moved, not every bug
+(`./poll`'s `since`): each sends the tag of what it last read, a Worker where
+nothing moved answers 304, and one where something did names the bugs that moved
+(workers/tracker's `GET /bugs?since=`), which are read again by id. A first
+read, and one whose tag the Worker no longer knows what moved since, read every
+bug.
+
 The heal service opens the platform `./poll` watch on the open bugs in its work
 host, and reads a closed bug by id with the watch's `get`, a page of ids to a
 request, while work on the box is still open about it. Its signed reads and

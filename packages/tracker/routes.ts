@@ -59,8 +59,8 @@ export let read = async (
     }
     if (value) params.set(key, value)
   }
-  if (path == 'bugs' && query.has('query')) {
-    params.set('query', query.get('query')!)
+  for (let key of path == 'bugs' ? ['query', 'since'] : []) {
+    if (query.has(key)) params.set(key, query.get(key)!)
   }
   try {
     let response = await upstream(

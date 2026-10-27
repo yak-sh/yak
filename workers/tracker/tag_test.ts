@@ -23,9 +23,9 @@ let bug = '00000000-0000-4000-8000-0000000000b1'
 await g.graph.apply([{ entity: { eid: bug }, bug: { fault: 'one' } }], {
   trusted: true,
 })
-let read = async (tag?: string, from = g) => {
+let read = async (tag?: string, from = g, since = '') => {
   let r = await door(from, platform, secret)(
-    new Request('https://tracker.test/bugs?query=.bug', {
+    new Request(`https://tracker.test/bugs?query=.bug${since}`, {
       headers: {
         authorization: `Bearer ${auth}`,
         ...tag ? { 'if-none-match': tag } : {},
@@ -66,6 +66,30 @@ await door(g, platform, secret)(
 )
 let moved = await read(first.tag)
 let woke = await read(moved.tag, instance())
+// A reader holding an older tag asks what moved since it: the archived bug,
+// and the bug an occurrence was grouped into, never the pool's bookkeeping
+// or a trace.
+let since = (tag: string, from = g) =>
+  read(tag, from, `&since=${encodeURIComponent(tag)}`)
+let archived = await since(first.tag)
+await g.graph.apply([{
+  entity: { eid: '00000000-0000-4000-8000-0000000000c1' },
+  error: { bug, at: '2026-10-27T12:00:00Z', message: 'again' },
+}], { trusted: true })
+let grouped = await since(moved.tag, instance())
+let both = await since(first.tag)
+let other = await since('"elsewhen.1"')
+
+test('a reader holding an older tag is told which bugs moved since', () => {
+  equal(JSON.parse(archived.body), { moved: [bug] })
+  equal(archived.tag, moved.tag)
+  equal(JSON.parse(grouped.body), { moved: [bug] })
+  equal(JSON.parse(both.body), { moved: [bug] })
+})
+
+test('a tag of another era is answered with no moves, to be read whole', () => {
+  equal(JSON.parse(other.body), { moved: null })
+})
 
 test('a reader holding the current tag is answered 304 with no body', () => {
   equal(first.status, 200)
