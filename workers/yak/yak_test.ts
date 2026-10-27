@@ -543,9 +543,13 @@ test('an app says who may read it and who may write it', async () => {
     assertEquals(seen.headers.get('cache-control'), 'public, no-cache')
     await seen.body?.cancel()
 
-    let shut = await k.at(`${club70}.yaks.app`, '/diary/api/query?.doc')
-    assertEquals(shut.status, 401)
-    assertEquals((await shut.json()).error.code, 'not_a_reader')
+    // Every door that reads the app is shut to a stranger, its store's name
+    // and size and its connections' sentinels as much as its rows.
+    for (let door of ['query?.doc', 'graph', 'env', 'fetch?url=https://a.b']) {
+      let shut = await k.at(`${club70}.yaks.app`, `/diary/api/${door}`)
+      assertEquals(shut.status, 401, door)
+      assertEquals((await shut.json()).error.code, 'not_a_reader', door)
+    }
     // A page loads the words its store speaks, the byline the store stamps as
     // much as its own, and asks them as the store does; a stranger is told
     // none of them.

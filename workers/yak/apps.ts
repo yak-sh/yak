@@ -1918,6 +1918,7 @@ let api = async (
     )
   }
   if (path == '/graph') {
+    if (!mayRead) return refused('not_a_reader')
     let r = await store.consume(
       '/graph',
       (res) => res.json() as Promise<Record<string, unknown>>,

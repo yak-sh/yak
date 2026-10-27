@@ -70,7 +70,7 @@
 //                             space's own and ahead of every app
 //     /<app>                  302 to /<app>/, or to / when <app> is the front
 //                             page, whose address is the bare hostname
-//     /<app>/api/graph        the store's identity, plus who is asking
+//     /<app>/api/graph        the store's identity and who is asking, to a reader
 //     /<app>/api/query        the filter grammar over the app's store
 //     /<app>/api/vocab.json   every word the app's store speaks, as documents
 //     /<app>/api/apply        a batch into the app's store (a writer)

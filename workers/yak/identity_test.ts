@@ -352,13 +352,13 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
     await res.body?.cancel()
   }
   let identity = async (host: string, cookie: string) => {
-    let res = await k.at(host, '/notes/api/graph', { headers: { cookie } })
+    let res = await k.at(host, '/notes/api/me', { headers: { cookie } })
     let who = await res.json()
     return [who.person, who.role]
   }
   equal(await identity(host, cookie), [person, 'owner'])
   equal(await identity(`${slug}.yaks.app`, cookie), [person, 'owner'])
-  let outside = await k.at(`${other}.yaks.app`, '/notes/api/graph', {
+  let outside = await k.at(`${other}.yaks.app`, '/notes/api/me', {
     headers: { cookie },
   })
   equal((await outside.json()).person, null)

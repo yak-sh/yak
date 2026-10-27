@@ -30,7 +30,7 @@
 import { used, USES } from '@yaks/connections'
 import { type Caller, Capped, forward, type Host, Refused } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
-import { callsOut } from '@yaks/member'
+import { callsOut, mode, reads } from '@yaks/member'
 import { sentinels } from '@yaks/secrets'
 import { ctxOf } from './connections.ts'
 import type { Env } from './env.ts'
@@ -146,9 +146,12 @@ let OURS =
 // `./api/env`: the sentinel for each connected connection the app uses, by the
 // name its code reads it by, where this visitor may call out through it: a
 // shared one as its link allows, and their own where the app asks each person.
-// A direct link's key is for a worker's code and never a page's.
-export let envDoor: Answer = async ({ env, path, app, who }) => {
+// A direct link's key is for a worker's code and never a page's. Both doors
+// are the app's to those who may read it, as its store doors are: a private
+// app's link opened to anyone is open to anyone it lets in.
+export let envDoor: Answer = async ({ env, path, app, who, refuse }) => {
   if (path != '/env') return null
+  if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
   let out: Record<string, string> = {}
   for (let r of await used(ctxOf(env), app.eid, who.person)) {
     let u = (r.link[USES] ?? {}) as Comp
@@ -162,8 +165,11 @@ export let envDoor: Answer = async ({ env, path, app, who }) => {
 
 // `./api/fetch?url=…`: the page's call, sent on to that address as it was
 // made, minus what it says about us.
-export let fetchDoor: Answer = async ({ env, req, path, app, who, json }) => {
+export let fetchDoor: Answer = async (
+  { env, req, path, app, who, json, refuse },
+) => {
   if (path != '/fetch') return null
+  if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
   let to = new URL(req.url).searchParams.get('url') ?? ''
   if (!URL.canParse(to)) {
     return json(400, 'bad_url', 'url= is the whole address to call')
