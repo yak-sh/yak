@@ -105,7 +105,7 @@ import {
   when,
 } from './ast.ts'
 import { inline, render } from './render.ts'
-import { type Arm, ARMS, arms, cut } from './compound.ts'
+import { type Arm, ARMS, arms, cut, unionAllWithin } from './compound.ts'
 import { alternatives } from './alternatives.ts'
 import {
   type Dialect,
@@ -1193,16 +1193,21 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
 //
 // A union of every reference column in a wide vocabulary is a compound SELECT
 // with more terms than workerd allows (./compound.ts), so the columns are
-// grouped by table and cut into unions of {@link ARMS} terms — and the groups
-// are combined with OR, because or has no such limit and each `in` starts its
-// own compound SELECT. A vocabulary with no reference properties has no
-// backlinks to find.
+// grouped by table and cut into unions of {@link ARMS} terms, and the groups
+// nest in a union all of their own, no compound wider than ARMS. A vocabulary
+// with no reference properties has no backlinks to find.
 let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
   if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
-  return inRefs(ctx, refGroups(ctx.v), r.value)
+  let held = referrers(ctx, r.value)
+  return held
+    ? cond({
+      sql: `${ctx.d.ownerKey('entity')} in (${held.sql})`,
+      params: held.params,
+    })
+    : FALSE
 }
 
 // A vocabulary's reference properties by table, cut to what one compound
@@ -1215,37 +1220,49 @@ let refGroups = (v: Vocab): Arm[][] => {
   return held
 }
 
-// The rows from which some reference property among `groups` points at
-// `value`: one `in` per group of terms, each term a table's reference columns
-// combined with OR. No reference properties select nothing.
-let inRefs = (ctx: Ctx, groups: Arm[][], value: string): Cond => {
-  if (!groups[0].length) return FALSE
-  // Bind the target once, not once per reference column:
-  // a wide vocabulary must still fit the runtime's 100-parameter limit. Each
-  // term joins the target and compares its columns to the joined id, which
-  // still seeks each column's index. A scalar subquery per column would look
-  // the target up, through its visibility scope, once per column.
+/** How many references to an entity make a backlink page walk the newest
+ * entities rather than seek each referrer (`lower`). About where the two cost
+ * the same on the box: 10,000 seeks, or the 138,000 entities a walk passes to
+ * find a page of 200 so spread among 6.9 million. */
+let MANY = 10_000
+
+// The owners of the rows whose reference properties point at `value`, as one
+// selection of ids, or none where the vocabulary has no reference property:
+// each term a table's reference columns combined with OR. An owner may come
+// more than once, by two of its properties: `in` asks only whether it is
+// there, so the terms are a union all, and none is sorted to drop a repeat.
+//
+// Bind the target once, not once per reference column: a wide vocabulary must
+// still fit the runtime's 100-parameter limit. Each term joins the target and
+// compares its columns to the joined id, which still seeks each column's
+// index. A scalar subquery per column would look the target up, through its
+// visibility scope, once per column.
+//
+// A row is read as joined to an owner the spine admits (the dialect's
+// `joined`), with no scope of its own unless its component has one: the owner
+// it names is tested against the selection's spine, which already says what
+// is visible. Scoping each row as well read every referrer's visibility three
+// times over, 30 s for a model with 557,859 referrers (T-132056).
+let referrers = (ctx: Ctx, value: string): Frag | undefined => {
+  let groups = refGroups(ctx.v)
+  if (!groups[0].length) return
   let name = '__refs_target'
   while (ctx.v.comp(name)) name += '_'
   let target = `with "${name}" as (select id from ${
     source(ctx, 'entity')
   } where eid = ?)`
-  let sub = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)} from "${name}" join ${ctx.d.table(c)} on ` +
+  let term = ([c, props]: Arm) =>
+    `select ${ctx.d.ownerKey(c)} from "${name}" join ${
+      ctx.d.joined?.(c) ?? ctx.d.table(c)
+    } on ` +
     props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
-  let alias = '__refs_entity'
-  let where = render(or(...groups.map((group) =>
-    cond({
-      sql: `"${alias}".id in (${group.map(sub).join(' union ')})`,
-      params: [],
+  let list = render(unionAllWithin(groups.map((group, i) =>
+    select({
+      cols: [star()],
+      from: from(raw(group.map(term).join(' union all ')), `__refs${i}`),
     })
-  ))).sql
-  return cond({
-    sql: `${ctx.d.ownerKey('entity')} in (${target} select "${alias}".id from ${
-      source(ctx, 'entity')
-    } "${alias}" where ${where})`,
-    params: [value],
-  })
+  )))
+  return { sql: `${target} ${list.sql}`, params: [value, ...list.params] }
 }
 
 let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
@@ -3514,6 +3531,103 @@ let lower = (
       where: cond({ sql: `${owner} in (${page.sql})`, params: page.params }),
       order: ordered,
     }))
+  }
+  // A backlink page need not read every referrer. Its window is the newest
+  // first, the order the number's index (or the spine's own key) already
+  // keeps, so for an entity with many referrers it walks that index from the
+  // newest and keeps what the referrers hold, stopping at a full page. For one
+  // with few it seeks each and sorts them, as any filter does: the walk over
+  // so few would pass every entity the store holds (2 s on the box's 6.9
+  // million), and the seek over many reads the number of every one of them (a
+  // model's 557,859, 30 s). The statement reads up to `MANY` of the referrers
+  // to choose, and runs one road; the other's limit is 0, which stops it
+  // before its first row. The list is read where it is used, not kept: kept,
+  // it was written whole and then read whole again into the lookup.
+  let [backlink, ...beside] = filters.filter((c) =>
+    !(c.kind == 'pred' && c.op == '?')
+  )
+  let target = !beside.length && backlink?.kind == 'refs' && backlink.op == '='
+    ? backlink.value
+    : ''
+  let held = target && limit && limit.n > 0 && Number.isSafeInteger(limit.n) &&
+      !order && !after && !fields && !unordered && !physical &&
+      !ctx.spine && !ctx.eids && !ctx.correlated && !reads.length &&
+      !claims(ctx, 'refs') && (ctx.d.scoped || ctx.d.spine == '"entity"')
+    ? referrers(ctx, target)
+    : undefined
+  if (limit && held) {
+    let list = fresh(ctx, [held.sql], '__backlinks_')
+    let many = raw(
+      `exists (select 1 from "${list}" limit 1 offset ${MANY})`,
+    )
+    let listed = (walk: boolean) =>
+      cond({
+        sql: `${walk ? '+' : ''}${owner} in (select * from "${list}")`,
+        params: [],
+      })
+    // The walk reads the store's own entity rows where a scoped spine lets
+    // it (`admitted`), and asks the spine's relation to admit only the
+    // referrers it finds. Walked through the spine, each entity's visibility
+    // was tested before the list was: 3.4 s for a walk that takes 0.7 this
+    // way. `+` keeps the list from driving the walk instead.
+    let admits = source(ctx, 'entity')
+    let walked = ctx.d.spine == `${admits} as "entity"`
+      ? ctx.d.admitted
+      : undefined
+    let walk = rel(walked ?? ctx.d.spine, {
+      cols: [owner + ' as "id"'],
+      joins: [],
+      where: and(
+        listed(true),
+        walked
+          ? exists(select({
+            cols: [val(1)],
+            from: raw(`${admits} as "__admitted"`),
+            where: eq(raw('"__admitted"."id"'), raw(owner)),
+          }))
+          : cond(ctx.d.live()),
+      ),
+      order: ordered,
+    })
+    let seek = rel(ctx.d.spine, {
+      cols: [owner + ' as "id"'],
+      joins: [],
+      where: and(listed(false), cond(ctx.d.live())),
+      order: ordered,
+    })
+    let road = (s: Select, on: boolean): Select => {
+      let ran = render({
+        ...s,
+        limit: {
+          t: 'case',
+          arms: [[many, val(on ? limit.n : 0)]],
+          else: val(on ? 0 : limit.n),
+        },
+      })
+      return select({
+        cols: [raw('"id"')],
+        from: raw(`(${ran.sql})`, ran.params),
+      })
+    }
+    let page = render({
+      t: 'compound',
+      op: 'union all',
+      parts: [road(walk, true), road(seek, false)],
+    })
+    return finished({
+      ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
+      with: [{
+        name: list,
+        q: raw(held.sql, held.params),
+        materialized: false,
+      }],
+      from: raw(`(${page.sql}) as "__backlink_page"`, page.params),
+      joins: [{
+        how: 'cross',
+        src: raw(ctx.d.spine, [], 'entity'),
+        on: raw(`"__backlink_page"."id" = ${owner}`),
+      }],
+    })
   }
   // A numbered component page need not sort that component's whole history.
   // Try a bounded prefix in the exact requested order. Only when it holds a

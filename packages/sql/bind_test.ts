@@ -459,8 +459,8 @@ test('the membership statement excludes graves and answers one eid', () => {
 test('.refs= groups its arms and cuts them to what a compound may carry', () => {
   // A vocabulary wider than one compound SELECT may carry: seven tables bear a
   // reference column and one of them bears two, where workerd would refuse the
-  // sixth term (./compound.ts). Every group is its own `in`, so no compound
-  // here carries more than ARMS.
+  // sixth term (./compound.ts). Every group is a compound of its own, nested in
+  // one more, so no compound here carries more than ARMS.
   let wide = loadVocab({
     $defs: {
       entity: {
@@ -497,12 +497,24 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
     ),
     sql,
   )
-  // Two groups of at most four arms, and nothing else in the statement unions.
-  let compounds = sql.split('"__refs_entity".id in (').slice(1)
-    .map((piece) => piece.split(/\bunion\b/i).length)
-  assertEquals(compounds, [4, 3])
-  for (let terms of compounds) assert(terms <= ARMS, `${terms} terms: ${sql}`)
+  // Seven arms, in compounds of at most four terms.
+  assertEquals(sql.match(/ join "(n\d|pair)"/g)?.length, 7)
+  for (let terms of compounds(sql)) {
+    assert(terms <= ARMS, `${terms} terms: ${sql}`)
+  }
 })
+
+// How many terms each compound SELECT in `sql` carries: the unions at one
+// depth of parentheses, plus one.
+let compounds = (sql: string): number[] => {
+  let depth = [0], out: number[] = []
+  for (let token of sql.match(/\(|\)|\bunion\b/gi) ?? []) {
+    if (token == '(') depth.push(0)
+    else if (token == ')') out.push(depth.pop()! + 1)
+    else depth[depth.length - 1]++
+  }
+  return [...out, depth[0] + 1].filter((n) => n > 1)
+}
 
 test('.refs= over a vocabulary that references nothing selects nothing', () => {
   let none = loadVocab({

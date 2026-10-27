@@ -799,6 +799,10 @@ correlated EXISTS or count subqueries, which preserve one outer row per entity.
 `.refs=<eid>` finds backlinks across reference properties, grouping columns by
 table and cutting compound selects to fit the engine limit. Each backlink
 predicate binds its target once, regardless of the number of reference columns.
+A window of backlinks in the default order (`.refs=<eid>&.limit=200`) costs
+about its page: when the entity has more than 10,000 references the statement
+walks the newest entities in order and keeps the referrers among them, and
+otherwise it looks up each referrer and sorts them.
 [Walks](../query/README.md#walks-and-qualifiers) compile reference chains to a
 recursive common table expression. The exported `walk` accepts a one-step query
 projecting `from` and `to` integer ids; edge packages supply their own step.
