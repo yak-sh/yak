@@ -6,6 +6,7 @@ import {
   type DurableStorage,
   type Hibernation,
   moved,
+  profile,
   replaced,
   reserved,
   type Sockets,
@@ -117,7 +118,23 @@ export class Tracker {
   // One driver over this instance's storage: making one runs its pragma, so
   // a boot or a trace admission made three or four for nothing.
   #driver?: Driver
-  #sql = () => this.#driver ??= driver(this.ctx.storage)
+  // What each entry point's SQL reads and writes, said in the Worker's logs
+  // at once on waking and at most once a minute after (@yaks/durable-object
+  // `profile`), so a row bill reads as the work that ran it.
+  #rows = profile((summary) =>
+    console.log(
+      'tracker rows',
+      JSON.stringify({ scope: this.scope, ...summary }),
+    )
+  )
+  #run = async <T>(kind: string, work: () => Promise<T>): Promise<T> => {
+    try {
+      return await this.#rows.run(kind, work)
+    } finally {
+      this.#rows.flush()
+    }
+  }
+  #sql = () => this.#driver ??= driver(this.ctx.storage, this.#rows.observe)
   #traceMeta = () => meta(this.#sql())
   constructor(
     public ctx: State,
@@ -174,7 +191,7 @@ export class Tracker {
     let saved = storage(this.ctx.storage, vocab, {
       ...options,
       schemaReady: () => true,
-    })
+    }, this.#rows.observe)
     if (!marked) {
       this.ctx.storage.transactionSync(() => {
         saved.install()
@@ -193,7 +210,7 @@ export class Tracker {
       ? storage(this.ctx.storage, vocab, {
         ...options,
         schemaReady: () => printed(sql, PRINT),
-      })
+      }, this.#rows.observe)
       : this.#traceStorage()
     if (install) {
       // Until the release before prints can no longer run, its stamp decides
@@ -252,7 +269,9 @@ export class Tracker {
       await this.ctx.storage.setAlarm(this.now() + 1000)
     } catch { /* next queue delivery retries */ }
   }
-  ingest = async (rows: Bundle[]): Promise<void> => {
+  ingest = (rows: Bundle[]): Promise<void> =>
+    this.#run('ingest', () => this.#ingest(rows))
+  #ingest = async (rows: Bundle[]): Promise<void> => {
     if (rows.some((row) => row.trace || row.span)) {
       throw Error('trace intake requires platform admission')
     }
@@ -381,7 +400,12 @@ export class Tracker {
     this.#traceTail = ran.then(() => {}, () => {})
     return ran
   }
-  fetch = async (request: Request): Promise<Response> => {
+  fetch = (request: Request): Promise<Response> =>
+    this.#run(
+      `${request.method} ${new URL(request.url).pathname}`,
+      () => this.#fetch(request),
+    )
+  #fetch = async (request: Request): Promise<Response> => {
     try {
       let access = await authorize(
         request,
@@ -450,7 +474,8 @@ export class Tracker {
     this.rpc(ticket, '/deployed', { app, version })
   unseen = (ticket: string, app: string) =>
     this.rpc(ticket, `/unseen?app=${encodeURIComponent(app)}`)
-  monitor = async () => {
+  monitor = () => this.#run('monitor', this.#monitor)
+  #monitor = async () => {
     try {
       let tracker = await this.boot()
       await monitor(
@@ -465,7 +490,8 @@ export class Tracker {
       await this.recover(error, 'Tracker.monitor')
     }
   }
-  alarm = async () => {
+  alarm = () => this.#run('alarm', this.#alarm)
+  #alarm = async () => {
     try {
       let tracker = await this.boot()
       await this.live?.wake()
@@ -485,7 +511,9 @@ export class Tracker {
     let alarm = await this.ctx.storage.getAlarm()
     if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
   }
-  webSocketMessage = async (ws: Wire, data: string | ArrayBuffer) => {
+  webSocketMessage = (ws: Wire, data: string | ArrayBuffer) =>
+    this.#run('socket', () => this.#message(ws, data))
+  #message = async (ws: Wire, data: string | ArrayBuffer) => {
     try {
       await this.boot()
       let frame = JSON.parse(
