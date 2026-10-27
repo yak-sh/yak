@@ -65,6 +65,19 @@ test('a pass reads the columns only of tables that stood declared otherwise', ()
   assertEquals(columns(db, 'made'), ['id', 'at'])
 })
 
+test('a reader asks no table about its columns where the file declares it as the vocabulary does', () => {
+  let db = fresh(), asked: unknown[] = []
+  let query = db.query.bind(db)
+  db.query = (s) => {
+    if (s.t == 'pragma' && ['entity', 'note'].includes(String(s.arg))) {
+      asked.push(s.arg)
+    }
+    return query(s)
+  }
+  assertEquals(lacking(db, vocab, {}, true), { derived: {}, absent: [] })
+  assertEquals(asked, [])
+})
+
 test('an unfinished pass leaves its print for the next opener, and so does forget', () => {
   let db = fresh()
   let print = printOf('store', [])

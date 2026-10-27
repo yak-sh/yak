@@ -28,7 +28,7 @@ import { installed, meta, PRINTED, printed } from './meta.ts'
 import { unit } from './unit.ts'
 import { build } from './owe.ts'
 import { plan } from './plan.ts'
-import { declares, standing } from './ddl.ts'
+import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
@@ -154,10 +154,14 @@ export let lacking = (
   if (!physical && mark == plan(vocab, derived, !!driver.file).print) {
     return { derived: {}, absent: [] }
   }
-  let was = standing(driver, vocab)
+  // Only a table declared otherwise than the vocabulary does can lack a
+  // column, so only those are asked about, two statements each, rather than
+  // every table on every open.
+  let kept = exact(driver, vocab)
+  let was = behind(driver, vocab, kept)
   let held = tables(vocab)
   return {
-    absent: held.filter((comp) => !(comp in was)),
+    absent: held.filter((comp) => !kept.has(comp) && !(comp in was)),
     derived: Object.fromEntries(
       held.filter((comp) => comp in was).flatMap((comp) => {
         let has = new Set(was[comp].cols.map((r) => String(r.name)))

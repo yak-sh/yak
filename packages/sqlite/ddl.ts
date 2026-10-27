@@ -476,15 +476,27 @@ let declared = (vocab: Vocab) => {
   return held
 }
 
-let behind = (driver: Driver, vocab: Vocab): Standing => {
+/** The tables the file declares exactly as the vocabulary does. Adding or
+ * dropping a column rewrites the declaration SQLite keeps, so each of these
+ * has every column and constraint, and nothing need ask it about them. */
+export let exact = (driver: Driver, vocab: Vocab): Set<string> => {
   let fresh = declared(vocab)
-  let exact = new Set(
+  return new Set(
     objects(driver, { type: 'table' }).filter((t) =>
       declaration(String(t.sql)) == fresh.get(String(t.name))
     ).map((t) => String(t.name)),
   )
+}
+
+/** The {@link Standing} of each table that stood other than as the vocabulary
+ * declares it: what fitting, or a reader, must ask the file about. */
+export let behind = (
+  driver: Driver,
+  vocab: Vocab,
+  kept = exact(driver, vocab),
+): Standing => {
   let pick = fitting(vocab)
-  return stood(driver, (name) => pick(name) && !exact.has(name))
+  return stood(driver, (name) => pick(name) && !kept.has(name))
 }
 
 // The component tables that stood.
