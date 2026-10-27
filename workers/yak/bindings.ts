@@ -8,7 +8,7 @@ import { KERNEL, meta } from './meta.ts'
 import { type Bound, type Config, requests } from './wrangler_app.ts'
 import { NAMESPACE, namespace } from './dispatch.ts'
 import { refuse } from './tool.ts'
-import { accountUrl } from './workers_api.ts'
+import { accountUrl, resent } from './workers_api.ts'
 
 export type Binding = Bound & { eid: string; app: string }
 type Request = ReturnType<typeof requests>[number]
@@ -72,7 +72,7 @@ let api = async (
   if (!env.CF_WORKERS_TOKEN) {
     throw new Error(`CF_WORKERS_TOKEN is missing; token scopes: ${SCOPES}`)
   }
-  let r = await fetch(
+  let r = await resent(
     accountUrl(env, paths[type] + path),
     {
       method,

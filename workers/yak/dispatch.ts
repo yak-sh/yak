@@ -55,7 +55,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
 import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
-import { accountUrl } from './workers_api.ts'
+import { accountUrl, resent } from './workers_api.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
@@ -804,7 +804,7 @@ export let answered = async (r: Response) => {
 }
 
 export let sent = (env: Env, path: string, init: RequestInit) =>
-  fetch(api(env, path), {
+  resent(api(env, path), {
     ...init,
     headers: {
       authorization: `Bearer ${env.CF_WORKERS_TOKEN}`,

@@ -5,7 +5,10 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { shim, WRAP, wrapping } from './dispatch.ts'
 import { DAILY, forward, parts, rewrapped, ROW } from './rewrap.ts'
+import { resends } from './workers_api.ts'
 import type { Env } from './env.ts'
+
+resends.wait = () => Promise.resolve()
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
 let AT = '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps/scripts'
@@ -35,11 +38,13 @@ export * from "./src/app.js"
 export default { fetch: (req, env, ctx) => app.fetch(req, env, ctx) }
 `
 
-// A script whose modules are null is one the content door refuses.
+// A script whose modules are null is one the content door fails each time;
+// one with `failing` fails that many reads first.
 type Script = {
   modules: Record<string, Uint8Array> | null
   tags: string[] | null
   content?: Response
+  failing?: number
 }
 
 // The account API over `scripts`, recording every write it is sent.
@@ -67,10 +72,13 @@ let account = async (
       return ok({})
     }
     if (door == 'content') {
-      if (!script.modules) {
-        return Response.json({ success: false, errors: [{ message: 'no' }] }, {
-          status: 500,
-        })
+      if (!script.modules || script.failing && script.failing--) {
+        return Response.json({
+          success: false,
+          errors: [{
+            message: 'Internal authentication error: internal server error',
+          }],
+        }, { status: 500 })
       }
       if (script.content) return script.content
       let boundary = 'b0undary'
@@ -211,6 +219,18 @@ test('one script failing leaves the others rewrapped', async () => {
   }
   let { out } = await account(scripts, () => rewrapped(env))
   assertEquals(out, { rewrapped: 1, failed: 1, left: 0 })
+})
+
+test('Cloudflare failing a read on its own side is asked again', async () => {
+  let scripts: Record<string, Script> = {
+    jeff_recipes: {
+      modules: { '__yak_entry.js': ENC.encode(OLD) },
+      tags: null,
+      failing: 2,
+    },
+  }
+  let { out } = await account(scripts, () => rewrapped(env))
+  assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
 })
 
 test('a pass takes at most so many, and says how many are left', async () => {
