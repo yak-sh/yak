@@ -19,8 +19,9 @@
 // line appended (a call, the result answering it, a stop, a checkpoint) or by
 // the lines it found: the next reading asks only those and the lines appended
 // since, each by name. A lookup on a transcript whose newest lines were
-// deleted, which may append at those seqs again, reads it whole. A mark set on
-// an older line (`provisional` on an ask) is read each time.
+// deleted, which may append at those seqs again, or that more lines landed on
+// than a lookup asks for by name, reads it whole. A mark set on an older line
+// (`provisional` on an ask) is read each time.
 //
 // A fork reads through its segments (./window.ts): the parent up to the
 // anchor, then its own. A transcript with no checkpoint and no window is its
@@ -48,6 +49,9 @@ import { type Segment, transcriptSegments, within } from './window.ts'
 const SENDING = 'sending'
 const PROGRESS = 'tool_progress'
 const FIRST = 64
+// The most lines appended since a lookup that it asks for by name; past them
+// (an import, a run another process wrote) it reads the transcript whole.
+const SINCE = 256
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -187,10 +191,12 @@ let pages = (r: Read) => {
   }
 }
 
-// A segment's lines from `seq` up, newest first, or its newest line alone:
-// their identities, read once a reading.
+// A segment's lines from `seq` up, newest first, as many as SINCE lines
+// appended after it, or its newest line alone: their identities, read once a
+// reading.
 let tail = (r: Read, s: Segment, seq?: number): Promise<Line[]> => {
-  let q = within(s) + (seq == null ? '&.limit=1' : `&.entry.seq>=${seq}`)
+  let q = within(s) +
+    (seq == null ? '&.limit=1' : `&.entry.seq>=${seq}&.limit=${SINCE + 1}`)
   let held = r.lines.get(q)
   if (held) return held
   let read =

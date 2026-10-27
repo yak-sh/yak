@@ -63,15 +63,18 @@ await s.tx((tx) =>
   ])
 )
 
-// A step's reads, status and turn, after the step before it appended its
-// ask, its call and the call's result.
+// A step's reads, status and turn, and the VM steps they took.
+let read = async (session: string) => {
+  let before = steps()
+  let status = await currentStatus(g, session)
+  await reach(g, session, { turn: true })
+  return { status, steps: steps() - before }
+}
+
+// A step's reads after the step before it appended its ask, its call and the
+// call's result; and the first reading, which nothing was remembered for.
 let step = async (session: string) => {
-  let read = async () => {
-    let status = await currentStatus(g, session)
-    await reach(g, session, { turn: true })
-    return status
-  }
-  await read()
+  let whole = (await read(session)).steps
   let [last] = await g.rows(
     `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
@@ -93,16 +96,32 @@ let step = async (session: string) => {
     result: { call: `${session}.call` },
     content: { body: 'ok' },
   }])
-  let before = steps()
-  let status = await read()
-  return { status, steps: steps() - before }
+  return { ...await read(session), whole }
 }
 let short = await step('short'), long = await step('long')
+
+// A transcript a step read, that 2,000 lines then landed on at once (an
+// import, a run another process wrote), read again.
+let landed = async () => {
+  let all = lines('landed', 2000)
+  await s.tx((tx) => tx.patch(all.slice(0, 61)))
+  await read('landed')
+  await s.tx((tx) => tx.patch(all.slice(61)))
+  return (await read('landed')).steps
+}
+let bulk = await landed()
 
 test('a step on a long transcript reads what one on a short transcript does', () => {
   ok(short.status == 'pending' && long.status == 'pending')
   ok(
     long.steps < short.steps * 1.5,
     `${long.steps} steps on 2,000 lines, ${short.steps} on 60`,
+  )
+})
+
+test('a reading after thousands of lines landed costs what reading them all does', () => {
+  ok(
+    bulk < long.whole * 1.25,
+    `${bulk} steps after 2,000 lines landed, ${long.whole} reading 2,000 whole`,
   )
 })
