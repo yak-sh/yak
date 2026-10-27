@@ -402,8 +402,12 @@
   }
 
   /* The reading column, and the two slots beside it. The column says how
-     WIDE, never how far apart: what fills it — .Home, .Prose, .Guide — owns
-     its own rhythm, and says so by re-pointing --rhythm.
+     WIDE, never how far apart: what fills it — .Home, .Pricing, .Guide — owns
+     its own rhythm, and says so by re-pointing --rhythm. A page that names
+     none keeps the default, so a page of two sections (the gallery and its
+     invitation under it) never draws one against the other. The gap is the
+     Page's, not its content's: .Prose on a Page is spaced by the rhythm,
+     which overrides the gap it would keep elsewhere.
 
      Three columns are always here and the outer two are nothing wide, so a
      page that names no slot is the single column it has always been. A page
@@ -477,7 +481,6 @@
       grid-column: body;
       grid-row: 1;
       padding-inline-start: 0;
-      margin-block-end: var(--gap);
     }
 
     .Page_Body {
@@ -511,7 +514,6 @@
     .Page_Side {
       order: 3;
       padding-inline-end: 0;
-      margin-block-start: var(--wide-gap);
     }
   }
 
