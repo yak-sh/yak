@@ -411,16 +411,18 @@ export let answer = async (
   return await page(d, dir, r, env)
 }
 
-// The directory's own parts: a search bar, and rows of what each uses, each
-// figure under the word for it; one column on a phone.
+// The directory's own parts: a search bar, and one card of rows with
+// hairlines between them, as the style guide draws .Rows, each saying what it
+// uses, each figure under the word for it; one column on a phone.
 let css = `
 .Directory_Bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; margin: 0 0 1.5rem }
 .Directory_Find { display: flex; gap: .5rem; flex: 1 1 20rem; max-width: 30rem; margin: 0 }
 .Directory_Find .Field { flex: 1 }
 .Directory_Bar > a { font-size: .9rem }
-.Directory { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none }
-.Directory_Row { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); align-items: center; gap: .5rem 1.5rem; padding: .85rem 1.1rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--paper) }
-.Directory_Row:hover { border-color: var(--accent) }
+.Directory { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--edge); border-radius: .75rem; background: var(--paper); overflow: hidden }
+.Directory_Row { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); align-items: center; gap: .5rem 1.5rem; padding: .85rem 1.25rem; border-top: 1px solid var(--line) }
+.Directory_Row:first-child { border-top: 0 }
+.Directory_Row:hover { background: color-mix(in srgb, var(--ground), var(--paper) 55%) }
 .Directory_Who { display: grid; gap: .1rem; min-width: 0 }
 .Directory_Who .Apps_Tags { margin: .25rem 0 0; padding: 0 }
 .Directory_Open { color: var(--ink); text-decoration: none; overflow-wrap: anywhere }

@@ -407,15 +407,17 @@ export let dropped = (at: {
     }
 ${
       at.files?.length
-        ? `<section class="Card"><h2>${at.files.length} ${
-          at.files.length == 1 ? 'file' : 'files'
-        }</h2>
+        ? `<section class="Card">${
+          heading(
+            `${at.files.length} ${at.files.length == 1 ? 'file' : 'files'}`,
+          )
+        }
 <ol class="Files">${at.files.map((f) => `<li>${esc(f)}</li>`).join('')}</ol>
 </section>`
         : ''
     }
-<div class="Card"><h2>${at.slug ? 'Update app files' : 'Try again'}</h2>
-<p class="Note">${
+<section class="Card">${heading(at.slug ? 'Update app files' : 'Try again')}
+<p class="Card_Sub">${
       at.slug
         ? `Drop another zip — or one index.html — and ${
           esc(at.slug)
@@ -423,7 +425,7 @@ ${
         : 'A .zip of the files, or a single index.html.'
     }</p>
 ${dropZone(at.slug)}
-</div>
+</section>
 <p><a class="Away" href="${
       url(env, managePath('apps', at.space))
     }">Back to your apps</a></p>
@@ -1426,9 +1428,11 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
     : at.person
     ? home(env)
     : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>
-<div class="Card"><h2>What is yaks.app?</h2><p>Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><a href="${
+<section class="Card">${
+      heading('What is yaks.app?')
+    }<p class="Card_Sub">Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><p><a href="${
       url(env, '/')
-    }">Make one of your own</a></div>`
+    }">Make one of your own</a></p></section>`
   return shell(
     env,
     esc(at.title || at.space),
@@ -1475,7 +1479,7 @@ export let provisioning = (
       : `${esc(host)} is being connected to yaks.app. This is usually a ` +
         'matter of minutes, not hours.',
     503,
-    `<section class="Card"><h2>${esc(host)}</h2><pre>${
+    `<section class="Card">${heading(esc(host))}<pre>${
       esc(said)
     }</pre></section>${home(env)}`,
     { 'retry-after': '30' },
@@ -1640,9 +1644,13 @@ export let askDelete = (at: {
     at.status ?? 200,
     `${
       at.lines.length
-        ? `<section class="Card"><h2>${
-          at.forever ? 'What goes, for good' : 'What stops until you restore it'
-        }</h2>
+        ? `<section class="Card">${
+          heading(
+            at.forever
+              ? 'What goes, for good'
+              : 'What stops until you restore it',
+          )
+        }
 <ol>${at.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>
 </section>`
         : ''
@@ -1653,8 +1661,12 @@ ${
         : `<form method="post" action="/space/${esc(at.slug)}/delete">
 ${held('t', at.token)}
 ${
-          at.token ? '' : `<p>Type <b>${esc(at.slug)}</b> to confirm.</p>
-<input class="Field" name="confirm" autocomplete="off" spellcheck="false" autofocus aria-label="The name of the space">`
+          at.token
+            ? ''
+            : `<label class="Form_Label" for="confirm">Type <b>${
+              esc(at.slug)
+            }</b> to confirm</label>
+<input class="Field" id="confirm" name="confirm" autocomplete="off" spellcheck="false" autofocus>`
         }
 <button class="Button" type="submit">${
           at.forever
@@ -2194,7 +2206,7 @@ ${
         i ? '' : ' checked'
       }>
 <label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
-<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
+<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2 class="Card_Title">${a.title}</h2>
 ${a.intro ? `<p>${a.intro}</p>` : ''}
 ${
         a.paths

@@ -319,6 +319,6 @@ test('a card offers installation separately from opening the app', () => {
   assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
   assertStringIncludes(
     html,
-    '<button class="Button" type="submit">Get your own copy</button>',
+    '<button class="Button" type="submit">Get a copy</button>',
   )
 })

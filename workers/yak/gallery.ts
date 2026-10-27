@@ -301,26 +301,25 @@ export let pictures = async (env: Env, all: Shown[]) =>
 
 // ---- the page ----------------------------------------------------------
 
-// Trying the app and installing a copy are separate actions.
+// Trying the app and installing a copy are separate actions: its head is its
+// name, linked to the app, and the copy it offers; its picture opens the app
+// too; and its address sits outside every link, so it can be selected.
 export let card = (a: Shown) =>
-  `<li class="Make_Card">
-<a class="Make_Link" href="${esc(a.at)}">
-${
+  `<li class="Card Make_Card">
+<header class="Card_Head"><h3 class="Card_Title"><a href="${esc(a.at)}">${
+    esc(a.title)
+  } <span aria-hidden="true">↗</span></a></h3><form class="Card_Actions" method="post" action="/install?name=${
+    encodeURIComponent(a.name)
+  }"><button class="Button" type="submit">Get a copy</button></form></header>
+<a class="Make_Shot" href="${esc(a.at)}" tabindex="-1" aria-hidden="true">${
     a.shot
-      ? `<img class="Make_Shot" src="${
+      ? `<img src="${
         esc(a.shot)
       }" alt="" loading="lazy" width="1200" height="630">`
-      : `<img class="Make_Shot Make_Shot-none" src="/connector-512.png" alt="" loading="lazy" width="512" height="512">`
-  }
-<span class="Make_Name">${esc(a.title)} <span aria-hidden="true">↗</span></span>
-${a.about ? `<span class="Note Note-small">${esc(a.about)}</span>` : ''}
-<span class="Note Note-small">${esc(a.at.replace('https://', ''))}</span>
-</a>
-<form class="Make_Line" method="post" action="/install?name=${
-    encodeURIComponent(a.name)
-  }">
-<button class="Button" type="submit">Get your own copy</button>
-</form>
+      : `<img class="Make_Shot-none" src="/connector-512.png" alt="" loading="lazy" width="512" height="512">`
+  }</a>
+${a.about ? `<p class="Card_Sub">${esc(a.about)}</p>` : ''}
+<p class="Note Note-small">${esc(a.at.replace('https://', ''))}</p>
 </li>`
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an

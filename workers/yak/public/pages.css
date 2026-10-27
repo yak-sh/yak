@@ -507,10 +507,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  /* How to get a key, as its integration's markdown says it. */
-  .More_Body > .Markdown > :last-child {
-    margin-bottom: 0;
-  }
   .Desk_Skip {
     position: absolute;
     top: -5rem;

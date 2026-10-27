@@ -698,75 +698,34 @@
     gap: var(--gap);
   }
 
-  .Make_Link {
-    display: grid;
-    gap: var(--half-gap);
-    height: 100%;
-    padding: 1.25rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--paper);
-    text-decoration: none;
-  }
-
-  .Make_Link:hover {
-    border-color: var(--accent);
-  }
-
-  .Make_Link:hover .Make_Name {
-    text-decoration: underline;
-  }
-
-  .Make_Name {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--gap);
-    font-weight: 800;
-  }
-
-  /* A gallery entry (gallery.ts): the card is the app's own link, and the line
-     under it is the one to copy, so it sits OUTSIDE the anchor — a link
-     swallows the selection. */
-  .Make_Card {
-    display: grid;
-    gap: var(--half-gap);
-  }
-
-  /* The app's own share card where it has one, and the platform tile where it
-     does not. A picture from somebody else's app is any shape it likes, so the
-     box is what fixes the row: cropped to fill, never stretched. */
+  /* A gallery entry (gallery.ts) is a card: its head the app's name and the
+     copy it offers, then its picture. The app's own share card where it has
+     one, and the platform tile where it does not; a picture from somebody
+     else's app is any shape it likes, so the box is what fixes the row:
+     cropped to fill, never stretched. */
   .Make_Shot {
-    width: 100%;
-    height: auto;
+    display: block;
     aspect-ratio: 1200 / 630;
-    align-self: start;
-    object-fit: cover;
+    overflow: hidden;
     border-radius: calc(var(--radius) / 2);
     background: var(--ground);
   }
 
-  .Make_Shot-none {
+  .Make_Shot img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .Make_Shot .Make_Shot-none {
     object-fit: contain;
     padding: 1rem;
   }
 
-  .Make_Line {
-    margin: 0;
-  }
-
-  .Make_Line summary {
-    color: var(--meadow);
-    cursor: pointer;
-  }
-
-  .Make_Line .Said {
-    user-select: all;
-    overflow-wrap: anywhere;
-  }
-
-  /* The integration directory (integrations.ts): a card a service, saying
-     what it is, where its key goes and how to start, its button at the foot
-     so a row of cards lines them up. */
+  /* The integration directory (integrations.ts): a card a service, its head
+     the service and the way to add it, then what it is, where its key goes
+     and how to get one. */
   .Services {
     display: grid;
     gap: 1.25rem;
@@ -785,44 +744,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  .Service {
-    display: flex;
-    flex-direction: column;
-    gap: var(--half-gap);
-    margin: 0;
-  }
-
-  .Service_Head {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .Service_Head h2,
-  .Service_Tagline,
-  .Service_How {
-    margin: 0;
-  }
-
-  .Service_Logo {
-    flex: none;
-    width: 32px;
-    height: 32px;
-  }
-
-  .Service_How summary {
-    color: var(--meadow);
-    cursor: pointer;
-  }
-
-  .Service_How .Markdown > :last-child {
-    margin-bottom: 0;
-  }
-
-  .Service_Add {
-    margin: auto 0 0;
   }
 
   .Yours {
@@ -894,14 +815,11 @@
      not of the Card component: what is emphasised on this page is this
      page's business. */
   .Plan {
-    display: grid;
-    gap: 0.75rem;
-    border: 1px solid var(--plan-line, transparent);
     text-align: left;
   }
 
   .Plan-plus {
-    --plan-line: var(--accent);
+    border-color: var(--accent);
   }
 
   .Plan_Price {

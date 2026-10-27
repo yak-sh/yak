@@ -451,7 +451,10 @@
     gap: .875rem;
     margin-top: .75rem;
   }
-  .More_Body > * {
+  /* Markdown someone wrote (theirs.ts), such as how to get a key, ends
+     where the body does. */
+  .More_Body > *,
+  .More_Body > .Markdown > :last-child {
     margin: 0;
   }
 

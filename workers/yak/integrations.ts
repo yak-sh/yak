@@ -50,35 +50,37 @@ let site = (i: Listed) =>
 // Its mark, as an image of its own SVG and never as markup.
 let logo = (i: Listed) =>
   i.logo
-    ? `<img class="Service_Logo" src="data:image/svg+xml,${
+    ? `<img class="Card_Mark" src="data:image/svg+xml,${
       esc(encodeURIComponent(i.logo))
-    }" alt="" width="32" height="32">`
+    }" alt="" width="24" height="24">`
     : ''
 
-// One service: what it is, where its key goes, how to start.
+// One service, as a card: its head the service and the way to add it, then
+// what it is, where its key goes, and how to get one.
 let card = async (i: Listed, env: Host) => {
   let title = i.title || i.name
   let how = await drawn(i.instructions)
   let hosts = i.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
   let where = site(i)
-  return `<li class="Card Service" id="${esc(encodeURIComponent(i.name))}">
-<header class="Service_Head">${logo(i)}<h2>${esc(title)}</h2></header>
-${i.tagline ? `<p class="Service_Tagline">${esc(i.tagline)}</p>` : ''}
+  return `<li class="Card" id="${esc(encodeURIComponent(i.name))}">
+<header class="Card_Head">${logo(i)}<h2 class="Card_Title">${
+    esc(title)
+  }</h2><div class="Card_Actions"><a class="Button" href="${
+    esc(addAt(env, i.name))
+  }">Add to a space</a></div></header>
+${i.tagline ? `<p class="Card_Sub">${esc(i.tagline)}</p>` : ''}
 <p class="Note Note-small">${where}${where && hosts ? ' · ' : ''}${
     hosts ? `Its key is only ever sent to ${hosts}.` : ''
   }</p>
 ${
     keyed(i)
       ? how
-        ? `<details class="Service_How"><summary>How to get the key</summary>${how}</details>`
+        ? `<details class="More"><summary>How to get the key</summary><div class="More_Body">${how}</div></details>`
         : '<p class="Note Note-small">Connected with a key you paste.</p>'
       : `<p class="Note Note-small">Connected by signing in to ${
         esc(title)
       }: there is no key to copy.</p>`
   }
-<p class="Service_Add"><a class="Button" href="${
-    esc(addAt(env, i.name))
-  }">Add to a space</a></p>
 </li>`
 }
 

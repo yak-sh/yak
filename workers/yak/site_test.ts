@@ -384,7 +384,7 @@ test('the integration directory is a page of this site, saying what each service
     let text of [
       `<title>${INTEGRATIONS.title}</title>`,
       `<link rel="canonical" href="${url}">`,
-      '<h2>ESV API</h2>',
+      '<h2 class="Card_Title">ESV API</h2>',
       'Its key is only ever sent to <code>api.esv.org</code>.',
       '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
       'href="https://yaks.app/manage/connections?add=ESV">Add to a space',

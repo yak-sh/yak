@@ -35,31 +35,28 @@ let page = (
 </head><body>
 ${top}
 <main class="Page">
-<section class="Card">
 <h1 class="Title">${esc(title)}</h1>
-${why ? `<p role="alert">${esc(why)}</p>` : ''}
+${why ? `<p class="Say Say-no" role="alert">${esc(why)}</p>` : ''}
 ${
       name
-        ? `<p class="Note">Your copy has its own data. You can make it your own.</p>
-<form method="post" action="${esc(at(name))}">
+        ? `<form class="Card" method="post" action="${esc(at(name))}">
+<header class="Card_Head"><h2 class="Card_Title">Get your own copy</h2></header>
+<p class="Card_Sub">Your copy has its own data. You can make it your own.</p>
 ${
           spaces.length
-            ? `<p><label>Install in
-<select class="Field" name="space" required>${
+            ? `<div class="Form_Field"><label class="Form_Label" for="install-space">Install in</label><div class="Form_Line"><select class="Field" id="install-space" name="space" required>${
               spaces.map((s) =>
                 `<option value="${esc(s.slug)}"${
                   s.slug == selected ? ' selected' : ''
                 }>${esc(s.title)} (${esc(s.slug)})</option>`
               ).join('')
-            }</select></label></p>`
-            : ''
+            }</select><button class="Button" type="submit">Install app</button></div></div>`
+            : '<div class="Form_Actions"><button class="Button" type="submit">Install app</button></div>'
         }
-<p><button class="Button" type="submit">Install app</button></p>
 </form>`
         : ''
     }
 <p><a href="/gallery">Back to the gallery</a></p>
-</section>
 </main>
 ${foot}
 </body></html>`,
