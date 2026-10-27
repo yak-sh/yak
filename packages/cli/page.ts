@@ -16,7 +16,7 @@
  * @module
  */
 
-import { fault } from '@yaks/api'
+import { fault } from '@yaks/api/refuse'
 import { released } from './release.ts'
 
 /** A body a page loads. */

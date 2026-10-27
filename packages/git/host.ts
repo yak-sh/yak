@@ -12,7 +12,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { and, distinct, eq, fields, list, present } from '@yaks/query'
-import { refEid } from './refs.ts'
+import { refEid } from './comp.ts'
 import { localFilesystem } from './placement.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
 

@@ -2,13 +2,13 @@
 import {
   begin,
   connect,
-  CONNECTION,
   credential,
   type Ctx,
   need,
   pick,
   refresh,
 } from './connections.ts'
+import { CONNECTION } from './identity.ts'
 import type { Eid, Graph } from '@yaks/graph'
 import type { Vault } from '@yaks/secrets'
 import type { Attempt } from '@yaks/oauth'

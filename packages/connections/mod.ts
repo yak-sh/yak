@@ -61,7 +61,8 @@ export {
   set,
   told,
 } from './integrations.ts'
-export { INTEGRATION, integrationEid } from './identity.ts'
+export { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
+export { through } from './graph.ts'
 export {
   clientOf,
   type Registered,
@@ -77,7 +78,6 @@ export {
   bindingOf,
   carry,
   connect,
-  CONNECTION,
   credential,
   type Ctx,
   disconnect,
@@ -91,9 +91,7 @@ export {
   resolve,
   type Resolved,
   type Status,
-  through,
   used,
-  USES,
   using,
 } from './connections.ts'
 

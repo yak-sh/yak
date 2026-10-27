@@ -74,11 +74,10 @@ import {
   set,
   told,
 } from './integrations.ts'
-import { INTEGRATION, integrationEid } from './identity.ts'
+import { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
+import { through } from './graph.ts'
 import { clientOf } from './clients.ts'
 
-export let CONNECTION = 'connection'
-export let USES = 'uses'
 let SECRET = 'secret'
 let EDGE = 'edge'
 
@@ -451,35 +450,6 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
     `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}${ALL}`,
   )
   return [...owned, ...links, ...await through(read, owned)]
-}
-
-/** The integrations the connections among `bundles` go through, as the graph
- * holds them, but for any `bundles` already carry: what a person and their
- * agent read beside a connection, how to get its key among it. A `uses` link
- * whose connection is not among them is read to find which. */
-export let through = async (
-  read: Read,
-  bundles: Bundle[],
-): Promise<Bundle[]> => {
-  let names = new Set<string>()
-  let ask: Eid[] = []
-  for (let b of bundles) {
-    let c = comp(b, CONNECTION)
-    if (typeof c.integration == 'string') names.add(c.integration)
-    else if (b[USES]) ask.push(far(b, 'from'))
-  }
-  if (ask.length) {
-    for (let b of await read(`.entity.eid=${any(ask)}&.${CONNECTION}`)) {
-      names.add(String(comp(b, CONNECTION).integration))
-    }
-  }
-  let have = new Set(
-    bundles.filter((b) => b[INTEGRATION]).map((b) => b.entity.eid),
-  )
-  let wanted = [...names].map(integrationEid).filter((e) => !have.has(e))
-  return wanted.length
-    ? await read(`.entity.eid=${any(wanted)}&.${INTEGRATION}`)
-    : []
 }
 
 /** Every connected connection an app calls out through for a person, or for

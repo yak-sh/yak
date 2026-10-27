@@ -21,7 +21,7 @@ import {
   repositoryEid,
   worktreeEid,
 } from './host.ts'
-import { refEid } from './refs.ts'
+import { refEid } from './comp.ts'
 
 /** Resolve the stable filesystem, never a convenience directory. */
 export let filesystem = async (

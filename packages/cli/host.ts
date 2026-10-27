@@ -88,7 +88,7 @@ import {
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
-import { faults } from '@yaks/api'
+import { faults } from '@yaks/api/refuse'
 import {
   artifactsAt,
   type Backend,

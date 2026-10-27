@@ -121,6 +121,7 @@ because they span transactions; unkeyed requests keep their ordinary behavior.
 | `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `@yaks/api/refuse` | `json`, `refusal`, `refuse`, `fault`, `faults`, `Refusal`, `Unauthorized`                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Query answers
 
@@ -637,8 +638,12 @@ message, a subscription refresh, a streamed import's failed line, and a server
 failure `refuse` answers. Under `served`, that last one is reported with its
 request instead, once.
 
+These are also `@yaks/api/refuse`, which loads none of the server: a process
+that serves nothing, such as a `yak` command, installs its reporter with
+`faults` from there.
+
 ```ts
-import { faults, json, refusal, refuse, Unauthorized } from '@yaks/api'
+import { faults, json, refusal, refuse, Unauthorized } from '@yaks/api/refuse'
 import { Misfit } from '@yaks/graph/errors'
 import { equal } from '@yaks/testing'
 

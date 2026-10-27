@@ -23,23 +23,12 @@
 
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
 import { treeOf, type Who } from './commit.ts'
-import { BLOB, REF } from './comp.ts'
+import { BLOB, REF, refEid } from './comp.ts'
 import { MAIN } from './http.ts'
 import { type Base, index, names, type Writes } from './index.ts'
 import type { Oids } from './oid.ts'
 import type { Files } from './tree.ts'
-
-/**
- * The entity id of a ref, derived from the string `ref|<app>|<name>`.
- *
- * Derived rather than freshly generated, so writing where a branch points is
- * idempotent from anywhere: the hook that saw the release and the sweep that
- * missed it update the same row.
- */
-export let refEid = (app: Eid, name: string): Eid =>
-  derivedEid(`${REF}|${app}|${name}`)
 
 // Reads a reference property in either of the two forms a store returns: the
 // bare eid that a read inside a transaction gives, and the `{eid, name}`

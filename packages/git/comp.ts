@@ -55,6 +55,8 @@
 // name in the query grammar must be letters (@yaks/query `SEG`): a component
 // nobody can name in a query is a component nobody can read back.
 
+import type { Eid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
@@ -78,6 +80,16 @@ export let COMPAT = 'compat'
 
 /** The component recording where one branch of one repository points. */
 export let REF = 'ref'
+
+/**
+ * The entity id of a ref, derived from the string `ref|<app>|<name>`.
+ *
+ * Derived rather than freshly generated, so writing where a branch points is
+ * idempotent from anywhere: the hook that saw the release and the sweep that
+ * missed it update the same row.
+ */
+export let refEid = (app: Eid, name: string): Eid =>
+  derivedEid(`${REF}|${app}|${name}`)
 
 // The citation components are named in ./cites.ts, beside the code that reads
 // them: `file` as a component and `FILE` as a tree entry's mode (./tree.ts)
