@@ -284,8 +284,12 @@
     font-size: .8rem;
     font-weight: 700;
   }
+  /* One column as wide as the list's own, so a long name is cut short with
+     an ellipsis rather than widening the row past its column and over the
+     next one; the count beside it keeps its whole width and one line. */
   .Stats_List {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: .4rem;
     margin: 0;
     padding: 0;
@@ -303,7 +307,9 @@
     white-space: nowrap;
   }
   .Stats_List b {
+    flex: none;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   @media (max-width: 600px) {
     .Stats_Tops {

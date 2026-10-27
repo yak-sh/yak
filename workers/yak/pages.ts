@@ -560,7 +560,9 @@ let column = (head: string, rows: { name: string; views: number }[]) =>
     ? `<div class="Stats_Column"><h3>${head}</h3>
 <ul class="Stats_List">${
       rows.map((r) =>
-        `<li><span>${esc(r.name)}</span><b>${count(r.views)}</b></li>`
+        `<li><span title="${esc(r.name)}">${esc(r.name)}</span><b>${
+          count(r.views)
+        }</b></li>`
       ).join('')
     }</ul></div>`
     : ''
