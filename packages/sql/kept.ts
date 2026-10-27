@@ -132,6 +132,18 @@ let choosing = (
     return answer
   })
 
+// Where each value first stands in a list, found once rather than searched
+// for each value: a call can name thousands of ids.
+let places = new WeakMap<readonly unknown[], Map<unknown, number>>()
+let firsts = (xs: readonly unknown[]): Map<unknown, number> => {
+  let found = places.get(xs)
+  if (found) return found
+  found = new Map()
+  for (let [k, x] of xs.entries()) if (!found.has(x)) found.set(x, k)
+  places.set(xs, found)
+  return found
+}
+
 let alike = (a?: readonly number[], b?: readonly number[]) =>
   a === b || !!a && !!b && a.length == b.length && a.every((x, i) => x === b[i])
 
@@ -319,7 +331,7 @@ let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
       id.includes('-'),
       refs[k] === undefined ? 0 : refs[k] === null ? 1 : 2,
     ]),
-    roots?.map((r) => roots!.indexOf(r)) ?? null,
+    roots?.map((r) => firsts(roots!).get(r)) ?? null,
     spelled,
     o.storageOrder ?? null,
     o.unordered ?? null,
@@ -387,13 +399,13 @@ let slot = (
   }
   let input = (i: number) => (v: unknown): Bind | undefined => {
     let { call } = probes[i]
-    let k = call.operands.indexOf(v as string)
+    let k = firsts(call.operands).get(v) ?? -1
     if (k >= 0 && typeof v == 'string') return (c) => c.operands[k]
-    k = typeof v == 'number' ? call.operands.indexOf(String(v)) : -1
+    k = typeof v == 'number' ? firsts(call.operands).get(String(v)) ?? -1 : -1
     if (k >= 0) return (c) => Number(c.operands[k])
-    k = call.roots.indexOf(v as string)
+    k = firsts(call.roots).get(v) ?? -1
     if (k >= 0 && typeof v == 'string') return (c) => c.roots[k]
-    k = call.refs.indexOf(v as number)
+    k = firsts(call.refs).get(v) ?? -1
     if (k >= 0 && typeof v == 'number') return (c) => c.refs[k] ?? null
   }
   let reads = (v: Param, i: number): string | undefined => {
@@ -445,7 +457,7 @@ let proven = (
     let asked: Asked[] = [], touched = { any: false }
     let operands = call.operands.map((id, k) => stand(id, family, k))
     let roots = call.roots.map((r) =>
-      stand('-', family, call.roots.indexOf(r) + call.operands.length)
+      stand('-', family, firsts(call.roots).get(r)! + call.operands.length)
     )
     let refs = call.refs.map((r, k) =>
       r === undefined || r === null ? r : marker(family, k)
@@ -460,7 +472,11 @@ let proven = (
     let out = within(touched, () =>
       render(
         prepared(
-          renamed(ast, vocab, (id) => operands[asking.operands.indexOf(id)]),
+          renamed(
+            ast,
+            vocab,
+            (id) => operands[firsts(asking.operands).get(id)!],
+          ),
           vocab,
           { ...opts, now, eids: opts.eids && roots, references },
           undefined,

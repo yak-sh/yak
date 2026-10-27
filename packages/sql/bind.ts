@@ -253,6 +253,11 @@ type Ctx = {
   row?: boolean
   exactIds?: boolean
   eids?: BindOpts['eids']
+  /** the identity test `eids` puts in the statement's WHERE, which a
+   * statement they drive leaves out (`holding`): beside them and an ORDER
+   * BY, it cost SQLite the square of their number
+   * (../sqlite/candidates_cost_test.ts) */
+  rooted?: Pred
   references?: BindOpts['references']
   visibility?: BindOpts['visibility']
   archetypes?: ArchetypeSet
@@ -1797,7 +1802,7 @@ let owners = (
   ctx: Ctx,
   clauses: Clause[],
 ): (Identity & { clause?: Pred }) | undefined => {
-  if (ctx.eids) return { eids: [...ctx.eids], nums: [] }
+  if (ctx.eids) return { eids: [...ctx.eids], nums: [], clause: ctx.rooted }
   if (ctx.spine || claims(ctx, 'pred')) return
   for (let c of flattened(clauses)) {
     if (
@@ -3362,19 +3367,18 @@ let lower = (
     ctx.present = presence(ctx, filters)
   }
   ctx.paged = seeksPage(ctx, cs)
+  ctx.rooted = ctx.eids && {
+    kind: 'pred',
+    path: ['entity', 'eid'],
+    op: '=',
+    value: {
+      kind: 'list',
+      items: ctx.eids.map((raw) => ({ kind: 'scalar', raw })),
+    },
+  }
   let where = and(
     ...conjuncts(ctx, filters),
-    ...ctx.eids
-      ? [clause({ ...ctx, exactIds: true }, {
-        kind: 'pred',
-        path: ['entity', 'eid'],
-        op: '=',
-        value: {
-          kind: 'list',
-          items: ctx.eids.map((raw) => ({ kind: 'scalar', raw })),
-        },
-      })]
-      : [],
+    ...ctx.rooted ? [clause({ ...ctx, exactIds: true }, ctx.rooted)] : [],
     cond(ctx.d.live()),
   )
   // Callers that read columns beside the filter ask for their joins here. A
