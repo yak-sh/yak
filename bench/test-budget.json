@@ -4035,7 +4035,7 @@
       "upload sends only migrations after the dispatch script tag": 2.7
     },
     "workers/yak/dispatch_test.ts": {
-      "a command failure is captured once across worker and caller": 10.3,
+      "a command failure is captured once across worker and caller, naming its command": 10.3,
       "a command worker failure calls its reporter once": 1.7,
       "a vpc_services name is a door to the kernel as the app, never a binding": 12,
       "a wasm module goes up as a module part of its own type": 1.1,

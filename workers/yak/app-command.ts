@@ -144,9 +144,10 @@ export let commandReply = async (
 }
 
 /** A hosted command's dispatch boundary, preserving the recorded invocation
- * beside its scoped caller. */
+ * beside its scoped caller. A break of the app's worker is the app's, filed
+ * once here whoever ran the command: a page, a connector or a schedule. */
 export let commandAt = async (
-  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
+  env: Env,
   space: Space,
   app: App,
   who: Who,
@@ -154,14 +155,18 @@ export let commandAt = async (
   tool: ToolDef,
   args: Record<string, unknown>,
   door: Acts,
-  execution: NonNullable<Parameters<typeof commandWorker>[6]> = {},
+  execution: { call?: string; at?: string; source?: string } = {},
 ): Promise<{ text: string; value: Record<string, unknown> }> => {
   let at = `${space.slug}/${app.slug}`
   return await commandReply(at, who, name, tool, args, {
     ...door,
     worker: async (path, args) =>
       workerReply(
-        await commandWorker(env, space, app, who, path, args, execution),
+        await commandWorker(env, space, app, who, path, args, {
+          ...execution,
+          report: (req, error) =>
+            workerBreak(env, space, app, req, error, name),
+        }),
         name,
         at,
       ),
@@ -185,7 +190,5 @@ export let commandIn = async (
       `no command ${name} in ${space.slug}/${app.slug}`,
     )
   }
-  return commandAt(env, space, app, who, name, tool, args, door, {
-    report: (req, error) => workerBreak(env, space, app, req, error),
-  })
+  return commandAt(env, space, app, who, name, tool, args, door)
 }

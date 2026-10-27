@@ -198,6 +198,8 @@ export let noted = async (
   broke: {
     request: string
     requestId?: string
+    // The app command whose run broke, when one did.
+    command?: string
     version?: number | null
     message: string
     stack?: string
@@ -231,6 +233,7 @@ export let noted = async (
       app: at.app.slug,
       request: broke.request,
       request_id: broke.requestId,
+      ...broke.command ? { command: broke.command } : {},
       ...account ? { account } : {},
       ...viewer ? { user_id: viewer } : {},
     }

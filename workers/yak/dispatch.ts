@@ -414,19 +414,22 @@ export let nowhere = (e: unknown) => missing(e) || unreachable(e)
 // One break of the app's own making, where its agent reads it — the app's
 // store, its serving version, and the members told. Both ways the app's code
 // can fall over come through here, because they are one event: a worker that
-// answers 500 and a worker that throws are the same app not working.
+// answers 500 and a worker that throws are the same app not working. A break
+// in a command's run names the command.
 export let workerBreak = async (
   env: Env,
   space: Space,
   app: App,
   req: Request,
   error: Error,
+  command?: string,
 ) => {
   if (refused(error) || refusal(error.message)) return
   let request = `worker ${req.method} ${new URL(req.url).pathname}`
   let version = app.version
   await noted({
     request,
+    command,
     version,
     message: error.message,
     stack: error.stack ?? '',
@@ -444,6 +447,7 @@ export let workerBreak = async (
         request: `file ${request}`,
         space: space.slug,
         app: app.slug,
+        command,
       })
     )
 }

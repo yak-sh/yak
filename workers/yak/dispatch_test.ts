@@ -43,6 +43,7 @@ import {
   workerBreak,
 } from './dispatch.ts'
 import { CallError } from '@yaks/tools/errors'
+import { commandAt } from './app-command.ts'
 import { caught, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { nobody, type Who } from './session.ts'
@@ -310,15 +311,18 @@ test('a command worker failure calls its reporter once', async () => {
   ])
 })
 
-test('a command failure is captured once across worker and caller', () =>
+test('a command failure is captured once across worker and caller, naming its command', () =>
   tracked(async (seen) => {
     let env = envOf(mirror(503).get)
     wrote = []
     let failure: unknown
+    let tool = { description: 'inspect', input: {}, worker: '/inspect' }
+    let door = {
+      apply: () => Promise.resolve({ entities: [], aliases: {} }),
+      query: () => Promise.resolve([]),
+    }
     try {
-      await commandWorker(env, space, app, who, '/inspect', {}, {
-        report: (req, error) => workerBreak(env, space, app, req, error),
-      })
+      await commandAt(env, space, app, who, 'inspect', tool, {}, door)
     } catch (e) {
       failure = e
       caught(e, { request: 'outer command reporter' })
@@ -334,6 +338,7 @@ test('a command failure is captured once across worker and caller', () =>
       app: app.slug,
       request: 'worker POST /recipes/inspect',
       request_id: undefined,
+      command: 'inspect',
       account: 'person',
     })
     assertEquals(wrote[0].during, {

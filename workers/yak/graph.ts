@@ -2714,7 +2714,7 @@ export class Store {
                   }
                   let answered = held
                     ? await commandAt(
-                      this.#bind,
+                      this.#bind as Env,
                       held.space,
                       held.app,
                       caller,
