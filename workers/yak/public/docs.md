@@ -48,6 +48,23 @@ the eid creates one. Who may read and write is the app's `access`: `public`,
 Deeper: <https://yaks.app/docs/store.md> — every function of the client, the
 HTTP endpoints underneath, and who may read and write.
 
+## A page that loads at once
+
+A page waits on the network in rounds, and a read that waits for another's
+answer is a round more. So a page subscribes to what it draws, every kind in one
+line, and asks `me()` at the same moment rather than first:
+
+    subscribe('(.recipe|.chore)&?doc', draw)   // its first rows over HTTP
+    let who = await me()                       // beside them, not ahead
+
+That loads in one round. `subscribe(...).ready` is the first rows, for a page
+that must have them before it goes on, so it never queries a line and then
+subscribes to it too.
+
+Deeper: <https://yaks.app/docs/speed.md> — why that is one round, how to see a
+slow page's rounds and the `Server-Timing` on every answer, and what else slows
+a page: chains of module imports, pictures, and work done on every change.
+
 ## Files
 
 `app_deploy` releases the app's draft. Open pages get a `yak-release` event with

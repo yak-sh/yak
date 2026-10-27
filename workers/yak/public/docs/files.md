@@ -691,13 +691,6 @@ picture's space held open — the entire page.
       let say = (words) => document.getElementById('say').textContent = words
       // smaller() is the downscale from the section above.
 
-      // Only offer the input to someone this app accepts a write from.
-      let who = await me()
-      if (!who.writes) {
-        pick.remove()
-        say(who.signIn ? 'Sign in to add a photo.' : 'Look only.')
-      }
-
       let add = async (file) => {
         try {
           say(`sending ${file.name}…`)
@@ -719,29 +712,37 @@ picture's space held open — the entire page.
         pick.value = ''
       })
 
-      // Each picture's size, by the eid the rows already hold.
-      let size = new Map((await query('.image'))
-        .map((i) => [i.entity.eid, i.image]))
-
-      // And the wall, redrawn on every change — including one made on
-      // their phone while this page is open.
-      subscribe('.photo', (photos) => {
-        wall.replaceChildren(...photos.map((p) => {
+      // The wall and each picture's size, in one line, redrawn on every
+      // change — including one made on their phone while this page is open.
+      subscribe('.photo|.image', (rows) => {
+        let size = new Map(rows.filter((r) => r.image)
+          .map((r) => [r.entity.eid, r.image]))
+        wall.replaceChildren(...rows.filter((r) => r.photo).map((p) => {
           let img = document.createElement('img')
           img.src = `./api/blob/${p.photo.blob}`
           img.alt = p.photo.caption || ''
+          img.loading = 'lazy'
           let box = size.get(p.photo.blob)
           if (box) { img.width = box.w; img.height = box.h }
           return img
         }))
       })
+
+      // Only offer the input to someone this app accepts a write from, asked
+      // beside the wall rather than ahead of it.
+      let who = await me()
+      if (!who.writes) {
+        pick.remove()
+        say(who.signIn ? 'Sign in to add a photo.' : 'Look only.')
+      }
     </script>
 
 The line worth keeping is the check before the write: two visitors sending the
 identical picture are one blob and one `attachment` row for free, but a `photo`
 row of your own is a separate row, and two of them are two pictures on the wall.
-On a wall left open for hours, read `.image` inside the subscription, so a photo
-added later gets its box too.
+The wall and the sizes are one subscription, so the page loads in one round and
+a photo added later arrives with its box
+([a page that loads at once](./speed.md)).
 
 ## Publishing a file to anyone
 

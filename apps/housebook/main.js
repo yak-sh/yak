@@ -349,13 +349,11 @@ let start = async () => {
   // The house's records are asked for while me() says who is looking, so the
   // first rows and the answer arrive together; a visitor who may not read has
   // the subscription ended unheard.
-  let filled
-  let first = new Promise((resolve) => filled = resolve)
-  stop.push(subscribe(everything, (rows) => {
+  let live = subscribe(everything, (rows) => {
     data = byKind(rows)
-    filled()
     if (content) draw()
-  }))
+  })
+  stop.push(live)
   who = await me()
   if (!who.reads) {
     stop.forEach((fn) => fn())
@@ -370,7 +368,7 @@ let start = async () => {
     return
   }
   desk = drafts({ by: who.person, report: fail })
-  await first
+  await live.ready
   edit = editor({
     dialog: document.getElementById('editor'),
     desk,

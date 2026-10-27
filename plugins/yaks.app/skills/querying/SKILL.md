@@ -52,9 +52,12 @@ property, an operator, a value:
 
     GET ./api/query?.recipe.minutes<=30&?doc
 
-Every predicate must hold — `&` is an intersection, never an "or". (Any-of lives
-inside one predicate, below.) A predicate ends where the next `&` begins:
-`.recipe&.doc` is two filters, where `.recipe.doc` would be one path.
+Every predicate joined by `&` must hold. `|` is "or", and joins looser than `&`,
+so parentheses group: `(.recipe|.chore)&?doc` is recipes and chores, each with
+its doc, which is how a page asks for every kind it draws in one request
+(<https://yaks.app/docs/speed.md>). Any-of on one property lives inside its
+predicate, below. A predicate ends where the next `&` begins: `.recipe&.doc` is
+two filters, where `.recipe.doc` would be one path.
 
 A property is always written with its component: `.recipe.serves`, `.doc.title`.
 A name by itself is a component, so `.serves` asks for entities wearing a

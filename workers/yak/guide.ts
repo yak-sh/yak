@@ -136,14 +136,22 @@ Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
 The page gets it in one line, from the app's own address:
 
-  import { apply, query, search, subscribe } from './api/client.js'
+  import { apply, me, query, search, subscribe } from './api/client.js'
 
+  subscribe('.doc', draw)             // what the page draws, and again
+                                       // whenever it changes, on any device
+  let who = await me()                 // who is looking, asked beside it
   await apply({ entity: { eid: '$r' },
                 doc: { title: 'Lemon cake', body: '3 lemons...' } })
   let all = await query('.doc')       // everything, oldest first
   let some = await search('lemon')     // full-text search, ranked
-  subscribe('.doc', draw)             // and again whenever it changes,
-                                       // including on their other device
+
+A page loads in one round when every read it starts with goes out at once:
+subscribe to what it draws, every kind in one line ('(.recipe|.chore)&?doc'),
+rather than querying it and then subscribing to it too, and never await me()
+ahead of a read that does not need it. subscribe(...).ready is the first rows,
+for a page that must have them before it goes on. Call guide with page speed
+for why, for how to see a slow page's rounds, and for what else slows one.
 
 A browser write is saved only when apply answers with its accepted receipt.
 The client durably keeps intent before sending and automatically retries with
@@ -440,6 +448,7 @@ let page = (slug: string): Page => {
 export let PAGES: Page[] = [
   'store',
   'querying',
+  'speed',
   'components',
   'storage',
   'games',

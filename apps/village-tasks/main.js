@@ -1,12 +1,11 @@
 // The village task page reads its own rows and Vale's villager and hero rows
 // through the two documented page stores. A completion is about the hero Vale
 // selected in this tab; the page does not own or copy Vale's game state.
+// The platform serves the client beside the page (deno.json maps it to the
+// repo's copy for the type check). A static import, so the browser fetches it
+// beside state.js rather than after it.
+import { apply, me, query, store, subscribe } from './api/client.js'
 import { completed, completionEid } from './state.js'
-
-// The platform serves this module beside the page; it is absent from the repo.
-let { apply, me, query, store, subscribe } = await import(
-  new URL('./api/client.js', import.meta.url).href
-)
 
 let vale = store('/vale/api/')
 let list = document.querySelector('.Tasks')
@@ -93,31 +92,37 @@ list.addEventListener('click', (e) => {
 })
 
 let start = async () => {
-  let [who, rows, villagers] = await Promise.all([
+  // Everything the page draws is asked for at once, so it loads in one round:
+  // the hero's completions are a subscription whose first rows the page waits
+  // for, rather than a query and then the same line again.
+  let drawn = false
+  let live = player &&
+    subscribe(`.village_done.player=${player}`, (rows) => {
+      done = completed(rows, player)
+      if (drawn) draw()
+    })
+  let [who, rows, villagers, heroes, looks] = await Promise.all([
     me(),
     query('.village_task'),
     vale.query('.villager&?doc'),
+    player ? vale.query(`id=${player}&.player`) : [],
+    player ? vale.query(`.look.player=${player}`) : [],
+    live?.ready,
   ])
   writable = who.writes
   tasks = rows
   people = new Map(villagers.map((r) => [r.entity.eid, r]))
-  if (player) {
-    let heroes = await vale.query(`id=${player}&.player`)
-    if (!heroes.length) player = null
+  if (player && !heroes.length) {
+    live()
+    player = null
   }
   if (player) {
-    let looks = await vale.query(`.look.player=${player}`)
     let look = looks.sort((a, b) => (b.look?.at ?? 0) - (a.look?.at ?? 0))[0]
     document.querySelector('.Hero').textContent = `For ${
       look?.look?.name ?? 'your selected hero'
     }`
-    let filter = `.village_done.player=${player}`
-    done = completed(await query(filter), player)
-    subscribe(filter, (rows) => {
-      done = completed(rows, player)
-      draw()
-    })
   }
+  drawn = true
   draw()
 }
 

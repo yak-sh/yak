@@ -127,6 +127,14 @@ export let PAGES: Record<string, Page> = {
       "Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandbox its owner can put it in, what pinning means, and what an update does to what people saved.",
     'brief': 'publishing and installing an app',
   },
+  'speed': {
+    'slug': 'speed',
+    'title': 'A page that loads at once',
+    'description':
+      "How a page loads its data in one round rather than a waterfall: subscribe to what it draws, every kind in one line with |, ask me() beside it, and wait on a subscription's ready when the rows must come first. How to see a slow page for yourself, its rounds and the Server-Timing on every answer, and what else slows one: chains of module imports, pictures, and work done on every change.",
+    'brief':
+      "loading a page's data in one round, and finding what makes one slow",
+  },
   'stats': {
     'slug': 'stats',
     'title': 'Who visited',

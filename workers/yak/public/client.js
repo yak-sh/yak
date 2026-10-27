@@ -24,12 +24,15 @@ export { draftEid }
 // `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
 // onto the app's API, which watches any component homes the app uses, so a
 // write from another device — or another tab, or an agent — re-renders the
-// page without a poll. It hands back the same rows `query` does; the returned
-// function ends it.
+// page without a poll. It hands back the same rows `query` does, the first of
+// them over the page's own connection while the socket opens; the returned
+// function ends it, and its `ready` is those first rows, for a page that waits
+// for them. A page that subscribes to what it draws, all of it at once, loads
+// in one round.
 //
-// `me()` is who is looking: the page asks before it asks the person for
-// anything, so it can show a sign-in link or a name field on load rather than
-// after a refusal.
+// `me()` is who is looking: the page asks beside its first reads, never ahead
+// of them, so it can show a sign-in link or a name field on load rather than
+// after a refusal, and its data does not wait for the answer.
 //
 // `upload(file, {name})` is the bytes half: the app's own file door
 // (`POST ./api/blob`), which stores what a page hands it — a File off an
@@ -90,7 +93,8 @@ let refused = (r, body) => {
 // A read already on its way answers everyone who asks it meanwhile, as one
 // request: the outbox's `me` and the page's own on load, a subscription's
 // fill and the page's query of the same line. Each caller parses its own copy,
-// so no two share an object to change.
+// so no two share an object to change. A write that lands ends the sharing:
+// a read asked after it is its own, so it sees the write.
 let door = (base) => {
   let flying = new Map()
   let send = async (path, init) => {
@@ -104,10 +108,12 @@ let door = (base) => {
     return { r, body: await r.text() }
   }
   let sent = (path, init) => {
-    if (init) return send(path, init)
+    if (init) return send(path, init).finally(() => flying.clear())
     let held = flying.get(path)
     if (!held) {
-      held = send(path).finally(() => flying.delete(path))
+      held = send(path).finally(() =>
+        flying.get(path) == held && flying.delete(path)
+      )
       flying.set(path, held)
     }
     return held
@@ -359,17 +365,20 @@ export let digest = async (blob) => (await hashed(blob)).sha
 let SPLIT = 32 * 1024 * 1024
 let LANES = 4
 
-// Sent again while what failed was the way there, not the answer: no
-// connection (a phone asleep, a train in a tunnel, which waits for the
-// browser to say it is back online), or a platform that is busy or down. A
-// refusal is thrown at once. Each wait doubles, to fifteen seconds.
+// Whether what failed was the way there, not the answer: no connection (a
+// phone asleep, a train in a tunnel), or a platform that is busy or down.
+// Anything else is a refusal.
+let busy = (e) =>
+  e.status == null || e.status >= 500 || e.status == 408 || e.status == 429
+
+// Sent again while the way there failed, which waits for the browser to say it
+// is back online. A refusal is thrown at once. Each wait doubles, to fifteen
+// seconds.
 let again = async (call, tries = 0) => {
   try {
     return await call()
   } catch (e) {
-    let busy = e.status == null || e.status >= 500 || e.status == 408 ||
-      e.status == 429
-    if (!busy || tries >= 7) throw e
+    if (!busy(e) || tries >= 7) throw e
     if (globalThis.navigator?.onLine === false) {
       await new Promise((on) => addEventListener('online', on, { once: true }))
     }
@@ -641,9 +650,15 @@ export let store = (base) => {
       let sub = subs.get(f.id)
       if (!sub) return
       sub.heard = true
-      if (f.refused) throw new Error(f.refused.message ?? f.refused.error)
+      if (f.refused) {
+        let e = new Error(f.refused.message ?? f.refused.error)
+        sub.first.reject(e)
+        throw e
+      }
       fold(sub, f)
-      sub.cb(rows(sub))
+      let now = rows(sub)
+      sub.first.resolve(now)
+      sub.cb(now)
     }
     s.onmessage = (e) => {
       let frame = typeof e.data == 'string' ? JSON.parse(e.data) : undefined
@@ -687,23 +702,36 @@ export let store = (base) => {
   // so '.recipe&?doc' where the page draws titles — and a page swaps one
   // for the other and nothing else changes; the returned function ends the
   // subscription.
+  //
+  // Its `ready` is the first rows `cb` is handed, for a page that needs them
+  // before it goes on (`let rows = await subscribe(f, draw).ready`), so that
+  // page subscribes rather than querying first and asking the store twice. It
+  // rejects with the store's refusal of the filter; a socket that will not
+  // open only keeps it waiting for the rows. A rejection nobody awaits is the
+  // socket's to report, as it always was, so it is not reported twice.
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
     let q = asked(filter)
-    let sub = { q, rows: new Map(), riders: [], cb, heard: false }
+    let first
+    let ready = new Promise((resolve, reject) => first = { resolve, reject })
+    ready.catch(() => {})
+    let sub = { q, rows: new Map(), riders: [], cb, heard: false, first }
     subs.set(name, sub)
     tell({ subscribe: q, id: name })
     // A socket that is not open yet is a handshake away — a connection of
     // its own and an upgrade — while a query rides the connection the page
     // already has. So the first rows come from a query, unless the socket
     // answers first; its answer is the whole set and replaces them. A query
-    // that fails says nothing here: the socket says what went wrong.
+    // whose way there failed says nothing here: the socket keeps trying.
     if (sock?.readyState != 1) {
+      let mine = () => subs.get(name) == sub && !sub.heard
       query(filter).then((rows) => {
-        if (subs.get(name) == sub && !sub.heard) cb(rows)
-      }, () => {})
+        if (!mine()) return
+        first.resolve(rows)
+        cb(rows)
+      }, (e) => mine() && !busy(e) && first.reject(e))
     }
-    return () => {
+    let stop = () => {
       if (!subs.delete(name)) return
       // No subscriptions, no socket: the last one to leave closes it, and the
       // next subscribe opens a new one.
@@ -714,6 +742,8 @@ export let store = (base) => {
       }
       tell({ unsubscribe: name })
     }
+    stop.ready = ready
+    return stop
   }
   return {
     apply,

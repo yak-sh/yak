@@ -105,8 +105,10 @@ same way.
 
 ### subscribe(filter, cb)
 
-`query` that keeps returning. It hands back the stop function synchronously —
-not a promise, so there is nothing to await. Its own section below.
+`query` that keeps returning, and the way a page loads what it draws: its first
+rows come over the page's own connection while its socket opens. It hands back,
+at once, the function that ends it, whose `ready` is a promise of those first
+rows. Its own section below.
 
 ### upload(file, {name}?)
 
@@ -311,18 +313,23 @@ arrives; never append to what you drew last time.
 - Keep the count small. A socket carries its declarations in about 2 KB of state
   so it survives hibernation, and past that a declaration is refused — quietly,
   from the page's side.
-- A filter the store cannot serve fails on the socket, not in your code: it
-  throws where the page's error reporter picks it up, rather than rejecting a
-  promise you can catch. Try the filter through `query()` first.
-- **A socket that will not open reports nothing at all.** `subscribe` does not
-  throw and has no promise to reject, so a page that only subscribes shows an
-  empty screen for as long as the socket is down — no error, no callback. It
-  retries on its own, backing off to every 15 seconds, and the first frame that
-  arrives fills the page. So `query` first for what you can draw now, then
-  `subscribe` to keep it true; the first callback replaces the rows you drew.
+- A filter the store cannot serve is thrown where the page's error reporter
+  picks it up, and rejects the subscription's `ready` (below), which is the
+  place to catch it.
+- **Its first rows do not wait for the socket.** They come from a query on the
+  connection the page already has, and the socket's own first frame replaces
+  them, so a page that only subscribes is drawn as soon as a query would have
+  drawn it. A socket that will not open retries on its own, backing off to every
+  15 seconds. Querying the same line first only asks the store twice.
+- **`ready` is the first rows**, for a page that needs them before it goes on.
+  It rejects with the store's refusal of the filter:
 
-      draw(await query('.task.status=open&?doc'))
-      let stop = subscribe('.task.status=open&?doc', draw)
+      let open = subscribe('.task.status=open&?doc', draw)
+      let [who, tasks] = await Promise.all([me(), open.ready])
+
+  Many lines are one round when they are subscribed together, and one request
+  when they are one line: `(.task|.comment)&?doc`
+  ([a page that loads at once](./speed.md)).
 
 ### A shared clock for pages
 
@@ -359,7 +366,8 @@ A `viewer` reads a private app and never writes it. Writing the app's own files
 (`PUT ./api/files/<path>`) is outside this bargain: those bytes are always an
 owner's or an editor's to change, whatever the app lets its visitors save.
 
-Ask on load, not on refusal:
+Ask on load, not on refusal, and beside the page's reads rather than ahead of
+them, since no read waits on the answer:
 
     let who = await me()
     if (!who.writes) {
