@@ -300,7 +300,7 @@ test('an app is published by name, and the name is one app', async () => {
 
 // The whole of T-34475: an owner asks for the gallery, a letter carries the
 // decision, and the app is on the public page — and in a stranger's search —
-// only after somebody here opens the link that says yes (gallery.ts, M-4522).
+// only after an admin approves it through the web or agent door (gallery.ts).
 // Then the two ways off it: withdrawing, which clears the word, and the trash,
 // which writes nothing and gives the listing back on a restore.
 test('an app reaches the gallery only when yaks.app says yes', async () => {
@@ -336,7 +336,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertEquals(cards(await empty.text()), 0)
 
     // The letter, at the platform's own mailbox, carrying both answers.
-    let post = await letter(k, 'hello@yaks.app', 'Recipe box')
+    let post = await letter(k, 'task@bot.yak.sh', 'Recipe box')
     assertStringIncludes(post.body, `https://${mine}.yaks.app/recipes/`)
     assertStringIncludes(post.body, 'Somewhere to keep recipes')
     let [yes, no] = [
@@ -388,6 +388,39 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertStringIncludes(page, 'Recipe box')
     assertStringIncludes(page, 'Somewhere to keep recipes')
     assertStringIncludes(page, `https://${mine}.yaks.app/recipes/`)
+    // An agent with the admin credential decides through the same review.
+    let reviewer = connector(k, k.owner.cookie)
+    let review = {
+      app: `${mine}/recipes`,
+      decision: 'approve',
+      by: crypto.randomUUID(),
+      via: crypto.randomUUID(),
+      reason: 'The app works and its listing is clear',
+    }
+    await assertRejects(
+      () => agent.tool('gallery_review', review),
+      Error,
+      'platform admin',
+    )
+    assertStringIncludes(
+      await reviewer.tool('gallery_review', review),
+      'listed in the gallery',
+    )
+    let rows = await reviewer.call('tools/call', {
+      name: 'graph_query',
+      arguments: {
+        app: 'yak/platform',
+        q: `.app.slug=recipes&.gallery.by=${review.by}&?gallery&?updated`,
+      },
+    })
+    let row = rows.structuredContent.result[0]
+    let record = row?.gallery
+    assertEquals(row?.updated.by, review.by)
+    assertEquals(row?.updated.via, review.via)
+    assertEquals(record?.by, review.by)
+    assertEquals(record?.via, review.via)
+    assertEquals(record?.decision, 'approved')
+    assertEquals(record?.reason, review.reason)
     // The app's own og:image, read off the bytes we hold and resolved against
     // its address — never against ours.
     assertStringIncludes(page, `https://${mine}.yaks.app/recipes/card.png`)
@@ -498,23 +531,11 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       app: 'recipes',
       gallery: true,
     })
-    let second = await letter(k, 'hello@yaks.app', 'Recipe box')
-    let turned = [...second.body.matchAll(
-      /https:\/\/yaks\.app(\/gallery\/review\?t=[^\s]+)/g,
-    )]
-      .map((m) => m[1])[1]
-    let off = await k.at('yaks.app', '/gallery/review', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        cookie: k.owner.cookie,
-      },
-      body: new URLSearchParams({
-        t: new URLSearchParams(turned.split('?')[1]).get('t')!,
-      }).toString(),
+    await reviewer.tool('gallery_review', {
+      ...review,
+      decision: 'decline',
+      reason: 'The listing needs revision',
     })
-    assertEquals(off.status, 200)
-    await off.body?.cancel()
     assertEquals(
       cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
       0,

@@ -7,7 +7,7 @@ import { integrationEid } from '@yaks/connections/identity'
 import { reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
-import { ended, Refused, runs } from './tools.ts'
+import { ended, Refused, review, runs } from './tools.ts'
 
 let box = async () => {
   let host = await compose({
@@ -96,6 +96,38 @@ test('fee uses computed own account by default and --as selects another bearer',
   } finally {
     await host.close()
   }
+})
+
+test('gallery review forwards the project actor and session with the admin bearer', async () => {
+  let actor = { by: 'operator-project', via: 'operator-session' }
+  let args = {
+    app: 'jeff/housebook',
+    decision: 'approve',
+    reason: 'Works well',
+  }
+  await answering((url, init) => {
+    equal(url, 'https://yaks.app/mcp')
+    equal(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer admin-bearer',
+    )
+    equal(JSON.parse(String(init?.body)).params, {
+      name: 'gallery_review',
+      arguments: { ...args, ...actor },
+    })
+    return Response.json({
+      result: { content: [{ type: 'text', text: 'listed' }] },
+    })
+  }, async () => {
+    equal(
+      await review('admin-bearer', {
+        entity: { eid: 'call' },
+        call: { args },
+        created: actor,
+      }),
+      'listed',
+    )
+  })
 })
 
 test('an unknown --as account is a refusal, not an exception', async () => {

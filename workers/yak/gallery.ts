@@ -14,17 +14,10 @@
 // owner asks (`gallery: true`) and the platform answers, and until it answers
 // the app is not on any page here.
 //
-// Why the approval. M-4522: what goes out under our name is ours to allow.
-// Nothing an agent says and nothing a person types can put an app on this
-// site — the ask is one stamp, the listing is a second one, and the second is
-// only ever written by the platform's admin, signed in on the web, answering a
-// link out of a letter to hello@yaks.app. The letter alone is not enough: that
-// mailbox lands in the box's graph, where agents read it, so the link is only
-// where the answer happens, and the session cookie of an owner of the meta
-// space is who may give it. An agent holds a bearer token, never that cookie,
-// so it cannot answer — the same line the space delete door draws (erase.ts):
-// the same `seal` from the kernel's own secret, the same GET that only ever
-// draws, the same POST that acts.
+// The platform's admin decides through gallery_review (the CLI's admin
+// gallery command calls the same tool), or the signed letter's web form.
+// Review requests reach the operator at task@bot.yak.sh. Both doors write the
+// same decision, with the actor in by and the session or credential in via.
 //
 // The two words on the row (vocab.ts `gallery`) say the whole state:
 //
@@ -41,6 +34,8 @@
 // trashed app leaves the gallery the moment it is thrown away, and a restored
 // one is back where it was without asking anybody twice.
 import { r2Objects } from './lib/objects.ts'
+import { mediaTypeOf, type Objects } from '@yaks/blob'
+import { blobPrefix } from './blob-key.ts'
 import { opened, seal } from './lib/token.ts'
 import {
   type App,
@@ -51,11 +46,13 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { configOf, keyed, prefixOf, rootOf } from './files.ts'
-import { type Letter, REPLY_TO } from './mail.ts'
+import type { Letter } from './mail.ts'
+import type { Actor, Bundle } from '@yaks/graph'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
-import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
+import { type Host, hosted, url as siteUrl } from './host.ts'
+import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
 
@@ -65,11 +62,10 @@ import { staff } from './admin.ts'
 // one of the site's pages, and the list it belongs to is kept in one place.
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
+export let IMAGE = `${PATH}/image/`
 
-// The platform's own mailbox — the address every letter we send already
-// answers to (mail.ts REPLY_TO), so the approval arrives where the platform's
-// mail already arrives and nobody has to be told a second address.
-export let DESK = REPLY_TO
+// The operator reviews submissions from its own inbox.
+export let DESK = 'task@bot.yak.sh'
 
 // A week to get to it. Longer than the hour a space's death gets (erase.ts
 // LIFE), because nothing here is destroyed and nobody is waiting at a form:
@@ -249,7 +245,41 @@ export let searched = async (
 // A chosen screenshot is an app upload, addressed by its bytes. Build its URL
 // from the app's current address so an app move keeps the card working.
 export let screenshot = (space: Space, app: App, env: Host = {}) =>
-  app.screenshot ? `${url(space, app, env)}api/blob/${app.screenshot}` : ''
+  !app.screenshot
+    ? ''
+    : app.access == 'private'
+    ? siteUrl(env, `${IMAGE}${app.eid}/${app.screenshot}`)
+    : `${url(space, app, env)}api/blob/${app.screenshot}`
+
+/** A private app's selected gallery image is public with its listing. Every
+ * request checks the current offer and selection before reaching the bucket. */
+export let image = async (
+  req: Request,
+  dir: Directory,
+  objects: Pick<Objects, 'read'>,
+  path: string,
+) => {
+  let [eid, sha, extra] = path.slice(IMAGE.length).split('/')
+  let at = !extra &&
+    (await dir.offers()).find(({ app }) =>
+      app.eid == eid && app.gallery?.listedAt && app.screenshot == sha
+    )
+  let bytes = at ? await objects.read(blobPrefix(at.space, at.app) + sha) : null
+  let mime = bytes && mediaTypeOf(bytes)
+  if (!bytes || !mime) {
+    return new Response(null, {
+      status: 404,
+      headers: { 'cache-control': 'no-store' },
+    })
+  }
+  return new Response(req.method == 'HEAD' ? null : bytes, {
+    headers: {
+      'content-type': mime,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  })
+}
 
 // The app's own share card, read out of the bytes we already hold rather than
 // fetched from its address: the platform stores every file an app serves
@@ -305,7 +335,7 @@ export let pictures = async (env: Env, all: Shown[]) =>
 // name, linked to the app, and the copy it offers; its picture opens the app
 // too; and its address sits outside every link, so it can be selected.
 export let card = (a: Shown) =>
-  `<li class="Card Make_Card">
+  `<li class="Card Make_Card" id="${esc(a.name)}">
 <header class="Card_Head"><h3 class="Card_Title"><a href="${esc(a.at)}">${
     esc(a.title)
   } <span aria-hidden="true">↗</span></a></h3><form class="Card_Actions" method="post" action="/install?name=${
@@ -384,10 +414,10 @@ ${foot}
 
 // ---- the letter, and the door it points at -----------------------------
 
-// The letter to the desk. Everything a decision needs is IN it — what the app
+// The letter to the desk. Everything a decision needs is in it — what the app
 // is called, what it says it is, where it lives and who made it — because
-// whoever reads it should not have to go looking, and the two links are the
-// whole of the answer.
+// whoever reads it should not have to go looking. It carries the agent command
+// and signed website links to the same decision.
 export let letter = (at: {
   title: string
   about: string
@@ -395,8 +425,9 @@ export let letter = (at: {
   owner: string
   yes: string
   no: string
-}, env: Host = {}): Letter => ({
-  to: replyTo(env),
+  app?: string
+}, _env: Host = {}): Letter => ({
+  to: DESK,
   subject: `Gallery: ${at.title}?`,
   body: `${at.owner} asked to show an app on the yaks.app gallery.
 
@@ -405,6 +436,17 @@ export let letter = (at: {
   ${at.about || '(no description)'}
   by ${at.owner}
 
+Review the app and its listing, then decide as the platform admin:
+${
+    at.app
+      ? `yak admin gallery ${at.app} approve --as admin@bot.yak.sh
+yak admin gallery ${at.app} decline --as admin@bot.yak.sh
+`
+      : ''
+  }
+The MCP tool is gallery_review; use by for the project actor and via for the session.
+
+Or use the website:
 Yes, list it:
 ${at.yes}
 
@@ -419,9 +461,7 @@ These links expire in one week.`,
 // before anyone reads it must not be able to list an app by doing its job.
 //
 // The ticket says which app and which answer; the cookie says who is answering
-// (`staff`). Both are needed: the ticket because the kernel signed what is
-// being decided, the cookie because the letter sits in a graph agents read.
-// The person confirming is us: an owner of the meta space, signed in.
+// (`staff`). The agent door instead verifies the admin's bearer credential.
 let review = (at: {
   title: string
   about: string
@@ -498,20 +538,50 @@ export let ask = (env: Env, app: App, now = new Date()) =>
   stamp(env, {
     entities: [{
       entity: { eid: app.eid },
-      gallery: { asked_at: now.toISOString(), listed_at: null },
+      gallery: {
+        asked_at: now.toISOString(),
+        listed_at: null,
+        reviewed_at: null,
+        decision: null,
+        by: null,
+        via: null,
+        reason: null,
+      },
     }],
   })
 
-export let list = (env: Env, app: App, now = new Date()) =>
-  stamp(env, {
-    entities: [{
-      entity: { eid: app.eid },
-      gallery: { listed_at: now.toISOString() },
-    }],
-  })
+/** The decision shared by the agent tool and the web form. A decline clears
+ * the pending ask while retaining who decided and why. */
+export let decision = (
+  app: App,
+  approve: boolean,
+  actor: Actor,
+  reason = '',
+  now = new Date(),
+): Bundle => ({
+  entity: { eid: app.eid },
+  gallery: {
+    asked_at: approve ? app.gallery?.askedAt || now.toISOString() : null,
+    listed_at: approve ? now.toISOString() : null,
+    reviewed_at: now.toISOString(),
+    decision: approve ? 'approved' : 'declined',
+    by: actor.by ?? null,
+    via: actor.via ?? null,
+    reason,
+  },
+})
+
+export let decide = (
+  env: Env,
+  app: App,
+  approve: boolean,
+  actor: Actor,
+  reason = '',
+) =>
+  stamp(env, { entities: [decision(app, approve, actor, reason)] }, { actor })
 
 /** The word off the row entirely: un-asked and un-listed at once, which is
- * what withdrawing means (`gallery: false`, app_unpublish, a decline). */
+ * what withdrawing means (`gallery: false`, app_unpublish). */
 export let drop = (env: Env, app: App) =>
   stamp(env, { entities: [{ entity: { eid: app.eid }, gallery: null }] })
 
@@ -536,6 +606,9 @@ export let answer = async (
   path: string,
   dir: Directory,
 ): Promise<Response | null> => {
+  if (path.startsWith(IMAGE) && ['GET', 'HEAD'].includes(req.method)) {
+    return image(req, dir, r2Objects(env.BLOBS), path)
+  }
   if (path != REVIEW) return null
   let asked = new URL(req.url)
   let form = req.method == 'POST'
@@ -600,15 +673,18 @@ export let answer = async (
     token: held,
   }
   if (req.method != 'POST') return review(said, env)
+  let session = await browserOf(req, env.SESSION_SECRET)
+  await decide(env, at.app, ok.list, {
+    by: who,
+    ...(session?.via ? { via: session.via } : {}),
+  })
   if (ok.list) {
-    await list(env, at.app)
     return done(
       env,
       `${at.app.title} is in the gallery.`,
       `You can find it at ${siteUrl(env, PATH)}.`,
     )
   }
-  await drop(env, at.app)
   return done(
     env,
     `${at.app.title} was not listed.`,

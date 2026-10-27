@@ -279,14 +279,26 @@ gallery entry that cannot be installed is of no use. It also needs a screenshot:
 upload one through the app's `/api/blob` endpoint and pass its returned `eid` to
 `app_set(app, screenshot: '<eid>')`. This takes effect without deploying the
 app. An existing `og:image` in its `index.html` works too, though a chosen
-screenshot takes precedence. The screenshot can be cleared with
-`app_set(app, screenshot: '')` after withdrawing a listed app.
+screenshot takes precedence. A selected screenshot is public while its gallery
+listing is live, including for a private app; its other files and data stay
+private. The screenshot can be cleared with `app_set(app, screenshot: '')` after
+withdrawing a listed app.
 
-The app is not listed immediately. The request sends an email to yaks.app with
-the app's title, its address, the line its owner wrote about it and who made it,
-and two links for the answer. Nothing is listed anywhere until somebody at
-yaks.app opens the link that approves it. There is no faster path, because the
-gallery is yaks.app's own page, published under its name.
+The app is not listed immediately. The request reaches the operator at
+`task@bot.yak.sh` with the app's title, address, description and maker. An admin
+reviews the app and its listing, then calls
+`gallery_review(app: 'space/app',
+decision: 'approve', by: '<actor eid>', via: '<session eid>', reason: '…')`,
+or uses the signed review link in the letter. `decision: 'decline'` clears the
+request and leaves the app published. The decision records the actor in `by` and
+the session in `via`.
+
+On the operator's machine the same review is available as:
+
+    yak admin gallery space/app approve --as admin@bot.yak.sh --reason 'Works well'
+
+The CLI and its mirrored `admin_gallery` MCP tool take the actor and session
+from the calling agent. Both use the same admin review as `gallery_review`.
 
 The tool reports the listing's status, and so does the app's status pill on the
 space's own page:

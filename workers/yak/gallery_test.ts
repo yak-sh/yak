@@ -12,10 +12,13 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App, Directory, Space } from './directory.ts'
 import {
   card,
+  decision,
   DEMOS,
   door,
   examples,
   found,
+  IMAGE,
+  image,
   install,
   letter,
   LIFE,
@@ -23,6 +26,7 @@ import {
   made,
   page,
   pictured,
+  screenshot,
   searched,
   showcase,
   type Shown,
@@ -102,6 +106,59 @@ test('the listing is the approved offers', async () => {
   assertEquals(install(all[0]), "app_install(name: 'recipes')")
 })
 
+test('gallery decisions record the actor and session and clear a declined request', () => {
+  let pending = app({ gallery: asked })
+  let actor = { by: 'operator-project', via: 'review-session' }
+  let now = new Date('2026-10-27T12:00:00Z')
+  let approved = decision(pending, true, actor, 'Works well', now)
+  assertEquals(approved.gallery, {
+    asked_at: asked.askedAt,
+    listed_at: now.toISOString(),
+    reviewed_at: now.toISOString(),
+    decision: 'approved',
+    ...actor,
+    reason: 'Works well',
+  })
+  assertEquals(decision(pending, false, actor, 'Broken app', now).gallery, {
+    asked_at: null,
+    listed_at: null,
+    reviewed_at: now.toISOString(),
+    decision: 'declined',
+    ...actor,
+    reason: 'Broken app',
+  })
+})
+
+test('a private gallery app exposes only its currently selected listing image', async () => {
+  let current = app({ access: 'private', gallery: live, screenshot: 'chosen' })
+  let dir = {
+    offers: () => Promise.resolve([{ space: space(), app: current }]),
+  } as unknown as Directory
+  let reads: string[] = []
+  let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  let objects = {
+    read: (key: string) => {
+      reads.push(key)
+      return Promise.resolve(bytes)
+    },
+  }
+  let path = `${IMAGE}${current.eid}/chosen`
+  assertEquals(screenshot(space(), current), `https://yaks.app${path}`)
+  let req = new Request(`https://yaks.app${path}`)
+  let shown = await image(req, dir, objects, path)
+  assertEquals(shown.status, 200)
+  assertEquals(shown.headers.get('content-type'), 'image/png')
+  assertEquals(shown.headers.get('cache-control'), 'no-store')
+  assertEquals(new Uint8Array(await shown.arrayBuffer()), bytes)
+  assertEquals(reads, ['jeff/recipes/blobs/chosen'])
+  for (let hidden of [`${IMAGE}${current.eid}/other`, `${path}/extra`]) {
+    assertEquals((await image(req, dir, objects, hidden)).status, 404)
+  }
+  current.gallery = asked
+  assertEquals((await image(req, dir, objects, path)).status, 404)
+  assertEquals(reads.length, 1)
+})
+
 let shown = (over: Partial<Shown> = {}): Shown => ({
   eid: 'app-eid',
   name: 'recipes',
@@ -140,7 +197,7 @@ test('words find a listing by its name and its own description', () => {
   assertEquals(found(all, 'recipe', 1).map((a) => a.eid), ['a'])
 })
 
-// The letter is the only door to a listing, so it carries the whole decision:
+// The letter carries what the operator needs for a decision:
 // what the app is, where it lives, who made it, and the two answers.
 test('the letter names the app, its maker, and both answers', () => {
   let l = letter({
@@ -151,7 +208,7 @@ test('the letter names the app, its maker, and both answers', () => {
     yes: 'https://yaks.app/gallery/review?t=yes',
     no: 'https://yaks.app/gallery/review?t=no',
   })
-  assertEquals(l.to, 'hello@yaks.app')
+  assertEquals(l.to, 'task@bot.yak.sh')
   assertStringIncludes(l.subject, 'Recipe box')
   assertStringIncludes(l.body, 'Jeff')
   assertStringIncludes(l.body, 'https://jeff.yaks.app/recipes/')
@@ -187,7 +244,7 @@ test('staging gallery listings, reviews and mail stay on its own host', async ()
       yes,
       no: door('no', env),
     }, env).to,
-    'hello@yaks.fyi',
+    'task@bot.yak.sh',
   )
 })
 
@@ -312,6 +369,7 @@ test('the homepage paints all six chosen screenshots and Mossvale', async () => 
 
 test('a card offers installation separately from opening the app', () => {
   let html = card(shown())
+  assertStringIncludes(html, 'id="recipes"')
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
   assertStringIncludes(html, 'jeff.yaks.app/recipes/')
   // No picture of its own falls back to the platform's tile.

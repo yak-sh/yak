@@ -246,7 +246,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   if (path == install.PATH) return install.answer(req, env, dir)
-  if (path == gallery.REVIEW) {
+  if (path == gallery.REVIEW || path.startsWith(gallery.IMAGE)) {
     let shown = await gallery.answer(req, env, path, dir)
     if (shown) return shown
   }

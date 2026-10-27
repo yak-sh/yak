@@ -26,7 +26,7 @@ import { EPOCH, MEND } from './directory-copy.ts'
 // its own store.
 import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Actor, Bundle } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections'
 import { identityEid } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
@@ -324,8 +324,16 @@ export type Pin = {
 
 // Where a published app stands with the gallery (gallery.ts, T-34476): when
 // its owner asked to be shown on yaks.app, and when we said yes. Asked and not
-// yet listed is the waiting state; both empty is a row that never asked.
-export type Gallery = { askedAt: string; listedAt: string }
+// yet listed is the waiting state. A decline clears both and keeps its review.
+export type Gallery = {
+  askedAt: string
+  listedAt: string
+  reviewedAt?: string
+  decision?: 'approved' | 'declined'
+  by?: string
+  via?: string
+  reason?: string
+}
 
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
@@ -431,7 +439,15 @@ export type Row = {
     version?: number | null
     sandboxed?: string | null
   }
-  gallery?: { asked_at?: string | null; listed_at?: string | null }
+  gallery?: {
+    asked_at?: string | null
+    listed_at?: string | null
+    reviewed_at?: string
+    decision?: 'approved' | 'declined'
+    by?: Id | null
+    via?: Id | null
+    reason?: string
+  }
   screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
@@ -786,9 +802,14 @@ export let fetch = (
 export let stamp = async (
   env: { STORE: Namespace },
   mutation: { entities: Bundle[] },
-  opts?: { stamp?: boolean },
+  opts?: { stamp?: boolean; actor?: Actor },
 ) => {
-  let applied = await metaStore(env).apply(mutation.entities, KERNEL, opts)
+  let headers = {
+    ...KERNEL,
+    ...(opts?.actor?.by ? { 'x-yak-person': opts.actor.by } : {}),
+    ...(opts?.actor?.via ? { 'x-yak-via': opts.actor.via } : {}),
+  }
+  let applied = await metaStore(env).apply(mutation.entities, headers, opts)
   cached(metaStore(env)).clear()
   return applied
 }
@@ -959,6 +980,11 @@ export let appOf = (r: Row): App => ({
     ? {
       askedAt: r.gallery.asked_at ?? '',
       listedAt: r.gallery.listed_at ?? '',
+      ...(r.gallery.reviewed_at ? { reviewedAt: r.gallery.reviewed_at } : {}),
+      ...(r.gallery.decision ? { decision: r.gallery.decision } : {}),
+      ...(r.gallery.by ? { by: idOf(r.gallery.by) } : {}),
+      ...(r.gallery.via ? { via: idOf(r.gallery.via) } : {}),
+      ...(r.gallery.reason ? { reason: r.gallery.reason } : {}),
     }
     : null,
   screenshot: r.screenshot?.blob ?? null,

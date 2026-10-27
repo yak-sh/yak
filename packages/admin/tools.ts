@@ -3,7 +3,7 @@
 import { checkout } from './checkout.ts'
 import { basename, dirname } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { argsOf } from '@yaks/graph/call'
+import { argsOf, who } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import {
   isOpRef,
@@ -37,6 +37,7 @@ import {
   moveIn,
   renewing,
   rpc,
+  saidBy,
   setFee,
   setTunnel,
   storeApply,
@@ -174,6 +175,25 @@ export let tracker = async (
   return { remote: { url: remote?.url, secret } }
 }
 
+/** Review through the hosted tool with this call's actor and session. Account
+ * selection stays at the admin boundary shared by every operation. */
+export let review = async (bearer: string, call: Bundle): Promise<string> => {
+  let a = argsOf(call)
+  let actor = who(call)
+  return saidBy(
+    await rpc(bearer)('tools/call', {
+      name: 'gallery_review',
+      arguments: {
+        app: a.app,
+        decision: a.decision,
+        ...(actor?.by ? { by: actor.by } : {}),
+        ...(actor?.via ? { via: actor.via } : {}),
+        ...(a.reason ? { reason: a.reason } : {}),
+      },
+    }),
+  )
+}
+
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
   host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping'>,
@@ -253,6 +273,11 @@ export let runs = (
       return [
         said(call, `signed in as ${address} — act as it with --as=${address}`),
       ]
+    }),
+
+    admin_gallery: verb(async (call) => {
+      let at = await acting(argsOf(call))
+      return [said(call, await review(at.bearer, call))]
     }),
 
     admin_accept: verb(async (call, _vault, _keep, graph) => {

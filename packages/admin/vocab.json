@@ -518,6 +518,45 @@
       "positional": [
         "sha"
       ]
+    },
+    "admin_gallery": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "gallery",
+      "title": "Review a gallery listing",
+      "description": "Approve or decline a submitted gallery listing as the platform admin. Review the app, its screenshot and listing before deciding. The caller’s project actor is recorded in by and its session in via.\n\n  yak admin gallery jeff/housebook approve --as admin@bot.yak.sh --reason 'Works and reads well'",
+      "input": {
+        "app": {
+          "type": "string",
+          "description": "the published app as space/app"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "decline"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the listing was approved or declined"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "app",
+        "decision"
+      ],
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": true,
+      "positional": [
+        "app",
+        "decision"
+      ]
     }
   }
 }

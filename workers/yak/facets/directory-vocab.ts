@@ -202,14 +202,24 @@ export let directoryDoc: VocabDoc = {
     // pair reads as one sentence in either direction — nothing is listed that
     // was never asked for, and clearing the word un-asks and de-lists at once.
     //
-    // Server-owned, both of them, and the only word on an app that is: the
+    // The last review records its decision, actor, session and reason; a
+    // decline clears the ask and listing while retaining that record.
+    // Server-owned: the
     // listing is on our site under our name (M-4522), so it may never be
     // something a write can lift for itself. The tools stamp them through the
     // kernel's own door (directory.ts `stamp`).
     gallery: {
       component: true,
       type: 'object',
-      properties: { asked_at: owned(time), listed_at: owned(time) },
+      properties: {
+        asked_at: owned(time),
+        listed_at: owned(time),
+        reviewed_at: owned(time),
+        decision: owned({ type: 'string', enum: ['approved', 'declined'] }),
+        by: owned(ref('keep')),
+        via: owned(ref('keep')),
+        reason: owned(text),
+      },
     },
     // An uploaded image the owner chose to represent this app. Its bytes and
     // attachment live in the app's store; only the content address lives here.

@@ -566,4 +566,9 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Answer exactly one outer binding of any builder with an artifact already in this app's store. Supply takes the builder, the first entity of its binding (for), a slot and an artifact, all as ids or aliases. It works while staged, spends nothing, and makes that slot current at the key reconciliation computes now. Later input or definition edits rebuild it normally. Other slots are left alone. Optional args keeps the original prompt, model, loudness audit or other provenance on the supplied call. Only someone who can write the app may supply. Returns the output id.",
   },
+  'gallery_review': {
+    'title': 'Review a gallery listing',
+    'description':
+      'Approve or decline a submitted gallery listing. Only the platform admin may decide. Review that the app works, its screenshot and description read well, and its content is appropriate for the gallery before approving. app names the offer as space/app. by is the actor making the decision, such as the operator project eid; via is the session. reason records why. A decline leaves the app published and lets its owner submit again.',
+  },
 }

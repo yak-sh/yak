@@ -163,6 +163,7 @@ import { bound, type Env } from './env.ts'
 // carries the decision, and the listing every door here reads.
 import {
   ask as askGallery,
+  decide as decideGallery,
   door as galleryDoor,
   drop as unGallery,
   letter as galleryLetter,
@@ -670,6 +671,7 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   // the row exactly as it was, and asking again is the whole retry.
   try {
     await mail(ctx.env)(galleryLetter({
+      app: `${space.slug}/${app.slug}`,
       title: app.title,
       about: app.published.about,
       url: url(space, app, ctx.env),
@@ -6048,6 +6050,52 @@ let OURS: Row[] = [
         }
         : { text: publics(ctx.env).find((one) => one.name == t.name)!.text },
   })),
+  {
+    name: 'gallery_review',
+    idempotent: true,
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        app: str('the published app to review, as space/app'),
+        decision: { type: 'string', enum: ['approve', 'decline'] },
+        by: str(
+          'the actor deciding, such as the operator project eid; never a session',
+        ),
+        via: str('the session making the decision'),
+        reason: str('why the app and listing were approved or declined'),
+      },
+      required: ['app', 'decision'],
+    },
+    run: async (ctx, args) => {
+      if (!await admin(ctx)) {
+        throw refuse('access', 'gallery review is the platform admin’s act')
+      }
+      let name = text(args.app, 'app')
+      let at = (await ctx.dir.offers()).find(({ space, app }) =>
+        `${space.slug}/${app.slug}` == name
+      )
+      if (!at) throw refuse('missing', `${name} is not on offer`)
+      if (!at.app.gallery?.askedAt && !at.app.gallery?.reviewedAt) {
+        throw refuse('conflict', `${name} has no gallery submission`)
+      }
+      let approve = args.decision == 'approve'
+      if (!approve && args.decision != 'decline') {
+        throw refuse('arguments', 'decision is approve or decline')
+      }
+      await decideGallery(ctx.env, at.app, approve, {
+        by: typeof args.by == 'string' ? args.by : ctx.person,
+        via: typeof args.via == 'string' ? args.via : ctx.who?.instrument,
+      }, typeof args.reason == 'string' ? args.reason : '')
+      return {
+        text: `${name}: ${
+          approve
+            ? saying('listed', ctx.env)
+            : 'declined; the app stays published'
+        }`,
+      }
+    },
+  },
   // And the gallery (gallery.ts, T-34478), which is the same list to a
   // stranger and to somebody signed in — a listing is a public page, so there
   // is nothing to narrow per caller. `app_published` above is the wider

@@ -2533,8 +2533,8 @@ export class Store {
   // One batch, applied as the caller the door decided it is. `trusted` is two
   // things at once and they are the same thing: @yaks/graph admits the
   // server-owned properties, and the guard above stands down.
-  #trust(bundles: Bundle[], who: string | null, opts: ApplyOpts = {}) {
-    return this.#asIs(signed(bundles, who ? { by: who } : null), opts)
+  #trust(bundles: Bundle[], who: Actor | null, opts: ApplyOpts = {}) {
+    return this.#asIs(signed(bundles, who), opts)
   }
 
   // The same door, keeping whatever signature the batch already carries: what
@@ -4204,7 +4204,10 @@ export class Store {
           this.#landing = seq
           try {
             out = kernel
-              ? this.#trust(body as Bundle[], vouchOf(request).person, opts)
+              ? this.#trust(body as Bundle[], {
+                by: vouchOf(request).person ?? undefined,
+                via: vouchOf(request).via ?? undefined,
+              }, opts)
               : this.#graph.apply(signed(body as Bundle[], who), opts)
           } finally {
             this.#landing = null
