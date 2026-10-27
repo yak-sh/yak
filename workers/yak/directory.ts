@@ -1283,6 +1283,26 @@ let remote = (via: Fetcher): Part => ({
   },
 })
 
+// A versioned door's read, always fresh, its rows marked with the revision the
+// directory answered at (`policy`): the revision belongs to this response, not
+// a shared last-response slot, since parallel reads resume in either order.
+let revised = async (via: Fetcher, q: string): Promise<string> => {
+  let answer = await via.fetch(
+    new Request(
+      `http://directory/query?q=${encodeURIComponent(q)}`,
+      { headers: { [FRESH]: '1' } },
+    ),
+  )
+  if (!answer.ok) throw await answered(answer)
+  let epoch = answer.headers.get(EPOCH)
+  let text = await answer.text()
+  if (epoch == null) return text
+  let policy = { revision: Number(epoch) }
+  return JSON.stringify(
+    (JSON.parse(text) as Row[]).map((row) => ({ ...row, policy })),
+  )
+}
+
 // `now` makes every read of this client fresh (FRESH above). App rows are
 // always fresh: the app and the homes it borrows from must select declarations
 // written by one directory commit, even when two isolates hold old caches.
@@ -1293,34 +1313,20 @@ let remote = (via: Fetcher): Part => ({
 // each ask who the caller is and where they sit, and within one request those
 // are one moment, so a line already asked is answered from what came back
 // until the request writes to the directory, by this client or any other door
-// (hops.ts `recall`). What is kept is the text: every caller parses rows of
-// its own.
+// (hops.ts `recall`). A versioned door's answers are held the same way, each
+// with the revision it was read at and apart from the unversioned ones: every
+// directory read is a round trip from wherever the request landed (T-130730).
+// What is kept is the text: every caller parses rows of its own.
 export let directory = (via: Fetcher | Part, now = false) => {
   let versioned = ('signed' in via && !!via.signed) ||
     ('versioned' in via && !!via.versioned)
   let door = 'fetch' in via ? remote(via) : via
-  let query = async (q: string, fresh = now): Promise<Row[]> => {
-    if (versioned && 'fetch' in via) {
-      // The revision belongs to this response, not a shared mutable last
-      // response slot: parallel reads can resume in either order.
-      let answer = await via.fetch(
-        new Request(
-          `http://directory/query?q=${encodeURIComponent(q)}`,
-          { headers: { [FRESH]: '1' } },
-        ),
-      )
-      if (!answer.ok) throw await answered(answer)
-      let epoch = answer.headers.get(EPOCH)
-      let rows: Row[] = await answer.json()
-      return epoch == null ? rows : rows.map((row) => ({
-        ...row,
-        policy: { revision: Number(epoch) },
-      }))
-    }
-    return JSON.parse(
-      await recall(META_STORE, q, () => door.query(q, fresh), fresh),
+  let query = async (q: string, fresh = now): Promise<Row[]> =>
+    JSON.parse(
+      versioned && 'fetch' in via
+        ? await recall(META_STORE, `${EPOCH} ${q}`, () => revised(via, q), true)
+        : await recall(META_STORE, q, () => door.query(q, fresh), fresh),
     )
-  }
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
   let write = (
     mutation: { entities: Bundle[] },
@@ -1572,6 +1578,37 @@ export let directory = (via: Fetcher | Part, now = false) => {
       if (!space) return null
       let selected = (await self.apps(space)).find((one) => one.eid == eid)
       return selected ? { space, app: selected } : null
+    },
+    // A target a tool holds, read again by identity in one round trip, as it
+    // is after a directory commit (tool.ts `reacquire`): the space, the app
+    // when one is held and still in it, and the person's role there, null for
+    // no seat. Asked one after another these were four round trips, three
+    // times in every deploy (T-130730).
+    target: async (space: string, person: string, app?: string | null) => {
+      let rows = await query(
+        [
+          `(.entity.eid=${space}&.space&${SPACE_ABOUT})`,
+          ...app ? [`(.entity.eid=${app}&.app&${ABOUT})`] : [],
+          // Never for nobody, as `member` says.
+          ...person
+            ? [`(.member.space=${space}&.member.person=${person})`]
+            : [],
+        ].join('|'),
+        true,
+      )
+      let found = rows.find((r) => r.space && r.entity.eid == space)
+      let named = rows.find((r) =>
+        r.app && r.entity.eid == app && idOf(r.app.space) == space
+      )
+      let seat = rows.find((r) =>
+        r.member && idOf(r.member.person) == person &&
+        idOf(r.member.space) == space
+      )
+      return {
+        space: found ? spaceOf(found) : null,
+        app: named ? appOf(named) : null,
+        role: seat?.member?.role ?? null,
+      }
     },
     // What a hostname someone else owns is aimed at (T-33037, T-34596): the
     // hostname row, the space it opens, and the app when it opens one app

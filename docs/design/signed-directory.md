@@ -44,7 +44,9 @@ Each signed GET starts the real directory request and a fallback deadline shared
 by the transport: 25 ms from its creation, not another 25 ms per lookup. The
 `x-yak-directory-revision` request header bypasses the directory part's TTL
 cache. The directory Store captures its committed epoch beside the query, before
-yielding, and returns it with the response.
+yielding, and returns it with the response. Within one request a question is
+asked once, until the request writes to the directory (hops.ts `recall`), and
+the answer keeps the revision it was read at.
 
 | Successful path                        | Directory work                                      | Serving-copy RPCs before answering |
 | -------------------------------------- | --------------------------------------------------- | ---------------------------------- |
@@ -163,11 +165,12 @@ especially “Store composition”.
 
 A tool invocation owns its directory view. A committed directory write does not
 renew that view or its captured Store doors. `reacquire` opens a provisional
-view and resolves stable space/app identities, then reads the caller's current
-membership and administrative standing. Only after every check succeeds does it
-return the new metadata, Who and Store door together. Removal, downgrade, trash
-and credential narrowing still refuse the operation. Names are never resolved a
-second time to choose a replacement target.
+view and reads the space, the app and the caller's current membership by stable
+identity in one directory round trip (directory.ts `target`), then the caller's
+administrative standing. Only after every check succeeds does it return the new
+metadata, Who and Store door together. Removal, downgrade, trash and credential
+narrowing still refuse the operation. Names are never resolved a second time to
+choose a replacement target.
 
 Deployment checkpoints retain the release/fence compare-and-set conditions. The
 protected continuation runs with newly acquired metadata, not by mutating old

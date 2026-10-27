@@ -44,6 +44,13 @@ import { serve } from './unseen.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
+import { running } from './agent.ts'
+import {
+  copyOf,
+  type ServingCopyDoor,
+  signedDirectory,
+} from './directory-copy.ts'
+import { ServingCopy } from './serving-copy.ts'
 
 // Every app app_list answered as data, across its spaces.
 let apps = (out: Out) =>
@@ -512,6 +519,70 @@ let deployRoundTrips = await (async () => {
 })()
 test('a deploy says how many round trips it took', () => {
   assertEquals(deployRoundTrips, true)
+})
+
+// The same change through the connector's own door (mcp.ts): a signed
+// directory over the serving copy, opened again after each directory commit
+// (`reopen`), and the tool answered as the door answers it (agent.ts
+// `running`). Every directory read is a round trip from wherever the request
+// landed, a hundred milliseconds from Stockholm (T-130730), so the count is
+// what holds a deploy's time: a request asks each question once until it
+// writes, and a target it holds is read again in one.
+let signedRoundTrips = await (async () => {
+  let core = new ServingCopy({
+    persistence: { read: () => undefined, write: () => {} },
+  })
+  // The copy's object answers a miss as null (index.ts `PublicDirectory`).
+  let missed = <T>(read: () => T) => {
+    try {
+      return Promise.resolve(read())
+    } catch {
+      return Promise.resolve(null)
+    }
+  }
+  let door: ServingCopyDoor = {
+    begin: () => Promise.resolve(core.begin()),
+    finish: (n) => Promise.resolve(core.finish(n)),
+    revision: () => Promise.resolve(core.revision),
+    settle: (n, committed) => Promise.resolve(core.settle(n, committed)),
+    valid: (n) => Promise.resolve(core.valid(n)),
+    publish: (n, key, body) => Promise.resolve(core.publish(n, key, body)),
+    put: (n, key, body) => Promise.resolve(core.put(n, key, body)),
+    read: (key) => missed(() => core.read(key)),
+    get: (key) => missed(() => core.get(key)),
+  }
+  let { env } = platform('signed-hops-secret', {
+    SERVING_COPY: { idFromName: (name) => name, get: () => door },
+  })
+  let reopen = () =>
+    directory(
+      signedDirectory({ fetch: (r) => dirPart.fetch(r, env) }, copyOf(env)),
+      true,
+    )
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let setup: Ctx = { env, dir: reopen(), reopen, person: ADA }
+  await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(setup, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+  await booted(setup)
+  let hops = async (name: string, args: Record<string, unknown>) => {
+    let c = clock()
+    let ctx: Ctx = { env, dir: reopen(), reopen, person: ADA, clock: c }
+    let tool = TOOLS.find((t) => t.name == name)!
+    await c.counting(() => running(ctx, tool)(args))
+    return stages(c.header()).hops
+  }
+  let app = { space: 'ada', app: 'recipes' }
+  return {
+    files: await hops('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>hi</h1>' }],
+    }),
+    deploy: await hops('app_deploy', app),
+  }
+})()
+test('a deploy through the connector asks the directory each thing once until it writes', () => {
+  assert(signedRoundTrips.files <= 7, JSON.stringify(signedRoundTrips))
+  assert(signedRoundTrips.deploy <= 26, JSON.stringify(signedRoundTrips))
 })
 
 // And what a listing costs (T-35431, T-123502). The shape is what the exact

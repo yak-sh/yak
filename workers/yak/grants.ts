@@ -237,6 +237,10 @@ export let narrowed = (
       (await dir.seated(person, role)).filter((s) => matches(s.space)),
     role: async (space: Parameters<Directory['role']>[0], person: string) =>
       matches(space) ? await dir.role(space, person) : null,
+    target: async (space: string, person: string, app?: string | null) => {
+      let got = await dir.target(space, person, app)
+      return got.space && matches(got.space) ? got : { ...got, role: null }
+    },
     own: async () => {
       let space = eid ? await dir.at(eid) : await dir.space(slug)
       if (!space) throw refuse('missing', `no space ${slug}`)

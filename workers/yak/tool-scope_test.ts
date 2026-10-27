@@ -123,9 +123,25 @@ let fixture = () => {
       },
       role: async (where: Space) =>
         where.eid == 'meta' ? 'owner' : await read<Role | null>('role'),
+      target: async (eid: string, _person: string, held?: string | null) => {
+        let [where, now, role] = await Promise.all([
+          read<Space>('space'),
+          held ? read<App | null>('app') : null,
+          read<Role | null>('role'),
+        ])
+        return {
+          space: eid == SPACE ? where : null,
+          app: now?.eid == held && now?.space == eid
+            ? { ...now, policy: core.revision }
+            : null,
+          role,
+        }
+      },
     }
-    let checked: Pick<Directory, 'at' | 'appAt' | 'space' | 'app' | 'role'> =
-      dir
+    let checked: Pick<
+      Directory,
+      'at' | 'appAt' | 'space' | 'app' | 'role' | 'target'
+    > = dir
     return checked as unknown as Directory
   }
   let env = {

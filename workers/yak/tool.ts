@@ -23,6 +23,7 @@ import {
   daysLeft,
   type Directory,
   META,
+  type Role,
   type Space,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -283,8 +284,16 @@ export let admin = async (ctx: Ctx): Promise<boolean> => {
 // and restore (tools.ts) — the platform's admin stands as an owner in every
 // space. App writes still go through the store's own rules and journal,
 // recorded as the admin (T-63550).
-let roleIn = async (ctx: Ctx, space: Space, over: boolean) => {
-  let role = await ctx.dir.role(space, ctx.person)
+//
+// `seat` is the role when it was read already, in the same snapshot as the
+// space (`reacquire`).
+let roleIn = async (
+  ctx: Ctx,
+  space: Space,
+  over: boolean,
+  seat?: Role | null,
+) => {
+  let role = seat !== undefined ? seat : await ctx.dir.role(space, ctx.person)
   return role != 'owner' && over && await admin(ctx) ? 'owner' : role
 }
 
@@ -317,6 +326,7 @@ let callerIn = async (
   space: Space,
   write: boolean,
   over: boolean,
+  seat?: Role | null,
 ) => {
   if (
     ctx.who?.spaceEid
@@ -325,7 +335,7 @@ let callerIn = async (
   ) {
     throw refuse('access', 'this credential does not open that space')
   }
-  let who = asCaller(ctx, await roleIn(ctx, space, over))
+  let who = asCaller(ctx, await roleIn(ctx, space, over, seat))
   if (over && await admin(ctx)) who.administrative = true
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
@@ -404,16 +414,13 @@ export let reacquire = async (
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
     try {
-      let pair = held ? await scope.dir.appAt(held.eid) : null
-      let space = pair?.space ?? await scope.dir.at(previous.eid)
-      if (
-        !space || space.eid != previous.eid ||
-        held && (!pair || pair.app.space != space.eid)
-      ) {
+      let now = await scope.dir.target(previous.eid, ctx.person, held?.eid)
+      let { space } = now
+      let app = now.app ?? undefined
+      if (!space || held && !app) {
         throw refuse('missing', 'the authorized target no longer exists')
       }
-      let who = await callerIn(scope, space, write, over)
-      let app = pair?.app
+      let who = await callerIn(scope, space, write, over, now.role)
       if (!trash) awake(space, app)
       ctx.dir = scope.dir
       return {
