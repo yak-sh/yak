@@ -11,8 +11,10 @@ pull request has no main push to time, so the step is push-only and a PR judges
 the committed rows alone. A push that touches none of the Worker's build watch
 paths deploys nothing at all: the recorder waits for the version, finds no
 Cloudflare build check for the commit, says
-`no Workers Build — nothing to time`, and the gate judges the rows already
-recorded.
+`no kernel Workers Build — nothing to time`, and the gate judges the rows
+already recorded. So does a push a newer one to main overtook with Worker source
+of its own: its build stops before deploying, or never runs, and the recorder
+says `overtaken by <sha>, whose build deploys it`.
 
 By hand — the same two commands, and what the workflow runs:
 

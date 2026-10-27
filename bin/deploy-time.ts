@@ -105,12 +105,14 @@ export let finished = (runs: Check[]): Check | undefined =>
 /** Where the wait for a commit's uploaded version stands: whether the version
  * is found, whether the commit changes the watched source (wrangler.ts
  * `WATCHED`; null when git could not tell), Cloudflare's finished build
- * with how many seconds ago it was first seen, and the seconds waited. */
+ * with how many seconds ago it was first seen, the seconds waited, and
+ * whether a newer push to main changes the watched source after it. */
 export type Waiting = {
   found: boolean
   coming: boolean | null
   finished?: { conclusion: string | null; ago: number }
   waited: number
+  overtaken?: boolean
 }
 
 // Seconds a finished build's version may take to show in `versions list`,
@@ -126,18 +128,24 @@ export let LIMIT = 900
 /// verdict({ found: false, coming: true, waited: 90, finished: { conclusion: 'failure', ago: 0 } }) -> "Cloudflare's build failed: failure"
 /// verdict({ found: false, coming: true, waited: 150, finished: { conclusion: 'success', ago: 60 } }) -> 'Cloudflare built it but uploaded no version within 60s'
 /// verdict({ found: false, coming: true, waited: 900 }) -> "Cloudflare's build has not finished after 900s"
+/// verdict({ found: false, coming: true, waited: 150, finished: { conclusion: 'success', ago: 60 }, overtaken: true }) -> 'skip'
+/// verdict({ found: false, coming: true, waited: 20, overtaken: true }) -> 'skip'
 /** What the wait does next. Cloudflare builds a push only when it changes the
  * watched source, so a docs-or-CI commit has nothing to wait for; one that
  * does is waited on until Cloudflare's own build finishes, however long its
- * queue, never a guess at how long a build takes. */
+ * queue, never a guess at how long a build takes. A push a newer one overtook
+ * uploads nothing either: its build stops before deploying (wrangler.ts
+ * `superseded`), or Cloudflare never runs it, and the newer push's own gate
+ * times the deploy that carries it. */
 export let verdict = (
-  { found, coming, finished, waited }: Waiting,
+  { found, coming, finished, waited, overtaken }: Waiting,
 ): 'found' | 'skip' | 'wait' | string => {
   if (found) return 'found'
   if (coming === false) return 'skip'
   if (finished && finished.conclusion != 'success') {
     return `Cloudflare's build failed: ${finished.conclusion}`
   }
+  if (overtaken) return 'skip'
   if (finished && finished.ago >= SETTLE) {
     return `Cloudflare built it but uploaded no version within ${SETTLE}s`
   }
@@ -418,9 +426,18 @@ let starts = async (sha: string) => {
   return parent ? await changed(root.pathname, parent, sha) : null
 }
 
+// Main's tip, or null when it cannot be read.
+let tipOf = async (): Promise<string | null> =>
+  (await api('commits/main').catch(() => null))?.sha ?? null
+
+// Whether `tip` changes the watched source after `sha`, so its build
+// overtakes `sha`'s.
+let overtakes = async (sha: string, tip: string) =>
+  tip != sha && await changed(root.pathname, sha, tip).catch(() => null) == true
+
 // Waits for `sha`'s uploaded version as verdict() says: null when
-// Cloudflare builds nothing for it, and an error when its build cannot
-// upload one.
+// Cloudflare builds nothing for it or a newer push overtook it, and an error
+// when its build cannot upload one.
 let awaited = async (
   sha: string,
   pushed: string,
@@ -430,15 +447,22 @@ let awaited = async (
   let begun = Date.now()
   let asked = 0
   let done: { conclusion: string | null; at: number } | undefined
+  // Main's tip as last asked, and whether it overtook `sha`.
+  let tip = sha
+  let over = false
   for (;;) {
     let now = Date.now()
-    if (!match && coming !== false && !done && now - asked >= 10_000) {
+    if (!match && coming !== false && !over && now - asked >= 10_000) {
       asked = now
-      let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
-        check_runs: [],
-      }))
-      let run = finished(checks.check_runs)
-      if (run) done = { conclusion: run.conclusion, at: now }
+      if (!done) {
+        let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
+          check_runs: [],
+        }))
+        let run = finished(checks.check_runs)
+        if (run) done = { conclusion: run.conclusion, at: now }
+      }
+      let head = await tipOf()
+      if (head && head != tip) over = await overtakes(sha, tip = head)
     }
     let next = verdict({
       found: !!match,
@@ -448,9 +472,19 @@ let awaited = async (
         conclusion: done.conclusion,
         ago: (now - done.at) / 1000,
       },
+      overtaken: over,
     })
     if (next == 'found') return match
-    if (next == 'skip') return null
+    if (next == 'skip') {
+      console.log(
+        `${sha.slice(0, 8)}: ${
+          over
+            ? `overtaken by ${tip.slice(0, 8)}, whose build deploys it`
+            : 'no kernel Workers Build'
+        } — nothing to time`,
+      )
+      return null
+    }
     if (next != 'wait') {
       throw new Error(`no uploaded version for ${sha}: ${next}`)
     }
@@ -502,9 +536,6 @@ export let main = async (args = Deno.args) => {
     if (!backfill) {
       match = await awaited(sha, push.pushed, match)
       if (!match) {
-        console.log(
-          `${sha.slice(0, 8)}: no kernel Workers Build — nothing to time`,
-        )
         skipped = true
         continue
       }
