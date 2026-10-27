@@ -7,14 +7,10 @@
 // its login will want its own pair; that is a later leaf's.
 import { replyTo } from './host.ts'
 export let FROM = 'hello@bot.yak.sh'
-export let REPLY_TO = replyTo()
 
-// The fleet's task graph, addressed as a reader. hello@yaks.app forwards to a
-// person's mailbox and nowhere else, so a letter sent only there is invisible
-// to every agent: it waits for that person to relay it by hand. This is the
-// address the tasks server's inbound sweep pulls into `mail` entities aimed at
-// P-19 (src/inbound.ts `routeTo`, the address book's entry for the project),
-// which is what puts a letter in `task inbox` and on the comms bus. FROM is a
-// bot.yak.sh address, so the arrival is DKIM-aligned and grades verified —
-// the sweep delivers nothing else to the bus.
-export let GRAPH = 'task@bot.yak.sh'
+// REPLY_TO is also where the platform writes to its own people (the feedback
+// tool, the usage alert): the box's @yaks/mail pulls hello@yaks.app, whose
+// address is filed under the yaks.app project, so a letter there is held for
+// that project's sessions and filed as a task on its board (@yaks/mail
+// `mail_task`). One address, so the letter lands in one project.
+export let REPLY_TO = replyTo()

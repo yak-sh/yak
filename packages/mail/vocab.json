@@ -268,6 +268,24 @@
       ],
       "tries": 6,
       "description": "Hand an outbound letter to the sender and record its outcome. A send the sender knows never left is tried again; an unavailable configured sender defers its recorded run."
+    },
+    "mail_task": {
+      "effect": true,
+      "created": [
+        "mail"
+      ],
+      "target": ".mail !deliver",
+      "option": "local",
+      "description": "File a letter that arrived for a project, or for an address filed under one, as a task in that project, linked to the letter by an about edge, so it waits on the board until it is answered."
+    },
+    "mail_answered": {
+      "effect": true,
+      "created": [
+        "delivered"
+      ],
+      "target": ".mail.reply_to",
+      "option": "local",
+      "description": "Complete the task a letter filed once this graph has delivered a reply to it."
     }
   }
 }

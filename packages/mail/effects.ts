@@ -1,6 +1,8 @@
 // What the server does about a letter: the `@yaks/mail/effects` entry point —
 // the code behind `mail_post` (./vocab.json), which hands an outbound letter to
-// a sender and writes `delivered` or `bounced` back onto it.
+// a sender and writes `delivered` or `bounced` back onto it, and behind
+// `mail_task` and `mail_answered` (./work.ts), which file a letter that reached
+// a project as a task and complete it once it is answered.
 //
 // The sender is why this entry point takes OPTIONS. Handing a letter over
 // needs a transport — an account, a token, an endpoint — and none of that is a
@@ -20,6 +22,7 @@ import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
 import { cloudflare } from './cloudflare.ts'
 import { stash } from './stash.ts'
+import { work } from './work.ts'
 
 /** A named sender, lent by the host or built here — or the reason there is
  * none. An unavailable sender leaves letters waiting without stopping boot. */
@@ -66,11 +69,12 @@ export let waiting = (reason: string): Handler => (event, tx, write, attempt) =>
  * sender cannot be built, nothing is sent and the letters wait in the graph
  * rather than the server refusing to start. */
 export let effects = (
-  host?: Pick<Host, 'senders'> | null,
+  host?: Pick<Host, 'senders'> & Partial<Pick<Host, 'vocab'>> | null,
   options: Options = {},
 ): Handlers => {
   let kept: Sender | undefined
   return {
+    ...work(host?.vocab),
     mail_post: (event, tx, write, attempt) => {
       let said = options.sender
       let { sender, waiting: reason } = said

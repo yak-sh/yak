@@ -736,7 +736,9 @@ A letter sent with `mail send --about <project>` goes out from the project's
 address, so its answer is routed to the project (@yaks/mail). An entity wears
 one address, so a project's other addresses are filed under it: a letter to an
 entity wearing `email` with `filed.project` naming the project (hello@yaks.app,
-filed under the platform's project) is held for the project the same way.
+filed under the platform's project) is held for the project the same way. Such a
+letter is also filed as a task on the project's board (@yaks/mail `mail_task`),
+so it stays in sight until it is answered after a session has heard it.
 
 The next session is one at work. An outside session hears what is held on its
 own calls; a native transcript hears it only mid-turn (`pending` or `running`).

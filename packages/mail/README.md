@@ -307,6 +307,27 @@ Successful delivery clears the waiting reason. A transport rejection records
 `bounced.reason` and is also reported, without sending that letter twice.
 `mail check` reports configuration problems too.
 
+## A letter to a project is work
+
+Where `local` is set, a letter that arrives for a project is filed as work in
+it, the way @yaks/heal files a task for each bug the tracker opens. A session of
+the project hears the letter once on its bus (@yaks/session) and marks it
+`notified`; the task is what stays behind until somebody answers.
+
+- `mail_task`: an arrival (`mail` with no `deliver`) whose `mail.target` is a
+  project, or an address filed under one (`email{address}` + `filed{project}`,
+  as hello@yaks.app is filed under the yaks.app project), files `task{}` +
+  `doc{title, body}` + `filed{project, priority: 1}` and an `about` edge from
+  the task to the letter. The task's eid derives from the letter (`taskEid` in
+  ./work.ts), so a run that is repeated writes nothing new.
+- `mail_answered`: once a reply whose `mail.reply_to` names that letter is
+  `delivered`, the task is completed. A letter that needs no answer is cancelled
+  by whoever reads it.
+
+Both are declared with `"option": "local"`, so a graph whose mail a person reads
+in a mail client files nothing, and a graph without `task` or `filed.project`
+does nothing.
+
 ## Pulling from an edge
 
 A graph behind a perimeter cannot be posted to. Its edge keeps what arrived

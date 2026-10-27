@@ -183,7 +183,7 @@ import {
   mint,
   revoke,
 } from './grants.ts'
-import { GRAPH, mail } from './mail.ts'
+import { mail } from './mail.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import {
@@ -5902,14 +5902,12 @@ let OURS: Row[] = [
         ...await titling(ctx.dir, ctx.person),
       })
       let eid = minted(wrote).$said ?? ''
-      // The letter, to two readers at once: the platform's own address, where
-      // a person reads it, and the fleet's task graph (mail.ts GRAPH), where
-      // the sweep turns it into mail an operator is notified of instead of one
-      // a person must relay. Either one's reply goes to whoever said it, when
-      // they are signed in: the answer is for them, and our own address in
-      // Reply-To would send it back to us.
-      // One send, so it reaches both or neither and the answer below stays
-      // true either way. It leads with the words: what was said is the report,
+      // The letter, to the platform's own address (mail.ts REPLY_TO), which
+      // the box pulls into the yaks.app project: its sessions hear it and its
+      // board holds it as a task until it is answered. The reply goes to
+      // whoever said it, when they are signed in: the answer is for them, and
+      // our own address in Reply-To would send it back to us.
+      // It leads with the words: what was said is the report,
       // and everything else is a line of context under a rule, so a person
       // takes it in at a glance.
       // Who it is from, on the letter. Nobody signed in is said plainly —
@@ -5927,7 +5925,7 @@ let OURS: Row[] = [
       // letter in a person's mailbox is a thing a person has to read.
       let test = isTestAddress(email ?? '')
       let sent = !test && await mail(ctx.env)({
-        to: [replyTo(ctx.env), GRAPH],
+        to: [replyTo(ctx.env)],
         ...(email ? { replyTo: email } : {}),
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +

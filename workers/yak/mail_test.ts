@@ -18,18 +18,9 @@ import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
-import { canon } from '@yaks/mail'
 import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import {
-  account,
-  FROM,
-  GRAPH,
-  mail,
-  mailable,
-  REPLY_TO,
-  sending,
-} from './mail.ts'
+import { account, FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
@@ -63,9 +54,8 @@ test('every address an app writes from is one it can be written to', () => {
 })
 
 // The platform's own letter (mail.ts), which is a different sender: one send
-// carries every reader, so a feedback report cannot reach the person at
-// REPLY_TO and miss the fleet's graph inbox at GRAPH (or the other way).
-// Whatever the list, the letter still comes FROM the bot address — the only
+// carries every reader. Whatever the list, the letter still comes FROM the bot
+// address — the only
 // domain Email Sending will sign for — and is still answered at REPLY_TO.
 test('one send carries every reader, from one address', async () => {
   let posted: {
@@ -81,14 +71,14 @@ test('one send carries every reader, from one address', async () => {
   try {
     let send = sending('token', 'account', 'https://api.test')
     await send({ to: REPLY_TO, subject: 's', body: 'b' })
-    await send({ to: [REPLY_TO, GRAPH], subject: 's', body: 'b' })
+    await send({ to: [REPLY_TO, 'ann@x.test'], subject: 's', body: 'b' })
     await send({ to: REPLY_TO, subject: 's', body: 'b', replyTo: 'ann@x.test' })
   } finally {
     globalThis.fetch = real
   }
   assertEquals(posted.map((p) => p.to), [
     ['hello@yaks.app'],
-    ['hello@yaks.app', 'task@bot.yak.sh'],
+    ['hello@yaks.app', 'ann@x.test'],
     ['hello@yaks.app'],
   ])
   assertEquals(posted.map((p) => p.from.address), [FROM, FROM, FROM])
@@ -167,13 +157,6 @@ test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', asy
     globalThis.fetch = real
   }
   assertEquals(urls, ['https://api.test/accounts/acct/email/sending/send'])
-})
-
-// The graph inbox is the box's mailbox for what the platform writes: the
-// box's @yaks/mail pulls bot.yak.sh and routes by the canonical address, so
-// the platform must name the same mailbox or the report lands nowhere.
-test('the graph inbox is the fleet address the pull routes', () => {
-  assertEquals(GRAPH, canon('bot.yak.sh')('task@bot.yak.sh'))
 })
 
 // The binding, faked: what it was handed, and a refusal on demand — the

@@ -68,7 +68,7 @@ import {
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 import { BOT } from './lib/bots.ts'
-import { GRAPH } from './mail-config.ts'
+import { REPLY_TO } from './mail-config.ts'
 import { managePath } from './route.ts'
 import { LISTING } from './published.ts'
 
@@ -194,7 +194,7 @@ test(
       )
       if (!LIVE) {
         assertEquals(
-          letters(k, GRAPH).filter((l) => l.body.includes('roster suite says')),
+          letters(k, REPLY_TO).filter((l) => l.body.includes('roster suite says')),
           [],
           'no feedback letter went',
         )

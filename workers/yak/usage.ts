@@ -59,7 +59,7 @@ import {
   thisMonth,
   WARN,
 } from './meter.ts'
-import { GRAPH, mail } from './mail.ts'
+import { mail } from './mail.ts'
 import { replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Usage, warning } from './usage-alert.ts'
@@ -187,7 +187,7 @@ let accountAlert = async (env: Env, usage: Usage) => {
   )
   if (body) {
     await mail(env)({
-      to: [GRAPH, replyTo(env)],
+      to: [replyTo(env)],
       subject: 'Cloudflare Durable Object usage alert',
       body,
     })

@@ -159,12 +159,11 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.body, `${kitchen43}/recipes v1`)
     assertStringIncludes(sent.body, `https://${kitchen43}.yaks.app/recipes/`)
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
-    // The same letter is addressed to the fleet's graph inbox as well, so it
-    // lands in `task inbox` instead of waiting on a person to relay it. One
-    // send, two readers: the graph copy is the letter, not a summary of it.
-    assertEquals(sent.to, ['hello@yaks.app', 'task@bot.yak.sh'])
-    assertEquals(await letter(k, 'task@bot.yak.sh', 'app_rename'), sent)
-    // Answering it, from either copy, reaches the person who said it.
+    // To the platform's address alone, which the box files in the yaks.app
+    // project; two addresses would put one letter in whichever project's copy
+    // arrived first.
+    assertEquals(sent.to, ['hello@yaks.app'])
+    // Answering it reaches the person who said it.
     assertEquals(sent.replyTo, them.email)
 
     // The row, in the meta store: the words, who said them, and where they
