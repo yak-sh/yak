@@ -304,7 +304,7 @@ export let contentPages = (): Page[] => {
     painted:
       `!!document.querySelector('.Map_Node[data-node]:not([data-node^="phase:"])')`,
   }, {
-    name: 'map',
+    name: 'schema',
     path: '/?map',
     painted: `!!document.querySelector('.Shell_Body .Head_Title')
       ?.textContent.includes('Schema') && ${table}`,

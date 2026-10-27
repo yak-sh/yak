@@ -88,18 +88,18 @@
       "tolerance": 0
     },
     {
-      "name": "map/cold",
+      "name": "schema/cold",
       "unit": "ms",
       "better": "lower",
-      "median": 264,
+      "median": 323,
       "resolution": 1,
       "tolerance": 0
     },
     {
-      "name": "map/warm",
+      "name": "schema/warm",
       "unit": "ms",
       "better": "lower",
-      "median": 101,
+      "median": 125,
       "resolution": 1,
       "tolerance": 0
     },
