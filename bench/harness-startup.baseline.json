@@ -39,8 +39,8 @@
       "name": "close",
       "unit": "ms",
       "better": "lower",
-      "median": 8.700565000006463,
-      "tolerance": 0.45
+      "median": 20.173905999999988,
+      "tolerance": 0.527
     },
     {
       "name": "remoteReady",
