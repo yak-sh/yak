@@ -2,8 +2,9 @@
 // them: the hero a page relays ten times a second is read once, not once per
 // relay. An entity is let go when a write through this package names it
 // (`writes`); every entity is let go when a statement writes a component table
-// any other way, when the schema moves, and when another connection commits
-// (@yaks/sql `revision`'s `outside`).
+// any other way and when the schema moves. When another connection commits
+// (@yaks/sql `revision`'s `outside`), a file's log of which entity each write
+// named (./written.ts) says which to let go; where it can't say, every one.
 //
 // A transaction can roll back what it wrote, so its known writes stay in its
 // pending image until commit. A getter for stored components can read that
@@ -53,8 +54,10 @@
 // A get naming components is cut from a whole entity held, or from one held
 // in part: what an earlier get naming at least those read. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
-// connection's rows) are read again on every hit. Bounded by count and bytes,
-// the longest unread let go first; a scan is read through, not kept.
+// connection's rows) are read again on every hit, of the entities holding
+// them. Bounded by bytes (`memoized`'s `memory`) and by an entity for every
+// 2 KiB of them, the longest unread let go first; a scan is read through, not
+// kept.
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import type { Prop, Vocab } from '@yaks/vocab'
@@ -80,6 +83,7 @@ import { tables } from './layout.ts'
 import { BESIDE, DIAL } from './history.ts'
 import { type Answer as Packed, copied, packed } from './answer.ts'
 import type { Known, Spine } from './write.ts'
+import { follows, newest, since } from './written.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]
 
@@ -159,10 +163,10 @@ export type Spines = {
   learn: (eid: string, spine: Spine) => void
 }
 
-const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192, CLASSES = 256
-// A read of more entities than this is a scan: what it reads is not kept, so
-// it does not push out what is read again and again.
-const SCAN = COUNT / 4
+/** What a store's memory of whole entities keeps, in bytes, unless its opener
+ * says otherwise (./mod.ts `Opts.memory`): what a Durable Object can spare. */
+export const MEMORY = 4 << 20
+const SPINES = 8192, CLASSES = 256
 // Answers are bounded by count, and one too large to keep is read every time.
 const ANSWERS = 256, ANSWER = 16 << 10
 // How many queries asked once are remembered, waiting to be asked again.
@@ -375,7 +379,14 @@ type Kept = {
   /** queries asked once and not kept, oldest first */
   asked: Set<string>
   tables: Set<string>
+  /** whether the file's log follows every table it reads (./written.ts):
+   * none beside the store's own but the blob table, whose text no write
+   * changes under an address */
+  logged: boolean
   clear: () => void
+  /** let go of what another connection may have written: the entities
+   * `eids` names, or every one, and every answer */
+  drop: (eids?: Set<string>) => void
 }
 
 // What one connection says about its transactions and writes, shared by every
@@ -395,14 +406,22 @@ type Connection = {
   shifts: number
   /** answers kept while a transaction is open, by where they are kept */
   answered: [Map<string, Answer>, string][]
-  /** the `outside` revision the spines were kept at */
-  outside: number
   /** the class a birth's opening shape last finished in, by shape */
   classes: Map<string, number>
   /** shapes whose class was learned while a transaction is open */
   learned: Set<string>
   /** the `outside` revision the classes were learned at */
   classedAt: number
+  /** the `outside` and `schema` revisions what memory holds was brought to
+   * (`follow`) */
+  seen: number
+  schema: number
+  /** the newest row of the file's log (./written.ts) whose entity memory let
+   * go, or `undefined` where it read none */
+  cursor?: number
+  /** the cursor the open transaction began at: a row read inside it may be
+   * its own, whose seq another takes if it rolls back */
+  began?: number
 }
 
 // By connection (@yaks/sql `Driver.connection`): every driver speaking
@@ -429,13 +448,14 @@ let opened = (): Connection => ({
   blind: false,
   spines: new Map(),
   since: new Set(),
-  outside: -1,
   classes: new Map(),
   learned: new Set(),
   classedAt: -1,
   versions: new Map(),
   shifts: 0,
   answered: [],
+  seen: -1,
+  schema: -1,
 })
 
 // Have `driver` tell the connection `c` each statement and transaction it runs.
@@ -452,6 +472,10 @@ let tell = (driver: Driver, c: Connection) => {
     for (let k of c.kept) {
       for (let eid of k.after.keys()) k.after.set(eid, LOST)
     }
+    c.cursor = c.began
+  }
+  let begin = () => {
+    if (!c.depth++) c.began = c.cursor
   }
   let ended = (committed: boolean) => {
     if (!committed) undone()
@@ -515,7 +539,7 @@ let tell = (driver: Driver, c: Connection) => {
   }
   let observe = (s: Stmt): void => {
     if (s.t == 'raw') return s.origin && observe(s.origin)
-    if (s.t == 'begin' || s.t == 'savepoint') c.depth++
+    if (s.t == 'begin' || s.t == 'savepoint') begin()
     else if (s.t == 'commit') ended(true)
     else if (s.t == 'rollback') s.to ? undone() : ended(false)
     else if (s.t == 'release' && --c.depth <= 0) ended(true)
@@ -559,7 +583,7 @@ let tell = (driver: Driver, c: Connection) => {
   if (driver.tx) {
     let tx = driver.tx.bind(driver)
     driver.tx = (body) => {
-      c.depth++
+      begin()
       let committed = false
       try {
         let out = tx(body)
@@ -574,6 +598,33 @@ let tell = (driver: Driver, c: Connection) => {
   }
 }
 
+// Bring what memory holds of the connection `c` past what other connections
+// committed since it last looked: let go of the entities the file's log says
+// they wrote (./written.ts), or of every one where it can't say, as when the
+// schema moved, which nothing logs.
+let follow = (driver: Driver, c: Connection) => {
+  let now = revision(driver, 'outside')
+  if (now == c.seen) return
+  let schema = revision(driver, 'schema')
+  // A store in memory keeps no log: its one connection sees every statement.
+  let names = [...c.kept].flatMap((k) => [...k.tables])
+  let logged = !!driver.file && [...c.kept].every((k) => k.logged) &&
+    follows(driver, new Set(names.filter((name) => name != BLOBS)))
+  let written = logged && schema == c.schema && c.cursor != null
+    ? since(driver, c.cursor)
+    : undefined
+  for (let k of c.kept) k.drop(written?.eids)
+  if (written) {
+    for (let eid of written.eids) c.spines.delete(eid)
+  } else {
+    c.spines.clear()
+    c.since.clear()
+  }
+  c.cursor = written ? written.at : logged ? newest(driver) : undefined
+  c.seen = now
+  c.schema = schema
+}
+
 /** The spines kept for the connection `driver` is. */
 export let spined = (driver: Driver): Spines => {
   let c = connect(driver)
@@ -585,12 +636,7 @@ export let spined = (driver: Driver): Spines => {
   }
   return {
     get: (eids, read) => {
-      let now = revision(driver, 'outside')
-      if (now != c.outside) {
-        c.spines.clear()
-        c.since.clear()
-        c.outside = now
-      }
+      follow(driver, c)
       let out = new Map<string, Spine>()
       let missing = eids.filter((eid) => {
         let held = c.spines.get(eid)
@@ -693,13 +739,23 @@ let copy = (
   return out
 }
 
-/** The memory of whole entities for a store bound to `driver` and `vocab`. */
+/** The memory of whole entities for a store bound to `driver` and `vocab`,
+ * keeping up to `memory` bytes of them. */
 export let memoized = (
   driver: Driver,
   vocab: Vocab,
   derived: Derived = {},
+  memory = MEMORY,
 ): Memo => {
   let c = connect(driver)
+  let count = Math.floor(memory / 2048)
+  // A read of more entities than this is a scan: what it reads is not kept,
+  // so it does not push out what is read again and again.
+  let scan = Math.floor(count / 4)
+  let own = new Set(['entity', 'tombstone', BLOBS, ...tables(vocab)])
+  let through = Object.values(derived).flatMap((d) =>
+    storedOnly(d, vocab) ? tablesOf(d.expr(col('__owner'))) ?? [] : []
+  )
   let k: Kept = {
     held: new Map(),
     part: new Map(),
@@ -709,24 +765,25 @@ export let memoized = (
     asked: new Set(),
     after: new Map(),
     afterPart: new Map(),
-    tables: new Set([
-      'entity',
-      'tombstone',
-      BLOBS,
-      ...tables(vocab),
-      ...Object.values(derived).flatMap((d) =>
-        storedOnly(d, vocab) ? tablesOf(d.expr(col('__owner'))) ?? [] : []
-      ),
-    ]),
+    tables: new Set([...own, ...through]),
+    logged: through.every((name) => own.has(name)),
     clear: () => {
       k.held.clear()
       k.part.clear()
       k.sizes.clear()
       k.bytes = 0
     },
+    drop: (eids) => {
+      k.answers.clear()
+      if (!eids) k.clear()
+      for (let eid of eids ?? k.after.keys()) {
+        if (eids) evict(eid)
+        if (k.after.has(eid)) k.after.set(eid, LOST)
+      }
+    },
     // What a transaction writing more than a scan reads is not kept either.
     commit: () => {
-      if (k.after.size > SCAN) return
+      if (k.after.size > scan) return
       for (let [eid, b] of k.after) {
         if (b !== LOST && !(b && holed(b))) hold(eid, b, k.afterPart.get(eid))
       }
@@ -746,7 +803,7 @@ export let memoized = (
     let size = b ? sizeOf(b) : 64
     k.sizes.set(eid, size)
     k.bytes += size
-    k.held.set(eid, b && structuredClone(b))
+    k.held.set(eid, b && copy(b))
     if (asked) k.part.set(eid, asked)
   }
   // Whether memory holds what a read asks of an entity: all of it, or the
@@ -757,7 +814,7 @@ export let memoized = (
       (!part || !!wanted && [...wanted].every((name) => part.has(name)))
   }
   let trim = () => {
-    while (k.held.size > COUNT || k.bytes > BYTES) {
+    while (k.held.size > count || k.bytes > memory) {
       evict(k.held.keys().next().value!)
     }
   }
@@ -968,16 +1025,8 @@ export let memoized = (
       if (!moved) a.tables = a.tables.map(([t]) => [t, c.versions.get(t) ?? 0])
     }
   }
-  let seen = -1
   // Another connection's commit, or anything else this one cannot see.
-  let sync = () => {
-    let now = revision(driver, 'outside')
-    if (now == seen) return
-    k.clear()
-    k.answers.clear()
-    for (let eid of k.after.keys()) k.after.set(eid, LOST)
-    seen = now
-  }
+  let sync = () => follow(driver, c)
   // A stable relation can change when another entity is patched. Such
   // components refresh on every miss; only this global revision can reuse the
   // completed answer. Unproven providers remain uncached.
@@ -1044,7 +1093,7 @@ export let memoized = (
         b,
       ) => [b.entity.eid, b]),
     )
-    if (!c.blind && missing.length <= SCAN) {
+    if (!c.blind && missing.length <= scan) {
       for (let eid of missing) {
         if (c.dirty.has(eid)) continue
         let b = fresh.get(eid) ?? null
@@ -1054,18 +1103,19 @@ export let memoized = (
     let hits = eids.filter((eid) =>
       !written.has(eid) && !read.has(eid) && k.held.get(eid)
     )
-    // A hit's dynamic components are read now, in one statement.
-    let names = [
-      ...new Set(
-        (refresh ? hits : []).flatMap((eid) =>
-          Object.keys(k.held.get(eid)!).filter((name) =>
-            dynamic.has(name) && (!wanted || wanted.has(name))
-          )
-        ),
-      ),
-    ]
+    // A hit's dynamic components are read now, in one statement, of the hits
+    // holding any.
+    let stale = new Map(
+      (refresh ? hits : []).flatMap((eid) => {
+        let names = Object.keys(k.held.get(eid)!).filter((name) =>
+          dynamic.has(name) && (!wanted || wanted.has(name))
+        )
+        return names.length ? [[eid, names] as const] : []
+      }),
+    )
+    let names = [...new Set([...stale.values()].flat())]
     let current = new Map(
-      (names.length ? get([...new Set(hits)], names) : []).map((
+      (names.length ? get([...stale.keys()], names) : []).map((
         b,
       ) => [b.entity.eid, b]),
     )

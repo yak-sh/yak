@@ -402,6 +402,9 @@ export type Opts = BindOpts & {
   /** Read main as of a transaction, or a branch, and write only to the branch:
    * what a connection opened for a mode is bound with (./mode.ts). */
   mode?: Mode
+  /** How many bytes of the entities it read the store keeps in memory
+   * (./memo.ts): 4 MiB unless its opener can spare more. */
+  memory?: number
 }
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
@@ -507,7 +510,7 @@ export let storage = (
   let numbered = typeof base.number == 'object'
     ? !base.number.except.includes('archetype')
     : !!base.number
-  let memo = memoized(driver, vocab, base.derived)
+  let memo = memoized(driver, vocab, base.derived, base.memory)
   // A query's rows, from memory while the tables its answer stands on are
   // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A
   // `direct` read takes presence from the component tables, not the archetype

@@ -661,6 +661,9 @@ let composed = async (
             }
             : false,
           history,
+          // A model turn reads its window again each step, a thousand lines
+          // of a long transcript: more than a Durable Object's 4 MiB keeps.
+          memory: 32 << 20,
         }
         store = opening(o)
         return store

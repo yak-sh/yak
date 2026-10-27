@@ -70,6 +70,7 @@ import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { busy } from './error.ts'
 import { clocked, versioned } from './versions.ts'
+import { writtenDdl } from './written.ts'
 
 import type { Statistics } from './meta.ts'
 import { META, tables } from './layout.ts'
@@ -313,6 +314,7 @@ export let tabled = (
 ): Stmt[] => [
   ...spine(vocab),
   ...clocks(vocab, file).flatMap(versioned),
+  ...told(vocab, file),
   ...docDdl(vocab, derived),
 ]
 
@@ -321,6 +323,11 @@ export let tabled = (
 // own writes and keeps none.
 let clocks = (vocab: Vocab, file: boolean): string[] =>
   file && vocab.comp('archetype') ? ['archetype'] : []
+
+// Which entity each write named, for a file's other connections to let go of
+// just those (./written.ts). A single-owner store keeps no log either.
+let told = (vocab: Vocab, file: boolean): Stmt[] =>
+  file ? writtenDdl(tables(vocab)) : []
 
 let spine = (vocab: Vocab): Stmt[] => [
   ...SPINE,
@@ -350,6 +357,7 @@ export let retabled = (
   return [
     ...spine(vocab),
     ...clocked(driver, clocks(vocab, !!driver.file)),
+    ...told(vocab, !!driver.file),
     ...make && stands(driver, make) ? [] : view,
   ]
 }

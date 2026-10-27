@@ -280,12 +280,29 @@ entity read again costs no row, whole or cut to the components a `get` names. A
 others; a `read` takes the entities it found from the same memory, unless it
 asks for a derived value a whole read leaves out. A statement that writes a
 component table without naming its entities lets go of every one, as do schema
-changes and another connection's commits; nothing a transaction has written is
-kept until that transaction ends. Transactions are seen where the driver says
-them: a `begin` or savepoint through `query`, or the driver's own `tx`, so a
-host that opens one some other way must not read through the store inside it.
-Drivers naming one `connection` (@yaks/sql `Driver`), as every driver over a
-Durable Object's storage does, keep one memory between them.
+changes; nothing a transaction has written is kept until that transaction ends.
+Transactions are seen where the driver says them: a `begin` or savepoint through
+`query`, or the driver's own `tx`, so a host that opens one some other way must
+not read through the store inside it. Drivers naming one `connection` (@yaks/sql
+`Driver`), as every driver over a Durable Object's storage does, keep one memory
+between them.
+
+A file keeps a log of which entity each write named, `entity_written`, so
+another connection's commit lets go of just the entities it wrote: a model turn
+reading the same thousand lines of a transcript each step reads again only the
+ones that changed, while other processes commit to the file. Triggers on the
+spine, the graves and every component's table write it, in the same transaction
+as the rows, whoever wrote them, raw SQL included; it keeps about its newest
+65,536 rows. Where it can't say what moved, every entity is let go, as before:
+for a connection that fell further behind, over a file whose tables lack those
+triggers (one an older install made), and for a store reading a stored value
+through a table other than its own and @yaks/blob's, whose text no write changes
+under an address. A store in memory has no other connection and keeps no log.
+
+Memory keeps up to 4 MiB of entities, and an entity for every 2 KiB of that;
+`base.memory` gives a store more, as the box's host gives each of its stores 32
+MiB. A read of more than a quarter of those entities is a scan, read through and
+not kept, so it pushes out nothing read again and again.
 
 An entity a `patch` writes is not read back to be known: what it held before and
 what the patch said make what it holds after, kept once the transaction commits.
@@ -694,6 +711,8 @@ option).
 - `doc_value`: a read view when the vocabulary declares `doc`.
 - `server_meta`: database metadata, separate from graph entities.
 - `entity_sequence` and triggers: the human-number high-water mark.
+- `entity_written` and triggers, in a file: which entity each write named, in
+  commit order, for the other connections' memory (under Read).
 
 Required properties become NOT NULL, enums become CHECK constraints, and
 declared defaults fill omitted values. A `{ "now": true }` default uses the
