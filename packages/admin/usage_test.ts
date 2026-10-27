@@ -3,12 +3,16 @@ import { type Answer, HOUR, jumps, readings, report } from './usage.ts'
 import { analytics, look } from './service.ts'
 
 let at = Date.parse('2026-10-17T12:00:00Z')
-let iso = (ms: number) => new Date(ms).toISOString()
+// The 48 hours before `at`, then `at`, as analytics stamps them.
+let hours = Array.from(
+  { length: 49 },
+  (_, i) => new Date(at - (48 - i) * HOUR).toISOString(),
+)
+let last = hours[48]
 // A tracker object that read `before` rows each of the 48 hours before `at`
 // and `now` rows in it, answering 3,100 fetches and 98 RPCs that hour.
 let answer = (before: number, now: number): Answer => {
   let object = { scriptName: 'yak-tracker', namespaceId: 'ns', objectId: 'o1' }
-  let hours = Array.from({ length: 49 }, (_, i) => at - (48 - i) * HOUR)
   return {
     viewer: {
       accounts: [{
@@ -17,18 +21,18 @@ let answer = (before: number, now: number): Answer => {
           dimensions: {
             namespaceId: 'ns',
             objectId: 'o1',
-            datetimeHour: iso(h),
+            datetimeHour: h,
           },
           sum: {
-            rowsRead: h == at ? now : before,
+            rowsRead: h == last ? now : before,
             rowsWritten: 1,
             duration: 1,
           },
         })),
-        called: hours.map((h) => ({
-          dimensions: { ...object, datetimeHour: iso(h) },
-          sum: { requests: 1300 },
-        })),
+        called: [{
+          dimensions: { ...object, datetimeHour: last },
+          sum: { requests: 3198 },
+        }],
         entries: [
           {
             dimensions: { ...object, name: 'platform', type: 'jsrpc' },
