@@ -105,6 +105,35 @@ test('a consumed asset completion token starts a fresh Wrangler upload', async (
 })
 
 for (
+  let [name, output] of [
+    [
+      'a version not yet readable after its upload',
+      `Uploaded yak (11.30 sec)\n✘ [ERROR] A request to the Cloudflare API (/accounts/a/workers/scripts/yak/versions/v1) failed.\n\n  The requested Worker version could not be found, please check the ID being passed and try again. [code: 100146]`,
+    ],
+    [
+      'a container application internal error',
+      `╭ Deploy a container application deploy changes to your application\n│\n\n✘ [ERROR] There has been an internal error\n\n\nIf you think this is a bug then please create an issue`,
+    ],
+    [
+      'an asset upload session refused',
+      `✘ [ERROR] Received a malformed response from the API\n\n\n\n✘ [ERROR] Received a malformed response from the API\n\n  Unauthorized\n  POST /accounts/a/workers/assets/upload?base64=true -> 401 Unauthorized`,
+    ],
+  ]
+) {
+  test(`a Wrangler deploy retries ${name}`, async () => {
+    let calls = 0
+    let code = await runStep(
+      ['deploy', '--env', 'staging'],
+      () => Promise.resolve({ code: ++calls == 1 ? 1 : 0, output }),
+      {
+        wait: () => Promise.resolve(),
+      },
+    )
+    assertEquals({ code, calls }, { code: 0, calls: 2 })
+  })
+}
+
+for (
   let [name, output, log] of [
     [
       'authentication',
@@ -122,6 +151,11 @@ for (
       responseLog(401),
     ],
     ['HTML denial', malformed(403), responseLog(504)],
+    [
+      'script upload refused',
+      'Received a malformed response from the API\n  Unauthorized\n  PUT /accounts/a/workers/scripts/yak -> 401 Unauthorized',
+      '',
+    ],
     [
       'WAF block',
       'The Cloudflare API responded with a WAF block page instead of the expected JSON response',

@@ -212,21 +212,39 @@ let deploying = (args: string[]) =>
   command(args) == 'deploy' ||
   (command(args) == 'versions' && args.includes('deploy'))
 
+// The containers API's client words every HTTP 500 it gets this way, and
+// prints no request or status beside it.
+let INTERNAL = /^\s*There has been an internal error\b/
+
+// Final API errors a new Wrangler process gets past. Asset completion tokens
+// are single-use (100312): a new process starts a fresh upload session rather
+// than resubmitting the consumed token. A version just uploaded can stay
+// unreadable past Wrangler's own two seconds of asking (100146): a new process
+// uploads it again.
+let RACED = /\[code: (?:100146|100312)\]/
+
+// Asset uploads are authorized by the upload session's own JWT, not the
+// deploy's token: their 401 refuses the session, and a new process opens
+// another.
+let SESSION = /\/workers\/assets\/upload\b/
+
 // JSON API errors hide their HTTP status on the console. Wrangler's sanitized
 // debug file records it even at normal verbosity. Use the last response before
 // the final API error, never an earlier request that Wrangler recovered from.
 let transient = ({ output, log = '' }: StepResult) => {
   output = stripVTControlCharacters(output).split('[ERROR]').at(-1)!
+  if (INTERNAL.test(output)) return true
   let malformed = output.includes('Received a malformed response from the API')
   let failed = /A request to the Cloudflare API(?: \([^\n]+\))? failed\./.exec(
     output,
   )
   if (!malformed && !failed) return false
-  // Asset completion tokens are single-use. A new Wrangler process starts a
-  // fresh upload session rather than resubmitting the consumed token.
-  if (failed && /\[code: 100312\]/.test(output)) return true
-  let status = /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) \/\S+ -> (\d{3})\b/
-    .exec(output)?.[1]
+  if (failed && RACED.test(output)) return true
+  let request =
+    /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) (\/\S+) -> (\d{3})\b/
+      .exec(output)
+  if (request?.[2] == '401' && SESSION.test(request[1])) return true
+  let status = request?.[2]
   if (!status) {
     let at = log.lastIndexOf(
       failed?.[0] ?? 'Received a malformed response from the API',
