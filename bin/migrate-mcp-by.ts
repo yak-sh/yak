@@ -8362,6 +8362,19 @@ let plan = async (g: Graph) => {
       (b) => [b.entity.eid, b],
     ),
   )
+  // A historical project or persona already names an agent correctly.
+  let named = new Set(
+    (await g.get(
+      [
+        ...new Set(
+          evidence.map((x) =>
+            (rows.get(x.eid)?.[x.comp] as Comp | undefined)?.by
+          ).filter((id): id is string => typeof id == 'string'),
+        ),
+      ],
+      ['project', 'persona'],
+    )).filter((b) => b.project || b.persona).map((b) => b.entity.eid),
+  )
   let actors = new Map<string, string | undefined>()
   let patches = new Map<string, Bundle>()
   let stamps = 0
@@ -8377,6 +8390,7 @@ let plan = async (g: Graph) => {
       !held ||
       !['at', 'by', 'via'].every((p) => same(held[p], (x.stamp as Comp)[p]))
     ) continue
+    if (typeof held.by == 'string' && named.has(held.by)) by = held.by
     if (held.by == jeff || (held.by == by && held.via == via)) continue
     let b = patches.get(x.eid) ?? { entity: { eid: x.eid }, $was: {} }
     b[x.comp] = { by, via }
@@ -8466,6 +8480,15 @@ try {
       ]),
     ]
     let copied = await g.get(ids)
+    copied.push(
+      ...await g.get([
+        ...new Set(
+          evidence.map((x) =>
+            x.stamp.by
+          ).filter((id): id is string => typeof id == 'string'),
+        ),
+      ], ['project', 'persona']),
+    )
     // These preconditions check the target's kind, so copy those references too.
     let named = [['using', 'provider'], ['using', 'model'], ['fork', 'from'], [
       'spawned',
