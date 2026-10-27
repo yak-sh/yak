@@ -482,6 +482,11 @@ export let analytics = (rows: (sql: string) => Record<string, unknown>[]) => {
   return { asked, done: () => void (globalThis.fetch = real) }
 }
 
+/** How many gallery cards a page draws (gallery.ts `card`), whatever other
+ * classes a card wears beside its own. */
+export let cards = (html: string) =>
+  html.match(/class="[^"]*\bMake_Card\b[^"]*"/g)?.length ?? 0
+
 /**
  * A Durable Object's key-value storage in a Map, the slice the Wire object
  * reads (stream.ts): a value is kept as a structured clone, as the runtime

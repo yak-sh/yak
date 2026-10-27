@@ -31,6 +31,7 @@ import {
   ticketed,
 } from './gallery.ts'
 import type { Env } from './env.ts'
+import { cards } from './testing.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -249,7 +250,7 @@ test('the gallery page carries the listings and its own metadata', async () => {
   assertStringIncludes(html, '"@type":"CollectionPage"')
   assertStringIncludes(html, 'Recipe box')
   assertStringIncludes(html, 'https://jeff.yaks.app/recipes/c.png')
-  assert(!(await page([]).text()).includes('class="Make_Card"'))
+  assertEquals(cards(await page([]).text()), 0)
 })
 
 // The home page keeps its own examples in the file, and gives the space up to
@@ -261,7 +262,7 @@ test('the showcase keeps the chosen demo order and featured image', () => {
     file,
     DEMOS.map((eid) => shown({ eid, title: `App ${eid}` })),
   )
-  assertEquals((six.match(/class="Make_Card"/g) ?? []).length, 6)
+  assertEquals(cards(six), 6)
   assert(six.indexOf('App recipes') < six.indexOf('App chores'))
   assertStringIncludes(six, '<p>after</p>')
   let hero = showcase(
@@ -299,7 +300,7 @@ test('the homepage paints all six chosen screenshots and Mossvale', async () => 
       '<ul class="Make_List"><li>fallback</li></ul>',
   )
   let html = await (await made({} as Env, dir, file)).text()
-  assertEquals((html.match(/class="Make_Card"/g) ?? []).length, 6)
+  assertEquals(cards(html), 6)
   for (let slug of DEMOS) {
     assertStringIncludes(
       html,

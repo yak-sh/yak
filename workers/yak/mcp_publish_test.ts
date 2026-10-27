@@ -18,6 +18,7 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
+import { cards } from './testing.ts'
 
 // Across spaces a word means what its space says (T-32728): one name, two
 // vocabularies. A bundle merges by name only where the shapes agree, and
@@ -332,7 +333,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     })
     assertStringIncludes(said, `published ${published} v1`)
     let empty = await k.at('yaks.app', '/gallery')
-    assert(!(await empty.text()).includes('class="Make_Card"'))
+    assertEquals(cards(await empty.text()), 0)
 
     // The letter, at the platform's own mailbox, carrying both answers.
     let post = await letter(k, 'hello@yaks.app', 'Recipe box')
@@ -372,9 +373,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let maker = await answer({ cookie: jeff.cookie })
     assertEquals(maker.status, 403)
     await maker.body?.cancel()
-    assert(
-      !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
-        .includes('class="Make_Card"'),
+    assertEquals(
+      cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
+      0,
     )
 
     // The POST acts. Now it is on the page, with its own share card and the
@@ -383,6 +384,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertEquals(ok.status, 200)
     await ok.body?.cancel()
     let page = await k.at('yaks.app', '/gallery').then((r) => r.text())
+    assertEquals(cards(page), 1)
     assertStringIncludes(page, 'Recipe box')
     assertStringIncludes(page, 'Somewhere to keep recipes')
     assertStringIncludes(page, `https://${mine}.yaks.app/recipes/`)
@@ -445,9 +447,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let offers = () =>
       connector(k).tool('app_published', { words: `${published} v` })
     await agent.tool('app_delete', { space: mine, app: 'recipes' })
-    assert(
-      !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
-        .includes('class="Make_Card"'),
+    assertEquals(
+      cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
+      0,
     )
     assertStringIncludes(await offers(), 'nothing published says')
     assertStringIncludes(
@@ -470,9 +472,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       await agent.tool('app_unpublish', { space: mine, app: 'recipes' }),
       'off the gallery',
     )
-    assert(
-      !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
-        .includes('class="Make_Card"'),
+    assertEquals(
+      cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
+      0,
     )
     assertStringIncludes(
       await connector(k).tool('gallery_search', { words: 'recipes' }),
@@ -513,9 +515,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     })
     assertEquals(off.status, 200)
     await off.body?.cancel()
-    assert(
-      !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
-        .includes('class="Make_Card"'),
+    assertEquals(
+      cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
+      0,
     )
     // An app that was never published cannot be shown: the gallery is what a
     // person can install.

@@ -84,24 +84,26 @@ export let worldBindings = (app: string, person: string): Bindings => {
         },
       }),
     },
+    // Workers AI answers over the network, on a later turn. The embedding
+    // drain a write starts runs behind that write, so its vectors come a turn
+    // later here too, never inside the write's own; a villager's turn is
+    // awaited by the alarm that asks for it, and answers at once.
     AI: {
       gateway: () => ({ getUrl: () => Promise.resolve('') }),
       run: (model: string, input: unknown) =>
-        Promise.resolve(
-          model == MODEL
-            ? {
-              data: (input as { text: string[] }).text.map(() =>
-                Array.from({ length: DIM }, (_, i) => i == 0 ? 1 : 0)
-              ),
-            }
-            : {
-              answers: {
-                go: { type: 'choice', choice: 'home', confidence: 1 },
-                mood: { type: 'choice', choice: 'glad', confidence: 1 },
-              },
-              usage: { input_tokens: 1, output_tokens: 1 },
+        model == MODEL
+          ? new Promise((ok) => setTimeout(ok)).then(() => ({
+            data: (input as { text: string[] }).text.map(() =>
+              Array.from({ length: DIM }, (_, i) => i == 0 ? 1 : 0)
+            ),
+          }))
+          : Promise.resolve({
+            answers: {
+              go: { type: 'choice', choice: 'home', confidence: 1 },
+              mood: { type: 'choice', choice: 'glad', confidence: 1 },
             },
-        ),
+            usage: { input_tokens: 1, output_tokens: 1 },
+          }),
     } as Bindings['AI'],
     MODEL_FETCH: () =>
       Promise.resolve(
