@@ -107,6 +107,22 @@ test('frames resolved again to the same answer write nothing', async () => {
   equal(writes, 1)
 })
 
+let plain = await occurrence()
+let plainWrites = 0
+await reframe(
+  {
+    ...plain,
+    apply: (...args: Parameters<typeof plain.apply>) => {
+      plainWrites++
+      return plain.apply(...args)
+    },
+  },
+  'occurrence',
+  enrichFrames(),
+)
+test('frames naming no culprit resolved again to the same spot write nothing', () =>
+  equal(plainWrites, 0))
+
 test('frame resolver failures retain grouping and text without self enrichment', async () => {
   let g = bare()
   let error = new TypeError('catalog refused')

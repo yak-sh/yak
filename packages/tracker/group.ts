@@ -65,6 +65,20 @@ export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
   past(row, bug) &&
   !(release(row) && before.some((old) => release(old) == release(row)))
 
+/** Where frames place a bug: their top in-app symbol is its culprit, or
+ * else the top in-app frame, or the top frame, its spot. */
+let placed = (frames: Frame[]): Comp => {
+  let culprit = frames.find((f) => f.app && f.symbol)?.symbol
+  let top = frames.find((f) => f.app) ?? frames[0]
+  return culprit ? { culprit, spot: null } : top
+    ? {
+      spot: `${top.file}${top.line ? `:${top.line}` : ''}${
+        top.function ? ` ${top.function}` : ''
+      }`,
+    }
+    : {}
+}
+
 export let grouped = (
   row: Bundle,
   bug: Bundle | undefined,
@@ -79,8 +93,6 @@ export let grouped = (
   let old = comp(bug, 'bug')
   let at = str(e.at)
   let frames = Array.isArray(x.frames) ? x.frames as Frame[] : []
-  let culprit = frames.find((f) => f.app && f.symbol)?.symbol
-  let top = frames.find((f) => f.app) ?? frames[0]
   let back = !!bug && regresses(row, bug, before)
   let marks = inherited(row, bug, before)
   return [
@@ -112,13 +124,7 @@ export let grouped = (
             fault,
             ...(app ? { app } : {}),
             first: at,
-            ...culprit ? { culprit, spot: null } : top
-              ? {
-                spot: `${top.file}${top.line ? `:${top.line}` : ''}${
-                  top.function ? ` ${top.function}` : ''
-                }`,
-              }
-              : {},
+            ...placed(frames),
           }
           : {},
         first: str(old.first) && str(old.first) < at ? old.first : at,
@@ -310,27 +316,24 @@ export let reframe = async (
       },
       exception: { frames },
     }]
-    let culprit = frames.find((f) => f.app && f.symbol)?.symbol
-    let top = frames.find((f) => f.app) ?? frames[0]
+    let place = placed(frames)
     let [known] = await g.read(and(
       eq('entity.eid', bug),
       present('bug'),
       fields('bug.culprit', 'bug.spot'),
     ))
-    if (known && !comp(known, 'bug').culprit && (culprit || top)) {
+    let held = comp(known, 'bug')
+    // A culprit, once named, stays; a spot is written only where it moved.
+    if (
+      known && !held.culprit &&
+      (place.culprit || (place.spot && place.spot != held.spot))
+    ) {
       patch.push({
         entity: { eid: bug },
         $was: {
-          bug: {
-            culprit: token(comp(known, 'bug').culprit),
-            spot: token(comp(known, 'bug').spot),
-          },
+          bug: { culprit: token(held.culprit), spot: token(held.spot) },
         },
-        bug: culprit ? { culprit, spot: null } : {
-          spot: `${top.file}${top.line ? `:${top.line}` : ''}${
-            top.function ? ` ${top.function}` : ''
-          }`,
-        },
+        bug: place,
       })
     }
     // A repeated request mostly finds what is already written.
