@@ -451,13 +451,15 @@ the turns a retry counts, the last stop, the newest checkpoint and what follows
 it, the lines of a finite `sending.window`) and the older entries those name. It
 answers `statusOf`, `openCalls`, `usingBefore`, `sendingBefore` and a model
 turn's context as `transcript()` would, so a step costs the same on a short
-transcript and a long one. What it looks for beyond those newest entries (the
-open calls, the newest `using`, `sending` and stop) a graph remembers, and the
-next reading asks only the lines appended since and the ones it found. A
-transcript with neither checkpoint nor window is its own context, and reaching
-it reads it all. `usingOf()` and `openOf()` ask for the model selection in force
-and the calls no result answers alone. `transcriptWindow()` reads a bounded page
-for user interfaces:
+transcript and a long one. A step running one call (`{ call: true }`) reads what
+its tool reads of the turn, the prompts and the `using` and `sending` in force,
+and no window: the turn sent that, not the call. What it looks for beyond those
+newest entries (the open calls, the newest `using`, `sending` and stop) a graph
+remembers, and the next reading asks only the lines appended since and the ones
+it found. A transcript with neither checkpoint nor window is its own context,
+and reaching it reads it all. `usingOf()` and `openOf()` ask for the model
+selection in force and the calls no result answers alone. `transcriptWindow()`
+reads a bounded page for user interfaces:
 
 ```ts
 import { graph } from '@yaks/graph'

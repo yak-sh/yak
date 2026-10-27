@@ -172,23 +172,33 @@ let view = (entries: Bundle[]) => {
     sending,
     asking: askingOf(entries)?.entity.eid,
     sent: eids(recent(said, sending?.window)),
+    prompts: eids(entries.filter((b) => b.prompt)),
   }
+}
+
+// What a tool call's step asks of the entries: all but the window its turn
+// sent.
+let called = (entries: Bundle[]) => {
+  let { asking: _asking, sent: _sent, ...rest } = view(entries)
+  return rest
 }
 
 for (let forked of [false, true]) {
   for (let seed = 1; seed <= 4; seed++) {
     let g = await world(script(seed, 80, forked))
     let session = forked ? 'child' : 's'
-    let whole = view(await transcript(g, session))
+    let all = await transcript(g, session)
+    let whole = view(all)
     // Capture the integration reads once; the case compares their answers to
     // the whole-transcript oracle, not the cost of composing that oracle.
     let got = view(await reach(g, session, { turn: true }))
     let bodies = view(await reach(g, session, { turn: true, bodies: true }))
+    let call = called(await reach(g, session, { call: true }))
     let status = view(await reach(g, session))
     let using = await usingOf(g, session)
     let open = (await openOf(g, session)).map((b) => b.entity.eid).sort()
     let expectedOpen = whole.open.toSorted()
-    test(`a turn reads what the whole transcript would say (seed ${seed}, fork: ${forked})`, () => {
+    test(`a turn and a tool call read what the whole transcript would say (seed ${seed}, fork: ${forked})`, () => {
       for (let k of Object.keys(whole) as (keyof typeof whole)[]) {
         assertEquals(got[k], whole[k], k)
       }
@@ -196,6 +206,7 @@ for (let forked of [false, true]) {
         bodies,
         whole,
       )
+      assertEquals(call, called(all))
       assertEquals(
         [status.status, status.open, status.using],
         [whole.status, whole.open, whole.using],
@@ -278,6 +289,73 @@ for (let bound of ['window', 'checkpoint'] as const) {
     assertEquals(statusRows < 120, true)
   })
 }
+
+// A turn of 130 tool steps behind a checkpoint that leaves the model nearly all
+// of them, its newest call still running, and a shared prompt from before it
+// began: a tool call's reading has what its tool reads (the prompt, the
+// selection and tools in force) and not the window the turn sent.
+let far = await (async () => {
+  let out: Bundle[] = [
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'rule' },
+      entry: { session: 's', seq: 1 },
+      prompt: { scope: 'shared' },
+      content: { body: 'rule' },
+    },
+    {
+      entity: { eid: 'go' },
+      entry: { session: 's', seq: 2 },
+      content: { body: 'go' },
+      using: { model: M },
+      sending: { tools: ['echo'] },
+    },
+  ]
+  let seq = 2, last = 'go'
+  let line = (eid: string, parts: Record<string, Comp>) => {
+    out.push({ entity: { eid }, entry: { session: 's', seq: ++seq }, ...parts })
+    return eid
+  }
+  for (let i = 0; i <= 130; i++) {
+    if (i == 129) {
+      line('mark', {
+        checkpoint: { through: 'result5', seq: 18, tasks: {} },
+        content: { body: 'summary' },
+        notice: {},
+      })
+    }
+    let ask = line('ask' + i, {
+      ask: { to: M, through: last },
+      using: { model: M },
+      attempt: { by: null },
+    })
+    last = line('call' + i, {
+      call: { to: T, id: 'c' + i, source: ask },
+      tool_async: {},
+    })
+    if (i < 130) {
+      last = line('result' + i, {
+        result: { call: 'call' + i },
+        content: { body: 'ok' },
+      })
+    }
+  }
+  let g = await world(out)
+  let all = await transcript(g, 's')
+  let loaded = 0, get = g.get.bind(g)
+  g.get = async (...args) => {
+    let rows = await get(...args)
+    loaded += rows.length
+    return rows
+  }
+  let call = called(await reach(g, 's', { call: true }))
+  return { whole: called(all), call, loaded }
+})()
+test('a tool call reads what its tool reads of a long turn, not the window it sent', () => {
+  assertEquals(far.call, far.whole)
+  assertEquals(far.call.prompts, ['rule'])
+  assertEquals(far.loaded < 120, true, `${far.loaded} entities`)
+})
 
 // Imported history can contain thousands of controls but no asks. Neither
 // the first model request nor a completed first request owes a retry streak.

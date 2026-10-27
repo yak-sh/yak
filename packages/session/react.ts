@@ -343,17 +343,20 @@ export let currentStatus = (
   session: Eid,
 ): Promise<TranscriptStatus> => entryStatus(g, session)
 
-// A model turn reads the newest of a transcript and what it names (./reach.ts).
-// Its prose comes with every entry when the host reads entries of its own, and
-// is loaded for the lines the turn sends alone otherwise.
-let turnEntries = async (
+// A step reads the newest of a transcript and what it names (./reach.ts): a
+// model turn its context and the window it sends, a step running one call
+// (`Deps.runCall`) what its tool reads of the turn, never a window it does not
+// send. Prose comes with every entry when the host reads entries of its own,
+// and is loaded for the lines a turn sends alone otherwise.
+let stepEntries = async (
   g: Graph,
   session: Eid,
   deps: Deps,
 ): Promise<{ entries: Bundle[]; bodies: boolean }> => {
   let bodies = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
-  return { entries: await reach(g, session, { turn: true, bodies }), bodies }
+  let read = deps.runCall ? { call: true } : { turn: true }
+  return { entries: await reach(g, session, { ...read, bodies }), bodies }
 }
 
 // Whether a transcript may have stopped since a step read it, `seen` being
@@ -595,7 +598,7 @@ export let react = async (
   session: Eid,
   deps: Deps,
 ): Promise<Step> => {
-  let { entries, bodies } = await turnEntries(g, session, deps)
+  let { entries, bodies } = await stepEntries(g, session, deps)
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
   // What the request this step sends carries (./parts.ts): the fixed part

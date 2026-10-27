@@ -5,13 +5,16 @@
 //
 // `reach` reads newest first, a page at a time, and stops at the oldest seq
 // any of those decisions still looks at: the newest ask and the boundary it
-// was sent from, the turns a retry counts back through, the last stop, the
-// summary a checkpoint left and everything after the line it replaced, or the
-// lines a finite `sending.window` sends. Beyond that edge it adds only the
-// entries those name (a call a result answers, the ask a line came from, the
-// newest `using` and `sending`, the prompts a checkpoint retains), each by one
-// query. What it returns answers every function of ./state.ts and ./compact.ts
-// as the whole transcript would; ./reach_test.ts holds the two together.
+// was sent from, the turns a retry counts back through, the last stop, and for
+// a model turn the summary a checkpoint left and everything after the line it
+// replaced, or the lines a finite `sending.window` sends. Beyond that edge it
+// adds only the entries those name (a call a result answers, the ask a line
+// came from, the newest `using` and `sending`, the prompts a checkpoint
+// retains), each by one query. A step running one call reads what its tool
+// reads of the turn (those prompts, `using` and `sending`) and stops where a
+// status does: it sends no window, so it never reads one. What it returns
+// answers every function of ./state.ts and ./compact.ts as the whole
+// transcript would; ./reach_test.ts holds the two together.
 //
 // Those lookups beyond the edge are remembered, so a step costs the lines
 // appended since the last, not the transcript's length. A line is appended at
@@ -61,6 +64,10 @@ export type Reach = {
   bodies?: boolean
   /** a model turn: its context (checkpoint, prompts, window) is reached too */
   turn?: boolean
+  /** a tool call: what a tool reads of the turn it came from (the prompts,
+   * the model selection and `sending` in force), but not the window that
+   * turn sent */
+  call?: boolean
   /** the components to read of each entry; every one but prose by default */
   comps?: string[]
 }
@@ -390,17 +397,18 @@ export let hasAsk = async (g: Graph, session: Eid): Promise<boolean> =>
   !!await newest(await chain(g, session, { comps: [ENTRY] }), `&.${ASK}`)
 
 // What a reading holds besides its newest rows, found by one lookup for all:
-// the open calls (which no result answers), and for a model turn the
-// checkpoints and the prompts it retains; and for a model turn the asks the
-// runner owes a retry, by a query of their own, since that mark is set on an
-// ask already written. The mark is named first: a query is driven by the
-// first component it names, and the few marked entities are read where every
-// ask of the graph, or every line of the transcript, would be.
-let named = async (r: Read, turn: boolean): Promise<Bundle[]> => {
+// the open calls (which no result answers), the prompts for a model turn or a
+// tool call, and the checkpoints for a model turn; and for a model turn the
+// asks the runner owes a retry, by a query of their own, since that mark is
+// set on an ask already written. The mark is named first: a query is driven
+// by the first component it names, and the few marked entities are read where
+// every ask of the graph, or every line of the transcript, would be.
+let named = async (r: Read, o: Reach): Promise<Bundle[]> => {
   let has = (name: string) => r.g.vocab.comp(name)
+  let turn = !!o.turn
   let parts = [
     ...turn && has('checkpoint') ? ['.checkpoint'] : [],
-    ...turn && has('prompt') ? ['.prompt'] : [],
+    ...(turn || o.call) && has('prompt') ? ['.prompt'] : [],
     ...has(CALL) && has(RESULT) ? [`.${CALL} !${RESULT}s`] : [],
   ]
   let retry = `&.provisional&.${ASK}`
@@ -414,7 +422,7 @@ let named = async (r: Read, turn: boolean): Promise<Bundle[]> => {
 
 /** The calls of a transcript no result answers. */
 export let openOf = async (g: Graph, session: Eid): Promise<Bundle[]> =>
-  (await named(await chain(g, session, { comps: [ENTRY, CALL] }), false))
+  (await named(await chain(g, session, { comps: [ENTRY, CALL] }), {}))
     .filter((b) => b.call)
 
 // What a decision still reads, found as the rows come: the oldest seq the rows
@@ -484,7 +492,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
   shapes: Map<string, string[]>
 }> => {
   let r = await chain(g, session, o)
-  let held = await named(r, !!o.turn)
+  let held = await named(r, o)
   let rows: Bundle[] = []
   let find = (eid: Eid) =>
     rows.find((b) => b.entity.eid == eid) ??
@@ -543,7 +551,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
   // Older entries the rows name: what a model selection is in force, the call
   // a result answers, the ask a reply or call came from, and what the open
   // calls have reported.
-  if (o.turn) {
+  if (o.turn || o.call) {
     held.push(
       ...await aspect(r, USING, rows),
       ...await aspect(r, SENDING, rows),

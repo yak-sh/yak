@@ -13,7 +13,8 @@ import { stepping } from '../sqlite/testing.ts'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 import { reach } from './reach.ts'
-import { currentStatus } from './react.ts'
+import { currentStatus, react } from './react.ts'
+import { toolEid } from '@yaks/tools'
 import { sessionDerived } from './status.ts'
 
 let vocab = loadVocab(
@@ -27,9 +28,9 @@ let g = graph({ storage: s, vocab, plugins: [sessions()] })
 let M = identityEid('model', ['fake'])
 
 // A native transcript of `n` lines, as the box holds them: background tool
-// steps answered as they go, a checkpoint leaving the model its last lines,
-// and no `sending` or stop anywhere, so a lookup for one finds none.
-let lines = (session: string, n: number): Bundle[] => {
+// steps answered as they go, a checkpoint leaving the model its last `kept`
+// lines, and no `sending` or stop anywhere, so a lookup for one finds none.
+let lines = (session: string, n: number, kept = 30): Bundle[] => {
   let out: Bundle[] = [{ entity: { eid: session }, session: {} }]
   let line = (seq: number, parts: Record<string, unknown>) =>
     out.push({
@@ -49,7 +50,7 @@ let lines = (session: string, n: number): Bundle[] => {
     line(++seq, { result: { call }, content: { body: 'ok' } })
   }
   line(++seq, {
-    checkpoint: { through: `${session}.${seq - 30}`, seq: seq - 30 },
+    checkpoint: { through: `${session}.${seq - kept}`, seq: seq - kept },
     notice: {},
     content: { body: 'summary' },
   })
@@ -60,6 +61,8 @@ await s.tx((tx) =>
     { entity: { eid: M }, model: { name: 'fake' } },
     ...lines('short', 60),
     ...lines('long', 2000),
+    ...lines('tools', 60),
+    ...lines('turn', 2000, 1900),
   ])
 )
 
@@ -111,11 +114,54 @@ let landed = async () => {
 }
 let bulk = await landed()
 
+// A step running the call the newest ask made, after a step before it read the
+// transcript, and the VM steps it took.
+let echo = {
+  name: 'echo',
+  description: 'say it',
+  parameters: { type: 'object', properties: {} },
+  run: () => 'ok',
+}
+let tool = async (session: string) => {
+  await read(session)
+  let [last] = await g.rows(
+    `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+  )
+  let [ask] = await g.apply([{
+    entity: { eid: `${session}.tool-ask` },
+    entry: { session },
+    ask: { to: M, through: String(last['entity.eid']) },
+    using: { model: M },
+  }])
+  await g.apply([{
+    entity: { eid: `${session}.tool-call` },
+    entry: { session },
+    call: { to: toolEid('echo'), id: 'tool', args: {}, source: ask.entity.eid },
+    tool_async: {},
+  }])
+  let before = steps()
+  let step = await react(g, session, {
+    model: () => Promise.reject(new Error('a tool step asks no model')),
+    tools: [echo],
+    runCall: `${session}.tool-call`,
+  })
+  return { did: step.did, steps: steps() - before }
+}
+let shortTool = await tool('tools'), longTool = await tool('turn')
+
 test('a step on a long transcript reads what one on a short transcript does', () => {
   ok(short.status == 'pending' && long.status == 'pending')
   ok(
     long.steps < short.steps * 1.5,
     `${long.steps} steps on 2,000 lines, ${short.steps} on 60`,
+  )
+})
+
+test('a tool step of a long turn reads what one of a short turn does, not the window the turn sent', () => {
+  ok(shortTool.did == 'ran' && longTool.did == 'ran')
+  ok(
+    longTool.steps < shortTool.steps * 1.5,
+    `${longTool.steps} steps behind a 1,900-line window, ${shortTool.steps} on 60 lines`,
   )
 })
 
