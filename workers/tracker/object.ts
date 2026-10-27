@@ -6,7 +6,6 @@ import {
   type DurableStorage,
   type Hibernation,
   moved,
-  profile,
   replaced,
   reserved,
   type Sockets,
@@ -25,6 +24,7 @@ import {
   vocab,
 } from './core.ts'
 import { batch } from './queue.ts'
+import { billing } from './bill.ts'
 import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
@@ -118,22 +118,13 @@ export class Tracker {
   // One driver over this instance's storage: making one runs its pragma, so
   // a boot or a trace admission made three or four for nothing.
   #driver?: Driver
-  // What each entry point's SQL reads and writes, said in the Worker's logs
-  // at once on waking and at most once a minute after (@yaks/durable-object
-  // `profile`), so a row bill reads as the work that ran it.
-  #rows = profile((summary) =>
-    console.log(
-      'tracker rows',
-      JSON.stringify({ scope: this.scope, ...summary }),
-    )
+  // What each entry point's SQL read and wrote, said in the Worker's logs
+  // when a costly one ends (./bill.ts).
+  #rows = billing((bill) =>
+    console.log('tracker rows', JSON.stringify({ scope: this.scope, ...bill }))
   )
-  #run = async <T>(kind: string, work: () => Promise<T>): Promise<T> => {
-    try {
-      return await this.#rows.run(kind, work)
-    } finally {
-      this.#rows.flush()
-    }
-  }
+  #run = <T>(kind: string, work: () => Promise<T>): Promise<T> =>
+    this.#rows.run(kind, work)
   #sql = () => this.#driver ??= driver(this.ctx.storage, this.#rows.observe)
   #traceMeta = () => meta(this.#sql())
   constructor(

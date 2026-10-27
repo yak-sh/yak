@@ -5,11 +5,11 @@ An independent Worker consumes `yak-errors` into one Durable Object graph for
 reporter, grouping, effects and resolution as `@yaks/tracker`. It has no binding
 to yak; queue intake does not depend on a directory or authentication lookup.
 
-Each object says in the Worker's logs what its SQL read and wrote, line
-`tracker rows`, by entry point (`GET /bugs`, `POST /errors`, `alarm`, `monitor`,
-…) with its costliest statement shapes and no values: at once on waking, then at
-most once a minute while it stays awake (`wrangler tail yak-tracker` shows them
-live). A row bill reads as the work that ran it.
+Each object says in the Worker's logs what an invocation's SQL read and wrote
+when one costs 500 rows or more, line `tracker rows`: its entry point
+(`GET /bugs`, `POST /errors`, `alarm`, `monitor`, …), its rows and its costliest
+statement shapes, with no values (./bill.ts; `wrangler tail yak-tracker` shows
+them live). A row bill reads as the work that ran it.
 
 ## Run and build
 
