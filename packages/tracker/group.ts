@@ -6,7 +6,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
-import { absent, and, eq, every } from '@yaks/query'
+import { absent, and, eq, fields, limit, present, want } from '@yaks/query'
 import { faultOf } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
@@ -52,13 +52,17 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
     ),
   )
 }
+// An occurrence after its bug's resolution, which brings the bug back unless
+// the group saw its release before.
+let past = (row: Bundle, bug: Bundle): boolean =>
+  !imported(row) && !!bug.resolved &&
+  str(comp(row, 'error').at) > str(comp(bug, 'resolved').at)
 /** A resolved bug comes back when it happens after its resolution, unless the
  * occurrence names a release the group already saw: that is old code still
  * running. An occurrence naming no release (a systemd unit's failure, reported
  * from outside the process that ran) has only its time to go by. */
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
-  !imported(row) && !!bug.resolved &&
-  str(comp(row, 'error').at) > str(comp(bug, 'resolved').at) &&
+  past(row, bug) &&
   !(release(row) && before.some((old) => release(old) == release(row)))
 
 export let grouped = (
@@ -133,6 +137,60 @@ export let grouped = (
   ]
 }
 
+// Grouping reads only what it decides by: of the occurrence, what its fault
+// is made of, what grouping writes back and the marks an imported sample
+// carries; of its bug, the counters it moves and when it was resolved, and
+// its marks whole only for an imported sample.
+let MARKS = ['archived', 'notified', 'resolved']
+let ITS = ['error', 'exception', 'during', 'refusal', ...MARKS]
+let COUNTED = fields('bug.hits', 'bug.first', 'bug.last', 'resolved.at')
+
+/** The bug an occurrence joins, as grouping reads it. */
+let joined = (
+  g: Desk,
+  row: Bundle,
+  fault: string,
+  app: string,
+): Bundle | undefined | Promise<Bundle | undefined> =>
+  after(
+    g.read(and(
+      eq('bug.fault', fault),
+      app ? eq('bug.app', app) : absent('bug.app'),
+      COUNTED,
+    )),
+    ([bug]) =>
+      bug && imported(row)
+        ? after(g.get([bug.entity.eid], MARKS), ([marks]) => ({
+          ...bug,
+          ...marks,
+        }))
+        : bug,
+  )
+
+/** The earlier occurrences grouping decides by, and only as many as decide:
+ * an imported sample weighs every one's marks, and any other occurrence
+ * asks, only when it comes after its bug's resolution, for one that shares
+ * its release. */
+let earlier = (
+  g: Desk,
+  row: Bundle,
+  bug: Bundle | undefined,
+): Bundle[] | Promise<Bundle[]> => {
+  if (!bug) return []
+  let of = eq('error.bug', bug.entity.eid)
+  if (imported(row)) return g.read(and(of, ...MARKS.map((m) => want(m))))
+  if (!past(row, bug) || !release(row)) return []
+  let e = comp(row, 'error')
+  return g.read(and(
+    of,
+    ...e.commit
+      ? [eq('error.commit', str(e.commit))]
+      : [absent('error.commit'), eq('error.version', Number(e.version))],
+    fields('error.commit', 'error.version'),
+    limit(1),
+  ))
+}
+
 /** Existing groups can have migrated eids. New groups have deterministic ids;
  * guarded counters serialize competing workers without process-local locks.
  * Contention rebases here, without spending the effect's failure attempts. */
@@ -142,7 +200,7 @@ export let group = async (
   enrich?: Enrich,
 ): Promise<void> => {
   for (;;) {
-    let [row] = await g.get([eid])
+    let [row] = await g.get([eid], ITS)
     if (!row?.error || row.refusal || comp(row, 'error').bug) return
     let full = await (enrich ?? enrichFrames())(row)
     let fault = faultOf(full)
@@ -151,14 +209,10 @@ export let group = async (
       // Local reads and admission stay in one turn. Other processes still
       // compete through the guards, and a lost claim rereads its receipt too.
       await after(
-        g.read(and(
-          eq('bug.fault', fault),
-          app ? eq('bug.app', app) : absent('bug.app'),
-          every(),
-        )),
-        ([bug]) =>
+        joined(g, full, fault, app),
+        (bug) =>
           after(
-            bug ? g.read(and(eq('error.bug', bug.entity.eid), every())) : [],
+            earlier(g, full, bug),
             (before) => g.apply(grouped(full, bug, before), { trusted: true }),
           ),
       )
@@ -186,8 +240,19 @@ export let retained = (rows: Bundle[], count = 100): Set<string> => {
   return keep
 }
 
+/** Deletes the occurrences of a bug that retention no longer keeps, reading
+ * only each one's time and release, and none while the bug's hits, which
+ * count every occurrence it ever grouped, are within the newest it keeps. */
 export let trim = async (g: Desk, bug: string, count = 100): Promise<void> => {
-  let rows = await g.read(and(eq('error.bug', bug), every()))
+  let [held] = await g.read(
+    and(eq('entity.eid', bug), present('bug'), fields('bug.hits')),
+  )
+  let hits = comp(held, 'bug').hits
+  if (typeof hits == 'number' && hits <= count) return
+  let rows = await g.read(and(
+    eq('error.bug', bug),
+    fields('error.at', 'error.commit', 'error.version'),
+  ))
   let keep = retained(rows, count)
   let gone = rows.filter((b) => !keep.has(b.entity.eid))
   if (gone.length) {
@@ -210,6 +275,8 @@ export let frameable = (row: Bundle | undefined): row is Bundle => {
       'handler' in tags && tags.handler == 'error_frames')
 }
 
+// What reframing reads of an occurrence: the frames, and what they come from.
+let FRAMED = ['error', 'exception']
 let inputs = (row: Bundle) => ({
   error: { commit: token(comp(row, 'error').commit) },
   exception: {
@@ -226,12 +293,12 @@ export let reframe = async (
   enrich: Enrich,
 ): Promise<void> => {
   for (let tries = 0; tries < 3; tries++) {
-    let [source] = await g.get([eid])
+    let [source] = await g.get([eid], FRAMED)
     if (!frameable(source)) return
     let full = await enrich(source)
     let frames = comp(full, 'exception').frames
     if (!Array.isArray(frames)) return
-    let [row] = await g.get([eid])
+    let [row] = await g.get([eid], FRAMED)
     if (!frameable(row)) return
     if (JSON.stringify(inputs(source)) != JSON.stringify(inputs(row))) continue
     let bug = str(comp(row, 'error').bug)
@@ -245,8 +312,12 @@ export let reframe = async (
     }]
     let culprit = frames.find((f) => f.app && f.symbol)?.symbol
     let top = frames.find((f) => f.app) ?? frames[0]
-    let [known] = await g.get([bug])
-    if (known?.bug && !comp(known, 'bug').culprit && (culprit || top)) {
+    let [known] = await g.read(and(
+      eq('entity.eid', bug),
+      present('bug'),
+      fields('bug.culprit', 'bug.spot'),
+    ))
+    if (known && !comp(known, 'bug').culprit && (culprit || top)) {
       patch.push({
         entity: { eid: bug },
         $was: {

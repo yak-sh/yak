@@ -271,7 +271,7 @@ export let effects = (
     bug_follow: (e) =>
       follow(host.graph, e.entity.eid, { ...options, since: followSince, url }),
     error_trim: async (e) => {
-      let [row] = await host.graph.get([e.entity.eid])
+      let [row] = await host.graph.get([e.entity.eid], ['error'])
       let bug = str(comp(row, 'error').bug)
       if (bug) await trim(host.graph, bug, options.retain)
     },

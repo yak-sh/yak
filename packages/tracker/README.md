@@ -139,7 +139,11 @@ become notified only after their occasion's letter has its `delivered` mark; an
 earlier occasion's delivery cannot mark a later regression notified. Space
 replies own their own notified mark. Archived bugs still count but never notify.
 Retention keeps the newest hundred plus the first occurrence of each commit (or
-version without a commit).
+version without a commit). Grouping and retention read only what they decide by,
+so one occurrence of a busy bug costs few rows: grouping reads its bug's
+counters, and an earlier occurrence only after a resolution, to ask whether one
+shares its release; trimming reads each occurrence's time and release, and none
+while the bug's hits are within the newest it keeps.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was already seen

@@ -202,6 +202,28 @@ test('old code counts without reopening; a new commit regresses once', async () 
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
 
+let versions = await (async () => {
+  let g = fixture()
+  let versioned = (id: string, version: number, commit: string | null) => {
+    let row = occurrence(id)
+    row.error = { ...comp(row, 'error'), commit, version }
+    return row
+  }
+  await put(g, versioned('1', 1, null))
+  await put(g, versioned('2', 2, a))
+  let [bug] = await bugs(g)
+  let resolved = { at: '2026-10-02T00:00:02Z' }
+  await g.apply([{ entity: bug.entity, resolved }], { trusted: true })
+  await put(g, versioned('3', 1, null))
+  let old = (await bugs(g))[0]
+  await put(g, versioned('4', 2, null))
+  return { old, back: (await bugs(g))[0] }
+})()
+test('a version seen without a commit counts without reopening; one seen only beside a commit reopens', () => {
+  equal(comp(versions.old, 'bug').status, 'resolved')
+  equal(comp(versions.back, 'regressed').error, '4')
+})
+
 for (let kind of ['commit', 'version', 'no release']) {
   for (
     let [when, at] of [
