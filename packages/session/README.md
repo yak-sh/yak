@@ -245,8 +245,10 @@ transcript at once.
 
 With a durable pool, each `session_run` effect performs one leased step. Inputs,
 completed requests, context checkpoints and final tool results owe subsequent
-steps in the transaction that records them. Each `session_tool` effect claims
-and executes one call independently, so several calls can run together. A
+steps in the transaction that records them. `session_input` performs the same
+step for a new input that inherits `using`, leaving an input that selects
+`using` to `session_run` so it owes only one turn. Each `session_tool` effect
+claims and executes one call independently, so several calls can run together. A
 background call (`tool_async`) is answered by `PENDING` ("Pending; its result
 will follow."), which a request derives from the call. A model turn starts while
 calls run only when there is something new to read: an input, a result, or the

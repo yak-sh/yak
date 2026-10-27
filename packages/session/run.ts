@@ -26,7 +26,7 @@ import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { currentStatus, type Deps, react, type Step } from './react.ts'
 import { hasAsk, usingOf } from './reach.ts'
-import { seqOf, type TranscriptStatus } from './state.ts'
+import { kindOf, seqOf, type TranscriptStatus } from './state.ts'
 import { UnknownSession } from './unknown.ts'
 import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
 
@@ -496,22 +496,27 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
 // a task or dependency change also wakes the transcripts holding that work.
 // A removed dependency is read with the ends it had before the commit.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
-  let b = await one(g, e.entity.eid, [
-    'entry',
-    'ask',
-    'task',
-    'edge',
-    'provisional',
-    'attempt',
-  ])
+  let b = e.name == 'content'
+    ? (await g.get([e.entity.eid]))[0]
+    : await one(g, e.entity.eid, [
+      'entry',
+      'ask',
+      'task',
+      'edge',
+      'provisional',
+      'attempt',
+    ])
   if (b?.entry) {
+    if (e.name == 'content' && (b.notice || kindOf(b) != 'input')) return []
+    let session = String(comp(b, 'entry')?.session)
+    if (e.name == 'content' && !await usingOf(g, session)) return []
     if (
       b.ask && !(
         e.name == 'inference' && e.comp?.receipt ||
         e.name == 'attempt' && comp(b, 'attempt')?.by == null && !b.provisional
       )
     ) return []
-    return [String(comp(b, 'entry')?.session)]
+    return [session]
   }
   if (b && await isSession(g, b.entity.eid)) return [b.entity.eid]
   if (!holds(g)) return []
@@ -638,7 +643,21 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
 export let running = (g: Graph, runner: Runner): Handlers => {
   let pooled = !!g.vocab.comp('effect')
   let r = { ...runner, asyncTools: pooled && !!g.vocab.comp('tool_async') }
+  let run: Handlers[string] = async (e, _tx, _write, attempt) => {
+    // Every transcript the event names is answered; a failure in one, a
+    // request to ask again among them, is thrown once the others are.
+    let thrown: unknown
+    for (let session of await about(g, e)) {
+      await (pooled ? advance : answer)(g, session, { ...r, attempt }).catch(
+        (err) => {
+          thrown ??= err
+        },
+      )
+    }
+    if (thrown) throw thrown
+  }
   return {
+    ...declared(g, 'session_input') ? { session_input: run } : {},
     ...declared(g, 'session_tool')
       ? {
         session_tool: async (e: Event, _tx, _write, attempt) => {
@@ -673,19 +692,7 @@ export let running = (g: Graph, runner: Runner): Handlers => {
         },
       }
       : {},
-    session_run: async (e, _tx, _write, attempt) => {
-      // Every transcript the event names is answered; a failure in one, a
-      // request to ask again among them, is thrown once the others are.
-      let thrown: unknown
-      for (let session of await about(g, e)) {
-        await (pooled ? advance : answer)(g, session, { ...r, attempt }).catch(
-          (err) => {
-            thrown ??= err
-          },
-        )
-      }
-      if (thrown) throw thrown
-    },
+    session_run: run,
     ...declared(g, 'session_release')
       ? { session_release: (e: Event, tx: ReadTx) => release(g, e, tx) }
       : {},

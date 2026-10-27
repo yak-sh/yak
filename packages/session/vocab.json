@@ -794,6 +794,13 @@
       "input": {},
       "readOnly": false
     },
+    "session_input": {
+      "effect": true,
+      "created": ["content"],
+      "target": ".entry !lines !using !output !notice",
+      "tries": 8,
+      "description": "an input line inherits its transcript's selected model and owes one turn; an entry selecting a model is already owed by session_run"
+    },
     "session_run": {
       "effect": true,
       "created": [

@@ -178,6 +178,43 @@ let script = (reply: (n: number) => ModelError | Reply['items']) => {
 }
 let done: Reply['items'] = [{ kind: 'assistant', text: 'done' }]
 
+let continued = await (async () => {
+  let { model, asked } = fake()
+  let p = proc(store(), 'w1', model)
+  await p.g.apply(ask('conversation'))
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  let line: Bundle = {
+    entity: { eid: 'second-line' },
+    entry: { session: 'conversation' },
+    content: { body: 'and again' },
+  }
+  await p.g.apply([line])
+  await p.fx.idle()
+  // Re-delivery of the same line and another pool pass owe no extra turn.
+  await p.g.apply([line])
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  return { asked, entries: await transcript(p.g, 'conversation') }
+})()
+
+test('a later line inherits using and gets exactly one model turn', () => {
+  assertEquals(continued.asked.length, 2)
+  assertEquals(continued.asked[1].items, [
+    { kind: 'user', text: 'say done' },
+    { kind: 'assistant', text: 'done' },
+    { kind: 'user', text: 'and again' },
+  ])
+  assertEquals(continued.entries.map(kindOf), [
+    'input',
+    'ask',
+    'output',
+    'input',
+    'ask',
+    'output',
+  ])
+})
+
 // A process working the pool on a clock the test moves, with `s1` asked.
 let clocked = async (model: Model) => {
   let clock = { t: 0 }

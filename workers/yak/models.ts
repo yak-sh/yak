@@ -392,6 +392,7 @@ export let asking = (at: Stored): Handlers => {
     report: (error, _, phase) => at.broke(`model ${phase}`, error),
   })
   return {
+    session_input: run.session_input,
     session_run: run.session_run,
   }
 }

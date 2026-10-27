@@ -678,6 +678,12 @@ test('a page asks its store for a turn and the answer lands beside it', async ()
   assertAlmostEquals(Number((ask.cost as Comp).dollars), cost)
   let [session] = await v.landed(`.entity.eid=${s}&?session.cost&*`)
   assertAlmostEquals(Number((session.session as Comp).cost), cost)
+  await v.settled()
+  assertEquals((await v.send('/apply', line(s))).status, 200)
+  await v.settled()
+  assertEquals(v.asked.map((a) => a.model), [FLASH, FLASH])
+  assertEquals((await v.read(`.entry.session=${s}&.output`)).length, 2)
+  assertAlmostEquals((await v.spent()).meter!.models, cost * 2)
 })
 
 test('a typed question comes back as an answer entry', async () => {
@@ -766,7 +772,10 @@ test('a model calls only the commands marked for it, as the person who asked', a
 })
 
 test('a visitor asks an app for a turn only where it opens its models', async () => {
-  let answer = () => ({ response: 'hello' })
+  let answer = () => ({
+    response: 'hello',
+    usage: { prompt_tokens: 1_000, completion_tokens: 100 },
+  })
   let shut = await vale(answer, { access: 'open' })
   let refused = await shut.send(
     '/apply',
@@ -791,7 +800,14 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
   await until(async () =>
     (await open.read(`.entry.session=${s}&.output&*`)).some(said)
   )
+  await open.settled()
+  let paid = (await open.spent()).meter!.models
+  assert(paid > 0)
   assertEquals((await sent(line(s))).status, 200)
+  await open.settled()
+  assertEquals(open.asked.length, 2)
+  assertEquals((await open.read(`.entry.session=${s}&.output`)).length, 2)
+  assertAlmostEquals((await open.spent()).meter!.models, paid * 2)
   // Opened models are a visitor's to ask in their own transcript only.
   await open.send('/apply', asking(ada, FLASH))
   assertEquals((await sent(line(ada))).status, 403)

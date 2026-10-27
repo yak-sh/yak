@@ -112,6 +112,7 @@ export let appConfig: Config = {
         'attempt',
         'cancel',
         'dispatch',
+        'session_input',
         'session_run',
       ],
     },
