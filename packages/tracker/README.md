@@ -251,16 +251,17 @@ serves (workers/yak/page-script.ts) and into the box's web page (@yaks/web). It
 reads its door off its tag's `data-yak-at` and the page's release off
 `data-yak-version`, and posts each uncaught error, unhandled rejection, failed
 fetch and `console.error` to `<at>api/report`, tagged with the `mechanism` that
-caught it and the breadcrumbs before it. A fetch of the page's own origin that
-never had an answer (the server away, the person leaving) is no break, and a
-caller leaving its rejection uncaught, as itself or as another error's cause,
-does not make it one. `broken(body, refusal)` in `./report` reads either door's
-body, the reporter's or the browser's Reporting API's, into breaks, leaving out
-an answer `refusal` calls a no somebody meant (default: a 4xx) and a fetch of
-the page's own origin that had no answer, which the reporter woven into a tab
-opened before T-124729 still sends. The platform admits captured failures into
-the tracker; the box hands them to the host's reporter, which spools them like
-any other.
+caught it and the breadcrumbs before it. An error logged to the console goes
+with its stack and its `cause` chain, as a server's reporter keeps them. A fetch
+of the page's own origin that never had an answer (the server away, the person
+leaving) is no break, and a caller leaving its rejection uncaught, as itself or
+as another error's cause, does not make it one. `broken(body, refusal)` in
+`./report` reads either door's body, the reporter's or the browser's Reporting
+API's, into breaks, leaving out an answer `refusal` calls a no somebody meant
+(default: a 4xx) and a fetch of the page's own origin that had no answer, which
+the reporter woven into a tab opened before T-124729 still sends. The platform
+admits captured failures into the tracker; the box hands them to the host's
+reporter, which spools them like any other.
 
 [@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
 thrown in an answer or transcript entry. Tracker extends it with `stack`,

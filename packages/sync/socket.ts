@@ -19,9 +19,12 @@
 // So a drop the wire comes back from is recovered, not lost: once the socket
 // is open again and every subscription has been answered again (the set as it
 // now stands, or a refusal, which is said on its own), nothing was missed.
-// Only a drop that has not recovered `most` after it began is a failure.
+// Only a drop that has not recovered `most` after it began is a failure, and
+// only while this machine has a network: one with none has no server to fail
+// it, and when its network comes back the wire reopens at once.
 
 import type { Bundle, Eid } from '@yaks/graph'
+import { mask } from '@yaks/query'
 import { decode, stringify, unpack } from '@yaks/vocab/wire'
 import type { Vocab } from '@yaks/vocab'
 import { coalesced } from '@yaks/graph/bundle'
@@ -53,6 +56,16 @@ export type Connect = (url: string) => Socket
 /** How a retry is scheduled. Defaults to `setTimeout`; a test passes its own
  * and fires the reconnect when it wants one. */
 export type Timer = (fn: () => void, ms: number) => void
+
+/** Whether this machine has a network, and how to hear that it has one again.
+ * A browser says both, with `navigator.onLine` and the `online` event, and is
+ * the default; a runtime that says neither is always online. */
+export type Network = {
+  /** false while this machine has no network at all */
+  online: () => boolean
+  /** call `fn` each time the network comes back; returns its removal */
+  back: (fn: () => void) => () => void
+}
 
 /** What a subscriber asks for: a query, or `true` for the raw feed of every
  * committed write. */
@@ -124,6 +137,9 @@ export type WireOpts = {
   /** the longest reconnect delay in ms, and how long an outage may go
    * unresumed before it is reported (default: 30_000) */
   most?: number
+  /** whether this machine has a network (default: the browser's say, where
+   * there is one) */
+  network?: Network
   /** each frame, once the reset bookkeeping has been done for it */
   land: (frame: Frame) => unknown | Promise<unknown>
   /** a subscription needs a fresh answer: opened, re-pointed or disconnected */
@@ -170,17 +186,27 @@ export type Wire = {
  * has been down. Resumed is open again with every subscription answered again,
  * so a drop that resumes in time, whatever its close code (a restart, a proxy
  * reloading, a laptop waking), is the system working and is never said. Said
- * once per outage, while it lasts. */
+ * once per outage, while it lasts, and never while this machine has no
+ * network. Its `cause` says what it was waiting on: a socket that never
+ * reopened, or the queries a reopened one has not had answered. */
 export class Dropped extends Error {
-  constructor(url: string, code: number | undefined, ms: number) {
+  constructor(
+    url: string,
+    code: number | undefined,
+    ms: number,
+    waiting?: string,
+  ) {
     super(
       `${url} closed${code ? ` (${code})` : ''} and has not resumed after ${
-        (ms / 1000).toFixed(1)
-      } s`,
+        secs(ms)
+      }`,
+      waiting ? { cause: waiting } : undefined,
     )
     this.name = 'Dropped'
   }
 }
+
+let secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`
 
 /** The next reconnect delay: double it, but never past the ceiling. */
 export let backoff = (wait: number, most: number): number =>
@@ -199,6 +225,27 @@ let global = (): Connect | undefined => {
   return W && ((url) => new W(url))
 }
 
+// The browser's say on whether this machine has a network: `navigator.onLine`
+// is false only when it has none, and `online` fires when one comes back.
+let browser = (): Network => {
+  let g = globalThis as {
+    navigator?: { onLine?: boolean }
+    addEventListener?: (type: string, fn: () => void) => void
+    removeEventListener?: (type: string, fn: () => void) => void
+  }
+  return {
+    online: () => g.navigator?.onLine !== false,
+    back: (fn) => {
+      g.addEventListener?.('online', fn)
+      return () => g.removeEventListener?.('online', fn)
+    },
+  }
+}
+
+/** An outage: when it began, what closed it, the attempts made since, and
+ * when a socket last opened during it, while that one is still open. */
+type Outage = { at: number; code?: number; tries: number; opened?: number }
+
 /**
  * The socket half of a sync: subscriptions that survive a disconnection, one
  * reconnect timer, and a reset frame after each reopen so a client can work out
@@ -209,6 +256,7 @@ export let wire = (opts: WireOpts): Wire => {
   let timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let first = opts.wait ?? 250
   let most = opts.most ?? 30_000
+  let network = opts.network ?? browser()
 
   let asks = new Map<string, Ask>() // what each subscription asked for
   let refused = new Set<string>() // terminal until explicitly re-pointed
@@ -217,11 +265,12 @@ export let wire = (opts: WireOpts): Wire => {
   let socket: Socket | null = null
   let wait = first
   let retrying = false // the one timer — never a second
+  let turn = 0 // the timer that is live; a network coming back retires it
   let closed = false
   // The outage under way, from the first close until the wire resumes: an
   // open socket closing, or an attempt failing, starts one, and one still
   // here `most` later is said (`Dropped`).
-  let down: { at: number; code?: number } | undefined
+  let down: Outage | undefined
   let hearing = new Set<(open: boolean) => void>()
   let heard = (open: boolean) => {
     for (let fn of hearing) fn(open)
@@ -280,13 +329,39 @@ export let wire = (opts: WireOpts): Wire => {
     }, 16)
   }
 
-  // An outage still under way `most` after it began is a failure, said once.
-  let overdue = (outage: { at: number; code?: number }) =>
+  // An outage still under way `most` after it began is a failure, said once,
+  // unless this machine has no network: then it is the machine's, and the
+  // network coming back times what follows afresh.
+  let overdue = (outage: Outage) =>
     timer(() => {
-      if (down !== outage || closed) return
+      if (down !== outage || closed || !network.online()) return
       let ms = agreed.read() - outage.at
-      opts.report(new Dropped(wsUrl(opts.url), outage.code, ms))
+      opts.report(
+        new Dropped(wsUrl(opts.url), outage.code, ms, waited(outage)),
+      )
     }, most)
+
+  // What an overdue outage waits on: a socket that never reopened, or the
+  // queries a reopened one has not had answered, the first few masked as a
+  // trace keeps them.
+  let waited = (outage: Outage): string => {
+    if (outage.opened === undefined) {
+      let n = outage.tries
+      return `it has not reopened: ${n} attempt${n == 1 ? '' : 's'}${
+        socket?.readyState == 0 ? ', the last still connecting' : ''
+      }`
+    }
+    let held = [...asks].filter(([id, q]) => q !== true && !refused.has(id))
+    let unanswered = held.filter(([id]) => resetting.has(id))
+    let some = unanswered.slice(0, 3).map(([, q]) =>
+      mask(String(q)).slice(0, 200)
+    )
+    return `it reopened after ${
+      secs(outage.opened - outage.at)
+    }, and ${unanswered.length} of ${held.length} queries are not answered again: ${
+      some.join(', ')
+    }${unanswered.length > some.length ? ', …' : ''}`
+  }
 
   // Open, and every query answered since, with the set as it now stands or a
   // refusal: the outage is over, and no change in it was missed. A raw feed
@@ -343,22 +418,44 @@ export let wire = (opts: WireOpts): Wire => {
     if (closed || retrying) return
     if (now) return open()
     retrying = true
+    let mine = ++turn
     timer(() => {
+      if (mine != turn) return
       retrying = false
       open()
     }, wait)
     wait = backoff(wait, most)
   }
 
+  // The network is back, so the outage so far was this machine's: the wire
+  // tries again at once from the first delay, and times what follows afresh.
+  let stopBack = network.back(() => {
+    if (closed || !down) return
+    let now = agreed.read()
+    down = {
+      at: now,
+      code: down.code,
+      tries: 0,
+      opened: socket?.readyState == OPEN ? now : undefined,
+    }
+    overdue(down)
+    turn++
+    retrying = false
+    wait = first
+    open()
+  })
+
   let open = () => {
     if (closed || !connect) return
     if (socket && socket.readyState <= OPEN) return
+    if (down) down.tries++
     let s = connect(wsUrl(opts.url))
     socket = s
     let opened: number | undefined
     s.addEventListener('open', () => {
       if (socket != s || closed) return
       opened = agreed.read()
+      if (down) down.opened = opened
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
       agreed.reset()
@@ -458,16 +555,22 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('close', (e) => {
       if (socket != s) return
       socket = null
-      let begun = down
-        ? undefined
-        : { at: agreed.read(), code: (e as CloseEvent).code }
-      down ??= begun
+      // An open socket closing begins an outage, and so does a failed
+      // attempt, which is its first.
+      let outage: Outage = down ?? {
+        at: agreed.read(),
+        code: (e as CloseEvent).code,
+        tries: opened === undefined ? 1 : 0,
+      }
+      let begun = outage !== down
+      outage.opened = undefined
+      down = outage
       stopClock()
       waiting = []
       inbox = []
       // The next connection is on its way before the page hears of the loss.
       retry(opened !== undefined && agreed.read() - opened >= first)
-      if (begun) overdue(begun)
+      if (begun) overdue(outage)
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)
       }
@@ -518,6 +621,7 @@ export let wire = (opts: WireOpts): Wire => {
     close: () => {
       closed = true
       hearing.clear()
+      stopBack()
       stopClock()
       waiting = []
       let s = socket

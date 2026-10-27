@@ -46,9 +46,14 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
   }
   // The window the script runs in: `fetch` is whatever the window holds by
   // then, as a page's own global is.
-  let win: { origin: string; fetch: typeof server } = {
+  let win: {
+    origin: string
+    fetch: typeof server
+    console: { error: (...args: unknown[]) => void }
+  } = {
     origin: new URL(at).origin,
     fetch: server,
+    console: { error: () => {} },
   }
   let scope = {
     document: {
@@ -119,6 +124,18 @@ test('a failure the browser raises with no error is filed by its message', async
   let message = 'ResizeObserver loop completed with undelivered notifications.'
   p.heard.get('error')!({ target: p.win, error: null, message, filename: at })
   equal(await p.said(), [message])
+})
+
+test('an error logged to the console is filed with what it was wrapped around', async () => {
+  let p = page({})
+  let error = new Error('Dropped: wss://box.test/ws closed (1006)', {
+    cause: 'it has not reopened: 7 attempts',
+  })
+  p.win.console.error(`live client — ${error.message}`, error)
+  equal((await p.bodies()).map((b) => [b.message, b.cause]), [[
+    'live client — Dropped: wss://box.test/ws closed (1006)',
+    'it has not reopened: 7 attempts',
+  ]])
 })
 
 // A script from another origin throws, and the browser hides all but this.

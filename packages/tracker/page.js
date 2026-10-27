@@ -197,18 +197,36 @@
     })
   })
 
+  // What an error was wrapped around, down its `cause` chain, as the server's
+  // reporter keeps it (report.ts `causes`): each link's stack, else its value.
+  let causes = (error) => {
+    let out = []
+    let seen = new Set([error])
+    for (let c = error.cause; c != null && !seen.has(c) && out.length < 5;) {
+      seen.add(c)
+      out.push(
+        c instanceof Error ? c.stack || `${c.name}: ${c.message}` : said(c),
+      )
+      c = c instanceof Error ? c.cause : undefined
+    }
+    return out.join('\nCaused by: ').slice(0, 4000)
+  }
+
   let consoleError = globalThis.console?.error
   if (consoleError) {
     globalThis.console.error = (...args) => {
       // Console arguments can carry user data; only the first sentence is
       // kept, and the stack of an error logged beside it, which says where
-      // the code that logged it was, as an uncaught one's does.
+      // the code that logged it was, as an uncaught one's does, and its cause,
+      // which says what it was wrapped around.
       let message = said(args[0]).slice(0, 2000)
       let error = args.find((a) => a instanceof Error)
       crumb('console', message)
+      let cause = error && causes(error)
       send({
         message,
         stack: error && error.stack,
+        ...cause ? { cause } : {},
         url: location.href,
         mechanism: 'console',
       })

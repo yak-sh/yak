@@ -164,11 +164,19 @@ test("a page's report reaches the host's telemetry as the owner's break", async 
     204,
   )
   await send({ message: '403 /apply: no', status: 403 }) // a no it meant
+  await send({
+    message: 'live client — Dropped: ws://x/ws closed (1006)',
+    stack: 'Dropped: ws://x/ws closed (1006)\n    at http://x/web/app.js:3:1',
+    cause: 'it has not reopened: 7 attempts',
+    url: 'http://x/P-19',
+    mechanism: 'console',
+  })
   let [owner] = await graph.read('.doc.title=x')
   assertEquals(
     said.map(([e, c]) => [
       e.message,
       e.stack?.split('\n')[1].trim(),
+      e.cause,
       c?.mechanism,
       c?.tags?.request,
       c?.tags?.user_id,
@@ -176,8 +184,16 @@ test("a page's report reaches the host's telemetry as the owner's break", async 
     [[
       'x is undefined',
       'at draw (http://x/web/app.js:9:2)',
+      undefined,
       'onerror',
       'page /T-9',
+      owner.entity.eid,
+    ], [
+      'live client — Dropped: ws://x/ws closed (1006)',
+      'at http://x/web/app.js:3:1',
+      'it has not reopened: 7 attempts',
+      'console',
+      'page /P-19',
       owner.entity.eid,
     ]],
   )

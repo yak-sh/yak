@@ -90,6 +90,7 @@ export {
   type Connect,
   Dropped,
   type Frame,
+  type Network,
   type Socket,
   type Timer,
   type Wire,

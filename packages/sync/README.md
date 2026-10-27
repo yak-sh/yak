@@ -373,8 +373,16 @@ whatever closed it (a restart, a proxy, a laptop waking) says nothing. An outage
 that has not resumed `most` after it began, because the server stays away or
 takes the connection and never answers, is a failure: `report` receives a
 `Dropped` error naming the close code and how long it has been down, once per
-outage, while it lasts. It reaches the server whenever only the socket fails; a
-server that is away is seen by its own reporting.
+outage, while it lasts. Its `cause` says what the wire was waiting on: a socket
+that has not reopened, and how many attempts it made, or the queries a reopened
+one has not had answered, masked as a trace keeps them. It reaches the server
+whenever only the socket fails; a server that is away is seen by its own
+reporting.
+
+A machine with no network has no server to fail it. While `network` says it is
+offline (by default the browser's `navigator.onLine`), an outage is never said,
+and when the network comes back (the `online` event) the wire reopens at once,
+from the first delay, and times what follows afresh.
 
 ### The store's clock
 

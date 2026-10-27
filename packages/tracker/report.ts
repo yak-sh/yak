@@ -244,6 +244,8 @@ export type Break = {
   request: string
   message: string
   stack: string
+  /** what the error was wrapped around, down its `cause` chain */
+  cause?: string
   mechanism?: Mechanism
   breadcrumbs?: Crumb[]
 }
@@ -313,8 +315,8 @@ export let meant = (_answer: string, status: number): boolean =>
 
 /**
  * The breaks a page's report door was sent, out of either body: the page
- * reporter's `{message, stack?, url?, line?, status?, answer?, mechanism?,
- * version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
+ * reporter's `{message, stack?, cause?, url?, line?, status?, answer?,
+ * mechanism?, version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
  * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
  * a break in the page. An answer the reporter saw that `refusal` calls a no
  * somebody meant (default {@link meant}) is the page working, not a break,
@@ -335,6 +337,12 @@ export let meant = (_answer: string, status: number): boolean =>
  *   'x is undefined',
  *   'onerror',
  * ])
+ * let [wrapped] = broken(JSON.stringify({
+ *   message: 'live client — Dropped: wss://box.test/ws closed (1006)',
+ *   cause: 'it has not reopened: 7 attempts',
+ *   mechanism: 'console',
+ * }))
+ * equal(wrapped.cause, 'it has not reopened: 7 attempts')
  * equal(broken(JSON.stringify({ message: '403 /apply', status: 403 })), [])
  * equal(broken(JSON.stringify({ message: '502 /x', status: 502, filed: true })), [])
  * let fetched = (message: string) =>
@@ -385,6 +393,9 @@ export let broken = (
       stack: String(
         b.stack ?? (source ? `${source}:${b.lineNumber ?? b.line ?? ''}` : ''),
       ),
+      ...typeof b.cause == 'string' && b.cause
+        ? { cause: b.cause.slice(0, 4000) }
+        : {},
       ...MECHANISMS.has(b.mechanism)
         ? { mechanism: b.mechanism as Mechanism }
         : {},

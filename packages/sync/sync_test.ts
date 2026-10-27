@@ -354,13 +354,15 @@ test('a subscription refused by the server is reported, not applied', async () =
 })
 
 // A wire over sockets driven by hand, so its server can stay away, or take a
-// connection and never answer on it. It holds one query, answered and held a
-// second before each script begins.
+// connection and never answer on it, and its machine can lose its network.
+// It holds one query, answered and held a second before each script begins.
 let drops = () => {
   let now = 0
   let due: { at: number; fn: () => void }[] = []
   let sockets: ReturnType<typeof pair>[] = []
   let away = false
+  let online = true
+  let backs = new Set<() => void>()
   let said: unknown[] = []
   wire({
     url: 'http://drop.test',
@@ -369,6 +371,10 @@ let drops = () => {
     timer: (fn, ms) => {
       due.push({ at: now + ms, fn })
       due.sort((a, b) => a.at - b.at)
+    },
+    network: {
+      online: () => online,
+      back: (fn) => (backs.add(fn), () => backs.delete(fn)),
     },
     land: () => {},
     report: (e) => said.push(e),
@@ -403,6 +409,17 @@ let drops = () => {
       while (last().client.readyState != 0) fire()
       last().client.emit('open')
     },
+    // No network: every attempt fails, as the server being away does.
+    offline: () => {
+      online = false
+      away = true
+      fail()
+    },
+    online: () => {
+      online = true
+      away = false
+      for (let fn of backs) fn()
+    },
     answer: () => tell({ bundles: [] }),
     refuse: () => tell({ refused: { error: 'Refused', message: 'no word' } }),
     pass,
@@ -420,7 +437,9 @@ let drops = () => {
 
 // A drop is said only when the wire has not resumed from it `most` (30 s)
 // after it began: open again, with every query answered again. A refusal is
-// an answer, said on its own path. Each outage is said once, while it lasts.
+// an answer, said on its own path. Each outage is said once, while it lasts,
+// and none while the machine has no network: when it comes back the wire
+// reopens at once, and only what follows is timed.
 for (
   let [script, times] of [
     ['drop:1001 back answer', 0], // a restart
@@ -430,11 +449,34 @@ for (
     ['drop:1006 away:120000', 1],
     ['drop:1001 back', 1],
     ['drop:1006 away:120000 back answer drop:1006 away:120000', 2],
+    ['drop:1006 offline', 0], // a laptop with no network
+    ['drop:1006 offline pass:60000 online back answer', 0],
+    ['drop:1006 offline pass:60000 online', 1], // back, and the server is not
   ] as const
 ) {
   test(`a wire that does "${script}" is said dropped ${times} times`, () => {
     let said = drops()(`${script} pass:120000`)
     assertEquals(said.map((e) => e instanceof Dropped), Array(times).fill(true))
+  })
+}
+
+// A Dropped's cause says what the wire was waiting on.
+for (
+  let [script, cause] of [
+    ['drop:1006 away:120000', 'it has not reopened: 7 attempts'],
+    [
+      'drop:1006 offline pass:60000 online',
+      'it has not reopened: 1 attempt, the last still connecting',
+    ],
+    [
+      'drop:1001 back',
+      'it reopened after 0.0 s, and 1 of 1 queries are not answered again: .recipe',
+    ],
+  ] as const
+) {
+  test(`a wire that does "${script}" says "${cause}"`, () => {
+    let [said] = drops()(`${script} pass:120000`)
+    assertEquals((said as Error).cause, cause)
   })
 }
 

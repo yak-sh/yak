@@ -186,7 +186,10 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
         let agent = request.headers.get('user-agent')
         for (let b of breaks) {
           await host.report?.(
-            Object.assign(new Error(b.message), { stack: b.stack }),
+            Object.assign(
+              new Error(b.message, b.cause ? { cause: b.cause } : undefined),
+              { stack: b.stack },
+            ),
             {
               mechanism: b.mechanism,
               breadcrumbs: b.breadcrumbs,
