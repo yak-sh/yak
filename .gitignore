@@ -20,6 +20,11 @@ node_modules.lock/
 # Operator scratch — wake-brief note-to-self (re-injected post-clear), not a tracked artifact
 .operate/
 
+# Agents' scratch notes and mockups. A long-lived `yak` command pins the
+# checkout's untracked files beside its source (packages/cli/runtime.ts), so
+# what sits here unignored is read, hashed and copied on every start.
+.scratch/
+
 # Materialized persona projection — written by @yaks/persona (`yak persona
 # sync`), the adopted voice AGENTS.md/CLAUDE.md symlink into. This repo un-tracked it in
 # 5fc7573; it regenerates every sync, so ignore it lest a stray `git add -A`
