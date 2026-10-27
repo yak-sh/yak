@@ -159,15 +159,7 @@ import { full, fullFiles } from './usage.ts'
 import { free, refusedVisit, size } from './meter.ts'
 import { scheduleBy } from './used.ts'
 import { sha256 } from './versions.ts'
-import {
-  DAYS,
-  NOT_ON,
-  seen,
-  type Stats,
-  stats,
-  statsOf,
-  viewed,
-} from './views.ts'
+import { DAYS, NOT_ON, seen, stats, statsFor, viewed } from './views.ts'
 import { own as connection } from './connections.ts'
 import { envDoor, fetchDoor } from './outbound.ts'
 import { modelRun, recovery } from './models.ts'
@@ -2254,19 +2246,20 @@ let identity = () => import('./identity.ts')
 // carries the two things the sign-in card stopped asking — what to call them
 // and where their apps live — and the connect instructions, open until an
 // agent has ever been let in as them (T-34236).
-// Every app's visitors, for the owner's block. One read per app, all at once,
-// each already cached for a few minutes in views.ts — and a failure is `null`
-// rather than a throw, because this is the space's front door and it does not
-// go down because Cloudflare's analytics did.
+// Every app's visitors, for the owner's block: every app in the same four
+// queries (views.ts `statsFor`), each answer already cached for a few minutes
+// there — and a failure is `null` rather than a throw, because this is the
+// space's front door and it does not go down because Cloudflare's analytics
+// did.
 let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
-  let asked = apps.map((a) => statsOf(env, a.eid))
-  if (asked.some((s) => !s)) return null
+  let asked = statsFor(env, apps.map((a) => a.eid))
+  if (!asked) return null
   try {
-    let all = await Promise.all(asked as Promise<Stats>[])
-    return apps.map((a, i) => ({
+    let all = await asked
+    return apps.map((a) => ({
       slug: a.slug,
       title: a.title,
-      stats: all[i],
+      stats: all.get(a.eid)!,
     }))
   } catch (e) {
     caught(e, { request: 'views' })

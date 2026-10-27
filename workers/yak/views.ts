@@ -39,6 +39,7 @@ import type { Answer } from './apps.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
 import { caught } from './defects.ts'
+import { elapsed } from './lib/hops.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90
@@ -177,6 +178,16 @@ export let DAYS = 30
 export let TOP = 10
 
 /**
+ * How many rows one list may come back with when it is asked for several apps
+ * at once. The SQL API has no `LIMIT … BY` and no window functions, so no
+ * query can say "ten an app": it says the busiest rows across all of them, this
+ * many, and an app whose own ten may lie past them is asked again alone
+ * (`cut`). One app's crawler following relative links can leave thousands of
+ * one-visit paths, and this is what keeps them out of the answer.
+ */
+export let ROWS = 1000
+
+/**
  * How long an answer is held before the SQL API is asked again. Views are a
  * curiosity, not a control: a few minutes stale is invisible to a person, and
  * it saves a round trip on every refresh of the page.
@@ -211,29 +222,36 @@ let table = (name: string) => {
 /** What a count is, everywhere here: sampled rows, each standing for many. */
 export let COUNT = 'sum(_sample_interval)'
 
-// One app, one window — the FROM and where every query below shares.
-let over = (app: string, days: number, dataset: string) =>
-  `FROM ${table(dataset)} WHERE index1 = '${eid(app)}' ` +
-  `AND timestamp >= NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
+// Some apps, one window — the FROM and where every query below shares. A
+// query asks about every app a page shows and groups by the app, because the
+// page waits on its slowest round trip: four queries an app had a space of ten
+// apps' visits tab waiting 10 to 11 s live, and the same forty took the SQL
+// API 5 to 20 s from the box, where these four take half a second (T-132744).
+let over = (apps: string[], days: number, dataset: string) =>
+  `FROM ${table(dataset)} WHERE index1 IN (${
+    apps.map((a) => `'${eid(a)}'`).join(', ')
+  }) AND timestamp >= NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
 
 /**
- * Views per day, oldest first: the bars. A day nobody came is absent from the
- * answer and filled in by `daily` below, because a gap in a chart is a quiet
- * day and not a missing one.
+ * Views per app per day, oldest first: the bars. A day nobody came is absent
+ * from the answer and filled in by `daily` below, because a gap in a chart is
+ * a quiet day and not a missing one.
  */
-export let perDay = (app: string, days = DAYS, dataset = DATASET) =>
-  `SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, ` +
-  `${COUNT} AS views ${over(app, days, dataset)} GROUP BY day ORDER BY day`
+export let perDay = (apps: string[], days = DAYS, dataset = DATASET) =>
+  `SELECT index1 AS app, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS ` +
+  `day, ${COUNT} AS views ${over(apps, days, dataset)} ` +
+  'GROUP BY app, day ORDER BY day'
 
 // The three "top" lists are one query with a different column, so they are one
 // function. `skip` drops the rows that never had the fact: a direct visit has
 // no referring site, and an unknown country is not a country.
 let top =
   (col: string, as: string, skip: boolean) =>
-  (app: string, days = DAYS, limit = TOP, dataset = DATASET) =>
-    `SELECT ${col} AS ${as}, ${COUNT} AS views ${over(app, days, dataset)}` +
-    `${skip ? ` AND ${col} != ''` : ''} ` +
-    `GROUP BY ${as} ORDER BY views DESC LIMIT ${whole(limit, 100)}`
+  (apps: string[], days = DAYS, limit = TOP, dataset = DATASET) =>
+    `SELECT index1 AS app, ${col} AS ${as}, ${COUNT} AS views ${
+      over(apps, days, dataset)
+    }${skip ? ` AND ${col} != ''` : ''} ` +
+    `GROUP BY app, ${as} ORDER BY views DESC LIMIT ${whole(limit, ROWS)}`
 
 /** The most-visited pages. Every view has a path, so none is skipped. */
 export let topPages = top(PATH, 'path', false)
@@ -250,20 +268,30 @@ export let byClient = top(CLIENT, 'client', true)
 // The SQL API's default format, which is what these queries get back: the
 // schema, the rows, and the count. A number wider than a double arrives as a
 // string, which is why every number here goes through `num`.
-type Said = { data?: Record<string, unknown>[] }
+type Rows = Record<string, unknown>[]
+type Said = { data?: Rows }
 
 let num = (v: unknown) => Number(v) || 0
 let word = (v: unknown) => (v == null ? '' : String(v))
 
 /**
+ * How long a query is waited on before it is asked a second time. The SQL API
+ * answers in 0.2 to 1.1 s, and a few queries in a hundred stall for 6 or 10 s
+ * while the others asked beside them answer (measured from the box,
+ * T-132744): the same query asked again answers in the usual time.
+ */
+export let HEDGE = 1500
+
+/**
  * One query, run. The API takes SQL as the request body and answers JSON. A
  * dataset nobody has written to yet does not exist, and that is an app with no
- * views rather than a failure, so a 404 is an empty answer.
+ * views rather than a failure, so a 404 is an empty answer. Asked again past
+ * HEDGE (`hedged`), so one stalled query does not hold up a page.
  */
-export let ran = async (
-  env: Env,
-  sql: string,
-): Promise<Record<string, unknown>[]> => {
+export let ran = (env: Env, sql: string): Promise<Rows> =>
+  elapsed('analytics_wait', () => hedged(() => asking(env, sql), HEDGE))
+
+let asking = async (env: Env, sql: string): Promise<Rows> => {
   let res = await globalThis.fetch(sqlAt(env), {
     method: 'POST',
     headers: { authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}` },
@@ -274,6 +302,35 @@ export let ran = async (
   if (!res.ok) throw new Error(`analytics ${res.status}: ${said.slice(0, 200)}`)
   return (JSON.parse(said) as Said).data ?? []
 }
+
+// A timer as @yaks/testing's `clock` hands one out: run `fn` in `ms`, and the
+// way to call it off.
+type After = (ms: number, fn: () => void) => () => void
+
+let timeout: After = (ms, fn) => {
+  let timer = setTimeout(fn, ms)
+  return () => clearTimeout(timer)
+}
+
+/**
+ * `ask`, and once more if it has not answered in `wait` ms: whichever answer
+ * comes first is the answer. A failure before the second asking is the
+ * answer at once; one after it waits on the second.
+ */
+export let hedged = <T>(
+  ask: () => Promise<T>,
+  wait: number,
+  after: After = timeout,
+): Promise<T> =>
+  new Promise((resolve, reject) => {
+    let again: Promise<T> | undefined
+    let cancel = after(wait, () => {
+      again = ask()
+      again.then(resolve, () => {})
+    })
+    ask().then(resolve, (e) => again ? again.then(resolve, reject) : reject(e))
+      .finally(cancel)
+  })
 
 /** A day and what it held. */
 export type Day = { day: string; views: number }
@@ -299,11 +356,7 @@ let YMD = (t: number) => new Date(t).toISOString().slice(0, 10)
  * Cloudflare answers a DateTime (`2026-09-01 00:00:00`) and the day is its
  * date part.
  */
-export let daily = (
-  rows: Record<string, unknown>[],
-  days: number,
-  now = Date.now(),
-): Day[] => {
+export let daily = (rows: Rows, days: number, now = Date.now()): Day[] => {
   let had = new Map(rows.map((r) => [word(r.day).slice(0, 10), num(r.views)]))
   let out: Day[] = []
   for (let i = days - 1; i >= 0; i--) {
@@ -313,9 +366,60 @@ export let daily = (
   return out
 }
 
-let lines = (rows: Record<string, unknown>[], col: string): Line[] =>
+// An answer's rows, an app at a time, in the order they came.
+let byApp = (rows: Rows, apps: string[]) => {
+  let out = new Map(apps.map((app) => [app, [] as Rows]))
+  for (let r of rows) out.get(word(r.app))?.push(r)
+  return out
+}
+
+let lines = (rows: Rows, col: string): Line[] =>
   rows.map((r) => ({ name: word(r[col]), views: num(r.views) }))
-    .filter((l) => l.name)
+    .filter((l) => l.name).slice(0, TOP)
+
+/**
+ * The apps one list's answer may have cut short. An answer shorter than its
+ * limit holds every row there is. A full one holds only rows at least as busy
+ * as its last, so an app whose own TOP-th line is not that busy may have lost
+ * lines past the limit.
+ */
+export let cut = (
+  rows: Rows,
+  limit: number,
+  each: Map<string, Line[]>,
+): string[] => {
+  if (rows.length < limit) return []
+  let least = num(rows[rows.length - 1].views)
+  return [...each].filter(([, lines]) => (lines[TOP - 1]?.views ?? 0) < least)
+    .map(([app]) => app)
+}
+
+// One list for every app, from one query: each app's busiest lines, and an
+// app the answer may have cut short asked again alone, where the limit is its
+// own.
+let listed = async (
+  env: Env,
+  query: ReturnType<typeof top>,
+  col: string,
+  apps: string[],
+  days: number,
+  dataset: string,
+) => {
+  let limit = apps.length > 1 ? ROWS : TOP
+  let rows = await ran(env, query(apps, days, limit, dataset))
+  let each = new Map(
+    [...byApp(rows, apps)].map(([app, rows]) => [app, lines(rows, col)]),
+  )
+  await Promise.all(
+    cut(rows, limit, each).map(async (app) => {
+      each.set(
+        app,
+        lines(await ran(env, query([app], days, TOP, dataset)), col),
+      )
+    }),
+  )
+  return each
+}
 
 // A few minutes' worth of answers, per app and window, held in this isolate
 // and no further — the promise rather than the value, so a page refreshed
@@ -325,50 +429,79 @@ let lines = (rows: Record<string, unknown>[], col: string): Line[] =>
 let held = new Map<string, { at: number; stats: Promise<Stats> }>()
 
 /**
- * Who visited this app, in one answer — or `null` where nobody has set
- * CF_ANALYTICS_TOKEN, which is the platform saying analytics are not switched on
- * rather than an error every caller has to handle.
+ * Who visited these apps, one answer an app — or `null` where nobody has set
+ * CF_ANALYTICS_TOKEN, which is the platform saying analytics are not switched
+ * on rather than an error every caller has to handle. Only the apps with no
+ * answer held are asked about, all of them in the same four queries.
  */
+export let statsFor = (
+  env: Env,
+  apps: string[],
+  days = DAYS,
+  now = Date.now(),
+): Promise<Map<string, Stats>> | null => {
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
+  let window = whole(days, KEPT_DAYS)
+  let key = (app: string) =>
+    `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}`
+  let fresh = (app: string) => {
+    let kept = held.get(key(app))
+    return kept && now - kept.at < FRESH ? kept.stats : undefined
+  }
+  let missing = [...new Set(apps)].filter((app) => !fresh(app))
+  if (missing.length) {
+    let all = asked(env, missing, window, now)
+    for (let app of missing) {
+      let stats = all.then((all) => all.get(app)!)
+      held.set(key(app), { at: now, stats })
+      stats.catch(() => {
+        if (held.get(key(app))?.stats == stats) held.delete(key(app))
+      })
+    }
+  }
+  let each = apps.map((app) => fresh(app)!)
+  return Promise.all(each).then((all) =>
+    new Map(apps.map((app, i) => [app, all[i]]))
+  )
+}
+
+/** Who visited one app: {@link statsFor} asked about it alone. */
 export let statsOf = (
   env: Env,
   app: string,
   days = DAYS,
   now = Date.now(),
-): Promise<Stats> | null => {
-  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
-  let window = whole(days, KEPT_DAYS)
-  let key = `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}`
-  let fresh = held.get(key)
-  if (fresh && now - fresh.at < FRESH) return fresh.stats
-  let stats = asked(env, app, window, now)
-  held.set(key, { at: now, stats })
-  stats.catch(() => held.delete(key))
-  return stats
-}
+): Promise<Stats> | null =>
+  statsFor(env, [app], days, now)?.then((all) => all.get(app)!) ?? null
 
+// Four questions, four queries, whatever the number of apps: one round
+// trip's worth of waiting, and a second only for an app a list cut short.
 let asked = async (
   env: Env,
-  app: string,
+  apps: string[],
   days: number,
   now: number,
-): Promise<Stats> => {
-  // Four questions, four queries, one round trip's worth of waiting.
+): Promise<Map<string, Stats>> => {
   let dataset = env.VIEWS_DATASET ?? DATASET
+  let list = (query: ReturnType<typeof top>, col: string) =>
+    listed(env, query, col, apps, days, dataset)
   let [day, pages, from, countries] = await Promise.all([
-    ran(env, perDay(app, days, dataset)),
-    ran(env, topPages(app, days, TOP, dataset)),
-    ran(env, topFrom(app, days, TOP, dataset)),
-    ran(env, topCountries(app, days, TOP, dataset)),
+    ran(env, perDay(apps, days, dataset)).then((rows) => byApp(rows, apps)),
+    list(topPages, 'path'),
+    list(topFrom, 'site'),
+    list(topCountries, 'country'),
   ])
-  let series = daily(day, days, now)
-  return {
-    days,
-    total: series.reduce((n, d) => n + d.views, 0),
-    daily: series,
-    pages: lines(pages, 'path'),
-    from: lines(from, 'site'),
-    countries: lines(countries, 'country'),
-  }
+  return new Map(apps.map((app) => {
+    let series = daily(day.get(app)!, days, now)
+    return [app, {
+      days,
+      total: series.reduce((n, d) => n + d.views, 0),
+      daily: series,
+      pages: pages.get(app)!,
+      from: from.get(app)!,
+      countries: countries.get(app)!,
+    }]
+  }))
 }
 
 /**

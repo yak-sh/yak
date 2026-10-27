@@ -6,20 +6,25 @@
 // The other half is what is asked of the SQL API (T-34497): every count is
 // `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
 // by exactly the factor that made it busy — so the queries are pinned too.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Env } from './env.ts'
 import {
   classed,
+  cut,
   daily,
+  hedged,
   NOT_ON,
   perDay,
   point,
   ran,
   referred,
+  ROWS,
   sqlAt,
   stats,
+  statsFor,
   statsOf,
+  TOP,
   topCountries,
   topFrom,
   topPages,
@@ -128,14 +133,16 @@ test('point: inside every Analytics Engine limit, even given junk', () => {
 // ---- reading it back -------------------------------------------------------
 
 let APP = A_VIEW.app
+let BOX = 'b0000000-0000-4000-8000-00000000000b'
+let ONE = [APP]
 
 test('every query counts sampled rows, never rows', () => {
   for (
     let sql of [
-      perDay(APP),
-      topPages(APP),
-      topFrom(APP),
-      topCountries(APP),
+      perDay(ONE),
+      topPages(ONE),
+      topFrom(ONE),
+      topCountries(ONE),
     ]
   ) {
     assert(
@@ -143,44 +150,49 @@ test('every query counts sampled rows, never rows', () => {
       `a count that is not sampled: ${sql}`,
     )
     assert(!/\bcount\(\)/.test(sql), `a raw count(): ${sql}`)
-    assert(sql.includes(`index1 = '${APP}'`), `not scoped to the app: ${sql}`)
+    assert(
+      sql.includes(`index1 IN ('${APP}')`),
+      `not scoped to the app: ${sql}`,
+    )
     assert(sql.includes('FROM yak_views'), sql)
   }
 })
 
 test('the four queries, in full', () => {
   assertEquals(
-    perDay(APP, 7),
-    "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
+    perDay([APP, BOX], 7),
+    'SELECT index1 AS app, ' +
+      "toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
       'sum(_sample_interval) AS views ' +
-      `FROM yak_views WHERE index1 = '${APP}' ` +
-      "AND timestamp >= NOW() - INTERVAL '7' DAY GROUP BY day ORDER BY day",
+      `FROM yak_views WHERE index1 IN ('${APP}', '${BOX}') ` +
+      "AND timestamp >= NOW() - INTERVAL '7' DAY " +
+      'GROUP BY app, day ORDER BY day',
   )
   assertEquals(
-    topPages(APP, 30, 3),
-    'SELECT blob3 AS path, sum(_sample_interval) AS views ' +
-      `FROM yak_views WHERE index1 = '${APP}' ` +
+    topPages(ONE, 30, 3),
+    'SELECT index1 AS app, blob3 AS path, sum(_sample_interval) AS views ' +
+      `FROM yak_views WHERE index1 IN ('${APP}') ` +
       "AND timestamp >= NOW() - INTERVAL '30' DAY " +
-      'GROUP BY path ORDER BY views DESC LIMIT 3',
+      'GROUP BY app, path ORDER BY views DESC LIMIT 3',
   )
   // A direct visit refers nothing and an unknown country is not a country, so
   // both lists drop the empty column rather than leading with it.
-  assert(topFrom(APP).includes("AND blob5 != ''"), topFrom(APP))
-  assert(topCountries(APP).includes("AND blob4 != ''"), topCountries(APP))
-  assert(!topPages(APP).includes("blob3 != ''"), 'every view has a path')
+  assert(topFrom(ONE).includes("AND blob5 != ''"), topFrom(ONE))
+  assert(topCountries(ONE).includes("AND blob4 != ''"), topCountries(ONE))
+  assert(!topPages(ONE).includes("blob3 != ''"), 'every view has a path')
 })
 
 test('nothing reaches the SQL text unshaped', () => {
   // There are no bound parameters, so an eid that is not one is refused
   // rather than spliced in.
-  assertThrows(() => perDay("' OR 1=1 --"))
-  assertThrows(() => perDay('cookbook'))
+  assertThrows(() => perDay(["' OR 1=1 --"]))
+  assertThrows(() => perDay([APP, 'cookbook']))
   // A window is clamped to what Cloudflare still holds, and a junk one is a
   // day rather than a syntax error.
-  assert(perDay(APP, 9999).includes("INTERVAL '90' DAY"))
-  assert(perDay(APP, -3).includes("INTERVAL '1' DAY"))
-  assert(perDay(APP, NaN).includes("INTERVAL '1' DAY"))
-  assert(topPages(APP, 30, 1e9).includes('LIMIT 100'))
+  assert(perDay(ONE, 9999).includes("INTERVAL '90' DAY"))
+  assert(perDay(ONE, -3).includes("INTERVAL '1' DAY"))
+  assert(perDay(ONE, NaN).includes("INTERVAL '1' DAY"))
+  assert(topPages(ONE, 30, 1e9).includes(`LIMIT ${ROWS}`))
 })
 
 test("the endpoint is the account's own", () => {
@@ -236,9 +248,12 @@ let env = (vars: Partial<Env> = {}) =>
   ({ CF_ACCOUNT: 'acc0unt', CF_ANALYTICS_TOKEN: 'a token', ...vars }) as Env
 
 test('staging analytics reads and cached counts stay in their dataset', async () => {
+  // Its own app, so a module that ran this file before holds no answer.
+  let app = crypto.randomUUID()
   let api = sql((q) => ({
     body: JSON.stringify({
       data: [{
+        app,
         day: '2026-09-06',
         views: q.includes('FROM yak_views_staging ') ? 2 : 9,
       }],
@@ -246,9 +261,9 @@ test('staging analytics reads and cached counts stay in their dataset', async ()
   }))
   try {
     let now = Date.parse('2026-09-06T12:00:00Z')
-    assertEquals((await statsOf(env(), APP, 7, now))?.total, 9)
+    assertEquals((await statsOf(env(), app, 7, now))?.total, 9)
     assertEquals(
-      (await statsOf(env({ VIEWS_DATASET: 'yak_views_staging' }), APP, 7, now))
+      (await statsOf(env({ VIEWS_DATASET: 'yak_views_staging' }), app, 7, now))
         ?.total,
       2,
     )
@@ -256,7 +271,7 @@ test('staging analytics reads and cached counts stay in their dataset', async ()
     assert(
       api.asked.slice(4).every((q) => q.includes('FROM yak_views_staging ')),
     )
-    assertThrows(() => perDay(APP, 7, 'yak_views; DROP TABLE yak_views'))
+    assertThrows(() => perDay(ONE, 7, 'yak_views; DROP TABLE yak_views'))
   } finally {
     api.done()
   }
@@ -268,7 +283,7 @@ test('visits authenticate with the platform analytics reader', async () => {
     return { body: JSON.stringify({ data: [{ views: 7 }] }) }
   })
   try {
-    assertEquals(await ran(env(), perDay(APP)), [{ views: 7 }])
+    assertEquals(await ran(env(), perDay(ONE)), [{ views: 7 }])
   } finally {
     api.done()
   }
@@ -277,7 +292,7 @@ test('visits authenticate with the platform analytics reader', async () => {
 test('a dataset nobody has written to is no views, not a failure', async () => {
   let api = sql(() => ({ status: 404, body: 'unknown table yak_views' }))
   try {
-    assertEquals(await ran(env(), perDay(APP)), [])
+    assertEquals(await ran(env(), perDay(ONE)), [])
   } finally {
     api.done()
   }
@@ -286,7 +301,7 @@ test('a dataset nobody has written to is no views, not a failure', async () => {
 test('a refusal from the SQL API is said, not swallowed', async () => {
   let api = sql(() => ({ status: 400, body: 'syntax error at line 1' }))
   try {
-    await assertRejects(() => ran(env(), perDay(APP)), Error, 'analytics 400')
+    await assertRejects(() => ran(env(), perDay(ONE)), Error, 'analytics 400')
   } finally {
     api.done()
   }
@@ -296,6 +311,94 @@ test('with no token there is nothing to ask, and one sentence to say', () => {
   assertEquals(statsOf(env({ CF_ANALYTICS_TOKEN: undefined }), APP), null)
   assertEquals(statsOf(env({ CF_ACCOUNT: undefined }), APP), null)
   assert(NOT_ON.includes('not switched on'))
+})
+
+// The apps a query names, and the list it asks for.
+let named = (q: string) =>
+  q.match(/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/g)!
+let asks = (q: string) => q.match(/ AS (day|path|site|country),/)![1]
+
+test('every app of a page is asked about in the same four queries', async () => {
+  // Their own apps, so a module that ran this file before holds no answer.
+  let [app, box] = [crypto.randomUUID(), crypto.randomUUID()]
+  let api = sql((q) => ({
+    body: JSON.stringify({
+      data: asks(q) == 'day'
+        ? [
+          { app: app, day: '2026-09-06 00:00:00', views: 3 },
+          { app: box, day: '2026-09-06 00:00:00', views: 5 },
+        ]
+        : asks(q) == 'path'
+        ? [
+          { app: box, path: '/box/', views: 5 },
+          { app: app, path: '/cookbook/', views: 3 },
+        ]
+        : [],
+    }),
+  }))
+  try {
+    let all = await statsFor(
+      env(),
+      [app, box],
+      3,
+      Date.parse('2026-09-06T12:00:00Z'),
+    )
+    assertEquals(api.asked.length, 4)
+    assert(
+      api.asked.every((q) => named(q).length == 2),
+      'one query per question',
+    )
+    assertEquals(all?.get(app)?.total, 3)
+    assertEquals(all?.get(app)?.pages, [{ name: '/cookbook/', views: 3 }])
+    assertEquals(all?.get(box)?.total, 5)
+    assertEquals(all?.get(box)?.pages, [{ name: '/box/', views: 5 }])
+    // Held for a few minutes: asked again, nothing is asked.
+    await statsOf(env(), box, 3, Date.parse('2026-09-06T12:01:00Z'))
+    assertEquals(api.asked.length, 4)
+  } finally {
+    api.done()
+  }
+})
+
+test('cut: the apps a full answer may have lost lines of', () => {
+  let ten = (views: number) =>
+    Array.from({ length: TOP }, (_, i) => ({ name: `/${i}`, views }))
+  let each = new Map([
+    ['busy', ten(3)],
+    ['tied', ten(2)],
+    ['quiet', [{ name: '/', views: 2 }]],
+  ])
+  let rows = (...views: number[]) => views.map((views) => ({ views }))
+  // Shorter than its limit, the answer holds every row there is.
+  assertEquals(cut(rows(3, 2), 3, each), [])
+  // Full, and a row past it may be as busy as 2: the quiet app's next line
+  // may be one, and the tied app's tenth is as busy as any it could lose.
+  assertEquals(cut(rows(3, 3, 2), 3, each), ['quiet'])
+  assertEquals(cut(rows(3, 3, 3), 3, each), ['tied', 'quiet'])
+})
+
+test('hedged: a slow asking is asked again, and a quick failure is not', async () => {
+  let time = clock()
+  let n = 0
+  let stalled = Promise.withResolvers<string>()
+  let ask = () => ++n == 1 ? stalled.promise : Promise.resolve('again')
+  let answer = hedged(ask, 1500, time.after)
+  await time.advance(1499)
+  assertEquals(n, 1)
+  await time.advance(1)
+  assertEquals(await answer, 'again')
+  assertEquals(n, 2)
+  stalled.resolve('late')
+
+  let failed = 0
+  let failing = () => (failed++, Promise.reject(new Error('no')))
+  await assertRejects(() => hedged(failing, 1500, time.after), Error, 'no')
+  assertEquals(
+    await hedged(() => Promise.resolve('first'), 1500, time.after),
+    'first',
+  )
+  await time.advance(1500)
+  assertEquals(failed, 1)
 })
 
 // ---- the door and counter -------------------------------------------------
