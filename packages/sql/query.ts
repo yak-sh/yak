@@ -8,11 +8,13 @@ export { walk } from './walk.ts'
 export {
   bind,
   type BindOpts,
+  type Census,
   screen,
   sourceScreen,
   tallied,
   visibleBacked,
   visibleDerived,
+  walks,
 } from './bind.ts'
 
 /** A compiled statement: its SQL and the parameters it binds, in order. */

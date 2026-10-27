@@ -1,5 +1,6 @@
 import {
   cardinality,
+  census,
   classified,
   installed,
   POPULATION,
@@ -133,6 +134,7 @@ export let rows = (
       catalogued(driver, vocab, {
         ...opts,
         population,
+        census: census(driver),
       }),
     ))
       .map((r) => projected(vocab, r))

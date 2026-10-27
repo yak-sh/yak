@@ -1,12 +1,14 @@
-// Identity pages take the shorter road to their owners: a walk of the entity's
-// EID index when the component is dense, its own rows when it is sparse.
+// Identity pages take the shorter road to their owners, as the store's counted
+// populations size them: a walk of the entity's EID index when the component
+// is dense, its own rows when it is sparse or when the store keeps no counts.
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from './mod.ts'
 import { stepping } from './testing.ts'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { archetypeDoc } from '@yaks/archetype'
 
-let vocab = loadVocab([kernelDoc, {
+let vocab = loadVocab([kernelDoc, archetypeDoc, {
   $defs: {
     session: { component: true, type: 'object', properties: {} },
     hidden: { component: true, type: 'object', properties: {} },
@@ -17,9 +19,13 @@ let eid = (i: number) =>
   `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
 // A store of `n` entities, every `every`th wearing session and every other
 // session hidden too, and what a query costs it in VM steps.
-let fixture = (n: number, every: number) => {
+let fixture = (
+  n: number,
+  every: number,
+  counts: 'eager' | 'lazy' = 'eager',
+) => {
   let { driver, steps } = stepping()
-  let store = storage(driver, vocab)
+  let store = storage(driver, vocab, { counts })
   store.install()
   store.tx((tx) =>
     tx.patch(
@@ -56,10 +62,17 @@ let visible = eids(
   `!hidden .order=entity.eid .limit=2 .after=${eid(4000)}`,
 )
 let reverse = eids(dense, `.order=-entity.eid .limit=2 .after=${eid(4000)}`)
+let uncounted = fixture(5000, 1, 'lazy')
+let driven = [
+  `.order=entity.eid .limit=2 .after=${eid(4000)}`,
+  `!hidden .order=entity.eid .limit=2 .after=${eid(4000)}`,
+  `.order=-entity.eid .limit=2 .after=${eid(4000)}`,
+].map((q) => eids(uncounted, q))
 
-test('EID cursor pages retain absence and reverse ordering', () => {
+test('EID cursor pages retain absence and reverse ordering, on either road', () => {
   equal(visible, [eid(4002), eid(4004)])
   equal(reverse, [eid(3999), eid(3998)])
+  equal(driven, [first.eids, visible, reverse])
 })
 
 // 40 sessions among 20,000 entities: a page that never fills walked the whole

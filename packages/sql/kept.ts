@@ -6,9 +6,10 @@
 //
 // A shape is the AST with every generated id it compares against stood in for
 // by its place, plus every input the lowering reads: the options' data, the
-// registries by identity, the extensions' hooks, and the archetype catalog's
-// answers. The values a kept statement binds anew are the clock, the root
-// candidates (`eids`), those ids, and the integer ids they resolve to.
+// registries by identity, the extensions' hooks, the archetype catalog's
+// answers, and the census's choice of road (./bind.ts `walks`). The values a
+// kept statement binds anew are the clock, the root candidates (`eids`), those
+// ids, and the integer ids they resolve to.
 //
 // Where each value lands is proved, never inferred from the binder's code: a
 // shape seen a second time is lowered twice more, at two fixed instants, with
@@ -26,14 +27,22 @@
 // its `origin`: the observers that read it read structure (tables, verbs),
 // never the values (./ast.ts `Raw`), and the structure is the shape's.
 //
-// The catalog is asked again on each call, every question in the order the
-// lowering asked it: a statement is kept only while each answer stands.
+// The catalog and the census are asked again on each call, every question in
+// the order the lowering asked it: a statement is kept only while each answer
+// stands.
 
 import { type And, map, type Value } from '@yaks/query/core'
 import type { Presence, Vocab } from '@yaks/vocab'
 import { parse } from '@yaks/id'
 import { type Param, type Raw, raw, type Stmt } from './ast.ts'
-import { type BindOpts, type Prepared, prepared } from './bind.ts'
+import {
+  type BindOpts,
+  type Census,
+  type Prepared,
+  prepared,
+  type Walks,
+  walks,
+} from './bind.ts'
 import type { ArchetypeSet } from './archetype.ts'
 import { idOf } from './derived.ts'
 import { type Extension, ranking, type Site } from './extend.ts'
@@ -48,10 +57,11 @@ type Call = {
 }
 // A parameter a call supplies.
 type Bind = (call: Call) => Param
-// One question the lowering asked the catalog, and its answer.
+// One question the lowering asked the catalog or the census, and its answer.
 type Asked =
   | { held: boolean | undefined }
   | { presence: Presence; ids: readonly number[] | undefined }
+  | { walks: string; page?: number; answer: boolean }
 type Kept = {
   sql: string
   params: (Param | Bind)[]
@@ -108,24 +118,41 @@ let recorded = (
     },
   ) as ArchetypeSet
 
+// The census's choice of road as the lowering asks it, written down: the
+// choice, not the counts, which move with every entity born.
+let choosing = (
+  census: Census | undefined,
+  log: Asked[],
+): Walks | undefined =>
+  census && ((comp, page) => {
+    let answer = walks(census, comp, page)
+    log.push({ walks: comp, page, answer })
+    return answer
+  })
+
 let alike = (a?: readonly number[], b?: readonly number[]) =>
   a === b || !!a && !!b && a.length == b.length && a.every((x, i) => x === b[i])
 
-// Whether the catalog still answers every question as it did.
-let stands = (asked: Asked[], set?: ArchetypeSet): boolean =>
+// Whether the catalog and the census still answer every question as they did.
+let stands = (asked: Asked[], opts: BindOpts): boolean =>
   asked.every((a) =>
-    'presence' in a
-      ? !!set && alike(set(a.presence), a.ids)
-      : set?.held === a.held
+    'walks' in a
+      ? walks(opts.census, a.walks, a.page) === a.answer
+      : 'presence' in a
+      ? !!opts.archetypes && alike(opts.archetypes(a.presence), a.ids)
+      : opts.archetypes?.held === a.held
   )
 
 let agree = (a: Asked[], b: Asked[]) =>
   a.length == b.length && a.every((x, i) => {
     let y = b[i]
-    return 'presence' in x
+    return 'walks' in x
+      ? 'walks' in y && x.walks == y.walks && x.page === y.page &&
+        x.answer === y.answer
+      : 'presence' in x
       ? 'presence' in y && alike(x.ids, y.ids) &&
         JSON.stringify(x.presence) == JSON.stringify(y.presence)
-      : !('presence' in y) && x.held === y.held
+      : 'held' in y && x.held === y.held
   })
 
 // The call whose extensions are watched: whether one answered for a clause
@@ -289,6 +316,7 @@ let called = (ast: And, opts: BindOpts, p: Prepared) => {
       !!e.order,
     ]),
     !!opts.archetypes,
+    !!opts.census,
     p.spine ?? null,
   ])
   return {
@@ -416,6 +444,7 @@ let proven = (
           {
             archetypes: recorded(opts.archetypes, asked),
             extend: watched(opts.extend, false),
+            walks: choosing(opts.census, asked),
           },
         ).lower(),
       ))
@@ -491,6 +520,7 @@ export let compile = (
       prepared(ast, vocab, opts, undefined, undefined, undefined, {
         archetypes: recorded(opts.archetypes, asked),
         extend: watched(opts.extend, true),
+        walks: choosing(opts.census, asked),
       }),
   )
   let lowered = () => within(touched, () => render(p.lower()))
@@ -499,12 +529,12 @@ export let compile = (
   let { key, call } = shaped
   let s = shelf(vocab), held = s.get(key)
   if (held === null) return lowered()
-  if (held && 'sql' in held && stands(held.asked, opts.archetypes)) {
+  if (held && 'sql' in held && stands(held.asked, opts)) {
     put(s, key, held)
     return bound(held, call)
   }
   // Seen once, under a catalog that still answers as it did: prove it.
-  if (held && 'first' in held && stands(held.asked, opts.archetypes)) {
+  if (held && 'first' in held && stands(held.asked, opts)) {
     let kept = proven(ast, vocab, opts, held, call)
     put(s, key, kept)
     return kept ? bound(kept, call) : lowered()

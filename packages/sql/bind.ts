@@ -176,6 +176,41 @@ export type BindOpts = {
   archetypes?: ArchetypeSet
   /** Exact transaction-consistent stored populations, supplied by the adapter. */
   population?: string
+  /** What the store counts of itself, for choosing between plans. */
+  census?: Census
+}
+
+/** What a store counts of itself, read only when a plan asks: how many
+ * entities hold a component (`undefined` when the store keeps no count), and
+ * the entity table's largest id. */
+export type Census = {
+  held: (comp: string) => number | undefined
+  largest: () => number
+}
+
+/** Whether a page of `comp`'s owners in EID order is shorter walking the
+ * entity's EID index than driving through the owners, as `census` sizes the
+ * two roads. The walk reads about page × entities / owners rows to fill its
+ * page, and the whole index for one that never fills; the drive reads each
+ * owner and its entity. Without a count, the drive: its owners bound it.
+ *
+ * ```ts
+ * import { walks } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ * let census = (held?: number) => ({ held: () => held, largest: () => 3.2e6 })
+ * equal(walks(census(19_000), 'session', 1), true)
+ * equal(walks(census(2_000), 'bug', 100), false)
+ * equal(walks(census(), 'session', 1), false)
+ * ```
+ */
+export type Walks = (comp: string, page?: number) => boolean
+export let walks = (
+  census: Census | undefined,
+  comp: string,
+  page?: number,
+): boolean => {
+  let held = census?.held(comp)
+  return !!held && census!.largest() * (page ?? held) < 2 * held * held
 }
 
 // The mutable state one call to `bind` threads through: the schema, the
@@ -220,6 +255,8 @@ type Ctx = {
   references?: BindOpts['references']
   visibility?: BindOpts['visibility']
   archetypes?: ArchetypeSet
+  /** whether a page of a component's owners walks the EID index (`walks`) */
+  walks?: Walks
   /** the computed component whose rows this query reads as its spine, when it
    * reads a backing's rather than the entity table */
   spine?: string
@@ -2854,30 +2891,11 @@ let indexedRelation = (
       [indexed, dense],
     ])
   }
-  if (!walk) return indexed
-  // The walk reads about page × entities / owners rows to fill its page; the
-  // drive reads each owner and its entity. Both are counted in the statement,
-  // the entities by the largest id and the owners by the table's own count,
-  // and the walk is taken only while it is the shorter: the box's 19k
-  // sessions among 3.2M entities page one at a time by walking, and the
-  // platform tracker's bugs page a hundred at a time by driving. A spine that
-  // can't be counted without its policy takes the drive, which is bounded.
-  let entities = ctx.d.admitted ?? (from == '"entity"' ? from : undefined)
-  if (!entities) return indexed
-  let held = ctx.d.owned?.(ctx.present!) ?? ctx.d.table(ctx.present!)
-  // The owners are a bare `count(*)`, which SQLite answers from the B-tree's
-  // cells without decoding a row; the largest id is one seek.
-  let largest = `(select coalesce(max("__entities"."id"), 0) from ${entities}` +
-    ` as "__entities")`
-  let counted = (of: string) =>
-    `(select ${of} from (select count(*) as "n" from ${held}))`
-  let walks: Cond = page == null
-    ? raw(`${largest} < ${counted('2 * "n"')}`)
-    : raw(`${largest} * ? < ${counted('2 * "n" * "n"')}`, [page])
-  return roads(ctx, s, from, root.comp, page, [
-    [walk, walks],
-    [indexed, not(walks)],
-  ])
+  // The store's census sizes the two roads (`walks`) without reading the
+  // owners, as a count of them would, billed a row each in a Durable Object:
+  // the box's 19k sessions among 3.2M entities page one at a time by walking,
+  // and the platform tracker's bugs page a hundred at a time by driving.
+  return walk && ctx.walks?.(ctx.present!, page) ? walk : indexed
 }
 
 // Alternative roads to one statement's rows, each taken only while its
@@ -2978,7 +2996,10 @@ export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
 // The catalog and the extensions a lowering asks, in place of the options'
 // own: a caller that watches what the lowering asks of them (./kept.ts) hands
 // in its watching forms, and every other option is read as the caller holds it.
-export type Heard = Pick<BindOpts, 'archetypes' | 'extend'>
+/** What the lowering asks as it goes, which a kept statement records and
+ * asks again (./kept.ts): the archetype catalog, the extensions, and the
+ * census's choice of road. */
+export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & { walks?: Walks }
 
 export let prepared = (
   ast: And,
@@ -3034,6 +3055,8 @@ export let prepared = (
     shared: new Map(),
     identities: new WeakMap(),
     archetypes: spine ? undefined : heard.archetypes,
+    walks: heard.walks ??
+      (opts.census && ((comp, page) => walks(opts.census, comp, page))),
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
@@ -4325,7 +4348,7 @@ let visible = (
       screening,
       correlated,
     },
-    { archetypes, extend: heard.extend },
+    { archetypes, extend: heard.extend, walks: heard.walks },
   )
   return {
     ...inner,

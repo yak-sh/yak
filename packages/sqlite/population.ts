@@ -8,6 +8,7 @@ import {
   as,
   type BindOpts,
   call,
+  type Census,
   col,
   count,
   derivedOf,
@@ -250,6 +251,20 @@ export let populationCount = (
   )[0]
   return Number(row?.n ?? 0)
 }
+
+/** What a read's plans are sized by (@yaks/sql `Census`): a component's
+ * counted population, once the file keeps populations, and the entity
+ * table's largest id, one seek. Each is read only when a plan asks. */
+export let census = (driver: Driver): Census => ({
+  held: (comp) => populationCount(driver, comp),
+  largest: () =>
+    Number(
+      driver.query(select({
+        cols: [as(fn('max', col('id')), 'n')],
+        from: table('entity'),
+      }))[0]?.n ?? 0,
+    ),
+})
 
 /** A presence-only entity policy selects whole buckets. Value-based policies
  * and component-specific visibility still need the ordinary scoped query. */

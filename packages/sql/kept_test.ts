@@ -8,6 +8,7 @@ import {
   limit,
   list,
   or,
+  order,
   type Pred,
   present,
   time,
@@ -426,4 +427,16 @@ test('a kept statement stops standing when the catalog answers otherwise', () =>
     ids = next
     same(q, { archetypes })
   }
+})
+
+test('a kept statement takes the road its census chooses now', () => {
+  let held = 19_000
+  let census = { held: () => held, largest: () => 3.2e6 }
+  let q = and(present('one'), order('entity.eid'), limit(1))
+  let roads = new Set<string>()
+  for (let next of [19_000, 19_000, 19_000, 10, 10]) {
+    held = next
+    roads.add(same(q, { census }).sql)
+  }
+  equal(roads.size, 2)
 })
