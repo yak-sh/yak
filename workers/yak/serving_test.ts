@@ -670,7 +670,8 @@ test('a page view is one data point, and it names no visitor', async () => {
   assertEquals(seen.points.length, 1)
 })
 
-// What the fake SQL API answers each of the four queries with.
+// What the fake SQL API answers each of the four queries with, for one app:
+// each row names the app it was grouped by, as `index1 AS app` asks.
 let ROWS: Record<string, Record<string, unknown>[]> = {
   day: [{ day: `${new Date().toISOString().slice(0, 10)} 00:00:00`, views: 5 }],
   path: [{ path: '/cookbook/dinner', views: '4' }],
@@ -678,18 +679,19 @@ let ROWS: Record<string, Record<string, unknown>[]> = {
   country: [{ country: 'US', views: 5 }],
 }
 
-let rowsFor = (sql: string) =>
-  ROWS[Object.keys(ROWS).find((k) => sql.includes(` AS ${k},`)) ?? ''] ?? []
+let rowsFor = (app: string) => (sql: string) =>
+  (ROWS[Object.keys(ROWS).find((k) => sql.includes(` AS ${k},`)) ?? ''] ?? [])
+    .map((row) => ({ app, ...row }))
 
 test("/api/stats answers the app's own people, and nobody else", async () => {
-  let api = analytics(rowsFor)
+  await using scenario = platform({
+    CF_ACCOUNT: 'acc0unt',
+    CF_ANALYTICS_TOKEN: 'a token',
+  })
+  let { env } = scenario
+  let { app } = await seeded(env)
+  let api = analytics(rowsFor(app.eid))
   try {
-    await using scenario = platform({
-      CF_ACCOUNT: 'acc0unt',
-      CF_ANALYTICS_TOKEN: 'a token',
-    })
-    let { env } = scenario
-    await seeded(env)
     let mine = await apps.fetch(
       visit('/cookbook/api/stats', { headers: { cookie: await as(ADA) } }),
       env,

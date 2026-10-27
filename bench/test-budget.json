@@ -1644,16 +1644,6 @@
     "packages/embedding/options_test.ts": {
       "a provider row serves the model under its own name, and the space is the model": 3.2
     },
-    "packages/embedding/remote_test.ts": {
-      "a dim keeps the leading coordinates, renormalized": 2.4,
-      "a refused input is Refused; an unreachable server is not": 4.6,
-      "a status and a shapeless answer both throw, with the body in the words": 7.2,
-      "a text longer than the model reads is sent as its opening": 2.4,
-      "a text refused past the model context is asked again as its opening half": 2.6,
-      "calls made together ride together, split by count and in order": 2.5,
-      "ollama: /api/embed, and the vector out of `embeddings`": 2.5,
-      "openai: /v1/embeddings, the vector out of `data`, and the key as a bearer": 2.5
-    },
     "packages/embedding/schema_test.ts": {
       "embedding schema decisions observe DDL through query and run": 2.5,
       "embedding schema decisions observe file peer changes": 4.4,
@@ -1689,10 +1679,6 @@
       "the fields changing queues everything, once": 3,
       "the sweep embeds everything owed, then nothing": 3.9,
       "the vectors are derived: drop the table and the sweep rebuilds it": 3.7
-    },
-    "packages/embedding/workers-ai_test.ts": {
-      "an input the model will not take is Refused; an outage is not": 4.8,
-      "texts asked together ride one run, cut to the width asked for": 2.6
     },
     "packages/esbuild/README.md": {
       "packages/esbuild/README.md: 03dc10dccb99": 20.3
@@ -1792,6 +1778,9 @@
     "packages/fts/storage_test.ts": {
       ".order=search puts the closest match first": 3.4,
       "storage composes FTS explicitly for document and non-document prose": 6.1
+    },
+    "packages/fts/wide_test.ts": {
+      "a search over seven indexes answers within five compound terms": 12.7
     },
     "packages/git/README.md": {
       "packages/git/README.md: b1a5b9850ac2": 6.2,

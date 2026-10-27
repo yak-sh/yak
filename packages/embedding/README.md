@@ -217,24 +217,25 @@ makes existing text stale and causes the next sweep to recompute it.
 normalizes the resulting vector. `remote({ api, model, base, key?, dim? })`
 posts to Ollama's `/api/embed` or an OpenAI-compatible `/v1/embeddings`
 endpoint, asking for `model` by the name the server knows it by; `space` names
-the vectors otherwise. The calls made in one turn of the event loop ride in one
-request, up to `count` (64) inputs and `load` (128,000) characters each.
-Credentials are arguments; `remote()` itself reads no environment variables.
-Optional `dim` truncates and renormalizes vectors; use it with a model that
-supports that operation. Two widths of one model are two spaces, so a `dim` is
-part of the stored model name (`qwen3-embedding-0.6b#256`). `chars` (default
-30,000) bounds the text sent for one vector. A server may refuse a text past its
-model's context rather than truncate it, as Ollama does for some texts on a
-512-token model, so a text refused alone is asked again as its opening half,
-down to 256 characters. A status saying the input was refused (400, 413, 422)
-rejects with `Refused`. Any other failure is the provider's, which usually
-passes in seconds, so the request is sent again after each pause of
-`retries.waits` (half a second, two, then six); one that outlasts them rejects
-once with `Unanswered`. Its message names only the provider
-(`@yaks/embedding: workers-ai did not answer`), so one outage reads as one
-failure however many texts it met or in which words; its `context` holds the
-model, how many texts and how many tries, and its `cause` is the provider's last
-failure. `retrying(provider, model, ask, waits?)` is that, for any `ask`.
+the vectors otherwise. The calls made together, as `Promise.all(texts.map(...))`
+makes them, ride in one request, up to `count` (64) inputs and `load` (128,000)
+characters each. Credentials are arguments; `remote()` itself reads no
+environment variables. Optional `dim` truncates and renormalizes vectors; use it
+with a model that supports that operation. Two widths of one model are two
+spaces, so a `dim` is part of the stored model name
+(`qwen3-embedding-0.6b#256`). `chars` (default 30,000) bounds the text sent for
+one vector. A server may refuse a text past its model's context rather than
+truncate it, as Ollama does for some texts on a 512-token model, so a text
+refused alone is asked again as its opening half, down to 256 characters. A
+status saying the input was refused (400, 413, 422) rejects with `Refused`. Any
+other failure is the provider's, which usually passes in seconds, so the request
+is sent again after each pause of `retries.waits` (half a second, two, then
+six); one that outlasts them rejects once with `Unanswered`. Its message names
+only the provider (`@yaks/embedding: workers-ai did not answer`), so one outage
+reads as one failure however many texts it met or in which words; its `context`
+holds the model, how many texts and how many tries, and its `cause` is the
+provider's last failure. `retrying(provider, model, ask, waits?)` is that, for
+any `ask`.
 
 `{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
 runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):

@@ -27,10 +27,12 @@
 //
 // Calls made together are sent together. Both servers take an array of inputs,
 // and a batch of 64 costs a local model about a seventh of the time per vector
-// that 64 single requests do, so every `embed()` made in one turn of the event
-// loop (the sweep makes a batch's calls at once) waits for that turn to end
-// and rides in one request — split by {@link parts} into requests no longer
-// than a server takes.
+// that 64 single requests do, so every `embed()` made together (the sweep makes
+// a batch's calls at once, in one synchronous run) waits for the microtasks
+// already queued and rides in one request — split by {@link parts} into
+// requests no longer than a server takes. A microtask rather than a timer: a
+// bare setTimeout(0) takes about 2 ms under Deno 2.9, and every search's one
+// embedding waited on it.
 
 import { type Embedder, Refused, Unanswered } from './embedder.ts'
 import { unit } from './vector.ts'
@@ -207,7 +209,7 @@ export type Batched = Omit<Embedder, 'embed'> & {
 
 /**
  * An {@link Embedder} over a provider that answers many texts at once. Every
- * `embed()` made in one turn of the event loop waits for that turn to end and
+ * `embed()` made together, before the microtasks already queued have run,
  * rides one call of `ask`, split by {@link parts} into calls no larger than
  * `load` allows; a call that fails fails every text in it. `ask` answers a
  * vector per text, in order ({@link answered}).
@@ -223,7 +225,7 @@ export let batched = (
     no: (e: unknown) => void
   }
   let waiting: Wait[] = []
-  // Send what this turn asked for, a run at a time.
+  // Send what was asked for together, a run at a time.
   let flush = async (): Promise<void> => {
     let all = waiting
     waiting = []
@@ -248,7 +250,7 @@ export let batched = (
     model,
     embed: (text) =>
       new Promise((ok, no) => {
-        if (!waiting.length) setTimeout(flush)
+        if (!waiting.length) queueMicrotask(flush)
         waiting.push({ text: text.slice(0, load.chars ?? CHARS), ok, no })
       }),
   }
