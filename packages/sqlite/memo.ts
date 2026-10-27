@@ -52,8 +52,9 @@
 // memory what it ran, so a write through any of them is seen by all.
 //
 // A get naming components is cut from a whole entity held, or from one held
-// in part: what an earlier get naming at least those read. Returned bundles
-// are copies; dynamic components (computed, or derived from anything but this
+// in part: what earlier gets naming at least those read, together. Returned
+// bundles are copies, made without a look at each value where what memory
+// holds is JSON; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit, of the entities holding
 // them. Bounded by bytes (`memoized`'s `memory`) and by an entity for every
 // 2 KiB of them, the longest unread let go first; a scan is read through, not
@@ -698,45 +699,93 @@ let sizeOf = (b: Bundle) =>
     (_key, value) => typeof value == 'bigint' ? String(value) : value,
   ).length * 2
 
-// Copy only the facets this read exposes. Scalar components need fresh
-// objects; nested or special values keep structuredClone's semantics, shared
-// references included, across the selected bundle.
+// What `cloned` answers for a value it leaves to structuredClone.
+const OTHER = Symbol('other')
+
+// A JSON value copied: primitives, plain objects and arrays, each object met
+// once. Anything else (a Date, bytes, a Map, a hole, an object met twice) is
+// OTHER, since structuredClone copies those as a read of them expects.
+let cloned = (value: unknown, seen: Set<object>): unknown => {
+  if (typeof value != 'object' || value === null) {
+    return typeof value == 'function' || typeof value == 'symbol'
+      ? OTHER
+      : value
+  }
+  if (seen.has(value)) return OTHER
+  seen.add(value)
+  let proto = Object.getPrototypeOf(value)
+  if (proto == Array.prototype) {
+    let from = value as unknown[], out = new Array(from.length)
+    for (let i = 0; i < from.length; i++) {
+      let v = i in from ? cloned(from[i], seen) : OTHER
+      if (v === OTHER) return OTHER
+      out[i] = v
+    }
+    return out
+  }
+  if (proto != Object.prototype && proto != null) return OTHER
+  let out: Record<string, unknown> = {}
+  for (let key of Object.keys(value)) {
+    let v = cloned((value as Record<string, unknown>)[key], seen)
+    if (v === OTHER) return OTHER
+    out[key] = v
+  }
+  return out
+}
+
+// The components `names` of a bundle copied as JSON, or undefined where one
+// holds anything else.
+let json = (b: Bundle, names: string[]): Bundle | undefined => {
+  let out: Record<string, unknown> = {}, seen = new Set<object>()
+  for (let name of names) {
+    let comp = cloned(b[name], seen)
+    if (comp === OTHER) return undefined
+    out[name] = comp
+  }
+  return out as Bundle
+}
+
+// A copy of a value that is JSON and shares no object.
+let dup = (value: unknown): unknown => {
+  if (typeof value != 'object' || value === null) return value
+  if (Array.isArray(value)) return value.map(dup)
+  let out: Record<string, unknown> = {}
+  for (let key in value) out[key] = dup((value as Record<string, unknown>)[key])
+  return out
+}
+
+// The bundles memory holds that are JSON throughout and share no object
+// (`json` made them), whose copies need not look at each value. No caller
+// is handed one.
+let trees = new WeakSet<Bundle>()
+
+// What memory holds of a bundle it is given: a copy, marked when it is JSON.
+let kept = (b: Bundle): Bundle => {
+  let tree = json(b, Object.keys(b))
+  if (!tree) return structuredClone(b)
+  trees.add(tree)
+  return tree
+}
+
+// Copy only the facets this read exposes, each value fresh. Values other than
+// JSON keep structuredClone's semantics, shared references included, across
+// the selected bundle.
 let copy = (
   b: Bundle,
   wanted?: Set<string>,
   omitted: string[] = [],
 ): Bundle => {
-  let out = Object.fromEntries(
-    Object.entries(b).filter(([name]) =>
-      !omitted.includes(name) &&
-      (!wanted || name == 'entity' || name == 'tombstone' || wanted.has(name))
-    ),
-  ) as Bundle
-  let values = Object.values(out)
-  for (let i = 0; i < values.length; i++) {
-    let comp = values[i]
-    if (comp == null) continue
-    if (
-      values.indexOf(comp) != i || typeof comp != 'object' ||
-      Object.getPrototypeOf(comp) != Object.prototype
-    ) {
-      return structuredClone(out)
-    }
-    for (let value of Object.values(comp)) {
-      let type = typeof value
-      if (
-        value != null && type == 'object' || type == 'function' ||
-        type == 'symbol'
-      ) {
-        return structuredClone(out)
-      }
-    }
+  let names = Object.keys(b).filter((name) =>
+    (!omitted.length || !omitted.includes(name)) &&
+    (!wanted || name == 'entity' || name == 'tombstone' || wanted.has(name))
+  )
+  if (trees.has(b)) {
+    let out: Record<string, unknown> = {}
+    for (let name of names) out[name] = dup(b[name])
+    return out as Bundle
   }
-  for (let name of Object.keys(out)) {
-    let comp = out[name]
-    if (comp != null) out[name] = { ...comp as Comp }
-  }
-  return out
+  return json(b, names) ??
+    structuredClone(Object.fromEntries(names.map((n) => [n, b[n]]))) as Bundle
 }
 
 /** The memory of whole entities for a store bound to `driver` and `vocab`,
@@ -797,21 +846,32 @@ export let memoized = (
     k.held.delete(eid)
     k.part.delete(eid)
   }
-  // Held whole, or in part: only the components `asked` names.
+  // Held whole, or in part: only the components `asked` names. What memory
+  // already holds of it in part still stands, since nothing wrote it, and
+  // is held beside them: two reads naming different components of one
+  // entity are each answered from memory.
   let hold = (eid: string, b: Bundle | null, asked?: Set<string>) => {
+    let had = k.part.get(eid), was = k.held.get(eid)
+    if (b && asked && had && was) {
+      b = { ...was, ...b }
+      asked = new Set([...had, ...asked])
+    }
     evict(eid)
     let size = b ? sizeOf(b) : 64
     k.sizes.set(eid, size)
     k.bytes += size
-    k.held.set(eid, b && copy(b))
+    k.held.set(eid, b && kept(b))
     if (asked) k.part.set(eid, asked)
   }
   // Whether memory holds what a read asks of an entity: all of it, or the
   // components `wanted` names.
   let holds = (eid: string, wanted?: Set<string>) => {
     let part = k.part.get(eid)
-    return k.held.has(eid) &&
-      (!part || !!wanted && [...wanted].every((name) => part.has(name)))
+    if (!k.held.has(eid)) return false
+    if (!part) return true
+    if (!wanted) return false
+    for (let name of wanted) if (!part.has(name)) return false
+    return true
   }
   let trim = () => {
     while (k.held.size > count || k.bytes > memory) {
@@ -1105,8 +1165,10 @@ export let memoized = (
     )
     // A hit's dynamic components are read now, in one statement, of the hits
     // holding any.
+    let changing = refresh &&
+      (!wanted || [...wanted].some((name) => dynamic.has(name)))
     let stale = new Map(
-      (refresh ? hits : []).flatMap((eid) => {
+      (changing ? hits : []).flatMap((eid) => {
         let names = Object.keys(k.held.get(eid)!).filter((name) =>
           dynamic.has(name) && (!wanted || wanted.has(name))
         )
@@ -1129,8 +1191,8 @@ export let memoized = (
       k.held.delete(eid)
       k.held.set(eid, held)
       if (!held) return []
-      let b = copy(held, wanted, names)
-      return [Object.assign(b, current.get(eid) ?? {})]
+      let b = copy(held, wanted, names), now = current.get(eid)
+      return [now ? Object.assign(b, now) : b]
     })
     trim()
     return out

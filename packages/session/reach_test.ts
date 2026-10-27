@@ -12,6 +12,8 @@ import {
 } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { stepping } from '../sqlite/testing.ts'
 import { Archetypes } from '@yaks/archetype'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -578,3 +580,80 @@ test('recent inputs bound an interrupted request without loading old prose', () 
     {},
   )
 })
+
+// A store keeping archetypes, as the box's does, where a reading remembers the
+// lines of a window it reached and asks them again by name; and a graph over
+// it, each time one is made, that remembers nothing.
+let shelf = storage(stepping().driver, recoveryVocab)
+shelf.install()
+let unremembering = () =>
+  graph({ storage: shelf, vocab: recoveryVocab, plugins: [sessions()] })
+let remembering = unremembering()
+let seq = 0
+// An input, the ask sent through it and the reply.
+let turn = (): Bundle[] => {
+  let n = seq
+  seq += 3
+  return [
+    {
+      entity: { eid: `in${n}` },
+      entry: { session: 'w', seq: n + 1 },
+      content: { body: 'go' },
+      using: { model: M },
+    },
+    {
+      entity: { eid: `ask${n}` },
+      entry: { session: 'w', seq: n + 2 },
+      ask: { to: M, through: `in${n}` },
+      using: { model: M },
+      attempt: { by: null },
+    },
+    {
+      entity: { eid: `out${n}` },
+      entry: { session: 'w', seq: n + 3 },
+      content: { body: 'ok' },
+      output: { source: `ask${n}` },
+    },
+  ]
+}
+await remembering.apply([
+  { entity: { eid: M }, model: { name: 'fake' } },
+  { entity: { eid: 'w' }, session: {} },
+  ...Array.from({ length: 40 }, turn).flat(),
+], { trusted: true })
+await remembering.apply([{
+  entity: { eid: 'summary' },
+  entry: { session: 'w', seq: ++seq },
+  checkpoint: { through: 'out9', seq: 12, tasks: {} },
+  content: { body: 'summary' },
+  notice: {},
+}], { trusted: true })
+// What lands between one reading of the 109-line window and the next.
+let landing: [string, () => Bundle[]][] = [
+  ['nothing', () => []],
+  ['a turn', turn],
+  ['a mark on an old line', () => [{
+    entity: { eid: 'ask30' },
+    interrupted: { code: 'transport' },
+  }]],
+  ['an old line deleted', () => [{ entity: { eid: 'in36' }, $delete: true }]],
+  ['its newest line deleted', () => [{
+    entity: { eid: `out${seq - 3}` },
+    $delete: true,
+  }]],
+  ['another line at that seq', () => [{
+    entity: { eid: 'again' },
+    entry: { session: 'w', seq },
+    content: { body: 'again' },
+  }]],
+]
+for (let [landed, lines] of landing) {
+  await remembering.apply(lines(), { trusted: true })
+  for (let bodies of [false, true]) {
+    let got = await reach(remembering, 'w', { turn: true, bodies })
+    let whole = await reach(unremembering(), 'w', { turn: true, bodies })
+    test(`a turn reads its window as it stands after ${landed} (bodies: ${bodies})`, () => {
+      assertEquals(got, whole)
+    })
+  }
+}

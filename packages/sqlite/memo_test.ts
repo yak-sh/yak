@@ -398,6 +398,11 @@ test('a get naming components keeps what it read for one naming no others', () =
   assert(reads(g, () => hero(['player'])) > 0)
   assertEquals(hero(['player']).player, { active: true })
   assertEquals(hero(['position']).position, { x: 1 })
+  // What each read is held beside the other.
+  assertEquals(
+    reads(g, () => [hero(['player']), hero(['position', 'player'])]),
+    0,
+  )
   assert(reads(g, () => hero()) > 0)
   assertEquals(hero(), {
     entity: { eid: 'hero' },

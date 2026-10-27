@@ -276,16 +276,16 @@ try {
 
 A whole entity `get` reads is kept in memory until a write names it, so an
 entity read again costs no row, whole or cut to the components a `get` names. A
-`get` naming components keeps what it read too, for a later `get` naming no
-others; a `read` takes the entities it found from the same memory, unless it
-asks for a derived value a whole read leaves out. A statement that writes a
-component table without naming its entities lets go of every one, as do schema
-changes; nothing a transaction has written is kept until that transaction ends.
-Transactions are seen where the driver says them: a `begin` or savepoint through
-`query`, or the driver's own `tx`, so a host that opens one some other way must
-not read through the store inside it. Drivers naming one `connection` (@yaks/sql
-`Driver`), as every driver over a Durable Object's storage does, keep one memory
-between them.
+`get` naming components keeps what it read too, beside what other `get`s read of
+the entity, for a later `get` naming no others; a `read` takes the entities it
+found from the same memory, unless it asks for a derived value a whole read
+leaves out. A statement that writes a component table without naming its
+entities lets go of every one, as do schema changes; nothing a transaction has
+written is kept until that transaction ends. Transactions are seen where the
+driver says them: a `begin` or savepoint through `query`, or the driver's own
+`tx`, so a host that opens one some other way must not read through the store
+inside it. Drivers naming one `connection` (@yaks/sql `Driver`), as every driver
+over a Durable Object's storage does, keep one memory between them.
 
 A file keeps a log of which entity each write named, `entity_written`, so
 another connection's commit lets go of just the entities it wrote: a model turn

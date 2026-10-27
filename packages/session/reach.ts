@@ -29,13 +29,26 @@
 // than a lookup asks for by name, reads it whole. A mark set on an older line
 // (`provisional` on an ask) is read each time.
 //
+// The lines below every one a decision reads (the newest ask, the newest
+// answered one, the turns a retry counts) are what a model is sent and what a
+// status looks over for their shapes: an ask, a call, its result. They are read
+// without their lifecycles, an ask's `attempt` and a call's `execution`, which
+// nothing decides by there and which a store derives again on every read
+// (`attempt.state`, `execution.state`). An open call, a provisional ask and
+// what the newest lines name are read whole by their own lookups, and those
+// readings stand over the line's. The lines a reading reached below its pages
+// are remembered too, as the lookups are: while the newest line it read stands
+// where it was, the next reading asks them again by name, in one get the store
+// answers from memory, and reads them by query again once one is no longer
+// the line it was or holds other components.
+//
 // A fork reads through its segments (./window.ts): the parent up to the
 // anchor, then its own. A pending transcript with no checkpoint and no window
 // is its own context, so its turn reads it all: the model is sent all of it
 // too. Entries without a `seq` belong to the oldest end and are reached when
 // the reading is.
 
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
 import { stoppedNotice } from './claude-control.ts'
 import { askingOf, lines } from './compact.ts'
 import { ASK, CALL, CONTENT, ENTRY, OUTPUT, RESULT, USING } from './native.ts'
@@ -54,6 +67,8 @@ import { type Segment, transcriptSegments, within } from './window.ts'
 
 const SENDING = 'sending'
 const PROGRESS = 'tool_progress'
+// What the lines below a decision's are read without.
+const LIFECYCLES = ['attempt', 'execution']
 const FIRST = 64
 // The most lines appended since a lookup that it asks for by name; past them
 // (an import, a run another process wrote) it reads the transcript whole.
@@ -142,6 +157,12 @@ let selected = async (r: Read, ...asks: Ask[]): Promise<Bundle[]> => {
         : await r.g.rows(a.q + fields, { eids: a.eids }),
     )
   }
+  return await gathered(r, owners)
+}
+
+// The entities of `owners`, rows naming each one's eid and archetype, holding
+// the components of `r.names` their archetypes hold.
+let gathered = async (r: Read, owners: Row[]): Promise<Bundle[]> => {
   let ids = owners.map((b) => String(b['entity.eid']))
   if (!ids.length) return []
   let names = r.names
@@ -168,10 +189,64 @@ let selected = async (r: Read, ...asks: Ask[]): Promise<Bundle[]> => {
   return ids.flatMap((id) => rows.get(id) ?? [])
 }
 
+// A segment's lines a reading reached, newest first from the segment's newest,
+// with their shapes, and the seq they were read down to.
+type Shape = Line & { archetype: Eid }
+type Reached = { from: number; lines: Shape[] }
+const WINDOWS = 64
+let windows = new WeakMap<Graph, Map<string, Reached>>()
+
+// The lines of `s` from `at` up and below `under`, as the last reading to reach
+// them found them, asked again by name. While that reading's newest line is
+// where it was, the segment holds its lines and those appended since, which a
+// page has read. Each must still be the line it was, of the same shape; if one
+// is not, or a line appended since lies below the pages, it is undefined.
+let recalled = async (
+  r: Read,
+  s: Segment,
+  at: number,
+  under: number,
+): Promise<Bundle[] | undefined> => {
+  let known = windows.get(r.g)?.get(within(s))
+  if (!known || at < known.from) return
+  let edge = known.lines[0]
+  let lines = await tail(r, s, edge.seq)
+  let last = lines.at(-1)
+  if (last?.eid != edge.eid || last.seq != edge.seq) return
+  let range = (l: Line) => l.seq >= at && l.seq < under
+  if (lines.slice(0, -1).some(range)) return
+  let wanted = known.lines.filter(range)
+  let found = await gathered(
+    r,
+    wanted.map((l) => ({
+      'entity.eid': l.eid,
+      'entity.archetype': l.archetype,
+    })),
+  )
+  let stands = found.length == wanted.length &&
+    found.every((b, k) =>
+      b.entity.eid == wanted[k].eid &&
+      b.entity.archetype == wanted[k].archetype &&
+      comp(b, ENTRY)?.session == s.session && seqOf(b) == wanted[k].seq
+    )
+  return stands ? found : undefined
+}
+
 // Older rows of the whole chain, `n` at a time, newest first.
 let pages = (r: Read) => {
   let { segs } = r
   let i = segs.length - 1, after = ''
+  let below: Read = {
+    ...r,
+    names: (r.names ?? r.g.vocab.all).filter((n) => !LIFECYCLES.includes(n)),
+  }
+  // What each segment was read down to, and its rows, newest first.
+  let reached = segs.map(() => ({ from: Infinity, rows: [] as Bundle[] }))
+  let took = (k: number, rows: Bundle[], from: number) => {
+    reached[k].rows.push(...rows)
+    reached[k].from = Math.min(reached[k].from, from)
+  }
+  let reaching = false
   return {
     get done() {
       return i < 0
@@ -186,29 +261,63 @@ let pages = (r: Read) => {
         )
         got.push(...rows)
         if (rows.length < want) {
+          took(i, rows, -Infinity)
           i--
           after = ''
-        } else after = `&.after=${rows.at(-1)!.entity.eid}`
+        } else {
+          took(i, rows, seqOf(rows.at(-1)!))
+          after = `&.after=${rows.at(-1)!.entity.eid}`
+        }
       }
       return got
     },
     // Every row from `at` up that is still unread, a query for each segment
     // it spans: a segment is read whole when the one before it still holds
     // seqs at or above `at`, since the seqs of a segment all pass those before.
+    // They lie below every line a decision reads, so without lifecycles, and
+    // the lines a reading reached before are asked again by name.
     until: async (at: number): Promise<Bundle[]> => {
+      reaching = true
       let got: Bundle[] = []
       while (i >= 0) {
-        let rows = await selected(
-          r,
-          `${within(segs[i])}&.entry.seq>=${at}&.order=-entry.seq${after}`,
-        )
+        let s = segs[i], oldest = reached[i].rows.at(-1)
+        let rows =
+          await recalled(below, s, at, oldest ? seqOf(oldest) : Infinity) ??
+            await selected(
+              below,
+              `${within(s)}&.entry.seq>=${at}&.order=-entry.seq${after}`,
+            )
         got.push(...rows)
+        took(i, rows, at)
         if (rows.length) after = `&.after=${rows.at(-1)!.entity.eid}`
         if (i == 0 || segs[i - 1].through < at) break
         i--
         after = ''
       }
       return got
+    },
+    // What a reading that reached below its pages read of each segment, for
+    // the next to ask again: lines of a seq and a known shape.
+    keep: () => {
+      if (!reaching || !r.g.vocab.comp('archetype')) return
+      let kept = windows.get(r.g) ?? new Map<string, Reached>()
+      windows.set(r.g, kept)
+      reached.forEach(({ from, rows }, k) => {
+        if (from == Infinity) return
+        let key = within(segs[k])
+        kept.delete(key)
+        let lines = rows.map((b) => ({
+          eid: b.entity.eid,
+          seq: Number(comp(b, ENTRY)?.seq),
+          archetype: String(b.entity.archetype ?? ''),
+        }))
+        if (
+          !lines.length ||
+          lines.some((l) => !Number.isSafeInteger(l.seq) || !l.archetype)
+        ) return
+        kept.set(key, { from, lines })
+        if (kept.size > WINDOWS) kept.delete(kept.keys().next().value!)
+      })
     },
   }
 }
@@ -310,7 +419,7 @@ let fetch = async (r: Read, eids: Iterable<Eid>): Promise<Bundle[]> => {
   if (!ids.length) return []
   let found = await r.g.get(
     ids,
-    r.names?.includes(ENTRY) ? r.names : [ENTRY, ...r.names ?? []],
+    r.names && !r.names.includes(ENTRY) ? [ENTRY, ...r.names] : r.names,
   )
   return found.filter((b) => {
     let at = comp(b, ENTRY)
@@ -590,11 +699,14 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       ),
       ...await fetch(r, missing((b) => comp(b, OUTPUT)?.source)),
     )
+    // What a lookup read of a line stands over the rows' reading of it, which
+    // may lack its lifecycle.
+    let looked = new Map(held.map((b) => [b.entity.eid, b]))
     let seen = new Set<Eid>()
-    return ordered([...rows, ...held].filter((b) => {
-      if (seen.has(b.entity.eid)) return false
+    return ordered([...rows, ...held].flatMap((b) => {
+      if (seen.has(b.entity.eid)) return []
       seen.add(b.entity.eid)
-      return true
+      return [looked.get(b.entity.eid) ?? b]
     }))
   }
   await fill(false)
@@ -616,6 +728,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     }
     await fill(true)
   }
+  page.keep()
   // And what a model selection and `sending` in force are.
   if (o.turn || o.call) {
     held.push(

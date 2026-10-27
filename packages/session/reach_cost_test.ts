@@ -73,6 +73,7 @@ await s.tx((tx) =>
     ...lines('long', 2000),
     ...lines('tools', 60),
     ...lines('turn', 2000, 1900),
+    ...lines('window', 2000, 400),
   ])
 )
 
@@ -112,6 +113,7 @@ let step = async (session: string) => {
   return { ...await read(session), whole }
 }
 let short = await step('short'), long = await step('long')
+let wide = await step('window')
 
 // A transcript a step read, that 2,000 lines then landed on at once (an
 // import, a run another process wrote), read again.
@@ -184,6 +186,14 @@ test('a step on a long transcript reads what one on a short transcript does', ()
   ok(
     long.steps < short.steps * 1.5,
     `${long.steps} steps on 2,000 lines, ${short.steps} on 60`,
+  )
+})
+
+test('a model turn behind a window of 400 lines reads what one on a short transcript does', () => {
+  ok(wide.status == 'pending')
+  ok(
+    wide.steps < short.steps * 1.5,
+    `${wide.steps} steps behind a 400-line window, ${short.steps} on 60 lines`,
   )
 })
 
