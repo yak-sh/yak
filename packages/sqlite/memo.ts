@@ -132,10 +132,12 @@ export type Memo = {
     key: string,
     tables: string[] | undefined,
     run: () => Row[],
-    query?: And | Filter,
-    membership?: boolean,
-    strict?: string[],
-    shape?: Filter,
+    proof?: () => {
+      query?: And | Filter
+      membership?: boolean
+      strict?: string[]
+      shape?: Filter
+    },
   ) => Row[]
 }
 
@@ -1256,7 +1258,7 @@ export let memoized = (
         ? undefined
         : tables.filter((name) => b[name] != null)
     },
-    answer: (key, tables, run, query, membership, strict, shape) => {
+    answer: (key, tables, run, prove) => {
       if (!tables) return run()
       sync()
       let current = (table: string) => c.versions.get(table) ?? 0
@@ -1283,6 +1285,7 @@ export let memoized = (
       if (at.some(([t, n]) => current(t) != n)) return rows
       let kept = packed(rows, ANSWER)
       if (!kept) return rows
+      let { query, membership, strict, shape } = prove?.() ?? {}
       let proof = typeof query == 'function' || !query
         ? undefined
         : rooted(vocab, query)

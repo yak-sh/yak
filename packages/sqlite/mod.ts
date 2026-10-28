@@ -564,8 +564,7 @@ export let storage = (
         JSON.stringify(['permit', eids, components, o.visibility, !!graves]),
         policies(o),
         run,
-        graves ? undefined : test,
-        true,
+        () => ({ query: graves ? undefined : test, membership: true }),
       )
     },
   })
@@ -733,49 +732,57 @@ export let storage = (
         ? [...new Set([...tables, ...scoped])]
         : undefined
     }
-    let standing: And | Filter | undefined = query
-    let strict: string[] | undefined
-    let shape: Filter | undefined
-    let identities = (c: Clause): boolean =>
-      c.kind == 'and' || c.kind == 'or'
-        ? c.clauses.every(identities)
-        : c.kind == 'pred' && !c.where || c.kind == 'every'
-    let fixed = (c: Clause): boolean => {
-      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(fixed)
-      if (c.kind != 'pred') return true
-      let leaf = vocab.aim(c.path.join('.'), bare(c)).at(-1)
-      return !leaf || vocab.prop(leaf.comp, leaf.prop)?.category != 'ref' ||
-        !c.not && c.op == '=' && !!literals(c.value)?.length
-    }
-    if (o.visibility) {
-      let policy = o.visibility.entity
-      let proof = basis(vocab, query, base.derived) && rooted(vocab, query)
-      // Aspect policies can change what a predicate reads. A whole-entity
-      // policy instead composes with an ordinary local membership test.
-      if (
-        !Object.keys(o.visibility.components ?? {}).length &&
-        (local(vocab, query) || !!proof) &&
-        (!policy || local(vocab, ast(policy)))
-      ) {
-        let ordinary = tested(query) ?? (proof ? proof.test : undefined)
-        if (ordinary && !fixed(query)) ordinary = undefined
-        let allowed = policy && tested(ast(policy), true)
-        standing = ordinary && (!policy || allowed)
-          ? (b) => ordinary(b) && (!allowed || allowed(b))
-          : undefined
-        if (standing && proof) shape = proof.shape
-        // A reference's target can become hidden without its source changing.
-        // Local source predicates cannot prove that policy change irrelevant.
-        if (!simple(query)) {
-          let scope = policies(o, !!tables && !tables.includes('entity'))
-          strict = scope && [
-            ...new Set([
-              ...scope,
-              ...proof ? proof.strict : [],
-            ]),
-          ]
-        }
-      } else standing = undefined
+    let prove = () => {
+      let standing: And | Filter | undefined = query
+      let strict: string[] | undefined
+      let shape: Filter | undefined
+      let identities = (c: Clause): boolean =>
+        c.kind == 'and' || c.kind == 'or'
+          ? c.clauses.every(identities)
+          : c.kind == 'pred' && !c.where || c.kind == 'every'
+      let fixed = (c: Clause): boolean => {
+        if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(fixed)
+        if (c.kind != 'pred') return true
+        let leaf = vocab.aim(c.path.join('.'), bare(c)).at(-1)
+        return !leaf || vocab.prop(leaf.comp, leaf.prop)?.category != 'ref' ||
+          !c.not && c.op == '=' && !!literals(c.value)?.length
+      }
+      if (o.visibility) {
+        let policy = o.visibility.entity
+        let proof = basis(vocab, query, base.derived) && rooted(vocab, query)
+        // Aspect policies can change what a predicate reads. A whole-entity
+        // policy instead composes with an ordinary local membership test.
+        if (
+          !Object.keys(o.visibility.components ?? {}).length &&
+          (local(vocab, query) || !!proof) &&
+          (!policy || local(vocab, ast(policy)))
+        ) {
+          let ordinary = tested(query) ?? (proof ? proof.test : undefined)
+          if (ordinary && !fixed(query)) ordinary = undefined
+          let allowed = policy && tested(ast(policy), true)
+          standing = ordinary && (!policy || allowed)
+            ? (b) => ordinary(b) && (!allowed || allowed(b))
+            : undefined
+          if (standing && proof) shape = proof.shape
+          // A reference's target can become hidden without its source changing.
+          // Local source predicates cannot prove that policy change irrelevant.
+          if (!simple(query)) {
+            let scope = policies(o, !!tables && !tables.includes('entity'))
+            strict = scope && [
+              ...new Set([
+                ...scope,
+                ...proof ? proof.strict : [],
+              ]),
+            ]
+          }
+        } else standing = undefined
+      }
+      return {
+        query: standing,
+        membership: identities(query) && local(vocab, query),
+        strict,
+        shape,
+      }
     }
     return unit(driver, () =>
       memo.answer(
@@ -794,10 +801,7 @@ export let storage = (
             references: resolved(query, o) ?? o.references,
             ...direct ? { archetypes: () => undefined } : {},
           }),
-        standing,
-        identities(query) && local(vocab, query),
-        strict,
-        shape,
+        prove,
       ), 'read')
   }
   let graves = burying(driver, vocab)
