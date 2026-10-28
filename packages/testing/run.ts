@@ -1,6 +1,7 @@
 // Runs collected tests one at a time, in the order they were declared, and
 // says how each went in the lines `deno test` prints (`name ... ok (12ms)`),
 // which what watches a run reads.
+import { own } from './own.ts'
 import { closing, type Test } from './suite.ts'
 
 /** How one test went. */
@@ -107,12 +108,27 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   // The deadline is set before the clock starts: a test's time is its own,
   // not the runner's, and a runtime's first timer costs a third of a
   // millisecond, which the first test to await would otherwise pay.
-  let late = new Promise((_, no) =>
-    timer = later(
-      () => no(new Error(`the test did not end within ${timeout}ms`)),
-      timeout,
-    )
-  )
+  //
+  // It counts the test's own time: the wall clock less what the box kept
+  // this runtime, and every process it started, waiting for a CPU
+  // (./own.ts). A test that hangs waits for no CPU, so it fails as soon on a
+  // busy box as on an idle one. The clock is read each second, and first
+  // looks then, so a test that ends sooner never pays for a look.
+  let late = new Promise((_, no) => {
+    let spent = own(Deno.pid, { every: 500, time: now })
+    let check = () => {
+      let left = timeout - spent()
+      if (left > 0) timer = later(check, Math.min(left, 1000))
+      else {
+        no(
+          new Error(
+            `the test did not end within ${timeout}ms of its own time`,
+          ),
+        )
+      }
+    }
+    timer = later(check, Math.min(timeout, 1000))
+  })
   let from = sched()
   let start = now()
   let ms = 0

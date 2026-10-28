@@ -44,3 +44,12 @@ test('until preserves the fact value and errors', async () => {
     error,
   )
 })
+
+test('until counts its timeout on the clock it is given', async () => {
+  let ticks = 0
+  await assertRejects(
+    () => until(() => false, { timeout: 1000, now: () => 1000 * ticks++ }),
+    Error,
+    'until: timed out after 1000ms',
+  )
+})

@@ -7,6 +7,7 @@
     "./deps": "./deps.ts",
     "./find": "./find.ts",
     "./main": "./main.ts",
+    "./own": "./own.ts",
     "./reads": "./reads.ts"
   },
   "license": "Apache-2.0",

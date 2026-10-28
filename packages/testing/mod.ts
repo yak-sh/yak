@@ -41,4 +41,5 @@ export {
   type Test,
   test,
 } from './suite.ts'
+export { type Looks, own, waits } from './own.ts'
 export { tick, until, type Wait } from './wait.ts'

@@ -67,14 +67,15 @@ try {
 
 ## Exports
 
-| Export                 | Provides                                                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/testing`        | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`       |
-| `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                             |
-| `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                  |
-| `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`; the pass record: `passed`, `remember`, `forget`, `recall`, `note` |
-| `@yaks/testing/reads`  | `AUDIT`, `audit`, `mark`, `reads`, `audited`, `path`: what each file read as it ran                                                       |
-| `@yaks/testing/main`   | The Deno runner entry point                                                                                                               |
+| Export                 | Provides                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/testing`        | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks` |
+| `@yaks/testing/own`    | `own`, `waits`: a process's own time, for a coordinator that imports no tests                                                                                |
+| `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                |
+| `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                                     |
+| `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`; the pass record: `passed`, `remember`, `forget`, `recall`, `note`                    |
+| `@yaks/testing/reads`  | `AUDIT`, `audit`, `mark`, `reads`, `audited`, `path`: what each file read as it ran                                                                          |
+| `@yaks/testing/main`   | The Deno runner entry point                                                                                                                                  |
 
 ## Declaring tests
 
@@ -123,8 +124,9 @@ arrow functions, compare by deep equality.
 
 `tick` yields one macrotask. `until` polls a function until its return value is
 truthy, then returns that value; a rejected or thrown error propagates. It
-accepts `timeout` (default 2000 ms), `poll` (default 5 ms), and a `label` for
-the timeout error. A label function is evaluated when the timeout occurs.
+accepts `timeout` (default 2000 ms), `poll` (default 5 ms), a `label` for the
+timeout error, and `now`, the clock the timeout counts on (by default the test's
+own time, below). A label function is evaluated when the timeout occurs.
 
 ```ts
 import { equal, throws, tick, until } from '@yaks/testing'
@@ -139,6 +141,34 @@ await throws(() =>
     timeout: 0,
     label: () => `${attempts} attempts`,
   }), '1 attempts')
+```
+
+A timeout counts the test's **own time**: the wall clock less what the box kept
+the test's runtime, and every process it started, waiting for a CPU. `own(pid)`
+is that clock for a process and every process it started (this one by default),
+read from Linux's /proc; elsewhere it is the wall clock. A wait on something
+that hangs (a server that never answers, a child that stopped) waits for no CPU,
+so its own time keeps the wall clock's pace and the wait still fails; one only
+slowed by a busy box is given the time it would have taken alone. Between two
+looks, the box held the processes at least as long as their most-held thread
+waited, and that is what each look takes off. The first look is 250 ms into a
+wait (`every`) and the span before it counts whole, so a wait that ends sooner
+costs nothing. `waits(pid)` is what a look reads: each thread's wait so far, in
+ms.
+
+```ts
+import { equal, own } from '@yaks/testing'
+
+// What a thread has waited at each look, and the wall clock at each reading.
+let looks = [new Map([['main', 0]]), new Map([['main', 30]])]
+let times = [0, 0, 100]
+let now = own(Deno.pid, {
+  every: 0,
+  look: () => looks.shift()!,
+  time: () => times.shift()!,
+})
+equal(now(), 0) // the first look
+equal(now(), 70) // 100 ms passed, 30 of them waiting for a CPU
 ```
 
 ## Examples beside the code
@@ -240,9 +270,10 @@ deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
 
 A path names a test module, a page, or a directory holding them. Files load one
 at a time; each file's tests run before the next file loads. A file that cannot
-load fails as a test. A test that exceeds `--timeout` (default 50000 ms) fails
-and the runner continues; the timeout does not cancel its body. A failed test
-sets exit code 1; an unknown flag sets exit code 2.
+load fails as a test. A test that exceeds `--timeout` (default 50000 ms) of its
+own time (`own`: the runtime's and every process it started) fails and the
+runner continues; the timeout does not cancel its body. A failed test sets exit
+code 1; an unknown flag sets exit code 2.
 
 The runner says each test as it runs (`adds ... ok (120µs)`), a failed test's
 errors right after its line, so a runtime that dies before it ends has still

@@ -95,6 +95,13 @@ ran, which is not an assertion.
   where an integration depends on the runtime itself progressing, rather
   than to tests of time behavior. Inside workerd the clock doesn't move while
   code runs, so bound work there by count.
+- `until`'s timeout, the runner's per-test `--timeout` and the coordinator's
+  idle limit count the test's own time (@yaks/testing `own`): the wall clock
+  less what the box kept the runtime and every process it started waiting
+  for a CPU. A CLI process a test starts takes several times as long under
+  four agents' suites, so a wall-clock timeout there failed on load, not on
+  a hang; a hang waits for no CPU and still fails on time. A timeout says
+  how long the thing waited on may take on an idle box, nothing more.
 - A helper that stands in for a door behaves like the door. One that skips a
   header or a check the door sends lets the test pass where production fails:
   a store called without its access-mode header once read every app as public.

@@ -29,6 +29,7 @@ import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { choose } from '@yaks/testing/choose'
 import { find, tested } from '@yaks/testing/find'
+import { own } from '@yaks/testing/own'
 import { AUDIT } from '@yaks/testing/reads'
 import { runTestCommands, type TestCommand } from './phases.ts'
 import { budget, hold, measure, OWN, read, type Suite } from './test-budget.ts'
@@ -155,7 +156,8 @@ export let runtime = (shared: string = denoDir()) => ({
 let ansi = /\x1b\[[0-9;]*m/g
 
 /** What a platform's runtime has said so far: the test or file it is on,
- * when a test last ended, how many have, and each that failed. */
+ * when a test last ended (by the clock `observe` is given), how many have,
+ * and each that failed. */
 export type Progress = {
   name: string
   completed: number
@@ -166,6 +168,7 @@ export type Progress = {
 export let observe = async (
   stream: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
   progress: Progress,
+  now: () => number = () => Date.now(),
 ) => {
   let decoder = new TextDecoder()
   let pending = ''
@@ -188,7 +191,7 @@ export let observe = async (
       /^(?:.+? \.\.\. )?(ok|FAILED|ignored) \(\d+(?:µs|ms|s|m\d+s)\)$/,
     )
     if (done && running && result) {
-      progress.completed = Date.now()
+      progress.completed = now()
       progress.count++
       if (result[1] == 'FAILED') progress.failed.push(progress.name)
       running = false
@@ -390,7 +393,12 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     return child
   }
   let failed: string[] = []
+  // Each platform is idle by its runtime's own time once that runtime starts
+  // (@yaks/testing/own): the wall clock less what the box kept it, and every
+  // process it started, waiting for a CPU. A runtime that hangs waits for no
+  // CPU, so it is ended as soon on a busy box as on an idle one.
   let progress = runs.map(([p]) => ({
+    now: () => Date.now(),
     name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
     completed: Date.now(),
     count: 0,
@@ -477,7 +485,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     for (let [i, p] of progress.entries()) {
       if (p.done) continue
       let name = runs[i][0]
-      let idle = Date.now() - p.completed
+      let idle = p.now() - p.completed
       if (p.count > p.said && Date.now() - p.reported >= 15_000) {
         // Progress is news to a person watching, not to an agent reading
         // the run once it ends; a wait is news to both.
@@ -505,9 +513,12 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }
   }, pulse)
   let run = async (i: number, child: Deno.ChildProcess) => {
+    let p = progress[i]
+    p.now = own(child.pid, { every: pulse / 2 })
+    p.completed = p.now()
     let followed = Promise.all([
-      observe(kept(child.stdout, heard[i].out), progress[i]),
-      observe(kept(child.stderr, heard[i].err), progress[i]),
+      observe(kept(child.stdout, heard[i].out), p, p.now),
+      observe(kept(child.stderr, heard[i].err), p, p.now),
     ])
     let status = await child.status
     await followed
@@ -530,7 +541,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }
     try {
       progress[i].name = 'loading tests'
-      progress[i].completed = Date.now()
       await run(i, spawn('workerd', files, suite.env))
     } finally {
       await suite.stop()

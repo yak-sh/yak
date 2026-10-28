@@ -16,7 +16,8 @@
 // naming a file, the runner sees what each file reads as it runs
 // (./reads.ts), and keeps a pass by that too.
 //
-// A test that has not ended within `--timeout` fails, and the run goes on.
+// A test that has not ended within `--timeout` of its own time fails, and the
+// run goes on (./run.ts `one`).
 // `--times` writes what each test and each file's load took, and the proof
 // of each file the run remembered as passed, to `<dir>/<platform>.json`.
 // `--loads=n` loads every file n times, each time once all have loaded the
