@@ -508,7 +508,9 @@ let CONNECTIONS: Row[] = [
         owner: space.eid,
       })
       let view = await connectionsOf(ctx.env, [space], who.person!)
-      let titles = new Map(
+      // An app of this space goes by its slug, the name every tool takes;
+      // a copy borrowing from another space, by the title its page shows.
+      let slugs = new Map(
         (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
       )
       let rows = all.filter((b) => b[CONNECTION]).map((b) => {
@@ -519,7 +521,7 @@ let CONNECTIONS: Row[] = [
             let shown = view.list.find((c) => c.eid == b.entity.eid)?.apps
               .find((a) => a.app == app)
             let u = comp(l, USES)
-            return said(u, shown?.title ?? titles.get(app) ?? 'another app') +
+            return said(u, slugs.get(app) ?? shown?.title ?? 'another app') +
               (shown?.borrower ? ` in ${shown.borrower} (borrowing)` : '') +
               calledOn(l) +
               (typeof u.lends == 'number'
@@ -539,7 +541,9 @@ let CONNECTIONS: Row[] = [
       for (let loan of view.borrowed) {
         rows.push(
           `${loan.integration} (${loan.eid}): borrowed from ${loan.lender}; ` +
-            `${loan.app.title} reads it as env.${loan.app.binding} (a sentinel), ` +
+            `${
+              slugs.get(loan.app.app) ?? loan.app.title
+            } reads it as env.${loan.app.binding} (a sentinel), ` +
             `${loan.app.calls} calls out this month of ${loan.app.cap} allowed. ` +
             `Connect your own at ${pageOf(ctx.env, space.slug)} and use ` +
             'connection_attach to replace the borrowed connection.',

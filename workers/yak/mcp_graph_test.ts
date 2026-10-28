@@ -892,22 +892,24 @@ test('a word the space already has is used where it lives', async () => {
       (await rows('.book', 'reading-list')).map((r) => r.entity.eid),
       [piranesi],
     )
-    // And there is no second copy: the fan-out answers one bundle, while each
-    // store refuses the word it never planted. Two stores live in one isolate,
-    // so this used to depend on which of them parsed first — the grammar's
-    // learned words were process-wide, and the answer was an empty row set
-    // where a refusal is owed (T-32814). The vocabulary now rides the parse,
-    // per store handle, so both refusals are the store's own, every run.
+    // And there is no second copy: the fan-out answers one bundle, and the
+    // lending app reads the book where it lives, as its pages do (T-132924),
+    // while a store refuses a word it neither planted nor uses. Two stores
+    // live in one isolate, so this used to depend on which of them parsed
+    // first — the grammar's learned words were process-wide, and the answer
+    // was an empty row set where a refusal is owed (T-32814). The vocabulary
+    // now rides the parse, per store handle, so the refusal is the store's
+    // own, every run.
     assertEquals((await rows(`id=${piranesi}`))[0].book!.title, 'Piranesi')
+    assertEquals(
+      (await rows('.book', 'lending')).map((r) => r.entity.eid),
+      [piranesi],
+    )
     let refused = (filter: string, app: string) =>
       agent.tool('graph_query', { filter, app }).then(
         () => '',
         (e: Error) => e.message,
       )
-    assertStringIncludes(
-      await refused('.book', 'lending'),
-      'unknown prop: .book',
-    )
     assertStringIncludes(
       await refused('.loan', 'reading-list'),
       'unknown prop: .loan',
