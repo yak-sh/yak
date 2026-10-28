@@ -158,16 +158,20 @@ money by the hour, and nothing fails while it does. The **usage watch**, the
 same service's other look, reads the account's usage from Cloudflare's GraphQL
 Analytics API ten minutes after each hour ends: each Worker's requests and CPU
 time, and each Durable Object's requests, rows read, rows written and duration.
-A **jump** is an hour at least twice its subject's normal, the median of the 48
-hours before, and past it by an amount worth a look (`METRICS` in usage.ts). It
-is reported to the box's tracker as a bug, one per subject and metric, saying
-the amount, the normal, the Worker, the object and, for an object, its entry
-points that hour (fetch, alarm, RPC):
+An hour is **past its normal** when it is at least twice its subject's normal,
+the median of the 48 hours before, and past it by the metric's floor, about a
+cent an hour (`METRICS` in usage.ts). A **jump** is an hour past its normal
+whose run of hours past it has lasted three hours, so the rise stays, or is past
+its normal by 24 floors in all, so it is worth a look even once. An hour of work
+that finished is neither, and is not reported. A jump is reported to the box's
+tracker as a bug, one per subject and metric, saying the amount, the normal, how
+long it has run, the Worker, the object and, for an object, its entry points
+that hour (fetch, alarm, RPC):
 
 > yak-tracker's Durable Object 1711faaf1a26 read 423.8M rows in the hour from
 > 2026-10-17T12:00:00.000Z, 129.1 times its normal of 3.3M an hour, the median
-> of the 48 before (Cloudflare's analytics). Its entry points: 3,119 alarm,
-> 3,100 http, 98 jsrpc.
+> of the 48 before (Cloudflare's analytics). It has been past its normal 2 hours
+> running. Its entry points: 3,119 alarm, 3,100 http, 98 jsrpc.
 
 The watch keeps nothing: Cloudflare holds the history, and an hour's report has
 an eid derived from the hour, so a look repeated after a restart lands once. It

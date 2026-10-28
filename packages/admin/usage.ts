@@ -8,18 +8,41 @@
 // misbehaving.
 //
 // A subject's normal is its median hour over the 48 before (an hour it did
-// nothing counts as nothing). A jump is an hour at least `RISE` times that
-// normal and past it by the metric's `floor`, an amount worth an agent's look:
-// about a cent an hour at Cloudflare's prices, a few dollars a month if it
-// stays. The platform tracker's bug pages (T-132729) went from 3M rows read an
-// hour to 47M on 2026-10-17, and stayed for ten days.
+// nothing counts as nothing). An hour is past its normal when it is at least
+// `RISE` times that normal and past it by the metric's `floor`: about a cent an
+// hour at Cloudflare's prices, a few dollars a month if it stays. A bug filed
+// is a failure someone has to fix, and an hour past its normal is often work
+// that finished, so a jump is an hour past its normal whose run (the hours
+// past it in a row, this one the last) says one of two things:
+//
+// - The rise stays: the run has lasted `STAYS` hours. Work done in under an
+//   hour touches at most two hours of the clock, so a third says it did not
+//   finish.
+// - It is worth a look even once: the run is past its normal by `ONCE` floors
+//   in all, a day of the floor. A run that size once a day costs as much in a
+//   month as the floor does staying. Counting the run, not its last hour, gives
+//   the same answer wherever an hour's end cuts the work.
+//
+// Anything else is quiet. yak-trash's daily sweep wrote 74,519 rows in the
+// yak/platform object in seven minutes of 2026-10-28's 04:00Z hour, under four
+// floors (7 cents), and the next hour was back to normal: work that finished.
+// On 2026-10-17 the platform tracker's object wrote 422k then 785k rows in two
+// hours, 60 floors, and its reads went from about 1M an hour to 518M and 424M,
+// then stayed at 15M or more for ten days (T-132729): a jump from the first
+// hour of reads, the second of writes, and each later hour the reads stayed
+// past their normal.
 import { derivedEid } from '@yaks/graph/identity'
 
 export let HOUR = 3_600_000
 /** The hours a subject's normal is the median of. */
 export let BEFORE = 48
-/** How many times its normal an hour must be to be a jump. */
+/** How many times its normal an hour must be to be past it. */
 export let RISE = 2
+/** How many hours running past its normal make a rise that stays. */
+export let STAYS = 3
+/** How many floors a run of hours must be past its normal by, in all, to be
+ * worth a look even if it ends there: a day of the floor. */
+export let ONCE = 24
 
 /** A measure of usage: where analytics keeps it, and how much more than
  * normal is worth a look. */
@@ -223,25 +246,29 @@ export type Jump = {
   hour: number
   value: number
   normal: number
+  /** how many hours running, this one the last, it has been past its normal */
+  running: number
 }
 
-/// let hours = (xs: number[]) => new Map(xs.map((v, i) => [i * HOUR, v]))
-/// let s = (xs: number[]) => [{ subject: 'worker w', metric: METRICS.rowsRead, hours: hours(xs) }]
-/// jumps(s([...Array(48).fill(3e6), 47e6]), 48 * HOUR).length -> 1
-/// jumps(s([...Array(48).fill(30e6), 47e6]), 48 * HOUR).length -> 0
-/// jumps(s([...Array(48).fill(1e3), 5e6]), 48 * HOUR).length -> 0
+/// let read = (normal: number, ...ran: number[]) => jumps([{ subject: 'worker w', metric: METRICS.rowsRead, hours: new Map([...Array(49 - ran.length).fill(normal), ...ran].map((v, i) => [i * HOUR, v])) }], 48 * HOUR).map((j) => j.running)
+/// read(3e6, 47e6) -> []
+/// read(3e6, 47e6, 47e6) -> []
+/// read(3e6, 47e6, 47e6, 47e6) -> [3]
+/// read(3e6, 250e6) -> [1]
+/// read(3e6, 125e6, 125e6) -> [2]
+/// read(30e6, 47e6, 47e6, 47e6) -> []
+/// read(1e3, 5e6, 5e6, 5e6) -> []
 /** The jumps of the hour at `hour` (ms, on the hour). */
 export let jumps = (series: Series[], hour: number): Jump[] =>
   series.flatMap(({ subject, metric, hours }) => {
-    let value = hours.get(hour) ?? 0
-    let normal = median(
-      Array.from(
-        { length: BEFORE },
-        (_, i) => hours.get(hour - (i + 1) * HOUR) ?? 0,
-      ),
-    )
-    return value >= RISE * normal && value - normal >= metric.floor
-      ? [{ subject, metric, hour, value, normal }]
+    let at = (i: number) => hours.get(hour - i * HOUR) ?? 0
+    let normal = median(Array.from({ length: BEFORE }, (_, i) => at(i + 1)))
+    let past = (v: number) => v >= RISE * normal && v - normal >= metric.floor
+    let run: number[] = []
+    for (let i = 0; i <= BEFORE && past(at(i)); i++) run.push(at(i) - normal)
+    let over = run.reduce((a, b) => a + b, 0)
+    return run.length >= STAYS || over >= ONCE * metric.floor
+      ? [{ subject, metric, hour, value: at(0), normal, running: run.length }]
       : []
   })
 
@@ -254,10 +281,13 @@ export class UsageJump extends Error {
  * every hour of one subject's metric on one bug, an hour's report landing
  * once however often it is sent. */
 export let report = (jump: Jump, who?: Who) => {
-  let { subject, metric, hour, value, normal } = jump
+  let { subject, metric, hour, value, normal, running } = jump
   let fault = `usage jump|${subject}|${metric.name}`
   let at = new Date(hour).toISOString()
   let times = normal ? `, ${+(value / normal).toFixed(1)} times` : ''
+  let stayed = running > 1
+    ? ` It has been past its normal ${running} hours running.`
+    : ''
   let entries = who?.tags.entries
     ? ` Its entry points: ${who.tags.entries}.`
     : ''
@@ -266,7 +296,7 @@ export let report = (jump: Jump, who?: Who) => {
       `${who?.said ?? subject} ${metric.did} ${count(value)} ${metric.unit} ` +
         `in the hour from ${at}${times} its normal of ${count(normal)} an ` +
         `hour, the median of the ${BEFORE} before (Cloudflare's analytics).` +
-        entries,
+        stayed + entries,
     ),
     context: {
       fault,
@@ -277,6 +307,7 @@ export let report = (jump: Jump, who?: Who) => {
         hour: at,
         value: String(value),
         normal: String(normal),
+        running: String(running),
       },
     },
   }
