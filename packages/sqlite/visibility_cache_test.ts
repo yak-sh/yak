@@ -84,6 +84,8 @@ let reuse = fixture(),
   removed = fixture(),
   rollback = fixture(),
   publicTarget = fixture()
+let missing = fixture()
+missing.store.get(['absent'])
 let selected = fixture()
 let unchanged = fixture()
 let pending = fixture()
@@ -181,6 +183,13 @@ test('a reference operand follows a target removed in the transaction', () => {
 test('a reference operand finds no deleted target its store keeps no history of', () => {
   let q = '.pointer.to=new-target'
   assertEquals(pending.store.tx((tx) => tx.read(q, queryOpts)), [])
+})
+test('removing a known absent identity leaves it absent', () => {
+  missing.store.tx((tx) => {
+    tx.remove([{ eid: 'absent' }])
+    assertEquals(tx.get(['absent']), [])
+  })
+  assertEquals(missing.store.get(['absent']), [])
 })
 test('a removed component leaves no cached aspect', () => {
   removed.store.tx((tx) => tx.patch([{ entity: { eid: 'draft' }, doc: null }]))

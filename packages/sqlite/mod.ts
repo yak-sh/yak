@@ -554,8 +554,11 @@ export let storage = (
         let found = fetch(eids, [...new Set(names)])
         // A deleted entity is judged by its history, which only the store's
         // statement reads (@yaks/sql `ghostly`).
-        if (!graves || !found.some(dead)) {
-          return found.filter((b) => test!(b)).map((b) => ({
+        let history = Object.values(o.backed ?? base.backed ?? {}).some((b) =>
+          b.held && b.about
+        )
+        if (!graves || !found.some(dead) || !history) {
+          return found.filter((b) => !dead(b) && test!(b)).map((b) => ({
             eid: b.entity.eid,
           }))
         }

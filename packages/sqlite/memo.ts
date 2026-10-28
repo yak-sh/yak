@@ -1321,12 +1321,18 @@ export let memoized = (
       if (!c.depth || c.blind) return
       // What each holds once buried: its grave, and nothing else.
       let buried = (eid: string, b: Bundle | null): Bundle => ({
-        entity: b?.entity.num != null ? { eid, num: b.entity.num } : { eid },
+        entity: b ? { ...b.entity } : { eid },
         tombstone: { deleted_at: at },
       })
       let now = new Map<string, Bundle | null | typeof LOST>()
       for (let [eid, b] of was) {
-        now.set(eid, b === LOST ? LOST : buried(eid, b))
+        now.set(eid, b === LOST || b == null ? b : buried(eid, b))
+      }
+      for (let [eid, b] of now) {
+        k.after.set(
+          eid,
+          b && b !== LOST ? { entity: b.entity, tombstone: {} } : b,
+        )
       }
       stand(was, now, before)
     },
