@@ -165,15 +165,21 @@ let once = (rows: Bundle[]): Bundle[] => {
  * this merge (./rules.ts).
  */
 export let merged = (held: Bundle | null, b: Bundle): Bundle => {
-  let out: Bundle = { ...(held ?? { entity: b.entity }) }
-  if (b.entity.archetype !== undefined) {
-    out.entity = { ...out.entity, archetype: b.entity.archetype }
+  let out: Bundle = held ?? { entity: b.entity }
+  let own = () => out === held ? out = { ...held } : out
+  if (
+    b.entity.archetype !== undefined &&
+    b.entity.archetype !== out.entity.archetype
+  ) {
+    own().entity = { ...out.entity, archetype: b.entity.archetype }
   }
   for (let [name, comp] of comps(b)) {
-    if (comp == null) delete out[name]
-    else {
+    if (comp == null) {
+      if (name in out) delete own()[name]
+    } else {
       let was = out[name] as Comp | undefined
-      out[name] = was ? { ...was, ...comp } : { ...comp }
+      if (was && Object.keys(comp).every((p) => was[p] === comp[p])) continue
+      own()[name] = was ? { ...was, ...comp } : { ...comp }
     }
   }
   return out
