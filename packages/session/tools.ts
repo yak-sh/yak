@@ -56,18 +56,14 @@ import { and, eq, every, present } from '@yaks/query'
 import { absolute } from '@yaks/file/local'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
-import { carried } from '@yaks/persona'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor, spawning } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './state.ts'
-import { install, settingsPath } from './hooks.ts'
 import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
 import { listen } from './listen.ts'
-import { cacheRead } from './cache.ts'
-import { waits } from './wake.ts'
 
 /** What a config file can set for this package: the checks' patience, and how
  * the duty reads transcripts (./service.ts). */
@@ -82,6 +78,16 @@ let HOURS = 2
 // A run nothing will resume. `settled` is left out on purpose: it means
 // nothing is outstanding, not that the session is over.
 let ENDED = ['stopped', 'failed']
+
+// What only some of these tools run is imported by the tool that runs it: a
+// session's hooks start and end every Claude Code session on the box, and
+// none of them reads the transcript cache, writes a harness's settings or asks
+// whether a managed run waits on a task. The workspace's lazy-dynamic-imports
+// (deno.json) is what keeps an import written here from loading at start.
+let wake = () => import('./wake.ts')
+let hooks = () => import('./hooks.ts')
+let cache = () => import('./cache.ts')
+let personas = () => import('@yaks/persona')
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -209,7 +215,7 @@ export let runs = (
 ): Runs => ({
   session_cache: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let value = await cacheRead(graph, {
+    let value = await (await cache()).cacheRead(graph, {
       from: typeof args.from == 'string' ? args.from : undefined,
       until: typeof args.until == 'string' ? args.until : undefined,
       session: typeof args.session == 'string' ? args.session : undefined,
@@ -317,7 +323,7 @@ export let runs = (
     // (./listen.ts).
     let worn = !str(comp(found, SESSION).persona) &&
       graph.vocab.prop(SESSION, 'persona') &&
-      await carried(graph, hooked(args.hook).cwd)
+      await (await personas()).carried(graph, hooked(args.hook).cwd)
     let persona = worn ? worn.persona.entity.eid : undefined
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.
@@ -365,8 +371,9 @@ export let runs = (
     // A managed run keeps the task it is parked on: a dependency finishing
     // runs it again, and its ending lets go of the rest (./wake.ts).
     let kept = new Set<string>()
-    for (let b of s.process ? held : []) {
-      if (await waits(graph, eid, b.entity.eid)) kept.add(b.entity.eid)
+    let { waits } = s.process && held.length ? await wake() : {}
+    for (let b of waits ? held : []) {
+      if (await waits!(graph, eid, b.entity.eid)) kept.add(b.entity.eid)
     }
     return [
       { entity: { eid }, [SESSION]: { ended: true } },
@@ -378,8 +385,9 @@ export let runs = (
     ]
   },
 
-  hooks_install: (call): Bundle[] => {
+  hooks_install: async (call): Promise<Bundle[]> => {
     let args = argsOf(call)
+    let { install, settingsPath } = await hooks()
     return [{
       entity: { eid: '$said' },
       content: {

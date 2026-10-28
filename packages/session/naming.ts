@@ -19,7 +19,7 @@ import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { attemptState } from './attempt.ts'
 
 import { after, over } from '@yaks/fp'
-import { MODEL, PROVIDER } from '@yaks/model'
+import { MODEL, PROVIDER } from '@yaks/model/vocab'
 import { ENTRY, FORK, USING } from './native.ts'
 
 /** A reference in one of this package's components named an entity of the

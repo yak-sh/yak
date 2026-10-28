@@ -7,7 +7,7 @@ import { POPULATION_VERSION } from './population.ts'
 import type { Derived, Stmt } from '@yaks/sql'
 import { render } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
-import { sha256 } from '@yaks/graph/sha256'
+import { digest, sha256 } from '@yaks/graph/sha256'
 import { FIT, indexed, tabled } from './ddl.ts'
 
 // What `install()` runs, known once per vocabulary and read overrides: the
@@ -29,28 +29,60 @@ let plans = [
   new WeakMap<Vocab, WeakMap<Derived, Plan>>(),
 ]
 let NONE: Derived = {}
+
+// Where the plan for a vocabulary and its read overrides is kept.
+let shelf = (vocab: Vocab, file: boolean) => {
+  let held = plans[Number(file)]
+  let by = held.get(vocab) ?? new WeakMap<Derived, Plan>()
+  held.set(vocab, by)
+  return by
+}
+
+// A plan but its print, and the text its print digests.
+let draft = (vocab: Vocab, derived: Derived, file: boolean) => {
+  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
+  let raised = stmts.filter(makes)
+  return {
+    // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
+    // changes is read off the file, so a fitting that learns something new
+    // installs again over a file whose statements are as they were.
+    text: [FIT, POPULATION_VERSION, ...stmts.map((s) => render(s).sql)]
+      .join(';\n'),
+    raised,
+    made: raised.map((s) => s.name),
+  }
+}
+
 export let plan = (
   vocab: Vocab,
   derived: Derived = NONE,
   file = false,
 ): Plan => {
-  let held = plans[Number(file)]
-  let by = held.get(vocab) ?? new WeakMap<Derived, Plan>()
-  held.set(vocab, by)
+  let by = shelf(vocab, file)
   let known = by.get(derived)
   if (known) return known
-  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
-  let raised = stmts.filter(makes)
-  let fresh = {
-    // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
-    // changes is read off the file, so a fitting that learns something new
-    // installs again over a file whose statements are as they were.
-    print: sha256(
-      [FIT, POPULATION_VERSION, ...stmts.map((s) => render(s).sql)].join(';\n'),
-    ),
-    raised,
-    made: raised.map((s) => s.name),
-  }
+  let { text, raised, made } = draft(vocab, derived, file)
+  let fresh = { print: sha256(text), raised, made }
   by.set(derived, fresh)
   return fresh
+}
+
+/** {@link plan}, its print digested by the platform rather than in script,
+ * and kept where `plan` finds it. A schema's statements are a hundred
+ * kilobytes, which the script digest takes milliseconds over in a process
+ * that has not compiled it yet, as every command starts; a host that can wait
+ * before it binds its store asks this first. */
+export let planned = async (
+  vocab: Vocab,
+  derived: Derived = NONE,
+  file = false,
+): Promise<Plan> => {
+  let by = shelf(vocab, file)
+  let known = by.get(derived)
+  if (known) return known
+  let { text, raised, made } = draft(vocab, derived, file)
+  let print = await digest(text)
+  // One `plan` made while the digest ran is the same plan, and stays.
+  if (!by.has(derived)) by.set(derived, { print, raised, made })
+  return by.get(derived)!
 }

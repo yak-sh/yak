@@ -165,6 +165,25 @@ let TRIES = 3
 /** The longest a bundle takes, every try together. */
 export let BUNDLE_LIMIT = TRY * TRIES
 
+// TODO(T-132250): the bundler's own graph should be whole. Deno 2.9.1's, under
+// the workspace's lazy-dynamic-imports (deno.json), cannot load a jsr package
+// a bundle reaches only through a dynamic import, and names the one it could
+// not: "Do not know how to load path: deno:jsr:@std/yaml@^1.2.0". An entry
+// importing it statically bundles, so a written entry is bundled again with an
+// import of each package so named, and no module a command line loads has to
+// import one for the bundler's sake.
+let unloaded = /Do not know how to load path: deno:(jsr:[\w@/.^~=<>*+-]+)/
+
+// The entry again with a static import of the package `e` says the bundler
+// could not load; undefined where it says none, or one already imported.
+let loading = (entry: URL | Written, e: unknown): Written | undefined => {
+  let missing = String((e as Error)?.message).match(unloaded)?.[1]
+  if (!missing || entry instanceof URL) return
+  let line = `import ${JSON.stringify(missing)}\n`
+  if (entry.code.includes(line)) return
+  return { ...entry, code: line + entry.code }
+}
+
 /** An entry written where it is bundled rather than read from a file: its
  * `code`, whose imports resolve as they would in a module at `at`. A page
  * composed of what a config's plugins contribute starts from one. */
@@ -189,6 +208,12 @@ export let bundle = async (
     try {
       return await once(signal ? AbortSignal.any([signal, late]) : late, entry)
     } catch (e) {
+      let whole = loading(entry, e)
+      if (whole) {
+        entry = whole
+        tried--
+        continue
+      }
       if (!late.aborted || signal?.aborted) throw e
       if (tried == TRIES) {
         throw new Error(

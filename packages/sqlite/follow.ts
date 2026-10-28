@@ -27,7 +27,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { installed, meta, PRINTED, printed } from './meta.ts'
 import { unit } from './unit.ts'
 import { build } from './owe.ts'
-import { plan } from './plan.ts'
+import { plan, planned } from './plan.ts'
 import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
 
@@ -44,6 +44,15 @@ export let printFor = (
   derived: Derived = {},
   file = false,
 ): string => plan(vocab, derived, file).print
+
+/** {@link printFor}, digested by the platform: a host that can wait before it
+ * binds the store it opens asks this first, and the store finds its print
+ * made rather than digesting a hundred kilobytes of statements in script. */
+export let printing = (
+  vocab: Vocab,
+  derived: Derived = {},
+  file = false,
+): Promise<string> => planned(vocab, derived, file).then((p) => p.print)
 
 // A column as `add column` takes it onto a standing table: SQLite refuses a
 // key or a unique column there, a NOT NULL without a literal default, and a

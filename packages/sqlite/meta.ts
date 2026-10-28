@@ -106,6 +106,15 @@ export let PRINTED = 'schema:'
 export let printed = (driver: Driver, print: string): boolean =>
   kept(driver, PRINTED + print) != null
 
+/** The prefix of the key a file records each survey of a store's schema under
+ * (./survey.ts): `surveyed:<print>`, the store's print. */
+export let SURVEYED = 'surveyed:'
+
+/** The survey this file recorded of the store schema `print` names, as it
+ * was recorded. */
+export let surveyedAt = (driver: Driver, print: string): string | undefined =>
+  kept(driver, SURVEYED + print)
+
 /** The prefix of the key a store records each plugin its data requires under:
  * `required:<plugin>`, its value when it was recorded. A host that does not
  * compose every one refuses to open the store (@yaks/host `meet`). A plugin

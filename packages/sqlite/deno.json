@@ -14,6 +14,7 @@
     "./follow": "./follow.ts",
     "./meta": "./meta.ts",
     "./owe": "./owe.ts",
+    "./survey": "./survey.ts",
     "./read-store": "./read-store.ts"
   },
   "license": "Apache-2.0",

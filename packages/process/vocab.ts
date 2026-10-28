@@ -8,6 +8,7 @@ import { processDoc } from './comp.ts'
 import manifest from './deno.json' with { type: 'json' }
 
 export { processDoc }
+export { EXIT, PROCESS, RUNTIME, SERVICE } from './comp.ts'
 
 /** What this package is: its manifest's description, the one place it is
  * written, which a host stamps on each document here. */

@@ -22,6 +22,8 @@ export let description: string = manifest.description
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [modelDoc]
 
+export let PROVIDER = 'provider'
+export let MODEL = 'model'
 export let USAGE = 'usage'
 export let PRICE = 'price'
 export let COST = 'cost'

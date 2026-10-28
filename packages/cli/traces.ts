@@ -7,13 +7,12 @@
 // the spans worth holding (@yaks/timing `held`). Held whole, such a root kept
 // every span it ever ran until the worker ran out of heap.
 import type { Bundle } from '@yaks/graph'
+import { held, TRACE_MAX_SPANS } from '@yaks/timing/cap'
 import {
-  held,
   type RequestState,
   sampleRequest,
   selectRequest,
-  TRACE_MAX_SPANS,
-} from '@yaks/timing'
+} from '@yaks/timing/request'
 import { channel, type Event } from '@yaks/trace'
 import type { Sink } from '@yaks/tracker/report'
 

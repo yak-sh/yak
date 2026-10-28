@@ -5,13 +5,6 @@
 // desk.
 import type { View } from '@yaks/inspect'
 import NotebookPen from 'lucide/dist/esm/icons/notebook-pen.mjs'
-// TODO(T-132250): Deno 2.9.1's bundler, under the workspace's
-// lazy-dynamic-imports (deno.json), cannot load a jsr package a bundle reaches
-// only through a dynamic import, and @yaks/web's app.js bundles this facet
-// with ./inspect.ts (and through it skill-text.ts's @std/yaml) behind one.
-// Imported here, @std/yaml is in the bundle's static graph, so it loads.
-// Remove once the bundler builds the whole graph.
-import '@std/yaml'
 
 /** The desk, the workshop and the bodies, as the inspector draws them. */
 export let inspectViews = (): Promise<View[]> =>

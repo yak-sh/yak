@@ -89,10 +89,15 @@ let ASCII = /^\p{ASCII}*$/u
 // keeping; a longer message gets one of its own.
 let kept = new Uint8Array(256)
 
+// Past this length an ASCII string is written by the encoder, whose one native
+// call beats a character loop the engine has not compiled yet: a schema's
+// print hashes a hundred kilobytes of DDL in every process that opens a graph.
+let LONG = 256
+
 // The padded message: the string's UTF-8 bytes, a 1 bit, zeros, and the bit
-// length as a 64-bit big-endian tail, rounded up to whole 64-byte blocks. An
-// ASCII string, which nearly every eid and token is, is its own bytes, copied
-// without a trip through the encoder.
+// length as a 64-bit big-endian tail, rounded up to whole 64-byte blocks. A
+// short ASCII string, which nearly every eid and token is, is its own bytes,
+// copied without a trip through the encoder.
 let padded = (input: string | Uint8Array): Uint8Array => {
   let ascii = typeof input == 'string' && ASCII.test(input)
   let bytes = input instanceof Uint8Array
@@ -104,6 +109,7 @@ let padded = (input: string | Uint8Array): Uint8Array => {
   let size = (((len + 8) >> 6) + 1) << 6
   let out = size <= kept.length ? kept : new Uint8Array(size)
   if (bytes) out.set(bytes)
+  else if (len > LONG) encoder.encodeInto(input as string, out)
   else for (let i = 0; i < len; i++) out[i] = (input as string).charCodeAt(i)
   out.fill(0, len, size)
   out[len] = 0x80
@@ -181,6 +187,31 @@ export let sha256 = (input: string | Uint8Array): string => {
     let x = h[i]
     hex += HEX[x >>> 24] + HEX[(x >>> 16) & 255] + HEX[(x >>> 8) & 255] +
       HEX[x & 255]
+  }
+  return hex
+}
+
+/**
+ * {@link sha256} by the platform's own digest, for a caller that can wait.
+ * Over a long message it is the faster by milliseconds in a process that has
+ * not compiled the loop above yet, as every command starts.
+ *
+ * ```ts
+ * import { digest, sha256 } from '@yaks/graph/sha256'
+ * import { equal } from '@yaks/testing'
+ *
+ * let long = 'create table if not exists "doc" ("entity" integer);\n'.repeat(20)
+ * equal(await digest(long), sha256(long))
+ * equal(await digest('ünïcode'), sha256('ünïcode'))
+ * ```
+ */
+export let digest = async (
+  input: string | Uint8Array<ArrayBuffer>,
+): Promise<string> => {
+  let bytes = typeof input == 'string' ? encoder.encode(input) : input
+  let hex = ''
+  for (let b of new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))) {
+    hex += HEX[b]
   }
   return hex
 }

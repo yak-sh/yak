@@ -3,6 +3,8 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./cap": "./cap.ts",
+    "./request": "./request.ts",
     "./vocab": "./vocab.ts",
     "./views": "./views.ts"
   },

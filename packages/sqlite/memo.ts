@@ -85,6 +85,7 @@ import { BESIDE, DIAL } from './history.ts'
 import { type Answer as Packed, copied, packed } from './answer.ts'
 import type { Known, Spine } from './write.ts'
 import { follows, newest, since } from './written.ts'
+import { surveyed } from './survey.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]
 
@@ -384,6 +385,9 @@ type Kept = {
    * none beside the store's own but the blob table, whose text no write
    * changes under an address */
   logged: boolean
+  /** whether the file has the log's triggers on every one of them, asked
+   * once while the schema stands at `schema` */
+  follows: (schema: number) => boolean
   clear: () => void
   /** let go of what another connection may have written: the entities
    * `eids` names, or every one, and every answer */
@@ -608,9 +612,8 @@ let follow = (driver: Driver, c: Connection) => {
   if (now == c.seen) return
   let schema = revision(driver, 'schema')
   // A store in memory keeps no log: its one connection sees every statement.
-  let names = [...c.kept].flatMap((k) => [...k.tables])
-  let logged = !!driver.file && [...c.kept].every((k) => k.logged) &&
-    follows(driver, new Set(names.filter((name) => name != BLOBS)))
+  let logged = !!driver.file &&
+    [...c.kept].every((k) => k.logged && k.follows(schema))
   let written = logged && schema == c.schema && c.cursor != null
     ? since(driver, c.cursor)
     : undefined
@@ -793,9 +796,10 @@ let copy = (
 export let memoized = (
   driver: Driver,
   vocab: Vocab,
-  derived: Derived = {},
+  given?: Derived,
   memory = MEMORY,
 ): Memo => {
+  let derived = given ?? {}
   let c = connect(driver)
   let count = Math.floor(memory / 2048)
   // A read of more entities than this is a scan: what it reads is not kept,
@@ -805,6 +809,10 @@ export let memoized = (
   let through = Object.values(derived).flatMap((d) =>
     storedOnly(d, vocab) ? tablesOf(d.expr(col('__owner'))) ?? [] : []
   )
+  // Whether the log follows the tables kept here, while the schema stands:
+  // as the file's survey says where it is current (./survey.ts), or else as
+  // the file itself does.
+  let logs: { schema: number; follows: boolean } | undefined
   let k: Kept = {
     held: new Map(),
     part: new Map(),
@@ -816,6 +824,18 @@ export let memoized = (
     afterPart: new Map(),
     tables: new Set([...own, ...through]),
     logged: through.every((name) => own.has(name)),
+    follows: (schema) => {
+      if (logs?.schema !== schema) {
+        let found = surveyed(driver, vocab, given)
+        logs = {
+          schema,
+          follows: found
+            ? !found.unlogged.length
+            : follows(driver, [...k.tables].filter((name) => name != BLOBS)),
+        }
+      }
+      return logs.follows
+    },
     clear: () => {
       k.held.clear()
       k.part.clear()

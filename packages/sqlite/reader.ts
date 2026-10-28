@@ -1,15 +1,14 @@
 // The SELECT half of an installed store. It shares the compiler, component
 // gathers and snapshot rules with storage(), without importing its writers,
 // mutation pipeline, migrations or diagnostics.
-import { type BindOpts, catalogue, type Driver, revision } from '@yaks/sql'
+import { type BindOpts, type Driver, revision } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Store } from './mod.ts'
 import { EPOCH, meta } from './meta.ts'
 import { get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import { gotten, metered, named } from './budget.ts'
-import { lacking } from './follow.ts'
-import { indexed } from './ddl.ts'
+import { glance, lacked, surveyed } from './survey.ts'
 
 /** Read against the physical schema of this snapshot, not the one that was
  * standing when the command started. Never repair an older vocabulary's
@@ -29,15 +28,14 @@ export let options = <T extends BindOpts>(
       schema = current
       return tagged = base
     }
-    let behind = inspect
-      ? lacking(driver, vocab, base.derived, true)
-      : { derived: {}, absent: [] }
-    let objects = inspect
-      ? new Set(catalogue(driver).map((o) => o.name))
-      : undefined
-    let missingIndexes = indexed(vocab).flatMap((s) =>
-      s.t == 'create index' && objects && !objects.has(s.name) ? [s.name] : []
-    )
+    // What a writer found when it last looked, where the schema has not
+    // moved since (./survey.ts), or else a look at the file now.
+    let found = inspect
+      ? surveyed(driver, vocab, base.derived) ??
+        glance(driver, vocab, base.derived)
+      : { lacking: [], absent: [], unindexed: [] }
+    let lacks = lacked(vocab, found)
+    let missingIndexes = found.unindexed
     let e = base.backed && meta(driver).get(EPOCH)
     let backed = e
       ? Object.fromEntries(
@@ -50,10 +48,10 @@ export let options = <T extends BindOpts>(
     return tagged = {
       ...base,
       backed,
-      derived: Object.keys(behind.derived).length
-        ? { ...base.derived, ...behind.derived }
+      derived: found.lacking.length
+        ? { ...base.derived, ...lacks }
         : base.derived,
-      absent: [...new Set([...base.absent ?? [], ...behind.absent])],
+      absent: [...new Set([...base.absent ?? [], ...found.absent])],
       ...missingIndexes.length ? { missingIndexes } : {},
     }
   }

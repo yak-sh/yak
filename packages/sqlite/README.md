@@ -114,6 +114,7 @@ try {
 | `@yaks/sqlite/physical`   | Inspection of installed tables, columns and schema objects                                                                             |
 | `@yaks/sqlite/migration`  | Migration readiness, monitoring and explicit installation control                                                                      |
 | `@yaks/sqlite/meta`       | The store's own key/value and the plugins its data requires, without loading storage                                                   |
+| `@yaks/sqlite/survey`     | `survey` and `surveyed`: what a writer found of the file's schema, kept until the schema moves ([below](#following-a-composed-schema)) |
 | `@yaks/sqlite/vocab`      | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
 | `@yaks/sqlite/tools`      | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
 
@@ -699,6 +700,16 @@ a host whose file something that keeps no print may have changed. A reader binds
 yet as absent properties, and its `absent` names the component tables the file
 does not have yet, which read as worn by no entity (@yaks/sql's `absent`
 option).
+
+Finding that out reads the whole of `sqlite_schema`, so a writer records it.
+`survey(driver, vocab, derived?)` (`@yaks/sqlite/survey`) writes what a look at
+the file finds (the lacking columns, absent tables, missing indexes and tables
+the log does not follow) as the `server_meta` row `surveyed:<print>`, beside the
+`pragma schema_version` it was taken at. `surveyed(driver, vocab,
+derived?)`
+reads it back while that version stands, and is undefined once anything has
+changed the schema, so a reader and memory look at the file again until a writer
+records the next survey.
 
 ## The storage layout
 

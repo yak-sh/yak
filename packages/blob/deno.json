@@ -3,6 +3,8 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./backend": "./backend.ts",
+    "./sqlite": "./sqlite.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
     "./routes": "./routes.ts"

@@ -58,21 +58,14 @@ import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
-import {
-  ended,
-  EXIT,
-  gone,
-  PROCESS,
-  selfEid,
-  started,
-  store as machine,
-  vanished,
-} from '@yaks/process'
+import { EXIT, PROCESS } from '@yaks/process/vocab'
+import { ended, selfEid, started } from '@yaks/process/self'
 import type { History, Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
-import { add, follow, printOf } from '@yaks/sqlite/follow'
+import { add, follow, printing, printOf } from '@yaks/sqlite/follow'
 import { requirements, requires } from '@yaks/sqlite/meta'
 import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
+import { survey } from '@yaks/sqlite/survey'
 import type { Opened } from '@yaks/sqlite/db'
 import {
   adopt,
@@ -88,14 +81,9 @@ import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
 import { faults } from '@yaks/api/refuse'
-import {
-  artifactsAt,
-  type Backend,
-  backend,
-  type Blobs,
-  blobSchema,
-  sqliteBlobs,
-} from '@yaks/blob'
+import { artifactsAt, type Backend, backend } from '@yaks/blob/backend'
+import { blobSchema, sqliteBlobs } from '@yaks/blob/sqlite'
+import type { Blobs } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
 import { chosen, type Configured, facetsOf, meet } from '@yaks/host/config'
 import { facet } from './words.ts'
@@ -123,6 +111,11 @@ import { traceControl } from './trace_control.ts'
 // One carrier per runtime, not per composed graph. Multiple CLI hosts can
 // coexist without replacing one another's async context.
 let traceLocal = new AsyncLocalStorage<TraceContext | undefined>()
+
+// What finds the processes that ended without closing, imported by the first
+// host that asks after one: a command that buries nobody never loads the
+// supervisor it lives in.
+let supervisor = () => import('@yaks/process')
 installContext({
   get: () => traceLocal.getStore(),
   run: (ctx, work) => traceLocal.run(ctx, work),
@@ -596,6 +589,9 @@ let composed = async (
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
+    // The store's print, digested by the platform before the store is bound,
+    // so the schema below finds it made.
+    if (!opts.readOnly && !mode) await printing(vocab, derived, !!sql.file)
     let built = plan.bind({
       host: {
         vault,
@@ -621,7 +617,8 @@ let composed = async (
         },
         bury: async () => {
           if (!self || !g) return []
-          let dead = await vanished(machine(g), { me: selfEid() })
+          let { store, vanished } = await supervisor()
+          let dead = await vanished(store(g), { me: selfEid() })
           for (let b of dead) {
             let pid = (b[PROCESS] as Comp | undefined)?.pid
             await host.end(
@@ -631,8 +628,11 @@ let composed = async (
           }
           return dead
         },
-        gone: async (holder) =>
-          !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
+        gone: async (holder) => {
+          if (!self || !g) return false
+          let { gone, store } = await supervisor()
+          return await gone(store(g), holder, { me: selfEid() })
+        },
       },
       actor: self,
       process: started({ roles: [...roles] })[PROCESS] as Comp,
@@ -701,6 +701,13 @@ let composed = async (
         // composition says the rows it writes will need.
         try {
           requires(sql, plan.required.filter((p) => !required.includes(p)))
+        } catch (error) {
+          told(error)
+        }
+        // What a reader's first look at the file finds, kept for every
+        // opener after this one until the schema moves.
+        try {
+          survey(sql, vocab, derived)
         } catch (error) {
           told(error)
         }

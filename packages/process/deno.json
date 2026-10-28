@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
+    "./self": "./self.ts",
     "./wind": "./wind.ts",
     "./isolate": "./isolate.ts"
   },

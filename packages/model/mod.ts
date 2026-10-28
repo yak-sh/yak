@@ -51,7 +51,14 @@ import { Refused } from '@yaks/graph/errors'
 import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import type { Artifact } from '@yaks/blob'
-import { modelDoc, type Price, type Usage, weigh } from './vocab.ts'
+import {
+  MODEL,
+  modelDoc,
+  type Price,
+  PROVIDER,
+  type Usage,
+  weigh,
+} from './vocab.ts'
 import type { MediaReceipt } from './media.ts'
 export {
   type Executor,
@@ -77,9 +84,11 @@ export {
   COST,
   dollars,
   hourly,
+  MODEL,
   modelDoc,
   PRICE,
   type Price,
+  PROVIDER,
   RATE_LIMIT,
   USAGE,
   type Usage,
@@ -97,13 +106,10 @@ export { acknowledged, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 
-export let PROVIDER = 'provider'
-
 /** The row holding a provider's latest reading of one plan-limit window
  * (`rate_limit`), named by its provider entity and the window in minutes. */
 export let limitEid = (provider: Eid, window: number): Eid =>
   identityEid('rate_limit', [provider, String(window)])
-export let MODEL = 'model'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'
