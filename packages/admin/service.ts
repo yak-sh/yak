@@ -8,11 +8,11 @@
 // through the build's watch paths. Wrangler is asked only about a late head
 // that is not yet live: its OAuth refresh rewrites one shared file without a
 // lock (deploys.ts `deploymentLists`), so its readers stay rare. Whether
-// Builds is running the head's build is read from the check run Builds keeps
-// on the commit in GitHub, `Workers Builds: yak`, which is in progress from
-// the moment the build runs until it ends. `gh` reads it as the box's own
-// GitHub sign-in, where Builds' own API would take one more credential, a
-// Workers CI token.
+// Builds is running the head's build, or when it failed, is read from the
+// check run Builds keeps on the commit in GitHub, `Workers Builds: yak`, which
+// is in progress from the moment the build runs until it ends. `gh` reads it
+// as the box's own GitHub sign-in, where Builds' own API would take one more
+// credential, a Workers CI token.
 //
 // The build is started through main's deploy hook, a URL that can do nothing
 // but start that build, kept in the vault and named by the config. The
@@ -29,12 +29,14 @@ import { sleep } from '@yaks/fp'
 import { WATCHED } from '../../workers/yak/wrangler.ts'
 import {
   BOUND,
+  type Build,
   firstShown,
   type Head,
   LATE,
   type Live,
   missed,
   PENDING,
+  ran,
   said,
   type Step,
   step,
@@ -91,8 +93,9 @@ export type Doors = {
   live: () => Promise<Omit<Live, 'has'>>
   /** whether two commits hold the same Worker source */
   same: (a: string, b: string) => Promise<boolean>
-  /** whether Workers Builds is running a build of a commit */
-  building: (sha: string) => Promise<boolean>
+  /** whether Workers Builds is running a build of a commit, or when it
+   * failed */
+  build: (sha: string) => Promise<Build>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
   now: () => number
@@ -177,16 +180,21 @@ export let box = (
       }
       return r.code == 0
     },
-    building: async (sha) => {
+    build: async (sha) => {
       let runs = `repos/{owner}/{repo}/commits/${sha}/check-runs?check_name=` +
-        `${encodeURIComponent(CHECK)}&status=in_progress`
-      let count = await command(
+        encodeURIComponent(CHECK)
+      let run = await command(
         dir,
         'gh',
-        ['api', runs, '--jq', '.total_count'],
+        [
+          'api',
+          runs,
+          '--jq',
+          '.check_runs[0] | {status, conclusion, completed_at}',
+        ],
         stopping,
       )
-      return Number(count) > 0
+      return ran(JSON.parse(run))
     },
     start: async () => {
       let hook = options.hook
@@ -230,7 +238,7 @@ export let pass = async (
     ...served,
     has: served.sha == tip.sha || await doors.same(served.sha, tip.sha),
   }
-  if (!live.has) head.building = await doors.building(tip.sha)
+  if (!live.has) head = { ...head, ...await doors.build(tip.sha) }
   next = step(head, doors.now(), live, late, bound)
   let context = (fault: string, answer: string) => ({
     fault: `${fault}:yak`,
@@ -254,7 +262,7 @@ export let pass = async (
     // A pending build is a slow one, not a miss.
     if (answer != PENDING) {
       await report(
-        missed(head, live, answer, late),
+        missed(head, live, answer, late, bound),
         context('deploy missed', answer),
       )
     }

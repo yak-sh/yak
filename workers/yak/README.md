@@ -172,8 +172,10 @@ first failure is a log line; the second build's failure is filed, and so is a
 failure the hook could not start a build for. A push Builds starts no build for
 fails nowhere, so the box looks: its deploy catch-up
 ([@yaks/admin](../../packages/admin/README.md#the-deploy-catch-up)) starts
-main's build through a deploy hook of its own once main's head is not live 15
-minutes after it landed, and reports it.
+main's build through a deploy hook of its own once main's head is not live 3
+minutes after it landed with no build under way, and reports it. A head whose
+build failed is this rebuild's for 15 minutes; the catch-up builds it only if it
+is still not live then.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

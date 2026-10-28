@@ -1,13 +1,14 @@
 // The deploy catch-up through its doors: a head Builds never deployed gets one
 // build and two reports, and a head that is live, holds the same Worker
-// source, is still building or was rolled back past gets none.
+// source, is still building, is being rebuilt after its build failed or was
+// rolled back past gets none.
 import { equal, match, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
-import { BOUND, firstShown, LATE, PENDING } from './catchup.ts'
+import { BOUND, type Build, firstShown, LATE, PENDING } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 
@@ -33,7 +34,7 @@ let fixture = (
   let at = { now: landed }
   let looked = 0
   let started = 0
-  let building = false
+  let build: Build = {}
   let reports: [Error, Record<string, unknown>][] = []
   let doors: Doors = {
     main: () => Promise.resolve({ sha: HEAD, at: landed }),
@@ -47,7 +48,7 @@ let fixture = (
       })
     },
     same: () => Promise.resolve(same),
-    building: () => Promise.resolve(building),
+    build: () => Promise.resolve(build),
     start: () => {
       started++
       return Promise.resolve('build aa194fb5 queued')
@@ -77,8 +78,8 @@ let fixture = (
     get started() {
       return started
     },
-    set building(now: boolean) {
-      building = now
+    set build(now: Build) {
+      build = now
     },
   }
 }
@@ -140,13 +141,32 @@ test('a pending build answers the start and is not reported', async () => {
 
 test('a late head whose build is running waits for it, unreported', async () => {
   let f = fixture()
-  f.building = true
+  f.build = { building: true }
   f.at.now = landed + LATE
   equal((await f.look()).step, 'wait')
   equal([f.started, f.reports.length], [0, 0])
-  f.building = false
+  f.build = {}
   f.at.now += MIN
   equal((await f.look()).step, 'rebuild')
+  equal(f.started, 1)
+})
+
+// fcabed20's build failed at 12:59:40Z, four minutes after its push; the
+// kernel's rebuild went live 77 s later.
+test('a head whose build failed waits a bound for its rebuild, then gets one', async () => {
+  let f = fixture()
+  f.build = { broke: landed + LATE - 5_000 }
+  f.at.now = landed + LATE
+  equal((await f.look()).step, 'wait')
+  f.at.now += BOUND - 2 * MIN
+  equal((await f.look()).step, 'wait')
+  equal([f.started, f.reports.length], [0, 0])
+  f.at.now += 2 * MIN
+  equal((await f.look()).step, 'rebuild')
+  match(
+    f.reports[0][0].message,
+    /739f56b2 is not live 15 min after its Workers Build failed; .*No build of main deployed it since.* build aa194fb5 queued/,
+  )
   equal(f.started, 1)
 })
 

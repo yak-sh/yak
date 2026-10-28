@@ -6,17 +6,21 @@
 //
 // A head gets `LATE` to go live, since Builds starts a build within seconds of
 // a push. Past it, a head Builds is still building waits: its build is under
-// way, only slower than LATE. Otherwise the catch-up asks main's deploy hook
-// for a build once, marking the commit `rebuilt{said}` with what Builds
-// answered. The hook starts none while one is queued or initializing, so a
-// build that is merely waiting its turn costs nothing and is not reported; a
-// build the hook did start is. The hook would start a second build beside a
-// running one (Cloudflare's deploy hooks page), which is why a running one is
-// read first. A `BOUND` later, still not live, the catch-up marks the
-// commit `failed{reason}`, reports that, and starts nothing more for it: the
-// build's own log says why, and the next push starts over. A rollback newer
-// than the head is an operator's choice and is left alone. Removing the marks
-// asks for another try.
+// way, only slower than LATE. A head whose build failed waits a `BOUND` from
+// the failure: Workers Builds tells the kernel (workers/yak/builds.ts), which
+// builds main again through the deploy hook, a build no check run shows, and
+// files that build's failure; a look that started a second build beside it
+// would only race it. Otherwise the catch-up asks main's deploy hook for a
+// build once, marking the commit `rebuilt{said}` with what Builds answered.
+// The hook starts none while one is queued or initializing, so a build that is
+// merely waiting its turn costs nothing and is not reported; a build the hook
+// did start is. The hook would start a second build beside a running one
+// (Cloudflare's deploy hooks page), which is why a running one is read first.
+// A `BOUND` later, still not live, the catch-up marks the commit
+// `failed{reason}`, reports that, and starts nothing more for it: the build's
+// own log says why, and the next push starts over. A rollback newer than the
+// head is an operator's choice and is left alone. Removing the marks asks for
+// another try.
 
 /** How long a push may go not live before the catch-up looks for its build.
  * Builds queues one within seconds of the push, and a build of `yak` took 78 s
@@ -35,15 +39,43 @@ export let LATE = 3 * 60_000
 export let BOUND = 15 * 60_000
 
 /** main's head: its commit, when origin first showed it (ms), whether Workers
- * Builds is running a build of it (once read), and when the catch-up started
- * its build and gave up on it, if it has. */
+ * Builds is running a build of it or when that build failed (ms, once read),
+ * and when the catch-up started its build and gave up on it, if it has. */
 export type Head = {
   sha: string
   at: number
   building?: boolean
+  broke?: number
   rebuilt?: number
   failed?: boolean
 }
+
+/** What Workers Builds says of a head's build, once read. */
+export type Build = Pick<Head, 'building' | 'broke'>
+
+/** The check run Workers Builds keeps on a commit, as GitHub gives it. */
+export type Run = {
+  status?: string | null
+  conclusion?: string | null
+  completed_at?: string | null
+}
+
+/// ran({ status: 'in_progress' }) -> { building: true }
+/// ran({ status: 'queued' }) -> { building: true }
+/// ran({ status: 'completed', conclusion: 'failure', completed_at: '2026-10-28T12:59:40Z' }) -> { broke: 1793192380000 }
+/// ran({ status: 'completed', conclusion: 'success' }) -> {}
+/// ran({ status: null, conclusion: null, completed_at: null }) -> {}
+/** What a commit's latest check run says of its build: under way until it
+ * completes, or failed at its completion. A build that passed, or was
+ * cancelled, says nothing: no failure path rebuilds it. */
+export let ran = (run: Run): Build =>
+  !run.status
+    ? {}
+    : run.status != 'completed'
+    ? { building: true }
+    : run.conclusion == 'failure' && run.completed_at
+    ? { broke: Date.parse(run.completed_at) }
+    : {}
 
 /** What serves: the commit its deployment was built from, when it went live
  * (ms), whether an operator rolled back to it, and whether it already has the
@@ -76,6 +108,8 @@ export type Step =
 /// step(h, LATE, { ...l, has: true }) -> 'live'
 /// step(h, LATE, l) -> 'rebuild'
 /// step({ ...h, building: true }, LATE, l) -> 'wait'
+/// step({ ...h, broke: LATE }, LATE + BOUND - 1, l) -> 'wait'
+/// step({ ...h, broke: LATE }, LATE + BOUND, l) -> 'rebuild'
 /// step(h, LATE, { ...l, at: 1, rollback: true }) -> 'held'
 /// step({ ...h, rebuilt: BOUND }, BOUND + LATE) -> 'wait'
 /// step({ ...h, rebuilt: BOUND, building: true }, 2 * BOUND, l) -> 'wait'
@@ -99,7 +133,8 @@ export let step = (
     ? 'live'
     : live.rollback && live.at > head.at
     ? 'held'
-    : head.building || now - live.at < (head.rebuilt ? bound : late)
+    : head.building || now - live.at < (head.rebuilt ? bound : late) ||
+        now - (head.broke ?? -Infinity) < bound
     ? 'wait'
     : head.rebuilt
     ? 'fail'
@@ -140,13 +175,24 @@ let short = (sha: string) => sha.slice(0, 8)
 let minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
 
 /** Why the catch-up started main's build, with what Builds answered. */
-export let missed = (head: Head, live: Live, answer: string, late = LATE) =>
+export let missed = (
+  head: Head,
+  live: Live,
+  answer: string,
+  late = LATE,
+  bound = BOUND,
+) =>
   new NotLive(
     `main's head ${short(head.sha)} is not live ${
-      minutes(late)
-    } after it was pushed; yak serves ${short(live.sha)}. No Workers ` +
-      `Build of it is running or deployed it, so the deploy catch-up ` +
-      `started main's build through its deploy hook: ${answer}`,
+      head.broke
+        ? `${minutes(bound)} after its Workers Build failed`
+        : `${minutes(late)} after it was pushed`
+    }; yak serves ${short(live.sha)}. ${
+      head.broke
+        ? 'No build of main deployed it since'
+        : 'No Workers Build of it is running or deployed it'
+    }, so the deploy catch-up started main's build through its deploy ` +
+      `hook: ${answer}`,
   )
 
 /** Why the catch-up gave up on a commit whose build it started. */
