@@ -6,10 +6,13 @@ import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
 
 let env = { SESSION_SECRET: 'install-test' } as Env
+// A session as the sign-in mints it, naming the browser it was signed in
+// from (session.ts `minted`).
 let cookie = `yak_session=${await sign({
   person: 'person',
   space: null,
   exp: Math.floor(Date.now() / 1000) + 3600,
+  via: 'b0000000-0000-4000-8000-000000000001',
 }, env.SESSION_SECRET!)}`
 let spaces = ['owner', 'editor', 'reader'].map((role) => ({
   role,
@@ -45,22 +48,27 @@ test('install sign-in keeps the chosen app as its return address', async () => {
   )
 })
 
-// The page's one form, read from its markup: a DOM parser's first parse
-// costs this file several times its budget.
-let FORM = /<form([^>]*)>([\s\S]*?)<\/form>/
+// The page's one form, read from its markup by where its quotes fall: a DOM
+// parser's first parse costs this file several times its budget, and a
+// regular expression's first match compiles it.
+let quoted = (text: string, from: string) => {
+  let at = text.indexOf(from) + from.length
+  return at < from.length ? undefined : text.slice(at, text.indexOf('"', at))
+}
 let formOf = (html: string) => {
-  let [, attrs = '', body = ''] = html.match(FORM) ?? []
-  let attr = (name: string) =>
-    attrs.match(new RegExp(` ${name}="([^"]*)"`))?.[1]
+  let form = html.slice(html.indexOf('<form'), html.indexOf('</form>'))
+  let tag = form.slice(0, form.indexOf('>'))
   return {
-    method: attr('method'),
-    action: attr('action'),
-    options: [...body.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]),
+    method: quoted(tag, ' method="'),
+    action: quoted(tag, ' action="'),
+    options: form.split('<option value="').slice(1)
+      .map((option) => option.slice(0, option.indexOf('"'))),
   }
 }
 
+let signedIn = request('GET')
 test('an install page offers only writable spaces without making a copy', async () => {
-  let response = await answer(request('GET'), env, dir)
+  let response = await answer(signedIn, env, dir)
   assertEquals(formOf(await response.text()), {
     method: 'post',
     action: '/install?name=trip-plan',

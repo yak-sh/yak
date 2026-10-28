@@ -6,6 +6,7 @@ import { answer, type Census, uses } from './admin.ts'
 import { type Directory, META, type Meter, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'
+import { drawn } from './render/mod.ts'
 
 let ROOT = { eid: 'meta', slug: META.space } as Space
 let SECRET = 'secret'
@@ -131,15 +132,21 @@ let dir = {
   census: () =>
     Promise.resolve({ ...EMPTY, people: census().people.slice(0, 1) }),
 } as unknown as Directory
-let get = (path: string, person?: string) =>
-  answer(
+// The directory's words, and its renderers' queries compiled against them,
+// are made once an isolate, by the first page to draw a row: made here, so
+// a case times its own page.
+drawn(census().people[0], 'Directory.List.Tile')
+// What the router hands the admin's door for `path`, signed in as `person`.
+let asking = (path: string, person?: string) =>
+  [
     new Request(`https://yaks.app${path}`, {
       headers: person ? { cookie: SIGNED_IN[person] } : {},
     }),
     env,
-    new URL(`https://yaks.app${path}`).pathname,
+    path.split('?')[0],
     dir,
-  )
+  ] as const
+let get = (path: string, person?: string) => answer(...asking(path, person))
 
 test('the directory is drawn for the platform admin and nobody else', async () => {
   let out = (await get('/admin/people'))!
@@ -151,8 +158,9 @@ test('the directory is drawn for the platform admin and nobody else', async () =
   assertEquals(door.headers.get('location'), '/admin/people')
 })
 
+let search = asking('/admin/people?q=ann', 'root')
 test("the admin's people list shows who a search finds", async () => {
-  let found = (await get('/admin/people?q=ann', 'root'))!
+  let found = (await answer(...search))!
   assertEquals(found.status, 200)
   assertStringIncludes(await found.text(), 'ann@x.com')
 })

@@ -92,11 +92,19 @@ test('new app exposes separate build and upload forms below the agent route', as
   )
 })
 
-// The value a page's input named `name` is drawn with, read off the markup:
-// parsing a whole page into a document takes half a millisecond.
+// The value a page's input named `name` is drawn with, read off the markup
+// by where its quotes fall: parsing a whole page into a document takes half a
+// millisecond, and a regular expression's first match compiles it.
+let quoted = (text: string, from: string) => {
+  let at = text.indexOf(from) + from.length
+  return at < from.length ? undefined : text.slice(at, text.indexOf('"', at))
+}
 let field = (html: string, name: string) =>
-  html.match(new RegExp(`<input\\b[^>]*\\bname="${name}"[^>]*>`))?.[0]
-    .match(/\bvalue="([^"]*)"/)?.[1]
+  quoted(
+    html.split('<input').slice(1).map((tag) => tag.slice(0, tag.indexOf('>')))
+      .find((tag) => tag.includes(` name="${name}"`)) ?? '',
+    ' value="',
+  )
 
 test('the app address can be changed from settings whatever the space holds', async () => {
   assertEquals(field(await block({ view: 'settings' }), 'space'), 'dana')
