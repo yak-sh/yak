@@ -8,14 +8,14 @@
 // through the same signed transport.
 //
 // A poll the tracker cannot answer for now is a log line, and the next poll
-// tries again. Only a tracker that has not answered for OUTAGE is reported,
-// once, since the box is the witness when the platform tracker is down; any
-// other failed poll is reported at once.
+// tries again; what a failed poll is, and when it is reported, is
+// ./outage.ts's, as it is for the tracker service's syncs.
 import type { Bundle } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
-import { late, mark, type Remote } from './remote.ts'
+import { mark, type Remote, unanswered, Unavailable } from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
+import { later, outage, type Timer } from './outage.ts'
 import { pollThread } from './poll_thread.ts'
 
 /** A polled answer of the platform tracker, with its mark door. */
@@ -78,25 +78,13 @@ export type PollOpts = {
   log?: (line: string) => void
   /** where it asks (default: signed doors on a dedicated worker event loop) */
   doors?: Doors
-  /** how a wait is set — between polls, and a page's deadline — returning
-   * what cancels it (default: `setTimeout`), so a test can hold the clock */
-  timer?: (fn: () => void, ms: number) => () => void
+  /** how a wait is set — between polls, the outage's, and a page's deadline
+   * — returning what cancels it (default: `setTimeout`), so a test can hold
+   * the clock */
+  timer?: Timer
 }
 
 const PAGE = 100, PAGES = 100
-
-/** How long the platform tracker may go unanswered before a poll reports it,
- * in ms: five minutes, ten polls at the default pace. Each read already
- * retries for up to a minute (./remote.ts), and what has passed on its own (a
- * Durable Object reset, a runtime that stalls for half a minute, a bad path to
- * one colo) was over well within it. Past it, the platform's own reports may
- * not be landing, and nobody else is saying so. */
-export const OUTAGE = 300_000
-
-// A read the tracker could not answer for now, which a later poll can
-// recover from: a refusal of 503 or 504 (./routes.ts `read`), or a page past
-// its own deadline.
-class Unavailable extends Error {}
 
 /** A page of the bugs `params` asks for, or that nothing moved since `tag`;
  * a refusal throws. */
@@ -104,6 +92,43 @@ export type Page = (
   params: URLSearchParams,
   tag?: string,
 ) => Promise<Extract<Read, { ok: true }>>
+
+/** The pages `doors` answers. A refusal throws, as `Unavailable` (./remote.ts)
+ * where the tracker could not answer for now: a 503 or 504 (./routes.ts
+ * `read`), or a page past its `timeout`. A stop ends a page as itself, never
+ * as the read it cut short. */
+export let pages = (
+  doors: Doors,
+  stop?: AbortSignal,
+  { timeout, timer = later }: { timeout?: number; timer?: Timer } = {},
+): Page =>
+async (params, tag) => {
+  stop?.throwIfAborted()
+  // A page past its deadline aborts as `AbortSignal.timeout` would, so the
+  // transport names it a timeout (./remote.ts `late`).
+  let late = new AbortController()
+  let cancel = timeout
+    ? timer(
+      () => late.abort(new DOMException('Signal timed out.', 'TimeoutError')),
+      timeout,
+    )
+    : () => {}
+  let signal = timeout
+    ? AbortSignal.any([late.signal, ...stop ? [stop] : []])
+    : stop
+  try {
+    let got = await doors.bugs(params, signal, tag).catch((error) => {
+      throw unanswered(error)
+    })
+    stop?.throwIfAborted()
+    if (got.ok) return got
+    throw got.status == 503 || got.status == 504
+      ? new Unavailable(got.error)
+      : Error(got.error)
+  } finally {
+    cancel()
+  }
+}
 
 /** What brings an answer read at a tag up to date: the rows read, at the tag
  * the tracker stands at now. With `moved`, they are the answer among those
@@ -203,11 +228,6 @@ export let renewed = (rows: Bundle[], fresh: Fresh): Bundle[] => {
     .sort((a, b) => a.entity.eid < b.entity.eid ? -1 : 1)
 }
 
-let timeout = (fn: () => void, ms: number) => {
-  let id = setTimeout(fn, ms)
-  return () => clearTimeout(id)
-}
-
 // The mark a bundle carries, if it carries one.
 let markOf = (b: Bundle): Mark | undefined =>
   b.resolved
@@ -250,91 +270,35 @@ export let poll = (
 ): Polled => {
   let thread = opts.doors ? undefined : pollThread(remote)
   let doors = opts.doors ?? thread!
-  let timer = opts.timer ?? timeout
+  let timer = opts.timer ?? later
   let value: Bundle[] = [], ready = false
   // The tag `value` was read at.
   let held: string | undefined
   let listeners = new Set<(bundles: Bundle[]) => void>()
   let stop = new AbortController()
-  // A page past its deadline aborts as `AbortSignal.timeout` would, so the
-  // transport names it a timeout (./remote.ts `late`).
-  let deadline = (ms: number) => {
-    let late = new AbortController()
-    let cancel = timer(
-      () => late.abort(new DOMException('Signal timed out.', 'TimeoutError')),
-      ms,
-    )
-    return { signal: AbortSignal.any([stop.signal, late.signal]), cancel }
-  }
-  let page: Page = async (params, tag) => {
-    let { signal, cancel } = opts.timeout
-      ? deadline(opts.timeout)
-      : { signal: stop.signal, cancel: () => {} }
-    try {
-      let result = await doors.bugs(params, signal, tag).catch((error) => {
-        // Past the deadline, the poll's own thread gives up on the page.
-        throw late(error)
-          ? new Unavailable('Remote tracker did not answer in time')
-          : error
-      })
-      if (!result.ok) {
-        throw result.status == 503 || result.status == 504
-          ? new Unavailable(result.error)
-          : Error(result.error)
-      }
-      return result
-    } finally {
-      cancel()
-    }
-  }
-  let log = opts.log ?? console.warn
+  let page = pages(doors, stop.signal, { timeout: opts.timeout, timer })
   let every = opts.every ?? 30_000
-  // Since the tracker last answered: the polls it could not answer, the last
-  // one's failure, and what cancels the report owed once that lasts OUTAGE.
-  // Its clock starts with the poll, so one that hangs is unanswered too.
-  let down: { failed: number; error?: unknown; cancel: () => void } | undefined
-  let unanswered = () =>
-    down ??= {
-      failed: 0,
-      cancel: timer(() => {
-        if (stop.signal.aborted) return
-        opts.report?.(
-          Error(
-            `Remote tracker has not answered for ${OUTAGE / 60_000} minutes`,
-            { cause: down?.error },
-          ),
-        )
-      }, OUTAGE),
-    }
-  let over = () => {
-    down?.cancel()
-    down = undefined
-  }
+  let watched = outage({
+    name: 'Tracker poll',
+    every,
+    report: opts.report,
+    log: opts.log,
+    timer,
+    signal: stop.signal,
+  })
   let pass = async () => {
-    let outage = unanswered()
     try {
-      let fresh = await since(page, query, held)
-      if (fresh) {
-        value = renewed(value, fresh)
-        held = fresh.tag
-      }
-      ready = true
-      if (outage.failed) {
-        log(`Remote tracker answered again after ${outage.failed} failed polls`)
-      }
-      over()
-    } catch (error) {
+      await watched(async () => {
+        let fresh = await since(page, query, held)
+        if (fresh) {
+          value = renewed(value, fresh)
+          held = fresh.tag
+        }
+        ready = true
+      })
+    } catch {
       if (stop.signal.aborted) return
       ready = false
-      if (error instanceof Unavailable) {
-        let again = `polling again every ${every / 1000} s`
-        if (!outage.failed++) log(`${error.message}; ${again}`)
-        outage.error = error
-      } else {
-        // It answered, wrongly, or this side failed: a bug now, not an outage.
-        over()
-        opts.report?.(error)
-      }
     }
     for (let fn of listeners) fn(value)
   }
@@ -370,7 +334,7 @@ export let poll = (
     },
     close: () => {
       stop.abort()
-      down?.cancel()
+      watched.close()
       thread?.close()
     },
     mutate: async (bundles) => {

@@ -88,7 +88,7 @@ let composed = await (async () => {
     let route = door(tracker, platform, remote.secret)
     let go = ((input, init) => route(new Request(input, init))) as typeof fetch
     let failed = (() =>
-      Promise.resolve(new Response(null, { status: 503 }))) as typeof fetch
+      Promise.resolve(new Response(null, { status: 400 }))) as typeof fetch
     let refused = false
     try {
       await service(host, { remote, fetch: failed })
@@ -97,7 +97,7 @@ let composed = await (async () => {
     }
     let [record] = await Array.fromAsync(files(config.tracker.spool).source())
     let retainedRows = record.rows.length
-    let outageTraces = (await host.graph.read('.trace *')).length
+    let refusedTraces = (await host.graph.read('.trace *')).length
     await delivery(remote, go)(record.rows.filter((row) =>
       row.error
     ))
@@ -113,7 +113,7 @@ let composed = await (async () => {
       beforeCommit,
       refused,
       retainedRows,
-      outageTraces,
+      refusedTraces,
       remoteRows,
       rows,
       notices,
@@ -132,8 +132,8 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   equal(composed.beforeCommit, 1)
   equal(composed.refused, true)
   equal(composed.retainedRows, 3)
-  // Both pure and mixed traces are admitted locally during the remote outage.
-  equal(composed.outageTraces, 2)
+  // Both pure and mixed traces are admitted locally while the remote refuses.
+  equal(composed.refusedTraces, 2)
   equal(remoteRows.length, 1)
   equal(remoteRows[0].entity.eid, rows[0].entity.eid)
   let { source, handler, command } = comp(remoteRows[0], 'error')
@@ -143,9 +143,10 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   equal(comp(remoteRows[0], 'during').entity, entity)
   equal(composed.remoteTraces, [])
   equal([composed.traces, composed.spans], [2, 2])
-  // The outage admits its own local health notice, not another delivery.
-  equal(composed.notices.length, 1)
-  equal(comp(composed.notices[0], 'error').fault, 'tracker_sync:delivery')
+  // A refusal admits its own local health notice, not another delivery.
+  equal(composed.notices.map((row) => comp(row, 'exception').value), [
+    'Tracker delivery sync failed: Remote tracker refused intake (400)',
+  ])
   equal(rows.length, 1)
   equal(comp(rows[0], 'created').by, actor.by)
   equal(comp(rows[0], 'created').via, actor.via)

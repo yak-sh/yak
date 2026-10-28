@@ -7,7 +7,7 @@ import { token } from '@yaks/graph/sha256'
 import { absent, and, eq, every, limit, or, order, present } from '@yaks/query'
 import { comp, type Desk, str } from './model.ts'
 import type { Remote } from './remote.ts'
-import { type Page, signed, since } from './poll.ts'
+import { pages, signed, since } from './poll.ts'
 
 let marks = ['resolved', 'archived', 'taken', 'regressed'] as const
 let app = (row: Bundle) => str(comp(row, 'bug').app ?? comp(row, 'during').app)
@@ -71,8 +71,9 @@ export let standing = (local: Bundle, remote: Bundle): Bundle | undefined => {
  * so with no row read, and one where something did names what moved, and
  * only those are read. The first pass, or one whose tag the remote no longer
  * knows what moved since, reads every bug. A raced local group is left for
- * the next pass, which asks again from the tag before it; failures propagate
- * to the service's health report. */
+ * the next pass, which asks again from the tag before it. A read refused
+ * fails as the poll's does (./poll.ts `pages`), and the service decides what
+ * the failure is (./outage.ts). */
 export let reconcile = async (
   g: Desk,
   remote: Remote,
@@ -80,15 +81,7 @@ export let reconcile = async (
   signal?: AbortSignal,
   seen: { tag?: string } = {},
 ): Promise<void> => {
-  let doors = signed(remote, go)
-  // A stop ends the pass as itself, never as the read it cut short.
-  let page: Page = async (params, tag) => {
-    signal?.throwIfAborted()
-    let got = await doors.bugs(params, signal, tag)
-    signal?.throwIfAborted()
-    if (!got.ok) throw Error(got.error)
-    return got
-  }
+  let page = pages(signed(remote, go), signal)
   let fresh = await since(page, '.bug *', seen.tag)
   if (!fresh) return
   let raced = false

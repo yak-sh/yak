@@ -96,7 +96,7 @@ test('a refused read is reported at once, and a busy tracker is logged', () => {
     [],
   ])
   equal(busyRead, [false, [], [
-    'Remote tracker refused the read (503); polling again every 30 s',
+    'Tracker poll: Remote tracker refused the read (503); trying again every 30 s',
   ]])
 })
 
@@ -120,7 +120,7 @@ test('a poll that hangs settles as failed, and says it timed out', async () => {
   await time.advance(5)
   let open = await hung
   equal([open.ready, filed, logged], [false, [], [
-    'Remote tracker did not answer in time; polling again every 30 s',
+    'Tracker poll: Remote tracker did not answer in time; trying again every 30 s',
   ]])
   open.close()
 })
@@ -184,8 +184,8 @@ test('a poll that fails and recovers files nothing, and logs both', async () => 
   equal(await polls('busy', 'late', 'ok'), {
     filed: [],
     logged: [
-      'Remote tracker refused the read (503); polling again every 30 s',
-      'Remote tracker answered again after 2 failed polls',
+      'Tracker poll: Remote tracker refused the read (503); trying again every 30 s',
+      'Tracker poll: Remote tracker answered again after 2 failed passes',
     ],
   })
 })

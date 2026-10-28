@@ -292,12 +292,19 @@ so a flood does not open one TLS connection per occurrence. Each loop retries on
 its own clock, so even a stalled remote connection cannot delay local admission.
 Sources supplied by a host must support independent replayable scans; file
 sources supply `admitted` and `admit` receipts. A failed delivery leaves its
-original record for retry and never adds a delivery error to the same outbox. A
-failed delivery or standing pass, or one still running after a minute, admits a
-sync failure directly to the local tracker. Its independent mail duty notifies
-the configured recipient without using the failing remote outbox. Repeated
-failures remain one notice until a pass succeeds. Immutable global eids make
-interrupted and repeated delivery safe.
+original record for retry and never adds a delivery error to the same outbox.
+Immutable global eids make interrupted and repeated delivery safe.
+
+The delivery and standing syncs decide what a failed pass is as the poll below
+does (`./outage.ts`): a pass the Worker could not answer for now (`Unavailable`
+from `./remote`: a delivery answered 408, 429 or 5xx, or not answered at all; a
+read refused 503 or 504) is a log line, and its answering again another. A sync
+left unanswered for five minutes (`OUTAGE`), failing or hanging, is reported
+once; any other failure (a refusal of what was sent or asked, a bad page, a
+failure on this side) is reported at once. Each report is admitted directly to
+the local tracker as `Tracker <direction> sync failed: <what failed>`, with the
+failure as its `cause`, a flood coalesced; its independent mail duty notifies
+the configured recipient without using the failing remote outbox.
 
 A **standing pass** reads remote bug marks every thirty seconds and reconciles
 matching box groups by global eid or their fault and app. The Worker owns
@@ -329,7 +336,9 @@ statuses) is a log line, and the next poll tries again. A Worker that has not
 answered for five minutes (`OUTAGE`), failing or hanging, is reported once, with
 the last failure as its cause: when the platform tracker is down, the box is
 what says so. Any other failed poll (a refusal of what was asked, an invalid
-page, a failed worker) is reported at once.
+page, a failed worker) is reported at once. The standing pass reads through the
+same pages (`./poll`'s `pages`), and both syncs decide through the same
+`./outage.ts`.
 
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit

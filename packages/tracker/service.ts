@@ -7,9 +7,15 @@ export { intake, type Record, type Source } from './intake.ts'
 import { sleep } from '@yaks/effects'
 import { files } from './file.ts'
 import { caught, type Context, spool } from './report.ts'
-import { delivery, type Remote } from './remote.ts'
+import { delivery, type Remote, Unavailable } from './remote.ts'
 import { reconcile } from './reconcile.ts'
-import { syncNotice, type Timer, watching } from './sync_health.ts'
+import type { Timer } from './outage.ts'
+import {
+  type Direction,
+  type Notice,
+  syncing,
+  syncNotice,
+} from './sync_health.ts'
 
 export type Options = {
   source?: Source
@@ -18,9 +24,14 @@ export type Options = {
   report?: (error: unknown, context?: Partial<Context>) => void
   remote?: Remote
   fetch?: typeof fetch
+  /** how the outage's wait is set (./outage.ts), so a test can hold the
+   * clock */
   timer?: Timer
   /** Independent local notice path; never forwarded into the failing outbox. */
-  notice?: (error: Error) => Promise<void>
+  notice?: Notice
+  /** a sync the platform tracker could not answer, and its answering again
+   * (default: `console.warn`) */
+  log?: (line: string) => void
   reconcileEvery?: number
 }
 
@@ -97,90 +108,90 @@ export let service = async (
       if (bundles == 100) await attempt()
     }).catch((error) => failures.push(error))
     await attempt()
-    if (failures.length == 1) throw failures[0]
-    if (failures.length) {
-      throw new AggregateError(failures, 'Tracker delivery batches failed')
-    }
+    if (!failures.length) return
+    // Batches the tracker could not answer for now are one outage, not a bug.
+    let bug = failures.find((error) => !(error instanceof Unavailable))
+    if (failures.length == 1 || !bug) throw failures.at(-1)
+    throw new AggregateError(failures, 'Tracker delivery batches failed', {
+      cause: bug,
+    })
   }
-  let health = (direction: string) =>
-    watching(
-      options.notice ?? syncNotice(host.graph, direction),
-      direction,
-      options.timer,
-      undefined,
-      stop,
-    )
-  let outward = health('delivery'), inward = health('standing')
+  let every = options.every ?? 1000
+  let reconcileEvery = options.reconcileEvery ?? 30_000
+  let notices = options.notice ? undefined : syncNotice(host.graph)
+  let health = (direction: Direction, every: number) =>
+    syncing(direction, options.notice ?? notices!, {
+      every,
+      timer: options.timer,
+      signal: stop,
+      log: options.log,
+    })
+  let outward = health('delivery', every)
+  let inward = health('standing', reconcileEvery)
   // The tag of the remote standing the last reconciliation applied in full.
   let seen: { tag?: string } = {}
 
+  // A failed intake pass is reported. A sync's failure is its watch's to
+  // tell (./sync_health.ts), so a failed retry never reports into its own
+  // outbox.
+  let unadmitted = async (error: unknown) => {
+    try {
+      if (options.report) {
+        options.report(error, { tags: { handler: 'tracker_intake' } })
+      } else if (dir) {
+        await caught(error, {
+          sink: spool(files(dir).append),
+          tags: { handler: 'tracker_intake' },
+        })
+      } else console.error(error)
+    } catch { /* keep the spool */ }
+  }
   let run = async (
     pass: () => Promise<void>,
-    remote = false,
-    every = options.every ?? 1000,
+    tell: (error: unknown) => Promise<void> = async () => {},
+    wait = every,
   ) => {
     do {
       try {
         await pass()
       } catch (error) {
         if (stop?.aborted && error === stop.reason) return
-        try {
-          // A failed retry must not report into its own outbox.
-          if (remote) console.error('tracker delivery failed —', error)
-          else if (options.report) {
-            options.report(error, { tags: { handler: 'tracker_intake' } })
-          } else if (dir) {
-            await caught(error, {
-              sink: spool(files(dir).append),
-              tags: { handler: 'tracker_intake' },
-            })
-          } else console.error(error)
-        } catch { /* keep the spool */ }
+        await tell(error)
         if (signal.aborted) throw error
       }
       if (signal.aborted) return
-      await sleep(every, signal)
+      await sleep(wait, signal)
     } while (!signal.aborted)
   }
-  if (signal.aborted) {
-    await run(() => intake(host.graph, local))
-    await run(() => outward(forward), true)
-    if (options.remote) {
-      await run(
-        () =>
-          inward(() =>
-            reconcile(host.graph, options.remote!, options.fetch, stop, seen)
-          ),
-        true,
-      )
+  let standing = () =>
+    inward(() =>
+      reconcile(host.graph, options.remote!, options.fetch, stop, seen)
+    )
+  try {
+    if (signal.aborted) {
+      await run(() => intake(host.graph, local), unadmitted)
+      await run(() => outward(forward))
+      if (options.remote) await run(standing)
+    } else {
+      // Neither remote refusal nor a minute of connection retries can delay a
+      // later local record. The retained immutable eids make both loops
+      // replayable.
+      let results = await Promise.allSettled([
+        run(() => intake(host.graph, local, stop), unadmitted),
+        ...send
+          ? [
+            run(() => outward(forward)),
+            run(standing, undefined, reconcileEvery),
+          ]
+          : [],
+      ])
+      for (let result of results) {
+        if (result.status == 'rejected') throw result.reason
+      }
     }
-  } else {
-    // Neither remote refusal nor a minute of connection retries can delay a
-    // later local record. The retained immutable eids make both loops replayable.
-    let results = await Promise.allSettled([
-      run(() => intake(host.graph, local, stop)),
-      ...send
-        ? [
-          run(() => outward(forward), true),
-          run(
-            () =>
-              inward(() =>
-                reconcile(
-                  host.graph,
-                  options.remote!,
-                  options.fetch,
-                  stop,
-                  seen,
-                )
-              ),
-            true,
-            options.reconcileEvery ?? 30_000,
-          ),
-        ]
-        : [],
-    ])
-    for (let result of results) {
-      if (result.status == 'rejected') throw result.reason
-    }
+  } finally {
+    outward.close()
+    inward.close()
+    await notices?.close()
   }
 }

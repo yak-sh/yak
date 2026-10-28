@@ -33,6 +33,18 @@ export let late = (error: unknown) =>
 export let unavailable = (status: number) =>
   status == 408 || status == 429 || status >= 500
 
+/** A request the tracker could not answer for now, which a later try can
+ * recover from: no attempt was answered, or it answered a status `unavailable`
+ * names. Anything else that fails is a refusal of what was asked, or a failure
+ * on this side. */
+export class Unavailable extends Error {}
+
+/// unanswered(new DOMException('', 'TimeoutError')) instanceof Unavailable -> true
+/// unanswered(new DOMException('', 'AbortError')) instanceof Unavailable -> false
+/** `error`, or the `Unavailable` it is when a timeout caused it. */
+export let unanswered = (error: unknown): unknown =>
+  late(error) ? new Unavailable('Remote tracker did not answer in time') : error
+
 // One attempt on a connection of its own, closed once the whole answer is in
 // hand. Outside Deno the runtime owns the connections.
 let attempt = async (go: typeof fetch, url: URL, init: RequestInit) => {
@@ -113,7 +125,7 @@ export let request = async (
   }
   throw late(last)
     ? new DOMException('Remote tracker did not answer in time', 'TimeoutError')
-    : Error('Remote tracker is unavailable')
+    : new Unavailable('Remote tracker is unavailable')
 }
 export let delivery =
   (remote: Remote, go: typeof fetch = fetch): Sink => async (rows) => {
@@ -127,10 +139,15 @@ export let delivery =
         body: JSON.stringify(rows),
       },
       go,
-    )
+    ).catch((error) => {
+      throw unanswered(error)
+    })
     await response.body?.cancel()
     if (!response.ok) {
-      throw Error(`Remote tracker refused intake (${response.status})`)
+      let refusal = `Remote tracker refused intake (${response.status})`
+      throw unavailable(response.status)
+        ? new Unavailable(refusal)
+        : Error(refusal)
     }
   }
 
