@@ -9,11 +9,15 @@
 // stalls or moves it. So a request is short attempts for up to a minute, each
 // on a connection of its own, with a ticket a minute from expiry, and taking
 // its whole answer, never one long wait on a connection gone bad.
+import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
 
 export type Remote = { url?: string; secret?: string }
+
+/** A sink whose delivery is always a promise, so a caller can wait for it and
+ * read why it failed. */
+export type Delivery = (rows: Bundle[]) => Promise<void>
 
 /** How long one attempt may take to its whole answer, and how many attempts a
  * request makes: a minute in all. */
@@ -128,7 +132,7 @@ export let request = async (
     : new Unavailable('Remote tracker is unavailable')
 }
 export let delivery =
-  (remote: Remote, go: typeof fetch = fetch): Sink => async (rows) => {
+  (remote: Remote, go: typeof fetch = fetch): Delivery => async (rows) => {
     let response = await request(
       remote,
       'errors',
