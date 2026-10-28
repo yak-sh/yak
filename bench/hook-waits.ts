@@ -208,6 +208,15 @@ export async function measure(
       }
       return answer
     }
+    // The door a person's tool calls reach is a `yak serve` that has answered
+    // many. A fresh host's first requests compile the door's code (about
+    // 70 ms, then 20, then steady), which is no wait anyone has twice, so
+    // they are spent before timing.
+    for (let i = 0; i < 5; i++) {
+      let f = await fixture()
+      await post(f.runner)
+      await post(f.runner, true)
+    }
     await timed('hook/PostToolUse-delivery', async () => {
       let f = await fixture()
       return async () => {
