@@ -2,7 +2,7 @@
 // duty. No provider process or private transcript is needed to read one.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Bundle, type Comp, identityEid } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, identityEid } from '@yaks/graph'
 import { codexRollout } from './readers.ts'
 import { look, type Seen } from './service.ts'
 import { transcriptOf } from './tail.ts'
@@ -45,6 +45,15 @@ let dir = Deno.makeTempDirSync()
 Deno.mkdirSync(`${dir}/2026/10/19`, { recursive: true })
 let path = (id: string) =>
   `${dir}/2026/10/19/rollout-2026-10-19T15-00-00-${id}.jsonl`
+// A look at the rollouts given all the time it needs: these cases check what a
+// read writes, and how looks share their time is service_test.ts's.
+let read = (graph: Graph, seen: Seen, o: Parameters<typeof look>[3] = {}) =>
+  look(graph, '', seen, {
+    codex: dir,
+    slice: Infinity,
+    budget: Infinity,
+    ...o,
+  })
 let g = locked(store())
 let resumed = locked(store())
 let childGraph = locked(store())
@@ -94,9 +103,9 @@ let body = (b: Bundle) => (b.content as Comp | undefined)?.body
 
 // Prepare the resumable case outside its timed operation.
 let first = seen()
-await look(resumed, '', first, { codex: dir, person: ids.ada, slice: 0 })
+await read(resumed, first, { person: ids.ada, slice: 0 })
 let firstCount = (await rows(resumed)).length
-await look(g, '', seen(), { codex: dir, person: ids.ada })
+await read(g, seen(), { person: ids.ada })
 let imported = await rows(g)
 
 test('Codex rollout messages retain roles, calls, timestamps and runner identity', () => {
@@ -125,12 +134,12 @@ test('Codex rollout messages retain roles, calls, timestamps and runner identity
   ])
 })
 
-await look(resumed, '', seen(), { codex: dir, person: ids.ada })
+await read(resumed, seen(), { person: ids.ada })
 let resumedRows = await rows(resumed)
-let read = await transcriptOf(resumed, path(id))
-await look(resumed, '', seen(), { codex: dir, person: ids.ada })
+let transcript = await transcriptOf(resumed, path(id))
+await read(resumed, seen(), { person: ids.ada })
 let replayed = await rows(resumed)
-await look(managedGraph, '', seen(), { codex: dir })
+await read(managedGraph, seen())
 let managedRows = await rows(managedGraph)
 
 test('Codex rollout resumes partial consumption across importer restart without duplicates', () => {
@@ -143,7 +152,7 @@ test('Codex rollout resumes partial consumption across importer restart without 
     replayed.map((b) => b.entity.eid),
     imported.map((b) => b.entity.eid),
   )
-  assertEquals(read?.consumed, 12)
+  assertEquals(transcript?.consumed, 12)
 })
 
 test('Codex rollout of a managed thread leaves its stdout transcript alone', () => {
@@ -193,13 +202,13 @@ Deno.writeTextFileSync(
   ),
 )
 let childSeen = seen()
-await look(childGraph, '', childSeen, { codex: dir, person: ids.ada })
+await read(childGraph, childSeen, { person: ids.ada })
 Deno.writeTextFileSync(
   path(child),
   encode(message('user', 'follow-up delegation', 'user.text')),
   { append: true },
 )
-await look(childGraph, '', childSeen, { codex: dir, person: ids.ada })
+await read(childGraph, childSeen, { person: ids.ada })
 let [childRow] = await childGraph.get([child])
 let childEntries = await childGraph.read(`.entry.session=${child} *`)
 Deno.utimeSync(path(id), new Date(0), new Date(0))
@@ -207,8 +216,8 @@ Deno.utimeSync(path(id), new Date(0), new Date(0))
 // the filesystem lists first (tmpfs lists the newest file first), so two
 // looks read both.
 let backfill = seen(), later = Date.now() + 30 * 86400000
-await look(history, '', backfill, { codex: dir, now: later })
-await look(history, '', backfill, { codex: dir, now: later })
+await read(history, backfill, { now: later })
+await read(history, backfill, { now: later })
 let old = await rows(history)
 
 test('Codex children retain thread identities and never attribute a delegated prompt to the owner', () => {

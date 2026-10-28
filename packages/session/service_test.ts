@@ -86,6 +86,15 @@ let told = async (g: Graph, id: string) => {
     .map((b) => (b.content as { body: string } | undefined)?.body ?? '(call)')
 }
 
+// A look given all the time it needs: a case that checks what a read writes
+// sets no deadline, and the cases on how looks share time set their own.
+let read = (
+  g: Graph,
+  dir: string,
+  seen: Seen,
+  o: Parameters<typeof look>[3] = {},
+) => look(g, dir, seen, { slice: Infinity, budget: Infinity, ...o })
+
 let DAY = 24 * 60 * 60 * 1000
 
 let reapStore = store()
@@ -105,7 +114,7 @@ test('a recent transcript is followed in full; an old one is read in later, its 
   }, async (dir) => {
     let g = locked(store())
     let seen: Seen = { tails: new Map(), done: new Set() }
-    await look(g, dir, seen, { person: ids.ada })
+    await read(g, dir, seen, { person: ids.ada })
     assertEquals(await told(g, 'one'), ['fix it', 'thought 0', 'said 0'])
     assertEquals(await told(g, 'fresh'), ['hello', 'thought 0', 'said 0'])
     // One old transcript per look, and its prose alone.
@@ -114,7 +123,7 @@ test('a recent transcript is followed in full; an old one is read in later, its 
     Deno.writeTextFileSync(`${dir}/-home-me-code/one.jsonl`, lines('more'), {
       append: true,
     })
-    await look(g, dir, seen)
+    await read(g, dir, seen)
     assertEquals(await told(g, 'one'), [
       'fix it',
       'thought 0',
@@ -190,7 +199,7 @@ await projects({
     JSON.stringify({ toolUseId: 't1' }),
   )
   let g = locked(store())
-  await look(g, dir, { tails: new Map(), done: new Set() })
+  await read(g, dir, { tails: new Map(), done: new Set() })
   let [child] = await g.get([sessionEid('child', 'parent')])
   coldChildCall = (child.spawned as Comp)?.call
 })
@@ -203,7 +212,7 @@ test('a session is the entity its harness id names', () => {
   let id = '49805559-ca98-4c0a-873e-45c19ec7316c'
   return projects({ [id]: { text: lines('hello') } }, async (dir) => {
     let g = locked(store())
-    await look(g, dir, { tails: new Map(), done: new Set() })
+    await read(g, dir, { tails: new Map(), done: new Set() })
     let [s] = await g.get([id])
     assertEquals((s.session as Comp).id, id)
     assertEquals(await told(g, id), ['hello', 'thought 0', 'said 0'])
@@ -238,7 +247,7 @@ test("a subagent's transcript is a session of its own, started by its parent's c
     Deno.writeTextFileSync(`${at}.meta.json`, '{"toolUseId":"toolu_a"}')
     let g = locked(store())
     let seen: Seen = { tails: new Map(), done: new Set() }
-    await look(g, dir, seen)
+    await read(g, dir, seen)
     let [s] = await g.get([sessionEid('a1', parent)])
     assertEquals(s.spawned, { parent, call: callOf(parent, 'toolu_a') })
     assertEquals(await told(g, 'a1'), ['(call)', 'a.txt'])
@@ -246,7 +255,7 @@ test("a subagent's transcript is a session of its own, started by its parent's c
     Deno.writeTextFileSync(`${at}.jsonl`, side(JSON.stringify(done)), {
       append: true,
     })
-    await look(g, dir, seen)
+    await read(g, dir, seen)
     assertEquals(await told(g, 'a1'), ['(call)', 'a.txt', 'done'])
   })
 })
@@ -277,7 +286,7 @@ await projects({
   )
   let g = locked(store())
   let child = await subagentSession(g, hookParent, 'a1')
-  await look(g, dir, { tails: new Map(), done: new Set() })
+  await read(g, dir, { tails: new Map(), done: new Set() })
   hookFirst = (await g.get([child!]))[0].spawned
 })
 
@@ -304,7 +313,7 @@ let managedGraph = locked(managedStore)
 
 test('a managed run is read from its own output, not its transcript file', async () => {
   try {
-    await look(managedGraph, managedDir, { tails: new Map(), done: new Set() })
+    await read(managedGraph, managedDir, { tails: new Map(), done: new Set() })
     assertEquals(await told(managedGraph, 'one'), ['do it'])
   } finally {
     Deno.removeSync(managedDir, { recursive: true })
@@ -347,7 +356,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     let s = store()
     priced(s)
     let g = locked(s)
-    await look(g, dir, { tails: new Map(), done: new Set() }, {
+    await read(g, dir, { tails: new Map(), done: new Set() }, {
       person: ids.ada,
     })
     await trim(g)
@@ -450,7 +459,7 @@ await projects(
     Deno.writeTextFileSync(`${dir}/-home-me-code/old.jsonl`, lines('new'), {
       append: true,
     })
-    await look(g, dir, seen)
+    await read(g, dir, seen)
     speaking = await told(g, 'old')
   },
 )
