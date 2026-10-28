@@ -125,11 +125,26 @@ export let snapshot = async (
     }
   }
   let commit = decode(await git(root, 'rev-parse', 'HEAD')).trim()
+  // Status before the diff. Besides naming the untracked files, it refreshes
+  // the index's record of each file's stat and writes it back when it can
+  // take the index's lock; a diff refreshes it only in memory. In a checkout
+  // whose index is no newer than its files (racily clean, as a new
+  // worktree's can be), a diff alone hashed every tracked file again on every
+  // launch.
+  let untracked = decode(
+    await git(
+      root,
+      'status',
+      '--porcelain',
+      '-z',
+      '--no-renames',
+      '--untracked-files=all',
+    ),
+  ).split('\0').filter((line) => line.startsWith('?? '))
+    .map((line) => line.slice(3))
   let patch = await git(root, 'diff', '--binary', commit)
   let files = await Promise.all(
-    decode(
-      await git(root, 'ls-files', '--others', '--exclude-standard', '-z'),
-    ).split('\0').filter(Boolean).sort().map(async (name) => ({
+    untracked.sort().map(async (name) => ({
       name,
       bytes: await Deno.readFile(`${root}/${name}`),
       mode: (await Deno.stat(`${root}/${name}`)).mode,
