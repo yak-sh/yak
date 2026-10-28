@@ -10,9 +10,8 @@
 #
 # Every yak process opens the SQLite the repository's tests open (bin/sqlite.ts,
 # built here when absent), not the one the machine's package manager last
-# installed. Homebrew's is linked so that, inside Deno, its calls to its own API
-# run Deno's embedded copy instead, which holds only while the two are the same
-# version. Moving the pin means running this again.
+# installed, which moves with every `brew upgrade`. Moving the pin means running
+# this again.
 set -eu
 root=$(git worktree list --porcelain | head -1 | cut -c 10-)
 bin="${DENO_INSTALL_ROOT:-$HOME/.deno}/bin"

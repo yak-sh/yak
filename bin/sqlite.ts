@@ -10,11 +10,11 @@
 //
 // The options are Homebrew's for 3.53.3, which the box's processes ran on,
 // with what SQLite's own configure adds to them, so a query plans as it did.
-// The library is linked -Bsymbolic: Deno exports its embedded SQLite's API
-// (`nm -D` lists sqlite3_free, sqlite3_mutex_alloc and eighty more), and a
-// library linked without it binds its own calls to those, so Deno's copy runs
-// half of it; one built that way crashes in sqlite3MallocInit on its first
-// call.
+// The library is linked -Bsymbolic. Homebrew's Deno links the machine's
+// libsqlite3 (`ldd $(which deno)`), so that library's API is in the process
+// before ours loads, and a second library linked without -Bsymbolic binds its
+// calls to its own functions to the first one's: one built that way crashes in
+// sqlite3MallocInit on its first call.
 //
 //   deno run -A bin/sqlite.ts    # builds it when absent and says its path
 

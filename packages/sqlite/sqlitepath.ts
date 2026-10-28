@@ -5,9 +5,10 @@
 // moment it initializes: `sqlite3_initialize` calls through a null pointer
 // inside `sqlite3MallocInit` under Deno 2.9 — a SIGSEGV with an empty stderr,
 // before a line of ours runs. A library linked without -Bsymbolic crashes the
-// same way: Deno exports its own embedded SQLite's API, and the library's
-// calls to its own functions bind to those. Every platform's system library is
-// fine, so name that instead. This repository's tests name one SQLite built
+// same way under a Deno that links the system's libsqlite3 (Homebrew's does):
+// that library's API is in the process first, and the second library's calls
+// to its own functions bind to it. Every platform's system library is fine, so
+// name that instead. This repository's tests name one SQLite built
 // one way, wherever they run (bin/sqlite.ts).
 //
 // This is its own module because ES evaluation runs a module's dependencies
