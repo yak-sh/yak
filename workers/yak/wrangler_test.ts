@@ -12,6 +12,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { parse } from '@std/toml'
+import { globToRegExp } from 'jsr:@std/path@^1.0.0/glob-to-regexp'
 import {
   aliased,
   bundled,
@@ -1627,47 +1628,49 @@ Deno.writeTextFileSync(
   'main="index.ts"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
 )
 let kernelArgs = ['deploy', '--env', 'staging', '--message', 'commit']
-let kernelBuild: string[] = []
-let kernelBundle = await bundled(kernelArgs, (build) => {
-  kernelBuild = build
-  let output = build[build.indexOf('--outdir') + 1]
+let kernelBundle = await bundled(kernelArgs, (output, meta) => {
   Deno.writeTextFileSync(
-    join(output, 'entry.js'),
-    'export default {};\n//# sourceMappingURL=entry.js.map',
+    join(output, 'index.js'),
+    'export default {};\n//# sourceMappingURL=index.js.map',
   )
   Deno.writeTextFileSync(
-    join(output, 'entry.js.map'),
+    join(output, 'index.js.map'),
     '{"sources":["index.ts"]}',
   )
-  Deno.writeTextFileSync(join(output, 'compiler.wasm'), 'wasm')
+  Deno.writeTextFileSync(join(output, 'optional.js'), 'export let lazy = 1')
   Deno.writeTextFileSync(
-    build[build.indexOf('--metafile') + 1],
+    meta,
     JSON.stringify({
-      outputs: { [join(output, 'entry.js')]: { entryPoint: 'index.ts' } },
+      outputs: { [join(output, 'index.js')]: { entryPoint: 'index.ts' } },
     }),
   )
-  return Promise.resolve(0)
+  return Promise.resolve()
 }, kernelRoot)
 
 test('a kernel upload uses its prepared bundle and retains source maps and modules', () => {
   try {
-    assert(kernelBuild.includes('--dry-run'))
-    assert(kernelBuild.includes('--containers-rollout=none'))
     let config = parse(Deno.readTextFileSync(kernelBundle.args.at(-1)!))
     assertEquals(kernelBundle.args.slice(0, -2), kernelArgs)
     assertEquals(config.no_bundle, true)
     assertEquals(config.find_additional_modules, true)
+    assert(
+      (config.rules as { type: string; globs: string[] }[]).some((rule) =>
+        rule.type == 'ESModule' &&
+        rule.globs.some((glob) => globToRegExp(glob).test('optional.js'))
+      ),
+      'the upload includes the JavaScript modules its entry imports',
+    )
     assertEquals(config.compatibility_flags, ['nodejs_compat'])
     assertEquals(config.upload_source_maps, true)
     assertEquals(config.assets, { directory: 'public' })
     assertEquals(
       Deno.readTextFileSync(config.main as string),
-      'export default {};\n//# sourceMappingURL=entry.js.map',
+      'export default {};\n//# sourceMappingURL=index.js.map',
     )
     assertEquals(
       [...Deno.readDirSync(config.base_dir as string)].map((f) => f.name)
         .sort(),
-      ['compiler.wasm', 'entry.js', 'entry.js.map'],
+      ['index.js', 'index.js.map', 'metafile.json', 'optional.js'],
     )
   } finally {
     kernelBundle.remove()
@@ -1685,7 +1688,11 @@ test('a failed kernel bundle prevents uploading and removes its output', async (
           return Promise.resolve(0)
         },
         async () =>
-          (await bundled(kernelArgs, () => Promise.resolve(7), kernelRoot))
+          (await bundled(
+            kernelArgs,
+            () => Promise.reject(new Error('bundle failed')),
+            kernelRoot,
+          ))
             .args,
       )
     } catch {

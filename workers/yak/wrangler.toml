@@ -25,17 +25,18 @@ compatibility_date = "2025-05-08"
 # `Sandbox`): the container's requests to this platform are handed to
 # `ContainerProxy` through `ctx.exports`, which this compatibility date
 # predates.
+# enable_nodejs_process_v2 supplies the native process object to the module
+# build, alongside the runtime's node: modules, without JS polyfills.
 compatibility_flags = [
   "nodejs_compat",
   "global_fetch_strictly_public",
   "enable_ctx_exports",
+  "enable_nodejs_process_v2",
 ]
 
-# Every isolate parses the whole script before it answers, a Store waking for
-# one query included, so the bundle ships minified: 4.1 MB became 1.9 MB
-# (T-37975). Names survive (wrangler's `keep_names` defaults on), so a tracker
-# frame still says which function threw; the source map goes up with the
-# deploy so Workers Logs prints a stack in the files it came from.
+# Modules ship minified. bundle.ts keeps optional doors as dynamic imports
+# and groups the eager modules together; Wrangler uploads that prepared graph.
+# Function names and composed source maps survive both build passes.
 minify = true
 upload_source_maps = true
 
@@ -536,6 +537,9 @@ fflate = "./node_modules/fflate/esm/browser.js"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"
 "zod" = "./node_modules/zod/index.js"
+# Both MCP packages use Zod 4. Share one copy while older tool declarations
+# keep their Zod 3 schemas and conversion.
+"zod/v4" = "./node_modules/@modelcontextprotocol/server/node_modules/zod/v4/index.js"
 # @yaks/esbuild parses an app's module graph at deploy (packages/esbuild/graph.ts).
 "es-module-lexer/js" = "./node_modules/es-module-lexer/dist/lexer.asm.js"
 "sucrase" = "./node_modules/sucrase/dist/esm/index.js"

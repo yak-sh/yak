@@ -720,6 +720,10 @@ let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
     no_bundle: true,
     minify: false,
     find_additional_modules: true,
+    rules: [
+      { type: 'ESModule', globs: ['**/*.js'], fallthrough: true },
+      ...(Array.isArray(parsed.rules) ? parsed.rules : []),
+    ],
   })
   let config = Deno.makeTempFileSync({
     dir: dirname(path),
@@ -735,18 +739,16 @@ let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
   }
 }
 
-/** Bundle with the pinned Wrangler before uploads finish, then upload those
- * same modules and source maps through the original config's bindings. */
+/** Build the kernel before uploads finish, then hand Wrangler the same
+ * modules and source maps through the original config's bindings. */
 export let bundled = async (
   args: string[],
-  run: (args: string[]) => Promise<number>,
+  make: (output: string, meta: string) => Promise<void>,
   root = dir,
 ) => {
   if (
     !siblings(args).length ||
-    args.some((a) =>
-      /^(--dry-run|--no-bundle|--outdir|--metafile)(=|$)/.test(a)
-    )
+    args.some((a) => /^(--no-bundle)(=|$)/.test(a))
   ) {
     return { args, remove: () => {} }
   }
@@ -760,19 +762,29 @@ export let bundled = async (
     Deno.removeSync(output, { recursive: true })
   }
   try {
-    let meta = join(output, 'metafile.json')
-    let code = await run([
-      ...unrolled(args),
-      '--dry-run',
-      '--containers-rollout=none',
-      '--outdir',
+    let metaAt = args.findIndex((arg) =>
+      arg == '--metafile' || arg.startsWith('--metafile=')
+    )
+    let attached = metaAt >= 0 && args[metaAt].startsWith('--metafile=')
+    let next = metaAt >= 0 && !attached &&
+      args[metaAt + 1]?.startsWith('-') === false
+    let named = attached
+      ? args[metaAt].slice('--metafile='.length)
+      : next
+      ? args[metaAt + 1]
+      : undefined
+    let meta = named ? resolve(root, named) : join(output, 'metafile.json')
+    await make(output, meta)
+    // The metafile describes esbuild's source attribution. Wrangler uploads
+    // already-built modules here, so it has no second metafile to write.
+    let upload = args.filter((_, i) =>
+      metaAt < 0 || i != metaAt && (!next || i != metaAt + 1)
+    )
+    config = unbundled('wrangler.toml', {
+      entry: join(output, 'index.js'),
       output,
-      '--metafile',
-      meta,
-    ])
-    if (code) throw new Error(`Kernel bundle exited ${code}`)
-    config = unbundled('wrangler.toml', bundleEntry(output, meta, root), root)
-    return { args: [...args, '-c', config], remove }
+    }, root)
+    return { args: [...upload, '-c', config], remove }
   } catch (error) {
     remove()
     throw error
@@ -1388,7 +1400,11 @@ if (import.meta.main) {
     () => Promise.all([readied, made.catalog]),
     () => inspected,
     async () => {
-      let bundle = await bundled(argv, run)
+      let bundle = await bundled(
+        argv,
+        (output, meta) =>
+          generated('Kernel modules', [join(dir, 'bundle.ts'), output, meta]),
+      )
       try {
         let bound = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
           ? { args: bundle.args, remove: () => {} }
