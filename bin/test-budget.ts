@@ -118,10 +118,10 @@ export let LIST = new URL('../bench/test-budget.json', import.meta.url)
 
 /** How measuring tests again loads a file holding a test over the line: again
  * while one of them has been over every time (packages/testing `--until`), up
- * to `loads` times, and while its loads have taken less than `spend`
- * milliseconds in all. A file of tests near 1 ms warms in tens of loads; one
- * whose tests run for seconds warms in its first. */
-export let LOADS = { loads: 40, spend: 5_000 }
+ * to `loads` times, and while its loads after the first, cold one have taken
+ * less than `spend` milliseconds in all. A file of tests near 1 ms warms in
+ * tens of loads; one that loads for seconds has two or three warm ones. */
+export let LOADS = { loads: 40, spend: 10_000 }
 let KEPT = new URL('../bench/test-times/', import.meta.url).pathname
 
 /** A test as a runner timed it; a runner before `waited` said none. */

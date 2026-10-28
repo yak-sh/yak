@@ -26,11 +26,11 @@
 // (bin/test-budget.ts), since a test that cannot run twice in one runtime
 // fails a later load. The code a file calls warms as it runs again, as it
 // does in a run of the whole suite, where the files before it ran it. A file
-// loads again only while its loads have taken less than `--spend` in all, and,
-// with `--until` naming a JSON file of times by file and test
-// (`{ "a_test.ts": { "adds": 1 } }`), while one of the tests it names there
-// has neither run within its time, less what it waited for a CPU, nor
-// failed (./run.ts `owed`).
+// loads again only while its loads after the first have taken less than
+// `--spend` in all, and, with `--until` naming a JSON file of times by file
+// and test (`{ "a_test.ts": { "adds": 1 } }`), while one of the tests it
+// names there has neither run within its time, less what it waited for a
+// CPU, nor failed (./run.ts `owed`).
 //
 // Each test is said as it runs, a failure's error right after it, and the
 // closing report says every failure again; each error is cut short (./run.ts
@@ -106,7 +106,9 @@ let loads: Record<string, number> = {}
 let collected = collect()
 let picked = (t: Test) => tags.every((tag) => t.tags.includes(tag))
 let outcomes: Outcome[] = []
-// What each file's loads and tests have taken so far.
+// What each file's loads and tests have taken so far, after its first load:
+// that one pays for loading what it imports, and what is measured again is
+// the code warm.
 let spent = new Map<string, number>()
 let run = async (path: string, load: () => Promise<unknown>) => {
   let at = collected.length
@@ -127,7 +129,8 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   // Executed bodies own fixtures; retain only report metadata after the file.
   let tests = collected.splice(at).filter(picked)
   outcomes.push(...await file(path, tests, timeout, loaded, verbose))
-  spent.set(path, (spent.get(path) ?? 0) + performance.now() - begun)
+  let took = performance.now() - begun
+  spent.set(path, spent.has(path) ? spent.get(path)! + took : 0)
 }
 // `--until`'s times, and the files holding one of those tests that has
 // neither run within its time nor failed: each loads again.

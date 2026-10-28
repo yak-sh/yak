@@ -199,7 +199,7 @@ stronger.
   in a run of its file alone, and comes down only after tens of loads. So a
   time over the line is measured again first, in a fresh runtime, one
   platform at a time, each such file loaded again while one of its tests is
-  over every time, up to 40 loads or 5 s (packages/testing `--loads`,
+  over every time, up to 40 loads or 10 s after the first (packages/testing `--loads`,
   `--until` and `--spend`); a test fails only when it is over every time, and
   a narrowed run holds it to what the whole suite does. A run with nothing
   over pays for no second pass, and a test that can't run twice in one
