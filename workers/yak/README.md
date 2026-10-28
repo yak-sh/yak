@@ -80,8 +80,8 @@ data, even when older code is deployed.
 A push to `main` deploys, through Cloudflare Workers Builds — not through a
 GitHub Actions workflow. Builds clones the repo itself and mints its own API
 token, so no Cloudflare credential that can deploy exists in this repo, on the
-Actions runner, or in a GitHub secret. The runner holds one read-only token
-(Workers Scripts Read), so the gate can time the deploy.
+Actions runner, or in a GitHub secret. The gate reads no Cloudflare credential
+at all.
 
 Nothing gates that push. `.github/workflows/gate.yml` runs `deno task check` and
 `deno task test`, the workerd tests included, and it reports what it finds: a
@@ -113,8 +113,7 @@ and a preview is one hostname, while yaks.app serves each space at
 `<space>.<APEX>`, so spaces need a wildcard below the preview's hostname.
 
 A push outside the watch paths deploys nothing: no build check, no version, and
-so nothing for the gate's `deploy time` step to measure — it says so and the
-deploy gate judges the rows already recorded (`bench/deploys.md`).
+nothing for the deploy catch-up to time (`bench/deploys.md`).
 
 The kernel captures the toolkit catalog and sends it with each compiler job.
 Jobs carry `x-yak-compiler-job: 1` and a JSON body of `{ask, catalog}`; the
@@ -301,10 +300,9 @@ push independently, and waits up to 20 minutes for an annotated version
 containing the revert to serve all traffic. A failed worktree is kept for
 inspection. Neither a rollback nor a revert undoes migrated data.
 
-Push-to-upload observations, the version-confirmed live timer, the deploy
-ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
-The gate runs `deno task deploy:time <sha>` first on each push to main, and
-reads the committed record through `deno task deploy:gate` after the tests.
+The box's deploy catch-up times every deploy from push to live and reports
+deploys that got slower as their own bug; main's gate times none of it. How, and
+what a deploy's time is made of, is [deploy timing](../../bench/deploys.md).
 
 ## Everything set by hand
 
@@ -580,13 +578,13 @@ tool, and three minutes of `wrangler tail` with zero 5xx — what was done by ha
 after the last two deploys (T-33808, T-34085).
 
 It is **not** wired into CI, on purpose. Builds runs the build command _before_
-the deploy, so there is nothing to verify at that point; and the Actions
-runner's one Cloudflare token only reads versions — Builds mints its own — so
-`wrangler tail`, the half that actually catches a 5xx, cannot run there. A
-gate-side check would also race the Builds deploy and verify whichever version
-happened to be live, which is a green that means nothing. So it stays one
-command, run after a Builds deploy goes green. `--tail 0` skips the tail and
-needs no credential at all.
+the deploy, so there is nothing to verify at that point; and the gate reads no
+Cloudflare credential, so `wrangler tail`, the half that catches a 5xx, cannot
+run there. A gate-side check would also race the Builds deploy and verify
+whichever version happened to be live, which is a green that means nothing. So
+it stays one command, run after a Builds deploy goes green. `--tail 0` skips the
+tail and needs no credential at all. The box's deploy catch-up asks for the home
+page alone once main's head goes live, and reports it not answering.
 
 ## App archetype indexing
 

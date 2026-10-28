@@ -118,7 +118,7 @@ yak admin push apps/mail --space reviewer --as reviewer --confirm
 Every push to main is meant to deploy yaks.app through Workers Builds, and
 sometimes Builds starts no build for a push at all. The **deploy catch-up** is
 this plugin's service: it notices main's head is not live and starts main's
-build itself.
+build itself, and it times every deploy.
 
 Each minute it reads main's head from origin. Once origin first showed the head
 (its push, to within a look, since a commit's own time is minutes before a
@@ -143,6 +143,18 @@ second build beside a running one, which is why a running one is read first. A
 live, the commit gets the kernel's `failed{reason}` mark and a second report,
 and no other build: its log says why. A rollback newer than the head is an
 operator's choice and is left alone. Removing the marks asks for another start.
+
+A look that reads what `yak` serves also times every deploy wrangler's
+deployments list shows. A commit went live at its first deployment (one version,
+naming its commit, not a rollback), and was pushed to main when GitHub made its
+first check suite, which it does as the push arrives. Each is kept once, on the
+commit's entity, as `deployed{pushed, live}`. When the median push to live of
+the latest `WINDOW` (10) is past `SLOW` (2 minutes, about twice what a deploy
+takes), the catch-up reports `deploy slow:yak`, and every deploy while it stays
+slow adds a hit: deploys that got slower are a bug of their own, never main's
+gate going red. When main's head goes live through its own deploy, yaks.app's
+home page has to answer 200 within three tries ten seconds apart, or the
+catch-up reports `deploy down:yak`.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }
@@ -198,7 +210,7 @@ over, and without `account` there is no usage watch.
 
 ## Facets
 
-- `./vocab` declares the admin tools and the `rebuilt` mark.
+- `./vocab` declares the admin tools, the `rebuilt` mark and `deployed`.
 - `./tools` implements those tools over the host's graph, config and vault.
 - `./cli` binds the account selector to the admin tools' `as` input.
 - `./service` is the deploy catch-up and the usage watch.

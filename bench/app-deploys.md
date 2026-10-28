@@ -4,8 +4,8 @@ What a person waits for when they deploy an app on yaks.app, and the ratchet
 that keeps it from growing (goal V-34987, task T-34986).
 
 ```sh
-deno task app-deploy:time    # on the box; signs in a throwaway, records
-deno task app-deploy:gate    # anywhere; reads
+deno task app-deploy:time          # on the box; signs in a throwaway, records
+deno task bench:check app-deploy   # reads the rows and judges the latest
 ```
 
 `app-deploy:time` signs in as a throwaway account (`NAME`, default
@@ -26,11 +26,13 @@ Before `app_files` writes were staged until `app_deploy`, the rows measured
 stay in the file and are never compared with these; the gated numbers have new
 names (`ship → live`, `ship deploy`, `edit → live`).
 
-`bin/bench-monitor` runs this suite daily with the others: it takes a fresh
-measurement, checks it, measures again to confirm a regression, and files a bug
-for a confirmed one.
+`bin/bench-monitor` runs this suite daily with the others (bench/monitor.ts),
+taking a fresh measurement into its own record outside the repo. It is a live
+measurement (`LIVE`), with no older code to run beside it, so the monitor
+reports a check that fails, not one that is slower. Main's gate does not run it:
+what an app deploy costs is yaks.app's, not the commit's.
 
-`app-deploy:gate` reads the committed rows through
+The check reads the rows through
 [@yaks/benchmark](../packages/benchmark/README.md), checking the latest row
 against that host's entries in `bench/app-deploy.baseline.json`. It checks three
 medians: ship → live, ship deploy, and edit → live. The baseline preserves each

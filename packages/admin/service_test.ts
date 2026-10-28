@@ -1,14 +1,23 @@
 // The deploy catch-up through its doors: a head Builds never deployed gets one
 // build and two reports, and a head that is live, holds the same Worker
 // source, is still building, is being rebuilt after its build failed or was
-// rolled back past gets none.
+// rolled back past gets none. Each deploy a look shows is timed once, and
+// slower deploys, or a home page that does not answer, are reported.
 import { equal, match, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
-import { BOUND, type Build, firstShown, LATE, PENDING } from './catchup.ts'
+import {
+  BOUND,
+  type Build,
+  firstShown,
+  LATE,
+  PENDING,
+  SLOW,
+  WINDOW,
+} from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 
@@ -18,7 +27,7 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
 })
 let vocab = loadVocab([
   pick(kernelDoc, 'entity', 'failed'),
-  pick(adminDoc, 'rebuilt'),
+  pick(adminDoc, 'rebuilt', 'deployed'),
 ], [kernelKeywords])
 let MIN = 60_000
 
@@ -44,9 +53,12 @@ let fixture = (
         sha: LIVE,
         at: Date.parse('2026-10-13T12:39:47Z'),
         rollback: false,
+        debuts: [],
         ...live,
       })
     },
+    pushed: () => Promise.resolve(undefined),
+    answers: () => Promise.resolve(undefined),
     same: () => Promise.resolve(same),
     build: () => Promise.resolve(build),
     start: () => {
@@ -194,6 +206,57 @@ test('removing the marks asks for another start', async () => {
   let f = unmarked
   equal((await f.look()).step, 'rebuild')
   equal(f.started, 2)
+})
+
+// A live head whose look shows a deploy per `took` (seconds from push to live,
+// oldest first, an hour apart, the head's last) and whose home page answers
+// `home`. Says what the look reported, and how often it asked the home page.
+let deploys = (took: number[], home?: string) => {
+  let f = fixture({ sha: HEAD })
+  let shas = took.map((_, i) => i == took.length - 1 ? HEAD : `${i}`.repeat(40))
+  let push = (i: number) => landed - (took.length - 1 - i) * 60 * MIN
+  let debuts = took.map((s, i) => ({ sha: shas[i], at: push(i) + s * 1000 }))
+  f.doors.live = () =>
+    Promise.resolve({ sha: HEAD, at: landed, rollback: false, debuts })
+  f.doors.pushed = (sha) => Promise.resolve(push(shas.indexOf(sha)))
+  let asked = 0
+  f.doors.answers = () => (asked++, Promise.resolve(home))
+  f.at.now = landed + LATE
+  let look = async () => {
+    await f.look()
+    return {
+      faults: f.reports.map(([e, c]) => `${c.fault}: ${e.message}`),
+      asked,
+    }
+  }
+  return { ...f, look }
+}
+
+test('each deploy a look shows is timed once, and the head asks yaks.app once', async () => {
+  let f = deploys([90, 60])
+  equal(await f.look(), { faults: [], asked: 1 })
+  equal(await f.look(), { faults: [], asked: 1 })
+  let [row] = await f.g.get([HEAD], ['deployed'])
+  equal(row.deployed, {
+    pushed: '2026-10-13T12:42:23.000Z',
+    live: '2026-10-13T12:43:23.000Z',
+  })
+})
+
+test('deploys that got slower are a bug of their own', async () => {
+  let half = WINDOW / 2, slower = 3 * SLOW / 1000
+  let f = deploys([...Array(half).fill(60), ...Array(half).fill(slower)])
+  match(
+    (await f.look()).faults.join('\n'),
+    /^deploy slow:yak: main's deploys got slower: .* Newest first: 739f56b2 /,
+  )
+})
+
+test('a home page that does not answer once the head is live is a bug of its own', async () => {
+  let f = deploys([60], 'HTTP 503')
+  equal((await f.look()).faults, [
+    "deploy down:yak: yaks.app's home page did not answer 200 once main's head 739f56b2 went live: HTTP 503",
+  ])
 })
 
 test('the service reads a settled head no more, and a failing look once', async () => {

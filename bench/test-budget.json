@@ -514,9 +514,6 @@
       "compiler catalog normalizes relative import-map aliases": 3.5,
       "compiler catalog refuses unknown exports and excluded source paths": 6.1
     },
-    "bin/deploy-time_test.ts": {
-      "deploy record: concurrent append is idempotent, and a failed probe can complete": 2.6
-    },
     "bin/scratch_test.ts": {
       "a stray fails a named base and only warns on the shared one": 7.7,
       "scratch git fixtures do not inherit the caller repository": 45.1

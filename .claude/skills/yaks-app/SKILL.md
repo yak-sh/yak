@@ -103,6 +103,12 @@ and recovery is quick:
   marks the commit `rebuilt`, and reports a build it started to the tracker; a
   commit whose build still doesn't go live 15 minutes later is marked
   `failed`, reported, and not built again.
+- The same catch-up times every deploy, push to live, as
+  `deployed{pushed, live}` on the commit, and reports `deploy slow:yak` when
+  the median of the last ten passes two minutes, and `deploy down:yak` when
+  the home page doesn't answer once the head is live. Main's gate never waits
+  on or times a deploy, so a slow or failed Cloudflare build can't turn it red
+  (bench/deploys.md).
 - `yak admin revert <sha>` reverts a main commit in a fresh worktree, lands it
   and waits for Workers Builds to serve the revert. Since main deploys on every
   push, this is the usual way back.

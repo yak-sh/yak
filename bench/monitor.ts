@@ -34,8 +34,8 @@ import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
 import type { Judgement } from './paired.ts'
 
-/** Every suite this box measures itself; the CI and platform deploy suites are
- * timed where they run. */
+/** Every suite this box measures itself; the CI suites are timed where they
+ * run, and yaks.app's own deploys by the deploy catch-up (@yaks/admin). */
 export let SUITES = [
   'pages',
   'page-content',

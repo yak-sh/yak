@@ -32,12 +32,8 @@ export let main = async (args = Deno.args): Promise<number> => {
     }
     return await (await import('./box.ts')).main(action, rest)
   }
-  if (name == 'deploy' || name == 'app-deploy') {
+  if (name == 'app-deploy') {
     if (action == 'time') {
-      if (name == 'deploy') {
-        await (await import('../bin/deploy-time.ts')).main(rest)
-        return 0
-      }
       if (rest.length) throw new Error('app-deploy time takes no arguments')
       await (await import('../bin/app-deploy-time.ts')).main()
       return 0
@@ -45,10 +41,8 @@ export let main = async (args = Deno.args): Promise<number> => {
     if (!['run', 'check', 'accept', 'ratchet'].includes(action)) {
       throw new Error(`Unknown action: ${action}`)
     }
-    let suite = name == 'deploy'
-      ? await import('./deploy.ts')
-      : await import('./app-deploy.ts')
-    // Deploys use their recorded observations, one round each.
+    let suite = await import('./app-deploy.ts')
+    // App deploys use their recorded observations, one round each.
     let current = await suite.run({
       ...options(name, action, 1, 0),
       ...(reference || registeredBaseline
@@ -93,7 +87,6 @@ export let main = async (args = Deno.args): Promise<number> => {
       console.log(
         [
           'throughput',
-          'deploy',
           'app-deploy',
           'box',
           ...standalone.map((b) => b.suite().name),

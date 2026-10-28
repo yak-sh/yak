@@ -21,6 +21,16 @@
 // own log says why, and the next push starts over. A rollback newer than the
 // head is an operator's choice and is left alone. Removing the marks asks for
 // another try.
+//
+// A look that reads what is live also times the deploys it shows: each
+// commit's first deployment, from its push to main to the moment yaks.app
+// served it, kept on the commit as `deployed{pushed, live}`. The latest
+// `WINDOW` of them are judged together, and a median past `SLOW` is reported
+// as deploys that got slower, a bug of its own. Once main's head goes live
+// through its own deploy, yaks.app's home page has to answer 200; one that
+// does not is reported too.
+
+import { median } from './usage.ts'
 
 /** How long a push may go not live before the catch-up looks for its build.
  * Builds queues one within seconds of the push, and a build of `yak` took 78 s
@@ -34,8 +44,8 @@ export let LATE = 3 * 60_000
 
 /** How long main's head may take to go live once its build was asked for:
  * longer than any build measured. Of those 248 builds, 277 s at the 99th
- * percentile and 789 s at most; push to live in bench/deploys.jsonl is 50 s at
- * the median, 640 s at most. */
+ * percentile and 789 s at most; push to live as main's gate recorded it, to
+ * 2026-10-21, was 50 s at the median and 640 s at most. */
 export let BOUND = 15 * 60_000
 
 /** main's head: its commit, when origin first showed it (ms), whether Workers
@@ -203,4 +213,62 @@ export let stuck = (head: Head, live: Live, answer: string, bound = BOUND) =>
     } after the deploy catch-up started its build (${answer}); yak serves ` +
       `${short(live.sha)}. It starts no other build of this commit; the ` +
       `build's log says why it did not deploy.`,
+  )
+
+/** A deploy of main as the catch-up timed it: its commit, when the commit was
+ * pushed to main, and when yaks.app first served it (ms). */
+export type Deployed = { sha: string; pushed: number; live: number }
+
+/** How many of main's latest deploys are judged together. One deploy says
+ * little: Cloudflare's build alone varied 27 to 97 s from one push to the next
+ * (T-131399) with nothing in the repo changed. */
+export let WINDOW = 10
+
+/** The median push to live past which deploys got slower: about twice what
+ * one takes. The nine before 2026-10-28T14:02Z went live 56 to 96 s after
+ * their push, 65 s at the median, besides one whose build failed and was built
+ * again (322 s); from 10-10 to 10-21 they took 27 to 96 s, 63 s at the
+ * median. */
+export let SLOW = 2 * 60_000
+
+/** Deploys that got slower: the error the tracker is handed. */
+export class Slow extends Error {
+  override name = 'Slow'
+}
+
+let seconds = (ms: number) => `${Math.round(ms / 1000)} s`
+
+/// let at = (s: number, i: number) => ({ sha: `${i}abcdef0`, pushed: i * 600_000, live: i * 600_000 + s * 1000 })
+/// slow([60, 70, 80].map(at), 3) -> undefined
+/// slow([60, 130, 300].map(at), 3)?.message -> "main's deploys got slower: push to live took 130 s at the median of the last 3, past 120 s. Newest first: 2abcdef0 300 s, 1abcdef0 130 s, 0abcdef0 60 s"
+/// slow([300, 300].map(at), 3) -> undefined
+/** Whether main's deploys got slower: the median push to live of the latest
+ * `window` past `bound`. Fewer than a window say nothing yet. */
+export let slow = (rows: Deployed[], window = WINDOW, bound = SLOW) => {
+  let latest = rows.toSorted((a, b) => b.live - a.live).slice(0, window)
+  let took = (d: Deployed) => d.live - d.pushed
+  let typical = median(latest.map(took))
+  return latest.length < window || typical <= bound ? undefined : new Slow(
+    `main's deploys got slower: push to live took ${
+      seconds(typical)
+    } at the median of the last ${window}, past ${seconds(bound)}. ` +
+      `Newest first: ${
+        latest.map((d) => `${short(d.sha)} ${seconds(took(d))}`).join(', ')
+      }`,
+  )
+}
+
+/** yaks.app not answering once main's head went live: the error the tracker
+ * is handed. */
+export class Down extends Error {
+  override name = 'Down'
+}
+
+/// down('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be', 'HTTP 503').message -> "yaks.app's home page did not answer 200 once main's head 739f56b2 went live: HTTP 503"
+/** Why yaks.app's home page failed the head that just went live. */
+export let down = (sha: string, problem: string) =>
+  new Down(
+    `yaks.app's home page did not answer 200 once main's head ${
+      short(sha)
+    } went live: ${problem}`,
   )

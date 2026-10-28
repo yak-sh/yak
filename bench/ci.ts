@@ -5,10 +5,10 @@
  *
  * A red run is broken when a check or a test failed, and is reported at once.
  * A run red only for a time is held: a test over its budget or a platform's
- * wall clock past its record (bin/test-budget.ts), or a step that times a
- * deploy. The gate's runner shares its CPU's cache and memory with the agents'
- * box, so a test that sits near its line tips over it on one run and not on
- * the next, with no change to its code. A held run is reported when the next
+ * wall clock past its record (bin/test-budget.ts). The gate's runner shares
+ * its CPU's cache and memory with the agents' box, so a test that sits near
+ * its line tips over it on one run and not on the next, with no change to its
+ * code. A held run is reported when the next
  * run that times the same thing is over it again, and dropped with a line in
  * the log when the next run passes. A test the code made slow is over on
  * every run, so it reports one run later; a blip never does. A red run the
@@ -24,9 +24,6 @@ import { reporter, revision } from '../packages/cli/report.ts'
 import { type Budget, failed, read as kept } from '../bin/test-budget.ts'
 
 export let WORKFLOWS = ['gate', 'publish']
-
-/** The steps that time something besides the code: a deploy's latency. */
-export let TIMED = ['deploy time', 'deploy gate', 'app deploy gate']
 
 export type Run = {
   databaseId: number
@@ -51,7 +48,6 @@ export type State = {
 let BROKEN: Verdict = { broken: true }
 
 /// verdict(['deno task check']) -> { broken: true }
-/// verdict(['deploy gate']) -> { broken: false, over: ['deploy gate'] }
 /// verdict(['tests'], { code: 0, over: ['a_test.ts: x'] }) -> { broken: false, over: ['a_test.ts: x'] }
 /// verdict(['tests'], { code: 1, over: ['a_test.ts: x'] }) -> { broken: true }
 /// verdict(['tests'], { code: 0, over: [] }) -> { broken: true }
@@ -67,7 +63,6 @@ export let verdict = (
 ): Verdict => {
   let [step, ...more] = steps
   if (!step || more.length) return BROKEN
-  if (TIMED.includes(step)) return { broken: false, over: [step] }
   return step == 'tests' && tests && !tests.code && tests.over.length
     ? { broken: false, over: tests.over }
     : BROKEN

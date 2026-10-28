@@ -51,17 +51,16 @@ The command boundary is
 `deno run -A bench/run.ts command NAME COMMAND [ARGS...]`. The CI shell uses
 `command --ci`, with `SUITE_STEP` supplying its step name.
 
-The gate's custom shell times every executed **run step**, including path
-detection, deploy recording, tests, and performance reports. Each has a stable
-`ci/<step name>` suite. Skipped steps produce no new measurement. The checkout
-and artifact-upload Actions are not shell commands and are not timed by this
-wrapper; their wall clocks remain in GitHub's job timeline. The job summary
-receives each timing report, and an `always()` artifact step retains results
-even after a failure. No extra paid runner, API credential, or deployment
-dependency is added. A `command` run inside a CI step is prefixed `ci/suite/`.
-The artifact includes the per-suite result files. Bank reviewed CI floors with
-`SUITE_ACCEPT=1`; until a CI step has a committed baseline, it records without
-comparison.
+The gate's custom shell times every executed **run step**, `deno task check` and
+the tests. Each has a stable `ci/<step name>` suite. Skipped steps produce no
+new measurement. The checkout and artifact-upload Actions are not shell commands
+and are not timed by this wrapper; their wall clocks remain in GitHub's job
+timeline. The job summary receives each timing report, and an `always()`
+artifact step retains results even after a failure. No extra paid runner, API
+credential, or deployment dependency is added. A `command` run inside a CI step
+is prefixed `ci/suite/`. The artifact includes the per-suite result files. Bank
+reviewed CI floors with `SUITE_ACCEPT=1`; until a CI step has a committed
+baseline, it records without comparison.
 
 Long command names use a shortened filename with a digest; the JSON keeps the
 complete suite name, so distinct narrowed commands retain distinct results.

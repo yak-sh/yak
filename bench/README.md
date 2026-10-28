@@ -92,9 +92,9 @@ leaves. `--url=` and `--task=` after `--` point it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
-[command wall clocks](suites.md), [platform deploy](deploys.md) and
-[app deploy](app-deploys.md) use the same runner and ratchet with their own
-baselines.
+[command wall clocks](suites.md) and [app deploy](app-deploys.md) use the same
+runner and ratchet with their own baselines. yaks.app's own
+[deploy timing](deploys.md) is the deploy catch-up's, outside the benches.
 
 ## Waiting paths
 

@@ -1,7 +1,7 @@
 # Mossvale compiler regression — T-125306 (2026-10-15)
 
 This measures **the deploy's compiler door**, not `app_deploy`. The deploy probe
-is `bin/app-deploy-time.ts`; `bench/app-deploy.ts` gates deploy data. Do not
+is `bin/app-deploy-time.ts`; `bench/app-deploy.ts` judges deploy data. Do not
 substitute its deploy wall time for compiler work.
 
 ## Repeating the workload

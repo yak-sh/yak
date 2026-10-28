@@ -19,6 +19,12 @@
 // commit's `rebuilt` mark is written before the hook is asked, so a crash
 // between the two never starts a second build; a look that fails is reported
 // once until a look succeeds again.
+//
+// A deploy is timed from the same reads: wrangler's deployments say when each
+// commit went live, and a commit's push to main is when GitHub made its first
+// check suite, which it does as the push arrives; the box's own first sight
+// of a head is a minute coarse. yaks.app's home page is asked a few times
+// apart, since a fresh deploy can leave it cold for seconds.
 
 import { checkout } from './checkout.ts'
 import type { Comp, Graph } from '@yaks/graph'
@@ -30,6 +36,8 @@ import { WATCHED } from '../../workers/yak/wrangler.ts'
 import {
   BOUND,
   type Build,
+  type Deployed,
+  down,
   firstShown,
   type Head,
   LATE,
@@ -38,12 +46,15 @@ import {
   PENDING,
   ran,
   said,
+  slow,
   type Step,
   step,
   stuck,
+  WINDOW,
 } from './catchup.ts'
 import {
   command,
+  debuts,
   type Deployment,
   git,
   needGit,
@@ -84,13 +95,21 @@ export type Options = {
   account?: string
 }
 
+/** A commit's first deployment: its sha, and when it went live (ms). */
+export type Debut = { sha: string; at: number }
+
 /** Where the catch-up reads and acts: the box's own ({@link box}), or a
  * test's. */
 export type Doors = {
   /** main's head at origin, and when origin first showed it (ms) */
   main: () => Promise<{ sha: string; at: number }>
-  /** what yak serves */
-  live: () => Promise<Omit<Live, 'has'>>
+  /** what yak serves, and each commit its recent deployments put live with
+   * when the first of them did (ms) */
+  live: () => Promise<Omit<Live, 'has'> & { debuts: Debut[] }>
+  /** when a commit was pushed to main (ms), if GitHub has seen it */
+  pushed: (sha: string) => Promise<number | undefined>
+  /** whether yaks.app's home page answers 200: nothing, or why it does not */
+  answers: () => Promise<string | undefined>
   /** whether two commits hold the same Worker source */
   same: (a: string, b: string) => Promise<boolean>
   /** whether Workers Builds is running a build of a commit, or when it
@@ -109,6 +128,29 @@ let SHA = /^[0-9a-f]{40}\b/
 
 /** The check run Workers Builds keeps on a commit it builds for `yak`. */
 let CHECK = 'Workers Builds: yak'
+
+/** The page a visitor lands on, asked `TRIES` times `APART` before it counts
+ * as not answering: a deploy leaves it cold for seconds (on 2026-10-28 probes
+ * timed out at 5 s, then answered in 2.6 s and 0.04 s). */
+let SITE = 'https://yaks.app/'
+let TRIES = 3
+let APART = 10_000
+
+/** yaks.app's home page, asked once: nothing when it answers 200, else why
+ * not. Shutdown cutting the ask off is no answer. */
+let home = async (go: typeof fetch, stopping: AbortSignal) => {
+  try {
+    let r = await go(SITE, {
+      redirect: 'manual',
+      signal: AbortSignal.any([stopping, AbortSignal.timeout(10_000)]),
+    })
+    await r.body?.cancel()
+    return r.status == 200 ? undefined : `HTTP ${r.status}`
+  } catch (error) {
+    if (stopping.aborted) throw new Interrupted('shut down', 'signal')
+    return error instanceof Error ? error.message : String(error)
+  }
+}
 
 /** The box's doors: origin and this checkout's git, wrangler, the hook. */
 export let box = (
@@ -150,12 +192,11 @@ export let box = (
       return shown(sha)
     },
     live: async () => {
-      let now = serving(
-        rowsIn<Deployment>(
-          await wrangled(['deployments', 'list']),
-          'deployments',
-        ),
+      let rows = rowsIn<Deployment>(
+        await wrangled(['deployments', 'list']),
+        'deployments',
       )
+      let now = serving(rows)
       if (!now) throw new Error('yak has no deployment')
       let sha = now.sha
       if (!sha) {
@@ -165,7 +206,35 @@ export let box = (
       if (!sha) {
         throw new Error(`yak serves ${now.version}, which names no commit`)
       }
-      return { sha, at: Date.parse(now.at), rollback: now.rollback }
+      return {
+        sha,
+        at: Date.parse(now.at),
+        rollback: now.rollback,
+        debuts: debuts(rows).map((d) => ({ ...d, at: Date.parse(d.at) })),
+      }
+    },
+    pushed: async (sha) => {
+      let at = Date.parse(
+        await command(
+          dir,
+          'gh',
+          [
+            'api',
+            `repos/{owner}/{repo}/commits/${sha}/check-suites`,
+            '--jq',
+            '[.check_suites[].created_at] | min',
+          ],
+          stopping,
+        ),
+      )
+      return Number.isFinite(at) ? at : undefined
+    },
+    answers: async () => {
+      for (let tries = 1;; tries++) {
+        let problem = await home(go, stopping)
+        if (!problem || tries == TRIES) return problem
+        await sleep(APART, stopping)
+      }
     },
     same: async (a, b) => {
       await have(a)
@@ -233,7 +302,7 @@ export let pass = async (
   let head: Head = { ...tip, rebuilt: time(mark), failed: !!row?.failed }
   let next = step(head, doors.now(), undefined, late, bound)
   if (next != 'look') return { sha: tip.sha, step: next }
-  let served = await doors.live()
+  let { debuts: shown, ...served } = await doors.live()
   let live: Live = {
     ...served,
     has: served.sha == tip.sha || await doors.same(served.sha, tip.sha),
@@ -276,8 +345,75 @@ export let pass = async (
     }])
     await report(error, context('deploy stuck', answer))
   }
+  let fresh = await untimed(g, shown)
+  let timed = await measure(g, doors, fresh)
+  let slower = timed.length ? slow(await latest(g)) : undefined
+  if (slower) {
+    await report(slower, {
+      fault: 'deploy slow:yak',
+      commit: timed.at(-1)!.sha,
+      tags: { worker: 'yak' },
+    })
+  }
+  // The head's own deploy, first seen: not a push that changed no Worker
+  // source, nor a look after the head was settled.
+  if (fresh.some((d) => d.sha == tip.sha)) {
+    let problem = await doors.answers()
+    if (problem) {
+      await report(down(tip.sha, problem), {
+        fault: 'deploy down:yak',
+        commit: tip.sha,
+        tags: { worker: 'yak', live: live.sha },
+      })
+    }
+  }
   return { sha: tip.sha, step: next }
 }
+
+let iso = (ms: number) => new Date(ms).toISOString()
+
+/** The deploys a look shows that have no `deployed` yet. */
+let untimed = async (g: Graph, shown: Debut[]): Promise<Debut[]> => {
+  if (!shown.length) return []
+  let had = new Set(
+    (await g.get(shown.map((d) => d.sha), ['deployed']))
+      .filter((row) => row.deployed).map((row) => row.entity.eid),
+  )
+  return shown.filter((d) => !had.has(d.sha))
+}
+
+/** Times each deploy, oldest first, and answers the ones it timed. A commit
+ * GitHub has no push of, or one pushed after it went live, is left untimed. */
+let measure = async (
+  g: Graph,
+  doors: Doors,
+  fresh: Debut[],
+): Promise<Deployed[]> => {
+  let timed: Deployed[] = []
+  for (let { sha, at } of fresh) {
+    let pushed = await doors.pushed(sha)
+    if (pushed != null && pushed <= at) timed.push({ sha, pushed, live: at })
+  }
+  if (timed.length) {
+    await g.apply(timed.map((d) => ({
+      entity: { eid: d.sha },
+      deployed: { pushed: iso(d.pushed), live: iso(d.live) },
+    })))
+  }
+  return timed
+}
+
+/** main's latest timed deploys, the window `slow` judges. */
+let latest = async (g: Graph): Promise<Deployed[]> =>
+  (await g.read(`.deployed .order=-deployed.live .limit=${WINDOW}`))
+    .map((row) => {
+      let d = row.deployed as Comp
+      return {
+        sha: row.entity.eid,
+        pushed: Date.parse(String(d.pushed)),
+        live: Date.parse(String(d.live)),
+      }
+    })
 
 let SETTLED: Step[] = ['live', 'held', 'done']
 

@@ -161,6 +161,28 @@ export let serving = (deployments: Deployment[]) => {
     : undefined
 }
 
+/// let put = (sha: string, created_on: string, triggered = 'upload') => ({ id: created_on, created_on, versions: [{ version_id: sha, percentage: 100 }], annotations: { 'workers/message': `${sha.repeat(40)} subject`, 'workers/triggered_by': triggered } })
+/// debuts([put('b', '2026-10-28T12:36:58Z'), put('b', '2026-10-28T12:36:52Z'), put('a', '2026-10-28T12:25:58Z')]) -> [{ sha: 'a'.repeat(40), at: '2026-10-28T12:25:58Z' }, { sha: 'b'.repeat(40), at: '2026-10-28T12:36:52Z' }]
+/// debuts([put('a', '2026-10-28T12:25:58Z', 'rollback')]) -> []
+/** Each commit the deploy door put live, and when its first deployment did,
+ * oldest first: deployments that serve one version and name their commit. A
+ * rollback is an operator's choice of what serves, not a commit's way live. */
+export let debuts = (deployments: Deployment[]) => {
+  let first = new Map<string, string>()
+  for (
+    let d of deployments.toSorted((a, b) =>
+      Date.parse(a.created_on) - Date.parse(b.created_on)
+    )
+  ) {
+    let sha = d.versions.length == 1 &&
+        d.annotations?.['workers/triggered_by'] != 'rollback'
+      ? shaIn(d.annotations?.['workers/message'])
+      : undefined
+    if (sha && !first.has(sha)) first.set(sha, d.created_on)
+  }
+  return [...first].map(([sha, at]) => ({ sha, at }))
+}
+
 export let deploymentsFor = (id: string, deployments: Deployment[]) =>
   deployments.filter((d) =>
     d.versions.some((v) => v.version_id == id && v.percentage > 0)

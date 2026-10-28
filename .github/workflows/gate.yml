@@ -1,22 +1,24 @@
-# The gate: what `deno task check` and `deno task test` say about a commit.
+# The gate: what `deno task check` and `deno task test` say about a commit,
+# and nothing else.
 #
-# It does not deploy. The kernel Worker ships through Cloudflare Workers Builds,
-# which runs its own build (bin/build-yak) and mints its own token — see
-# workers/yak/README.md. Nothing here can change Cloudflare: the one step that
-# reads it (deploy time) runs wrangler with the runner's read-only token.
+# It does not deploy, nor wait for or time a deploy. The kernel Worker ships
+# through Cloudflare Workers Builds, which runs its own build (bin/build-yak)
+# and mints its own token — see workers/yak/README.md. How long a push takes to
+# go live is Cloudflare's, not the commit's, so the box's deploy catch-up
+# times every deploy and reports slower ones as their own bug
+# (packages/admin/README.md, "The deploy catch-up").
 #
 # Runs on our own runner, not GitHub's — we buy no Actions minutes (M-9560).
 # It is gh-runner (LXC 112 on the homelab's pve, beside two other repos'
 # runners), as user `yak-runner` in /opt/actions-runner/yak, under the system
 # unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
-# docs/PROXMOX.md says how it was installed. Its environment (the runner's own
-# .env) carries STRIPE_KEY, a Workers Scripts Read token as
-# CLOUDFLARE_API_TOKEN, and DENO_SQLITE_PATH. The tools the tests call are the
-# box's, from apt: google-chrome-stable, sqlite3, rclone (bin/backup), and
-# bubblewrap and python3 (packages/process sandboxes). yak-runner lingers, so
-# its systemd user manager runs, with cpu, memory and pids delegated, for the
-# sandboxes' scopes. `runs-on` names the custom label `yak`, so a workflow can
-# never silently fall back to a hosted runner.
+# docs/PROXMOX.md says how it was installed. The gate reads STRIPE_KEY and
+# DENO_SQLITE_PATH from its environment (the runner's own .env). The tools the
+# tests call are the box's, from apt: google-chrome-stable, sqlite3, rclone
+# (bin/backup), and bubblewrap and python3 (packages/process sandboxes).
+# yak-runner lingers, so its systemd user manager runs, with cpu, memory and
+# pids delegated, for the sandboxes' scopes. `runs-on` names the custom label
+# `yak`, so a workflow can never silently fall back to a hosted runner.
 #
 # Timing runs on CPUs 0-3 (four physical cores). Explicit
 # lxc.cgroup2.cpuset.cpus entries in pve's LXC configs keep its balancer
@@ -54,46 +56,13 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, yak]
     timeout-minutes: 30
-    # What deploy time's `gh api` reads: events, gate runs, check suites.
     permissions:
       contents: read
-      actions: read
-      checks: read
     defaults:
       run:
         shell: deno run -A bench/run.ts command --ci bash --noprofile --norc -eo pipefail {0}
     steps:
       - uses: actions/checkout@v4
-
-      # FIRST, before a single test: `live` is the recorder's first successful
-      # probe, so whatever the job does before this step is measured as deploy
-      # latency. Run last (T-35336), the recorder reached the probe ~2m30 after
-      # the push, found the version long since serving, and wrote that 2m30 as
-      # the number — 175.689s for d03e4fba, 180.670s for d59bb215, 203.932s for
-      # ef364c57, each of them `upload` under a minute. Three REGRESSIONs in a
-      # row that were the gate timing its own test suite (T-35426).
-      #
-      # The commit under test times its own deploy. Push only: a PR has no main
-      # push to time. A push outside the Worker's watch paths deploys nothing,
-      # and the recorder says so instead of waiting (workers/yak/README.md). No
-      # Actions secret is added — gh reads GitHub with this job's own token,
-      # and wrangler reads versions with the runner's read-only
-      # CLOUDFLARE_API_TOKEN. Nothing here pushes, so the row lands in
-      # this run's checkout and in the job summary; commit it with the next
-      # change, like the benchmark baseline. A bench-row commit on main would
-      # start another Workers Build and another gate.
-      #
-      # It is a measurement, so nothing it observes fails it (T-132885): a
-      # build Cloudflare has not finished, one that uploaded no version, a
-      # version it never saw answer are said and the tests run. A push that
-      # never goes live is reported by the deploy catch-up and a failed build
-      # by workers/yak/builds.ts; the deploy gate below judges the row.
-      - name: deploy time
-        if: github.event_name == 'push'
-        env:
-          SUITE_STEP: deploy time
-          GH_TOKEN: ${{ github.token }}
-        run: deno task deploy:time ${{ github.sha }}
 
       # Verbose, here and below: the gate's log is read whole, so it keeps
       # every check's output and every test's line.
@@ -121,25 +90,6 @@ jobs:
         # All of it (`--all`): this machine keeps no record of what passed
         # before, and only a whole run holds the wall.
         run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all --verbose'
-
-      # Reads the row `deploy time` wrote; needs no credentials. Until
-      # T-35336 rows were only written when someone hand-ran deploy:time, so
-      # one unlucky Workers Builds row (39–71s, Cloudflare-side) stayed "the
-      # latest deploy" and failed every later commit. A deploy the recorder
-      # never saw answer is not judged, unless no probe got a 200 from
-      # yaks.app at all: that fails here, since nothing else asks yaks.app
-      # for its home page.
-      - name: deploy gate
-        env:
-          SUITE_STEP: deploy gate
-        run: deno task deploy:gate
-
-      # Box-side app-deploy:time records what an app_files write costs a person;
-      # this reads the committed rows and refuses a slower one (T-34986).
-      - name: app deploy gate
-        env:
-          SUITE_STEP: app deploy gate
-        run: deno task app-deploy:gate
 
       - name: retain suite timings
         if: always()

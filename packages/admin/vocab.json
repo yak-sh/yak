@@ -36,6 +36,24 @@
         }
       }
     },
+    "deployed": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a main commit yaks.app served: when it was pushed to main and when its first deployment went live, as the deploy catch-up (packages/admin/catchup.ts) read them from GitHub and wrangler. Push to live is the difference; the catch-up reports main's latest deploys when that grows",
+      "properties": {
+        "pushed": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when GitHub made the commit's first check suite, as the push arrived"
+        },
+        "live": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the commit's first deployment of the yak Worker was made, Cloudflare's created_on"
+        }
+      }
+    },
     "admin_throwaway": {
       "tool": true,
       "noun": "admin",

@@ -1,232 +1,42 @@
 # Deploy timing
 
-Every push to main times its own deploy: the gate workflow's `deploy time` step
-runs the recorder on `github.sha` before `deploy gate` judges (T-35336). It is
-the workflow's FIRST step, right after the checkout, because `live` is the
-recorder's own first successful probe — anything the job does before it is
-measured as deploy latency (T-35426, below). The workflow runs on the box, so
-the recorder reads the same GitHub and Wrangler logins under `$HOME` that a hand
-run does; no Actions secret is added, and the check still makes no live call. A
-pull request has no main push to time, so the step is push-only and a PR judges
-the committed rows alone. A push that touches none of the Worker's build watch
-paths deploys nothing at all: the recorder waits for the version, finds no
-Cloudflare build check for the commit, says
-`no kernel Workers Build — nothing to time`, and the gate judges the rows
-already recorded. So does a push a newer one to main overtook with Worker source
-of its own: its build stops before deploying, or never runs, and the recorder
-says `overtaken by <sha>, whose build deploys it`.
-
-By hand — the same two commands, and what the workflow runs:
+Push to live is how long a push to main takes until yaks.app serves it. The
+box's deploy catch-up times every deploy
+([@yaks/admin](../packages/admin/README.md#the-deploy-catch-up)): wrangler's
+deployments list says when a commit's first deployment went live, and GitHub's
+first check suite on the commit says when the push arrived. Each deploy is kept
+on its commit as `deployed{pushed, live}`. A median of the latest ten past two
+minutes (`SLOW` in packages/admin/catchup.ts) is reported to the tracker as
+`deploy slow:yak`, a bug of its own; a home page that does not answer once
+main's head goes live is `deploy down:yak`. A push that never goes live is
+`deploy missed:yak` or `deploy stuck:yak`, and a failed build is filed by
+workers/yak/builds.ts.
 
 ```sh
-deno task deploy:time <full-pushed-sha>
-deno task deploy:gate
+yak graph query '.deployed .order=-deployed.live .limit=10'
+yak admin deploys    # each version, when it went live, and its commit
 ```
 
-Start the recorder alongside the push, or immediately after the build finishes.
-Without a SHA it follows the newest main push in the gate workflow. It waits for
-Cloudflare's build to finish (up to 15 minutes, `LIMIT`) and a minute more for
-its version to show (`SETTLE`), then up to two minutes for a verified response.
-This command records observations; it never deploys, commits, or pushes.
+Main's gate times none of it. Its `deploy time`, `deploy gate` and
+`app deploy gate` steps did until T-132948, and in the two weeks before that
+they turned 41 runs red with nothing wrong in the commit under test: a build
+slower than the wait, a failed or overtaken Cloudflare build, a version never
+seen answering, normal spread against a one-row floor. Only a push to main ran
+them, so no agent could see or prevent any of it before landing.
 
-Nothing the recorder observes fails it (T-132885); only its own errors do. A
-build Cloudflare has not finished, one that finished and uploaded no version,
-and a failed build are said (`<sha>: … — not timed`) and leave no row: the
-deploy catch-up (packages/admin/catchup.ts `NotLive`) reports a push that never
-goes live, and workers/yak/builds.ts a failed build. A version it never saw
-answer is recorded with `live: null` and, in `probe`, another version's answer
-when any probe got one, else why the last probe got no 200.
+## What a deploy's time is made of
 
-The workflow records a row only in its checkout, then checks it through
-[@yaks/benchmark](../packages/benchmark/README.md) against
-`bench/deploy.baseline.json`. It prints the row to its job summary. Append the
-observation to `bench/deploys.jsonl` with the next change so its provenance is
-retained. Recording and checking never change the committed baseline.
-
-Accept a reviewed floor explicitly:
-
-```sh
-deno task bench:ratchet deploy
-```
-
-Acceptance reads the recorded deploys; it does not initiate a deployment. Review
-and commit the baseline diff. Nothing in Actions pushes a baseline or a record
-commit.
-
-Timing is a box command. An unattended caller must start it on each push; late
-observations include that delay. Use `deno task deploy:time --backfill 3` for
-historical uploads.
-
-The record's `pushed` comes from the matching main PushEvent (`pushed_at`, or
-the event's `created_at`), then the earliest main check-suite creation, then the
-original push-triggered gate run's `created_at`. A commit's committer date is
-never used. `pushSource` names the source; suites and workflow creation are
-proxies for the push, not timestamps of the commit's creation.
-
-`uploaded` is Wrangler's `metadata.created_on`. The version is matched against
-the SHA in `annotations["workers/message"]`. Older unannotated versions use the
-nearest upload after the push and carry `estimated: true`; another SHA's
-annotation is never treated as a match.
-
-`live` is the first successful probe observed by the recorder, and `seconds` is
-`(live - pushed) / 1000` — so it is an UPPER BOUND, and it is only as tight as
-the recorder is prompt. A late start is indistinguishable from a slow deploy;
-that is why the gate runs the recorder before its own tests. The probe requests
-`https://yaks.app/` with
-`Cloudflare-Workers-Version-Overrides: yak="<version id>"`. A 200 must also
-carry the matching `x-yak-version` response header, taken from the Worker's
-existing `CF_VERSION_METADATA` binding. Cloudflare can silently ignore an
-override for a version outside the current deployment, so an ordinary 200 does
-not prove which version answered. See
-[version overrides](https://developers.cloudflare.com/workers/versions-and-deployments/version-overrides/).
-
-Unknown live times are `null`, never upload timestamps substituted for live. A
-later successful retry appends its completion; the gate counts that deploy once.
-Repeating a successful record keeps its first observation. Historical probes
-either cannot verify the version or yield a late upper bound; `backfill: true`
-excludes both from the ratchet.
-
-Every line that prints a total prints the split beside it: `queue` is
-`started - pushed`, the build waiting for Cloudflare to start it; `upload` is
-`uploaded - started`, the build itself (clone, cache restore, bundle, version
-create); and `propagate` is `live - uploaded`, that version to the first
-verified 200. `started` is the build's `running_on` from the
-[Workers Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/),
-read with the runner's `CLOUDFLARE_API_TOKEN` once the probes are done; it takes
-the Workers CI Read permission. A row without it (an older row, or a token that
-cannot read builds) has no `queue`, and its wait counts as the build's own.
-`stages()`, `own()` and `split()` in `bench/deploy.ts` derive all of it from the
-row's stamps; nothing derived is stored.
-
-The gate judges the deploy's own time, `build → live` (`own()`:
-`live - started`), so a build waiting its turn behind a burst of pushes is not
-counted against it. The baseline holds the median of the recorded prospective
-live times. Its 90% tolerance permits up to `median × 1.9`; an independent
-150-second ceiling (`CEILING`) also applies, so exactly 150 seconds fails. Both
-comparisons use the same benchmark ratchet. Explicit acceptance can lower the
-floor from reviewed observations; a check only compares and writes its result to
-`bench/deploy.results.json`. No recorded rows pass as bootstrap. Corrupt rows
-fail. A latest deploy the recorder never saw answer is not judged when any probe
-got another version's 200 (`probe` reads `version <id>, want <id>`): it was not
-serving yet. One for which no probe got a 200 from yaks.app at all (`down`)
-fails, since nothing else asks yaks.app for its home page. A deploy leaves the
-home page cold for seconds (on 2026-10-28 probes timed out at 5 s, then answered
-in 2.6 s and 0.04 s), so one probe that got nothing says nothing. Historical
-backfills stay outside the ratchet.
-
-## Initial observations
-
-Collected on 2026-09-07. All three version messages were absent, so the SHA
-matches are estimated. Each override probe returned 200 without a version
-header; none establishes the time that version first served a 200.
-
-| SHA                                        | GitHub push source        | Push to upload | Verified push to live |
-| ------------------------------------------ | ------------------------- | -------------: | --------------------- |
-| `754d0863e5de1956a471efc6685384babb684854` | PushEvent, 19:30:39 UTC   |        41.120s | unknown               |
-| `04c960265029ee56a85751bd9f8156fe60e85eb8` | check-suite, 19:32:17 UTC |        40.628s | unknown               |
-| `13c6432b818e4f8cbd585ae9e9404eb92c29d61b` | check-suite, 19:49:19 UTC |        39.719s | unknown               |
-
-The live floor is unset until the first prospective, version-confirmed probe.
-The maximum comparison limit is 60s. No deployment was made to seed a baseline.
-
-## Build path and local profile
-
-Workers Builds clones the repository and restores its build cache. The
-dashboard's Build cache must be enabled for persistence; its setting was not
-changed or verified here. Cloudflare documents an npm cache but no Deno cache,
-so `bin/build-yak` defaults `DENO_INSTALL` and `DENO_DIR` to directories inside
-`npm config get cache`, while respecting explicit overrides. See
-[Workers build caching](https://developers.cloudflare.com/workers/ci-cd/builds/build-caching/).
-
-The build script's steps (the dashboard's build command has been empty since
-2026-09-08, so Workers Builds runs only the deploy half):
-
-1. Restore Deno's path; install Deno only if its executable is absent. Download
-   and extraction were not measured locally because Deno is already installed.
-2. Run `deno task check`: formatting, lint, byte hygiene, type checks, generated
-   content checks, and package tests. The warm run took 21.68s; the first run
-   with an isolated cache took 71.21s. Both passed 918 package tests. These are
-   local durations, not Cloudflare build timings.
-3. Run `deno task test:workers` for kernel and tail (28.52s locally, 575 tests
-   passed). Its probes call `ready()`. The build wrapper already had no extra
-   npm install to remove.
-4. The separate `bin/build-yak deploy` restores the same Deno/cache paths and
-   calls `deno task deploy:yak`. `ready()` reuses the probe's `node_modules`
-   (0.000058s locally). When required, the lockfile install prefers cached
-   packages and skips the audit/funding requests (1.963s into an empty tree from
-   a warm package cache).
-5. Read the SHA and subject for the version annotation (0.00332s), then run
-   pinned Wrangler with `--prefer-offline`. Wrangler startup, bundling and
-   assets took 2.142s locally; upload and Cloudflare propagation were not
-   measured by the dry run.
-
-`time deno task deploy:yak --dry-run` took 19.14s with cold npm dependencies and
-exited 1: Wrangler still tried to build the configured container and Docker is
-unavailable on this box. With the existing documented
-`--containers-rollout=none` option, the warm dry run passed in 2.36s (2.53s
-before the cache options). It bundled 3008.12 KiB, gzip 667.63 KiB, and read 46
-asset files. These are single samples; the difference is not evidence of a
-reliable speedup. The container build and remote upload remain unmeasured.
-
-No incremental build or skipped correctness check was introduced.
-
-## What the 74.182s row was (2026-09-09, T-35253)
-
-Not a repo regression. Push to upload — the Workers Builds half — is what
-varies, and it varies run to run with the commit's content held irrelevant:
-39.7s, 40.6s, 41.1s (09-07), 56.7s, 66.9s (09-08), 39s, 41s, 53s, 71s, 39s
-(09-09, from each commit's Cloudflare check-suite `created_at` to its version's
-`created_on`). 74.182s is 66.9s of that plus 7.2s of propagation — the slow tail
-of that spread, banked as the only measured row and compared against the hard
-60s ceiling.
-
-Measured against it: a build that dropped `deno task check` and
-`deno task test:workers` — ~94s of work on this box (30.21s and 64.28s warm on
-2026-09-09) — moved neither number. Four deploys built that way uploaded in
-40.3s, 42.0s, 40.4s and 42.6s, and their whole Builds run (build, production
-deploy, staging deploy) spanned 3m06 and 3m21, inside the 3m01–3m34 of the five
-built the old way that morning. The arithmetic leaves no room for those
-commands: the deploy's cost is Cloudflare's queue, container, clone, cache
-restore, bundle and upload. Whether the dashboard's build command runs
-`bin/build-yak` at all is a question for the dashboard; it is not visible from
-here, and the Builds API refuses the box's Wrangler OAuth token.
-
-So the limit stands at the owner's 60s, and nothing in the repo is holding the
-deploy back. The gate will read red whenever a recorded deploy lands in the slow
-tail, because one recorded row is the whole sample. Recording every push, not
-the occasional one, is what would make the ratchet mean anything.
-
-## What the 175s rows were (2026-09-09, T-35426)
-
-The gate timing itself. `deploy time` was the workflow's last step, so the
-recorder did not reach its first probe until `deno task check`, `test` and
-`test:workers` had run — about two and a half minutes after the push. By then
-the version had been serving for a minute or more, the first probe succeeded
-immediately, and that late observation was written as `live`:
-
-| SHA        |  upload |     live | gate step ran |
-| ---------- | ------: | -------: | ------------- |
-| `d03e4fba` | 39.929s | 175.689s | push +2m48    |
-| `d59bb215` | 55.790s | 180.670s | push +2m45    |
-| `ef364c57` | 59.188s | 203.932s | push +3m12    |
-
-Every `upload` is ordinary — the same 39–71s Cloudflare spread T-35253 measured.
-The rest is the gate's own test suite, counted as propagation. Run 34359974213's
-steps say it plainly: job started 7s after the push, `deploy
-time` ran
-13:56:01–13:56:06, five seconds for a version that had existed since 13:53:5x.
-Three REGRESSIONs in a row, none of them a deploy.
-
-The premise that a landing storm queues in Workers Builds does not survive the
-numbers either: `d03e4fba` uploaded in 39.929s, the fastest of the night, in the
-middle of fifteen landings in an hour. A storm slows the gate's own runner, not
-Cloudflare's build queue — and a late recorder turns that into a deploy
-regression.
-
-Two changes: the recorder is now the first step after the checkout, so `live` is
-the deploy's, and every verdict prints `upload` and `propagate` separately, so a
-number that grows says which half grew. The 60s limit and the ratchet are
-unchanged.
+Nearly all of it is Cloudflare's: the build waiting its turn behind other
+pushes' builds (six run at once per account), then clone, cache restore, bundle
+and upload, then the version reaching its first answer. It varied 27 to 97 s
+from one push to the next between 2026-10-10 and 10-21, 63 s at the median, with
+nothing in the repo changed (T-131399); on 2026-10-28 it was 56 to 96 s, 65 s at
+the median. Dropping `deno task check` and the tests from the build moved
+neither number (T-35253). The Workers Builds API, which would tell the queue
+from the build, refuses the box's wrangler credential (HTTP 403, code 12004), so
+a slower deploy is read in its build's own log, linked from the commit's
+`Workers Builds: yak` check run. What made deploys slower before, and how each
+was fixed, follows.
 
 ## Catalog dependency (T-65018)
 
@@ -262,10 +72,9 @@ fails, since neither restores the compiler Worker.
 | `03673a8c9` | [38100519502](https://github.com/yak-sh/yak/actions/runs/38100519502) |      62.797s | removal of fallback; compiler code changed and uploaded        |
 | `51acbc60e` | [38101111396](https://github.com/yak-sh/yak/actions/runs/38101111396) |      45.596s | package change with the compiler catalog carried by yak        |
 
-The catalog-free package push took 17.594 seconds less than `1849b73bc`, with
-14.404 seconds below the ceiling. Its upload was 45.596 seconds and propagation
-was 0.000 seconds. This proves one main push under the limit with headroom; it
-does not establish an upper bound for queued builds.
+The catalog-free package push took 17.594 seconds less than `1849b73bc`: its
+upload was 45.596 seconds and propagation 0.000 seconds. One push says nothing
+of queued builds.
 
 These rows are observations, not evidence of a fixed Cloudflare setup time. The
 supplied timelines put clone plus cache restore at 14–19 seconds, and one build
@@ -281,10 +90,9 @@ and image preparation, so launching their shell commands concurrently would race
 those writes. A complete Build continues with image rollout and staging after
 production is live and keeps its slot occupied. Cloudflare documents
 [six concurrent builds per paid account](https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/).
-A 50-second queue wait leaves insufficient execution time for the strict
-60-second limit. The baseline and limit remain unchanged; this change removes
-the package catalog's serial upload, while queue and restore latency remain to
-be measured through Workers CI access.
+A 50-second queue wait is most of a 63-second deploy. This change removed the
+package catalog's serial upload; queue and restore latency stay unmeasured,
+since the Builds API refuses the box's credential.
 
 ## Sandbox CLI delivery (T-65018)
 
@@ -320,11 +128,6 @@ unchanged. These exclude remote transfer and container startup. Without lazy npm
 caching, the same cold help takes 3.17 seconds and fills 283 MB of unrelated npm
 cache. A separate CLI bundle failed on dynamic local-host dependencies; a source
 workspace also preserves the server-declared package views.
-
-The available Wrangler OAuth credential still gets HTTP 403, code 12004 from the
-Workers Builds list API. Queue stamps cannot be read with that credential; live
-proof uses prospective version-confirmed probes and Cloudflare's GitHub Build
-checks. The strict 60-second limit and ratchet remain unchanged.
 
 The first rollout of this shape, `d058ad04e`, was observed at 75.655 seconds:
 51.786 seconds to upload and 23.869 seconds to the version-confirmed response.
@@ -375,31 +178,9 @@ after the first went live, while the old image build would still have held the
 Build slot. The first Build had completed at 09:32:07 UTC, 48 seconds before the
 next push at 09:32:55; no sandbox image work remained to queue behind. The
 second Build completed at 09:33:44. Both verified rows have zero recorded
-propagation delay and are retained in `deploys.jsonl`, without an estimated SHA
-match or a backfill. The Markdown-only `91febea3a` started no Workers Build and
-is excluded from this pair. The measured pushes change launcher source comments
-while keeping runtime behavior fixed. Builds queue stamps remain unavailable
-with the current credential; the removed Docker path and the preceding Build's
-completion establish that the second push cannot wait behind its sandbox image
-build.
-
-## The limit follows Cloudflare's spread (T-131399)
-
-The gate failed on most pushes on 2026-10-21 because one push is one sample, and
-Cloudflare's build varies more than the limit allowed. Push to live in the
-gate's own runs that day: 56.7, 78.1, 72.0, 62.8, 77.0, 49.4, 60.1 and 68.2
-seconds, with 26.7 to 95.8 since 2026-10-10: a median near 63 against a floor of
-47.478 taken from four lucky September rows and a 60-second ceiling. Of those,
-upload (the build) was 48 to 77 seconds and propagation 0 to 15; the Builds API
-refuses the runner's token (HTTP 401), so the queue cannot be told from the
-build and counts as the build's. Nothing in the repo changed between the green
-and red pushes. The baseline is now the median, 63 seconds, with 100% tolerance
-(126 s), and the ceiling is 150 seconds (39d45f04 took 96.5 s, 67.7 of it
-upload): a gate for a deploy that got twice as slow, not for the day's weather.
-
-A second source of false red is the gate's single runner: a push that lands
-while the runner is busy with the previous one has its recorder start minutes
-late (d819878f: deployed 00:26:57, recorder began 00:31:34, recorded 334.8 s). A
-recorder that began after the version's first deployment now times it by that
-deployment, as one that finds the version already serving always did; a version
-deployed while the recorder watched is still timed by its first answering probe.
+propagation delay, without an estimated SHA match or a backfill. The
+Markdown-only `91febea3a` started no Workers Build and is excluded from this
+pair. The measured pushes change launcher source comments while keeping runtime
+behavior fixed. Builds queue stamps remain unavailable with the current
+credential; the removed Docker path and the preceding Build's completion
+establish that the second push cannot wait behind its sandbox image build.
