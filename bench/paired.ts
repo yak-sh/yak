@@ -271,13 +271,14 @@ export let collect = async (
       if (use != null) pressure.push(use)
     }
     let names = JSON.stringify(base.benches.map((b) => b.name).sort())
-    let measure = async (at: number, slot: number) => {
+    let measure = async (at: number, round: number) => {
       await resting()
-      let samples
       try {
-        samples = await collector(roots[at]).collect(observations[slot].length)
+        let samples = await collector(roots[at]).collect(round)
         let got = JSON.stringify(Object.keys(samples).sort())
         if (got != names) throw Error(`measured ${got}, banked ${names}`)
+        await resting()
+        return samples
       } catch (error) {
         if (at == 1) throw error
         throw new Unjudged(
@@ -286,18 +287,19 @@ export let collect = async (
           }`,
         )
       }
-      observations[slot].push(samples)
-      await resting()
     }
+    // Each tree runs once unmeasured, so no round times one tree's cold
+    // compile caches against the other's warm ones.
+    for (let at of [0, 1]) await measure(at, 0)
     let rounds = Math.max(6, Math.ceil(Math.log2(20 * base.benches.length)))
     for (let round = 0; round < rounds; round++) {
-      await bracket(
-        (revision) =>
-          revision == 'current'
-            ? measure(1, 1)
-            : measure(0, observations[0].length > round ? 2 : 0),
+      let pair = await bracket(
+        (revision) => measure(revision == 'current' ? 1 : 0, round),
         async () => {},
       )
+      observations[0].push(pair.before)
+      observations[1].push(pair.current)
+      observations[2].push(pair.after)
     }
     let suiteOf = collector(roots[1])
     let aggregate = (slot: number): Promise<Run> =>

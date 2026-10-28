@@ -395,18 +395,20 @@ from the test suite.
 bench/paired.ts measures a suite at two product revisions, by default the one
 its baseline was banked at and HEAD, under the same driver: this checkout's
 bench files and @yaks/benchmark, copied into an archive of each revision. It
-holds the box-wide lock across rounds of reference, current, reference (at least
-six, more with more benches, for the within-round sign comparison); each probe
-owns its seeded graph and no live database is copied. A bench is slower when
-every round's current figure is past both references beside it (or every current
-figure past every reference one) and its median is past the reference's by more
-than the slack its baseline banked. The figure is CPU time where every sample
-carries it (@yaks/benchmark `stopwatch`), since a busy box barely moves it, and
-wall time where a step waits on I/O or works in a process that outlives it.
-Other work on the box during the bracket is recorded, not refused, since it
-slows both revisions alike; reference rounds that drift apart make the whole
-comparison inconclusive. So does older code that cannot run today's driver; a
-failure of the current code's bench is a failure. The comparison banks nothing.
+holds the box-wide lock across one unmeasured run of each, so no round times one
+tree's cold compile caches against the other's warm ones, then rounds of
+reference, current, reference (at least six, more with more benches, for the
+within-round sign comparison); each probe owns its seeded graph and no live
+database is copied. A bench is slower when every round's current figure is past
+both references beside it (or every current figure past every reference one) and
+its median is past the reference's by more than the slack its baseline banked.
+The figure is CPU time where every sample carries it (@yaks/benchmark
+`stopwatch`), since a busy box barely moves it, and wall time where a step waits
+on I/O or works in a process that outlives it. Other work on the box during the
+bracket is recorded, not refused, since it slows both revisions alike; reference
+rounds that drift apart make the whole comparison inconclusive. So does older
+code that cannot run today's driver; a failure of the current code's bench is a
+failure. The comparison banks nothing.
 
 To inspect one directly while holding the shared measurement lock:
 
