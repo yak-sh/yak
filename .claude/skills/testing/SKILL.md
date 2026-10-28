@@ -221,7 +221,8 @@ stronger.
   new work, about two minutes. Each check says one line, and a failed one its
   output, cut to its first and last lines; `deno task check:types` (or any
   one) says its output whole, and `--verbose` says every check's output as it
-  comes. What these caught on main
+  comes, each line led by its check's name, every check run to its end. What
+  these caught on main
   is what agents skipped: README prose left unformatted, slow types in a
   public API (`check:publish`), a generated file not regenerated
   (`check:content`), and type errors.

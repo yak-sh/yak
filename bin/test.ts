@@ -204,6 +204,17 @@ export let observe = async (
   read(pending + decoder.decode(), true)
 }
 
+/** Each chunk `stream` says, kept in `into` as it passes. */
+export async function* kept(
+  stream: AsyncIterable<Uint8Array>,
+  into: Uint8Array[],
+) {
+  for await (let b of stream) {
+    into.push(b)
+    yield b
+  }
+}
+
 /// reported('a ... ok (1ms)\n\nok | 1 passed | 0 failed (2ms)\n') -> true
 /// reported('a ... ok (1ms)\nb ... ') -> false
 /** Whether a runtime said its closing report, the line its runner ends on. */
@@ -226,12 +237,16 @@ export let died = ({ name, count, failed }: Progress) =>
 
 /// failures('a ... ok (1ms)\n\nERRORS\n\nb => ./a_test.ts\nError: no\n\n\nFAILED | 1 passed | 1 failed (2ms)\n', '') -> 'ERRORS\n\nb => ./a_test.ts\nError: no\n\n'
 /// failures('', 'error: Module not found\n', 'test deno: 1') -> 'test deno: 1\nerror: Module not found\n'
+/// failures('a ... FAILED (50s)\nError: the test did not end within 50000ms\n\nb ... ok (1ms)\nc ... ', '', 'test deno: SIGTERM during c', 1)
+///   -> 'test deno: SIGTERM during c\na ... FAILED (50s)\nError: the test did not end within 50000ms\nc ...\n'
 /**
  * What a run says of a platform that failed, unless `--verbose`: its
  * runner's report of the failures, without the counts that the run's own
  * closing line sums (bin/test-budget.ts); or, from a runner that ended
- * before it reported, `why` and the last `lines` it said. Nothing about a
- * test that passed, nor what a test printed: `--verbose` says those.
+ * before it reported, `why`, each failure it said as it ran (a test's line
+ * and its error, packages/testing/run.ts `file`), and the last `lines` it
+ * said. Nothing about a test that passed, nor what a test printed:
+ * `--verbose` says those.
  */
 export let failures = (out: string, err: string, why = '', lines = 40) => {
   let plain = out.replace(ansi, '')
@@ -241,7 +256,13 @@ export let failures = (out: string, err: string, why = '', lines = 40) => {
       .replace(/\n+(?:ok|FAILED) \| \d+ passed \|[^\n]*\n*$/, '\n\n')
   }
   let all = (plain + err.replace(ansi, '')).trimEnd().split('\n')
-  return `${why}\n${all.slice(-lines).join('\n')}\n`
+  let last = Math.max(0, all.length - lines)
+  let said = [
+    ...`${all.slice(0, last).join('\n')}\n`.matchAll(
+      /^.+? \.\.\. FAILED \([^)]*\)\n(?:[^\n]+\n)*/gm,
+    ),
+  ].map((m) => m[0].trimEnd())
+  return [why, ...said, ...all.slice(last)].join('\n') + '\n'
 }
 
 // Writes to a pipe may be short. Finish one report synchronously so another
@@ -378,20 +399,75 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     reported: Date.now(),
     done: false,
   }))
+  // What each platform has said, kept as it comes: one ended before its
+  // closing report is said with all of it.
+  let heard = runs.map(() => ({
+    out: [] as Uint8Array[],
+    err: [] as Uint8Array[],
+  }))
+  let bytes = (parts: Uint8Array[]) => {
+    let all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+    parts.reduce((at, p) => (all.set(p, at), at + p.length), 0)
+    return all
+  }
+  // A platform's report, once: whole when verbose, and otherwise only a red
+  // one's failures. `status` is how its runtime ended; none, when it outlived
+  // the run's end.
+  let say = (i: number, status?: Deno.CommandStatus) => {
+    if (progress[i].done) return
+    progress[i].done = true
+    let out = bytes(heard[i].out), err = bytes(heard[i].err)
+    let said = new TextDecoder().decode(out)
+    let ok = status?.success ?? false
+    // A runtime that died (out of memory, say) never listed its failures.
+    let why = `test ${runs[i][0]}: ${
+      status ? status.signal ?? status.code : 'still running'
+    }${ok || reported(said) ? '' : died(progress[i])}`
+    if (verbose) {
+      report(Deno.stdout, out)
+      report(Deno.stderr, err)
+    } else if (!ok) {
+      let text = failures(said, new TextDecoder().decode(err), why)
+      report(Deno.stdout, new TextEncoder().encode(text))
+    }
+    if (!ok) failed.push(why)
+  }
+  // The closing word on a long run: which platforms were red, after every one
+  // of them has printed its own report. A short run said each as it ended.
+  // The code is said outright: wrangler's close sets Node's exit code, which
+  // is Deno's.
+  let finish = () => {
+    clearInterval(watch)
+    if (verbose && failed.length) {
+      console.error(`\n─── ${failed.length} failing platform(s) ───`)
+      for (let line of failed) console.error(`  ${line}`)
+    }
+    Deno.exit(failed.length ? 1 : 0)
+  }
+  // How long ended platforms have to end and say what they said; one still
+  // going after it is said as it stands.
+  let GRACE = 10_000
   let parent = Deno.ppid
   let ending = false
+  // Ends the run: every platform ends, then each says what it said, so the
+  // failure that came before a hang is in the report.
   let end = (why: string) => {
     if (ending) return
     ending = true
     console.error(why)
+    failed.push(why)
     // runTestCommands starts this coordinator as a session leader. End its
-    // whole process group, including test-spawned descendants. A direct
-    // `--bulk` invocation only owns its immediate children.
-    if (group() == Deno.pid) Deno.kill(-Deno.pid, 'SIGTERM')
-    else {
-      for (let child of children) child.kill('SIGTERM')
-      Deno.exit(1)
-    }
+    // whole process group, including test-spawned descendants, but this
+    // process, which hears its own signal as nothing. A direct `--bulk`
+    // invocation only owns its immediate children.
+    if (group() == Deno.pid) {
+      Deno.addSignalListener('SIGTERM', () => {})
+      Deno.kill(-Deno.pid, 'SIGTERM')
+    } else for (let child of children) child.kill('SIGTERM')
+    setTimeout(() => {
+      for (let i of runs.keys()) say(i)
+      finish()
+    }, GRACE)
   }
   let watch = setInterval(() => {
     if (Deno.ppid != parent) {
@@ -429,33 +505,13 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }
   }, pulse)
   let run = async (i: number, child: Deno.ChildProcess) => {
-    let [stdout, preview] = child.stdout.tee()
-    let [stderr, errors] = child.stderr.tee()
-    let output = new Response(stdout).arrayBuffer()
-    let error = new Response(stderr).arrayBuffer()
     let followed = Promise.all([
-      observe(preview, progress[i]),
-      observe(errors, progress[i]),
+      observe(kept(child.stdout, heard[i].out), progress[i]),
+      observe(kept(child.stderr, heard[i].err), progress[i]),
     ])
     let status = await child.status
     await followed
-    progress[i].done = true
-    let out = new Uint8Array(await output)
-    let said = new TextDecoder().decode(out)
-    // A runtime that died (out of memory, say) never listed its failures.
-    let why = `test ${runs[i][0]}: ${status.signal ?? status.code}${
-      status.success || reported(said) ? '' : died(progress[i])
-    }`
-    // Every platform runs to its own end and prints its own report: whole
-    // when verbose, and otherwise only a red one's failures.
-    if (verbose) {
-      report(Deno.stdout, out)
-      report(Deno.stderr, new Uint8Array(await error))
-    } else if (!status.success) {
-      let err = new TextDecoder().decode(await error)
-      report(Deno.stdout, new TextEncoder().encode(failures(said, err, why)))
-    }
-    if (!status.success) failed.push(why)
+    say(i, status)
   }
   // The workerd platform, once the kernel it shares is up; the kernel stops
   // after its last test.
@@ -480,24 +536,12 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       await suite.stop()
     }
   }
-  try {
-    await Promise.all(
-      runs.map(([p, files], i) =>
-        p == 'workerd' ? kernel(i, files) : run(i, spawn(p, files))
-      ),
-    )
-  } finally {
-    clearInterval(watch)
-  }
-  // The closing word on a long run: which platforms were red, after every one
-  // of them has printed its own report. A short run said each as it ended.
-  if (verbose && failed.length) {
-    console.error(`\n─── ${failed.length} failing platform(s) ───`)
-    for (let line of failed) console.error(`  ${line}`)
-  }
-  // The code is said outright: wrangler's close sets Node's exit code, which
-  // is Deno's.
-  Deno.exit(failed.length ? 1 : 0)
+  await Promise.all(
+    runs.map(([p, files], i) =>
+      p == 'workerd' ? kernel(i, files) : run(i, spawn(p, files))
+    ),
+  )
+  finish()
 } else if (import.meta.main) {
   let outer = Deno.env.get(RUN)
   if (outer) {

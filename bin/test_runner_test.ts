@@ -158,6 +158,9 @@ let waiting = async (dir: string) => {
     // file took to load on a busy box.
     `import { test } from ${TESTING}
     test('a first test completes', () => {})
+    test('a test fails before the wait', () => {
+      throw new Error('said before the end')
+    })
     test('waiting on a lost reply', async () => {
       let held = new Deno.Command('sleep', { args: ['60'] }).spawn()
       Deno.writeTextFileSync(${held}, String(held.pid))
@@ -202,8 +205,20 @@ test('a test that stops completing is named and its descendants end', async () =
   let child: Deno.ChildProcess | undefined
   try {
     let file = await waiting(dir)
+    // Handed its keys, as bin/test.ts hands them, the runtime starts its
+    // tests at once: the short idle limit times the wait, not the choosing.
+    let keys = `${dir}/keys.json`
+    await Deno.writeTextFile(keys, '{}')
     child = new Deno.Command('setsid', {
-      args: [Deno.execPath(), 'run', '-A', runner, '--bulk', file],
+      args: [
+        Deno.execPath(),
+        'run',
+        '-A',
+        runner,
+        '--bulk',
+        `--keys=${keys}`,
+        file,
+      ],
       // A short idle limit and a fast watch: the run's defaults are seconds,
       // and this proves detection, not the wait itself.
       env: { TASKS_TEST_IDLE_MS: '300', TASKS_TEST_WATCH_MS: '20' },
@@ -211,10 +226,14 @@ test('a test that stops completing is named and its descendants end', async () =
       stderr: 'piped',
     }).spawn()
     let result = await child.output()
-    assertEquals(result.signal, 'SIGTERM')
+    assertEquals(result.code, 1)
     assertMatch(
       new TextDecoder().decode(result.stderr),
       /no test completed for \d+s; last: waiting on a lost reply/,
+    )
+    assertMatch(
+      new TextDecoder().decode(result.stdout),
+      /a test fails before the wait \.\.\. FAILED .*\n.*said before the end/,
     )
     let held = Number(await Deno.readTextFile(`${dir}/held.pid`))
     await gone(held)

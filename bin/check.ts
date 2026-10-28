@@ -4,9 +4,9 @@
 // after that line, cut short (`cut`): an agent reads a run on every later
 // turn, and a passing check's output is never news. The run closes with one
 // line naming every check that failed (`closing`), so its last line is the
-// verdict even when a failure that ended early scrolled away. `--verbose` runs
-// `check:run` itself, every check's output said as it comes, each line led by
-// its task's name.
+// verdict even when a failure that ended early scrolled away. `--verbose` says
+// every check's output as it comes, each line led by its task's name, and
+// still runs every check to its end.
 import config from '../deno.json' with { type: 'json' }
 
 /** The checks, by their task names. */
@@ -43,8 +43,25 @@ export let closing = (failed: string[], total: number, ms: number) =>
     failed.length ? `${failed.length} failed: ${failed.join(', ')}` : '0 failed'
   } (${took(ms)})`
 
-// One check, its output and errors as one stream, in the order they came.
-let check = async (task: string) => {
+/// let say = led('check:fmt')
+/// [say('a\nb'), say('c\n'), say('', true)] -> [['check:fmt: a'], ['check:fmt: bc'], []]
+/// say('d', true) -> ['check:fmt: d']
+/** What a check says, a line at a time, each led by its task's name: the
+ * lines a chunk ends, and once `done`, the rest. */
+export let led = (task: string) => {
+  let pending = ''
+  return (chunk: string, done = false) => {
+    let lines = (pending + chunk).split('\n')
+    pending = lines.pop()!
+    if (done && pending) lines.push(pending)
+    if (done) pending = ''
+    return lines.map((l) => `${task}: ${l}`)
+  }
+}
+
+// One check, its output and errors as one stream, in the order they came;
+// `verbose` says each line as it comes.
+let check = async (task: string, verbose = false) => {
   let start = performance.now()
   let child = new Deno.Command(Deno.execPath(), {
     args: ['task', '-q', task],
@@ -57,28 +74,31 @@ let check = async (task: string) => {
   let parts: string[] = []
   let drain = async (stream: ReadableStream<Uint8Array>) => {
     let text = new TextDecoder()
+    let say = led(task)
+    let out = (lines: string[]) =>
+      verbose && lines.forEach((l) => console.log(l))
     for await (let bytes of stream) {
-      parts.push(text.decode(bytes, { stream: true }))
+      let chunk = text.decode(bytes, { stream: true })
+      parts.push(chunk)
+      out(say(chunk))
     }
+    out(say(text.decode(), true))
   }
   await Promise.all([drain(child.stdout), drain(child.stderr)])
   let { success } = await child.status
   let said = `${success ? 'ok' : 'FAILED'} ${task} (${
     took(performance.now() - start)
   })`
-  console.log(success ? said : `${said}\n${cut(parts.join(''), task)}`)
+  console.log(
+    success || verbose ? said : `${said}\n${cut(parts.join(''), task)}`,
+  )
   return success
 }
 
 if (import.meta.main) {
-  if (Deno.args.includes('--verbose')) {
-    let { code } = await new Deno.Command(Deno.execPath(), {
-      args: ['task', 'check:run'],
-    }).spawn().status
-    Deno.exit(code)
-  }
+  let verbose = Deno.args.includes('--verbose')
   let start = performance.now()
-  let passed = await Promise.all(CHECKS.map(check))
+  let passed = await Promise.all(CHECKS.map((c) => check(c, verbose)))
   let failed = CHECKS.filter((_, i) => !passed[i])
   console.log(closing(failed, CHECKS.length, performance.now() - start))
   Deno.exit(failed.length ? 1 : 0)
