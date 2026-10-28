@@ -17,6 +17,7 @@ import {
   bundled,
   changed,
   command,
+  guard,
   images,
   members,
   modelBound,
@@ -1104,6 +1105,79 @@ test('deploy preflight starts Git reads while the serving version is pending', a
     changed: false,
     live: [{ sha: head, ahead: false }],
   })
+})
+
+// A build of commit `a` whose first look finds main at `a` and an older commit
+// serving. `main.at` is main's tip for each later look (null when the remote
+// cannot be asked), and `newer` whether its Worker source differs from `a`'s.
+// A deploy's first `fail` upload attempts fail as Cloudflare's 504 does.
+let build = async (main: { at: string | null }, newer = true) => {
+  let [a, old] = ['a'.repeat(40), 'f'.repeat(40)]
+  main.at = a
+  let read = (_root: string, ...[op]: string[]) =>
+    Promise.resolve(
+      op == 'ls-remote'
+        ? { code: main.at ? 0 : 128, out: `${main.at}\trefs/heads/main` }
+        : op == 'rev-parse'
+        ? { code: 0, out: a }
+        : { code: op == 'diff' ? +newer : op == 'merge-base' ? 1 : 0, out: '' },
+    )
+  let notes: string[] = [], uploads = 0
+  let door = guard(
+    '/c',
+    () => seen('/c', [old], WATCHED, read),
+    WATCHED,
+    read,
+    (line) => notes.push(line),
+  )
+  assert(await door.first())
+  let deploy = (fail = 0, wait = () => Promise.resolve()) =>
+    runStep(['deploy', '--message', a], () =>
+      Promise.resolve({
+        code: ++uploads <= fail ? 1 : 0,
+        output: malformed(504),
+      }), { allowed: door.still, wait })
+  return { door, deploy, notes, uploads: () => uploads }
+}
+
+let B = 'b'.repeat(40)
+
+test('a build of the newest commit deploys, and an app-only push after it does not stop it', async () => {
+  for (let moved of [false, true]) {
+    let main = { at: null as string | null }
+    let b = await build(main, false)
+    if (moved) main.at = B
+    assertEquals([await b.deploy(), b.uploads()], [0, 1])
+  }
+})
+
+test('a build main moved past while it prepared leaves the newer version serving', async () => {
+  let main = { at: null as string | null }
+  let b = await build(main)
+  main.at = B
+  assertEquals([await b.deploy(), b.uploads()], [0, 0])
+  assertEquals(
+    b.notes.at(-1),
+    'not deploying: main is at bbbbbbbb with newer Worker source; its build deploys it',
+  )
+  // Main only moves on: a tip unread later does not undo the refusal.
+  main.at = null
+  assertEquals(await b.door.still(), false)
+})
+
+test('a deploy attempt retried after main moved on is not started', async () => {
+  let main = { at: null as string | null }
+  let b = await build(main)
+  let moving = () => Promise.resolve(void (main.at = B))
+  assertEquals([await b.deploy(1, moving), b.uploads()], [0, 1])
+})
+
+test('only a Wrangler step that changes what serves asks the guard', async () => {
+  for (let args of [['deploy', '--dry-run'], ['versions', 'view', 'v1']]) {
+    let asked = () => Promise.reject(Error(`${args.join(' ')} asked`))
+    let ok = () => Promise.resolve({ code: 0, output: '' })
+    assertEquals(await runStep(args, ok, { allowed: asked }), 0)
+  }
 })
 
 test('kernel bundling overlaps the guard and uploads overlap the pending bundle', async () => {

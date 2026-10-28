@@ -262,17 +262,22 @@ let transient = ({ output, log = '' }: StepResult) => {
 
 /** Run one Wrangler step, keeping its arguments and exit code. The command
  * boundary supplies diagnostics; the timer and signal belong to the caller.
- * Deploys get three attempts; permanent failures and other commands get one. */
+ * Deploys get three attempts; permanent failures and other commands get one.
+ * Each attempt that would change what serves first asks `allowed`, the deploy
+ * guard as it stands then; one it refuses deploys nothing and exits 0. */
 export let runStep = async (
   args: string[],
   execute: (args: string[]) => Promise<StepResult>,
-  { wait = sleep, signal }: {
+  { wait = sleep, signal, allowed }: {
     wait?: typeof sleep
     signal?: AbortSignal
+    allowed?: () => Promise<boolean>
   } = {},
 ): Promise<number> => {
+  let promotes = deploying(args) && !args.includes('--dry-run')
   for (let attempt = 1;; attempt++) {
     if (signal?.aborted) return 130
+    if (promotes && allowed && !await allowed()) return 0
     let result = await execute(args)
     if (
       !result.code || result.code == 130 || result.code == 143 ||
@@ -990,6 +995,12 @@ export let descendants = (pid: number): number[] => {
 // main) is replaced: main is what runs. What could not be read is printed.
 // The tracker's deploy (workers/tracker/deploy.ts) asks the same with the
 // watched paths of its own trigger.
+//
+// The door looks once as the build starts (`seen`), beside its preparation,
+// and asks main's tip again as each upload starts (`again`): bundling, images
+// and sibling uploads can take minutes, and a newer push's build can go live
+// in them, so an answer from the start alone can let an older build go live
+// over a newer one.
 
 /** What a deploy sees: its own commit, main's tip at the remote (null when the
  * remote could not be asked), whether the watched source changed at that tip,
@@ -1097,6 +1108,21 @@ export let changed = async (
   return code == 0 ? false : code == 1 ? true : null
 }
 
+// main's tip at the remote, or null when the remote could not be asked.
+let tipOf = async (root: string, read = git) => {
+  let asked = await read(root, 'ls-remote', 'origin', 'refs/heads/main')
+  return asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
+}
+
+// Whether the watched source changed between this commit and main's tip.
+let moved = (
+  root: string,
+  head: string,
+  tip: string | null,
+  watched = WATCHED,
+  read = git,
+) => tip && tip != head ? changed(root, head, tip, watched, read) : false
+
 /**
  * What a deploy from `root`'s checkout sees, given the commits live now. A
  * shallow clone can lack both older and newer live commits. Fetch their
@@ -1109,16 +1135,13 @@ export let seen = async (
   watched = WATCHED,
   read = git,
 ): Promise<Seen> => {
-  let [checked, asked, named] = await Promise.all([
+  let [checked, tip, named] = await Promise.all([
     read(root, 'rev-parse', 'HEAD'),
-    read(root, 'ls-remote', 'origin', 'refs/heads/main'),
+    tipOf(root, read),
     live,
   ])
   let head = checked.out
-  let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-  let moved = tip && tip != head
-    ? await changed(root, head, tip, watched, read)
-    : false
+  let change = await moved(root, head, tip, watched, read)
   let ahead = async (sha: string) => {
     if (sha == head) return false
     await fetched(root, sha, 'tree:0', read)
@@ -1128,10 +1151,65 @@ export let seen = async (
   return {
     head,
     tip,
-    changed: moved,
+    changed: change,
     live: await Promise.all(
       named.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
     ),
+  }
+}
+
+/** What a deploy sees as an upload starts: its first look (`seen`) with
+ * main's tip asked again. A version ahead of this commit goes live only from a
+ * newer commit on main, so while the tip has not moved the first look stands,
+ * for one `ls-remote`; a tip that cannot be read leaves it standing too. */
+let again = async (
+  root: string,
+  saw: Seen,
+  watched = WATCHED,
+  read = git,
+): Promise<Seen> => {
+  let tip = await tipOf(root, read)
+  return !tip || tip == saw.tip ? saw : {
+    ...saw,
+    tip,
+    changed: await moved(root, saw.head, tip, watched, read),
+  }
+}
+
+/** The deploy door's guard over the first look `look` gives: `first` answers
+ * it beside the build's preparation, and `still` answers {@link again} as
+ * each upload starts. Main only moves on, so a refusal stands for every upload
+ * after it. */
+export let guard = (
+  root: string,
+  look: () => Promise<Seen>,
+  watched = WATCHED,
+  read = git,
+  note = console.log,
+) => {
+  let looked: Promise<Seen> | undefined
+  let once = () => looked ??= look()
+  let refused: string | null = null
+  let decide = (saw: Seen) => {
+    refused ??= superseded(saw)
+    if (refused) note(`not deploying: ${refused}`)
+    return !refused
+  }
+  return {
+    first: async () => {
+      let saw = await once()
+      let live = saw.live.map((l) =>
+        short(l.sha) + (l.ahead == null ? '?' : '')
+      )
+      note(
+        `deploy ${short(saw.head)}: main at ${
+          saw.tip ? short(saw.tip) : '(unread)'
+        }, live ${live.join(' ') || '(unread)'}`,
+      )
+      return decide(saw)
+    },
+    still: async () =>
+      !refused && decide(await again(root, await once(), watched, read)),
   }
 }
 
@@ -1192,22 +1270,14 @@ if (import.meta.main) {
   let executable = join(dir, 'node_modules/.bin/wrangler')
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
-  let inspect = async () => {
-    if (!guarded) return true
-    let saw = await seen(dir, readied.then(() => serving(envs(argv), wrangler)))
-    let live = saw.live.map((l) => short(l.sha) + (l.ahead == null ? '?' : ''))
-    console.log(
-      `deploy ${short(saw.head)}: main at ${
-        saw.tip ? short(saw.tip) : '(unread)'
-      }, live ${live.join(' ') || '(unread)'}`,
+  let door = guarded
+    ? guard(
+      dir,
+      () => seen(dir, readied.then(() => serving(envs(argv), wrangler))),
     )
-    let why = superseded(saw)
-    if (why) {
-      console.log(`not deploying: ${why}`)
-      return false
-    }
-    return true
-  }
+    : undefined
+  let inspect = async () => door ? await door.first() : true
+  let still = async () => door ? await door.still() : true
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by time.
     let commit = await new Deno.Command('git', {
@@ -1295,7 +1365,7 @@ if (import.meta.main) {
       } finally {
         if (log) Deno.removeSync(log)
       }
-    }, { signal: stopped.signal })
+    }, { signal: stopped.signal, allowed: still })
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after npm has installed: a cold checkout has this pin now too.

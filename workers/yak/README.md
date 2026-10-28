@@ -177,9 +177,13 @@ minutes after it landed, and reports it.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
-the watched source and no live version is ahead of it. An app-only push starts
-no replacement build and does not supersede the last one. A build that loses the
-race to newer Worker source deploys nothing and says why in its log.
+the watched source and no live version is ahead of it. It looks once as the
+build starts, beside the build's preparation, and asks main's tip again as each
+upload starts (`wrangler.ts` `guard`), since a build can take minutes to reach
+its upload and a newer push's build can go live in them. That second look is one
+`git ls-remote` while main has not moved. An app-only push starts no replacement
+build and does not supersede the last one. A build that loses the race to newer
+Worker source deploys nothing and says why in its log.
 
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).
