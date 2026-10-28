@@ -7,6 +7,7 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { group, Search, searchOpen, SearchPage } from './Search.tsx'
 import { cache, config } from '../live.ts'
+import { host, reader } from '../host_testing.ts'
 import { mount } from './mount.ts'
 import { fields } from './fields.tsx'
 import { route } from './nav.tsx'
@@ -98,24 +99,30 @@ test('search sends only the settled query while typing', async () => {
   }
 })
 
-test('query page draws the inspector table through the shared registry', () => {
-  cache.value = {
-    sample: {
-      entity: { eid: 'sample', num: 1 },
-      task: { eid: 'sample' },
-      doc: { eid: 'sample', title: 'A shared task' },
-    },
-  }
+test('query page draws the inspector table through the shared registry', async () => {
+  let read = reader([{
+    entity: { eid: 'sample', num: 1 },
+    task: {},
+    doc: { title: 'A shared task' },
+  }])
+  let wire = host(({ subscribe }) =>
+    subscribe.includes('.count')
+      ? { tally: { '': 1 } }
+      : { bundles: read(subscribe) }
+  )
   let seen = mount(h(SearchPage, { query: '.task' }))
   try {
     assertEquals(
       seen.root.querySelector('[data-query]')?.getAttribute('data-query'),
       '.task',
     )
-    assertEquals(seen.root.querySelector('[role=table]') != null, true)
+    await until(() => seen.root.querySelector('[role=table]'), {
+      label: 'the answered query table',
+    })
     assertEquals(seen.root.textContent?.includes('A shared task'), true)
   } finally {
     seen.free()
+    wire.free()
     cache.value = {}
   }
 })
