@@ -48,16 +48,17 @@ let bugs = await fetch(`${trackerUrl}/bugs?scope=${spaceEid}&app=${appEid}`, {
 ```
 
 Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
-`/vocab`, `/ws`, and `POST /resolve` and `/archive` with `{bug}`.
+`/vocab`, `/ws`, and `POST /resolve`, `/archive` and `/reopen` with `{bug}`.
 `/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
 relay writes. `/query` returns graph bundles. General `/apply` is absent.
-`POST /resolve` and `/archive` require a separately signed `mark: true`
-capability and exactly `{bug: <global-bug-eid>}`. Reader and intake tickets
-cannot mark bugs. Missing bugs are refused with 404; malformed marks with 400.
-Platform-only `POST /errors` accepts immutable error captures with a separately
-signed `ingest: true` capability; ordinary read tickets cannot submit captures.
-Box reporters retain their outbox until this intake admits their records.
-Retrying a capture preserves its global eid and counts it once.
+`POST /resolve`, `/archive` and `/reopen` require a separately signed
+`mark: true` capability and `{bug: <global-bug-eid>}`, a resolution with its
+explanation beside it. Reader and intake tickets cannot mark bugs. Missing bugs
+are refused with 404; malformed marks with 400. Platform-only `POST /errors`
+accepts immutable error captures with a separately signed `ingest: true`
+capability; ordinary read tickets cannot submit captures. Box reporters retain
+their outbox until this intake admits their records. Retrying a capture
+preserves its global eid and counts it once.
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug
 statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug followed by its
@@ -150,11 +151,11 @@ that errors, or sends nothing within 10 s, files a fatal occurrence on that
 door's own bug (`tracker|platform-uptime|MCP`, `…|app`), and an activated box
 heartbeat older than five minutes files one on `tracker|box-heartbeat`. A door
 that answers again resolves nothing: the bug stays open until an agent finds why
-it failed, and its last occurrence says when it stopped. Each tracker graph
-sends one letter per new bug opening through its own `MAIL` binding, with
-`MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs stream through
-their store's graph subscription and remain unseen until their caller marks
-notification in the platform integration.
+it failed and fixes it, and its last occurrence says when it stopped. Each
+tracker graph sends one letter per new bug opening through its own `MAIL`
+binding, with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs
+stream through their store's graph subscription and remain unseen until their
+caller marks notification in the platform integration.
 
 ## Activation and deployment
 

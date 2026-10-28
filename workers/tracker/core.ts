@@ -79,6 +79,12 @@ export type Config = Options & {
 // (door.ts `since`). An occurrence, and what came with it, moves its bug,
 // whose counts it changes. The moves keep the latest `MOVES` entities; a tag
 // from before the oldest they dropped is answered whole.
+// The tool that writes each mark a door asks for but a fixer's.
+let tools = {
+  resolved: 'bug_resolve',
+  archived: 'bug_archive',
+  reopened: 'bug_reopen',
+} as const
 let STAMPS = new Set(['entity', 'created', 'updated'])
 let BOOKKEEPING = new Set(['effect', 'lease', 'worker', 'wake', 'fired'])
 let TAG = 'bugs-tag', MOVED = 'bugs-moved', MOVES = 1000
@@ -228,10 +234,10 @@ export let store = (storage: Storage, config: Config) => {
       ),
     )
   // What a mark says beside the bug: a resolution's explanation, or the task
-  // a fixer took it for.
+  // a fixer took it for. A reopening says nothing: it takes a resolution back.
   let mark = async (
     bug: string,
-    name: 'resolved' | 'archived' | 'taken',
+    name: 'resolved' | 'archived' | 'taken' | 'reopened',
     said: Partial<Explanation> & { task?: string } = {},
   ): Promise<void> => {
     // A fixer's mark has no tool: only heal writes it, through this door.
@@ -247,8 +253,7 @@ export let store = (storage: Storage, config: Config) => {
       entity: { eid: crypto.randomUUID() },
       call: { args: { ...said, bug } },
     }
-    let patch = await runs()
-      [`bug_${name == 'resolved' ? 'resolve' : 'archive'}`](call, g)
+    let patch = await runs()[tools[name]](call, g)
     await g.apply(patch, { trusted: true })
   }
   return {

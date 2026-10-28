@@ -65,6 +65,12 @@ export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
           },
         )),
   )
+// What a mark writes on its bug: a resolution with its explanation, an
+// archival, or a reopening, which takes the resolution back.
+let written = (
+  name: 'resolved' | 'archived' | 'reopened',
+  said: Record<string, string>,
+): Partial<Bundle> => name == 'reopened' ? { resolved: null } : { [name]: said }
 let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {
   let value = { source: argsOf(call).source ?? 'box', ...data }
   return [{
@@ -79,7 +85,7 @@ export let runs = (
   go: typeof fetch = fetch,
 ): Runs => {
   let mark =
-    (name: 'resolved' | 'archived') =>
+    (name: 'resolved' | 'archived' | 'reopened') =>
     async (call: Bundle, g: Graph): Promise<Bundle[]> => {
       let args = argsOf(call)
       let remote = args.source == 'yaks.app'
@@ -102,7 +108,7 @@ export let runs = (
           throw new CallError('remote', (error as Error).message)
         }
       }
-      if (bug) return [{ entity: bug.entity, [name]: said }]
+      if (bug) return [{ entity: bug.entity, ...written(name, said) }]
       return answer(call, { bug: eid, mark: name })
     }
   let remote = async (
@@ -143,5 +149,6 @@ export let runs = (
     },
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),
+    bug_reopen: mark('reopened'),
   }
 }

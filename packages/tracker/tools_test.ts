@@ -388,3 +388,16 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     })
   }
 }
+// A reopening takes a resolution back in each store the bug is marked in.
+for (let source of ['box', 'yaks.app']) {
+  let shared = await marking(undefined, undefined, source == 'box')
+  let args = { bug: ids[0], ...source == 'yaks.app' ? { source } : {} }
+  await shared.call('bug_resolve', args)
+  await shared.call('bug_reopen', args)
+  test(`${source} bug reopen leaves its bug open again`, async () => {
+    let stores = source == 'box' ? [shared.box, shared.worker] : [shared.worker]
+    for (let store of stores) {
+      equal((await store.read('.bug.status=open')).length, 1)
+    }
+  })
+}

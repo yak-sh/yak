@@ -367,8 +367,10 @@ through the connector's graph tier (tool.ts `roleIn`).
   (M-37965); a new platform bug mails the owner through workers/tracker's
   delivery. `yak --config ~/.yak/tracker.json bug show <bug> --source
   yaks.app` reads one bug with its kept occurrences (tags, stack, request),
-  and `bug resolve` with the same flags marks it with its explanation; a long
-  `--broke`, `--cause` or `--recur` reads a file as `@path`.
+  and `bug resolve` with the same flags marks it with its explanation once its
+  fix is live; a long `--broke`, `--cause` or `--recur` reads a file as
+  `@path`. A bug that only stopped is not fixed and stays open; `bug reopen`
+  takes back a resolution whose cause was never fixed.
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following
   logs is not app traffic.

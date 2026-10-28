@@ -27,7 +27,7 @@ that did not arrive through an authenticated HTTP or MCP request.
 | **`failed`**      | The work was tried and given up on; `reason` records why. Removing it permits another attempt.                                            |
 | **`broken`**      | Something outside the graph stopped honoring the entity; `code` records the other side's answer. Removing it says the entity holds again. |
 | **`interrupted`** | A request or call was cut off before finishing; `code` records why. Removing it allows a deliberate retry.                                |
-| **`resolved`**    | The problem stopped happening; removing it says the problem is back. A problem can stop without work being completed.                     |
+| **`resolved`**    | The problem is over; removing it says the problem is back. A problem can end without a task being completed.                              |
 | **`verified`**    | Somebody checked the entity against its claims and found they hold. Only checking writes this mark.                                       |
 | **`proposed`**    | Put forward for a decision.                                                                                                               |
 | **`decided`**     | A verdict or chosen answer; `verdict` is `approved` or `declined`, and `choice` is a chosen label or custom answer.                       |

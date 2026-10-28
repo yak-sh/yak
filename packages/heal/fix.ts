@@ -222,7 +222,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
             last,
             ...(continuing
               ? [
-                'Tracker still reports the bug open; continue until it is resolved.',
+                'Tracker still reports the bug open; continue until its cause is fixed and live, then resolve it.',
               ]
               : []),
           ].filter(Boolean).join('\n\n'),

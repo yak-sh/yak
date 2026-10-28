@@ -1,7 +1,7 @@
 // Cron failures are occurrences, not a second monitor state machine. A door
 // or heartbeat that is healthy again resolves nothing: a failure stays open,
-// and keeps reaching agents, until one finds its cause and resolves it, or
-// judges it a one-off (M-37965). Its last occurrence says when it stopped.
+// and keeps reaching agents, until one fixes its cause and resolves it
+// (M-37965). Its last occurrence says when it stopped.
 
 import type { TrackerStore } from './core.ts'
 import { capture, type Context, origin } from '@yaks/tracker/report'

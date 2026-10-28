@@ -389,10 +389,10 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write was made through — the session or client it came in on, or the deploy that resolved it"
+          "description": "what the write was made through — the session or client it came in on"
         }
       },
-      "description": "The problem this entity records has stopped happening: a bug a deploy fixed, a comment thread that was settled, a conflict between two sessions that is over. It is not `completed`, which says a piece of work was finished; a problem can stop with no task done. Removing the mark says the problem is back."
+      "description": "The problem this entity records is over: a bug whose fix is live, a settled comment thread, a finished conflict between two sessions. It is not `completed`, which says a piece of work was finished; a problem can stop with no task done. Removing the mark says the problem is back."
     },
     "supersedes": {
       "component": true,

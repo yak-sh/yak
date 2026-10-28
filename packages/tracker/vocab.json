@@ -286,7 +286,7 @@
       "component": true,
       "extends": true,
       "type": "object",
-      "description": "Why a bug stopped, as whoever resolved it explained it. The tracker refuses a bug's resolution without its cause and recur.",
+      "description": "How a bug was fixed, as the agent that fixed its cause and saw the fix live explained it. Nothing resolves a bug on its own: one that stopped stays open. The tracker refuses a bug's resolution without its cause and recur.",
       "properties": {
         "broke": {
           "type": "string",
@@ -294,7 +294,7 @@
         },
         "cause": {
           "type": "string",
-          "description": "Why it broke. For one nobody investigated, that nobody did and what is known."
+          "description": "Why it broke."
         },
         "since": {
           "type": "string",
@@ -306,11 +306,11 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "The commit that fixed it, by its full sha. Absent when nothing was changed: it stopped on its own."
+          "description": "The commit that fixed it, by its full sha."
         },
         "recur": {
           "type": "string",
-          "description": "Whether it can happen again, and why. When nothing was fixed, why it is believed to be a one-off."
+          "description": "Whether it can happen again, and why."
         }
       }
     },
@@ -417,7 +417,7 @@
       "noun": "bug",
       "verb": "resolve",
       "title": "Resolve bugs",
-      "description": "Mark that the problem stopped happening, explained: what broke and whom it reached, why, the commits that introduced and fixed it, and whether it can come back. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Mark a bug fixed, once its fix is live, explained: what broke and whom it reached, why, the commits that introduced and fixed it, and whether it can come back. Resolve only a bug whose cause you fixed and saw live; one that stopped, went quiet or passed on a rerun stays open until its cause is found and fixed. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
       "input": {
         "bug": {
           "type": "string",
@@ -445,11 +445,11 @@
         },
         "fix": {
           "type": "string",
-          "description": "The full sha of the commit that fixed it. Leave it out when nothing was changed because it stopped on its own."
+          "description": "The full sha of the commit that fixed it, live. A fix that is not a commit (a key put in the vault, a row repaired) is said in cause."
         },
         "recur": {
           "type": "string",
-          "description": "Whether it can happen again, and why. When nothing was fixed, why it is believed to be a one-off."
+          "description": "Whether it can happen again, and why."
         }
       },
       "idempotent": true,
@@ -469,6 +469,34 @@
       "verb": "archive",
       "title": "Archive bugs",
       "description": "Hide a bug without discarding occurrences. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "input": {
+        "bug": {
+          "type": "string",
+          "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "box",
+            "yaks.app"
+          ],
+          "description": "Mark box bugs (default), including their remote copy when configured, or the platform tracker on yaks.app."
+        }
+      },
+      "idempotent": true,
+      "required": [
+        "bug"
+      ],
+      "positional": [
+        "bug"
+      ]
+    },
+    "bug_reopen": {
+      "tool": true,
+      "noun": "bug",
+      "verb": "reopen",
+      "title": "Reopen bugs",
+      "description": "Take a bug's resolution back, so it is open again until an agent fixes its cause: for one resolved without a fix, such as one that only stopped. Its occurrences and its thread stay as they are, and a bug whose opening was told is not told again. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
       "input": {
         "bug": {
           "type": "string",

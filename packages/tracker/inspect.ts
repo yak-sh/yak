@@ -293,7 +293,7 @@ let Occurrences = (
 }
 
 // A resolution beside the bug it closed: when, how long the bug was open, and
-// why it stopped, as its resolver explained it.
+// how it was fixed, as its resolver explained it.
 let Resolved = ({ io, e }: { io: Io; e: Bundle }): JSX.Element => {
   let lines = explained(e), open = fixtime(e)
   return h(

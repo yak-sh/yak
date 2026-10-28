@@ -116,7 +116,7 @@ test('tracker doors fail closed for other spaces, expired tickets and nonadmins'
   )
 })
 
-test('scoped RPC reads, resolves, archives and never exposes trusted intake', async () => {
+test('scoped RPC reads, resolves, reopens, archives and never exposes trusted intake', async () => {
   let g = fixture()
   await g.ingest(
     capture(Error('broken'), { sink: () => {}, during: { space } }),
@@ -146,6 +146,9 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
   )
   equal(((await g.graph.get([bug]))[0].resolved as Comp).cause, 'a race')
   equal((await g.unseen()).length, 0)
+  // A reopening takes the resolution back: the bug is open again.
+  equal((await route(request('/reopen', marker, { bug }))).status, 200)
+  equal((await g.graph.read('.bug.status=open')).length, 1)
   equal(
     (await route(request('/archive', marker, { bug: bugs[0].entity.eid })))
       .status,
@@ -286,7 +289,7 @@ let elsewhere = await sign({
   mark: true,
   exp: Date.now() / 1000 + 60,
 }, secret)
-for (let path of ['/resolve', '/archive', '/take']) {
+for (let path of ['/resolve', '/archive', '/take', '/reopen']) {
   for (
     let [kind, token] of [['reader', reader], ['intake', intakeOnly], [
       'other scope',
@@ -311,7 +314,7 @@ for (let path of ['/resolve', '/archive', '/take']) {
     })
   }
 }
-for (let path of ['/resolve', '/archive', '/take']) {
+for (let path of ['/resolve', '/archive', '/take', '/reopen']) {
   for (
     let [kind, body] of [
       ['a long task', JSON.stringify({ bug: other, task: 'x'.repeat(101) })],

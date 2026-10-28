@@ -296,7 +296,7 @@ test('errors times the fixes resolved in its window and the longest open bug', (
   assertEquals(why, [
     '  What broke: Error: bug 106',
     '  Why: A typo in the route.',
-    '  Fixed in: nothing changed: it stopped on its own',
+    '  Fixed in: no commit named',
     '  Can it come back: No.',
   ])
   assertMatch(

@@ -194,8 +194,8 @@ holds the shared ones: `completed{at, by, via}`, `failed{at, by, via, reason}`,
 `broken{at, by, via, code}`, `interrupted{at, by, via, code}`,
 `resolved{at, by, via}`, `archived{at, by, via}`, `verified{at, by, via}`. One
 of these usually already says it, and their meanings stay apart: `resolved`
-(the problem stopped happening, perhaps with no work done) is not `completed`
-(the work finished).
+(the problem is over, perhaps with no task completed, though a bug is resolved
+only once its fix is live) is not `completed` (the work finished).
 
 Where the entity stands is then the **`status`** keyword on the component: an
 ordered map from a component to the status it gives, plus `default`

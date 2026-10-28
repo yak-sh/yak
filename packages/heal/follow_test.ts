@@ -1242,7 +1242,7 @@ let continuedScenario = await (async () => {
     equal(comp(last, 'using').model, model)
     ok(
       String(comp(last, 'content').body).includes(
-        'continue until it is resolved',
+        'continue until its cause is fixed and live',
       ),
     )
     // Its pending next turn prevents a second continuation on replay.

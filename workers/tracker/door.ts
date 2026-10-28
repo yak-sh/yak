@@ -184,6 +184,7 @@ async (request: Request): Promise<Response> => {
     '/resolve': 'resolved',
     '/archive': 'archived',
     '/take': 'taken',
+    '/reopen': 'reopened',
   } as const
   if (request.method == 'POST' && path in marks) {
     let name = marks[path as keyof typeof marks]

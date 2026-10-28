@@ -62,6 +62,16 @@ let attempt = async (go: typeof fetch, url: URL, init: RequestInit) => {
   }
 }
 
+// The Worker's door for each mark, by the mark's name; a reopening takes a
+// resolution back.
+let doors = {
+  resolved: 'resolve',
+  archived: 'archive',
+  taken: 'take',
+  reopened: 'reopen',
+}
+let marks: string[] = Object.values(doors)
+
 export let request = async (
   remote: Remote,
   path: string,
@@ -93,7 +103,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...['resolve', 'archive', 'take'].includes(path) ? { mark: true } : {},
+    ...marks.includes(path) ? { mark: true } : {},
   }
   let last: unknown
   // Signing is deterministic: attempts within one second carry the same
@@ -155,11 +165,9 @@ export let delivery =
     }
   }
 
-// The Worker's door for each mark, by the mark's name.
-let doors = { resolved: 'resolve', archived: 'archive', taken: 'take' }
-
 /// marking('a', 'resolved', { cause: 'a race', recur: 'no' }) -> { door: 'resolve', body: '{"bug":"a","cause":"a race","recur":"no"}' }
 /// marking('b', 'archived') -> { door: 'archive', body: '{"bug":"b"}' }
+/// marking('c', 'reopened') -> { door: 'reopen', body: '{"bug":"c"}' }
 /// marking('d', 'taken', { task: 'T-7' }) -> { door: 'take', body: '{"bug":"d","task":"T-7"}' }
 /** The Worker's door a mark goes to, and what it says there: the bug, and
  * what the mark says (a resolution's explanation, a fixer's `task`). */

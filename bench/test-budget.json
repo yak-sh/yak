@@ -3828,7 +3828,7 @@
       "same batch duplicate eids do not multiply occurrence counts": 8.3
     },
     "workers/tracker/door_test.ts": {
-      "scoped RPC reads, resolves, archives and never exposes trusted intake": 10.9,
+      "scoped RPC reads, resolves, reopens, archives and never exposes trusted intake": 10.9,
       "tracker doors fail closed for other spaces, expired tickets and nonadmins": 3
     },
     "workers/tracker/object_test.ts": {

@@ -145,9 +145,10 @@ export let follow = (
       'Write each for the owner in plain words, a sentence or two: what ' +
       'broke and whom it reached, why it broke, and whether it can come ' +
       'back. --since is the full sha of the commit that introduced it, left ' +
-      'out when unknown; --fix the one that fixed it. If nothing needed ' +
-      'changing because it was a one-off, leave out --fix and say in ' +
-      '--recur why it is believed to be one.',
+      'out when unknown; --fix the one that fixed it.',
+      'Resolve it only once you have fixed its cause and seen the fix live. ' +
+      'A bug that stopped, went quiet or passed on a rerun is not fixed: ' +
+      'find why it happened and fix that.',
     ].join('\n\n')
   }
   return async (bugs, url, mutate) => {

@@ -1,7 +1,8 @@
-// Every resolved bug says why it stopped. Whoever resolves one (a fixer, a
-// person, or the tracker itself when a bug stops recurring) explains it on the
-// `resolved` mark: what broke, why, the commits that introduced and fixed it,
-// and whether it can come back. The graph refuses a bug's resolution without
+// Every resolved bug says how it was fixed. Only an agent that fixed a bug's
+// cause and saw the fix live resolves it; nothing resolves a bug on its own,
+// and one that stopped stays open. The resolver explains it on the `resolved`
+// mark: what broke, why, the commits that introduced and fixed it, and whether
+// it can come back. The graph refuses a bug's resolution without
 // its cause and recur at every door, so a letter or a page never meets a bare
 // one, except on a bug resolved before explanations were kept.
 
@@ -21,7 +22,7 @@ export type Explanation = {
   cause: string
   /** the full sha of the commit that introduced it, when known */
   since?: string
-  /** the full sha of the commit that fixed it; absent when nothing changed */
+  /** the full sha of the commit that fixed it */
   fix?: string
   /** whether it can happen again, and why */
   recur: string
@@ -89,9 +90,9 @@ export let explaining: Hook = hook(
 
 /// let fixed = { entity: { eid: 'b' }, bug: {}, doc: { title: 'TypeError: no row' }, resolved: { cause: 'a race', fix: 'f'.repeat(40), recur: 'no: the lock holds' } }
 /// explained(fixed) -> [['What broke', 'TypeError: no row'], ['Why', 'a race'], ['Fixed in', 'fffffff'], ['Can it come back', 'no: the lock holds']]
-/// explained({ ...fixed, resolved: { cause: 'nobody looked', recur: 'it may' } })[2] -> ['Fixed in', 'nothing changed: it stopped on its own']
+/// explained({ ...fixed, resolved: { cause: 'a race', recur: 'it may' } })[2] -> ['Fixed in', 'no commit named']
 /// explained({ entity: { eid: 'b' }, bug: {}, resolved: {} }) -> []
-/** Why a resolved bug stopped, as its resolver explained it: a label and what
+/** How a resolved bug was fixed, as its resolver explained it: a label and what
  * it says, for each thing said, as a letter, a page and `yak admin errors`
  * read it. What broke falls back to the bug's headline; `commit` writes a
  * sha. Empty for a bug that is not resolved, or that was resolved before
@@ -106,10 +107,7 @@ export let explained = (
     ['What broke', str(r.broke) || headline(said(e))],
     ['Why', str(r.cause)],
     ['Introduced in', r.since ? commit(str(r.since)) : ''],
-    [
-      'Fixed in',
-      r.fix ? commit(str(r.fix)) : 'nothing changed: it stopped on its own',
-    ],
+    ['Fixed in', r.fix ? commit(str(r.fix)) : 'no commit named'],
     ['Can it come back', str(r.recur)],
   ]
   return lines.filter(([, line]) => line)
