@@ -3980,10 +3980,6 @@
       "the hosted creature builder wires sounds over junk": 367.6,
       "the hosted creature builder wires sounds when omitted": 252.5
     },
-    "workers/yak/builds_test.ts": {
-      "builds: a build with no commit is never built again": 6.2,
-      "builds: a commit that failed is built again, once": 16.4
-    },
     "workers/yak/call_test.ts": {
       "a command that takes an argument runs in its store": 499.5
     },

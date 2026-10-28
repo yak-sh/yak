@@ -1,33 +1,42 @@
 // What Workers Builds says happened to a build of this Worker. Its event
 // subscription writes to the `yak-builds` queue (wrangler.toml
-// `[[queues.consumers]]`), and a failed build is a fault like any other:
-// the tracker hears it, and the meta store keeps the retry receipt
-// (unseen.ts). bin/build-yak deploys production and then staging, so a
-// build says what it deployed only through the step its log shows failing:
-// one that fails before production deploys leaves the live version serving
-// and the fix in it never arrives, while one that fails at staging has
-// already deployed production. An unreadable log claims neither. Builds that
-// fail for one cause are one tracker bug, filed under the failing step and
-// error the log names (or one "unknown" cause while the log is unreadable),
-// so one cause brings one letter and one fixer however many commits it
-// breaks. Each failure is a hit under the commit it built, so a build that
-// fails after its bug was resolved brings the bug back.
+// `[[queues.consumers]]`). bin/build-yak deploys production and then staging,
+// so a build says what it deployed only through the step its log shows
+// failing: one that fails before production deploys leaves the live version
+// serving and the fix in it never arrives, while one that fails at staging
+// has already deployed production. An unreadable log claims neither.
 //
 // The subscription asks for failures alone; anything else that arrives is
 // acknowledged unread, and so is a failed build of any branch but the one
 // Builds deploys (README "Workers Builds"): nothing it built was on its way
 // to production.
 //
-// A failed build is built once more, because most failures are the network's
-// (a download that 404s for a minute, a registry push that times out) and a
-// commit nothing is pushed after would otherwise never deploy. Once per commit,
-// and never for a build that names none: the deploy hook's own builds carry
-// an empty commit while their event still says `push_event`, so the trigger
-// source cannot tell a retry from a push, and a retry that retried its own
-// failure would never stop. The meta store holds the once: a receipt is noted
-// as the commit's own entity, on the condition (`$was`) that the commit holds
-// no receipt yet. Delivering one failure twice therefore notes it once, and
-// only the note that lands earns the retry.
+// What reaches the tracker is a failure someone has to fix. Most failures are
+// the network's (Builds' own clone of the repo, a download that 404s for a
+// minute, a registry push that times out), so a commit's first failure is
+// built once more through the deploy hook, and while that build runs the
+// failure is a log line: nothing is lost yet. A failure our code causes fails
+// the rebuild too, and the rebuild's failure is filed with its diagnosis
+// minutes later. The deploy hook's builds carry an empty commit while their
+// event still says `push_event`, so the trigger source cannot tell a retry
+// from a push, and a build that names no commit is never built again: a retry
+// that retried its own failure would never stop. A failure that earns no
+// rebuild is filed at once: no `BUILD_HOOK`, a hook that refused or could not
+// be reached, a build with no commit, a commit's second build. A rebuild that
+// never reports back leaves its commit not live, which the box's deploy
+// catch-up reports (NotLive, packages/admin/catchup.ts).
+//
+// Builds that fail for one cause are one tracker bug, filed under the failing
+// step and error the log names (or one "unknown" cause while the log is
+// unreadable), so one cause brings one letter and one fixer however many
+// commits it breaks. Each failure is a hit under the commit it built, so a
+// build that fails after its bug was resolved brings the bug back.
+//
+// The meta store holds the receipts that make each decision once (unseen.ts
+// `metaBreaks`): a failed build is noted as its own entity, and a commit's
+// failure as the commit's, each on the condition (`$was`) that it holds no
+// receipt yet. A build delivered twice is decided by its first delivery, and
+// only the commit's first note earns the rebuild.
 
 import { Stale } from '@yaks/graph/errors'
 import { normalize } from '@yaks/tracker'
@@ -285,18 +294,16 @@ export let diagnosed = async (
   }
 }
 
-/** Note a failed build in the meta store, and say whether it earns a retry:
- * only the first note of a commit does. A build with no commit is noted under
- * an id of its own and earns none. */
-export let first = async (breaks: Breaks, b: Broke): Promise<boolean> => {
-  if (!b.commit) return false
+/** Note a failed build in the meta store as `eid`'s receipt, and say whether
+ * it is the first: a later note finds the receipt and lands nothing. */
+export let first = async (
+  breaks: Breaks,
+  eid: string,
+  b: Broke,
+): Promise<boolean> => {
   let failed = { at: new Date().toISOString(), reason: b.error.message }
   try {
-    await breaks([{
-      entity: { eid: b.commit },
-      $was: { failed: { at: null } },
-      failed,
-    }])
+    await breaks([{ entity: { eid }, $was: { failed: { at: null } }, failed }])
     return true
   } catch (e) {
     if (e instanceof Stale) return false
@@ -325,30 +332,41 @@ export let rebuild = async (env: Env): Promise<string> => {
 
 type Batch = { messages: readonly { body: Built; ack(): void }[] }
 
-/** The queue handler: note each failed build, build a commit's first
- * failure again, send each to the tracker with what the retry came to, and
- * acknowledge every message. A note that fails is telemetry and earns no
- * retry: a retry nobody recorded is how the loop starts. */
+/** The queue handler: decide each failed build once, however often it is
+ * delivered, and acknowledge every message. A commit's first failure is built
+ * again, and is a log line once that build started; any other failure goes to
+ * the tracker with what its retry came to. A note that fails is telemetry: the
+ * build is decided as new, and earns no retry, since a retry nobody recorded
+ * is how the loop starts. */
 export let builds = async (batch: Batch, env: Env) => {
+  let breaks = metaBreaks(env)
+  let noted = (b: Broke, eid: string | undefined, otherwise: boolean) =>
+    eid
+      ? first(breaks, eid, b).catch((why) => {
+        caught(why, { request: `file ${b.request}` })
+        return otherwise
+      })
+      : otherwise
   for (let m of batch.messages) {
     let event = broke(m.body)
-    if (event) {
+    if (event && await noted(event, event.uuid, true)) {
       let detail = diagnosed(env, event)
-      let once = await first(metaBreaks(env), event).catch((why) => {
-        caught(why, { request: `file ${event.request}` })
-        return false
-      })
+      let once = await noted(event, event.commit, false)
       let retry = once ? await rebuild(env) : undefined
       let b = await detail
-      defect(b.error, {
-        request: b.request,
-        ...b.tags,
-        build_log: buildUrl(env, b),
-        retry,
-      }, {
-        fault: `build failed:${b.tags.worker}:${b.cause}`,
-        commit: b.commit ?? b.build,
-      })
+      if (retry == 'started') {
+        console.log(`yak-builds: ${b.error.message}. Building it again.`)
+      } else {
+        defect(b.error, {
+          request: b.request,
+          ...b.tags,
+          build_log: buildUrl(env, b),
+          retry,
+        }, {
+          fault: `build failed:${b.tags.worker}:${b.cause}`,
+          commit: b.commit ?? b.build,
+        })
+      }
     }
     m.ack()
   }

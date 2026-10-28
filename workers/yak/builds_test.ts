@@ -1,15 +1,15 @@
-// A failed Workers Build is filed with its commit; nothing else is filed. A
-// commit's first failure is built once more, and nothing else is.
+// A failed Workers Build of main is filed with its commit, unless it is its
+// commit's first failure and the build of it again started: then it is only
+// logged. Nothing else is filed or built again.
 import { clock, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { within } from './defects.ts'
 import {
   assertEquals,
   assertInstanceOf,
   assertStringIncludes,
 } from '@std/assert'
-import type { Wire } from '@yaks/durable-object'
-import { durable } from './testing.ts'
 import {
   broke,
   BuildFailed,
@@ -20,9 +20,7 @@ import {
   rebuild,
 } from './builds.ts'
 import type { Env } from './env.ts'
-import { doorOf, PLATFORM_STORE } from './door.ts'
-import { Store } from './graph.ts'
-import { metaOf } from './meta.ts'
+import type { Meta } from './meta.ts'
 
 let event = (type: string): Built => ({
   type: `cf.workersBuilds.worker.build.${type}`,
@@ -193,35 +191,48 @@ test('builds: a failed build of a branch that deploys nothing is not filed', () 
   assertEquals(broke(branch), null)
 })
 
-// The meta store, a Store object at the platform's own address.
-let meta = () => {
-  let store = new Store({
-    storage: durable(PLATFORM_STORE),
-    acceptWebSocket: () => {},
-    getWebSockets: () => [] as Wire[],
-  })
-  let door = doorOf((req) => Promise.resolve(store.fetch(req)), PLATFORM_STORE)
-  return metaOf(door)
+// The meta store's receipts, as its conditional write answers them (meta.ts
+// `written`): an entity's second note finds its first and is Stale.
+let receipts = (): Meta => {
+  let held = new Set<string>()
+  return {
+    query: () => Promise.resolve([]),
+    apply: (bundles) => {
+      for (let { entity } of bundles) {
+        let eid = String(entity?.eid)
+        if (held.has(eid)) {
+          return Promise.reject(new Stale(eid, 'failed', 'at', 'noted'))
+        }
+        held.add(eid)
+      }
+      return Promise.resolve(bundles)
+    },
+  }
 }
 
-// The builds the deploy hook is asked for, when the queue hands these events
-// over, in these batches, to one Worker.
-let rebuilt = async (...batches: Built[][]) => {
-  let samples: Bundle[] = []
+// What one Worker comes to when the queue hands it these events in these
+// batches: the builds the deploy hook is asked for, the failures filed, and
+// the lines logged. The hook answers `hook`, or is not configured.
+let consumed = async (batches: Built[][], hook: number | null = 200) => {
+  let rows: Bundle[] = []
   let env = {
-    META: meta(),
-    BUILD_HOOK: 'https://hook.test/main',
+    META: receipts(),
+    ...hook == null ? {} : { BUILD_HOOK: 'https://hook.test/main' },
     ERRORS: {
-      send: (rows: Bundle[]) => {
-        samples.push(...rows)
+      send: (sent: Bundle[]) => {
+        rows.push(...sent)
         return Promise.resolve()
       },
     },
   } as Env
   let time = clock()
   let asked = 0
-  let fetch = globalThis.fetch
-  globalThis.fetch = () => (asked++, Promise.resolve(new Response('{}')))
+  let logged = 0
+  let [fetch, log] = [globalThis.fetch, console.log]
+  globalThis.fetch = () => (
+    asked++, Promise.resolve(new Response('{}', { status: hook ?? 500 }))
+  )
+  console.log = () => void logged++
   try {
     await within(env, {}, async () => {
       for (let batch of batches) {
@@ -234,8 +245,13 @@ let rebuilt = async (...batches: Built[][]) => {
     await time.advance(10_000)
   } finally {
     globalThis.fetch = fetch
+    console.log = log
   }
-  return asked
+  let filed =
+    rows.filter((r) =>
+      (r.exception as { type?: string } | undefined)?.type == 'BuildFailed'
+    ).length
+  return { asked, filed, logged }
 }
 
 // What the deploy hook's own build says when it fails: main, and no commit.
@@ -246,20 +262,41 @@ let hooked = () => {
   return e
 }
 
-test('builds: a commit that failed is built again, once', async () => {
-  assertEquals(await rebuilt([event('failed')]), 1)
+test('builds: a first failure whose rebuild started is a log line', async () => {
+  let quiet = { asked: 1, filed: 0, logged: 1 }
+  assertEquals(await consumed([[event('failed')]]), quiet)
   // The queue delivering the same failure again, in one batch or the next.
-  assertEquals(await rebuilt([event('failed'), event('failed')]), 1)
-  assertEquals(await rebuilt([event('failed')], [event('failed')]), 1)
-  let other = event('failed')
-  other.payload!.buildUuid = 'build-2'
-  assertEquals(await rebuilt([event('failed'), other]), 1)
+  assertEquals(await consumed([[event('failed'), event('failed')]]), quiet)
+  assertEquals(await consumed([[event('failed')], [event('failed')]]), quiet)
+})
+
+test("builds: the rebuild's failure is filed", async () => {
+  assertEquals(
+    await consumed([[event('failed')], [hooked()]]),
+    { asked: 1, filed: 1, logged: 1 },
+  )
+})
+
+test('builds: a failure that earns no rebuild is filed', async () => {
+  let filed = { asked: 0, filed: 1, logged: 0 }
+  assertEquals(await consumed([[event('failed')]], null), filed)
+  assertEquals(await consumed([[event('failed')]], 404), { ...filed, asked: 1 })
+  // The commit's second build, after its first earned the rebuild.
+  let again = event('failed')
+  again.payload!.buildUuid = 'build-3'
+  assertEquals(
+    await consumed([[event('failed'), again]]),
+    { asked: 1, filed: 1, logged: 1 },
+  )
 })
 
 test('builds: a build with no commit is never built again', async () => {
   assertEquals(broke(hooked())!.commit, undefined)
   assertEquals(broke(hooked())!.request, 'BUILD yak unknown')
-  assertEquals(await rebuilt([hooked()], [hooked()]), 0)
+  assertEquals(
+    await consumed([[hooked()], [hooked()]]),
+    { asked: 0, filed: 1, logged: 0 },
+  )
 })
 
 test('builds: with no hook there is nothing to start', async () => {
