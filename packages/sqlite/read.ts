@@ -128,7 +128,7 @@ export let rows = (
         installed(driver) && classified(driver)
       ? POPULATION
       : undefined
-    return driver.query(compile(
+    let compiled = compile(
       parsed,
       vocab,
       catalogued(driver, vocab, {
@@ -136,8 +136,10 @@ export let rows = (
         population,
         census: census(driver),
       }),
-    ))
-      .map((r) => projected(vocab, r))
+    )
+    return (compiled.answer ?? driver.query(compiled)).map((r) =>
+      projected(vocab, r)
+    )
   }
   // The catalog and entity statement must see the same commit. Otherwise a
   // concurrent writer could introduce a new matching set between the two. A
@@ -1246,6 +1248,7 @@ export let read = (
 ): Bundle[] => {
   let parsed = ast(query)
   let eids = ask(parsed).filter((r) => r.eid != null).map((r) => String(r.eid))
+  if (!eids.length) return []
   let derived = opts.derived ?? NONE, asked = requestedDerived(parsed, derived)
   // A query asking for no derived value a whole read leaves out reads its
   // entities as the store's own get does, through `fetch` where one is given.

@@ -1,3 +1,4 @@
+import { empty } from './empty.ts'
 // The binding pass: an @yaks/query AST plus an @yaks/vocab schema, lowered to
 // the relational representation. This is where an unrouted query becomes a
 // statement over actual tables — every path routed through the vocabulary
@@ -3140,6 +3141,10 @@ export let prepared = (
   scope?: Scope,
   heard: Heard = opts,
 ): Prepared => {
+  let vacant = empty(ast, vocab, opts)
+  if (vacant && !reads.length) {
+    return { opts, lower: () => ({ ...vacant, from: raw(d.spine) }) }
+  }
   if (opts.missingIndexes?.length && d.indexed) {
     let original = d
     let missing = new Set(opts.missingIndexes)

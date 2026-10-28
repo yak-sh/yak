@@ -55,6 +55,8 @@ import type { ArchetypeSet } from './archetype.ts'
 import { idOf } from './derived.ts'
 import { type Extension, ranking, type Site } from './extend.ts'
 import { render } from './render.ts'
+import { empty } from './empty.ts'
+import type { Compiled } from './query.ts'
 
 // The values one call binds into a kept statement.
 type Call = {
@@ -601,7 +603,9 @@ export let compile = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts = {},
-): Raw => {
+): Compiled => {
+  let vacant = empty(ast, vocab, opts)
+  if (vacant) return { ...render(vacant), answer: [] }
   if (!opts.unordered && !opts.storageOrder) {
     ast = ranking(opts.extend ?? [], ast)
   }
