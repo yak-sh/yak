@@ -223,15 +223,20 @@ export let before = (newest: Bundle | undefined, n = 5): string[] =>
 let list = (heading: string, lines: string[]) =>
   lines.length ? [`**${heading}**`, '', ...lines.map((l) => `- ${l}`), ''] : []
 
-/** The subject: where it ran, the bug's name and its headline. */
-export let subject = (bug: Bundle, errors: Bundle[], name: string): string =>
+/// let broke = { entity: { eid: 'b' }, bug: {}, doc: { title: 'TypeError: x is undefined\n    at run' } }
+/// subject(broke, [tagged({ space: 'jill', app: 'flavors', account: 'test' })]) -> '[yaks.app jill/flavors test account] TypeError: x is undefined'
+/// subject(broke, [tagged({ source: 'box' })]) -> '[box] TypeError: x is undefined'
+/** The subject: where it ran and what broke, in words. The bug's id is in the
+ * body and its link; its later letters answer this one by `mail.reply_to`,
+ * which goes out as In-Reply-To and References. */
+export let subject = (bug: Bundle, errors: Bundle[]): string =>
   `[${
     [
       origin(errors),
       scope(errors).replace(/ \(.*$/, ''),
       tested(errors) ? 'test account' : '',
     ].filter(Boolean).join(' ')
-  }] ${name}: ${headline(said(bug))}`
+  }] ${headline(said(bug))}`
 
 /** The whole letter for a bug's opening or regression. `errors` are its
  * retained occurrences, newest first; `request` is the newest one's. */
@@ -256,7 +261,7 @@ export let letter = (
     commit ? `**Commit:** ${commit}` : '',
   ].filter(Boolean)
   return {
-    title: subject(bug, errors, to.name),
+    title: subject(bug, errors),
     body: [
       said(bug).trim(),
       '',

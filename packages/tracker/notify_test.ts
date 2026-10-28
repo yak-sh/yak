@@ -54,7 +54,7 @@ test('two bugs opening in one minute each get an immediate letter', async () => 
 })
 
 check(
-  'a letter names its bug and carries its essentials and web link',
+  'a letter says what broke and carries its essentials and web link',
   async (g) => {
     let row = bug()
     row.bug = {
@@ -67,11 +67,7 @@ check(
     await replay(g, row)
     let [letter] = await letters(g)
     let { title, body } = comp(letter, 'doc') as Record<string, string>
-    ok(
-      title.endsWith(
-        `${row.entity.eid}: TypeError: broken ${row.entity.eid.slice(0, 8)}…`,
-      ),
-    )
+    equal(title, `[yaks.app] TypeError: broken ${row.entity.eid.slice(0, 8)}…`)
     for (
       let said of [
         comp(row, 'doc').title as string,
@@ -383,12 +379,11 @@ check(
     await put(g, [row])
     await replay(g, row, { side: 'yaks.app' })
     let [letter] = await letters(g)
-    let { title, body } = comp(letter, 'doc') as Record<string, string>
+    let { body } = comp(letter, 'doc') as Record<string, string>
     let eid = row.entity.eid
-    ok(title.includes(`${eid}: `), title)
     ok(
       body.includes(
-        `(https://bugs.example.test/?q=.bug&side=yaks.app&bug=${eid})`,
+        `[View ${eid}](https://bugs.example.test/?q=.bug&side=yaks.app&bug=${eid})`,
       ),
       body,
     )
