@@ -144,7 +144,7 @@ let counts = (input?: Counts): Counts | undefined => {
   return Object.freeze(out)
 }
 
-let create = (): Channel => {
+let create = (now: () => number): Channel => {
   let listeners = new Set<(event: Event) => void>()
   // Delivery owns a snapshot. Subscription changes replace it, so reentrant
   // delivery remains isolated without copying the listeners for every event.
@@ -227,7 +227,7 @@ let create = (): Channel => {
     },
     begin: (a) => {
       if (!listeners.size) return
-      let start = performance.now()
+      let start = now()
       // Copy code metadata before delivering: a listener may mutate its caller.
       let at = context()
       let id = `${epoch}.${++sequence}`
@@ -277,7 +277,7 @@ let create = (): Channel => {
               : o?.counts,
           )
           finished.duration = 0
-          finished.time = performance.now()
+          finished.time = now()
           finished.duration = Math.max(0, finished.time - start)
           emit(finished)
         },
@@ -289,7 +289,7 @@ let create = (): Channel => {
       let id = `${epoch}.${++sequence}`
       roots.get(out)?.(id)
       return emit({
-        ...event(a, id, 'instant', performance.now()),
+        ...event(a, id, 'instant', now()),
         outcome: o?.outcome,
         counts: counts(o?.counts),
       })
@@ -361,12 +361,19 @@ export let measure = (input: Counts): void => {
   if (at) meters.get(at.channel)?.(at.parent, input)
 }
 
+let monotonic = () => performance.now()
+
 /** Explicit consumer entry point. Merely creating a channel does not turn
- * tracing on. Subscribe before reading history to avoid a delivery gap. */
-export let channel = (target: object): Channel => {
+ * tracing on. Subscribe before reading history to avoid a delivery gap. The
+ * first caller supplies its monotonic time source, `performance.now` by default;
+ * subsequent callers receive the target's existing channel and clock. */
+export let channel = (
+  target: object,
+  now: () => number = monotonic,
+): Channel => {
   let found = channels.get(target)
   if (found) return found
-  let made = create()
+  let made = create(now)
   channels.set(target, made)
   return made
 }

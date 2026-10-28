@@ -2,14 +2,17 @@
 // with one status each time, or drops (`null`), and what the caller gets.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { resends, resent } from './workers_api.ts'
-
-resends.wait = () => Promise.resolve()
+import { resent } from './workers_api.ts'
 
 type Call = [string, number | null, boolean?]
 
 let sends = async ([method, status, idempotent]: Call) => {
   let n = 0
+  let pauses: number[] = []
+  let wait = (ms: number) => {
+    pauses.push(ms)
+    return Promise.resolve()
+  }
   let was = globalThis.fetch
   globalThis.fetch = (() => {
     n++
@@ -22,7 +25,9 @@ let sends = async ([method, status, idempotent]: Call) => {
       'https://api.cloudflare.test/x',
       { method },
       idempotent == null ? {} : { idempotent },
+      wait,
     ).then((r) => r.status, (e: Error) => e.name)
+    assertEquals(pauses, [500, 2_000, 6_000].slice(0, n - 1))
     return [n, got]
   } finally {
     globalThis.fetch = was

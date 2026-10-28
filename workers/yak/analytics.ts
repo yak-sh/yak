@@ -8,6 +8,7 @@
 // token that cannot read analytics answers 200 with `errors`, which `said`
 // turns into the same throw as a refused call.
 import type { Env } from './env.ts'
+import { sleep } from '@yaks/fp'
 import { failure, resent } from './workers_api.ts'
 
 /** Cloudflare's API. */
@@ -33,15 +34,21 @@ export let ask = async <T>(
   env: Pick<Env, 'CF_ANALYTICS_TOKEN' | 'ANALYTICS_API'>,
   query: string,
   variables: Record<string, string>,
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<Answer<T>> => {
-  let r = await resent(`${api(env)}/graphql`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}`,
-      'content-type': 'application/json',
+  let r = await resent(
+    `${api(env)}/graphql`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
     },
-    body: JSON.stringify({ query, variables }),
-  }, { idempotent: true })
+    { idempotent: true },
+    wait,
+  )
   if (!r.ok) {
     throw failure(
       r.status,

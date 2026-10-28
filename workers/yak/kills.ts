@@ -12,6 +12,7 @@
 import { ask, said } from './analytics.ts'
 import { defect } from './defects.ts'
 import type { Env } from './env.ts'
+import { sleep } from '@yaks/fp'
 
 /** How often the sweep runs, and so how late a kill is heard. */
 export let EVERY = '5m'
@@ -123,6 +124,7 @@ export let swept = async (
   through: string | null | undefined,
   now: number,
   report: typeof defect = defect,
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<string | null> => {
   let window = span(through, now)
   if (!window || !env.CF_ANALYTICS_TOKEN) return null
@@ -130,7 +132,7 @@ export let swept = async (
     account: env.CF_ACCOUNT ?? '',
     script: env.WORKER_NAME ?? 'yak',
     ...window,
-  })
+  }, wait)
   let kills = said(answer)?.viewer?.accounts?.[0]
     ?.durableObjectsInvocationsAdaptiveGroups ?? []
   kills.forEach(reported(report))

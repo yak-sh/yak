@@ -18,6 +18,37 @@ import {
 } from './mod.ts'
 import type { Context, Event } from './mod.ts'
 
+test('each trace channel keeps its caller supplied monotonic clock', () => {
+  let target = {}
+  let firstTime = 10, secondTime = 100
+  let first = channel(target, () => firstTime)
+  let second = channel({}, () => secondTime)
+  let stopFirst = first.subscribe(() => {})
+  let stopSecond = second.subscribe(() => {})
+  try {
+    let a = ok(first.begin({ kind: 'bench', name: 'first' }))
+    let b = ok(second.begin({ kind: 'bench', name: 'second' }))
+    firstTime = 15
+    secondTime = 107
+    a.end()
+    b.end()
+    equal(first.history().map((e) => [e.time, e.duration]), [
+      [10, undefined],
+      [15, 5],
+    ])
+    equal(second.history().map((e) => [e.time, e.duration]), [
+      [100, undefined],
+      [107, 7],
+    ])
+    equal(channel(target, () => 999), first)
+    equal(first.instant({ kind: 'bench', name: 'instant' })?.time, 15)
+    equal(second.instant({ kind: 'bench', name: 'instant' })?.time, 107)
+  } finally {
+    stopFirst()
+    stopSecond()
+  }
+})
+
 test('trace is subscriber-owned, finite and preserves zero duration', () => {
   let graph = {}
   equal(peek(graph), undefined)

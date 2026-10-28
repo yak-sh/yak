@@ -12,11 +12,8 @@ export let accountUrl = (env: Env, path: string) =>
 
 /** The pauses before a call Cloudflare failed on its own side is sent again,
  * one per resend: about eight seconds in all, which a passing failure rarely
- * outlasts. A test replaces `wait`. */
-export let resends = {
-  pauses: [500, 2_000, 6_000],
-  wait: (ms: number) => sleep(ms),
-}
+ * outlasts. */
+let PAUSES = [500, 2_000, 6_000]
 
 // The calls that do the same thing however often they are sent (RFC 9110
 // 9.2.2). A POST or PATCH that failed may still have done its work, so it is
@@ -58,7 +55,7 @@ export let failure = (status: number, message: string): Error =>
 
 /** `fetch`, where an idempotent call that Cloudflare fails on its own side
  * (a passing status, or a connection that dropped) is sent again after each
- * of {@link resends}' pauses. A POST its caller says only reads (an analytics
+ * pause. A POST its caller says only reads (an analytics
  * query) is `idempotent` too. The last answer is the caller's; a connection
  * still dropping after the last pause is thrown as {@link Unavailable}, and
  * a call sent once throws what its fetch threw. */
@@ -67,10 +64,11 @@ export let resent = async (
   init: RequestInit = {},
   { idempotent = IDEMPOTENT.includes((init.method ?? 'GET').toUpperCase()) } =
     {},
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<Response> => {
   let again = idempotent && !(init.body instanceof ReadableStream)
   for (let sent = 0;; sent++) {
-    let pause = again ? resends.pauses[sent] : undefined
+    let pause = again ? PAUSES[sent] : undefined
     try {
       let r = await fetch(url, init)
       if (pause == null || !passing(r.status)) return r
@@ -83,6 +81,6 @@ export let resent = async (
         })
       }
     }
-    await resends.wait(pause)
+    await wait(pause)
   }
 }

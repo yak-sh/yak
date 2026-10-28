@@ -49,7 +49,7 @@
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
 import type { Caller } from '@yaks/egress'
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, sleep, system } from '@yaks/fp'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { instrumentEid } from './instrument.ts'
 import { sha256 } from '@yaks/graph/sha256'
@@ -808,14 +808,24 @@ export let answered = async (r: Response) => {
   )
 }
 
-export let sent = (env: Env, path: string, init: RequestInit) =>
-  resent(api(env, path), {
-    ...init,
-    headers: {
-      authorization: `Bearer ${env.CF_WORKERS_TOKEN}`,
-      ...(init.headers as Record<string, string> ?? {}),
+export let sent = (
+  env: Env,
+  path: string,
+  init: RequestInit,
+  wait: (ms: number) => Promise<void> = sleep,
+) =>
+  resent(
+    api(env, path),
+    {
+      ...init,
+      headers: {
+        authorization: `Bearer ${env.CF_WORKERS_TOKEN}`,
+        ...(init.headers as Record<string, string> ?? {}),
+      },
     },
-  })
+    {},
+    wait,
+  )
 
 // ── The modules a script is made of (T-34263) ──────────────────────────────
 //

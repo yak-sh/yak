@@ -197,8 +197,22 @@ test('deferred work from a disconnected recording cannot appear on reconnect', a
 
 for (let inactive of [false, true]) {
   test(`unobserved graph produces no activity calls, clocks or IDs (${inactive})`, () => {
-    let g = graph({ vocab: books, storage: memory() })
-    let c = inactive ? channel(g) : undefined
+    let ids = 0
+    let g = graph({
+      vocab: books,
+      storage: memory(),
+      mint: () => {
+        ids++
+        return '00000000-0000-4000-8000-000000000000'
+      },
+    })
+    let clocks = 0
+    let c = inactive
+      ? channel(g, () => {
+        clocks++
+        return 0
+      })
+      : undefined
     let calls = 0
     let begin = c && stub(c, 'begin', () => {
       calls++
@@ -207,16 +221,6 @@ for (let inactive of [false, true]) {
     let instant = c && stub(c, 'instant', () => {
       calls++
       return undefined
-    })
-    let clocks = 0
-    let ids = 0
-    let clock = stub(performance, 'now', () => {
-      clocks++
-      return 0
-    })
-    let id = stub(crypto, 'randomUUID', () => {
-      ids++
-      return '00000000-0000-4000-8000-000000000000' as const
     })
     try {
       g.apply([{ entity: { eid: 'book' }, book: { pages: 1 } }])
@@ -235,8 +239,6 @@ for (let inactive of [false, true]) {
       equal(ids, 0)
       equal(c?.history() ?? [], [])
     } finally {
-      clock.restore()
-      id.restore()
       begin?.restore()
       instant?.restore()
     }

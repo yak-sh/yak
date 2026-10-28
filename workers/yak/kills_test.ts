@@ -3,9 +3,8 @@
 import { equal, test } from '@yaks/testing'
 import { swept } from './kills.ts'
 import type { Env } from './env.ts'
-import { resends } from './workers_api.ts'
 
-resends.wait = () => Promise.resolve()
+let wait = () => Promise.resolve()
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
@@ -47,7 +46,7 @@ test('each run reports the kills since the last one, and reads on from there', a
       void reports.push([(e as Error).message, tags, details])
     let through: string | null = iso('04:50')
     for (let time of ['05:00', '05:05']) {
-      through = await swept(env, through, at(time), report)
+      through = await swept(env, through, at(time), report, wait)
     }
     equal(through, iso('05:00'))
     equal(asked.map((v) => [v.script, v.since, v.until]), [
@@ -100,7 +99,7 @@ let after = async (statuses: number[]) => {
   }
   try {
     let env = { CF_ANALYTICS_TOKEN: 'test' } as Env
-    return await swept(env, iso('04:50'), at('05:00'), () => {})
+    return await swept(env, iso('04:50'), at('05:00'), () => {}, wait)
       .catch((e: Error) => e.name)
   } finally {
     globalThis.fetch = fetch

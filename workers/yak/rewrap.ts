@@ -32,6 +32,7 @@ import { WRAPPER } from './wrangler_app.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import type { Bundle } from '@yaks/graph'
+import { sleep } from '@yaks/fp'
 
 /** The directory's wrap row, and the daily pass it is seeded with. */
 export let ROW = 'yak-wrap'
@@ -92,8 +93,12 @@ export let parts = (
 }
 
 // The script's modules as Cloudflare holds them.
-let held = async (env: Env, name: string) => {
-  let r = await sent(env, `/${name}/content`, {})
+let held = async (
+  env: Env,
+  name: string,
+  wait: (ms: number) => Promise<void>,
+) => {
+  let r = await sent(env, `/${name}/content`, {}, wait)
   if (!r.ok) return await answered(r) as never
   let type = r.headers.get('content-type') ?? ''
   let boundary = /boundary="?([^";]+)"?/.exec(type)?.[1]
@@ -101,18 +106,26 @@ let held = async (env: Env, name: string) => {
   return parts(new Uint8Array(await r.arrayBuffer()), boundary)
 }
 
-let tags = async (env: Env, name: string) =>
-  (await answered(await sent(env, `/${name}/tags`, {})) ?? []) as string[]
+let tags = async (
+  env: Env,
+  name: string,
+  wait: (ms: number) => Promise<void>,
+) =>
+  (await answered(await sent(env, `/${name}/tags`, {}, wait)) ?? []) as string[]
 
 /** One script's wrapper made this release's: true when it was rewrapped,
  * false when it is not a script the platform wrapped or a deploy has just
  * uploaded it new. */
-export let rewrap = async (env: Env, name: string): Promise<boolean> => {
-  let modules = await held(env, name)
+export let rewrap = async (
+  env: Env,
+  name: string,
+  wait: (ms: number) => Promise<void> = sleep,
+): Promise<boolean> => {
+  let modules = await held(env, name, wait)
   let entry = modules.find((m) => m.name == WRAPPER)
   let was = entry && wrapping(DEC.decode(entry.bytes))
   if (!was) return false
-  let worn = await tags(env, name)
+  let worn = await tags(env, name, wait)
   if (worn.includes(WRAP)) return false
   let body = new FormData()
   let part = (name: string, bytes: string | Uint8Array<ArrayBuffer>) =>
@@ -126,7 +139,7 @@ export let rewrap = async (env: Env, name: string): Promise<boolean> => {
   part(WRAPPER, shim(was.main, was.tunneled, was.ai))
   for (let m of modules) if (m.name != WRAPPER) part(m.name, m.bytes)
   await answered(
-    await sent(env, `/${name}/content`, { method: 'PUT', body }),
+    await sent(env, `/${name}/content`, { method: 'PUT', body }, wait),
   )
   await answered(
     await sent(env, `/${name}/tags`, {
@@ -136,7 +149,7 @@ export let rewrap = async (env: Env, name: string): Promise<boolean> => {
         ...worn.filter((t) => !t.startsWith('wrap-')),
         WRAP,
       ]),
-    }),
+    }, wait),
   )
   return true
 }
@@ -149,16 +162,20 @@ export let MOST = 100
 /** Every script in the namespace not wearing this release's wrapper,
  * rewrapped, up to {@link MOST} a pass. A script that fails is reported and
  * left for the next pass; the others go on. */
-export let rewrapped = async (env: Env, most = MOST) => {
+export let rewrapped = async (
+  env: Env,
+  most = MOST,
+  wait: (ms: number) => Promise<void> = sleep,
+) => {
   if (!env.CF_WORKERS_TOKEN) return { rewrapped: 0, failed: 0, left: 0 }
   let stale = (await answered(
-    await sent(env, `?tags=${WRAP}:no`, {}),
+    await sent(env, `?tags=${WRAP}:no`, {}, wait),
   ) ?? []) as { id: string }[]
   let done = 0
   let failed = 0
   for (let { id } of stale.slice(0, most)) {
     try {
-      if (await rewrap(env, id)) done++
+      if (await rewrap(env, id, wait)) done++
     } catch (e) {
       failed++
       caught(e, { request: 'rewrap', script: id })

@@ -5,10 +5,9 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { shim, WRAP, wrapping } from './dispatch.ts'
 import { DAILY, forward, parts, rewrapped, ROW } from './rewrap.ts'
-import { resends } from './workers_api.ts'
 import type { Env } from './env.ts'
 
-resends.wait = () => Promise.resolve()
+let wait = () => Promise.resolve()
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
 let AT = '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps/scripts'
@@ -147,7 +146,10 @@ let staleWrapper = shim('src/app.js', [], null)
 
 test("a stale script gets this release's wrapper and keeps its own modules", async () => {
   let scripts = staleScripts
-  let { out, writes } = await account(scripts, () => rewrapped(env))
+  let { out, writes } = await account(
+    scripts,
+    () => rewrapped(env, undefined, wait),
+  )
   assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
   let form = writes[0].form!
   let meta = JSON.parse(await (form.get('metadata') as File).text())
@@ -168,7 +170,7 @@ test('a pass after it finds nothing left to do', async () => {
       tags: [WRAP],
     },
   }
-  let again = await account(scripts, () => rewrapped(env))
+  let again = await account(scripts, () => rewrapped(env, undefined, wait))
   assertEquals(again.out, { rewrapped: 0, failed: 0, left: 0 })
   assertEquals(again.writes, [])
 })
@@ -187,7 +189,7 @@ test('a script a deploy just uploaded is left alone', async () => {
       meanwhile(
         1,
         () => scripts.jeff_recipes.tags = [WRAP],
-        () => rewrapped(env),
+        () => rewrapped(env, undefined, wait),
       ),
   )
   assertEquals(out, { rewrapped: 0, failed: 0, left: 0 })
@@ -217,7 +219,7 @@ test('one script failing leaves the others rewrapped', async () => {
       tags: null,
     },
   }
-  let { out } = await account(scripts, () => rewrapped(env))
+  let { out } = await account(scripts, () => rewrapped(env, undefined, wait))
   assertEquals(out, { rewrapped: 1, failed: 1, left: 0 })
 })
 
@@ -229,7 +231,7 @@ test('Cloudflare failing a read on its own side is asked again', async () => {
       failing: 2,
     },
   }
-  let { out } = await account(scripts, () => rewrapped(env))
+  let { out } = await account(scripts, () => rewrapped(env, undefined, wait))
   assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
 })
 
@@ -240,7 +242,7 @@ test('a pass takes at most so many, and says how many are left', async () => {
       tags: null,
     }]),
   )
-  let { out } = await account(scripts, () => rewrapped(env, 2))
+  let { out } = await account(scripts, () => rewrapped(env, 2, wait))
   assertEquals(out, { rewrapped: 2, failed: 0, left: 1 })
 })
 
