@@ -101,9 +101,13 @@ export let sequencing: Hook = (bundles, tx) =>
                     ...collisions,
                   ]
                   return after(
-                    tx.get([session], ['session', 'fork']),
-                    (rows) => {
-                      let found = rows.filter((b) => b.session)
+                    tx.read(
+                      '.entity.eid=' + session +
+                        '&.session',
+                      undefined,
+                      ['fork'],
+                    ),
+                    (found) => {
                       if (
                         !found[0] &&
                         !bundles.some((b) =>
