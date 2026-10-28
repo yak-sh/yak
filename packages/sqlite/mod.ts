@@ -114,7 +114,7 @@ import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { burying } from './buried.ts'
 import { located, measure } from './measure.ts'
 import { bindings } from './rules.ts'
-import { basis, local, memoized, rooted } from './memo.ts'
+import { basis, local, memoized, rooted, simple } from './memo.ts'
 import { revision } from '@yaks/sql'
 import { watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
@@ -704,22 +704,10 @@ export let storage = (
     let catalogued = classified && !direct
     let owing = catalogued &&
       (ledgers.get(driver) ?? []).some((u) => u.ledger.owed().length)
-    // A local identity selection can share its authoritative membership
-    // cache. With no window or reference predicate, applying the entity
-    // policy afterwards is the same relational intersection.
-    let simple = (c: Clause): boolean =>
-      c.kind == 'and' || c.kind == 'or'
-        ? c.clauses.every(simple)
-        : c.kind == 'every' || c.kind == 'pred' && !c.where && (() => {
-              let hops = vocab.aim(c.path.join('.'), bare(c))
-              let h = hops[0]
-              return hops.length == 1 &&
-                (!h.prop || vocab.prop(h.comp, h.prop)?.category != 'ref')
-            })()
     // A read asking for graves is the statement's: it alone judges the
     // deleted (@yaks/sql `ghostly`).
     if (
-      o.visibility && !owing && !o.graves && simple(query) &&
+      o.visibility && !owing && !o.graves && simple(vocab, query) &&
       !Object.keys(o.visibility.components ?? {}).length &&
       (!o.visibility.entity || local(vocab, ast(o.visibility.entity))) &&
       policies(o) && basis(vocab, query, base.derived, catalogued)
@@ -798,7 +786,7 @@ export let storage = (
           if (standing && proof) shape = proof.shape
           // A reference's target can become hidden without its source changing.
           // Local source predicates cannot prove that policy change irrelevant.
-          if (!simple(query)) {
+          if (!simple(vocab, query)) {
             let scope = policies(o, !!tables && !tables.includes('entity'))
             strict = scope && [
               ...new Set([

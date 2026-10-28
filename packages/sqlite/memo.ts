@@ -61,7 +61,7 @@
 // kept.
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
-import type { Prop, Vocab } from '@yaks/vocab'
+import type { Hop, Prop, Vocab } from '@yaks/vocab'
 import {
   type And,
   and,
@@ -177,6 +177,20 @@ const ANSWERS = 256, ANSWER = 16 << 10
 // How many queries asked once are remembered, waiting to be asked again.
 const ASKED = 4 * ANSWERS
 
+// A cache proof only classifies vocabulary paths. Associations and extension
+// paths belong to the compiler; an unroutable one declines the proof.
+let routed = (
+  vocab: Vocab,
+  path: string[],
+  facet = false,
+): Hop[] | undefined => {
+  try {
+    return vocab.aim(path.join('.'), facet)
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The tables a query's answer stands on, or `undefined` for one memory can't
  * follow: text, nearness, backlinks, edges, walks and rule clauses; a path
@@ -198,12 +212,8 @@ export let basis = (
   let path = (segs: string[], facet = false): boolean => {
     // A backlink is no path aim() answers: say so without the refusal.
     if (!vocab.comp(segs[0]) && vocab.assoc(segs[0])) return false
-    let hops
-    try {
-      hops = vocab.aim(segs.join('.'), facet)
-    } catch {
-      return false
-    }
+    let hops = routed(vocab, segs, facet)
+    if (!hops) return false
     for (let { comp, prop } of hops) {
       out.add(comp)
       if (comp == 'entity') continue
@@ -261,6 +271,19 @@ export let basis = (
   return [...out]
 }
 
+// A local identity selection reads no referenced target and has no window.
+export let simple = (vocab: Vocab, query: Clause): boolean => {
+  let visit = (c: Clause): boolean => {
+    if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(visit)
+    if (c.kind == 'every') return true
+    if (c.kind != 'pred' || c.where) return false
+    let hops = routed(vocab, c.path, bare(c)), h = hops?.[0]
+    return hops?.length == 1 && !!h &&
+      (!h.prop || vocab.prop(h.comp, h.prop)?.category != 'ref')
+  }
+  return visit(query)
+}
+
 /**
  * Whether what a query selects is told by each entity alone: every path ends
  * on the entity's own components, through no reference, and no `.after`
@@ -270,13 +293,8 @@ export let basis = (
  */
 export let local = (vocab: Vocab, q: And): boolean => {
   let own = (segs: string[], facet = false) => {
-    try {
-      return vocab.aim(segs.join('.'), facet).length <= 1
-    } catch {
-      // Extension-owned paths (including rankings) need the compiler, not a
-      // local cache proof. Leave their validation to that extension.
-      return false
-    }
+    let hops = routed(vocab, segs, facet)
+    return !!hops && hops.length <= 1
   }
   let visit = (c: Clause): boolean => {
     switch (c.kind) {
