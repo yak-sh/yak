@@ -28,9 +28,8 @@
 // tried again rather than lost.
 //
 // An edge that does not answer is tried again on the next pass, which takes
-// everything a blip left behind. Where another pass follows, a tray is said to
-// fail once it has gone unanswered for LATE, the time a letter may wait: by
-// then a letter may be late, and the edge is out rather than slow.
+// everything a blip left behind. Transient failures are logged while retrying;
+// a delayed letter reports the outage that held it up when the edge recovers.
 
 import type { Eid, Graph } from '@yaks/graph'
 import { hooked, type Request } from '@yaks/hook'
@@ -47,7 +46,7 @@ export type Report = (
 
 /** How long a letter may wait at the edge before taking it is itself a
  * failure: a pull runs every few seconds, so a letter this old means the pull
- * did not run, however it came to be late. A tray may go unanswered as long. */
+ * did not take it in time, however it came to be late. */
 export let LATE = 60_000
 
 /** A letter as the edge holds it: the envelope and what it parsed out. */
@@ -106,6 +105,10 @@ export type Edge = {
 /** How long one request to the edge may make no answer. */
 export let WAIT = 10_000
 
+/** A transport failure another pass can recover from. Parsing, authentication
+ * and recording failures are unexpected and still report immediately. */
+export class Unavailable extends Error {}
+
 /** The edge's HTTP API, with the bearer token it asks for. */
 export let edge = (
   { url, token }: Pull,
@@ -114,6 +117,10 @@ export let edge = (
   wait = WAIT,
 ): Edge => {
   let root = url.replace(/\/+$/, '')
+  let address = new URL(root)
+  if (!['http:', 'https:'].includes(address.protocol)) {
+    throw new Error('mail edge URL must use HTTP or HTTPS')
+  }
   // The answer's body, parsed, or null where the edge has no such tray.
   let call = async (method: string, path: string, body?: unknown) => {
     let late = AbortSignal.timeout(wait)
@@ -122,18 +129,30 @@ export let edge = (
       let res = await go(`${root}${path}`, {
         method,
         signal,
-        headers: {
+        headers: new Headers({
           authorization: `Bearer ${token}`,
           ...(body ? { 'content-type': 'application/json' } : {}),
-        },
+        }),
         ...(body ? { body: JSON.stringify(body) } : {}),
+      }).catch((cause) => {
+        throw new Unavailable(`${method} ${path}: connection failed`, { cause })
       })
-      if (res.status == 404) {
+      if (res.status == 404 && path.startsWith('/requests?')) {
         await res.body?.cancel()
-        return null
+        return undefined
       }
-      let raw = await res.text()
-      if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${raw}`)
+      let raw = await res.text().catch((cause) => {
+        throw new Unavailable(`${method} ${path}: response interrupted`, {
+          cause,
+        })
+      })
+      if (!res.ok) {
+        let ErrorType =
+          res.status == 408 || res.status == 429 || res.status >= 500
+            ? Unavailable
+            : Error
+        throw new ErrorType(`${method} ${path}: ${res.status} ${raw}`)
+      }
       return raw ? JSON.parse(raw) : null
     } catch (error) {
       // A host stopping is not a failed pull, including while the body is
@@ -150,11 +169,23 @@ export let edge = (
       await call('POST', path, { ids: ids.slice(i, i + 50) })
     }
   }
+  let list = async (path: string, optional = false) => {
+    let items = await call('GET', path)
+    if (stop?.aborted || (items === undefined && optional)) return null
+    if (
+      !Array.isArray(items) ||
+      items.some((item) => !item || typeof item.id != 'string')
+    ) {
+      throw new Error(`GET ${path}: expected items with ids`)
+    }
+    return items
+  }
   return {
     messages: async () =>
-      (await call('GET', '/messages?unnotified=1&.dir=in&limit=100')) ?? [],
+      (await list('/messages?unnotified=1&.dir=in&limit=100&sort=ts')) ??
+        [],
     notified: (ids) => ack('/messages/notified', ids),
-    requests: () => call('GET', '/requests?unprocessed=1&limit=100'),
+    requests: () => list('/requests?unprocessed=1&limit=100', true),
     processed: (ids) => ack('/requests/processed', ids),
   }
 }
@@ -236,18 +267,23 @@ let request = (r: EdgeRequest): Request => ({
   ...(r.sig_ok == null ? {} : { verified: !!r.sig_ok }),
 })
 
-/** Since when each tray has gone unanswered, kept by a caller that pulls
- * again: a tray that answers leaves it. */
-export type Down = Map<string, number>
+/** An outage kept until the tray answers, including the cause a delayed letter
+ * reports. A caller that retries shares this map across passes. */
+export type Down = Map<string, { since: number; error: unknown }>
 
 // What every tray of one pass shares.
-type Pass = { report: Report; now: () => number; down?: Down | undefined }
+type Pass = {
+  report: Report
+  log: Report
+  now: () => number
+  down?: Down | undefined
+}
 
 // One tray: list it, record each item, acknowledge the ones recorded. Nothing
 // here throws — nobody is waiting on a pull to answer — so a failure is said
 // instead, and an item that failed stays at the edge for the next pull.
 let tray = async <T extends { id: string }>(
-  { report, now, down }: Pass,
+  { report, log, now, down }: Pass,
   name: string,
   list: () => Promise<T[] | null>,
   record: (item: T) => Promise<unknown>,
@@ -269,14 +305,29 @@ let tray = async <T extends { id: string }>(
       }
     }
     if (done.length) await ack(done)
-    down?.delete(name)
+    if (down?.delete(name)) {
+      log(`@yaks/mail — ${name} tray recovered`, { tags: { tray: name } })
+    }
+    return done.length
   } catch (err) {
-    let since = down?.get(name) ?? began
-    down?.set(name, since)
-    let out = now() - since
-    if (!down || out > LATE) fail(`take ${name}s`, err, { down: `${out} ms` })
+    if (!down || !(err instanceof Unavailable)) fail(`take ${name}s`, err)
+    else {
+      let previous = down.get(name)
+      down.set(name, { since: previous?.since ?? began, error: err })
+      if (!previous) {
+        log(
+          new Error(
+            `@yaks/mail — ${name} tray unavailable; retrying next pass`,
+            {
+              cause: err,
+            },
+          ),
+          { tags: { step: 'mail pull', tray: name } },
+        )
+      }
+    }
   }
-  return done.length
+  return 0
 }
 
 /** What one pull took: how many letters and requests it recorded and
@@ -292,21 +343,28 @@ export type Pulled = { messages: number; requests: number }
  * whom they are for only where it declares `about`; a graph without `hook`
  * leaves the request tray for one that has it.
  *
- * A caller that pulls again hands in the same `down` each pass, so a tray the
- * edge does not answer is said once it has been down for LATE; without one,
- * it is said at once.
+ * A caller that pulls again hands in the same `down` each pass. Transient
+ * failures are logged and retained as the cause of a delayed letter's report;
+ * without another pass, every failure reports at once.
  */
 export let pull = async (
   at: Arrivals & {
     graph: Graph
     report?: Report
+    log?: Report
     now?: () => number
     down?: Down
   },
   from: Edge,
 ): Promise<Pulled> => {
-  let { graph, report = console.error, now = Date.now, down } = at
-  let pass: Pass = { report, now, down }
+  let {
+    graph,
+    report = console.error,
+    log = console.warn,
+    now = Date.now,
+    down,
+  } = at
+  let pass: Pass = { report, log, now, down }
   let receive = arrived(at)
   // Where a late letter's time went, per step, so the report says which.
   let took: Record<string, string> = {}
@@ -331,10 +389,21 @@ export let pull = async (
       let bundles = await timed('read', () => receive(...received(m)))
       if (bundles.length) await timed('write', () => graph.apply(bundles))
       let waited = now() - (m.ts ?? (Date.parse(m.received_at ?? '') || now()))
-      if (waited > LATE) {
+      if (bundles.length && waited > LATE) {
+        let outage = down?.get('message')
         report(
-          new Error('@yaks/mail — a letter waited too long at the edge'),
-          { tags: { step: 'mail stall', waited: `${waited} ms`, ...took } },
+          new Error('@yaks/mail — a letter waited too long at the edge', {
+            cause: outage?.error,
+          }),
+          {
+            tags: {
+              step: 'mail stall',
+              letter: messageIdOf(m.id),
+              waited: `${waited} ms`,
+              ...(outage ? { down: `${now() - outage.since} ms` } : {}),
+              ...took,
+            },
+          },
         )
       }
     },

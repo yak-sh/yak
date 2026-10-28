@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
@@ -9,6 +9,7 @@ import { edgeDoc, edgeEid, edgeKeywords } from '@yaks/edge'
 import { mailDoc } from './comp.ts'
 import { mailbox } from './plugin.ts'
 import {
+  type Down,
   type Edge,
   edge,
   type EdgeMessage,
@@ -17,6 +18,7 @@ import {
   messageIdOf,
   pull,
   received,
+  Unavailable,
 } from './pull.ts'
 import { service } from './service.ts'
 
@@ -204,33 +206,121 @@ test('pull: each tray fails alone, and a graph without hook leaves requests', as
   assertEquals(other.acked, [letter(1).id])
 })
 
-test('pull: an edge that does not answer is said once it has been down for LATE', async () => {
-  let g = await club()
-  let up = stub([letter(1)])
+let emptyRecovery = await club()
+test('pull: an unavailable empty edge retries without reporting a delayed letter', async () => {
+  let up = stub([])
   let out: Edge = {
     ...up.at,
-    messages: () => Promise.reject(new Error('timeout')),
+    messages: () => Promise.reject(new Unavailable('timeout')),
+    requests: () => Promise.reject(new Unavailable('timeout')),
   }
   let told: unknown[] = []
-  let down = new Map<string, number>()
+  let logged: unknown[] = []
+  let down: Down = new Map()
   let at = (t: number, from: Edge, keep = true) =>
     pull({
-      graph: g,
+      graph: emptyRecovery,
       domain,
       now: () => t,
       report: (e) => told.push(e),
+      log: (e) => logged.push(e),
       ...(keep ? { down } : {}),
     }, from)
   await at(0, out)
   await at(LATE, out)
-  assertEquals(told.length, 0)
   await at(LATE + 1, out)
-  assertEquals(told.length, 1)
+  assertEquals([told.length, logged.length, down.size], [0, 2, 2])
   await at(LATE + 2, up.at)
-  await at(LATE * 2 + 3, out)
-  assertEquals([told.length, up.acked], [1, [letter(1).id]])
-  await at(LATE * 2 + 4, out, false)
+  assertEquals([told.length, logged.length, down.size], [0, 4, 0])
+  await at(LATE + 3, out, false)
   assertEquals(told.length, 2)
+})
+
+let delayedRecovery = await club()
+test('pull: a delayed letter reports its outage cause once across an ack retry', async () => {
+  let now = Date.parse(letter(1).received_at!)
+  let down: Down = new Map()
+  let told: { error: Error; tags: Record<string, string> | undefined }[] = []
+  let cause = new Unavailable('edge down', {
+    cause: new DOMException('timeout', 'TimeoutError'),
+  })
+  let at = {
+    graph: delayedRecovery,
+    domain,
+    now: () => now,
+    down,
+    log: () => {},
+    report: (error: unknown, context?: { tags?: Record<string, string> }) =>
+      told.push({ error: error as Error, tags: context?.tags }),
+  }
+  let up = stub([letter(1)])
+  await pull(at, { ...up.at, messages: () => Promise.reject(cause) })
+  now += LATE + 1
+  let first = await pull(at, {
+    ...up.at,
+    notified: () => Promise.reject(new Unavailable('ack down')),
+  })
+  await pull(at, up.at)
+  assertEquals([
+    first.messages,
+    (await mails(delayedRecovery)).length,
+    up.acked,
+  ], [
+    0,
+    1,
+    [letter(1).id],
+  ])
+  assertEquals(told.length, 1)
+  assertEquals(told[0].error.cause, cause)
+  assertEquals(told[0].tags?.letter, messageIdOf(letter(1).id))
+  assertEquals(down.size, 0)
+})
+
+let unexpectedRecovery = await club()
+test('pull: an unexpected listing failure reports immediately even when retrying', async () => {
+  let error = new SyntaxError('invalid edge response')
+  let told: Error[] = []
+  await pull({
+    graph: unexpectedRecovery,
+    down: new Map(),
+    report: (e) => told.push(e as Error),
+  }, {
+    ...stub([]).at,
+    messages: () => Promise.reject(error),
+  })
+  assertEquals(told.length, 1)
+  assertEquals(told[0].cause, error)
+})
+
+let recording = await (async () => {
+  let g = await club()
+  let up = stub([letter(1), letter(2)])
+  let failed = false
+  let apply: Graph['apply'] = (bundles, options) => {
+    if (!failed) {
+      failed = true
+      throw new Error('store unavailable')
+    }
+    return g.apply(bundles, options)
+  }
+  let told: unknown[] = []
+  let at = {
+    graph: { ...g, apply },
+    domain,
+    now: () => Date.parse(letter(1).received_at!),
+    report: (e: unknown) => told.push(e),
+  }
+  await pull(at, up.at)
+  return { g, up, told, at }
+})()
+test('pull: a failed record stays unacknowledged while other letters arrive', () => {
+  assertEquals(recording.up.acked, [letter(2).id])
+  assertEquals(recording.told.length, 1)
+})
+test('pull: the next pass records and acknowledges a letter whose write failed', async () => {
+  await pull(recording.at, recording.up.at)
+  assertEquals((await mails(recording.g)).length, 2)
+  assertEquals(recording.up.acked, [letter(2).id, letter(1).id])
 })
 
 test('edge: the HTTP API, a missing tray, and acknowledgements in bites', async () => {
@@ -245,6 +335,7 @@ test('edge: the HTTP API, a missing tray, and acknowledgements in bites', async 
   })
   assertEquals(await at.messages(), [])
   assertEquals(await at.requests(), null)
+  assertEquals(asked[0].endsWith('&sort=ts'), true)
   await at.notified(Array.from({ length: 51 }, (_, i) => `m${i}`))
   assertEquals(asked.map((a) => a.slice(0, 50)), [
     'GET https://inbox.example/messages?unnotified=1&.d',
@@ -283,8 +374,58 @@ test('edge: a response that never finishes times out', async () => {
     undefined,
     1,
   )
-  await assertRejects(() => at.messages(), DOMException, 'timeout')
+  let error = await assertRejects(
+    () => at.messages(),
+    Unavailable,
+    'response interrupted',
+  )
+  assertEquals((error.cause as DOMException).name, 'TimeoutError')
 })
+
+for (
+  let [status, kind] of [
+    [408, Unavailable],
+    [429, Unavailable],
+    [503, Unavailable],
+    [401, Error],
+    [404, Error],
+  ] as const
+) {
+  test(`edge: HTTP ${status} keeps its failure kind`, async () => {
+    let at = edge(
+      { url: 'https://inbox.example', token: 't' },
+      () => Promise.resolve(new Response('refused', { status })),
+    )
+    let error = await assertRejects(() => at.messages(), kind)
+    assertEquals(error instanceof Unavailable, kind == Unavailable)
+  })
+}
+
+test('edge: a missing acknowledgement endpoint is a failure', async () => {
+  let at = edge(
+    { url: 'https://inbox.example', token: 't' },
+    () => Promise.resolve(new Response('', { status: 404 })),
+  )
+  await assertRejects(() => at.notified(['m1']), Error, '404')
+})
+
+test('edge: invalid URL and header configuration remain unexpected failures', async () => {
+  assertThrows(() => edge({ url: 'invalid', token: 't' }), TypeError)
+  let at = edge({ url: 'https://inbox.example', token: 'invalid\ntoken' })
+  let error = await assertRejects(() => at.messages(), TypeError)
+  assertEquals(error instanceof Unavailable, false)
+})
+
+for (let body of ['', 'null', '{}', '[{}]']) {
+  test(`edge: a malformed listing ${JSON.stringify(body)} is a failure`, async () => {
+    let at = edge(
+      { url: 'https://inbox.example', token: 't' },
+      () => Promise.resolve(new Response(body)),
+    )
+    await assertRejects(() => at.messages(), Error, 'expected items with ids')
+    await assertRejects(() => at.requests(), Error, 'expected items with ids')
+  })
+}
 
 test('edge: stopping its service ends an in-flight request quietly', async () => {
   let stop = new AbortController()
@@ -340,8 +481,10 @@ test('service: a timed-out pull is tried again', async () => {
   let stop = new AbortController()
   let at = pulled(stop)
   let calls = 0
-  let go = (url: string, init: RequestInit) => {
-    if (url.includes('/messages?') && calls++ == 0) return waiting(url, init)
+  let go = (url: string) => {
+    if (url.includes('/messages?') && calls++ == 0) {
+      return Promise.reject(new DOMException('timeout', 'TimeoutError'))
+    }
     return at.go(url)
   }
   let options = {
@@ -350,7 +493,7 @@ test('service: a timed-out pull is tried again', async () => {
   }
   let told: unknown[] = []
   await service(
-    { graph: g, report: (e) => told.push(e) },
+    { graph: g, report: (e) => told.push(e), log: () => {} },
     options,
     stop.signal,
     (pull, signal) => edge(pull, go, signal, 1),
