@@ -34,11 +34,12 @@ import { PUBLISHED } from './published.ts'
 import { lasting } from './testing.ts'
 import { call } from './tools.ts'
 import { minted } from './session.ts'
+import { reaching } from './agent.ts'
 
 let comp = (b: Bundle | undefined, key: string) => (b?.[key] ?? {}) as Comp
 let key = 'lender-private-key'
 
-let setup = async () => {
+let setup = async (words = false) => {
   let p = lasting('lending-test', {
     VAULT: d1() as unknown as D1Like,
     VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
@@ -75,7 +76,23 @@ let setup = async () => {
   )
   await home.run('app_new', { slug: 'notes', title: 'Notes' })
   await home.run('app_files', {
-    files: [{ path: 'index.html', content: '<h1>Notes</h1>' }],
+    files: [
+      { path: 'index.html', content: '<h1>Notes</h1>' },
+      ...words
+        ? [{
+          path: 'vocab.json',
+          content: JSON.stringify({
+            $defs: {
+              lendingnote: {
+                component: true,
+                type: 'object',
+                properties: { body: { type: 'string' } },
+              },
+            },
+          }),
+        }]
+        : [],
+    ],
   })
   await home.run('app_deploy')
   let app = (await dir.app(home.space, 'notes'))!
@@ -360,4 +377,37 @@ test('an OAuth replacement attaches the existing account that the callback renew
   })
   assertEquals(connected!.entity.eid, ownConnection.entity.eid)
   assertEquals(comp((await s.links())[0], 'uses'), { binding: 'SKY' })
+})
+
+let shared = await setup(true)
+await shared.away.run('app_install', { name: 'lent-notes', as: 'own' })
+let sibling = (await shared.dir.app(shared.away.space, 'own'))!
+let friendData = metaOf(
+  appStore(shared.p.env.STORE, shared.away.space, shared.copy),
+)
+await friendData.apply([{
+  entity: { eid: '$friend' },
+  lendingnote: { body: 'The friend’s note' },
+}], KERNEL)
+await metaOf(appStore(shared.p.env.STORE, shared.home.space, shared.app)).apply(
+  [{
+    entity: { eid: '$source' },
+    lendingnote: { body: 'The lender’s note' },
+  }],
+  KERNEL,
+)
+let graph = await reaching(
+  shared.away.ctx,
+  [shared.copy, sibling].map((app) => ({
+    space: shared.away.space,
+    app,
+    who: { person: shared.away.ctx.person, role: 'owner' },
+  })),
+)
+test('a named connector read from a second installed copy follows its component home', async () => {
+  cleanup(shared.p[Symbol.asyncDispose])
+  let rows = await graph.read('.in=borrower/own&.lendingnote')
+  assertEquals(rows.map((b) => comp(b, 'lendingnote').body), [
+    'The friend’s note',
+  ])
 })

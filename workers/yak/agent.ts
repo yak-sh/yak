@@ -54,6 +54,7 @@ import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
 import { PUBLISHED, sending } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
+import { queried } from './page-graph.ts'
 import { titling } from './session.ts'
 import {
   type Ctx,
@@ -433,7 +434,18 @@ let held = (
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
     let one = await byName(self, typeof q == 'string' ? lined(line) : line)
-    let answer = await read(ctx.env, where, one)
+    let at = where.length == 1 ? where[0] : undefined
+    let answer = at
+      ? await queried(
+        ctx.env,
+        at.space,
+        at.app,
+        at.who,
+        one,
+        false,
+        at.headers,
+      )
+      : await read(ctx.env, where, one)
     return { answer, reduced: !!aggregate(parse(one)) }
   }
   let rows = async (q: Query): Promise<Row[]> => {
