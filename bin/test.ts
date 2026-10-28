@@ -25,22 +25,36 @@
 // `--verbose` says each test as it ran, each error whole, and the budget's
 // findings in full: what the gate's log keeps.
 
-import { relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { choose } from '@yaks/testing/choose'
-import { find, tested } from '@yaks/testing/find'
-import { own } from '@yaks/testing/own'
-import { AUDIT } from '@yaks/testing/reads'
-import { runTestCommands, type TestCommand } from './phases.ts'
-import { budget, hold, measure, OWN, read, type Suite } from './test-budget.ts'
-import { SHARED } from './test-runtime.ts'
-import { library } from './sqlite.ts'
-
-export let ROOTS = ['packages', 'bin', 'workers', 'apps']
+import type { TestCommand } from './phases.ts'
+import type { Suite } from './test-budget.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
 export let RUN = 'TASKS_TEST_RUN'
+
+if (import.meta.main && Deno.args[0] !== '--bulk') {
+  let outer = Deno.env.get(RUN)
+  if (outer) {
+    console.error(
+      `bin/test.ts: refused — this is inside test run ${outer}, and a test ` +
+        'never starts the suite (it would start itself again, and again)',
+    )
+    Deno.exit(2)
+  }
+}
+
+let { relative } = await import('node:path')
+let { fileURLToPath } = await import('node:url')
+let { choose } = await import('@yaks/testing/choose')
+let { find, tested } = await import('@yaks/testing/find')
+let { own } = await import('@yaks/testing/own')
+let { AUDIT } = await import('@yaks/testing/reads')
+let { runTestCommands } = await import('./phases.ts')
+let { budget, hold, measure, OWN, read } = await import('./test-budget.ts')
+let { SHARED } = await import('./test-runtime.ts')
+let { library } = await import('./sqlite.ts')
+
+export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
 /** The module cache this process runs on: DENO_DIR where the environment
  * pins it, and Deno's own default for the platform otherwise. The run pins
@@ -553,14 +567,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   )
   finish()
 } else if (import.meta.main) {
-  let outer = Deno.env.get(RUN)
-  if (outer) {
-    console.error(
-      `bin/test.ts: refused — this is inside test run ${outer}, and a test ` +
-        'never starts the suite (it would start itself again, and again)',
-    )
-    Deno.exit(2)
-  }
   Deno.env.set(RUN, String(Deno.pid))
   // The one SQLite every runtime of the run opens, on this box as on main's
   // gate (./sqlite.ts). Every file's key holds the library's bytes, so a file
