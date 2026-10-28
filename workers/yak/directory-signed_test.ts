@@ -273,6 +273,17 @@ let blip = async (at: string) => {
           )
         }
         let epoch = trip('epoch') ? {} : { [EPOCH]: String(f.core().revision) }
+        if (trip('body')) {
+          let cut = new ReadableStream({
+            pull: (c) =>
+              c.error(
+                Error(
+                  'Durable Object reset because a newer deploy reached it: b',
+                ),
+              ),
+          })
+          return Promise.resolve(new Response(cut, { headers: epoch }))
+        }
         return Promise.resolve(new Response('page', { headers: epoch }))
       },
     },
@@ -294,6 +305,7 @@ for (
     ['503', 'a directory answering 503'],
     ['500', 'a directory failing with a 500'],
     ['epoch', 'a directory answer with no revision'],
+    ['body', 'a directory answer a restart cuts off'],
     ['publish', 'a copy that cannot be filled'],
     ['valid', 'a copy that cannot say what is current'],
   ]

@@ -325,9 +325,12 @@ export let signedDirectory = (
         // One read of the directory: an answer that stands, a refusal
         // included, or why nothing can be confirmed yet.
         let look = async (): Promise<Response | string> => {
-          let answer: Response
+          let answer: Response, body: string
+          // Read whole: a deploy that restarts the directory cuts off the
+          // answer it was sending as well as the call it was taking.
           try {
             answer = await via.fetch(new Request(req, { headers }))
+            body = await answer.text()
           } catch (e) {
             await fallback()
             return `the directory did not answer: ${said(e)}`
@@ -335,17 +338,13 @@ export let signedDirectory = (
           // A 5xx is the directory failing to answer for the moment, not
           // saying no: its own failure is reported where it happened.
           if (answer.status >= 500) {
-            return `the directory answered ${answer.status}: ${
-              message(await answer.text())
-            }`
+            return `the directory answered ${answer.status}: ${message(body)}`
           }
-          if (!answer.ok) return answer
+          if (!answer.ok) return new Response(body, answer)
           let epoch = answer.headers.get(EPOCH)
           if (epoch == null || !/^\d+$/.test(epoch)) {
-            void answer.body?.cancel()
             return 'the directory answered with no revision'
           }
-          let body = await answer.text()
           // The directory is the authority, and its answer stands as read: a
           // write it has fenced but not yet committed is one this read came
           // before. The copy is filled behind the answer, for a stall to fall
