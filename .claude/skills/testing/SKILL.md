@@ -182,12 +182,17 @@ stronger.
   and anything it awaits, still counts, and so does load: the gate's runner
   shares this box's CPU cache and memory, and a core busy beside a test makes
   it slower. Load only ever adds, so a test is held to the fastest time it
-  ran in. A time over the line is measured again first, in fresh runtimes,
-  one platform at a time, each such file loaded cold and then warm
-  (packages/testing `--loads`), and the files still over once more, cold and
-  twice warm; a test fails only when it is over every time. A run with
-  nothing over pays for no second pass, and a test that can't run twice in
-  one runtime fails there. A file failed this way stays unpassed, so the next
+  ran in. It is held with the code under it warm: V8 interprets a function
+  until it has run enough times to be compiled, so a test that took 0.9 ms in
+  the whole suite, where the files before it ran that code, takes 2 to 3 ms
+  in a run of its file alone, and comes down only after tens of loads. So a
+  time over the line is measured again first, in a fresh runtime, one
+  platform at a time, each such file loaded again while one of its tests is
+  over every time, up to 40 loads or 5 s (packages/testing `--loads`,
+  `--until` and `--spend`); a test fails only when it is over every time, and
+  a narrowed run holds it to what the whole suite does. A run with nothing
+  over pays for no second pass, and a test that can't run twice in one
+  runtime fails there. A file failed this way stays unpassed, so the next
   run runs it again. A file that runs unchanged since it passed (only `--all`
   runs one, as the gate does) is spared: the same code passed the budget, so
   a time over the line is the run's. A test gets slower when its code or
@@ -199,7 +204,9 @@ stronger.
   in memory as the gate's does, so a test that writes files takes the same
   time on both. What still differs is the CPU: a test's own time leaves out
   what its own thread waited for one, not what the processes it starts
-  waited, and agents' runs share this box's CPUs. In a whole run here, 25
+  waited, and agents' runs share this box's CPUs: two cores and their
+  hyperthreads (host CPUs 4-5 and 10-11), so a test whose sibling thread is
+  busy runs slower without waiting at all. In a whole run here, 25
   listed tests, most of them starting processes or running a kernel, took
   1.05 to 3.8 times what the gate's took, past their records, and 9 unlisted
   ones ran 1.0 to 1.3 ms where the gate's ran under 1. A platform's wall

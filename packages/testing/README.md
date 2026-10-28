@@ -264,8 +264,8 @@ try {
 
 ```sh
 deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
-  [--also=path]... [--keys=file] [--timeout=ms] [--times=dir] [--verbose] \
-  path...
+  [--loads=n] [--until=file] [--spend=ms] [--also=path]... [--keys=file] \
+  [--timeout=ms] [--times=dir] [--verbose] path...
 ```
 
 A path names a test module, a page, or a directory holding them. Files load one
@@ -282,6 +282,15 @@ errors again, then the counts. An error keeps only the stack frames in the
 current directory, named from it, and none of this package's own, and is cut to
 30 lines. `--verbose` says each error whole, names the failures again, and says
 what planning and loading took.
+
+`--loads=n` loads every file up to n times, each load a module of its own, to
+time each test again as the code it calls warms: V8 compiles a function only
+once it has run enough times, so a file's first load runs much of its code in
+the interpreter. A file loads again only while its loads have taken less than
+`--spend` milliseconds, and, with `--until` naming a JSON file of times by file
+and test name (`{ "a_test.ts": { "adds": 1 } }`), while one of the tests it
+names there has neither run within its time, less what it waited for a CPU, nor
+failed. A test that cannot run twice in one runtime fails a later load.
 
 `--tag` selects tests carrying every named tag; comma-separated tags are also
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps

@@ -31,13 +31,21 @@
 // another core makes a test take longer on its own. It never takes time
 // away, so each test is held to the fastest time it ran in: one time within
 // the line proves a pass, and a test fails only when it is over every time.
-// A time over the line is measured again before it counts: the files holding
-// such tests run in runtimes of their own, one platform at a time, each file
-// loaded more than once (packages/testing/main.ts `--loads`): cold, as the
-// first test of a file pays for everything its file is the first to load,
-// then warm, as the whole suite runs it. Each pass takes only the files still
-// over (`LOADS`), so a run with nothing over the line pays for none, and a
-// test near its line is measured most.
+//
+// A test is held to what it takes with the code it calls warm. V8 runs a
+// function in its interpreter until the function has run enough times to be
+// compiled, so a test takes less each time the code under it has run before:
+// in a run of the whole suite the files before it ran that code, and in a run
+// of one file nothing did. `a status filter on a ladder binds as a lookup on
+// the archetype index` (packages/sql/archetype_test.ts) took 2 to 3 ms in a
+// runtime of its own, 1.4 to 2 ms on its third load and 0.6 ms by its 25th,
+// and 0.85 to 0.94 ms in whole runs. So a time over the line is measured
+// again before it counts: the files holding such tests run in a runtime of
+// their own, one platform at a time, and each loads again while one of them
+// is over every time, until the code under it is warm
+// (packages/testing/main.ts `--loads` and `--until`, `LOADS`). A narrowed run
+// and the whole suite hold a test to the same time, a run with nothing over
+// the line pays for none, and a test near its line is measured most.
 //
 // A test gets slower when its code does, or the code it runs: its file's key
 // (packages/testing/deps.ts). A file that ran with the key it had already
@@ -106,11 +114,12 @@ export type Times = {
 
 export let LIST = new URL('../bench/test-budget.json', import.meta.url)
 
-/** How many times each pass measuring tests again loads a file: the first
- * takes every file holding a test over the line, cold and then warm; the next
- * those still over, cold and then warm twice. A test over every time has had
- * six. */
-export let LOADS = [2, 3]
+/** How measuring tests again loads a file holding a test over the line: again
+ * while one of them has been over every time (packages/testing `--until`), up
+ * to `loads` times, and while its loads have taken less than `spend`
+ * milliseconds in all. A file of tests near 1 ms warms in tens of loads; one
+ * whose tests run for seconds warms in its first. */
+export let LOADS = { loads: 40, spend: 5_000 }
 let KEPT = new URL('../bench/test-times/', import.meta.url).pathname
 
 /** A test as a runner timed it; a runner before `waited` said none. */
@@ -268,6 +277,24 @@ export let fastest = (
   )
 }
 
+/// let list = { budget: 1, leave: 0.5, slack: { times: 2, ms: 1 }, tests: { 'a_test.ts': { y: 3 } } }
+/// let seen = (name: string, key = name) => ({ platform: 'deno', file: 'a_test.ts', name, key, ms: 9 })
+/// lines(list, [seen('x'), seen('a_test.ts:4 y', 'y')]) -> { 'a_test.ts': { x: 1, 'a_test.ts:4 y': 7 } }
+/** A time for each of some tests, by file and by the name its runner said it
+ * by, in milliseconds (packages/testing `--until`). */
+export type Lines = Record<string, Record<string, number>>
+
+/** The line each of `rows` is held to, by file and by the name its runner
+ * said it by: the budget, or what its record allows. */
+export let lines = (b: Budget, rows: Seen[]): Lines => {
+  let by: Lines = {}
+  for (let s of rows) {
+    let r = b.tests[s.file]?.[s.key]
+    ;(by[s.file] ??= {})[s.name] = r == null ? b.budget : limit(b.slack, r)
+  }
+  return by
+}
+
 /** The tests a run fails: each over the budget, and each listed one slower
  * than its record allows where the records are held (`gated`). */
 export let failing = (j: Judged, gated: boolean): Seen[] =>
@@ -342,20 +369,31 @@ export let read = async (dir: string): Promise<Measured> => {
  * beside the command's own, over `files`, or over every file it names. */
 export type Suite = (flags: string[], files?: string[]) => Promise<Result>
 
-// A run of `suite` with its times taken, and its exit code.
-let timed = async (suite: Suite, flags: string[], files?: string[]) => {
+// A run of `suite` with its times taken, and its exit code; with `until`,
+// each file it names loaded again while a test it names there is over its
+// line (packages/testing `--until`).
+let timed = async (
+  suite: Suite,
+  flags: string[],
+  files?: string[],
+  until?: Lines,
+) => {
   let dir = await Deno.makeTempDir({ prefix: 'test-budget-' })
+  let held = until && await Deno.makeTempFile({ prefix: 'test-budget-' })
   try {
-    let result = await suite([...flags, `--times=${dir}`], files)
+    if (held) await Deno.writeTextFile(held, JSON.stringify(until))
+    let more = held ? [`--until=${held}`] : []
+    let result = await suite([...flags, ...more, `--times=${dir}`], files)
     let code = result.code ?? (result.signal == 'SIGINT' ? 130 : 143)
     return { ...await read(dir), code, stopped: !!result.signal }
   } finally {
     await Deno.remove(dir, { recursive: true })
+    if (held) await Deno.remove(held)
   }
 }
 
 /** Runs `suite` with its times taken. The files holding tests it would fail
- * run again, in a pass for each of `LOADS` while any is still over, each test
+ * run again, each loaded while one of them is still over (`LOADS`), each test
  * is held to the fastest of its times, and the files it still fails have
  * their passes taken back. A file that ran unchanged since it passed is
  * spared. A run a signal stopped says nothing. */
@@ -375,11 +413,12 @@ export let measure = async (
   let same = unchanged(runs, before)
   let slow = failing(judge(b, runs, same), gated)
   let stop: number | undefined
-  for (let loads of LOADS) {
-    if (!slow.length || stop != null) break
+  if (slow.length) {
     if (verbose) {
       let files = new Set(slow.map((s) => s.file)).size
-      console.log(`\n─── measuring ${files} file(s) again, ${loads} times ───`)
+      console.log(
+        `\n─── measuring ${files} file(s) again, up to ${LOADS.loads} times ───`,
+      )
     }
     // One platform at a time: the first pass runs them all at once, so a test
     // measured again beside another platform's runtime meets the same load
@@ -387,10 +426,14 @@ export let measure = async (
     // `--all`.
     let again: Record<string, Times> = {}
     for (let platform of new Set(slow.map((s) => s.platform))) {
-      let held = slow.filter((s) => s.platform == platform).map((s) => s.file)
-      let one = await timed(suite, ['--all', `--loads=${loads}`], [
-        ...new Set(held),
-      ])
+      let held = slow.filter((s) => s.platform == platform)
+      let files = [...new Set(held.map((s) => s.file))]
+      let one = await timed(
+        suite,
+        ['--all', `--loads=${LOADS.loads}`, `--spend=${LOADS.spend}`],
+        files,
+        lines(b, held),
+      )
       Object.assign(again, one.runs)
       if (one.stopped) {
         stop = one.code

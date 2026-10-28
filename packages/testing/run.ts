@@ -62,6 +62,30 @@ export let sched = (): Sched => {
 export let waited = (ms: number, from: Sched, to: Sched) =>
   Math.min(Math.max(0, ms - (to.ran - from.ran)), to.wait - from.wait)
 
+/** A time for each of some tests, by file and by test name, in milliseconds
+ * (main.ts `--until`). */
+export type Lines = Record<string, Record<string, number>>
+
+/// let ran = (name: string, ms: number, ok = true) => ({ test: { file: 'a_test.ts', name }, ok, ms, waited: 0.5 })
+/// owed({ 'a_test.ts': { x: 1, y: 1 } }, [ran('x', 3), ran('y', 1.4)]) -> ['a_test.ts']
+/// owed({ 'a_test.ts': { x: 1, y: 1 } }, [ran('x', 3), ran('x', 1.2), ran('y', 9, false)]) -> []
+/** The files holding a test `lines` names that has neither run within its
+ * time, less what it waited for a CPU, nor failed in `outcomes`. */
+export let owed = (
+  lines: Lines,
+  outcomes: Pick<Outcome, 'test' | 'ok' | 'ms' | 'waited'>[],
+): string[] => {
+  let met = new Set(
+    outcomes.filter((o) => {
+      let line = lines[o.test.file]?.[o.test.name]
+      return line != null && (!o.ok || o.ms - o.waited <= line)
+    }).map((o) => JSON.stringify([o.test.file, o.test.name])),
+  )
+  return Object.entries(lines).filter(([file, tests]) =>
+    Object.keys(tests).some((name) => !met.has(JSON.stringify([file, name])))
+  ).map(([file]) => file)
+}
+
 /// took(0.25) -> '250µs'
 /// took(12.4) -> '12ms'
 /// took(1500) -> '1s'
