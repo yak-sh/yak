@@ -22,6 +22,7 @@ import {
   not,
   notNull,
   op,
+  revision,
   select,
   type Stmt,
   table,
@@ -231,8 +232,9 @@ export let classified = (driver: Driver): boolean =>
 export let populationCount = (
   driver: Driver,
   component?: string,
-): number | undefined => {
-  if (!installed(driver)) return
+): number | undefined =>
+  installed(driver) ? counting(driver, component) : undefined
+let counting = (driver: Driver, component?: string): number => {
   let p = table(POPULATION, 'p')
   let row = driver.query(
     select({
@@ -252,18 +254,58 @@ export let populationCount = (
   return Number(row?.n ?? 0)
 }
 
+// What the census has read, while the rows it read stand (@yaks/sql
+// `revision`): the reads of one summary share a revision, and ask once.
+type Counted = {
+  at: number
+  installed?: boolean
+  held: Map<string, number | undefined>
+  looked: Map<string, boolean>
+  largest?: number
+}
+let counts = new WeakMap<Driver, Counted>()
+let counted = (driver: Driver): Counted => {
+  let at = revision(driver, 'data')
+  let held = counts.get(driver)
+  if (held?.at != at) {
+    counts.set(driver, held = { at, held: new Map(), looked: new Map() })
+  }
+  return held
+}
+
 /** What a read's plans are sized by (@yaks/sql `Census`): a component's
- * counted population, once the file keeps populations, and the entity
- * table's largest id, one seek. Each is read only when a plan asks. */
+ * counted population, once the file keeps populations, the entity table's
+ * largest id, one seek, and whether a component's table holds more than so
+ * many rows, a bounded look. Each is read only when a plan asks, and once
+ * while the rows it read stand. */
 export let census = (driver: Driver): Census => ({
-  held: (comp) => populationCount(driver, comp),
+  held: (comp) => {
+    let at = counted(driver)
+    if (!(at.installed ??= installed(driver))) return
+    if (!at.held.has(comp)) at.held.set(comp, counting(driver, comp))
+    return at.held.get(comp)
+  },
   largest: () =>
-    Number(
+    counted(driver).largest ??= Number(
       driver.query(select({
         cols: [as(fn('max', col('id')), 'n')],
         from: table('entity'),
       }))[0]?.n ?? 0,
     ),
+  exceeds: (comp, n) => {
+    let { looked } = counted(driver), key = `${n} ${comp}`
+    let more = looked.get(key)
+    if (more == null) {
+      more = driver.query(select({
+        cols: [lit(1)],
+        from: table(comp),
+        limit: lit(1),
+        offset: lit(n),
+      })).length > 0
+      looked.set(key, more)
+    }
+    return more
+  },
 })
 
 /** A presence-only entity policy selects whole buckets. Value-based policies

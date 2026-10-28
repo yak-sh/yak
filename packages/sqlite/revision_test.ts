@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
-import { insert } from '@yaks/sql'
+import { insert, render } from '@yaks/sql'
 import { open } from './db.ts'
 import { mem } from './testing.ts'
 import { revision } from '@yaks/sql'
@@ -81,16 +81,17 @@ test('a file connection reads its versions once a transaction, and again after i
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
     a.query(table('entity'))
-    let query = a.query, pragmas = 0
+    let query = a.query, reads = 0
     a.query = (s) => {
-      if (s.t == 'pragma') pragmas++
+      if (render(s).sql.includes('_version')) reads++
       return query(s)
     }
     let catalog = revision(a, 'catalog')
     unit(a, () => {
-      pragmas = 0
+      reads = 0
       for (let i = 0; i < 10; i++) revision(a, 'catalog')
-      assertEquals(pragmas, 2)
+      // One statement reads both versions.
+      assertEquals(reads, 1)
       a.query(insert('entity', { entity: 1 }))
       assert(revision(a, 'catalog') > catalog)
       catalog = revision(a, 'catalog')

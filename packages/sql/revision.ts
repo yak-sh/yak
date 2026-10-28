@@ -4,10 +4,12 @@
 // connections through SQLite's version pragmas, once per transaction: the
 // pragmas themselves open its snapshot, and no other connection's commit is
 // seen inside one, so asking again before it ends could only answer the same.
-// Rollback invalidates rather than rewinding a counter, since a snapshot may
-// have been taken inside the transaction whose changes just disappeared.
+// Both versions asked at once are one statement: each pragma is a table-valued
+// function too. Rollback invalidates rather than rewinding a counter, since a
+// snapshot may have been taken inside the transaction whose changes just
+// disappeared.
 import type { Driver } from './driver.ts'
-import type { Stmt } from './ast.ts'
+import { call, col, select, type Stmt } from './ast.ts'
 
 type Tokens = {
   schema: number
@@ -24,6 +26,15 @@ type State = Tokens & {
   /** which version pragmas the open transaction has read */
   seen: { schema: boolean; data: boolean }
 }
+
+// The statement that reads the versions a check needs.
+let SCHEMA: Stmt = { t: 'pragma', name: 'schema_version' }
+let DATA: Stmt = { t: 'pragma', name: 'data_version' }
+let BOTH: Stmt = select({
+  cols: [col('schema_version', 's'), col('data_version', 'd')],
+  from: call('pragma_schema_version', [], 's'),
+  joins: [{ how: 'cross', src: call('pragma_data_version', [], 'd') }],
+})
 
 // By connection (`Driver.connection`), and the drivers already speaking into
 // each one's state.
@@ -162,10 +173,13 @@ export function revision(driver: Driver, scope: Scope): number {
   }
   if (driver.file) {
     let inside = state.scopes.length > 0
-    if (!(inside && state.seen.schema)) {
-      let schemaVersion = driver.query({ t: 'pragma', name: 'schema_version' })[
-        0
-      ]?.schema_version
+    let schema = !(inside && state.seen.schema)
+    let data = scope != 'schema' && !(inside && state.seen.data)
+    let versions = schema || data
+      ? driver.query(schema && data ? BOTH : schema ? SCHEMA : DATA)[0]
+      : undefined
+    if (schema) {
+      let schemaVersion = versions?.schema_version
       if (schemaVersion !== state.schemaVersion) {
         state.schemaVersion = schemaVersion
         state.schema++
@@ -176,9 +190,8 @@ export function revision(driver: Driver, scope: Scope): number {
       }
       if (inside) state.seen.schema = true
     }
-    if (scope != 'schema' && !(inside && state.seen.data)) {
-      let dataVersion = driver.query({ t: 'pragma', name: 'data_version' })[0]
-        ?.data_version
+    if (data) {
+      let dataVersion = versions?.data_version
       if (dataVersion !== state.dataVersion) {
         state.dataVersion = dataVersion
         state.catalog++

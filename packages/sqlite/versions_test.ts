@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { col, eq, insert, lit, select, table } from '@yaks/sql'
+import { col, eq, insert, lit, render, select, table } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -70,11 +70,9 @@ let peer = () => {
   let reader = {
     file: true,
     query: (s: Parameters<typeof db.query>[0]) => {
-      if (s.t == 'pragma' && s.name == 'schema_version') {
-        return [{ schema_version: schema }]
-      }
-      if (s.t == 'pragma' && s.name == 'data_version') {
-        return [{ data_version: version }]
+      let sql = render(s).sql
+      if (sql.includes('schema_version') || sql.includes('data_version')) {
+        return [{ schema_version: schema, data_version: version }]
       }
       let out = db.query(s)
       rows += out.length

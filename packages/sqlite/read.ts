@@ -153,6 +153,7 @@ let catalogued = (driver: Driver, vocab: Vocab, opts: BindOpts): BindOpts => ({
   ...opts,
   archetypes: opts.archetypes ??
     (vocab.comp('archetype') ? catalog(driver) : undefined),
+  stable: opts.stable ?? driver.stable,
 })
 
 /**

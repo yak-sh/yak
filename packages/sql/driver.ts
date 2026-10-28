@@ -63,6 +63,15 @@ export type Driver = {
    */
   arms?: number
   /**
+   * This driver keeps each prepared statement by its text and binds every
+   * collection as one JSON array (`renderStable`): a list in a compiled read
+   * binds that way too, so the read's text is the same whatever the list
+   * holds, and is prepared once. A driver that leaves it out takes lists
+   * written into the text, which an engine billing each row read (a Durable
+   * Object) tests a row against without reading any (@yaks/sql `spelled`).
+   */
+  stable?: boolean
+  /**
    * Make a schema from a template. Where another database of this process
    * already ran `make` for the same `key`, holding the same objects this one
    * holds and no rows, this one becomes a copy of what that one made, and

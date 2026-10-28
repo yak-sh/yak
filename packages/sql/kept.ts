@@ -9,9 +9,9 @@
 // whole number a numeric property is compared above or below, stood in for by
 // its place, plus every input the lowering reads: the options' data, the
 // registries by identity, the extensions' hooks, the archetype catalog's
-// answers, and the census's choice of road (./bind.ts `walks`). The values a
-// kept statement binds anew are the clock, the root candidates (`eids`), those
-// ids and numbers, and the integer ids the ids resolve to.
+// answers, and the census's choices of road (./bind.ts `walks`, `crowded`).
+// The values a kept statement binds anew are the clock, the root candidates
+// (`eids`), those ids and numbers, and the integer ids the ids resolve to.
 //
 // Where each value lands is proved, never inferred from the binder's code: a
 // shape seen a second time is lowered twice more, at two fixed instants, with
@@ -21,9 +21,14 @@
 // length, day, hour, minute and second, so a phrase that does not move one for
 // one with the clock (`today`, `1 month ago`) never passes for one that does,
 // and its shape is lowered on every call, as is a shape an extension compiled
-// any part of (a `.near` reads its neighbourhood while it lowers). The proof
-// ends by binding the first call's values into the kept statement and asking
-// for the first call's statement back.
+// any part of (a `.near` reads its neighbourhood while it lowers). A first
+// call in another year than the first instant is the second instant for a
+// statement that binds no clock: every time phrase moves within a year, so
+// when each value of the first probe is the stand-in for an input or the
+// first call's own, nothing moved with the clock, and the second probe is
+// lowered only for a statement where something did. The proof ends by binding
+// the first call's values into the kept statement and asking for the first
+// call's statement back.
 //
 // Every answer for a shape carries the statement its first call lowered to as
 // its `origin`: the observers that read it read structure (tables, verbs),
@@ -35,14 +40,14 @@
 
 import { type And, map, type Pred, type Value } from '@yaks/query/core'
 import type { Presence, Vocab } from '@yaks/vocab'
-import { parse } from '@yaks/id'
 import { type Param, type Raw, raw, type Stmt } from './ast.ts'
 import {
   type BindOpts,
   type Census,
+  crowded,
+  type Heard,
   type Prepared,
   prepared,
-  type Walks,
   walks,
 } from './bind.ts'
 import type { ArchetypeSet } from './archetype.ts'
@@ -64,6 +69,7 @@ type Asked =
   | { held: boolean | undefined }
   | { presence: Presence; ids: readonly number[] | undefined }
   | { walks: string; page?: number; answer: boolean }
+  | { crowded: string; n: number; answer: boolean | undefined }
 type Kept = {
   sql: string
   params: (Param | Bind)[]
@@ -120,17 +126,26 @@ let recorded = (
     },
   ) as ArchetypeSet
 
-// The census's choice of road as the lowering asks it, written down: the
-// choice, not the counts, which move with every entity born.
+// The census's choices of road as the lowering asks them, written down: the
+// choices, not the counts, which move with every entity born.
 let choosing = (
   census: Census | undefined,
   log: Asked[],
-): Walks | undefined =>
-  census && ((comp, page) => {
-    let answer = walks(census, comp, page)
-    log.push({ walks: comp, page, answer })
-    return answer
-  })
+): Pick<Heard, 'walks' | 'crowded'> =>
+  census
+    ? {
+      walks: (comp, page) => {
+        let answer = walks(census, comp, page)
+        log.push({ walks: comp, page, answer })
+        return answer
+      },
+      crowded: (comp, n) => {
+        let answer = crowded(census, comp, n)
+        log.push({ crowded: comp, n, answer })
+        return answer
+      },
+    }
+    : {}
 
 // Where each value first stands in a list, found once rather than searched
 // for each value: a call can name thousands of ids.
@@ -152,6 +167,8 @@ let stands = (asked: Asked[], opts: BindOpts): boolean =>
   asked.every((a) =>
     'walks' in a
       ? walks(opts.census, a.walks, a.page) === a.answer
+      : 'crowded' in a
+      ? crowded(opts.census, a.crowded, a.n) === a.answer
       : 'presence' in a
       ? !!opts.archetypes && alike(opts.archetypes(a.presence), a.ids)
       : opts.archetypes?.held === a.held
@@ -162,6 +179,9 @@ let agree = (a: Asked[], b: Asked[]) =>
     let y = b[i]
     return 'walks' in x
       ? 'walks' in y && x.walks == y.walks && x.page === y.page &&
+        x.answer === y.answer
+      : 'crowded' in x
+      ? 'crowded' in y && x.crowded == y.crowded && x.n == y.n &&
         x.answer === y.answer
       : 'presence' in x
       ? 'presence' in y && alike(x.ids, y.ids) &&
@@ -292,7 +312,8 @@ let PROBES = [
 ]
 
 // The call this is, and the shape it has; undefined for a call whose ids the
-// lowering reads as more than opaque (a human id, a computed row's id).
+// lowering reads as more than opaque (a computed row's id). An id `generated`
+// matches is never a human one (`T-12`, `12`), which is a prefix and digits.
 let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
   let o = p.opts
   let place = new Map<string, number>(), operands: string[] = []
@@ -304,36 +325,43 @@ let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
     }
     return `\u0000${k}`
   })
-  let backed = Object.values(opts.backed ?? {})
-  let virtual = (eid: string) =>
-    backed.some((b) => b.tag && idOf(b.tag, eid) != null)
+  let tags = Object.values(opts.backed ?? {}).flatMap((b) =>
+    b.tag ? [b.tag] : []
+  )
+  let virtual = (eid: string) => tags.some((tag) => idOf(tag, eid) != null)
   let roots = o.eids ? [...o.eids] : undefined
-  let opaque = (id: string) => whole(id) || !parse(id) && !virtual(id)
-  if (!operands.every(opaque) || roots?.some(virtual)) return
-  let refs = operands.map((id) =>
-    o.references && Object.hasOwn(o.references, id)
+  if (roots?.some(virtual)) return
+  // Each operand's form: a number or an id's length and spelling, and whether
+  // it resolved to a row, to nothing, or was not asked.
+  let refs: (number | null | undefined)[] = [], forms: string[] = []
+  for (let id of operands) {
+    let number = whole(id)
+    if (!number && virtual(id)) return
+    let ref = o.references && Object.hasOwn(o.references, id)
       ? o.references[id]
       : undefined
-  )
-  if (refs.some((r) => r != null && !Number.isSafeInteger(r))) return
+    if (ref != null && !Number.isSafeInteger(ref)) return
+    refs.push(ref)
+    forms.push(
+      `${number ? 'n' : id.length}${id.includes('-') ? '-' : ''}${
+        ref === undefined ? 0 : ref === null ? 1 : 2
+      }`,
+    )
+  }
   // What an id the shape spells out resolves to is part of the shape too.
-  let spelled = Object.entries(o.references ?? {})
-    .filter(([id]) => !place.has(id))
-    .sort(([a], [b]) => a < b ? -1 : 1)
+  let spelled: [string, number | null][] = []
+  for (let id in o.references) {
+    if (!place.has(id)) spelled.push([id, o.references[id]])
+  }
+  spelled.sort(([a], [b]) => a < b ? -1 : 1)
   let ext = opts.extend ?? []
   let key = JSON.stringify([
     shape,
-    operands.map((
-      id,
-      k,
-    ) => [
-      whole(id) ? 'number' : id.length,
-      id.includes('-'),
-      refs[k] === undefined ? 0 : refs[k] === null ? 1 : 2,
-    ]),
+    forms.join(' '),
     roots?.map((r) => firsts(roots!).get(r)) ?? null,
     spelled,
     o.storageOrder ?? null,
+    opts.stable ?? null,
     o.unordered ?? null,
     opts.graves ?? null,
     o.exactIds ?? null,
@@ -378,20 +406,23 @@ type Probe = { out: Raw; call: Call }
 
 // What a parameter is, from its value in each probe: a constant, the clock
 // plus an offset, an input, or a JSON array of inputs; undefined when it is
-// none of these.
+// none of these. From one probe alone it is an input, or a constant the first
+// call bound too (`was`).
 let slot = (
   values: Param[],
   probes: Probe[],
+  was?: Param,
 ): Param | Bind | undefined => {
-  if (values.every((v) => v === values[0])) return values[0]
-  if (values.every((v) => typeof v == 'number')) {
+  let alone = probes.length == 1
+  if (!alone && values.every((v) => v === values[0])) return values[0]
+  if (!alone && values.every((v) => typeof v == 'number')) {
     let offsets = values.map((v, i) => (v as number) - probes[i].call.now)
     if (offsets.every((o) => o === offsets[0])) {
       return (call) => call.now + offsets[0]
     }
   }
-  let times = values.map(iso)
-  if (times.every((t) => t != null)) {
+  let times = alone ? [] : values.map(iso)
+  if (!alone && times.every((t) => t != null)) {
     let offsets = times.map((t, i) => t! - probes[i].call.now)
     if (offsets.every((o) => o === offsets[0])) {
       return (call) => new Date(call.now + offsets[0]).toISOString()
@@ -425,7 +456,9 @@ let slot = (
   }
   // Read in the first probe's terms, each probe's value must say the same.
   let said = values.map(reads)
-  if (said.some((s) => s == null || s != said[0])) return
+  if (said.some((s) => s == null || s != said[0])) {
+    return alone && values[0] === was ? was : undefined
+  }
   let one = input(0)(values[0])
   if (one) return one
   let binds = (JSON.parse(values[0] as string) as unknown[]).map(input(0))
@@ -451,8 +484,21 @@ let proven = (
   seen: Seen,
   asking: Call,
 ): Kept | null => {
-  let { call } = seen
-  let probes: Probe[] = []
+  let { call, first } = seen
+  let n = first.params.length
+  let located = (probes: Probe[]) => {
+    if (probes.some((p) => p.out.params.length != n)) return
+    let params: (Param | Bind)[] = []
+    for (let i = 0; i < n; i++) {
+      let s = slot(probes.map((p) => p.out.params[i]), probes, first.params[i])
+      if (s === undefined) return
+      params.push(s)
+    }
+    return params
+  }
+  let apart = new Date(call.now).getFullYear() !=
+    new Date(PROBES[0]).getFullYear()
+  let probes: Probe[] = [], params: (Param | Bind)[] | undefined
   for (let [family, now] of PROBES.entries()) {
     let asked: Asked[] = [], touched = { any: false }
     let operands = call.operands.map((id, k) => stand(id, family, k))
@@ -485,7 +531,7 @@ let proven = (
           {
             archetypes: recorded(opts.archetypes, asked),
             extend: watched(opts.extend, false),
-            walks: choosing(opts.census, asked),
+            ...choosing(opts.census, asked),
           },
         ).lower(),
       ))
@@ -493,16 +539,10 @@ let proven = (
       return null
     }
     probes.push({ out, call: { now, roots, operands, refs } })
+    params = probes.length > 1 || apart ? located(probes) : undefined
+    if (params) break
   }
-  let n = seen.first.params.length
-  if (probes.some((p) => p.out.params.length != n)) return null
-  let params: (Param | Bind)[] = []
-  for (let i = 0; i < n; i++) {
-    let s = slot(probes.map((p) => p.out.params[i]), probes)
-    if (s === undefined) return null
-    params.push(s)
-  }
-  let { first } = seen
+  if (!params) return null
   let kept: Kept = {
     sql: first.sql,
     params,
@@ -561,7 +601,7 @@ export let compile = (
       prepared(ast, vocab, opts, undefined, undefined, undefined, {
         archetypes: recorded(opts.archetypes, asked),
         extend: watched(opts.extend, true),
-        walks: choosing(opts.census, asked),
+        ...choosing(opts.census, asked),
       }),
   )
   let lowered = () => within(touched, () => render(p.lower()))

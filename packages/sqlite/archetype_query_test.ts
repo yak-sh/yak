@@ -376,7 +376,7 @@ test('archetype plans and gathers observe commits from another SQLite handle', (
       // The planner consults the connection's data version; a
       // commit landing right after it is the race this test stages.
       let sql = render(s).sql
-      if (db == first && sql == 'pragma data_version') {
+      if (db == first && sql.includes('data_version')) {
         let hook = afterCatalog
         afterCatalog = undefined
         hook?.()

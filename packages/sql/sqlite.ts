@@ -214,8 +214,12 @@ let referenceValues = (eids: string[]): string | undefined => {
  * still use one parameter: a delete can name every entity it deleted
  * (T-38059), while a host caps the values one statement binds.
  */
-export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
-  let values = eids.length == 1 ? undefined : referenceValues(eids)
+export let refEqAt = (
+  from: string,
+  stable = false,
+): Dialect['refEq'] =>
+(c, eids, negate) => {
+  let values = eids.length == 1 || stable ? undefined : referenceValues(eids)
   let hit = eids.length == 1
     ? { sql: `${c} = (select id from ${from} where eid = ?)`, params: eids }
     : values
@@ -262,18 +266,19 @@ let stampish = (c: string, s: Frag): Frag => ({
 })
 
 // A list as @yaks/sql's `oneOf` reads it, in the fewest rows: integers spelled
-// out, any other list bound once as JSON. Either is planned as a list
-// subquery, one value or many.
+// out, any other list bound once as JSON (`listed`). Either is planned as a
+// list subquery, one value or many.
 let among = (c: string, vals: (string | number)[]): Frag =>
   spelled(vals)
     ? {
       sql: `${c} in (values ${vals.map((v) => `(${v})`).join(', ')})`,
       params: [],
     }
-    : {
-      sql: `${c} in (select value from json_each(?))`,
-      params: [JSON.stringify(vals)],
-    }
+    : listed(c, vals)
+let listed = (c: string, vals: (string | number)[]): Frag => ({
+  sql: `${c} in (select value from json_each(?))`,
+  params: [JSON.stringify(vals)],
+})
 
 // The expression an equality tests and the one scalar it binds, or null for
 // any other predicate.
@@ -496,6 +501,15 @@ export let sqlite: Dialect = {
     sql: `${c} is ${negate ? '' : 'not '}null`,
     params: [],
   }),
+}
+
+/** The dialect for a host that keeps statements by their text (`stable`):
+ * the lists a read's operands and the catalog's answers make bind as one JSON
+ * array, never written into the text. */
+export let stableSqlite: Dialect = {
+  ...sqlite,
+  among: listed,
+  refEq: refEqAt('"entity"', true),
 }
 
 /**

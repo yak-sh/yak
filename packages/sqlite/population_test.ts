@@ -8,7 +8,7 @@ import { by, col, insert, select, table } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
 import { mem } from './testing.ts'
-import { POPULATION, population, populations } from './population.ts'
+import { census, POPULATION, population, populations } from './population.ts'
 import { unit } from './unit.ts'
 
 let vocab = loadVocab([archetypeDoc, {
@@ -246,3 +246,24 @@ for (let [line, want] of Object.entries(clauses)) {
     assertEquals(idle(line), want)
   })
 }
+
+// A census answers each question once while the rows it read stand: the reads
+// of one Inbox summary share it, and the next write asks again.
+let looked = fixture()
+looked.g.apply([{ entity: { eid: 'n' }, note: {} }])
+let statements = 0
+let run = looked.d.query
+looked.d.query = (s) => (statements++, run(s))
+let asks = () => {
+  let c = census(looked.d)
+  let answers = [c.exceeds!('note', 0), c.exceeds!('note', 1)]
+  return { answers, statements }
+}
+let firstAsks = asks(), againAsks = asks()
+looked.g.apply([{ entity: { eid: 'm' }, note: {} }])
+let afterWrite = asks()
+test('a census looks at a table once while its rows stand', () => {
+  assertEquals(firstAsks.answers, [true, false])
+  assertEquals(againAsks.statements, firstAsks.statements)
+  assertEquals(afterWrite.answers, [true, true])
+})

@@ -114,6 +114,7 @@ import {
   indexName,
   refEqAt,
   sqlite,
+  stableSqlite,
   type Tag,
   tagOf,
   tallied,
@@ -179,14 +180,21 @@ export type BindOpts = {
   population?: string
   /** What the store counts of itself, for choosing between plans. */
   census?: Census
+  /** Bind every list as one JSON array, for a host that keeps statements by
+   * their text (@yaks/sql `Driver.stable`): the statement's text is then the
+   * same whatever the list holds. */
+  stable?: boolean
 }
 
 /** What a store counts of itself, read only when a plan asks: how many
- * entities hold a component (`undefined` when the store keeps no count), and
- * the entity table's largest id. */
+ * entities hold a component (`undefined` when the store keeps no count), the
+ * entity table's largest id, and, for a store that keeps no count, whether a
+ * component's table holds more than so many rows, which reads at most one
+ * more than that. */
 export type Census = {
   held: (comp: string) => number | undefined
   largest: () => number
+  exceeds?: (comp: string, n: number) => boolean
 }
 
 /** Whether a page of `comp`'s owners in EID order is shorter walking the
@@ -212,6 +220,30 @@ export let walks = (
 ): boolean => {
   let held = census?.held(comp)
   return !!held && census!.largest() * (page ?? held) < 2 * held * held
+}
+
+/** Whether more than `n` rows of `comp` are stored, as `census` tells it:
+ * its count where it keeps one, else its bounded look; `undefined` when it
+ * can tell neither.
+ *
+ * ```ts
+ * import { crowded } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ * let census = (held?: number) => ({ held: () => held, largest: () => 3.2e6 })
+ * equal(crowded(census(65), 'content', 64), true)
+ * equal(crowded(census(3), 'content', 64), false)
+ * equal(crowded(census(), 'content', 64), undefined)
+ * equal(crowded({ ...census(), exceeds: () => true }, 'content', 64), true)
+ * ```
+ */
+export type Crowded = (comp: string, n: number) => boolean | undefined
+export let crowded = (
+  census: Census | undefined,
+  comp: string,
+  n: number,
+): boolean | undefined => {
+  let held = census?.held(comp)
+  return held != null ? held > n : census?.exceeds?.(comp, n)
 }
 
 // The mutable state one call to `bind` threads through: the schema, the
@@ -263,6 +295,8 @@ type Ctx = {
   archetypes?: ArchetypeSet
   /** whether a page of a component's owners walks the EID index (`walks`) */
   walks?: Walks
+  /** whether more than so many rows of a component are stored (`crowded`) */
+  crowded?: Crowded
   /** the computed component whose rows this query reads as its spine, when it
    * reads a backing's rather than the entity table */
   spine?: string
@@ -690,6 +724,25 @@ let refEq = (
   return ids.length ? ctx.d.among(key, ids) : { sql: '0', params: [] }
 }
 
+// A property's read value tested by the predicate's operator.
+let compared = (ctx: Ctx, hop: Hop, op: string, p: Pred): Frag | null => {
+  let read = readProp(ctx, hop.comp, hop.prop!, ctx.d.ownerKey(hop.comp))
+  if (!read) {
+    throw new Unsupported(
+      'a computed property',
+      `.${hop.comp}.${hop.prop} has no registered expression`,
+    )
+  }
+  if (op != EXISTS) {
+    opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
+  }
+  let lower = (c: string) =>
+    lowerScalar(ctx, c, op, p.value, read.tag, read.textAffinity)
+  return ctx.derived[`${hop.comp}.${hop.prop}`]
+    ? once(read.expr, lower)
+    : lower(read.expr)
+}
+
 // A predicate one hop long: either a property of a component, or a presence
 // test on the component itself (the leaf has no property name). `.task` and
 // `.task~=` test for presence, `!task` for absence; a value compared with a
@@ -790,27 +843,17 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       }
     }
   }
-  let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
-  if (!read) {
-    throw new Unsupported(
-      'a computed property',
-      `.${hop.comp}.${hop.prop} has no registered expression`,
-    )
-  }
   let values = literals(p.value)
   let def = ctx.v.prop(hop.comp, hop.prop)
+  // A reference equal to some eids compares the integer ids it stores
+  // (`refEq`) and reads no value: the eid it names is never read, so its
+  // expression is never built (under a scope, that read names the entities a
+  // reference may land on, a relation of its own).
   let refs = op == '' && values?.length && def?.category == 'ref' &&
     !def.computed && !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
-  if (!refs && op != EXISTS) {
-    opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
-  }
-  let lower = (c: string) =>
-    lowerScalar(ctx, c, op, p.value, read.tag, read.textAffinity)
   let frag = refs
     ? refEq(ctx, hop.comp, hop.prop, values!)
-    : ctx.derived[`${hop.comp}.${hop.prop}`]
-    ? once(read.expr, lower)
-    : lower(read.expr)
+    : compared(ctx, hop, op, p)
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
@@ -2234,7 +2277,7 @@ let selectionScreen = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts = {},
-  d: Dialect = sqlite,
+  d: Dialect = dialectOf(opts),
   screening = false,
 ): Selection | null => {
   let rest = ast.clauses.filter((c) => !directive(c))
@@ -2284,7 +2327,7 @@ export let screen = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts = {},
-  d: Dialect = sqlite,
+  d: Dialect = dialectOf(opts),
 ): Selection | null => selectionScreen(ast, vocab, opts, d)
 
 // Erasing a clause widens a screen. A true OR arm admits everything; under a
@@ -2852,32 +2895,70 @@ let indexedRelation = (
   }
   if (ctx.present && root.index && root.comp != ctx.present) {
     let present = ctx.present
+    // The same rows driven from the required component's own table.
+    let owning = (): Select => {
+      let sparse = rel(from, o)
+      return {
+        ...sparse,
+        from: raw(ctx.d.table(present)),
+        where: sparse.where,
+        joins: [
+          {
+            how: 'cross',
+            src: raw(from + ' not indexed', [], 'entity'),
+            on: raw(ctx.d.joinOn(present, 'entity')),
+          },
+          ...o.joins.filter((j) => j.source != joining(ctx, present)).map((
+            j,
+          ): Join => ({
+            how: flattened(clauses).some((c) =>
+                c.kind == 'pred' && !c.not && !c.where &&
+                c.path.length == 2 && joining(ctx, c.path[0]) == j.source &&
+                needs(opOf(c), c.value)
+              )
+              ? 'cross'
+              : 'left',
+            src: raw(
+              ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
+                ? ctx.d.owned(j.source.slice(1, -1))
+                : j.source,
+            ),
+            on: raw(j.on),
+          })),
+        ],
+      }
+    }
     // A session range can hold a lifetime of entries while the required
     // replies/requests number only a handful. Conversely, a populated request
-    // table must not replace a two-entry session seek. Probe a bounded prefix
-    // in this statement, not stale planner statistics or private cached state.
-    // Both roads apply the identical selector, ordering and page afterwards,
-    // so the probe counts stored rows: never through a visibility policy,
-    // whose test it would pay for each.
+    // table must not replace a two-entry session seek. Both roads apply the
+    // identical selector, ordering and page afterwards, so the choice counts
+    // stored rows: never through a visibility policy, whose test it would pay
+    // for each, and never planner statistics or a count kept from before.
     let cap = Math.max(64, (find<Limit>(clauses, 'limit')?.n ?? 16) * 4)
-    let dense: Cond = raw(
-      `exists (select 1 from ${
-        ctx.d.owned?.(present) ?? ctx.d.table(present)
-      } limit 1 offset ?)`,
-      [cap],
-    )
-    // A masked presence count evaluates its policy per owner; keep its
-    // census bounded above instead of counting the entire visible table.
-    if (
-      root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred)) &&
+    let stored = ctx.d.owned?.(present) ?? ctx.d.table(present)
+    let ranged = root.pred &&
+      ['<', '<=', '>', '>='].includes(opOf(root.pred)) &&
       !ctx.visibility?.components?.[present] &&
       ctx.v.indexes(root.comp).some((i) =>
         i.props.length == 1 &&
         indexName(ctx.v, root.comp, i.props) == root.index
       )
-    ) {
+    // The store tells whether they are many as the statement is planned
+    // (`crowded`, asked again on each call of a kept statement), and the
+    // statement takes that one road. One that cannot tell probes a bounded
+    // prefix in the statement, and keeps both.
+    let many = ranged ? undefined : ctx.crowded?.(present, cap)
+    if (many != null) {
+      return many ? indexed : owning()
+    }
+    let dense: Cond = raw(`exists (select 1 from ${stored} limit 1 offset ?)`, [
+      cap,
+    ])
+    // A masked presence count evaluates its policy per owner; keep its
+    // census bounded above instead of counting the entire visible table.
+    if (ranged) {
       let probe = { ...ctx, tables: new Set<string>(), correlated: true }
-      let range = clause(probe, root.pred)
+      let range = clause(probe, root.pred!)
       // Compare physical keys before reading content or visibility. The
       // range stops after the component population plus one; COUNT(*) on
       // the bare component uses SQLite's B-tree count, with no row decoding.
@@ -2886,44 +2967,11 @@ let indexedRelation = (
         from: raw(src),
         where: range,
         limit: lit(1),
-        offset: sub(select({
-          cols: [count()],
-          from: raw(ctx.d.owned?.(present) ?? ctx.d.table(present)),
-        })),
+        offset: sub(select({ cols: [count()], from: raw(stored) })),
       })))
     }
-    let sparse = rel(from, o)
-    let presence: Select = {
-      ...sparse,
-      from: raw(ctx.d.table(present)),
-      where: sparse.where,
-      joins: [
-        {
-          how: 'cross',
-          src: raw(from + ' not indexed', [], 'entity'),
-          on: raw(ctx.d.joinOn(present, 'entity')),
-        },
-        ...o.joins.filter((j) => j.source != joining(ctx, present)).map((
-          j,
-        ): Join => ({
-          how: flattened(clauses).some((c) =>
-              c.kind == 'pred' && !c.not && !c.where &&
-              c.path.length == 2 && joining(ctx, c.path[0]) == j.source &&
-              needs(opOf(c), c.value)
-            )
-            ? 'cross'
-            : 'left',
-          src: raw(
-            ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
-              ? ctx.d.owned(j.source.slice(1, -1))
-              : j.source,
-          ),
-          on: raw(j.on),
-        })),
-      ],
-    }
     return roads(ctx, s, from, root.comp, page, [
-      [presence, not(dense)],
+      [owning(), not(dense)],
       [indexed, dense],
     ])
   }
@@ -2998,7 +3046,11 @@ let roads = (
 /** A query as the statement that answers it: the one function `compile`
  * renders. */
 export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Select =>
-  bound(ast, vocab, opts, sqlite)
+  bound(ast, vocab, opts, dialectOf(opts))
+
+// The dialect a read is written in: its lists bound where the host keeps
+// statements by their text (`stable`), written out where it does not.
+let dialectOf = (opts: BindOpts): Dialect => opts.stable ? stableSqlite : sqlite
 
 // The same, through a dialect of this package's own — the renamed one a rule's
 // patterns are bound through (./match.ts).
@@ -3034,14 +3086,17 @@ export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
 // in its watching forms, and every other option is read as the caller holds it.
 /** What the lowering asks as it goes, which a kept statement records and
  * asks again (./kept.ts): the archetype catalog, the extensions, and the
- * census's choice of road. */
-export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & { walks?: Walks }
+ * census's choices of road. */
+export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & {
+  walks?: Walks
+  crowded?: Crowded
+}
 
 export let prepared = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
-  d: Dialect = sqlite,
+  d: Dialect = dialectOf(opts),
   reads: string[] = [],
   scope?: Scope,
   heard: Heard = opts,
@@ -3093,6 +3148,11 @@ export let prepared = (
     archetypes: spine ? undefined : heard.archetypes,
     walks: heard.walks ??
       (opts.census && ((comp, page) => walks(opts.census, comp, page))),
+    // A table the file lacks holds no rows, and is never asked for them.
+    crowded: (comp, n) =>
+      opts.absent?.includes(comp)
+        ? false
+        : (heard.crowded ?? ((c, n) => crowded(opts.census, c, n)))(comp, n),
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
@@ -3775,7 +3835,7 @@ export let sourceScreen = (
     (typeof q == 'string' ? parse(q) : q).clauses
   )
   let d: Dialect = {
-    ...sqlite,
+    ...dialectOf(opts),
     indexed: undefined,
     owned: undefined,
     archetype: undefined,
@@ -4419,7 +4479,7 @@ let visible = (
           quoted(comp)
         }.${quoted(field(prop))})`
         : base.col(comp, prop, v),
-    refEq: (c, eids, negate) => refEqAt(named())(c, eids, negate),
+    refEq: (c, eids, negate) => refEqAt(named(), opts.stable)(c, eids, negate),
   }
   let tally = scopedTally(
     ast,
@@ -4501,7 +4561,12 @@ let visible = (
       screening,
       correlated,
     },
-    { archetypes, extend: heard.extend, walks: heard.walks },
+    {
+      archetypes,
+      extend: heard.extend,
+      walks: heard.walks,
+      crowded: heard.crowded,
+    },
   )
   return {
     ...inner,

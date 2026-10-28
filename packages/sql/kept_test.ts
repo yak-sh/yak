@@ -454,6 +454,29 @@ test('a kept statement stops standing when the catalog answers otherwise', () =>
   }
 })
 
+test('a host that keeps statements by their text reads a list in one text', () => {
+  let texts = new Set<string>()
+  for (let n of [1, 2, 3, 4]) {
+    let ids = [eid(n), eid(n + 10)]
+    let references = { [ids[0]]: n, [ids[1]]: n + 10 }
+    let q = and(eq('link.left', list(...ids)))
+    texts.add(same(q, { references, stable: true }).sql)
+  }
+  equal(texts.size, 1)
+})
+
+test('a kept statement takes the road its census of a required component chooses now', () => {
+  let held = 1_000
+  let census = { held: () => held, largest: () => 3.2e6 }
+  let q = and(present('one'), eq('link.left', eid(1)))
+  let roads = new Set<string>()
+  for (let next of [1_000, 1_000, 1_000, 3, 3]) {
+    held = next
+    roads.add(same(q, { census }).sql)
+  }
+  equal(roads.size, 2)
+})
+
 test('a kept statement takes the road its census chooses now', () => {
   let held = 19_000
   let census = { held: () => held, largest: () => 3.2e6 }

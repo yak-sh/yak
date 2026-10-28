@@ -316,9 +316,9 @@ export let eidOf = (tag: string, id: number): string =>
 /** The integer id an eid names under `tag`, or null when it names none. Only
  * the one spelling {@link eidOf} writes is read, so an id has one eid. */
 export let idOf = (tag: string, eid: string): number | null => {
+  if (!eid.endsWith(tag)) return null
   let head = eid.slice(0, -tag.length)
-  return eid.endsWith(tag) && /^[0-9a-f]{8,}$/.test(head) &&
-      (head.length == 8 || head[0] != '0')
+  return /^[0-9a-f]{8,}$/.test(head) && (head.length == 8 || head[0] != '0')
     ? parseInt(head, 16)
     : null
 }

@@ -52,6 +52,7 @@ export let driver = (
     file: opts.file,
     statistics: opts.file ? 'sampled' : undefined,
     arms: STOCK,
+    stable: true,
   }
   return d
 }

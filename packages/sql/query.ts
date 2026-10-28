@@ -9,6 +9,7 @@ export {
   bind,
   type BindOpts,
   type Census,
+  crowded,
   screen,
   sourceScreen,
   tallied,
