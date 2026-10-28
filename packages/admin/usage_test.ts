@@ -48,13 +48,15 @@ let answer = (read: number[], wrote = run(1)): Answer => {
     },
   }
 }
-let found = (read: number[], wrote?: number[]) => {
-  let { series, who } = readings(answer(read, wrote))
+let jumped = (a: Answer) => {
+  let { series, who } = readings(a)
   return jumps(series, at).map((j) => report(j, who.get(j.subject)))
 }
+let found = (read: number[], wrote?: number[]) => jumped(answer(read, wrote))
 
+let far = answer(run(3.3e6, 423.8e6))
 test('an hour far past its normal is a jump that names the object and its entry points', () => {
-  let [jump, ...rest] = found(run(3.3e6, 423.8e6))
+  let [jump, ...rest] = jumped(far)
   equal(rest, [])
   match(
     jump.error.message,

@@ -229,7 +229,10 @@ export let median = (xs: number[]) => {
 /// count(264528274) -> '264.5M'
 /// count(480_000) -> '480k'
 /// count(1340) -> '1,340'
-/** An amount as a person reads it. */
+/// count(98) -> '98'
+/** An amount as a person reads it. The thousands are grouped by hand: a
+ * locale's formatter loads ICU's data the first time a process asks for it,
+ * tens of milliseconds for one comma. */
 export let count = (n: number) =>
   n >= 1e9
     ? `${+(n / 1e9).toFixed(1)}B`
@@ -237,7 +240,7 @@ export let count = (n: number) =>
     ? `${+(n / 1e6).toFixed(1)}M`
     : n >= 1e5
     ? `${Math.round(n / 1e3)}k`
-    : Math.round(n).toLocaleString('en-US')
+    : String(Math.round(n)).replace(/\B(?=(\d{3})+$)/g, ',')
 
 /** An hour a subject used far more of a metric than it normally does. */
 export type Jump = {
