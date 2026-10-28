@@ -503,15 +503,27 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
       list,
     })
     assertStringIncludes(text, 'Borrowed from Jeff')
-    assertStringIncludes(text, '3 of 100 calls this month')
+    assertStringIncludes(
+      text,
+      'Only members call out · 3 of 100 calls this month',
+    )
     return pressed
   }
-  assertEquals(await replaced(lent), [['Save key', 'own', 'copy', undefined]])
+  // Who may call out through it is the borrowing space's to say.
+  let open = ['Open to anyone', 'open', 'copy', undefined]
+  assertEquals(await replaced(lent), [open, [
+    'Save key',
+    'own',
+    'copy',
+    undefined,
+  ]])
   assertEquals(await replaced({ ...lent, keyed: false }), [
     ['Connect your own', 'own', 'copy', undefined],
+    open,
   ])
   assertEquals(await replaced(lent, [added('connected')]), [
     ['Use your own', 'attach', 'copy', undefined],
+    open,
   ])
 })
 

@@ -17,12 +17,14 @@ import { isHandle } from '@yaks/secrets'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import {
+  barred,
   CALLBACK,
   callback,
   connecting,
   connectionsOf,
   connectionTools,
   ctxOf,
+  type Hold,
   hook as receiveHook,
   own,
 } from './connections.ts'
@@ -401,6 +403,83 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
   assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['SKY'])
 })
 
+// Every act the page posts, and one app's link to a connection as each side
+// of it holds it: what the owner of the page's space may do there.
+let ACTS = [
+  'open',
+  'close',
+  'lend',
+  'recall',
+  'attach',
+  'own',
+  'key',
+  'signin',
+  'disconnect',
+  'about',
+  'list',
+  'unlist',
+]
+let KEEPS = ['key', 'signin', 'disconnect', 'about', 'list', 'unlist']
+let LOAN = { binding: 'SKY', cap: 2, lender: crypto.randomUUID() }
+
+test('each side of a link does only its own part of it', () => {
+  let through = (h: Hold) => ACTS.filter((a) => !barred(a, h))
+  let holds: [string, Hold, string[]][] = [
+    ['wholly the space’s', { kept: 'space', here: true, link: {} }, [
+      'open',
+      'close',
+      'lend',
+      'attach',
+      ...KEEPS,
+    ]],
+    [
+      'the lender at a copy’s loan',
+      { kept: 'space', here: false, link: LOAN },
+      [
+        'recall',
+        ...KEEPS,
+      ],
+    ],
+    ['the borrower at its loan', { here: true, link: LOAN }, [
+      'open',
+      'close',
+      'own',
+    ]],
+    [
+      'the borrower at the lender’s app',
+      { here: false, link: { lends: 2 } },
+      [],
+    ],
+    ['a copy borrowing in its source’s space', {
+      kept: 'space',
+      here: true,
+      link: LOAN,
+    }, ['open', 'close', 'lend', 'recall', 'attach', 'own', ...KEEPS]],
+    ['the person’s own, for an app elsewhere', {
+      kept: 'person',
+      here: false,
+      link: {},
+    }, KEEPS],
+    ['the person’s own, for an app here', {
+      kept: 'person',
+      here: true,
+      link: {},
+    }, ['open', 'close', 'attach', ...KEEPS]],
+    ['an app here that does not use it', { kept: 'space', here: true }, [
+      'attach',
+      ...KEEPS,
+    ]],
+    ['another space’s', { here: false }, []],
+  ]
+  for (let [what, hold, acts] of holds) {
+    assertEquals(through(hold), acts, what)
+  }
+  assertEquals(
+    barred('open', holds[1][1]),
+    'Who may call out through a copy borrowing it is that copy’s space’s ' +
+      'to say; you can change its cap or recall it.',
+  )
+})
 // A space whose Notes app asks each person to connect their own account
 // through an integration; bob, who is nobody there; the door he connects at;
 // and the connections his own page lists as his.

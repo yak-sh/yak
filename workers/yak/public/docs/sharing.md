@@ -400,11 +400,13 @@ connection's Advanced options hold **Lend to copies of** the app, with the calls
 a month each copy may make; saving a new number changes every copy's cap, and
 **Stop lending** recalls them all. Each copy borrowing it is a row naming the
 copy's space, with its calls this month against the cap and **Recall**, which
-leaves that copy asking for its own. On the borrower's side, the connection
-shows as borrowed from the lender's space with the copy's calls against its cap.
-**Use your own key** pastes a key in its place, **Connect your own** signs in
-where the service uses a sign-in, and **Use your own** attaches a connection the
-space already has for that service. See
+leaves that copy asking for its own; the cap and recalling it are all the lender
+can change of a copy's link. On the borrower's side, the connection shows as
+borrowed from the lender's space with the copy's calls against its cap. **Open
+to anyone** lets anyone using the copy call out through it, within the cap; only
+the copy's own space can say that. **Use your own key** pastes a key in its
+place, **Connect your own** signs in where the service uses a sign-in, and **Use
+your own** attaches a connection the space already has for that service. See
 [API keys and connections](./code.md#api-keys-and-connections) for declaring a
 connection and using its sentinel from a page or worker.
 

@@ -287,6 +287,34 @@ test('the borrower replaces a loan with its own key without changing the lender�
   )
 })
 
+let renamed = await setup()
+test('a borrower names its own borrowed link through the connector and changes nothing of the lender’s connection', async () => {
+  let s = renamed
+  cleanup(s.p[Symbol.asyncDispose])
+  // What the lender's connection is; `updated` and `used` are stamped by the
+  // answer naming it (T-132938).
+  let lender = async () =>
+    (await s.at.query(`.entity.eid=${s.connection}&*`))
+      .map((b) => [b.connection, b.secret])
+  let was = await lender()
+  let run = (name: string, args: Record<string, unknown>) =>
+    PUBLISHED.find((t) => t.name == name)!.run(s.away.ctx, {
+      space: 'borrower',
+      app: 'notes',
+      ...args,
+    })
+  await run('connection_need', { integration: 'Weather', binding: 'RAIN' })
+  assertEquals(comp((await s.links())[0], 'uses').binding, 'RAIN')
+  assertEquals(await lender(), was)
+  await assertRejects(() =>
+    run('connection_need', { integration: 'Weather', direct: true })
+  )
+  await assertRejects(() =>
+    run('app_secret_set', { name: 'Weather', value: 'theirs' })
+  )
+  assertEquals(await lender(), was)
+})
+
 let recalled = await setup()
 test('recalling a lend restores an ask in the borrower’s space', async () => {
   let s = recalled
@@ -532,6 +560,106 @@ test('the connections page lends, shows the loan on both sides, and replaces and
     assertStringIncludes(
       text(away.querySelector('[data-borrowed]')),
       '0 of 5 calls this month',
+    )
+
+    // Each side posts every act at the other's part of the loan, with every
+    // field any act reads: none goes through, and neither page changes.
+    let hidden = (row: Element) =>
+      Object.fromEntries(
+        [...row.querySelectorAll('form input[type=hidden]')].map((i) => [
+          i.getAttribute('name')!,
+          i.getAttribute('value')!,
+        ]),
+      )
+    let sent = async (who: Person, space: string, fields: object) => {
+      let r = await k.at(k.host, `/manage/connections?space=${space}`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          cookie: who.cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(fields as Record<string, string>).toString(),
+      })
+      let said = parseHTML(await r.text()).document.querySelector('.Say')
+      return {
+        say: text(said),
+        no: !!said?.getAttribute('class')?.includes('Say-no'),
+      }
+    }
+    let went = async (
+      who: Person,
+      space: string,
+      acts: string[],
+      at: object,
+    ) => {
+      let out = []
+      for (let act of acts) {
+        let fields = {
+          cap: '9',
+          key: 'their-key',
+          binding: 'MINE',
+          title: 'Mine',
+        }
+        let s = await sent(who, space, { ...fields, ...at, do: act })
+        if (!s.no) out.push(`${act}: ${s.say}`)
+      }
+      return out
+    }
+    let pages = async () => [
+      text(card(await open(jeff, his), 'ESV')),
+      text((await open(friend, hers)).querySelector('body')),
+    ]
+    let [source, copy] = [...esv.querySelectorAll('.Rows_Item')].map(hidden)
+    let before = await pages()
+    let acts = ['open', 'close', 'lend', 'recall', 'attach', 'own', 'key']
+      .concat(['signin', 'disconnect', 'about', 'list', 'unlist'])
+    // The lender's own connection is his to key and end, whichever app the
+    // post names, and the borrower's link is hers to open and replace.
+    let notHis = ['open', 'close', 'lend', 'attach', 'own']
+    assertEquals(await went(jeff, his, notHis, copy), [])
+    assertEquals(await went(friend, hers, acts, source), [])
+    let notHers = acts.filter((a) => !['open', 'close', 'own'].includes(a))
+    assertEquals(await went(friend, hers, notHers, copy), [])
+    // The same through the connector: his connection is not hers to lend
+    // on or to attach, nor her copy his to reach.
+    let lend = { app: 'study', integration: 'ESV', cap: 50 }
+    await assertRejects(
+      () => theirs.tool('connection_lend', lend),
+      Error,
+      'only the space lending it lends it on',
+    )
+    await assertRejects(
+      () =>
+        theirs.tool('connection_attach', {
+          app: 'study',
+          connection: copy.connection,
+        }),
+      Error,
+      'That connection is not here any more.',
+    )
+    await assertRejects(() =>
+      agent.tool('connection_lend', { ...lend, space: hers })
+    )
+    assertEquals(await pages(), before)
+    // What is each's: she opens her copy's link, and he is told it is hers.
+    let loan = away.querySelector('[data-borrowed]')!
+    assertStringIncludes(
+      await press(friend, away, button(loan, 'Open to anyone')),
+      'Anyone using the app may call out through it now.',
+    )
+    away = await open(friend, hers)
+    assertStringIncludes(
+      text(away.querySelector('[data-borrowed]')),
+      'Anyone may call out',
+    )
+    assertEquals(
+      await sent(jeff, his, { ...hidden(loan), do: 'close' }),
+      {
+        say: 'Who may call out through a copy borrowing it is that copy’s ' +
+          'space’s to say; you can change its cap or recall it.',
+        no: true,
+      },
     )
 
     // The borrower's own key replaces one copy's loan, the connection that

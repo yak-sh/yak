@@ -662,6 +662,100 @@ export type Said = { say: string; no: boolean }
 
 let no = (say: string): Said => ({ say, no: true })
 
+/**
+ * What the person acting for a space holds of a connection, and of one app's
+ * link to it. A link joins two sides: the connection, kept by the space or the
+ * person it belongs to, and the app, kept by its space. A loan splits them: a
+ * copy's link to a connection it borrows is its own space's, but for what the
+ * lender keeps of it, which is recalling it and its cap, set through the
+ * lender's own app's lend.
+ */
+export type Hold = {
+  /** whose the connection is, where it is this space's or the person's own */
+  kept?: 'space' | 'person'
+  /** the app is a live app of this space */
+  here: boolean
+  /** the app's link to the connection, where it has one */
+  link?: Comp
+}
+
+/** What the person acting for `space` holds of connection `b` and of the
+ * link to it from `app`, as the directory says. */
+export let holdOf = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  b: Bundle | undefined,
+  app: string,
+): Promise<Hold> => {
+  let owner = comp(b, CONNECTION).owner
+  let at = b && EID.test(app) ? await dirOf(env).appAt(app) : null
+  let [l] = at
+    ? await readOf(env)(
+      `.entity.eid=${edgeEid(app, USES, b!.entity.eid)}&.${USES}`,
+    )
+    : []
+  return {
+    ...!b
+      ? {}
+      : owner == space.eid
+      ? { kept: 'space' }
+      : owner == who.person
+      ? { kept: 'person' }
+      : {},
+    here: !!at && !at.app.trashed && at.space.eid == space.eid,
+    ...l ? { link: comp(l, USES) } : {},
+  }
+}
+
+let lent = (h: Hold) => h.link?.lender != null
+
+let GONE = 'That connection is not here any more.'
+let kept = (h: Hold) => h.kept ? undefined : GONE
+let here = (h: Hold) => h.here ? undefined : 'Choose a live app in this space.'
+let linked = (h: Hold) =>
+  h.link ? undefined : 'That app does not use it any more.'
+
+// Who may call out through a link is its app's space's to say, a copy's
+// borrowed link included.
+let setting = (h: Hold) =>
+  !h.kept && !(h.here && lent(h)) ? GONE : linked(h) ??
+    (h.here
+      ? undefined
+      : lent(h)
+      ? 'Who may call out through a copy borrowing it is that copy’s ' +
+        'space’s to say; you can change its cap or recall it.'
+      : 'Who may call out through that app is its own space’s to say.')
+
+// Each act at one app's link, and what it needs of the hold, as the sentence
+// refusing it where the hold falls short. Any other act is on the connection
+// alone, and needs only that it is kept here.
+let ACTS: Record<string, (h: Hold) => string | undefined> = {
+  own: (h) =>
+    h.here && lent(h)
+      ? undefined
+      : 'Choose a connection this space’s app borrows.',
+  lend: (h) =>
+    h.kept == 'space'
+      ? here(h) ?? linked(h)
+      : h.here && lent(h)
+      ? 'That app borrows it, and only the space lending it lends it on.'
+      : h.kept
+      ? 'Only a connection this space keeps can be lent.'
+      : GONE,
+  recall: (h) =>
+    kept(h) ?? (lent(h) ? undefined : 'That app does not borrow it.'),
+  attach: (h) => kept(h) ?? here(h),
+  open: setting,
+  close: setting,
+}
+
+/** Why the person may not do `act` (a connections page's `do`) with what they
+ * hold, or nothing where they may: what the page asks of every post, and the
+ * connector's tools of a connection or link they name that may be another's. */
+export let barred = (act: string, h: Hold): string | undefined =>
+  (ACTS[act] ?? kept)(h)
+
 // The hosts a custom key may go to, as a person typed them.
 let hostsOf = (text: string): string[] =>
   text.toLowerCase().split(/[\s,]+/).filter(Boolean)
@@ -749,7 +843,11 @@ export let connecting = async (
   let act = field('do')
   let c = ctxOf(env, who)
   let key = field('key')
-  if ((act == 'key' || act == 'add') && !vaulted(env)) {
+  // The page is its space owner's alone (apps.ts `manage`).
+  if (who.role != 'owner') {
+    return no('Only this space’s owner can change its connections.')
+  }
+  if (['key', 'add', 'own'].includes(act) && !vaulted(env)) {
     return no("Keys can't be saved here yet.")
   }
   try {
@@ -780,16 +878,10 @@ export let connecting = async (
       ? await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
       : []
     let owner = comp(b, CONNECTION).owner
+    let app = field('app')
+    let refused = barred(act, await holdOf(env, space, who, b, app))
+    if (refused) return no(refused)
     if (act == 'own') {
-      if (!vaulted(env)) return no("Keys can't be saved here yet.")
-      let app = field('app')
-      let at = await dirOf(env).appAt(app)
-      let [loan] = at && at.space.eid == space.eid && !at.app.trashed
-        ? await c.graph.read(`.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`)
-        : []
-      if (who.role != 'owner' || !b || comp(loan, USES).lender == null) {
-        return no('Choose a connection this space’s app borrows.')
-      }
       let integration = integrationOf(b)
       let i = await known(c.graph.read, integration)
       if ((!i || keyed(i)) && !key) return no('Paste the key first.')
@@ -809,17 +901,11 @@ export let connecting = async (
       await attached(env, who, space, app, own)
       return { say: 'The app uses your own connection now.', no: false }
     }
-    if (!b || (owner != space.eid && owner != who.person)) {
-      return no('That connection is not here any more.')
-    }
     let apps = await usersOf(env, eid)
     // What is said about a custom integration is its owner's to change: for
     // a space's, the space's owner (@yaks/connections `set`). Where its key
     // goes never changes.
     if (act == 'about' || act == 'list' || act == 'unlist') {
-      if (owner == space.eid && who.role != 'owner') {
-        return no('Only this space’s owner can change what it says here.')
-      }
       let bundles = await set(c.graph.read, {
         ...act == 'about'
           ? Object.fromEntries(ABOUT.map((k) => [k, field(k)]))
@@ -839,26 +925,17 @@ export let connecting = async (
         no: false,
       }
     }
-    if (act == 'lend' || act == 'recall') {
-      if (who.role != 'owner' || owner != space.eid) {
-        return no('Only this space’s owner can lend its connection.')
+    if (act == 'lend') {
+      let cap = field('cap') == '' ? null : Number(field('cap'))
+      await lending(env, app, integrationOf(b), cap)
+      return {
+        say: cap == null
+          ? 'Stopped lending to installed copies.'
+          : `Installed copies may each make ${cap} calls a month.`,
+        no: false,
       }
-      let app = field('app')
-      if (!apps.includes(app)) return no('That app does not use it any more.')
-      if (act == 'lend') {
-        let at = await dirOf(env).appAt(app)
-        if (!at || at.app.trashed || at.space.eid != space.eid) {
-          return no('Choose a live app in this space.')
-        }
-        let cap = field('cap') == '' ? null : Number(field('cap'))
-        await lending(env, app, integrationOf(b), cap)
-        return {
-          say: cap == null
-            ? 'Stopped lending to installed copies.'
-            : `Installed copies may each make ${cap} calls a month.`,
-          no: false,
-        }
-      }
+    }
+    if (act == 'recall') {
       let host = ctxOf(env)
       await host.graph.apply(
         await recall(host.graph.read, { connection: eid, app }, ownersOf(env)),
@@ -870,28 +947,20 @@ export let connecting = async (
       }
     }
     if (act == 'attach') {
-      if (who.role != 'owner' || owner != space.eid) {
-        return no('Only this space’s owner can attach its connection.')
-      }
-      let at = await dirOf(env).appAt(field('app'))
-      if (!at || at.space.eid != space.eid || at.app.trashed) {
-        return no('Choose a live app in this space.')
-      }
       let bundles = await attach(c.graph.read, {
         owner: space.eid,
-        app: at.app.eid,
+        app,
         connection: eid,
         binding: field('binding') || undefined,
       })
       if (bundles.length) await c.graph.apply(bundles)
-      await rebound(env, [at.app.eid])
+      await rebound(env, [app])
       let [l] = await c.graph.read(
-        `.entity.eid=${edgeEid(at.app.eid, USES, eid)}&.${USES}`,
+        `.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`,
       )
+      let at = (await dirOf(env).appAt(app))!.app
       return {
-        say: `${at.app.title || at.app.slug} can now use ${
-          integrationOf(b)
-        }, as env.${
+        say: `${at.title || at.slug} can now use ${integrationOf(b)}, as env.${
           comp(l, USES).binding
         }. Only its members can call out through it.`,
         no: false,
@@ -901,8 +970,6 @@ export let connecting = async (
     // members again, is the person's act on one link (@yaks/member
     // `callsOut`); what the app's code reads does not move.
     if (act == 'open' || act == 'close') {
-      let app = field('app')
-      if (!apps.includes(app)) return no('That app does not use it any more.')
       await c.graph.apply([{
         entity: { eid: edgeEid(app, USES, eid) },
         [USES]: { anyone: act == 'open' },
@@ -1188,6 +1255,14 @@ let CONNECTIONS: Row[] = [
       }
       let connection = text(args.connection, 'connection')
       let c = ctxOf(ctx.env, who)
+      let [b] = EID.test(connection)
+        ? await c.graph.read(`.entity.eid=${connection}&.${CONNECTION}`)
+        : []
+      let refused = barred(
+        'attach',
+        await holdOf(ctx.env, space, who, b, app.eid),
+      )
+      if (refused) throw refuse('access', refused)
       let bundles = await attach(c.graph.read, {
         owner: space.eid,
         app: app.eid,
@@ -1242,10 +1317,11 @@ let CONNECTIONS: Row[] = [
       }
       let integration = text(args.integration, 'integration')
       let c = ctxOf(ctx.env)
+      // An app with none to lend is told so by `lend`.
       let connection = await using(c.graph.read, { app: app.eid, integration })
-      if (!connection || comp(connection, CONNECTION).owner != space.eid) {
-        throw refuse('access', 'Only a connection this space owns may be lent.')
-      }
+      let refused = connection &&
+        barred('lend', await holdOf(ctx.env, space, who, connection, app.eid))
+      if (refused) throw refuse('access', refused)
       if (args.cap !== null && typeof args.cap != 'number') {
         throw refuse(
           'cap',

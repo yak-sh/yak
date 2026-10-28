@@ -956,6 +956,16 @@ let press = (value: string, label: string, quiet = true) =>
 
 let callsOf = (n: number) => `${n} ${n == 1 ? 'call' : 'calls'}`
 
+// Who may call out through an app's link, and the button that changes it:
+// the app's space's to say, a copy's borrowed link included.
+let callers = (a: Using) =>
+  a.anyone ? 'Anyone may call out' : 'Only members call out'
+let opening = (a: Using) =>
+  press(
+    a.anyone ? 'close' : 'open',
+    a.anyone ? 'Members only' : 'Open to anyone',
+  )
+
 // The calls an app made through a connection this month, against its cap.
 let calls = (a: { calls: number; cap: number | null }) =>
   a.cap == null
@@ -1033,11 +1043,7 @@ let connection = (
         `<code>env.${esc(a.binding)}</code>${
           a.direct ? ', the key itself' : ''
         }`,
-        c.each
-          ? ''
-          : a.anyone
-          ? 'Anyone may call out'
-          : 'Only members call out',
+        c.each ? '' : callers(a),
         calls(a),
         a.lends == null
           ? ''
@@ -1047,10 +1053,7 @@ let connection = (
       c.each ? '' : `<div class="Rows_Actions">${
         forApp(
           a,
-          a.borrower != null ? press('recall', 'Recall') : press(
-            a.anyone ? 'close' : 'open',
-            a.anyone ? 'Members only' : 'Open to anyone',
-          ),
+          a.borrower != null ? press('recall', 'Recall') : opening(a),
         )
       }</div>`
     }</li>`
@@ -1228,7 +1231,8 @@ let connection = (
 
 // A connection an app here borrows from the space that lent it with the app,
 // as a card: its head says whose it is, its row what the app has spent of the
-// cap it was lent under, and what replaces it is the space's own: a
+// cap it was lent under and who may call out through it, which is this space's
+// to say, and what replaces it is the space's own: a
 // connection it holds already, a sign-in, or a key pasted under the fold.
 let borrowing = (
   b: Borrowed,
@@ -1273,8 +1277,10 @@ let borrowing = (
   }’s key until you use your own. The key stays hidden, and neither of you sees the other’s data.</p><ul class="Rows"><li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
     esc(b.app.title)
   }</strong><span class="Rows_Meta"><code>env.${esc(b.app.binding)}</code> · ${
-    calls(b.app)
-  }</span></div></li></ul>${own}</section>`
+    callers(b.app)
+  } · ${calls(b.app)}</span></div><div class="Rows_Actions">${
+    form(opening(b.app))
+  }</div></li></ul>${own}</section>`
 }
 
 // The page: the person's own connections and the services that hold a

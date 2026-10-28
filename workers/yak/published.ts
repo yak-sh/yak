@@ -15,6 +15,7 @@
 // lists and deletes every translation whose name it no longer carries.
 import {
   connect,
+  CONNECTION,
   disconnect,
   INTEGRATION,
   integrationEid,
@@ -26,7 +27,14 @@ import {
 } from '@yaks/connections'
 import type { Bundle, Comp, NamedTool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
-import { connectionsOf, ctxOf, pageOf, rebind } from './connections.ts'
+import {
+  barred,
+  connectionsOf,
+  ctxOf,
+  holdOf,
+  pageOf,
+  rebind,
+} from './connections.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
 import {
@@ -46,7 +54,6 @@ import { call } from './tools.ts'
 import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
-import { CONNECTION } from '@yaks/connections'
 import { capOf, monthOf, spent } from '@yaks/egress'
 import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
@@ -193,8 +200,15 @@ let ROWS: Row[] = [
       }).catch((e) => {
         throw refuse('arguments', e instanceof Error ? e.message : String(e))
       })
-      let made = await c.graph.apply(asked)
-      let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
+      // An app that uses a connection by that name already is answered with
+      // it, which takes a new key only where it is this space's or the
+      // caller's own.
+      let eid = asked.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
+      let [held] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
+      let refused = held &&
+        barred('key', await holdOf(ctx.env, space, who, held, app.eid))
+      if (refused) throw refuse('access', refused)
+      await c.graph.apply(asked)
       await connect(c, eid, { key: value })
       await rebind(ctx.env, space, app)
       return {
@@ -250,12 +264,21 @@ let ROWS: Row[] = [
         .find((l) => comp(l, USES).binding == name)
       if (link) {
         let to = String(comp(link, 'edge').to)
+        // The link is the app's, and the key is forgotten with it only where
+        // the connection is this space's or the caller's own.
+        let [held] = await c.graph.read(`.entity.eid=${to}&.${CONNECTION}`)
+        let ours = !barred(
+          'disconnect',
+          await holdOf(ctx.env, space, who, held, app.eid),
+        )
         await c.graph.apply([{
           entity: { eid: link.entity.eid },
           tombstone: {},
         }])
         let left = await c.graph.read(`.edge.to=${to}&.${USES}`)
-        if (comp(link, USES).direct && !left.length) await disconnect(c, to)
+        if (comp(link, USES).direct && !left.length && ours) {
+          await disconnect(c, to)
+        }
       }
       await rebind(ctx.env, space, app, [name])
       return { space, text: `${space.slug}/${app.slug}: ${name} removed` }
