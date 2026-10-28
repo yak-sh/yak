@@ -747,7 +747,24 @@ export let storage = (
       }
       return tables
     }
+    let key = JSON.stringify([
+      query,
+      !!o.storageOrder,
+      !!o.unordered,
+      direct,
+      o.visibility,
+    ])
     let prove = () => {
+      // A retained proof reads the same query and policy even if a caller
+      // later edits the AST or visibility object it handed this read.
+      let [query, , , , visibility] = JSON.parse(key) as [
+        And,
+        boolean,
+        boolean,
+        boolean,
+        Opts['visibility'],
+      ]
+      let o = { visibility }
       let standing: And | Filter | undefined = query
       let strict: string[] | undefined
       let shape: Filter | undefined
@@ -801,13 +818,7 @@ export let storage = (
     }
     return unit(driver, () =>
       memo.answer(
-        JSON.stringify([
-          query,
-          !!o.storageOrder,
-          !!o.unordered,
-          direct,
-          o.visibility,
-        ]),
+        key,
         owing || unread ? undefined : dependencies,
         () =>
           rows(driver, vocab, query, {

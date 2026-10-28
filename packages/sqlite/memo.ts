@@ -142,6 +142,7 @@ export type Memo = {
 }
 
 type Answer = {
+  prove?: () => Pick<Answer, 'test' | 'shape' | 'membership' | 'strict'>
   tables: [string, number][]
   rows: Packed
   /** Whole/named gets with SQL-state-only derivations, under all DML. */
@@ -1084,8 +1085,13 @@ export let memoized = (
       b === LOST || b === undefined ||
       (b != null && (holed(b) ? a.shape?.(b) ?? true : a.test!(b)))
     for (let a of k.answers.values()) {
-      if (!a.test) continue
       if (a.tables.some(([t, n]) => (before.get(t) ?? 0) != n)) continue
+      if (a.tables.every(([t, n]) => (c.versions.get(t) ?? 0) == n)) continue
+      if (a.prove) {
+        Object.assign(a, a.prove())
+        delete a.prove
+      }
+      if (!a.test) continue
       if (
         a.strict?.some((t) => (before.get(t) ?? 0) != (c.versions.get(t) ?? 0))
       ) {
@@ -1287,23 +1293,27 @@ export let memoized = (
       if (at.some(([t, n]) => current(t) != n)) return rows
       let kept = packed(rows, ANSWER)
       if (!kept) return rows
-      let { query, membership, strict, shape } = prove?.() ?? {}
-      let proof = typeof query == 'function' || !query
-        ? undefined
-        : rooted(vocab, query)
       remember(key, {
         tables: at,
         rows: kept,
-        test: typeof query == 'function' ? query : proof?.test,
-        shape: shape ?? proof?.shape,
-        membership: membership &&
-          (typeof query == 'function' || !!query && local(vocab, query)),
-        strict: [
-          ...new Set([
-            ...strict ?? [],
-            ...proof?.strict ?? [],
-          ]),
-        ],
+        prove: () => {
+          let { query, membership, strict, shape } = prove?.() ?? {}
+          let proof = typeof query == 'function' || !query
+            ? undefined
+            : rooted(vocab, query)
+          return {
+            test: typeof query == 'function' ? query : proof?.test,
+            shape: shape ?? proof?.shape,
+            membership: membership &&
+              (typeof query == 'function' || !!query && local(vocab, query)),
+            strict: [
+              ...new Set([
+                ...strict ?? [],
+                ...proof?.strict ?? [],
+              ]),
+            ],
+          }
+        },
       })
       return rows
     },

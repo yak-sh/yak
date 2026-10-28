@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { parse } from '@yaks/query'
 import { snapshot, textual } from './testing.ts'
 import { storage } from './mod.ts'
 import {
@@ -86,6 +87,14 @@ let reuse = fixture(),
   publicTarget = fixture()
 let missing = fixture()
 missing.store.get(['absent'])
+let mutable = fixture()
+let selection = structuredClone(parse('.doc.text=secret'))
+mutable.store.rows(selection)
+mutable.store.rows(selection)
+let predicate = selection.clauses[0]
+if (predicate.kind == 'pred' && predicate.value?.kind == 'scalar') {
+  predicate.value.raw = 'other'
+}
 let selected = fixture()
 let unchanged = fixture()
 let pending = fixture()
@@ -190,6 +199,12 @@ test('removing a known absent identity leaves it absent', () => {
     assertEquals(tx.get(['absent']), [])
   })
   assertEquals(missing.store.get(['absent']), [])
+})
+test('a kept selection retains its query when the caller edits its AST', () => {
+  mutable.store.tx((tx) =>
+    tx.patch([{ entity: { eid: 'draft' }, doc: { text: 'changed' } }])
+  )
+  assertEquals(mutable.store.rows('.doc.text=secret'), [])
 })
 test('a removed component leaves no cached aspect', () => {
   removed.store.tx((tx) => tx.patch([{ entity: { eid: 'draft' }, doc: null }]))
