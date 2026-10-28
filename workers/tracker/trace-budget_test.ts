@@ -8,7 +8,7 @@ import { reserveTrace, TRACE_CEILING, traceBatch } from '@yaks/tracker/intake'
 import { type State, TRACE_ADMISSION_SETUP, Tracker } from './object.ts'
 import { platform } from './core.ts'
 import { consume } from './queue.ts'
-import { sign } from './auth.ts'
+import { authorize, sign } from './auth.ts'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let uuid = () => crypto.randomUUID()
@@ -197,12 +197,15 @@ test('queue acknowledges dropped traces without retrying or reporting and leaves
   equal(errored, 1)
 })
 
-// Signed tickets and durable storage belong to the module's door fixture.
+// Signed tickets and durable storage belong to the module's door fixture. Each
+// ticket is opened once as the file loads: the tracker's key and a ticket's
+// mac are WebCrypto calls, which Deno answers from a thread pool on a later
+// turn, and token.ts keeps both.
 let statusObject = new Tracker(state(durable(), platform), {
   TRACKER_SECRET: 'scratch',
 })
-let budgetRequest = async (scope: string, admin = false) =>
-  new Request('https://tracker.test/trace-budget', {
+let budgetRequest = async (scope: string, admin = false) => {
+  let request = new Request('https://tracker.test/trace-budget', {
     headers: {
       authorization: 'Bearer ' +
         await sign({
@@ -213,10 +216,16 @@ let budgetRequest = async (scope: string, admin = false) =>
         }, 'scratch'),
     },
   })
+  await authorize(request, 'scratch', scope)
+  return request
+}
 let deniedBudget = await budgetRequest(platform)
 let admittedBudget = await budgetRequest(platform, true)
-test('budget status is platform-admin only and does not boot a graph', async () => {
+test('budget status is platform-admin only', async () => {
   equal((await statusObject.fetch(deniedBudget)).status, 403)
+})
+
+test('budget status does not boot a graph', async () => {
   equal((await statusObject.fetch(admittedBudget)).status, 200)
   equal(statusObject.tracker, undefined)
 })

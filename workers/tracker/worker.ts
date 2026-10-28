@@ -199,9 +199,14 @@ export let worker = (
       true,
       (error) => evicted(error) || lost(error) || opaque(error),
     )
-  // An HTTP door, its body read again by each send.
+  // An HTTP door, its body read again by each send. A request without one has
+  // nothing a send uses up, so each send takes it as it is: in Deno, copying
+  // a Request took longer than the rest of the send.
   let send = (scope: string, request: Request, body: ArrayBuffer | null) =>
-    call(scope, (stub) => stub.fetch(new Request(request, { body })))
+    call(
+      scope,
+      (stub) => stub.fetch(body ? new Request(request, { body }) : request),
+    )
   // Where a receipt stands, asked through the object's stable read doors
   // across Worker/DO deployment propagation. The runtime holds its signing
   // key; the build learns only whether its canary arrived or failed.

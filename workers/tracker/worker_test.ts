@@ -27,6 +27,8 @@ let fixture = (doors: Partial<Stub> = {}) => {
     ingestTrace: fail,
     ...doors,
   }
+  // No stub reads a ticket, so a scratch one stands in for signing: a
+  // WebCrypto call, which Deno answers from a thread pool on a later turn.
   let w = worker({
     BUNDLE_HASH: hash,
     TRACKER_SECRET: 'scratch',
@@ -38,7 +40,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
         return Promise.resolve()
       },
     },
-  })
+  }, () => Promise.resolve('scratch-ticket'))
   let check = (entrypoint: string) => {
     let [failure, companion] = sent.at(-1)!
     equal((failure.error as Comp).tags, {
@@ -131,6 +133,9 @@ test('a mark lost, reset or refused on its way to the object is sent again', asy
 
 // A deploy's canary read, through `failures` on its way to the object: what
 // the Worker answers, and how many failures it reported.
+let read = new Request(
+  `https://tracker.test/canary?scope=platform&hash=${hash}&eid=${crypto.randomUUID()}`,
+)
 let stood = async (failures: Error[]) => {
   let { w, sent } = fixture({
     fetch: (request) => {
@@ -143,11 +148,7 @@ let stood = async (failures: Error[]) => {
       )
     },
   })
-  let response = await w.fetch(
-    new Request(
-      `https://tracker.test/canary?scope=platform&hash=${hash}&eid=${crypto.randomUUID()}`,
-    ),
-  )
+  let response = await w.fetch(read)
   return [response.status, await response.json(), sent.length]
 }
 
@@ -157,6 +158,9 @@ test("a canary's read of a moving object waits it out, unreported", async () => 
     { arrived: false },
     0,
   ])
+})
+
+test("a canary's read refused past its last resend is reported", async () => {
   equal(
     await stood(Array(backoff.pauses.length + 1).fill(refused)),
     [503, { error: 'tracker temporarily unavailable' }, 1],
