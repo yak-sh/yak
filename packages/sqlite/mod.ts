@@ -538,6 +538,7 @@ export let storage = (
   let reading = (o: Opts, fetch = cached): ReadCache => ({
     fetch: (eids, comps) => fetch(eids, comps, false),
     permit: (eids, components, run, graves) => {
+      if (!eids.length) return []
       let selected = new Set(eids)
       let queries = [
         o.visibility?.entity,
@@ -565,7 +566,7 @@ export let storage = (
       }
       return memo.answer(
         JSON.stringify(['permit', eids, components, o.visibility, !!graves]),
-        policies(o),
+        () => policies(o),
         run,
         () => ({ query: graves ? undefined : test, membership: true }),
       )
@@ -643,15 +644,23 @@ export let storage = (
       ? (eids: string[], comps?: string[]) =>
         viewed(eids, comps, o, fetch, pending())
       : undefined
+  let tests = new WeakMap<And, Map<boolean, Filter | undefined>>()
   let tested = (query: And, exactIds = false): Filter | undefined => {
-    if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
-      return undefined
+    let known = Object.isFrozen(query) ? tests.get(query) : undefined
+    if (known?.has(exactIds)) return known.get(exactIds)
+    let test: Filter | undefined
+    if (basis(vocab, query, base.derived) && local(vocab, query)) {
+      try {
+        test = filter(query, vocab, { exactIds })
+      } catch {
+        // SQL decides predicates the local matcher cannot judge.
+      }
     }
-    try {
-      return filter(query, vocab, { exactIds })
-    } catch {
-      return undefined
+    if (Object.isFrozen(query)) {
+      if (!known) tests.set(query, known = new Map())
+      known.set(exactIds, test)
     }
+    return test
   }
   let resolved = (query: And, o: Opts): BindOpts['references'] => {
     if (!o.visibility?.entity) return undefined
@@ -710,11 +719,10 @@ export let storage = (
     // A read asking for graves is the statement's: it alone judges the
     // deleted (@yaks/sql `ghostly`).
     if (
-      o.visibility && !owing && !o.graves &&
+      o.visibility && !owing && !o.graves && simple(query) &&
       !Object.keys(o.visibility.components ?? {}).length &&
       (!o.visibility.entity || local(vocab, ast(o.visibility.entity))) &&
-      policies(o) && basis(vocab, query, base.derived, catalogued) &&
-      simple(query)
+      policies(o) && basis(vocab, query, base.derived, catalogued)
     ) {
       let { visibility: _visibility, ...plain } = o
       let raw = asked(query, plain, direct)
@@ -728,12 +736,16 @@ export let storage = (
     // What a caller's options change of the statement: its order of pages; a
     // `now` matters only to time phrases, which are read every time.
     let unread = Object.keys(o).some((k) => !UNREAD.has(k) && k != 'visibility')
-    let tables = basis(vocab, query, base.derived, catalogued)
-    if (o.visibility) {
-      let scoped = policies(o, !!tables && !tables.includes('entity'))
-      tables = tables && scoped
-        ? [...new Set([...tables, ...scoped])]
-        : undefined
+    let tables: string[] | undefined
+    let dependencies = () => {
+      tables = basis(vocab, query, base.derived, catalogued)
+      if (o.visibility) {
+        let scoped = policies(o, !!tables && !tables.includes('entity'))
+        tables = tables && scoped
+          ? [...new Set([...tables, ...scoped])]
+          : undefined
+      }
+      return tables
     }
     let prove = () => {
       let standing: And | Filter | undefined = query
@@ -796,7 +808,7 @@ export let storage = (
           direct,
           o.visibility,
         ]),
-        owing || unread ? undefined : tables,
+        owing || unread ? undefined : dependencies,
         () =>
           rows(driver, vocab, query, {
             ...opts(),

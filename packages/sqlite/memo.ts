@@ -130,7 +130,7 @@ export type Memo = {
    * follow, `basis`), from `run` every time. */
   answer: (
     key: string,
-    tables: string[] | undefined,
+    tables: (() => string[] | undefined) | undefined,
     run: () => Row[],
     proof?: () => {
       query?: And | Filter
@@ -1258,8 +1258,8 @@ export let memoized = (
         ? undefined
         : tables.filter((name) => b[name] != null)
     },
-    answer: (key, tables, run, prove) => {
-      if (!tables) return run()
+    answer: (key, dependencies, run, prove) => {
+      if (!dependencies) return run()
       sync()
       let current = (table: string) => c.versions.get(table) ?? 0
       let held = k.answers.get(key)
@@ -1280,6 +1280,8 @@ export let memoized = (
         }
         return run()
       }
+      let tables = dependencies()
+      if (!tables) return run()
       let at = tables.map((t): [string, number] => [t, current(t)])
       let rows = run()
       if (at.some(([t, n]) => current(t) != n)) return rows
