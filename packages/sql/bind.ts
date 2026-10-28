@@ -1,4 +1,5 @@
 import { empty } from './empty.ts'
+import { presence as simplePresence } from './presence.ts'
 // The binding pass: an @yaks/query AST plus an @yaks/vocab schema, lowered to
 // the relational representation. This is where an unrouted query becomes a
 // statement over actual tables — every path routed through the vocabulary
@@ -3172,6 +3173,13 @@ export let prepared = (
       heard,
     )
   }
+  let simple = !reads.length && simplePresence(ast, vocab, opts, d)
+  if (simple) {
+    return {
+      opts: { ...opts, now: opts.now ?? Date.now() },
+      lower: () => simple,
+    }
+  }
   // The spine first (./spine.ts): a query that asks for a computed component's
   // entities reads that backing's rows, which no extension indexes and no
   // archetype describes.
@@ -4438,6 +4446,34 @@ let visible = (
     scope: string | And | undefined,
     graves = false,
   ): Cte => {
+    let query = typeof scope == 'string' ? parse(scope) : scope
+    let predicates = (c: Clause): boolean =>
+      c.kind == 'and' || c.kind == 'or'
+        ? c.clauses.every(predicates)
+        : c.kind == 'pred'
+    if (comp == 'entity' && query && predicates(query) && !masked && !graves) {
+      let selected = bound(
+        query,
+        vocab,
+        {
+          ...plain,
+          exactIds: true,
+          eids: undefined,
+          references: undefined,
+          archetypes: undefined,
+          extend: [],
+          graves: undefined,
+        },
+        base,
+        [],
+        { correlated: true },
+      )
+      return {
+        name,
+        materialized: false,
+        q: { ...selected, cols: [raw('"entity".*')], order: [] },
+      }
+    }
     let where = []
     if (comp != 'entity' && visibility.entity) {
       where.push(exists(select({
