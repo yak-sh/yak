@@ -29,7 +29,15 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { within } from './defects.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
-import { fitOf, formatted, grantEid, shapeOf, stands, Store } from './graph.ts'
+import {
+  fitOf,
+  formatted,
+  grantEid,
+  shapeOf,
+  stands,
+  Store,
+  type Time,
+} from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
@@ -248,8 +256,13 @@ let by = (b: Bundle) => (b.created as { by?: string } | undefined)?.by ?? null
 
 // A store with the app deployed into it, which is where every test starts.
 let fixtureLoad: Load | undefined
-let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
-  let store = new Store(ctx, {}, undefined, undefined, fixtureLoad)
+let cookbook = async (
+  ctx = state(),
+  manifest = SCHEMA,
+  v = owner,
+  time?: Time,
+) => {
+  let store = new Store(ctx, {}, undefined, time, fixtureLoad)
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
 }
@@ -2046,23 +2059,25 @@ test(
         },
       },
     })
-    let store = await cookbook(ctx, manifest)
+    // A clock of the Store's own, which only this test moves: the runtime's
+    // is every other Store's in the process, and theirs run beside this one.
+    // A relay message waits on its batch's 16 ms flush, so that one timer
+    // runs on the runtime's.
     let at = Date.now()
-    using _clock = stub(Date, 'now', () => at)
     let timers = new Map<number, { fn: () => void; at: number }>(), id = 0
-    let set = globalThis.setTimeout, clear = globalThis.clearTimeout
-    using _timer = stub(
-      globalThis,
-      'setTimeout',
-      ((fn: () => void, ms: number) => {
-        if (ms == 16) return set(fn, ms)
-        timers.set(--id, { fn, at: at + ms })
-        return id
-      }) as typeof setTimeout,
-    )
-    using _clear = stub(globalThis, 'clearTimeout', (id) => {
-      if (typeof id != 'number' || !timers.delete(id)) clear(id)
-    })
+    let time: Time = {
+      now: () => at,
+      timer: (fn, ms) => {
+        if (ms == 16) {
+          let t = setTimeout(fn, ms)
+          return () => clearTimeout(t)
+        }
+        let mine = --id
+        timers.set(mine, { fn, at: at + ms })
+        return () => void timers.delete(mine)
+      },
+    }
+    let store = await cookbook(ctx, manifest, owner, time)
     let tick = (ms: number) => {
       at += ms
       for (let [id, t] of [...timers]) {

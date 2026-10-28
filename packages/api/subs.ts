@@ -442,10 +442,11 @@ export let subscriptions = (graph: Graph, opts: {
    * session status depends on transcript entries). Returning true refreshes
    * that subscription after this commit. It does not subscribe to those rows. */
   invalidate?: (query: string, applied: Bundle[]) => boolean
-  /** how a `durable: "5s"` relayed value's timer is set (default:
-   * setTimeout) */
+  /** How every timer of the registry is set: a `durable: "5s"` relayed
+   * value's expiry, a pending save's retry and a relay batch's flush
+   * (default: setTimeout). */
   timer?: Timer
-  /** Clock used by pending save queries. */
+  /** Clock used by pending save queries (default: Date.now). */
   now?: () => number
   /** How many closed answers stand at once for a page to ask again (default
    * 256). */

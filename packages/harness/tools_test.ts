@@ -219,6 +219,7 @@ let checked = await (async () => {
   let asked = 0
   let a = agent({
     h,
+    release: () => h.close(),
     name: 'fake',
     tools: graphTools(h.g),
     model: (req) =>
@@ -246,7 +247,7 @@ let checked = await (async () => {
   let cut = said.lastIndexOf('\n]') + 2
   let [made] = JSON.parse(said.slice(0, cut))
   let kept = (await h.g.read('.doc.title="a topic"')).length
-  h.close()
+  await a.close()
   return {
     alias: made.$alias,
     minted: made.entity.eid[0] != '$',
@@ -271,6 +272,7 @@ let shown = await (async () => {
   let asked = 0
   let a = agent({
     h,
+    release: () => h.close(),
     name: 'fake',
     tools: graphTools(h.g),
     model: (req) =>
@@ -294,7 +296,7 @@ let shown = await (async () => {
   let result = (await a.transcript(s)).find((b) => b.result)!
   let said = String(body(result))
   let cut = said.lastIndexOf('\n]') + 2
-  h.close()
+  await a.close()
   return {
     shown: JSON.parse(said.slice(0, cut)).map((b: Bundle) => b.entity.eid),
     held: held.entity.eid,

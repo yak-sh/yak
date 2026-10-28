@@ -44,7 +44,7 @@ export let traceSourceBound = async (db: TraceStorage) => {
         },
       },
       undefined,
-      () => now,
+      { now: () => now },
     )
     let headers = {
       'x-store': 'probe/store-trace-bound',

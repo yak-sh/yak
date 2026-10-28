@@ -124,6 +124,7 @@ import {
   type Sink,
   type Subs,
   subscriptions,
+  type Timer,
   Unauthorized,
 } from '@yaks/api'
 import { blobRead, blobSchema, sqliteBlobs } from '@yaks/blob'
@@ -641,6 +642,13 @@ export type Bindings = Partial<Env> & {
   STORE?: Namespace
 }
 
+/** A Store's clock: the time its traces are stamped with, and the time and
+ * timers its live queries run on (@yaks/api `subscriptions`); unset, the
+ * runtime's. Every Store in a process shares the runtime's clock, so a test
+ * that moves one Store's time gives it a clock of its own instead of faking
+ * the runtime's. */
+export type Time = { now?: () => number; timer?: Timer }
+
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
 // eviction, and this is smaller than asking @yaks/graph to hold configuration
@@ -962,7 +970,7 @@ export class Store {
   #traceNext = 0
   #traceRate = 0
   #traceQuota: RequestState = new Map()
-  #traceNow: () => number
+  #time: Time
   #measure = (rowsRead?: number, rowsWritten?: number) => {
     hop('stmts')
     if (rowsRead != null) hop('rows', rowsRead)
@@ -1101,11 +1109,11 @@ export class Store {
     ctx: State,
     bind: Bindings = {},
     rules: Rule[] = RULES,
-    traceNow: () => number = Date.now,
+    time: Time = {},
     facetLoad: Load = load,
   ) {
     this.#load = facetLoad
-    this.#traceNow = traceNow
+    this.#time = time
     this.#ctx = ctx
     this.#bind = bind
     this.#rules = rules
@@ -1755,7 +1763,7 @@ export class Store {
         PLATFORM_STORE,
       ),
     )
-    let subs = subscriptions(g)
+    let subs = subscriptions(g, this.#time)
     this.#subs = subs
     subs.observe((bundles) => this.#rouse(bundles))
     let spared = screened((w) => !!vocab.comp(w), own)
@@ -2932,7 +2940,7 @@ export class Store {
       ? selectRequest({
         op: root.kind,
         name: root.name,
-        now: this.#traceNow(),
+        now: (this.#time.now ?? Date.now)(),
         rowsRead,
         rowsWritten,
         requested,
