@@ -6,9 +6,14 @@ import { read } from './config.ts'
 import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
 import type { Heard, Said } from './read_thread.ts'
+import { thread } from './stall.ts'
 
 let host: Promise<Served> | undefined
 let tell = (heard: Heard) => self.postMessage(heard)
+// Where this thread is, so the reader can see how long a read here waited
+// for a CPU while it runs.
+let place = thread()
+if (place) tell({ thread: place })
 let errorOf = (cause: unknown) => {
   let error = cause instanceof Error ? cause : new Error(String(cause))
   return {

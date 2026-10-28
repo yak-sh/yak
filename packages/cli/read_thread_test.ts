@@ -291,7 +291,7 @@ test('a cancelled read past its grace gives up its worker', async () => {
     let queued = reader.read('.queued')
     runaway.abort()
     await runaway.refused
-    for (let fn of overdue) fn()
+    for (let fn of [...overdue]) fn()
     assertEquals(workers[0].ended, true)
     assertEquals(workers[2].jobs.at(-1)?.query, '.queued')
     workers[1].answer()
@@ -303,40 +303,76 @@ test('a cancelled read past its grace gives up its worker', async () => {
   }
 })
 
-// A read still running past `slow` is told once, by its masked query, and its
-// cause says what it waited on; one answered in time is not told.
-test('a read that runs past slow is told with its masked query', async () => {
+// One read, `.memory.scope="secret"`, on a reader whose timers fire when its
+// clock passes them. Each step is `<ms>` (the clock moves there and the
+// checks due run), `<ms> <cpu> <wait>` (the same, with what the worker's
+// thread has spent by then, in s), or `answer`. Says what was told.
+let watched = async (...steps: string[]) => {
   let { workers, restore } = fakes()
-  let due = new Map<number, () => void>()
-  let next = 0
+  let clock = 0, spent = { cpu: 0, wait: 0 }
+  let due: { at: number; fn: () => void }[] = []
   let reader = readThread('unused.json', {
-    timer: (fn) => {
-      let key = next++
-      due.set(key, fn)
-      return () => due.delete(key)
+    now: () => clock,
+    measure: () => ({ ...spent }),
+    timer: (fn, ms) => {
+      let timer = { at: clock + ms, fn }
+      due.push(timer)
+      return () => due = due.filter((t) => t !== timer)
     },
   })
   let told: string[] = []
   reader.overrun((error) =>
-    told.push(
-      `${error.name}: ${error.message} (${(error.cause as Error).message})`,
-    )
+    told.push(`${error.message} (${(error.cause as Error).message})`)
   )
   try {
-    let quick = reader.read('.quick')
-    workers[0].answer()
-    await quick
-    let long = reader.read('.memory.scope="secret"')
-    for (let fn of [...due.values()]) fn()
-    workers[0].answer()
-    await long
-    for (let fn of [...due.values()]) fn()
-    assertEquals(told, [
-      'SlowRead: a read has run 10 s and is still running: .memory.scope=? ' +
-      '(the main thread ran this check on time)',
-    ])
+    let long = Promise.resolve(reader.read('.memory.scope="secret"'))
+    long.catch(() => {})
+    workers[0].onmessage?.({ data: { thread: '1/task/2' } })
+    for (let step of steps) {
+      if (step == 'answer') {
+        workers[0].answer()
+        await long
+        continue
+      }
+      let [ms, cpu, wait] = step.split(' ').map(Number)
+      clock = ms
+      if (wait != null) spent = { cpu: cpu * 1000, wait: wait * 1000 }
+      for (let timer of due.filter((t) => t.at <= clock)) {
+        due = due.filter((t) => t !== timer)
+        timer.fn()
+      }
+    }
+    return told
   } finally {
     await reader.close()
     restore()
   }
+}
+
+// A read whose own time passes `slow` while it runs is told once, by its
+// masked query, with how its worker spent the time. Its own time leaves out
+// what the box kept its worker waiting for a CPU, and a check the main thread
+// ran late looks again before it tells, since the answer may be waiting.
+test('a read is told when its own time passes slow', async () => {
+  let slow = 'a read has run 10 s and is still running: .memory.scope=? '
+  let cases: [string[], string[]][] = [
+    [['5000', 'answer', '30000'], []],
+    [['10000 9 0.5', '30000'], [
+      slow + '(in 10.0 s its worker ran 9.0 s on a CPU, waited 0.5 s for one ' +
+      'and was off one 0.5 s; its worker had not answered a read yet)',
+    ]],
+    // The main thread was held past the check; the answer was waiting.
+    [['15800 0 0', 'answer', '30000'], []],
+    [['15800 9 0', '16800 9.5 0'], [
+      slow + '(in 16.8 s its worker ran 9.5 s on a CPU, waited 0.0 s for one ' +
+      'and was off one 7.3 s; its worker had not answered a read yet)',
+    ]],
+    // The box kept the worker waiting for a CPU: slow only on its own time.
+    [['10000 2 7', 'answer', '30000'], []],
+    [['10000 2 7', '17000 4 7'], [
+      slow + '(in 17.0 s its worker ran 4.0 s on a CPU, waited 7.0 s for one ' +
+      'and was off one 6.0 s; its worker had not answered a read yet)',
+    ]],
+  ]
+  for (let [steps, told] of cases) assertEquals(await watched(...steps), told)
 })

@@ -55,6 +55,7 @@ import {
   type Served,
 } from './host.ts'
 import { readThread } from './read_thread.ts'
+import { stalls } from './stall.ts'
 import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
@@ -89,13 +90,24 @@ let open = async (
     ? readThread(path)
     : undefined
   // A web's reads are ready before it is: a server that just took over a port
-  // answers its first read as fast as its next.
+  // answers its first read as fast as its next. And a web tells of a main
+  // thread held so long that every request waited on it (./stall.ts).
   let withReader = async (host: Served): Promise<Served> => {
     try {
       await reader?.ready()
     } catch (error) {
       await host.close()
       throw error
+    }
+    if (!reader) return host
+    let unwatch = stalls({
+      report: (error) =>
+        void host.report?.(error, { tags: { step: 'main thread' } }),
+    })
+    let close = host.close
+    host.close = (code) => {
+      unwatch()
+      return close(code)
     }
     return host
   }

@@ -7,6 +7,7 @@
 import { mask, parse, stringify } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
+import { how, own, since, type Spent, spent } from './stall.ts'
 
 export type Reader = Pick<Graph, 'read' | 'rows' | 'get'>
 
@@ -27,6 +28,8 @@ export type Heard =
     & Traced
   )
   | { closed: true }
+  /** where the worker's thread is, for {@link spent} */
+  | { thread: string }
 
 let later = (fn: () => void, ms: number) => {
   let id = setTimeout(fn, ms)
@@ -45,17 +48,28 @@ let asked = (call: Call): string =>
  * cancelled while it runs is rejected at once and its answer dropped when it
  * comes; only one still running `grace` ms after its caller left (a runaway
  * query) ends its worker, so it cannot hold a lane for good. A read still
- * running `slow` ms after it started is told to whoever `overrun` was given,
- * once, with its masked query: one that runs on is a failure, and the query is
- * what names it. One the worker cuts off past its budget
- * (@yaks/sqlite/budget) is a refusal its caller hears, not a failure. */
+ * running when its own time passes `slow` ms is told to whoever `overrun` was
+ * given, once, with its masked query: one that runs on is a failure, and the
+ * query is what names it. Its own time is its wall clock less what the box
+ * kept its worker waiting for a CPU (./stall.ts), so a busy box makes no read
+ * slow. One the worker cuts off past its budget (@yaks/sqlite/budget) is a
+ * refusal its caller hears, not a failure. */
 export let readThread = (
   config: string,
-  { grace = 10_000, slow = 10_000, timer = later }: {
+  {
+    grace = 10_000,
+    slow = 10_000,
+    timer = later,
+    now = () => performance.now(),
+    measure = spent,
+  }: {
     grace?: number
     slow?: number
     /** schedule `fn` after `ms` and return its cancellation */
     timer?: (fn: () => void, ms: number) => () => void
+    now?: () => number
+    /** what a worker's thread has spent, by where it is */
+    measure?: (thread: string) => Spent | undefined
   } = {},
 ): Reader & {
   ready: () => Promise<void>
@@ -72,8 +86,10 @@ export let readThread = (
     off: () => void
     /** its caller left; the answer goes nowhere */
     dropped?: boolean
-    /** when its worker was given it (performance.now) */
+    /** when its worker was given it (`now`), and what the worker's thread
+     * had spent then */
     sent?: number
+    spent?: Spent
   }
   type Lane = {
     worker: Worker
@@ -82,6 +98,8 @@ export let readThread = (
     long?: () => void
     /** its worker has answered a read: it is started, not still loading */
     heard?: boolean
+    /** where its worker's thread is, once the worker has said */
+    thread?: string
   }
   let told: (error: Error) => void = () => {}
   let lanes = new Set<Lane>()
@@ -95,6 +113,12 @@ export let readThread = (
     lanes.delete(lane)
   }
   let finish = (lane: Lane, answer: Heard) => {
+    if ('thread' in answer) {
+      // A new worker says where it is after it was given its first read.
+      lane.thread = answer.thread
+      if (lane.job) lane.job.spent ??= spentBy(lane)
+      return
+    }
     if ('closed' in answer || lane.job?.id != answer.id) return
     let job = lane.job
     lane.job = undefined
@@ -136,30 +160,47 @@ export let readThread = (
     worker.postMessage({ start: config } satisfies Said)
     return lane
   }
-  // What a read past `slow` waited on, as far as this thread can see: a main
-  // thread that ran the check late was blocked (the answer may have come and
-  // gone unheard), a worker that never answered was still loading, and the
-  // other lane's read and the queue are what it ran beside.
-  let waited = (lane: Lane, job: Job): string => {
-    let s = (ms: number) => `${(ms / 1000).toFixed(1)} s`
-    let late = performance.now() - job.sent! - slow
-    let others = [...lanes].flatMap((l) =>
-      l != lane && l.job
-        ? [
-          `the other lane ran ${asked(l.job.call)} for ${
-            s(performance.now() - l.job.sent!)
-          }`,
-        ]
-        : []
-    )
-    return [
-      late > 1000
-        ? `this check ran ${s(late)} late: the main thread was blocked`
-        : 'the main thread ran this check on time',
+  let spentBy = (lane: Lane) => lane.thread ? measure(lane.thread) : undefined
+  // What a read past `slow` waited on, as far as this thread can see: how its
+  // worker spent the time, a worker that never answered was still loading,
+  // and the other lane's read and the queue are what it ran beside.
+  let waited = (lane: Lane, ran: number, s?: Spent): string =>
+    [
+      how('its worker', ran, s),
       lane.heard ? '' : 'its worker had not answered a read yet',
-      ...others,
+      ...[...lanes].flatMap((l) =>
+        l != lane && l.job
+          ? [
+            `the other lane ran ${asked(l.job.call)} for ${
+              ((now() - l.job.sent!) / 1000).toFixed(1)
+            } s`,
+          ]
+          : []
+      ),
       waiting.length ? `${waiting.length} reads waited behind it` : '',
     ].filter(Boolean).join('; ')
+  // A check the main thread ran late may have the answer waiting behind it,
+  // unheard: it looks again a second later, once the thread is free
+  // (./stall.ts tells of what held it). One that finds the read short of
+  // `slow` on its own, because the box kept its worker waiting for a CPU,
+  // looks again when it could pass it. A second either way is close enough.
+  let check = (lane: Lane, job: Job, due: number) => () => {
+    if (lane.job !== job) return
+    let at = now()
+    let again = (ms: number) =>
+      void (lane.long = timer(check(lane, job, at + ms), ms))
+    if (at - due >= 1000) return again(1000)
+    let ran = at - job.sent!, s = since(job.spent, spentBy(lane))
+    let left = slow - own(ran, s)
+    if (left >= 1000) return again(left)
+    told(Object.assign(
+      new Error(
+        `a read has run ${slow / 1000} s and is still running: ` +
+          asked(job.call),
+        { cause: new Error(waited(lane, ran, s)) },
+      ),
+      { name: 'SlowRead' },
+    ))
   }
   let drain = () => {
     while (waiting.length && !closed) {
@@ -168,18 +209,9 @@ export let readThread = (
       if (!lane) return
       let job = waiting.shift()!
       lane.job = job
-      job.sent = performance.now()
-      lane.long = timer(() => {
-        if (lane.job !== job) return
-        told(Object.assign(
-          new Error(
-            `a read has run ${slow / 1000} s and is still running: ` +
-              asked(job.call),
-            { cause: new Error(waited(lane, job)) },
-          ),
-          { name: 'SlowRead' },
-        ))
-      }, slow)
+      job.sent = now()
+      job.spent = spentBy(lane)
+      lane.long = timer(check(lane, job, job.sent + slow), slow)
       lane.worker.postMessage({
         ...job.call,
         id: job.id,
