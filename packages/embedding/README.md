@@ -285,6 +285,29 @@ service's loop is a drain and a wait, and a host with nothing standing between
 requests (a Durable Object sleeps) drains once a write commits. An aborted
 `signal` stops it after the pass it is in.
 
+A model that does not answer is an outage the drains ride out: its texts stay
+owed, are still found by their words, and are embedded by the first drain after
+it answers. So what fails is the wait, not each try. `drained` and
+`failed(error)` say what one drain's outcome makes of the `Outage` a host keeps
+between drains: an `Unanswered` starts an outage or rides on in it, and the
+drain that answers ends it, each end a line to log; once its texts have waited
+`OVERDUE` (a quarter of an hour) the outage reports once, as `Overdue`, the
+`Unanswered` as its cause and the wait in its `context`. Any other failure
+reports at once.
+
+```ts
+import { equal } from '@yaks/testing'
+import { failed, OVERDUE, Overdue, Unanswered } from '@yaks/embedding'
+
+let down = failed(
+  new Unanswered('workers-ai', { model: 'm', texts: '1', tries: '4' }, '4009'),
+)
+let { outage, log } = down(null, 0)
+equal([outage, typeof log], [{ since: 0 }, 'string'])
+equal(down(outage, OVERDUE - 1).report, undefined)
+equal(down(outage, OVERDUE).report instanceof Overdue, true)
+```
+
 `sources()`, `put()`, `watch()`, `moves()`, `owe()`, `due()` and `paid()` expose
 the individual operations. Embedding can run asynchronously; source reads,
 vector writes and query ranking use the synchronous database driver. A sweep is

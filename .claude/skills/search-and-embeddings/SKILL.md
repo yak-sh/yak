@@ -106,7 +106,10 @@ these are the words for it:
   top 8, the re-scored answer all of them. Copies share `HELD` (48 MB) per
   isolate; past it a store reads every row.
 - The store drains its sweep after each commit and from its alarm, behind its
-  own traffic. The store itself is `yaks-app`'s.
+  own traffic. Workers AI out past the embedder's retries is an outage the
+  drains ride out, logged, with the texts still owed; only texts waiting past
+  `OVERDUE` (15 minutes) report, once (packages/embedding/outage.ts). The
+  store itself is `yaks-app`'s.
 
 ## Words ranked by meaning
 

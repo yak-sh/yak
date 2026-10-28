@@ -180,13 +180,17 @@ import { admitSchema } from '@yaks/graph/schema'
 import {
   BATCH as EMBED_BATCH,
   drain,
+  drained,
   due as unembedded,
+  failed,
   type Field as Text,
+  type Outage,
+  Overdue,
   queues,
   remodel,
+  type Ride,
   schema as vectorSchema,
   semantic,
-  Unanswered,
   watch as watchEmbedding,
 } from '@yaks/embedding'
 import { after, isPromise } from '@yaks/fp'
@@ -673,6 +677,8 @@ type Word =
   | Mark
   // The bytes it last told the directory it holds (`#tell`).
   | 'weighed'
+  // The embedding outage its drains are riding out (`#ride`).
+  | 'embedding-outage'
   // One person's localStorage in a sandboxed app (installed.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -3522,10 +3528,28 @@ export class Store {
   // store owes a vector for each text it holds, and it catches up behind its
   // own traffic.
   // The embedder asks again through a passing failure of the model's own
-  // (@yaks/embedding `retrying`). A drain that fails even so goes to the
-  // tracker once and comes back a minute later, and nothing else starts one
-  // meanwhile; `.near` ranks whatever is stored.
+  // (@yaks/embedding `retrying`). A drain that fails even so comes back a
+  // minute later, and nothing else starts one meanwhile; `.near` ranks
+  // whatever is stored. A model that did not answer is an outage the drains
+  // ride out, logged, until its texts have waited OVERDUE, which goes to the
+  // tracker once; any other failure goes at once (`#ride`).
   static EMBED = 10_000
+
+  // What a drain's outcome makes of the outage it met (@yaks/embedding
+  // `drained`, `failed`), kept in the object's own memory so that a wait
+  // outlives the incarnations its retries wake.
+  #ride = (store: string | null, ride: Ride) => {
+    let was: Outage | null = JSON.parse(this.#get('embedding-outage') ?? 'null')
+    let { outage, report, log } = ride(was, Date.now())
+    if (outage != was) this.#put('embedding-outage', JSON.stringify(outage))
+    if (log) console.warn('yak store embedding', store, log)
+    if (report) {
+      // What varies across one outage (the model, how many texts, how many
+      // tries, how long they waited) is the occurrence's, not the bug's.
+      let context = report instanceof Overdue ? report.context : {}
+      defect(report, { request: 'embedding', store, ...context })
+    }
+  }
 
   // Whether a text is owed its vector, which seeks one queued row. An object whose
   // schema is not standing yet owes nothing: it has no table to owe it in.
@@ -3557,8 +3581,9 @@ export class Store {
       this.#texts.statements,
       EMBED_BATCH,
     )
-    if (!queued.length) return
     let name = this.#name()
+    // Nothing owed waits on the model, whether or not it answers.
+    if (!queued.length) return this.#ride(name, drained)
     this.#vectorWork = (async () => {
       do {
         this.#vectorAgain = false
@@ -3580,14 +3605,12 @@ export class Store {
           )
         }
       } while (this.#vectorAgain)
+      this.#ride(name, drained)
       if (this.#owes()) {
         await this.#arming(this.#soon(), 'embedding continuation')
       }
     })().catch(async (error) => {
-      // What varies across one outage (the model, how many texts, how many
-      // tries) is the occurrence's, not the bug's.
-      let context = error instanceof Unanswered ? error.context : {}
-      defect(error, { request: 'embedding', store: name, ...context })
+      this.#ride(name, failed(error))
       this.#vectorRetry = Date.now() + Store.RETRY
       await this.#arming(
         new Date(this.#vectorRetry).toISOString(),
