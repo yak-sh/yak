@@ -270,6 +270,29 @@ export let fastest = (
 export let failing = (j: Judged, gated: boolean): Seen[] =>
   gated ? [...j.over, ...j.slower] : j.over
 
+/** The platforms a run fails: each whose wall clock is past what its record
+ * allows, where the records are held (`gated`). */
+export let wide = (b: Budget, j: Judged, gated: boolean) =>
+  j.walls.filter((w) =>
+    gated && w.record != null && w.ms > limit(b.slack.walls, w.record)
+  )
+
+/// let b = { budget: 1, leave: 0.5, slack: { tests: { times: 2, ms: 0 }, walls: { times: 1, ms: 0 } }, platforms: { deno: 5 }, tests: {} }
+/// let run = (ms: number) => ({ wall: 9, tests: [{ file: 'a_test.ts', name: 'x', ms, ok: true }] })
+/// failed(b, { code: 0, gate: true, whole: true, runs: { deno: run(2) } }) -> ['a_test.ts: x', "deno's wall clock"]
+/// failed(b, { code: 0, gate: false, whole: true, runs: { deno: run(0.4) } }) -> []
+/** What a measured run fails the budget on, each said in a line: a test by
+ * its file and name, a platform by its wall clock. The same tests over on two
+ * runs say the same lines (bench/ci.ts holds a red run to that). */
+export let failed = (b: Budget, m: Measured): string[] => {
+  let gated = m.whole && m.gate
+  let j = judge(b, m.runs, m.same)
+  return [
+    ...failing(j, gated).map((s) => `${s.file}: ${s.key}`),
+    ...wide(b, j, gated).map((w) => `${w.platform}'s wall clock`),
+  ]
+}
+
 /** The passes the runs remembered that the budget takes back: the keys of the
  * files holding a test it fails. */
 export let retracted = (
@@ -463,9 +486,7 @@ export let hold = async (
   if (!whole || code) j.gone = []
   let gated = whole && gate
   let slower = whole ? j.slower : []
-  let wide = j.walls.filter((w) =>
-    gated && w.record != null && w.ms > limit(b.slack.walls, w.record)
-  )
+  let past = wide(b, j, gated)
   let shrinking = j.within.length + j.gone.length + j.faster.length
   let spared =
     'test(s) over the line in files unchanged since they passed, spared'
@@ -540,7 +561,7 @@ export let hold = async (
     if (j.spared.length) {
       lines.push(`${j.spared.length} ${spared}: ${worst(j.spared, b)}`)
     }
-    for (let w of wide) {
+    for (let w of past) {
       lines.push(
         `${w.platform}'s wall clock ${seconds(w.ms)}, past the ${
           seconds(limit(b.slack.walls, w.record!))
@@ -558,7 +579,7 @@ export let hold = async (
     await Deno.writeTextFile(LIST, JSON.stringify(next, null, 2) + '\n')
   }
   let exit = code ||
-    (!report && (failing(j, gated).length || wide.length) ? 1 : 0)
+    (!report && (failing(j, gated).length || past.length) ? 1 : 0)
   // A run a signal stopped measured nothing to sum.
   if (!code || Object.keys(runs).length) {
     let line = closing(exit, runs, j.over.length + slower.length, ms)
