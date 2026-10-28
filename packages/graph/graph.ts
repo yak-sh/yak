@@ -402,6 +402,7 @@ export let graph = (opts: Options): Graph => {
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
   let clock = opts.clock ?? system
+  let committed = detached(storage)
 
   let phaseHooks = new Map<Phase, [string, Hook][]>()
   let phaseRules = new Map<Phase, Rule[]>()
@@ -685,9 +686,8 @@ export let graph = (opts: Options): Graph => {
   }
 
   let outsideRead = (): Tx => {
-    let tx = detached(storage)
     let at = context()
-    return at ? retained(tx, () => at) : tx
+    return at ? retained(committed, () => at) : committed
   }
 
   let applying = (
@@ -728,7 +728,7 @@ export let graph = (opts: Options): Graph => {
           after(referring(formed(made), tx, pending), (b) => tx.patch(b)),
       }
     }
-    let outside = traced(protecting(detached(storage)))
+    let outside = traced(protecting(committed))
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
     let resources = resourced(moment)
@@ -796,7 +796,10 @@ export let graph = (opts: Options): Graph => {
       let calls = hooks(name)
       return timed(
         name,
-        () => runPhase(run, name, tx, core, of, rules, calls, bundles),
+        () =>
+          !rules.length && !calls.length
+            ? core ? core(bundles) : bundles
+            : runPhase(run, name, tx, core, of, rules, calls, bundles),
       )
     }
 
@@ -821,10 +824,12 @@ export let graph = (opts: Options): Graph => {
     }
 
     let effects = (applied: Bundle[]) => {
-      let rules = plugins.flatMap((p) =>
-        (p.rules ?? []).filter((r) => r.phase == 'effect')
-          .map((r) => [p.name, r] as const)
-      )
+      let rules: [string, Rule][] = []
+      for (let p of plugins) {
+        for (let r of p.rules ?? []) {
+          if (r.phase == 'effect') rules.push([p.name, r])
+        }
+      }
       // Rules see the whole entity, including components this write left out.
       // Freeze that view once, before any observer acts; each rule runs on its
       // own for isolation, but they share the phase's resources and the same
@@ -1208,9 +1213,17 @@ export let graph = (opts: Options): Graph => {
       pending: Bundle[] = [],
       aliases = false,
     ): Bundle[] | Promise<Bundle[]> => {
-      let refs = named.flatMap((row, i) =>
-        comps(row).flatMap(([comp, patch]) =>
-          Object.entries(patch ?? {}).flatMap(([prop, value]) => {
+      let refs: {
+        i: number
+        comp: string
+        prop: string
+        value: string
+        kind: string
+      }[] = []
+      for (let [i, row] of named.entries()) {
+        for (let [comp, patch] of comps(row)) {
+          for (let prop of Object.keys(patch ?? {})) {
+            let value = patch![prop]
             let p = vocab.prop(comp, prop)
             if (
               p?.category == 'ref' && typeof value == 'string' &&
@@ -1220,13 +1233,13 @@ export let graph = (opts: Options): Graph => {
                 `${comp}.${prop} references unresolved alias ${value}`,
               )
             }
-            return p?.category == 'ref' && typeof value == 'string' &&
-                !isAlias(value) && !minted(value)
-              ? [{ i, comp, prop, value, kind: String(p.ref) }]
-              : []
-          })
-        )
-      )
+            if (
+              p?.category == 'ref' && typeof value == 'string' &&
+              !isAlias(value) && !minted(value)
+            ) refs.push({ i, comp, prop, value, kind: String(p.ref) })
+          }
+        }
+      }
       // Rules admit each output separately. Most outputs need no resolution;
       // scanning the pending batch for each one makes stamping quadratic.
       if (!refs.length) return named
@@ -1234,8 +1247,10 @@ export let graph = (opts: Options): Graph => {
         [...pending, ...named].filter((row) => gives(row) && !dead(row))
           .map((row) => row.entity.eid),
       )
+      let unresolved = refs.filter(({ value }) => !targets.has(value))
+      if (!unresolved.length) return named
       return each(
-        refs.filter(({ value }) => !targets.has(value)),
+        unresolved,
         named,
         (out, { i, comp, prop, value, kind }) =>
           after(
@@ -1401,7 +1416,7 @@ export let graph = (opts: Options): Graph => {
     vocab,
     worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
     storage,
-    outside: detached(storage),
+    outside: committed,
     plugins,
     address,
     rewrites,

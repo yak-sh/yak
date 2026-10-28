@@ -460,22 +460,6 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
-  // A mirror also keeps computed values its source sent. Bytes retain the
-  // storage boundary's by-value ownership.
-  let stored = (comp: string, patch: Comp): Comp => {
-    let out: Comp = {}
-    let kept = cellsOf(comp).kept
-    for (let p in patch) {
-      if (!kept.has(p)) continue
-      let value = patch[p]
-      out[p] =
-        value instanceof Uint8Array && vocab.prop(comp, p)?.scalar == 'binary'
-          ? value.slice()
-          : value
-    }
-    return out
-  }
-
   // Reads carry the computed values a server would send, without storing
   // them. Compute against the whole index before cutting requested components.
   let statuses = ladders.get(vocab)
@@ -744,24 +728,30 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         if (was !== undefined) delete own()[name]
         continue
       }
-      let now = stored(name, comp)
-      if (!holds(was, now)) {
-        let next = was ? { ...was, ...now } : now
-        for (let p in now) if (now[p] == null) delete next[p]
-        own()[name] = next
+      let next = was ?? {}
+      let kept = cellsOf(name).kept
+      for (let p in comp) {
+        if (!kept.has(p)) continue
+        let value = comp[p]
+        if (
+          value == null
+            ? !Object.hasOwn(next, p)
+            : Object.hasOwn(next, p) && same(next[p], value)
+        ) continue
+        if (next === was) next = { ...was }
+        if (value == null) delete next[p]
+        else {
+          // Bytes retain the storage boundary's by-value ownership.
+          next[p] = value instanceof Uint8Array &&
+              vocab.prop(name, p)?.scalar == 'binary'
+            ? value.slice()
+            : value
+        }
       }
+      if (next !== was) own()[name] = next
     }
     return held
   }
-
-  // Whether a component already holds every value a patch gives it.
-  let holds = (was: Comp | undefined, now: Comp): boolean =>
-    !!was &&
-    Object.keys(now).every((p) =>
-      now[p] == null
-        ? !Object.hasOwn(was, p)
-        : Object.hasOwn(was, p) && same(was[p], now[p])
-    )
 
   // The records themselves. A record is never mutated once stored, so the one a
   // read hands back is safe to keep, and costs no copy; a record cut to the

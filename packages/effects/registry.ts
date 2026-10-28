@@ -787,6 +787,12 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // it is left work, as a run a slot owed and this worker could not claim.
     if (bundles.some(unheld)) left.add(context?.transaction ?? bundles[0])
     if (generation(bundles) > depth) return bundles
+    // A pool row owes no declared component event. Patterns still inspect
+    // the batch: a join can match a different, non-pool subject.
+    if (
+      bundles.every((b) => b[EFFECT] != null) &&
+      !slots.some((s) => s.effect && s.kind == 'matched')
+    ) return bundles
     return after(
       matched(
         bundles,

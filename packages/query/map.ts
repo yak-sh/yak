@@ -6,10 +6,14 @@ import type { Clause } from './ast.ts'
 export let map = <C extends Clause>(clause: C, f: (c: Clause) => Clause): C => {
   let next: Clause = clause
   if (clause.kind == 'and' || clause.kind == 'or') {
-    let clauses = clause.clauses.map((c) => map(c, f))
-    if (clauses.some((c, i) => c !== clause.clauses[i])) {
-      next = { ...clause, clauses }
+    let clauses: Clause[] | undefined
+    for (let i = 0; i < clause.clauses.length; i++) {
+      let was = clause.clauses[i]
+      let c = map(was, f)
+      if (c !== was) clauses ??= clause.clauses.slice(0, i)
+      clauses?.push(c)
     }
+    if (clauses) next = { ...clause, clauses }
   } else if (clause.kind == 'pred' && clause.where) {
     let where = map(clause.where, f)
     if (where !== clause.where) next = { ...clause, where }

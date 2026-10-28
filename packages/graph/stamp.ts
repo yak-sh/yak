@@ -274,6 +274,7 @@ let wear = (
  * nothing stamps it `created` and no client hears of an entity.
  */
 export let births = (bundles: Bundle[], st: State): Bundle[] => {
+  if (!st.born.length) return bundles
   let dead = new Set(st.killed)
   let given = new Set(
     bundles.filter((b) => comps(b).some(([, c]) => c != null))

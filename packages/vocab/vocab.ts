@@ -401,6 +401,34 @@ let propOf = (
   }
 }
 
+// Documents are immutable once loaded. A component shared by several
+// vocabularies has the same compiled metadata in each, unless extension
+// keywords change what is carried from its schemas.
+type Compiled = {
+  read: Map<string, Prop>
+  indexes?: Index[]
+  identity?: Identity
+  paths?: Map<string, Hop[]>
+}
+let components = new WeakMap<PropSchema, Map<string, Compiled>>()
+let compiled = (comp: string, d: PropSchema, extra: Set<string>) => {
+  let names = components.get(d)
+  let held = !extra.size && names?.get(comp)
+  if (held) return held
+  let read = new Map(
+    Object.entries(d.properties ?? {}).map(([prop, s]) => [
+      prop,
+      propOf(comp, prop, s, extra, !!d.required?.includes(prop)),
+    ]),
+  )
+  let made: Compiled = { read }
+  if (!extra.size) {
+    if (!names) components.set(d, names = new Map())
+    names.set(comp, made)
+  }
+  return made
+}
+
 // The query surface. Every method answers over the loaded documents; none
 // reads a global.
 export type Vocab = {
@@ -760,21 +788,13 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // component and property is read out of the schemas once, here, and every
   // question after that is a lookup: admission asks about every property of
   // every write.
-  let read = new Map<string, Map<string, Prop>>()
+  let read = new Map<string, Compiled>()
   for (let comp of names) {
     let d = defs[comp]
-    read.set(
-      comp,
-      new Map(
-        Object.entries(props(comp)).map(([prop, s]) => [
-          prop,
-          propOf(comp, prop, s, propWords, !!d.required?.includes(prop)),
-        ]),
-      ),
-    )
+    read.set(comp, compiled(comp, d, propWords))
   }
   let propFor = (comp: string, prop: string): Prop | undefined =>
-    read.get(comp)?.get(prop)
+    read.get(comp)?.read.get(prop)
 
   // A computed component is written by nobody, so no client writes it either.
   let wire = (name: string) =>
@@ -873,7 +893,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let refs = names.filter((comp) => defs[comp].computed !== true).flatMap((
     comp,
   ) =>
-    [...read.get(comp)!.values()].flatMap((c) =>
+    [...read.get(comp)!.read.values()].flatMap((c) =>
       c.category == 'ref' ? [[comp, c.prop] as [string, string]] : []
     )
   )
@@ -890,8 +910,6 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // compiles and every bundle a write carries: each is worked out once, and
   // handed out frozen, since every caller shares it.
   let aimed = new Map<string, Hop[]>()
-  let indexed = new Map<string, Index[]>()
-  let identifying = new Map<string, Identity>()
   let frozen = <T>(x: T): T => {
     if (x && typeof x == 'object') {
       for (let v of Object.values(x)) frozen(v)
@@ -911,17 +929,16 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
     props: (comp) => routes.get(comp) ?? [],
     prop: propFor,
     indexes: (comp) => {
-      let held = indexed.get(comp)
-      if (!held) {
-        held = indexesOf(defs[comp], (p) => propFor(comp, p))
-        indexed.set(comp, frozen(held))
-      }
-      return held
+      let held = read.get(comp)
+      if (!held) return frozen([])
+      return held.indexes ??= frozen(
+        indexesOf(defs[comp], (p) => propFor(comp, p)),
+      )
     },
     identity: (comp) => {
-      let held = identifying.get(comp)
-      if (!held) identifying.set(comp, held = frozen(identityOf(defs[comp])))
-      return held
+      let held = read.get(comp)
+      if (!held) return frozen([])
+      return held.identity ??= frozen(identityOf(defs[comp]))
     },
     // A dotted path → the hops it names, two segments at a time: a component
     // and one of its properties, or a component alone at the end. A name no
@@ -938,6 +955,12 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       let held = aimed.get(key)
       if (held) return held
       let segs = path.split('.')
+      let local = segs.length <= 2 ? read.get(segs[0]) : undefined
+      let known = local?.paths?.get(path)
+      if (known) {
+        aimed.set(key, known)
+        return known
+      }
       let out: Hop[] = []
       for (let i = 0; i < segs.length; i += 2) {
         let [a, b] = [segs[i], segs[i + 1]]
@@ -963,6 +986,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         out.push({ comp: a, prop: b })
       }
       aimed.set(key, frozen(out))
+      if (local) (local.paths ??= new Map()).set(path, out)
       return out
     },
     // A plural name → the reverse association it names, or undefined when the

@@ -145,13 +145,13 @@ export let RACY = 2_000
 
 // One line per path: its kind, inode, size and change times, or its absence.
 // A path changed within RACY of `now` is racy, as Git calls it: a rewrite in
-// the same tick would leave every stat equal, so its line equals no other.
-let mark = (path: string, now: number): string => {
+// the same tick would leave every stat equal, so it has no stable mark.
+let mark = (path: string, now: number): string | undefined => {
   try {
     let i = Deno.lstatSync(path)
     let kind = i.isSymlink ? 'l' : i.isDirectory ? 'd' : 'f'
     let changed = i.ctime?.getTime() ?? i.mtime?.getTime() ?? now
-    if (changed > now - RACY) return `${path} racy ${crypto.randomUUID()}`
+    if (changed > now - RACY) return
     let times = `${i.mtime?.getTime()} ${i.ctime?.getTime()}`
     return `${path} ${kind} ${i.ino} ${i.size} ${times}`
   } catch (error) {
@@ -159,20 +159,28 @@ let mark = (path: string, now: number): string => {
     throw error
   }
 }
-let walk = (dir: string, out: string[], now: number): void => {
-  out.push(mark(dir, now))
+let walk = (dir: string, out: string[], now: number): boolean => {
+  let line = mark(dir, now)
+  if (line === undefined) return false
+  out.push(line)
   let entries: Deno.DirEntry[]
   try {
     entries = [...Deno.readDirSync(dir)]
   } catch (error) {
-    if (gone(error)) return
+    if (gone(error)) return true
     throw error
   }
   for (let entry of entries.sort((a, b) => a.name < b.name ? -1 : 1)) {
     let path = `${dir}/${entry.name}`
-    if (entry.isDirectory) walk(path, out, now)
-    else out.push(mark(path, now))
+    if (entry.isDirectory) {
+      if (!walk(path, out, now)) return false
+    } else {
+      let line = mark(path, now)
+      if (line === undefined) return false
+      out.push(line)
+    }
   }
+  return true
 }
 
 /** What a sync of `root` reads from disk, as stats: the checkout's index and
@@ -182,10 +190,13 @@ let walk = (dir: string, out: string[], now: number): void => {
  * until its change is RACY old. No Git process runs, and the few stats are
  * synchronous: cheaper than a thread-pool hop each. */
 export let stamp = (root: string, now: number = Date.now()): string => {
-  let out = [
-    mark(`${root}/.git/index`, now),
-    mark(`${root}/.git/HEAD`, now),
-  ]
-  walk(`${root}/.claude/skills`, out, now)
+  let out: string[] = []
+  let racy = () => `racy ${crypto.randomUUID()}`
+  for (let name of ['index', 'HEAD']) {
+    let line = mark(`${root}/.git/${name}`, now)
+    if (line === undefined) return racy()
+    out.push(line)
+  }
+  if (!walk(`${root}/.claude/skills`, out, now)) return racy()
   return out.join('\n')
 }

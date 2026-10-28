@@ -57,28 +57,35 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
  * an entity; a range and a relative time expression name none. An empty scalar
  * is the "property is absent" form (`!decided.by`) and names nothing either.
  */
-let value = (v: Value, f: Says): Value =>
-  v.kind == 'scalar'
-    ? (v.raw ? { ...v, raw: f(v.raw) } : v)
-    : v.kind == 'list'
-    ? { ...v, items: v.items.map((i) => value(i, f)) }
-    : v
+let value = (v: Value, f: Says): Value => {
+  if (v.kind == 'scalar' && v.raw) {
+    let raw = f(v.raw)
+    return raw == v.raw ? v : { ...v, raw }
+  }
+  if (v.kind == 'list') {
+    let items = v.items.map((i) => value(i, f))
+    return items.every((item, i) => item === v.items[i]) ? v : { ...v, items }
+  }
+  return v
+}
 
 /** One clause with every id that names an entity mapped through `f`. */
 let mapped = (vocab: Vocab, c: Clause, f: Says): Clause =>
-  map(
-    c,
-    (c) =>
-      c.kind == 'refs'
-        ? (c.op == '=' && c.value ? { ...c, value: f(c.value) } : c)
-        : c.kind == 'walk'
-        ? { ...c, target: f(c.target) }
-        : c.kind == 'near'
-        ? (c.value ? { ...c, value: f(c.value) } : c)
-        : c.kind == 'pred' && c.value && refs(vocab, c)
-        ? { ...c, value: value(c.value, f) }
-        : c,
-  )
+  map(c, (c) => {
+    if ((c.kind == 'refs' && c.op == '=' || c.kind == 'near') && c.value) {
+      let next = f(c.value)
+      return next == c.value ? c : { ...c, value: next }
+    }
+    if (c.kind == 'walk') {
+      let target = f(c.target)
+      return target == c.target ? c : { ...c, target }
+    }
+    if (c.kind == 'pred' && c.value && refs(vocab, c)) {
+      let next = value(c.value, f)
+      return next === c.value ? c : { ...c, value: next }
+    }
+    return c
+  })
 
 /**
  * The read side of name resolution: a query in, the same query with every id

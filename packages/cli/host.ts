@@ -822,9 +822,6 @@ let composed = async (
       worded ??= (await import('./text.ts')).text(host)
       return worded(answer, wrote)
     }
-    // A shutdown may need the runner, but opening a graph does not. Keep its
-    // tool declarations lazy until a caller actually asks for them.
-    let calls = () => host.runner
     let fx = host.fx
     let effecting = roles.includes('effects')
     // Whoever works the effects also works off the schema work a pass owed
@@ -1007,7 +1004,7 @@ let composed = async (
           // somebody else's checkout.
           if (!opts.readOnly) {
             await wait('interrupt calls', () =>
-              calls().interrupt(
+              built.interrupt(
                 `interrupted: this process ended${
                   code == null ? '' : ` with code ${code}`
                 } before the tool returned`,

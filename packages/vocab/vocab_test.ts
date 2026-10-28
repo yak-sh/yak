@@ -78,6 +78,20 @@ test('stamped properties are readable, never writable', () => {
   assert(v.prop('claim', 'at')!.stamped)
 })
 
+test('a reused component schema keeps its property names in each vocabulary', () => {
+  let schema: PropSchema = {
+    component: true,
+    properties: { title: { type: 'string' } },
+    required: ['title'],
+  }
+  for (let name of ['book', 'album']) {
+    let v = loadVocab({ $defs: { [name]: schema } })
+    assertEquals(v.prop(name, 'title')?.comp, name)
+    assertEquals(v.prop(name, 'title')?.required, true)
+    assertEquals(v.check(name, { title: 'One' }), [])
+  }
+})
+
 test('a property is named with its component', () => {
   assertEquals(v.aim('doc.title'), [{ comp: 'doc', prop: 'title' }])
   assertEquals(v.aim('board.query'), [{ comp: 'board', prop: 'query' }])

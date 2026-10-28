@@ -526,10 +526,9 @@ equal(await g.read('.effect'), [])
 await fx.stop()
 ```
 
-Failures still follow the declaration's attempt limit and backoff, which the
-[pool tests](./pool_test.ts) cover:
+Failures follow the declaration's attempt limit and backoff:
 
-```ts ignore
+```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'

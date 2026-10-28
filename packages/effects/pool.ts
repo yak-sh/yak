@@ -622,7 +622,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         running.delete(eid)
         ran++
         ends.count(clock())
-        if (full) nap.abort()
+        if (full) nap?.abort()
       })
     running.set(eid, held)
     return held.run
@@ -637,7 +637,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let full = false
   let pending: And, signature = ''
   // The worker's wait between passes, which a wake cuts short.
-  let nap = new AbortController()
+  let nap: AbortController | undefined
   type Pass = { started: Promise<void>[]; more: boolean }
   let due = async (g: Access, budget = page): Promise<Pass> => {
     let now = clock()
@@ -881,12 +881,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }], { trusted: true })
     }
     // A wake before the first pass is answered by it.
-    if (nap.signal.aborted) nap = new AbortController()
+    if (!nap || nap.signal.aborted) nap = new AbortController()
     // A worker that cannot hear other processes still finds their runs, a
     // pass later.
     let unwatch = () => {}
     try {
-      unwatch = opts.watch?.(() => nap.abort()) ?? unwatch
+      unwatch = opts.watch?.(() => nap?.abort()) ?? unwatch
     } catch (err) {
       told(err)
     }
@@ -914,18 +914,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         }
         await sleep(
           more ? 0 : CAP,
-          AbortSignal.any([signal, nap.signal]),
+          AbortSignal.any([signal, nap!.signal]),
           time,
         )
         // A wake ends the nap at once, never the turn: what the pass started,
         // and a signal to stop, are heard before the next pass.
-        if (nap.signal.aborted) {
+        if (nap!.signal.aborted) {
           nap = new AbortController()
           await sleep(0, undefined, time)
         }
       }
     } finally {
       unwatch()
+      nap = undefined
       lag?.stop()
       if (present) {
         try {
@@ -1099,14 +1100,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     },
     startup,
-    // Without a signal, one pass, then out. Each call makes its own: on
-    // workerd a signal belongs to the Durable Object that made it, and one
-    // made as the module loads stops the Worker starting at all.
-    work: async (g, signal = AbortSignal.abort(), options = Infinity) => {
+    // Without a signal, drain and return. Only a continuing worker needs a
+    // signal; constructing an aborted one also constructs its unused error.
+    work: async (g, signal, options = Infinity) => {
       let requested = typeof options == 'number' ? { passes: options } : options
       let passes = requested.passes ?? Infinity
       graph = g
-      if (signal.aborted) {
+      if (!signal || signal.aborted) {
         if (
           !opts.singleOwner &&
           await working(g, { except: me, now: clock(), gone: opts.gone })
@@ -1149,7 +1149,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       loop = { done, signal }
       await done
     },
-    wake: () => nap.abort(),
+    wake: () => nap?.abort(),
     idle,
     stop: () => {
       member = false

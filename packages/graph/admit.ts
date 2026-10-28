@@ -94,7 +94,7 @@ let admitComp = (
   // What a replica's source derived: kept as it was sent, never checked, since
   // a derivation may answer wider than the words a client writes (a claimed
   // task's status is `wip`).
-  let derived: Comp = {}
+  let derived: Comp | undefined
   let ignored = false
   for (let k of Object.keys(patch)) {
     let p = v.prop(name, k)
@@ -109,7 +109,7 @@ let admitComp = (
     // A computed property is never a write, so a patch of nothing else names
     // the component alone: a server's `task: { status: 'open' }` is a task.
     if (p.computed) {
-      if (replica) derived[k] = patch[k]
+      if (replica) (derived ??= {})[k] = patch[k]
       continue
     }
     kept[k] = patch[k]
@@ -134,7 +134,7 @@ let admitComp = (
     )
     throw new Misfit(errs.join('; '), { eid, comp: name, prop })
   }
-  return { ...cut, ...derived }
+  return derived ? { ...cut, ...derived } : cut
 }
 
 /**

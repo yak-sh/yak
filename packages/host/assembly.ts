@@ -1,5 +1,5 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
-import type { Actor, Comp, Graph, NamedTool } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import type { graph } from '@yaks/graph'
 import type { Clock } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
@@ -96,6 +96,8 @@ export type Assembly = {
   bind: (binding: Binding) => {
     host: Host
     services: Duty[]
+    /** Interrupt calls already admitted by this host, without constructing a runner. */
+    interrupt: (why: string) => Promise<Bundle[]>
     /** Await after draining admitted work, before closing graph or reporter. */
     close: () => Promise<void>
   }
@@ -676,6 +678,7 @@ export let assemble = (
       return {
         host,
         services: duties,
+        interrupt: async (why) => await calls?.interrupt(why) ?? [],
         close: () => closing ??= resources.disposeAsync(),
       }
     },
