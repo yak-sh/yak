@@ -1,4 +1,5 @@
 import { decodedPath } from './request-path.ts'
+import { createHash } from 'node:crypto'
 // The platform in memory: the kernel's own bindings, stood up under Deno so a
 // test can drive the code that runs in production with nothing stubbed between
 // a request and the rows.
@@ -366,7 +367,7 @@ export let bucket = () => {
   let gets: { key: string; range?: { offset: number; length: number } }[] = []
   let etags = new WeakMap<Uint8Array, {
     bytes: Uint8Array<ArrayBuffer>
-    etag: Promise<string>
+    etag: string
   }>()
   // `held` is public and its bytes can change. Each read keeps one snapshot
   // for its body and tag, sharing the digest until those bytes change.
@@ -374,7 +375,12 @@ export let bucket = () => {
     let was = etags.get(bytes)
     if (was && sameBytes(bytes, was.bytes)) return was
     let snapshot = new Uint8Array(bytes)
-    let next = { bytes: snapshot, etag: sha256(snapshot) }
+    // Hash in this process: WebCrypto queues a worker even for a two-byte
+    // fixture, making a read wait on unrelated crypto work in the suite.
+    let next = {
+      bytes: snapshot,
+      etag: createHash('sha256').update(snapshot).digest('hex'),
+    }
     etags.set(bytes, next)
     return next
   }
@@ -393,25 +399,25 @@ export let bucket = () => {
     at,
     gets,
     r2: {
-      head: async (k: string) => {
+      head: (k: string) => {
         let bytes = held.get(k)
-        if (!bytes) return null
+        if (!bytes) return Promise.resolve(null)
         let read = tagged(bytes)
-        return { size: read.bytes.byteLength, etag: await read.etag }
+        return Promise.resolve({ size: read.bytes.byteLength, etag: read.etag })
       },
-      get: async (
+      get: (
         k: string,
         options?: { range: { offset: number; length: number } },
       ) => {
         gets.push({ key: k, range: options?.range })
         let bytes = held.get(k)
-        if (!bytes) return null
+        if (!bytes) return Promise.resolve(null)
         let read = tagged(bytes)
         let at = options?.range.offset ?? 0
         let end = at + (options?.range.length ?? read.bytes.length)
         let part = read.bytes.slice(at, end)
-        return {
-          etag: await read.etag,
+        return Promise.resolve({
+          etag: read.etag,
           body: new ReadableStream<Uint8Array>({
             start(controller) {
               controller.enqueue(part)
@@ -419,7 +425,7 @@ export let bucket = () => {
             },
           }),
           arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
-        }
+        })
       },
       put,
       // An upload in parts, held here until it is whole and then put.

@@ -5,6 +5,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { DIM } from './embedding.ts'
 import { bucket, platform } from './testing.ts'
+import { sha256 } from './versions.ts'
 
 test('platform disposal waits for store work before releasing storage', async () => {
   let release!: () => void
@@ -62,17 +63,24 @@ test('platform disposal waits for store work before releasing storage', async ()
   }
 })
 
+let receipt = '{"call":"original"}'
+let receiptTag = await sha256(new TextEncoder().encode(receipt))
+let viewTag = await sha256(new Uint8Array([1, 2]))
 test('the runtime bucket stores strings and the bytes selected by a view', async () => {
   let { r2 } = bucket()
-  await r2.put('receipt', '{"call":"original"}')
+  await r2.put('receipt', receipt)
+  let stored = (await r2.get('receipt'))!
+  assertEquals(stored.etag, receiptTag)
   assertEquals(
-    new TextDecoder().decode(await (await r2.get('receipt'))!.arrayBuffer()),
-    '{"call":"original"}',
+    new TextDecoder().decode(await stored.arrayBuffer()),
+    receipt,
   )
   let bytes = new Uint8Array([9, 1, 2, 8])
   await r2.put('view', new DataView(bytes.buffer, 1, 2))
+  let view = (await r2.get('view'))!
+  assertEquals(view.etag, viewTag)
   assertEquals(
-    new Uint8Array(await (await r2.get('view'))!.arrayBuffer()),
+    new Uint8Array(await view.arrayBuffer()),
     new Uint8Array([1, 2]),
   )
 })
