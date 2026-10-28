@@ -19,8 +19,37 @@ export type Deploy = {
   pushSource?: string
   estimated?: boolean
   backfill?: boolean
+  /** what the probes found instead of this version answering: another
+   * version's answer (`elsewhere`) when any probe got one, else why the last
+   * probe got no 200 from yaks.app */
   probe?: string
 }
+
+let ELSEWHERE = 'version '
+
+/** A probe's words for a 200 from a version other than the one it asked for
+ * (`served`, null when the page named none): the deploy was not serving yet. */
+export let elsewhere = (served: string | null, want: string) =>
+  `${ELSEWHERE}${served ?? '(missing)'}, want ${want}`
+
+/// answered(elsewhere('b', 'a')) -> true
+/// answered('HTTP 503, want 200') -> false
+/** Whether a probe's words say yaks.app answered 200, from another version. */
+export let answered = (probe: string) => probe.startsWith(ELSEWHERE)
+
+/// let unverified = (probe?: string) => ({ sha: '', pushed: '', uploaded: '', live: null, seconds: null, probe })
+/// down(unverified('HTTP 503, want 200')) -> true
+/// down(unverified('Signal timed out.')) -> true
+/// down(unverified(elsewhere('b', 'a'))) -> false
+/// down(unverified(elsewhere(null, 'a'))) -> false
+/// down(unverified()) -> false
+/** Whether no probe of a deploy got a 200 from yaks.app at all: the one
+ * failure only the recorder sees, since nothing else asks yaks.app for its
+ * home page. Another version answering says only that the deploy was not
+ * serving yet, which the deploy catch-up reports if it never is
+ * (packages/admin/catchup.ts NotLive). */
+export let down = (r: Deploy) =>
+  r.live == null && r.probe != null && !answered(r.probe)
 
 export let RECORD = new URL('./deploys.jsonl', import.meta.url)
 let stamp = (s: unknown): s is string =>
@@ -114,14 +143,18 @@ export let CEILING = 150
 
 export let overCeiling = (seconds: number) => seconds >= CEILING
 
+/** The latest deploy as the gate's bench, or null when there is nothing to
+ * judge: no deploy recorded, or one the recorder never saw answer. One for
+ * which no probe got a 200 from yaks.app at all fails (`down`). */
 export let suite = (rows: Deploy[]): CollectedSuite | null => {
   let row = latest(rows)
   if (!row) return null
-  if (row.seconds == null) {
+  if (down(row)) {
     throw new Error(
-      `${row.sha.slice(0, 8)}: no verified live response (${split(row)})`,
+      `${row.sha.slice(0, 8)}: yaks.app did not answer 200: ${row.probe}`,
     )
   }
+  if (row.seconds == null) return null
   return {
     name: 'deploy',
     metric: 'latest-verified-live',
@@ -155,7 +188,14 @@ export let run = async (options: Options, rows?: Deploy[]) => {
     throw new Error('Cannot accept a deploy exceeding the ceiling')
   }
   if (!work) {
-    console.log('deploy: no live timing data — pass (bootstrap)')
+    let row = latest(measured)
+    console.log(
+      row
+        ? `deploy: ${row.sha.slice(0, 8)} unverified (${
+          row.probe ?? split(row)
+        }) — nothing to judge`
+        : 'deploy: no live timing data — pass (bootstrap)',
+    )
     return null
   }
   let context = options.host ?? host

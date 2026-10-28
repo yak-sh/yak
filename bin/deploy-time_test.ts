@@ -1,16 +1,19 @@
 import { clock, test } from '@yaks/testing'
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import {
   append,
   finished,
+  main,
   observe,
   probe,
   pushTime,
   summary,
   versionFor,
+  type World,
 } from './deploy-time.ts'
 import {
   type Deploy,
+  elsewhere,
   latest,
   readRecords,
   records,
@@ -405,6 +408,139 @@ test('deploy time: a commit annotation cannot verify an inferred earliest versio
   assertEquals(result, { live: null, problem: 'inactive version' })
 })
 
+// The gate's recorder on SHA, pushed at PUSHED, in a world that answers as
+// GitHub, Cloudflare and yaks.app would: `built` is Cloudflare's finished
+// check run (none while it builds), `uploads` the versions wrangler lists,
+// and `answer` what every probe of yaks.app finds. The runner's token cannot
+// read Workers Builds. A wait is ten seconds.
+let recorder = (
+  { built, uploads = [], answer = elsewhere('old', ID) }: {
+    built?: string
+    uploads?: Version[]
+    answer?: string
+  } = {},
+) => {
+  let time = clock(Date.parse(PUSHED) + 5_000)
+  let github: Record<string, unknown> = {
+    'events?per_page=100': [],
+    'actions/workflows/gate.yml/runs?event=push&branch=main&per_page=100': {
+      workflow_runs: [{
+        head_sha: SHA,
+        created_at: PUSHED,
+        event: 'push',
+        head_branch: 'main',
+      }],
+    },
+    [`commits/${SHA}/check-suites`]: { check_suites: [] },
+    [`commits/${SHA}`]: { parents: [{ sha: 'b'.repeat(40) }] },
+    [`commits/${SHA}/check-runs`]: {
+      check_runs: built
+        ? [{
+          name: 'Workers Builds: yak',
+          status: 'completed',
+          conclusion: built,
+        }]
+        : [],
+    },
+    'commits/main': { sha: SHA },
+  }
+  let said: string[] = []
+  let rows: Deploy[] = []
+  let world: Partial<World> = {
+    api: (path) =>
+      path in github
+        ? Promise.resolve(github[path])
+        : Promise.reject(new Error(`gh: ${path}`)),
+    versions: () => Promise.resolve(uploads),
+    history: () => Promise.resolve([]),
+    changed: () => Promise.resolve(true),
+    check: () => Promise.resolve(answer),
+    started: () => Promise.reject(new Error('builds: HTTP 401')),
+    read: () => Promise.resolve([]),
+    append: (row) => Promise.resolve(rows.push(row) > 0),
+    job: () => Promise.resolve(),
+    say: (line) => said.push(line),
+    now: time.now,
+    wait: () => time.advance(10_000),
+  }
+  return { world, said, rows }
+}
+
+for (
+  let [built, why] of [
+    [undefined, "Cloudflare's build has not finished after 900s"],
+    ['success', 'Cloudflare built it but uploaded no version within 60s'],
+    ['failure', "Cloudflare's build failed: failure"],
+  ]
+) {
+  test(`deploy time: "${why}" is said, untimed, and nothing fails`, async () => {
+    let { world, said, rows } = recorder({ built })
+    await main([SHA], world)
+    assertEquals(said, [`${SHA.slice(0, 8)}: ${why} — not timed`])
+    assertEquals(rows, [])
+  })
+}
+
+// What the deploy gate makes of the rows: its bench, null, or why it fails.
+let judged = (rows: Deploy[]) => {
+  try {
+    return suite(rows)
+  } catch (e) {
+    return (e as Error).message
+  }
+}
+
+let uploaded = { ...version(40, `${SHA} subject`), id: ID }
+for (
+  let [answer, gate, verdict] of [
+    [elsewhere('old', ID), null, 'judges nothing'],
+    [
+      'HTTP 503, want 200',
+      'yaks.app did not answer 200: HTTP 503, want 200',
+      'fails: yaks.app never answered',
+    ],
+  ] as const
+) {
+  test(`deploy time: a version never seen answering is recorded unverified, nothing fails, and the deploy gate ${verdict}`, async () => {
+    let { world, said, rows } = recorder({ uploads: [uploaded], answer })
+    await main([SHA], world)
+    assertEquals(rows, [{
+      sha: SHA,
+      pushed: PUSHED,
+      pushSource: 'github:gate.created_at',
+      uploaded: uploaded.metadata.created_on,
+      live: null,
+      seconds: null,
+      version: ID,
+      estimated: false,
+      probe: answer,
+    }])
+    assertEquals(said, [
+      `${SHA.slice(0, 8)}: build start unknown — builds: HTTP 401`,
+      `${
+        SHA.slice(0, 8)
+      }: upload 40.000s; live unverified: ${answer} — recorded`,
+    ])
+    assertEquals(judged(rows), gate && `${SHA.slice(0, 8)}: ${gate}`)
+  })
+}
+
+test('deploy time: yaks.app answering from another version outweighs a later probe that got nothing', async () => {
+  // A deploy leaves the home page cold for seconds: probes time out, then
+  // the version before answers again.
+  let time = clock(Date.parse(PUSHED))
+  let probes = 0
+  let result = await observe({ ...version(20), id: ID }, false, {
+    check: () =>
+      Promise.resolve(
+        probes++ % 2 ? 'Signal timed out.' : elsewhere('old', ID),
+      ),
+    now: time.now,
+    wait: () => time.advance(10_000),
+  })
+  assertEquals(result, { live: null, problem: elsewhere('old', ID) })
+})
+
 let deploy = (n: number, seconds: number): Deploy => {
   let pushed = new Date(Date.parse(PUSHED) + n * 600_000).toISOString()
   return {
@@ -472,11 +608,7 @@ test('deploy record: concurrent append is idempotent, and a failed probe can com
     ])
     let failed = { ...row, backfill: false }
     assertEquals(await append(failed, path), true)
-    assertThrows(
-      () => suite(records(Deno.readTextFileSync(path))),
-      Error,
-      'no verified live response',
-    )
+    assertEquals(suite(records(Deno.readTextFileSync(path))), null)
     let live = { ...failed, live: '2026-09-07T19:00:25Z', seconds: 25 }
     assertEquals(await append(live, path), true)
     assertEquals(

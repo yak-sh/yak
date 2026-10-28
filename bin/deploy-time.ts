@@ -8,8 +8,17 @@
 // Cloudflare credential it finds (the runner's read-only CLOUDFLARE_API_TOKEN
 // in the gate); never an Actions secret. The suite check stays
 // credential-free and makes no live call.
+//
+// It records what it could measure and says what it could not, and nothing
+// it observes fails it (T-132885): a build Cloudflare has not finished, one
+// that uploaded no version, a version it never saw answer. A push that never
+// goes live is reported by the deploy catch-up (packages/admin/catchup.ts
+// NotLive) and a failed build by workers/yak/builds.ts; the deploy gate,
+// after the tests, judges the row (bench/deploy.ts `suite`).
 import {
+  answered,
   type Deploy,
+  elsewhere,
   readRecords,
   RECORD,
   records,
@@ -136,7 +145,8 @@ export let LIMIT = 900
  * queue, never a guess at how long a build takes. A push a newer one overtook
  * uploads nothing either: its build stops before deploying (wrangler.ts
  * `superseded`), or Cloudflare never runs it, and the newer push's own gate
- * times the deploy that carries it. */
+ * times the deploy that carries it. Any other answer is why the push cannot
+ * be timed, which the recorder says and goes on. */
 export let verdict = (
   { found, coming, finished, waited, overtaken }: Waiting,
 ): 'found' | 'skip' | 'wait' | string => {
@@ -170,9 +180,7 @@ export let probe = async (version: string, get = fetch) => {
     await res.arrayBuffer()
     if (res.status != 200) return `HTTP ${res.status}, want 200`
     let served = res.headers.get('x-yak-version')
-    return served == version
-      ? null
-      : `version ${served ?? '(missing)'}, want ${version}`
+    return served == version ? null : elsewhere(served, version)
   } catch (e) {
     return e instanceof Error ? e.message : String(e)
   }
@@ -197,13 +205,15 @@ let command = async (cmd: string, args: string[], cwd = root) => {
   return JSON.parse(new TextDecoder().decode(out.stdout))
 }
 let api = (path: string) => command('gh', ['api', `repos/yak-sh/yak/${path}`])
-let versions = (): Promise<Version[]> =>
+let wrangler = (...args: string[]) =>
   command(
     WRANGLER[0],
-    [...WRANGLER.slice(1), 'versions', 'list', '--json'],
+    [...WRANGLER.slice(1), ...args, '--json'],
     new URL('../workers/yak/', import.meta.url),
   )
-let pause = () => new Promise((ok) => setTimeout(ok, 1000))
+let versions = (): Promise<Version[]> => wrangler('versions', 'list')
+let deployments = (): Promise<unknown> => wrangler('deployments', 'list')
+let pause = () => new Promise<void>((ok) => setTimeout(ok, 1000))
 
 // The account and Worker the builds belong to, as wrangler.toml names them.
 let worker = async () => {
@@ -262,12 +272,7 @@ export let observe = async (
     check = probe,
     sha = commit(version),
     related = (): Promise<Version[]> => Promise.resolve([]),
-    history = () =>
-      command(
-        WRANGLER[0],
-        [...WRANGLER.slice(1), 'deployments', 'list', '--json'],
-        new URL('../workers/yak/', import.meta.url),
-      ),
+    history = deployments,
     now = Date.now,
     wait = pause,
   } = {},
@@ -278,6 +283,9 @@ export let observe = async (
   let refreshAt = -Infinity
   let discovery = Promise.resolve()
   let failure: { error: unknown } | undefined
+  // Another version's answer, once any probe got one: yaks.app answered, and
+  // a later probe that got nothing does not undo that (bench/deploy.ts `down`).
+  let other: string | undefined
   let refresh = () => {
     if (!sha || !names(version, sha) || discovering || now() < refreshAt) return
     discovering = true
@@ -299,6 +307,7 @@ export let observe = async (
     let problem = await check(version.id)
     let observed = new Date(now()).toISOString()
     if (!problem) return { problem, sibling: false, observed }
+    if (answered(problem)) other = problem
     // Backfills have no polling loop, so finish their one discovery first.
     if (backfill) await discovery
     if (failure) throw failure.error
@@ -350,7 +359,7 @@ export let observe = async (
         : result.sibling
         ? await activation()
         : await stamped(result.observed),
-      problem: result.problem,
+      problem: result.problem && (other ?? result.problem),
     }
   } finally {
     // Join even on success/error: no orphaned listing, and cleanup cannot
@@ -418,51 +427,89 @@ let writeRecord = async (row: Deploy, path: string | URL) => {
   return true
 }
 
+/** What the recorder reads, waits on and writes: GitHub (`gh api`), the
+ * Worker's versions and deployments (wrangler), whether a range of commits
+ * changes the watched source (git), yaks.app (`probe`), when Cloudflare
+ * started a build, the record, the job summary and the log. A test stands in
+ * for any of them. */
+export type World = {
+  api: typeof api
+  versions: () => Promise<Version[]>
+  history: () => Promise<unknown>
+  changed: (from: string, to: string) => Promise<boolean | null>
+  check: (version: string) => Promise<string | null>
+  started: (sha: string) => Promise<string | undefined>
+  read: () => Promise<Deploy[]>
+  append: (row: Deploy) => Promise<boolean>
+  job: (text: string) => Promise<void>
+  say: (line: string) => void
+  now: () => number
+  wait: () => Promise<void>
+}
+
+let world: World = {
+  api,
+  versions,
+  history: deployments,
+  changed: (from, to) => changed(root.pathname, from, to),
+  check: probe,
+  started: async (sha) => buildStart(sha, cloudflare, (await worker()).name),
+  read: readRecords,
+  append,
+  job: async (text) => {
+    let path = Deno.env.get('GITHUB_STEP_SUMMARY')
+    if (path) await Deno.writeTextFile(path, text, { append: true })
+  },
+  say: console.log,
+  now: Date.now,
+  wait: pause,
+}
+
 // Whether `sha` changes the watched source since its parent, so Cloudflare
 // builds it; null when that cannot be read.
-let starts = async (sha: string) => {
-  let parent = (await api(`commits/${sha}`).catch(() => null))?.parents?.[0]
-    ?.sha
-  return parent ? await changed(root.pathname, parent, sha) : null
+let starts = async (io: World, sha: string) => {
+  let parent = (await io.api(`commits/${sha}`).catch(() => null))?.parents
+    ?.[0]?.sha
+  return parent ? await io.changed(parent, sha) : null
 }
 
 // Main's tip, or null when it cannot be read.
-let tipOf = async (): Promise<string | null> =>
-  (await api('commits/main').catch(() => null))?.sha ?? null
+let tipOf = async (io: World): Promise<string | null> =>
+  (await io.api('commits/main').catch(() => null))?.sha ?? null
 
 // Whether `tip` changes the watched source after `sha`, so its build
 // overtakes `sha`'s.
-let overtakes = async (sha: string, tip: string) =>
-  tip != sha && await changed(root.pathname, sha, tip).catch(() => null) == true
+let overtakes = async (io: World, sha: string, tip: string) =>
+  tip != sha && await io.changed(sha, tip).catch(() => null) == true
 
-// Waits for `sha`'s uploaded version as verdict() says: null when
-// Cloudflare builds nothing for it or a newer push overtook it, and an error
-// when its build cannot upload one.
+// Waits for `sha`'s uploaded version as verdict() says: the version, or what
+// to say instead of timing it.
 let awaited = async (
+  io: World,
   sha: string,
   pushed: string,
   match: ReturnType<typeof versionFor>,
 ) => {
-  let coming = match ? true : await starts(sha)
-  let begun = Date.now()
-  let asked = 0
+  let coming = match ? true : await starts(io, sha)
+  let begun = io.now()
+  let asked = -Infinity
   let done: { conclusion: string | null; at: number } | undefined
   // Main's tip as last asked, and whether it overtook `sha`.
   let tip = sha
   let over = false
   for (;;) {
-    let now = Date.now()
+    let now = io.now()
     if (!match && coming !== false && !over && now - asked >= 10_000) {
       asked = now
       if (!done) {
-        let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
+        let checks = await io.api(`commits/${sha}/check-runs`).catch(() => ({
           check_runs: [],
         }))
         let run = finished(checks.check_runs)
         if (run) done = { conclusion: run.conclusion, at: now }
       }
-      let head = await tipOf()
-      if (head && head != tip) over = await overtakes(sha, tip = head)
+      let head = await tipOf(io)
+      if (head && head != tip) over = await overtakes(io, sha, tip = head)
     }
     let next = verdict({
       found: !!match,
@@ -474,26 +521,22 @@ let awaited = async (
       },
       overtaken: over,
     })
-    if (next == 'found') return match
+    if (next == 'found' && match) return match
     if (next == 'skip') {
-      console.log(
-        `${sha.slice(0, 8)}: ${
-          over
-            ? `overtaken by ${tip.slice(0, 8)}, whose build deploys it`
-            : 'no kernel Workers Build'
-        } — nothing to time`,
-      )
-      return null
+      return `${
+        over
+          ? `overtaken by ${tip.slice(0, 8)}, whose build deploys it`
+          : 'no kernel Workers Build'
+      } — nothing to time`
     }
-    if (next != 'wait') {
-      throw new Error(`no uploaded version for ${sha}: ${next}`)
-    }
-    await pause()
-    match = versionFor(sha, pushed, await versions())
+    if (next != 'wait') return `${next} — not timed`
+    await io.wait()
+    match = versionFor(sha, pushed, await io.versions())
   }
 }
 
-export let main = async (args = Deno.args) => {
+export let main = async (args = Deno.args, given: Partial<World> = {}) => {
+  let io = { ...world, ...given }
   let backfill = args[0] == '--backfill'
   let count = backfill ? +(args[1] ?? '3') : 1
   if (
@@ -504,9 +547,11 @@ export let main = async (args = Deno.args) => {
     throw new Error('usage: deploy:time [full-sha] | --backfill [1..10]')
   }
   let [events, workflow, available] = await Promise.all([
-    api('events?per_page=100').catch(() => []),
-    api('actions/workflows/gate.yml/runs?event=push&branch=main&per_page=100'),
-    versions(),
+    io.api('events?per_page=100').catch(() => []),
+    io.api(
+      'actions/workflows/gate.yml/runs?event=push&branch=main&per_page=100',
+    ),
+    io.versions(),
   ])
   let runs = workflow.workflow_runs as Run[]
   let shas = args[0] && !backfill
@@ -521,9 +566,9 @@ export let main = async (args = Deno.args) => {
     match: NonNullable<ReturnType<typeof versionFor>>
   }[] = []
   let used = new Set<string>()
-  let skipped = false
+  let untimed = false
   for (let sha of shas) {
-    let suites = await api(`commits/${sha}/check-suites`).catch(() => ({
+    let suites = await io.api(`commits/${sha}/check-suites`).catch(() => ({
       check_suites: [],
     }))
     let push = pushTime(sha, events, suites.check_suites, runs)
@@ -534,11 +579,13 @@ export let main = async (args = Deno.args) => {
     }
     let match = versionFor(sha, push.pushed, available)
     if (!backfill) {
-      match = await awaited(sha, push.pushed, match)
-      if (!match) {
-        skipped = true
+      let found = await awaited(io, sha, push.pushed, match)
+      if (typeof found == 'string') {
+        io.say(`${sha.slice(0, 8)}: ${found}`)
+        untimed = true
         continue
       }
+      match = found
     }
     if (match && !used.has(match.version.id)) {
       pending.push({ sha, push, match })
@@ -547,19 +594,18 @@ export let main = async (args = Deno.args) => {
     if (pending.length == count) break
   }
   if (!pending.length) {
-    if (skipped) return 0
+    if (untimed) return
     throw new Error('no uploads match recent pushes')
   }
-  let code = 0
   let written: Deploy[] = []
-  let old = await readRecords()
+  let old = await io.read()
   for (let { sha, push, match } of pending.reverse()) {
     let uploaded = match.version.metadata.created_on
     let recorded = old.find((r) =>
       r.sha == sha && r.uploaded == uploaded && !r.backfill && r.live != null
     )
     if (recorded) {
-      console.log(
+      io.say(
         `${sha.slice(0, 8)}: ${split(recorded)}; live ${
           recorded.seconds!.toFixed(3)
         }s — already recorded`,
@@ -568,15 +614,18 @@ export let main = async (args = Deno.args) => {
     }
     let { live, problem } = await observe(match.version, backfill, {
       sha,
-      related: versions,
+      related: io.versions,
+      check: io.check,
+      history: io.history,
+      now: io.now,
+      wait: io.wait,
     })
     // Asked once the probes are done, so it never delays the first one. A row
     // without it counts the build's wait as its own (bench/deploy.ts `own`).
-    let running = await buildStart(sha, cloudflare, (await worker()).name)
-      .catch((e: Error) => {
-        console.log(`${sha.slice(0, 8)}: build start unknown — ${e.message}`)
-        return undefined
-      })
+    let running = await io.started(sha).catch((e: Error) => {
+      io.say(`${sha.slice(0, 8)}: build start unknown — ${e.message}`)
+      return undefined
+    })
     // GitHub's push stamp is a proxy that can trail the build Cloudflare
     // started on it, and a build can wait no less than nothing.
     let started = running && Date.parse(running) <= Date.parse(uploaded)
@@ -597,9 +646,9 @@ export let main = async (args = Deno.args) => {
       ...(backfill ? { backfill: true } : {}),
       ...(problem ? { probe: problem } : {}),
     }
-    let added = await append(row)
+    let added = await io.append(row)
     if (added) written.push(row)
-    console.log(
+    io.say(
       `${sha.slice(0, 8)}: ${split(row)}${
         match.estimated ? ' (estimated SHA match)' : ''
       }; ${
@@ -610,18 +659,14 @@ export let main = async (args = Deno.args) => {
           : `live unverified: ${problem}`
       } — ${added ? 'recorded' : 'already recorded'}`,
     )
-    if (!backfill && problem) code = 1
   }
-  let job = Deno.env.get('GITHUB_STEP_SUMMARY')
-  if (job && written.length) {
-    await Deno.writeTextFile(job, summary(written), { append: true })
-  }
-  return code
+  if (written.length) await io.job(summary(written))
 }
 
 if (import.meta.main) {
   try {
-    Deno.exit(await main())
+    await main()
+    Deno.exit(0)
   } catch (e) {
     console.error(`deploy-time: ${e instanceof Error ? e.message : e}`)
     Deno.exit(1)

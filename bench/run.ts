@@ -35,7 +35,8 @@ export let main = async (args = Deno.args): Promise<number> => {
   if (name == 'deploy' || name == 'app-deploy') {
     if (action == 'time') {
       if (name == 'deploy') {
-        return await (await import('../bin/deploy-time.ts')).main(rest)
+        await (await import('../bin/deploy-time.ts')).main(rest)
+        return 0
       }
       if (rest.length) throw new Error('app-deploy time takes no arguments')
       await (await import('../bin/app-deploy-time.ts')).main()

@@ -82,6 +82,12 @@ jobs:
       # this run's checkout and in the job summary; commit it with the next
       # change, like the benchmark baseline. A bench-row commit on main would
       # start another Workers Build and another gate.
+      #
+      # It is a measurement, so nothing it observes fails it (T-132885): a
+      # build Cloudflare has not finished, one that uploaded no version, a
+      # version it never saw answer are said and the tests run. A push that
+      # never goes live is reported by the deploy catch-up and a failed build
+      # by workers/yak/builds.ts; the deploy gate below judges the row.
       - name: deploy time
         if: github.event_name == 'push'
         env:
@@ -119,7 +125,10 @@ jobs:
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so
       # one unlucky Workers Builds row (39–71s, Cloudflare-side) stayed "the
-      # latest deploy" and failed every later commit.
+      # latest deploy" and failed every later commit. A deploy the recorder
+      # never saw answer is not judged, unless no probe got a 200 from
+      # yaks.app at all: that fails here, since nothing else asks yaks.app
+      # for its home page.
       - name: deploy gate
         env:
           SUITE_STEP: deploy gate

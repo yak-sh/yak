@@ -24,9 +24,18 @@ deno task deploy:gate
 ```
 
 Start the recorder alongside the push, or immediately after the build finishes.
-Without a SHA it follows the newest main push in the gate workflow. It waits up
-to two minutes for an upload, then up to two minutes for a verified response.
+Without a SHA it follows the newest main push in the gate workflow. It waits for
+Cloudflare's build to finish (up to 15 minutes, `LIMIT`) and a minute more for
+its version to show (`SETTLE`), then up to two minutes for a verified response.
 This command records observations; it never deploys, commits, or pushes.
+
+Nothing the recorder observes fails it (T-132885); only its own errors do. A
+build Cloudflare has not finished, one that finished and uploaded no version,
+and a failed build are said (`<sha>: … — not timed`) and leave no row: the
+deploy catch-up (packages/admin/catchup.ts `NotLive`) reports a push that never
+goes live, and workers/yak/builds.ts a failed build. A version it never saw
+answer is recorded with `live: null` and, in `probe`, another version's answer
+when any probe got one, else why the last probe got no 200.
 
 The workflow records a row only in its checkout, then checks it through
 [@yaks/benchmark](../packages/benchmark/README.md) against
@@ -72,11 +81,10 @@ not prove which version answered. See
 [version overrides](https://developers.cloudflare.com/workers/versions-and-deployments/version-overrides/).
 
 Unknown live times are `null`, never upload timestamps substituted for live. A
-failed prospective probe fails the recorder and the gate. A later successful
-retry appends its completion; the gate counts that deploy once. Repeating a
-successful record keeps its first observation. Historical probes either cannot
-verify the version or yield a late upper bound; `backfill: true` excludes both
-from the ratchet.
+later successful retry appends its completion; the gate counts that deploy once.
+Repeating a successful record keeps its first observation. Historical probes
+either cannot verify the version or yield a late upper bound; `backfill: true`
+excludes both from the ratchet.
 
 Every line that prints a total prints the split beside it: `queue` is
 `started - pushed`, the build waiting for Cloudflare to start it; `upload` is
@@ -98,8 +106,13 @@ live times. Its 90% tolerance permits up to `median × 1.9`; an independent
 comparisons use the same benchmark ratchet. Explicit acceptance can lower the
 floor from reviewed observations; a check only compares and writes its result to
 `bench/deploy.results.json`. No recorded rows pass as bootstrap. Corrupt rows
-and an unverified latest deploy fail. Historical backfills stay outside the
-ratchet.
+fail. A latest deploy the recorder never saw answer is not judged when any probe
+got another version's 200 (`probe` reads `version <id>, want <id>`): it was not
+serving yet. One for which no probe got a 200 from yaks.app at all (`down`)
+fails, since nothing else asks yaks.app for its home page. A deploy leaves the
+home page cold for seconds (on 2026-10-28 probes timed out at 5 s, then answered
+in 2.6 s and 0.04 s), so one probe that got nothing says nothing. Historical
+backfills stay outside the ratchet.
 
 ## Initial observations
 

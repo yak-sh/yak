@@ -3,6 +3,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import {
   CEILING,
   type Deploy,
+  elsewhere,
   latest,
   records,
   run,
@@ -165,12 +166,19 @@ test('deploy suite: upload order, completed observations and backfills choose th
   assertEquals(latest([...measured.reverse(), historical])?.seconds, 30)
   assertEquals(suite([historical]), null)
   let failed = { ...row(40, 4), seconds: null, live: null }
-  assertThrows(
-    () => suite([...measured, failed]),
-    Error,
-    'no verified live response',
-  )
   assertEquals(latest([...measured, failed, row(40, 4)])?.seconds, 40)
+  // A deploy the recorder never saw answer is not judged; yaks.app not
+  // answering at all is the one thing only it sees, and fails.
+  for (
+    let probe of [undefined, elsewhere('old', 'new'), elsewhere(null, 'new')]
+  ) {
+    assertEquals(suite([...measured, { ...failed, probe }]), null)
+  }
+  assertThrows(
+    () => suite([...measured, { ...failed, probe: 'HTTP 503, want 200' }]),
+    Error,
+    'yaks.app did not answer 200: HTTP 503, want 200',
+  )
 })
 
 test('deploy acceptance cannot weaken the ceiling', async () => {
