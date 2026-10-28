@@ -12,10 +12,11 @@
 # It is gh-runner (LXC 112 on the homelab's pve, beside two other repos'
 # runners), as user `yak-runner` in /opt/actions-runner/yak, under the system
 # unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
-# docs/PROXMOX.md says how it was installed. The gate reads STRIPE_KEY and
-# DENO_SQLITE_PATH from its environment (the runner's own .env). The tools the
-# tests call are the box's, from apt: google-chrome-stable, sqlite3, rclone
-# (bin/backup), and bubblewrap and python3 (packages/process sandboxes).
+# docs/PROXMOX.md says how it was installed. The gate reads STRIPE_KEY from
+# its environment (the runner's own .env). The tools the tests call are the
+# box's, from apt: google-chrome-stable, sqlite3, rclone (bin/backup),
+# bubblewrap and python3 (packages/process sandboxes), and cc, which builds the
+# one SQLite library every test opens, here as on the box (bin/sqlite.ts).
 # yak-runner lingers, so its systemd user manager runs, with cpu, memory and
 # pids delegated, for the sandboxes' scopes. `runs-on` names the custom label
 # `yak`, so a workflow can never silently fall back to a hosted runner.

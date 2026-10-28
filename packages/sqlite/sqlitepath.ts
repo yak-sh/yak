@@ -4,8 +4,11 @@
 // it downloads a prebuilt. On Linux x86_64 that prebuilt kills the process the
 // moment it initializes: `sqlite3_initialize` calls through a null pointer
 // inside `sqlite3MallocInit` under Deno 2.9 — a SIGSEGV with an empty stderr,
-// before a line of ours runs. Every platform's system library is fine, so name
-// that instead.
+// before a line of ours runs. A library linked without -Bsymbolic crashes the
+// same way: Deno exports its own embedded SQLite's API, and the library's
+// calls to its own functions bind to those. Every platform's system library is
+// fine, so name that instead. This repository's tests name one SQLite built
+// one way, wherever they run (bin/sqlite.ts).
 //
 // This is its own module because ES evaluation runs a module's dependencies
 // before its body, in declaration order: ./db.ts imports this first, then

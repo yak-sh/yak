@@ -28,6 +28,7 @@ import { find, tested } from '@yaks/testing/find'
 import { runTestCommands, type TestCommand } from './phases.ts'
 import { budget, hold, measure, OWN, read, type Suite } from './test-budget.ts'
 import { SHARED } from './test-runtime.ts'
+import { library } from './sqlite.ts'
 
 export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
@@ -454,6 +455,11 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.exit(2)
   }
   Deno.env.set(RUN, String(Deno.pid))
+  // The one SQLite every runtime of the run opens, on this box as on main's
+  // gate (./sqlite.ts). Every file's key holds the library's bytes, so a file
+  // that passed on another SQLite runs again.
+  let sqlite = await library()
+  Deno.env.set('DENO_SQLITE_PATH', sqlite)
   let b = await budget()
   let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
   if (from) Deno.exit(await hold(b, await read(from), Deno.args))
@@ -506,6 +512,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
         '--unstable-worker-options',
         import.meta.filename!,
         '--bulk',
+        `--also=${sqlite}`,
         ...flags,
         ...more,
         ...over,
