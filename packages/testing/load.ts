@@ -109,7 +109,7 @@ let exported = async (page: string): Promise<string[]> =>
   Object.keys(await import(url(page)))
 
 /** Loads a page's examples, each declaring its test. A `pass` (a URL query,
- * such as `?again`) loads them as modules of their own a further time, beside
+ * such as `?load=1`) loads them as modules of their own a further time, beside
  * the ones already loaded. */
 export let examples = async (page: string, pass = '') => {
   let { fenced, lines } = runs(await Deno.readTextFile(page), page)

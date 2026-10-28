@@ -161,32 +161,37 @@ stronger.
 - Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
   fails it unless bench/test-budget.json lists it. What is held is the test's
   own time: its wall clock less what its runtime waited for a CPU another
-  process held (Linux's /proc/thread-self/schedstat), so a busy host or the
-  other platforms running beside it stretch the wall, not the verdict. A
-  test's own work, and anything it awaits, still counts. A time over the line is
-  measured again first, in fresh runtimes with each file loaded twice, and
-  fails only when it is over every time, so a loaded box doesn't fail it; a
-  run with nothing over pays for no second pass. A file failed this way stays
-  unpassed, so the next run runs it again. A file that runs unchanged since it
-  passed (only `--all` runs one, as the gate does) is spared: the same code
-  passed the budget, so a time over the line is the run's. A test gets slower
-  when its code or what it imports changes, which changes the file's key, so
-  the gate holds each file the first time its code runs there. The records
-  are the gate's: its whole run (`deno task test --all`) fails a listed test
-  past its record (times the list's slack) and workerd's wall past its own; a
-  whole run
-  elsewhere says them without holding them, and a narrowed one says neither,
-  since another box runs a process-spawning test several times slower. The
-  other platforms' walls are said, not held, since their tests are each held
-  already. Nothing joins the list: a new or renamed test is held to 1 ms from
-  its first run. Getting a kernel test under it pulls you to drop the checks
-  that "only exist across the door". Nearly every one is a decision some
-  function makes (who may see or delete what, which version serves): move it
-  there, extracting the function if it's inline, and drop nothing. `--write`
-  takes off what got fast and lowers the records; `--from=<dir> --write` does
-  it from a gate's kept times (its `suite-timings` artifact). The second
-  measuring pass loads each file twice in one runtime, so a test that can't
-  run twice fails there.
+  process held (Linux's /proc/thread-self/schedstat, the wait capped so own
+  time never falls below the thread's time on the CPU). A test's own work,
+  and anything it awaits, still counts, and so does load: the gate's runner
+  shares this box's CPU cache and memory, and a core busy beside a test makes
+  it slower. Load only ever adds, so a test is held to the fastest time it
+  ran in. A time over the line is measured again first, in fresh runtimes,
+  one platform at a time, each such file loaded cold and then warm
+  (packages/testing `--loads`), and the files still over once more, cold and
+  twice warm; a test fails only when it is over every time. A run with
+  nothing over pays for no second pass, and a test that can't run twice in
+  one runtime fails there. A file failed this way stays unpassed, so the next
+  run runs it again. A file that runs unchanged since it passed (only `--all`
+  runs one, as the gate does) is spared: the same code passed the budget, so
+  a time over the line is the run's. A test gets slower when its code or
+  what it imports changes, which changes the file's key, so the gate holds
+  each file the first time its code runs there. The records are the gate's:
+  its whole run (`deno task test --all`) fails a listed test past its record
+  (times the list's slack); a whole run elsewhere says them without holding
+  them, and a narrowed one says neither. This box keeps a run's temporary
+  files on disk where the gate keeps them in memory, and shares its CPUs, so
+  here a file-backed SQLite test takes ten to forty times its record and a
+  process-spawning one up to four. A platform's wall clock is said, never
+  held: it adds every wait among the run's processes, so no run of it is a
+  floor, and workerd's tests, not held one by one, have no time held. Nothing
+  joins the list: a new or renamed test is held to 1 ms from its first run.
+  Getting a kernel test under it pulls you to drop the checks that "only
+  exist across the door". Nearly every one is a decision some function makes
+  (who may see or delete what, which version serves): move it there,
+  extracting the function if it's inline, and drop nothing. `--write` takes
+  off what got fast and lowers the records; `--from=<dir> --write` does it
+  from a gate's kept times (its `suite-timings` artifact).
 - A red gate's verdict closes its tests step, and `gh run view --log` cuts that
   step short: read the job's whole log, `gh api
   repos/yak-sh/yak/actions/jobs/<job id>/logs`.

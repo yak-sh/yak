@@ -20,20 +20,35 @@ let now = performance.now.bind(performance)
 let later = setTimeout
 let cancel = clearTimeout
 
-/** What the calling thread has waited for a CPU, in milliseconds: runnable,
- * and not running because another process held every CPU. Linux says it in
- * /proc/thread-self/schedstat (on the CPU, waiting, slices; nanoseconds);
- * where nothing says it, 0. A busy host stretches a test's wall clock by
- * this, not by anything the test does. */
-export let queued = (): number => {
+/** What a thread has spent so far, in milliseconds: on a CPU, and runnable
+ * but waiting for one another process held. */
+export type Sched = { ran: number; wait: number }
+
+/** What the calling thread has spent so far (`Sched`), both read at once.
+ * Linux says them in /proc/thread-self/schedstat (on the CPU, waiting,
+ * slices; nanoseconds); where nothing says them, 0. A busy host stretches a
+ * test's wall clock by its wait, not by anything the test does. */
+export let sched = (): Sched => {
   try {
-    let waiting = Deno.readTextFileSync('/proc/thread-self/schedstat')
-      .split(' ')[1]
-    return Number(waiting) / 1e6 || 0
+    let [ran, wait] = Deno.readTextFileSync('/proc/thread-self/schedstat')
+      .split(' ').map((ns) => Number(ns) / 1e6 || 0)
+    return { ran, wait }
   } catch {
-    return 0
+    return { ran: 0, wait: 0 }
   }
 }
+
+/// waited(2, { ran: 0, wait: 0 }, { ran: 0.5, wait: 0.25 }) -> 0.25
+/// waited(2, { ran: 1, wait: 1 }, { ran: 2.5, wait: 4 }) -> 0.5
+/// waited(0.25, { ran: 0, wait: 0 }, { ran: 1, wait: 5 }) -> 0
+/** Of `ms`, what the thread waited for a CPU between two readings (`sched`).
+ * Linux brings both up to date only as the thread leaves a CPU or gets one
+ * back, so a reading can charge a wait or a run that began before the first;
+ * a thread never waits while it runs, so what it waited is at most what the
+ * wall clock leaves beside its time on the CPU, and a test's own time never
+ * falls below that. */
+export let waited = (ms: number, from: Sched, to: Sched) =>
+  Math.min(Math.max(0, ms - (to.ran - from.ran)), to.wait - from.wait)
 
 /// took(0.25) -> '250µs'
 /// took(12.4) -> '12ms'
@@ -87,7 +102,7 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
       timeout,
     )
   )
-  let waiting = queued()
+  let from = sched()
   let start = now()
   let ms = 0
   try {
@@ -104,7 +119,7 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
     ok: !errors.length,
     skipped: false,
     ms,
-    waited: Math.min(ms, queued() - waiting),
+    waited: waited(ms, from, sched()),
     errors,
   }
 }
@@ -167,10 +182,10 @@ export let file = async (
 
 /** What a run took, in milliseconds: the whole of it, its planning and its
  * loading, each file's load and each test that ran, with what of it the test
- * waited for a CPU (`queued`); each file it remembered
- * as passed, by its key (./deps.ts), so a caller holding the run to more than
- * passing can take a pass back; and how many tests it skipped and files it
- * left out as unchanged since they passed. */
+ * waited for a CPU (`waited`); each file it remembered as passed, by its key
+ * (./deps.ts), so a caller holding the run to more than passing can take a
+ * pass back; and how many tests it skipped and files it left out as
+ * unchanged since they passed. */
 export type Times = {
   wall: number
   planned: number

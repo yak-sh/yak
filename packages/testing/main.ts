@@ -2,7 +2,7 @@
 // The runner: every test module and example page it is given, loaded into
 // this one runtime a file at a time, each file's tests run as it loads.
 //
-//   main.ts [--tag=t]... [--platform=p] [--all] [--twice] [--also=path]...
+//   main.ts [--tag=t]... [--platform=p] [--all] [--loads=n] [--also=path]...
 //     [--timeout=ms] [--times=dir] [--verbose] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
@@ -13,21 +13,21 @@
 // what every file depends on beside its own graph. A test that has not ended
 // within `--timeout` fails, and the run goes on. `--times` writes what each
 // test and each file's load took, and the key of each file the run remembered
-// as passed, to `<dir>/<platform>.json`. `--twice` loads
-// every file a second time once all have run, as modules of their own, so a
-// test is also timed warm, the way it runs among the whole suite: for
-// measuring (bin/test-budget.ts), since a test that cannot run twice in one
-// runtime fails its second pass. Each test is said as it runs, a failure's
-// error right after it, and the closing report says every failure again; each
-// error is cut short (./run.ts `brief`) unless `--verbose`. The exit code is 1
-// when a test failed.
+// as passed, to `<dir>/<platform>.json`. `--loads=n` loads every file n
+// times, each time once all have loaded the time before, as modules of their
+// own, so a test is timed cold and then warm, the way it runs among the whole
+// suite: for measuring (bin/test-budget.ts), since a test that cannot run
+// twice in one runtime fails a later load. Each test is said as it runs, a
+// failure's error right after it, and the closing report says every failure
+// again; each error is cut short (./run.ts `brief`) unless `--verbose`. The
+// exit code is 1 when a test failed.
 import { keys, passed, remember } from './deps.ts'
 import { find } from './find.ts'
 import { examples, plan, sweep } from './load.ts'
 import { file, type Outcome, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
-let FLAGS = /^--(tag|platform|also|timeout|times)=(.*)$|^--(all|twice|verbose)$/
+let FLAGS = /^--(tag|platform|also|timeout|times|loads)=(.*)$|^--(all|verbose)$/
 let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -42,7 +42,7 @@ let tags = flag('tag').flatMap((t) => t.split(','))
   .filter((t) => t && t != platform)
 let timeout = Number(flag('timeout').at(-1) ?? 50_000)
 let all = Deno.args.includes('--all')
-let twice = Deno.args.includes('--twice')
+let rounds = Math.max(1, Number(flag('loads').at(-1)) || 1)
 let verbose = Deno.args.includes('--verbose')
 let paths = Deno.args.filter((a) => !a.startsWith('--'))
 let started = performance.now()
@@ -106,7 +106,8 @@ let run = async (path: string, load: () => Promise<unknown>) => {
 // Pages first: Deno's dynamic import costs more the larger the graph already
 // loaded, and every example is a module of its own. After the test modules'
 // graphs, the examples took 33 s to load; before them, 8 s.
-for (let pass of twice ? ['', '?again'] : ['']) {
+for (let round = 0; round < rounds; round++) {
+  let pass = round ? `?load=${round}` : ''
   for (let p of pages.filter(fresh)) await run(p, () => examples(p, pass))
   for (let m of modules.filter(fresh)) {
     await run(m, () => import(here(m) + pass))

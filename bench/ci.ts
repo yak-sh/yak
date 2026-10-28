@@ -4,15 +4,15 @@
  * bug, and one that goes red again after its bug was resolved reopens it.
  *
  * A red run is broken when a check or a test failed, and is reported at once.
- * A run red only for a time is held: a test over its budget or a platform's
- * wall clock past its record (bin/test-budget.ts). The gate's runner shares
- * its CPU's cache and memory with the agents' box, so a test that sits near
- * its line tips over it on one run and not on the next, with no change to its
- * code. A held run is reported when the next
- * run that times the same thing is over it again, and dropped with a line in
- * the log when the next run passes. A test the code made slow is over on
- * every run, so it reports one run later; a blip never does. A red run the
- * watcher cannot read is broken.
+ * A run red only for a time is held: a test over its budget or past its
+ * record (bin/test-budget.ts). The gate's runner shares its CPU's cache and
+ * memory with the agents' box, so a test that sits near its line can be over
+ * it every time it is measured while the box is busy, and not on the next
+ * run, with no change to its code. A held run is reported when the next run
+ * that times the same thing is over it again, and dropped with a line in the
+ * log when the next run passes. A test the code made slow is over on every
+ * run, so it reports one run later; a blip never does. A red run the watcher
+ * cannot read is broken.
  *
  *   deno run -A bench/ci.ts [workflow ...]
  *

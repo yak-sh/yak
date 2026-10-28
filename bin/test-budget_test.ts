@@ -19,8 +19,7 @@ import { fenceName, fences } from '../packages/testing/examples.ts'
 let list: Budget = {
   budget: 1,
   leave: 0.5,
-  slack: { tests: { times: 2, ms: 10 }, walls: { times: 1.2, ms: 0 } },
-  platforms: { deno: 1000 },
+  slack: { times: 2, ms: 10 },
   tests: { 'a_test.ts': { slow: 50, gone: 30 } },
 }
 let deno = (
@@ -41,18 +40,30 @@ let ran = (took: Record<string, number>, wall = 1000) =>
   judge(list, { deno: deno(took, wall) })
 let names = (rows: { key: string }[]) => rows.map((r) => r.key)
 
+// A runtime that loaded its files once for each of `loads`.
+let loaded = (...loads: Record<string, number>[]): Times => ({
+  wall: 1000,
+  tests: loads.flatMap((took) => deno(took).tests),
+})
+
 test('measured again, a test is held to the fastest time it passed with', () => {
   let runs = fastest(
-    { deno: deno({ over: 3, still: 2, slow: 120, quick: 0.2 }) },
-    { deno: deno({ over: 0.8, still: 1.5, slow: -1, quick: 0.9 }) },
+    { deno: deno({ over: 3, still: 2, slow: 120, quick: 0.2, late: 4 }) },
+    {
+      deno: loaded(
+        { over: 0.8, still: 1.5, slow: -1, quick: 0.9, late: 3 },
+        { over: 1.4, still: 1.1, slow: 130, quick: 0.3, late: 2 },
+        { over: 1.2, still: 1.3, slow: -1, quick: 0.4, late: 0.6 },
+      ),
+    },
   )
   let j = judge(list, runs)
   equal([names(j.over), names(j.slower)], [['still'], ['slow']])
-  equal(runs.deno.tests.map((t) => t.ms), [0.8, 1.5, 120, 0.2])
+  equal(runs.deno.tests.map((t) => t.ms), [0.8, 1.1, 120, 0.2, 0.6])
 })
 
 test('a test is held to its own time, not what it waited for a CPU', () => {
-  let loaded = (took: Record<string, [number, number]>): Times => ({
+  let waits = (took: Record<string, [number, number]>): Times => ({
     wall: 1000,
     tests: Object.entries(took).map(([name, [ms, waited]]) => ({
       file: 'a_test.ts',
@@ -63,7 +74,7 @@ test('a test is held to its own time, not what it waited for a CPU', () => {
     })),
   })
   let j = judge(list, {
-    deno: loaded({
+    deno: waits({
       bare: [4, 3.5],
       over: [4, 2],
       slow: [400, 300],
@@ -71,11 +82,11 @@ test('a test is held to its own time, not what it waited for a CPU', () => {
     }),
   })
   equal([names(j.over), names(j.slower)], [['over', 'quick'], []])
-  let slowed = judge(list, { deno: loaded({ slow: [400, 200] }) })
+  let slowed = judge(list, { deno: waits({ slow: [400, 200] }) })
   equal(names(slowed.slower), ['slow'])
   let again = fastest(
-    { deno: loaded({ over: [3, 0] }) },
-    { deno: loaded({ over: [9, 8.5] }) },
+    { deno: waits({ over: [3, 0] }) },
+    { deno: waits({ over: [9, 8.5] }) },
   )
   equal(own(again.deno.tests[0]), 0.5)
   equal(judge(list, again).over, [])
@@ -126,21 +137,19 @@ test('a listed test is held to its record and the slack', () => {
 test('the list only shrinks: well within budget, gone, faster', () => {
   let j = ran({ slow: 0.5 })
   equal([names(j.within), names(j.gone)], [['slow'], ['gone']])
-  equal(shrunk(list, j, true).tests, {})
-  equal(shrunk(list, ran({ slow: 0.9, gone: 30 }), true).tests, {
+  equal(shrunk(list, j).tests, {})
+  equal(shrunk(list, ran({ slow: 0.9, gone: 30 })).tests, {
     'a_test.ts': { slow: 0.9, gone: 30 },
   })
-  let faster = ran({ slow: 19.91, gone: 40, new: 3 }, 830)
-  equal(shrunk(list, faster, true), {
+  let faster = ran({ slow: 19.91, gone: 40, new: 3 })
+  equal(shrunk(list, faster), {
     ...list,
-    platforms: { deno: 830 },
     tests: { 'a_test.ts': { slow: 20, gone: 30 } },
   })
-  equal(shrunk(list, faster, false).platforms, list.platforms)
 })
 
 test('a record lowers only past the slack, not on one lucky run', () => {
-  equal(shrunk(list, ran({ slow: 20.01, gone: 30 }, 840), true), list)
+  equal(shrunk(list, ran({ slow: 20.01, gone: 30 })), list)
 })
 
 test('a failed test is neither timed nor gone', () => {
@@ -148,12 +157,16 @@ test('a failed test is neither timed nor gone', () => {
   equal([j.over, j.slower, j.within, j.gone], [[], [], [], []])
 })
 
-test('workerd is held by its wall alone', () => {
+test("a platform's wall clock is said, never held, and workerd's tests are not held", () => {
   let j = judge(list, {
+    deno: deno({ quick: 0.2 }, 9e9),
     workerd: { wall: 5, tests: [{ file: 'w.ts', name: 'w', ms: 9, ok: true }] },
   })
-  equal(j.over, [])
-  equal(j.walls, [{ platform: 'workerd', ms: 5, record: undefined }])
+  equal(failing(j, true), [])
+  equal(j.walls, [
+    { platform: 'deno', ms: 9e9 },
+    { platform: 'workerd', ms: 5 },
+  ])
 })
 
 test('a doctest is listed by its code, not its line', () => {

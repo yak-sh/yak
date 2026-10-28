@@ -167,7 +167,7 @@ test('untagged', () => {})`,
   equal(Object.keys((await dir.run('--timeout=1')).said).length, 3)
 })
 
-// Run `--twice`, so the same run shows each pass timed: each run of the runner
+// Run `--loads=2`, so the same run shows each load timed: each run of the runner
 // is a process, and a test of its own would take as long again.
 test('--times says what each test and each load took', async () => {
   await using dir = await fixture({
@@ -179,7 +179,7 @@ test('later', () => {}, { skip: true })`,
   })
   let at = await Deno.makeTempDir({ prefix: 'yaks-testing-times-' })
   try {
-    await dir.run('--platform=p', `--times=${at}`, '--twice')
+    await dir.run('--platform=p', `--times=${at}`, '--loads=2')
     let times: Times = JSON.parse(await Deno.readTextFile(`${at}/p.json`))
     match(times.tests, [
       { name: 'waits', ok: true, file: /a_test\.ts$/ },
