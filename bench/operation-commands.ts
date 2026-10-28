@@ -13,6 +13,7 @@ import { starter } from '../packages/cli/init.ts'
 import { declarations } from '../packages/cli/declarations.ts'
 import type { Config } from '../packages/cli/config.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
+import { settled } from './settled.ts'
 
 let root = new URL('../', import.meta.url).pathname
 let decode = new TextDecoder()
@@ -232,6 +233,7 @@ async function collect(
     }
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
+    await settled(host)
     let graph = host.graph
     await graph.apply([
       {

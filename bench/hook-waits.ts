@@ -9,6 +9,7 @@ import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { lifecycle } from '../packages/session/hooks.ts'
 import { PATH } from '../packages/session/routes.ts'
+import { settled } from './settled.ts'
 
 export let HOOK_WAITS = [
   'hook/SessionStart',
@@ -107,6 +108,7 @@ export async function measure(
     )
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
+    await settled(host)
     let graph = host.graph
     await graph.apply([{
       entity: { eid: person },

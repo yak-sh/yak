@@ -20,6 +20,7 @@ import {
 } from '@yaks/sql'
 import { TABLE } from '../packages/embedding/ddl.ts'
 import { service } from '../packages/embedding/service.ts'
+import { settled } from './settled.ts'
 
 export let DIAGNOSTIC_NAMES = [
   'cli/model-list-local-catalogue',
@@ -84,6 +85,7 @@ export let measure = async (
     let path = `${dir}/yak.json`
     await Deno.writeTextFile(path, JSON.stringify(config))
     host = await compose(read(path), ['graph', 'web'])
+    await settled(host)
     await host.graph.apply([
       { entity: { eid: workspace }, workspace: { root: dir } },
       { entity: { eid: session }, session: { id: 'diagnostic-home-fixture' } },
