@@ -163,16 +163,20 @@ import { bound, type Env } from './env.ts'
 // carries the decision, and the listing every door here reads.
 import {
   ask as askGallery,
+  codeReviewLetter,
   decide as decideGallery,
   door as galleryDoor,
   drop as unGallery,
   letter as galleryLetter,
+  owned as ownerOf,
   pictureOf,
+  review as reviewCode,
   saying,
   searched,
   type Standing,
   standing as onGallery,
   ticket as ticketFor,
+  type Verdict,
 } from './gallery.ts'
 import type { Caller } from './identity.ts'
 import {
@@ -675,24 +679,24 @@ let toGallery = async (
     await decideGallery(ctx.env, app, true, skip, 'listed without review')
     return 'listed' as const
   }
-  if (!ctx.env.SESSION_SECRET) {
-    throw new Error('the platform cannot sign a gallery link here')
-  }
   let owner = await ctx.dir.nameAt(ctx.person) ?? space.slug
-  let secret = ctx.env.SESSION_SECRET
+  let asking = await ours(ctx, space)
+    ? await reviewLetter(ctx, space, app, owner)
+    : codeReviewLetter({
+      title: app.title,
+      about: app.published.about,
+      url: url(space, app, ctx.env),
+      owner,
+      app: `${space.slug}/${app.slug}`,
+      name: app.published.name,
+      version: app.published.version,
+    })
   // The letter first, the mark second: an ask nobody was told about is an app
   // waiting on a decision no one was asked to make, and it would sit there
   // saying so on the space page forever. A letter that will not send leaves
   // the row exactly as it was, and asking again is the whole retry.
   try {
-    await mail(ctx.env)(galleryLetter({
-      title: app.title,
-      about: app.published.about,
-      url: url(space, app, ctx.env),
-      owner,
-      yes: galleryDoor(await ticketFor(app, true, secret), ctx.env),
-      no: galleryDoor(await ticketFor(app, false, secret), ctx.env),
-    }, ctx.env))
+    await mail(ctx.env)(asking)
   } catch (e) {
     throw new Error(
       `${space.slug}/${app.slug} is published, but the gallery could not be ` +
@@ -704,6 +708,38 @@ let toGallery = async (
   }
   await askGallery(ctx.env, app)
   return 'asked' as const
+}
+
+// The platform owner's review letter (gallery.ts `letter`), with its two
+// signed answers, and the code review that preceded it when there was one.
+let reviewLetter = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  owner: string,
+  code?: Verdict,
+) => {
+  let secret = ctx.env.SESSION_SECRET
+  if (!secret) throw new Error('the platform cannot sign a gallery link here')
+  return galleryLetter({
+    title: app.title,
+    about: app.published?.about ?? '',
+    url: url(space, app, ctx.env),
+    owner,
+    yes: galleryDoor(await ticketFor(app, true, secret), ctx.env),
+    no: galleryDoor(await ticketFor(app, false, secret), ctx.env),
+    ...(code ? { code } : {}),
+  }, ctx.env)
+}
+
+// A space one of the platform's own people owns (an owner of the meta space
+// owns it too: yourname, Jeff's own). Its apps skip the code review a
+// stranger's ask gets (gallery.ts).
+let ours = async (ctx: Ctx, space: Space) => {
+  let meta = await ctx.dir.space(META.space)
+  if (!meta) return false
+  let staff = new Set(await ctx.dir.owners(meta))
+  return (await ctx.dir.owners(space)).some((person) => staff.has(person))
 }
 
 // Who a gallery decision is recorded as (gallery.ts `decision`). The admin's
@@ -3110,9 +3146,12 @@ let OURS: Row[] = [
         )
       }
       let c = ctx.clock ?? clock()
+      // Reading is the platform admin's in every space, the way the graph
+      // tier is: a gallery code review reads a stranger's files (gallery.ts).
+      let write = WRITES.includes(op)
       let { space, app, who } = await c.time(
         'inApp',
-        () => inApp(ctx, args, WRITES.includes(op)),
+        () => inApp(ctx, args, write, !write),
       )
       let blobs = r2RawObjects(ctx.env.BLOBS)
       // A path as the app names it: written.ts keys the draft by app-relative
@@ -6175,6 +6214,59 @@ let OURS: Row[] = [
             ? saying('listed', ctx.env)
             : 'declined; the app stays published'
         }`,
+      }
+    },
+  },
+  {
+    name: 'gallery_code_review',
+    idempotent: false,
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        app: str('the published app whose code was reviewed, as space/app'),
+        verdict: { type: 'string', enum: ['approve', 'reject'] },
+        findings: str('what the review found, as a few lines of text'),
+        by: str('who reviewed it: your project eid; never a session'),
+        via: str('the session that reviewed it'),
+      },
+      required: ['app', 'verdict', 'findings'],
+    },
+    run: async (ctx, args) => {
+      if (!await admin(ctx)) {
+        throw refuse('access', 'a gallery code review is the platform admin’s')
+      }
+      let name = text(args.app, 'app')
+      let at = (await ctx.dir.offers()).find(({ space, app }) =>
+        `${space.slug}/${app.slug}` == name
+      )
+      if (!at) throw refuse('missing', `${name} is not on offer`)
+      if (onGallery(at.app) != 'asked') {
+        throw refuse('conflict', `${name} is not waiting for gallery review`)
+      }
+      if (await ours(ctx, at.space)) {
+        throw refuse(
+          'conflict',
+          `${name} is one of ours, so its review went to yaks.app's owner ` +
+            'with no code review',
+        )
+      }
+      let verdict = args.verdict
+      if (verdict !== 'approve' && verdict !== 'reject') {
+        throw refuse('arguments', 'verdict is approve or reject')
+      }
+      let code: Verdict = { verdict, findings: text(args.findings, 'findings') }
+      let owner = await ctx.dir.nameAt(await ownerOf(ctx.dir, at.space)) ??
+        at.space.slug
+      // The letter first, as an ask sends it: a review recorded with no
+      // letter would leave its owner never asked.
+      await mail(ctx.env)(
+        await reviewLetter(ctx, at.space, at.app, owner, code),
+      )
+      await reviewCode(ctx.env, at.app, code, await decider(ctx, args))
+      return {
+        text: `${name}: code review recorded (${code.verdict}); its review ` +
+          "request went to yaks.app's owner",
       }
     },
   },

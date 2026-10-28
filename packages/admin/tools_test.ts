@@ -147,6 +147,19 @@ test('a gallery decision goes to the hosted tool as the caller, or whoever it na
       via: 'operator-session',
     },
   })
+  let code = { verdict: 'approve', findings: 'Calls nothing out' }
+  equal(
+    await forwarded({ app: 'ann/recipes', decision: 'code-review', ...code }),
+    {
+      name: 'gallery_code_review',
+      arguments: {
+        app: 'ann/recipes',
+        ...code,
+        by: 'operator-project',
+        via: 'operator-session',
+      },
+    },
+  )
 })
 
 test('an unknown --as account is a refusal, not an exception', async () => {

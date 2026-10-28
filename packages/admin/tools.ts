@@ -166,12 +166,13 @@ export let tracker = async (
   return { remote: { url: remote?.url, secret } }
 }
 
-/** A gallery decision through the hosted tools, recorded as this call's
- * actor and session: approve or decline answers a request (gallery_review),
- * and list asks with review skipped (app_set `review: false`). A `by` the call
- * names, the platform owner's address when he asked for the act, stands in for
- * the caller's own. Account selection stays at the admin boundary shared by
- * every operation. */
+/** A gallery act through the hosted tools, recorded as this call's actor and
+ * session: approve or decline answers a request (gallery_review), list asks
+ * with review skipped (app_set `review: false`), and code-review records an
+ * agent's review of a stranger's app and sends its request to the platform's
+ * owner (gallery_code_review). A `by` the call names, the platform owner's
+ * address when he asked for the act, stands in for the caller's own. Account
+ * selection stays at the admin boundary shared by every operation. */
 export let review = async (bearer: string, call: Bundle): Promise<string> => {
   let a = argsOf(call)
   let actor = who(call)
@@ -184,25 +185,31 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
   if (!space || !app || extra != null) {
     throw new CallError('app', 'name the app as space/app')
   }
-  return saidBy(
-    await rpc(bearer)(
-      'tools/call',
-      a.decision == 'list'
-        ? {
-          name: 'app_set',
-          arguments: { space, app, gallery: true, review: false, ...stamp },
-        }
-        : {
-          name: 'gallery_review',
-          arguments: {
-            app: a.app,
-            decision: a.decision,
-            ...stamp,
-            ...(a.reason ? { reason: a.reason } : {}),
-          },
-        },
-    ),
-  )
+  let asked = a.decision == 'list'
+    ? {
+      name: 'app_set',
+      arguments: { space, app, gallery: true, review: false, ...stamp },
+    }
+    : a.decision == 'code-review'
+    ? {
+      name: 'gallery_code_review',
+      arguments: {
+        app: a.app,
+        verdict: a.verdict,
+        findings: a.findings,
+        ...stamp,
+      },
+    }
+    : {
+      name: 'gallery_review',
+      arguments: {
+        app: a.app,
+        decision: a.decision,
+        ...stamp,
+        ...(a.reason ? { reason: a.reason } : {}),
+      },
+    }
+  return saidBy(await rpc(bearer)('tools/call', asked))
 }
 
 /** The implementations of the tools ./vocab.json declares. */

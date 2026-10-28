@@ -30,6 +30,15 @@
 // calls one or the other. Every door writes one decision (`decision`), with
 // the actor in by and the session or credential in via.
 //
+// A code review first, for somebody else's app. Jeff, 2026-10-28: "it's
+// probably a good idea to have you do a code review approval of apps before
+// they enter the gallery in the future. Probably not for all these internal
+// ones, but for actual third-party apps". An ask from a space none of the
+// platform's own people owns (tools.ts `ours`) writes to the agents instead
+// (`CODE_REVIEW`), and his letter goes once an agent has read the code and
+// said what it found (gallery_code_review, `code_review` on the row). He
+// decides either way. An app of our own goes to him at once.
+//
 // The words on the row (vocab.ts `gallery`) say the whole state:
 //
 //   nothing      the app never asked
@@ -75,6 +84,12 @@ import { staff } from './admin.ts'
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
 export let IMAGE = `${PATH}/image/`
+
+// Where a code review is asked for: the yaks.app project's own address on the
+// box (its project wears it), so the letter is filed as a priority-1 task on
+// that project's board (@yaks/mail `mail_task`), which an agent picks up. It
+// never reaches the platform's owner; his letter follows the review.
+export let CODE_REVIEW = 'hello@bot.yak.sh'
 
 // A week to get to it. Longer than the hour a space's death gets (erase.ts
 // LIFE), because nothing here is destroyed and nobody is waiting at a form:
@@ -435,6 +450,7 @@ export let letter = (at: {
   owner: string
   yes: string
   no: string
+  code?: Verdict
 }, env: Host = {}): Letter => ({
   to: replyTo(env),
   subject: `Gallery: ${at.title}?`,
@@ -444,7 +460,15 @@ export let letter = (at: {
   ${at.url}
   ${at.about || '(no description)'}
   by ${at.owner}
+${
+    at.code
+      ? `
+An agent reviewed its code: ${at.code.verdict}.
 
+${at.code.findings}
+`
+      : ''
+  }
 Yes, list it:
 ${at.yes}
 
@@ -452,6 +476,52 @@ No, thank you:
 ${at.no}
 
 These links expire in one week.`,
+})
+
+// What an agent says of an app's code (gallery_code_review): approve or
+// reject, and what it found. The platform's owner reads it beside the app.
+export type Verdict = { verdict: 'approve' | 'reject'; findings: string }
+
+// The letter asking for a code review (`CODE_REVIEW`). It names the release
+// that would be copied, where the files are read, and the one command that
+// records the review and sends the owner's letter.
+export let codeReviewLetter = (at: {
+  title: string
+  about: string
+  url: string
+  owner: string
+  app: string
+  name: string
+  version: number
+}): Letter => ({
+  to: CODE_REVIEW,
+  replyTo: CODE_REVIEW,
+  subject: `Code review: ${at.title} for the gallery`,
+  body:
+    `${at.owner} asked to show an app on the yaks.app gallery. Review its code
+before the request goes to yaks.app's owner: what it does with people's data
+and keys, whether it works as it says, and anything that should not go out
+under our name (M-4522).
+
+  ${at.title}
+  ${at.url}
+  ${at.about || '(no description)'}
+  by ${at.owner}
+  published as ${at.name} v${at.version}
+
+Read its files as the platform admin:
+
+  yak command app_files --space ${at.app.split('/')[0]} --app ${
+      at.app.split('/')[1]
+    } --op list --as admin@bot.yak.sh
+
+Then record the review, which sends him the request with your verdict and
+findings. He decides either way.
+
+  yak admin gallery ${at.app} code-review --verdict approve --findings @findings.md --as admin@bot.yak.sh
+
+--verdict reject when it should not be listed. Then close the task this letter
+filed.`,
 })
 
 // The review page. It draws on GET and acts on POST, for the reason the space
@@ -462,7 +532,7 @@ These links expire in one week.`,
 // (`staff`). Both are needed: the ticket because the kernel signed what is
 // being decided, the cookie because the letter also lands in the box's graph,
 // where agents read mail.
-let review = (at: {
+let confirm = (at: {
   title: string
   about: string
   url: string
@@ -547,6 +617,7 @@ export let ask = (env: Env, app: App, now = new Date()) =>
         via: null,
         reason: null,
       },
+      code_review: null,
     }],
   })
 
@@ -584,7 +655,31 @@ export let decide = (
 /** The word off the row entirely: un-asked and un-listed at once, which is
  * what withdrawing means (`gallery: false`, app_unpublish). */
 export let drop = (env: Env, app: App) =>
-  stamp(env, { entities: [{ entity: { eid: app.eid }, gallery: null }] })
+  stamp(env, {
+    entities: [{ entity: { eid: app.eid }, gallery: null, code_review: null }],
+  })
+
+/** An agent's code review of the release asked about. A new ask or a
+ * withdrawal clears it with the ask. */
+export let reviewed = (
+  app: App,
+  code: Verdict,
+  actor: Actor,
+  now = new Date(),
+): Bundle => ({
+  entity: { eid: app.eid },
+  code_review: {
+    verdict: code.verdict,
+    findings: code.findings,
+    version: app.published?.version ?? 0,
+    at: now.toISOString(),
+    by: actor.by ?? null,
+    via: actor.via ?? null,
+  },
+})
+
+export let review = (env: Env, app: App, code: Verdict, actor: Actor) =>
+  stamp(env, { entities: [reviewed(app, code, actor)] }, { actor })
 
 // ---- the doors ---------------------------------------------------------
 
@@ -673,7 +768,7 @@ export let answer = async (
     list: ok.list,
     token: held,
   }
-  if (req.method != 'POST') return review(said, env)
+  if (req.method != 'POST') return confirm(said, env)
   let session = await browserOf(req, env.SESSION_SECRET)
   await decide(env, at.app, ok.list, {
     by: who,

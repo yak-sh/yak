@@ -294,15 +294,24 @@ listing is live, including for a private app; its other files and data stay
 private. The screenshot can be cleared with `app_set(app, screenshot: '')` after
 withdrawing a listed app.
 
-The app is not listed immediately. The request sends a letter to yaks.app's
-owner with the app's title, its address, the line its owner wrote about it and
-who made it, and two links for the answer. He reviews every request, and nothing
-is listed until he approves it.
+The app is not listed immediately. Unless it is one of yaks.app's own, an agent
+first reviews its code: what it does with people's data and keys, whether it
+works as it says, and anything that should not be shown under yaks.app's name.
+Then the request sends a letter to yaks.app's owner with the app's title, its
+address, the line its owner wrote about it, who made it, the code review's
+verdict and findings, and two links for the answer. He reviews every request,
+and nothing is listed until he approves it.
 
-The platform's admin, whose credential an agent can hold, can do two more
-things, and an agent does either only when yaks.app's owner asks it to,
-recording him as the one who decided (`by`, his address) and itself as the
-session (`via`):
+The code review is the platform admin's act, whose credential an agent holds:
+the request reaches its agents as a task, and
+**`gallery_code_review(app: 'space/app', verdict: 'approve', findings, by, via)`**
+records the review and sends the letter; `verdict: 'reject'` says the code
+should not be listed, and he still decides. `app_files` reads the app's code for
+the platform admin.
+
+The platform admin can do two more things, and an agent does either only when
+yaks.app's owner asks it to, recording him as the one who decided (`by`, his
+address) and itself as the session (`via`):
 
 - **`gallery_review(app: 'space/app', decision: 'approve', by, via, reason)`**
   answers a request. `decision: 'decline'` clears the request and leaves the app
@@ -311,10 +320,12 @@ session (`via`):
   `app_publish`, lists the app at once, skipping review: no request, no letter.
   It still needs a published app and a screenshot.
 
-On the platform's own machine these are `yak admin gallery space/app approve`
-(or `decline`) and `yak admin gallery space/app list`, each with
-`--by <his address> --as admin@bot.yak.sh`; the session is filled in from the
-calling agent.
+On the platform's own machine these are
+`yak admin gallery space/app code-review --verdict approve --findings @findings.md`,
+`yak admin gallery space/app approve` (or `decline`) and
+`yak admin gallery space/app list`, each with `--as admin@bot.yak.sh`, and the
+last two with `--by <his address>`; the session is filled in from the calling
+agent.
 
 The tool reports the listing's status, and so does the app's status pill on the
 space's own page:

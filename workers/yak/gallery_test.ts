@@ -12,6 +12,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App, Directory, Space } from './directory.ts'
 import {
   card,
+  CODE_REVIEW,
+  codeReviewLetter,
   decision,
   DEMOS,
   door,
@@ -215,6 +217,37 @@ test('the letter names the app, its maker, and both answers', () => {
   assertStringIncludes(l.body, 'Somewhere to keep recipes')
   assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=yes')
   assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=no')
+})
+
+// A stranger's ask is a code review for the platform's agents first, and the
+// owner's letter that follows carries what the review found.
+test('a code review asks the agents, and its verdict rides to the owner', () => {
+  let asked = codeReviewLetter({
+    title: 'Recipe box',
+    about: 'Somewhere to keep recipes',
+    url: 'https://ann.yaks.app/recipes/',
+    owner: 'Ann',
+    app: 'ann/recipes',
+    name: 'recipe-box',
+    version: 3,
+  })
+  assertEquals(asked.to, CODE_REVIEW)
+  assertStringIncludes(asked.body, 'published as recipe-box v3')
+  assertStringIncludes(asked.body, '--space ann --app recipes --op list')
+  assertStringIncludes(asked.body, 'yak admin gallery ann/recipes code-review')
+  let told = letter({
+    title: 'Recipe box',
+    about: '',
+    url: 'https://ann.yaks.app/recipes/',
+    owner: 'Ann',
+    yes: 'https://yaks.app/gallery/review?t=yes',
+    no: 'https://yaks.app/gallery/review?t=no',
+    code: { verdict: 'reject', findings: 'Sends every recipe to a stranger.' },
+  })
+  assertEquals(told.to, 'hello@yaks.app')
+  assertStringIncludes(told.body, 'An agent reviewed its code: reject')
+  assertStringIncludes(told.body, 'Sends every recipe to a stranger.')
+  assertStringIncludes(told.body, 'https://yaks.app/gallery/review?t=yes')
 })
 
 test('staging gallery listings, reviews and mail stay on its own host', async () => {

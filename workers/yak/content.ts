@@ -474,7 +474,7 @@ export let WORDS: Record<string, Words> = {
   'app_publish': {
     'title': 'Publish an app for others to install',
     'description':
-      "Publish this app so anyone in any other space can install it by name. Someone else then calls app_install and gets their own copy: their own store, their own address, their own data from the first byte, pinned to the version you published; nothing is shared but the code. The name is platform-wide, so it is the app's slug unless that is taken, and a taken name is refused. Publishing again publishes whatever is deployed now under the name it already has; a name is claimed once, and only an explicit new name moves it, which leaves the old name resolving to nothing. Nobody who installed it moves to the new version until they call app_update. Only the space owner may publish. gallery: true also submits it to be shown on https://yaks.app/gallery, a public page of what people have made. That is separate from publishing. It is not listed at once; the platform's owner reviews the submission and decides, and the app is published either way. review: false lists it at once instead: only the platform admin may, and only when the platform's owner asks. Returns the published name and version, how to install it, and any gallery submission status. Documentation: https://yaks.app/docs/sharing.",
+      "Publish this app so anyone in any other space can install it by name. Someone else then calls app_install and gets their own copy: their own store, their own address, their own data from the first byte, pinned to the version you published; nothing is shared but the code. The name is platform-wide, so it is the app's slug unless that is taken, and a taken name is refused. Publishing again publishes whatever is deployed now under the name it already has; a name is claimed once, and only an explicit new name moves it, which leaves the old name resolving to nothing. Nobody who installed it moves to the new version until they call app_update. Only the space owner may publish. gallery: true also submits it to be shown on https://yaks.app/gallery, a public page of what people have made. That is separate from publishing. It is not listed at once; an agent reviews its code first, unless it is one of the platform's own, then the platform's owner reviews the submission and decides, and the app is published either way. review: false lists it at once instead: only the platform admin may, and only when the platform's owner asks. Returns the published name and version, how to install it, and any gallery submission status. Documentation: https://yaks.app/docs/sharing.",
   },
   'app_unpublish': {
     'title': 'Unpublish an app',
@@ -575,5 +575,10 @@ export let WORDS: Record<string, Words> = {
     'title': 'Review a gallery listing',
     'description':
       "Approve or decline a submitted gallery listing as the platform admin. Every submission goes to the platform's owner for review, so decide one only when he asks you to, and record him: by is his address, via is the session, reason records why. app names the offer as space/app. A decline leaves the app published and lets its owner submit again. Listing an app without review, which also waits for him to ask, is app_set(app, gallery: true, review: false).",
+  },
+  'gallery_code_review': {
+    'title': "Review a gallery app's code",
+    'description':
+      "Record the platform admin's code review of an app somebody else asked into the gallery, and send the platform's owner its review request with the verdict and findings; he decides either way. An ask from outside the platform's own spaces comes to the admin's agents for this first, and app_files reads the app's code. verdict is approve or reject; findings says what the review found: what the app does with people's data and keys, whether it works as it says, and anything that should not be shown under yaks.app's name. by is your project, via your session.",
   },
 }

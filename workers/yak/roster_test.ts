@@ -569,6 +569,14 @@ test(
         'platform admin',
       )
       assertStringIncludes(
+        await refused(tool, 'gallery_code_review', {
+          app: `${mine}/${app}`,
+          verdict: 'approve',
+          findings: 'A probe.',
+        }),
+        'platform admin',
+      )
+      assertStringIncludes(
         await tool('app_install', { space: theirs, name: offer, as: app }),
         offer,
       )

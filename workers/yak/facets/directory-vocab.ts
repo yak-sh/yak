@@ -221,6 +221,23 @@ export let directoryDoc: VocabDoc = {
         reason: owned(text),
       },
     },
+    // An agent's code review of somebody else's app asked into the gallery
+    // (gallery.ts): its verdict, what it found, the published version it
+    // read, and who reviewed it through which session. The platform's owner
+    // reads it in his review letter and decides; a new ask or a withdrawal
+    // clears it. Server-owned for the reason `gallery` is.
+    code_review: {
+      component: true,
+      type: 'object',
+      properties: {
+        verdict: owned({ type: 'string', enum: ['approve', 'reject'] }),
+        findings: owned(text),
+        version: owned(num),
+        at: owned(time),
+        by: owned(ref('keep')),
+        via: owned(ref('keep')),
+      },
+    },
     // An uploaded image the owner chose to represent this app. Its bytes and
     // attachment live in the app's store; only the content address lives here.
     screenshot: {

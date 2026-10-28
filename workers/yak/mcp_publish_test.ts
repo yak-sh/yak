@@ -337,8 +337,48 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let empty = await k.at('yaks.app', '/gallery')
     assertEquals(cards(await empty.text()), 0)
 
-    // The letter, at the platform's own mailbox, carrying both answers.
+    // Somebody else's app: the ask goes to the platform's agents for a code
+    // review, and nothing reaches the platform's owner until one is recorded.
+    let address = `https://${mine}.yaks.app/recipes/`
+    let owed = () =>
+      letters(k, 'hello@yaks.app').filter((l) => l.body.includes(address))
+    let asked = await letter(k, 'hello@bot.yak.sh', 'Recipe box')
+    assertStringIncludes(
+      asked.body,
+      `yak admin gallery ${mine}/recipes code-review`,
+    )
+    assertEquals(owed().length, 0)
+    let reviewer = connector(k, k.owner.cookie)
+    let code = {
+      app: `${mine}/recipes`,
+      verdict: 'approve',
+      findings: 'Keeps recipes in its own store and calls nothing out.',
+    }
+    await assertRejects(
+      () => agent.tool('gallery_code_review', code),
+      Error,
+      'platform admin',
+    )
+    // The admin reads a stranger's files for it.
+    assertStringIncludes(
+      await reviewer.tool('app_files', {
+        space: mine,
+        app: 'recipes',
+        op: 'list',
+      }),
+      'index.html',
+    )
+    assertStringIncludes(
+      await reviewer.tool('gallery_code_review', code),
+      'code review recorded',
+    )
+
+    // The letter, at the platform's own mailbox, carrying the code review and
+    // both answers.
     let post = await letter(k, 'hello@yaks.app', 'Recipe box')
+    assertEquals(owed().length, 1)
+    assertStringIncludes(post.body, 'An agent reviewed its code: approve')
+    assertStringIncludes(post.body, code.findings)
     assertStringIncludes(post.body, `https://${mine}.yaks.app/recipes/`)
     assertStringIncludes(post.body, 'Somewhere to keep recipes')
     let [yes, no] = [
@@ -391,7 +431,6 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertStringIncludes(page, 'Somewhere to keep recipes')
     assertStringIncludes(page, `https://${mine}.yaks.app/recipes/`)
     // An agent with the admin credential decides through the same review.
-    let reviewer = connector(k, k.owner.cookie)
     let review = {
       app: `${mine}/recipes`,
       decision: 'approve',
@@ -606,6 +645,44 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       )).message,
       'needs a screenshot before gallery review',
     )
+
+    // An app of the platform's own people (an owner of the meta space owns its
+    // space) asks the platform's owner at once: no code review comes first.
+    let ours = unique('ours')
+    await reviewer.tool('app_new', { slug: ours, title: 'Our own' })
+    await reviewer.tool('app_files', {
+      app: ours,
+      op: 'write',
+      path: 'index.html',
+      content: '<meta property="og:image" content="card.png"><h1>Ours</h1>',
+    })
+    await reviewer.tool('app_deploy', { app: ours })
+    await reviewer.tool('app_publish', {
+      app: ours,
+      name: ours,
+      about: 'One of ours',
+      gallery: true,
+    })
+    let direct = await letter(k, 'hello@yaks.app', 'Our own')
+    assertStringIncludes(direct.body, `/${ours}/`)
+    assertEquals(direct.body.includes('reviewed its code'), false)
+    assertEquals(
+      letters(k, 'hello@bot.yak.sh').some((l) => l.body.includes(`/${ours}/`)),
+      false,
+    )
+    let ourSpace = direct.body.match(/https:\/\/([^.]+)\.yaks\.app\//)![1]
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          reviewer.tool('gallery_code_review', {
+            ...code,
+            app: `${ourSpace}/${ours}`,
+          }),
+        Error,
+      )).message,
+      'one of ours',
+    )
+    await reviewer.tool('app_set', { app: ours, gallery: false })
   } finally {
     await k.stop()
   }
