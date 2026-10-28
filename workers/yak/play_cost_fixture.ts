@@ -15,7 +15,7 @@ import {
 } from '@yaks/durable-object'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { seedWorld, settleWorld, worldBindings } from './play_world_fixture.ts'
-import { settle } from './release_cost_fixture.ts'
+import { objectState, settle } from './release_cost_fixture.ts'
 import { areaOf, looksOf, placeOf, REACH } from '../../apps/vale/area.ts'
 import { SIZE } from '../../apps/vale/levels.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
@@ -144,11 +144,11 @@ export let playMinute = async (
       }
     }
     let live: ReturnType<typeof wire>[] = []
-    let store = new Store({
-      storage: db,
-      getWebSockets: () => live,
-      acceptWebSocket: () => {},
-    }, worldBindings(app, person))
+    let state = objectState(db)
+    let store = new Store(
+      { ...state.context, getWebSockets: () => live },
+      worldBindings(app, person),
+    )
     let headers = {
       'x-store': 'probe/play-cost',
       'x-yak-access': 'private',
@@ -216,10 +216,10 @@ export let playMinute = async (
       if (held.rules.every((r) => !r.live || r.done)) break
       if (i == 99) throw new Error('lens fixture did not settle')
     }
-    await settleWorld(store, db)
+    await settleWorld(store, state)
     if (minutes) {
       await seedWorld(store, post)
-      await settleWorld(store, db)
+      await settleWorld(store, state)
     }
     let timers = new Map<number, { at: number; fn: () => void }>(),
       next = 1
@@ -485,7 +485,7 @@ export let playMinute = async (
       if (alarm != null && alarm <= at) {
         await db.deleteAlarm?.()
         await settle(store.alarm())
-        await settle(settleWorld(store, db))
+        await settle(settleWorld(store, state))
       }
       for (let k = 0; k < 20; k++) await Promise.resolve()
     }
@@ -562,11 +562,7 @@ export let idleWake = async (
     'x-yak-person': person,
     'x-yak-app': app,
   }
-  let context = {
-    storage: db,
-    getWebSockets: () => [],
-    acceptWebSocket: () => {},
-  }
+  let { context, settled } = objectState(db)
   let store = new Store(context)
   let post = async (path: string, body: unknown) => {
     let res = await store.fetch(
@@ -646,8 +642,8 @@ export let idleWake = async (
         if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
         await res.body?.cancel()
       }
-      // Drain the asynchronous pool work started by the request, not just its response.
-      for (let i = 0; i < 100; i++) await Promise.resolve()
+      // The work the request left running past its answer, not just its response.
+      await settled()
       if (await db.getAlarm() != null) {
         throw new Error('idle read armed an alarm')
       }

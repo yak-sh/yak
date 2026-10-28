@@ -52,9 +52,11 @@ test(
     let report = await r.json()
     console.log('RETAINED_LONG_ALARM', JSON.stringify(report))
     // Retained command declarations must still write through the session lens,
-    // including after the cold alarm restores its command runner.
+    // including after the cold alarm restores its command runner: each of the
+    // six villagers the hero's arrival roused answers where to go and how it
+    // feels.
     assertEquals(report.failures, [])
-    assertEquals(report.answers, 8)
+    assertEquals(report.answers, 12)
     assert(
       report.total.read < 800000,
       `retained alarm rereads historical transcripts: ${report.total.read}`,
@@ -71,8 +73,8 @@ test('current Vale command templates keep sending separate from model choice', a
   assertEquals(r.status, 200, await r.clone().text())
   let report = await r.json()
   assertEquals(report.failures, [])
-  assertEquals(report.answers, 8)
-  assertEquals(report.selections.length, 8)
+  assertEquals(report.answers, 12)
+  assertEquals(report.selections.length, 12)
   for (let row of report.selections) {
     assertEquals(row.sending, {
       window: 16,

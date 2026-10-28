@@ -19,7 +19,8 @@ import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { born } from '../../apps/vale/villagers.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
 import { useUntil } from './used.ts'
-import { settle } from './release_cost_fixture.ts'
+import { objectState, settle } from './release_cost_fixture.ts'
+import { PAUSE } from './mover.ts'
 
 export let worldBindings = (app: string, person: string): Bindings => {
   let vocab = platformVocab()
@@ -162,20 +163,46 @@ export let seedWorld = async (
   return villagers.map((row) => row.entity.eid)
 }
 
-// A firing starts deferred effects. Wait for the real queue to settle rather
-// than calling alarm() a second time and accidentally counting another tick.
-export let settleWorld = async (store: Store, storage?: State['storage']) => {
-  for (let round = 0; round < 1000; round++) {
-    for (let i = 0; i < 100; i++) await Promise.resolve()
-    let pending = await (await store.door).graph.read(
-      '.effect.state=pending,running&.fields=entity.eid',
-    )
-    if (
-      !pending.length && (!storage || left(statements(driver(storage))) == 0)
-    ) return
-    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+/** A Store's object state over a storage, holding what the Store hands
+ * `waitUntil` the way the runtime holds it (release_cost_fixture.ts). */
+export type World = ReturnType<typeof objectState>
+
+// A write or a firing answers before the work it caused is done: the effects
+// it owed, the vectors its texts are owed. The Store hands all of it to
+// `waitUntil`, so this waits on that work, and on the work it started in
+// turn, never on a count of event-loop rounds. A pass that stops at its slice
+// of wall clock (a drain at Store.EMBED) leaves the rest to the alarm it arms
+// a moment on, and that alarm is delivered here as the runtime delivers it,
+// so a busy machine changes only how long this takes. Work still owed with
+// no alarm coming back for it soon is a world that did not settle.
+export let settleWorld = async (store: Store, state: World) => {
+  let storage = state.context.storage
+  for (;;) {
+    await state.settled()
+    let owed = await owing(store, storage)
+    if (!owed) return
+    let at = await storage.getAlarm?.()
+    if (at == null || at > Date.now() + PAUSE) {
+      throw new Error(`world effects did not settle: ${owed}`)
+    }
+    await storage.deleteAlarm?.()
+    await store.alarm()
   }
-  throw new Error('world effects did not settle')
+}
+
+// What the world still owes, said; nothing owed is ''.
+let owing = async (store: Store, storage: State['storage']) => {
+  let pending = await (await store.door).graph.read(
+    '.effect.state=pending,running&.fields=effect.handler',
+  )
+  let texts = left(statements(driver(storage)))
+  let handlers = [
+    ...new Set(pending.map((b) => (b.effect as { handler: string }).handler)),
+  ]
+  return [
+    pending.length ? `${pending.length} effects (${handlers.join(', ')})` : '',
+    texts ? `${texts} texts owed vectors` : '',
+  ].filter(Boolean).join(' and ')
 }
 
 export let worldTick = async (storage: State['storage'], history = 79_000) => {
@@ -187,11 +214,11 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     serializeAttachment: () => {},
     deserializeAttachment: () => ({ writer: { actor: { by: person } } }),
   }
-  let store = new Store({
-    storage,
-    getWebSockets: () => [wire],
-    acceptWebSocket: () => {},
-  }, worldBindings(app, person))
+  let state = objectState(storage)
+  let store = new Store(
+    { ...state.context, getWebSockets: () => [wire] },
+    worldBindings(app, person),
+  )
   let headers = {
     'x-store': 'yourname/vale.f52dc2',
     'x-yak-access': 'private',
@@ -242,12 +269,12 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
   }
   await store.alarm()
   await settle(storage, () => store)
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()
   await post('/apply', [{ entity: { eid: hero }, player: {} }])
   let villagers = await seedWorld(store, post)
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   let at = Date.now()
   await store.webSocketMessage(
     wire,
@@ -258,7 +285,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       }],
     }),
   )
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   // Playing for five minutes still reaches the actual Store alarm, even
   // when the world has no periodic durable work to owe.
   let due = at + 5 * 60_000
@@ -302,7 +329,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     await rows.run('world alarm', async () => {
       await storage.deleteAlarm?.()
       await store.alarm()
-      await settleWorld(store, storage)
+      await settleWorld(store, state)
     })
     rows.flush(Infinity)
     let total = reports.reduce(

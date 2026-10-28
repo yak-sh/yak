@@ -1765,7 +1765,15 @@ export class Store {
     )
     let subs = subscriptions(g, this.#time)
     this.#subs = subs
-    subs.observe((bundles) => this.#rouse(bundles))
+    // A relayed arrival rouses the wakes it makes hold once the registry has
+    // released, with nobody waiting on it: work past the message's answer,
+    // held by the runtime like the rest (`waitUntil`). The registry reports
+    // its failure.
+    subs.observe((bundles) => {
+      let roused = this.#rouse(bundles)
+      this.#ctx.waitUntil?.(roused.catch(() => {}))
+      return roused
+    })
     let spared = screened((w) => !!vocab.comp(w), own)
     this.#live = sockets(
       this.#naming(subs, spared),

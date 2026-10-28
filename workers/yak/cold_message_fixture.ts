@@ -3,6 +3,7 @@
 import { Store } from './graph.ts'
 import { seedHistory } from './play_cost_fixture.ts'
 import { settleWorld, worldBindings } from './play_world_fixture.ts'
+import { objectState } from './release_cost_fixture.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { profile, type Summary } from '@yaks/durable-object'
 import type { Cost } from './play_cost_fixture.ts'
@@ -26,11 +27,8 @@ export let coldMessages = async (
     deserializeAttachment: () => structuredClone(attachment),
   }
   let live: typeof ws[] = []
-  let context = {
-    storage,
-    getWebSockets: () => live,
-    acceptWebSocket: () => {},
-  }
+  let state = objectState(storage)
+  let context = { ...state.context, getWebSockets: () => live }
   let binds = worldBindings(app, person), directoryCalls = 0
   let directory = binds.STORE!
   binds.STORE = {
@@ -78,7 +76,7 @@ export let coldMessages = async (
     }),
   )
   if (!wrote.ok) throw new Error(await wrote.text())
-  await settleWorld(warm, storage)
+  await settleWorld(warm, state)
   live.push(ws)
   for (
     let [id, subscribe] of [
@@ -92,7 +90,7 @@ export let coldMessages = async (
       JSON.stringify({ id: String(id), subscribe }),
     )
   }
-  await settleWorld(warm, storage)
+  await settleWorld(warm, state)
   frames.length = 0
   directoryCalls = 0
   let total = empty(), shapes = new Map<string, Cost>(), reports: Summary[] = []
@@ -134,7 +132,7 @@ export let coldMessages = async (
             }],
           }),
         )
-        await settleWorld(cold, storage)
+        await settleWorld(cold, state)
       })
     }
     p.flush(Infinity)

@@ -4,6 +4,7 @@ import { index, repeatFixture } from './repeat_fixture.ts'
 import { fn, lit, op } from '@yaks/sql'
 import { type State, Store } from './graph.ts'
 import { settleWorld, worldBindings } from './play_world_fixture.ts'
+import { objectState } from './release_cost_fixture.ts'
 import { parseTools } from '@yaks/tools/declared'
 import { graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
@@ -71,11 +72,8 @@ export let productionGap = async (
 ) => {
   let person = crypto.randomUUID(), app = crypto.randomUUID()
   let live: ReturnType<typeof wire>[] = []
-  let context = {
-    storage,
-    getWebSockets: () => live,
-    acceptWebSocket: () => {},
-  }
+  let state = objectState(storage)
+  let context = { ...state.context, getWebSockets: () => live }
   let binds = worldBindings(app, person)
   let store = new Store(context, binds)
   let headers = {
@@ -274,11 +272,11 @@ export let productionGap = async (
   store = new Store(context, binds)
   g = (await store.door).graph
   await store.alarm()
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()
   await post('/apply', [{ entity: { eid: hero }, player: {} }])
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   let ws = wire(person)
   live.push(ws)
   await store.fetch(new Request('http://store/vocab', { headers }))
@@ -302,7 +300,7 @@ export let productionGap = async (
       )
     }
   }
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   let before = await g.read('.wake&?call&?villager')
   let at = Date.now()
   await store.webSocketMessage(
@@ -320,7 +318,7 @@ export let productionGap = async (
       }],
     }),
   )
-  await settleWorld(store, storage)
+  await settleWorld(store, state)
   let reports: Summary[] = [],
     shapes = new Map<
       string,
@@ -358,7 +356,7 @@ export let productionGap = async (
     await p.run('retained release world alarm', async () => {
       await storage.deleteAlarm?.()
       await store.alarm()
-      await settleWorld(store, storage)
+      await settleWorld(store, state)
     })
     p.flush(Infinity)
     storage.sql.exec = exec
