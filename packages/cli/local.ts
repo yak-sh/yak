@@ -379,6 +379,9 @@ export let tool = async (
   let answer = answerOf(landed, id)
   if (c.json) {
     c.out(JSON.stringify(structured(declared, answer), null, 2))
+  } else if (!c.tui && !c.tty && host.text) {
+    let text = await host.text(answer, !declared.readOnly)
+    if (text) c.out(text)
   } else {
     await show(
       c,

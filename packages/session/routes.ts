@@ -12,11 +12,13 @@
 // the harness treats a failed hook as nothing to add and carries on.
 
 import { earlier } from '@yaks/memory/earlier'
-import type { Meaning } from '@yaks/host'
+import type { Host, Meaning } from '@yaks/host'
 import type { Graph } from '@yaks/graph'
 import type { Authenticate, Route } from '@yaks/api'
 import { heard, type Hook } from './bus.ts'
 import { hear } from './announce.ts'
+import type { Runner } from '@yaks/tools'
+import { lifecycle } from './lifecycle.ts'
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
@@ -28,6 +30,8 @@ export let routes = (
     config?: { person?: string }
     meaning?: Meaning
     who?: Authenticate
+    runner?: Runner
+    text?: Host['text']
   },
 ): Route[] => [{
   method: 'POST',
@@ -66,6 +70,8 @@ export let routes = (
         { status: 400 },
       )
     }
+    let edge = await lifecycle(host, request, hook as Record<string, unknown>)
+    if (edge) return edge
     if (await hear(host.graph, hook)) return Response.json({})
     return Response.json(await heard(host.graph, hook as Hook))
   },

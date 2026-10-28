@@ -12,7 +12,7 @@ import { suite as platformWaits } from './platform-waits.ts'
 import { suite as workerHealth } from './worker-health.ts'
 import { suite as inboxContent } from './inbox-content.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
-import { HOOK_WAITS } from './hook-waits.ts'
+import { HOOK_WAITS, measure as hookWaits } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
 import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
@@ -92,7 +92,16 @@ export let standalone: Registration[] = [
     suite: inboxContent,
     floor: 0,
   },
-  measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
+  {
+    ...measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
+    suite: (args = [], root) => ({
+      ...measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS).suite(
+        args,
+        root,
+      ),
+      collect: () => hookWaits(args),
+    }),
+  },
   measured(
     'operation-commands',
     'bench/operation-commands.ts',

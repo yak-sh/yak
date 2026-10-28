@@ -809,6 +809,11 @@ let composed = async (
     })
     host = built.host
     g = host.graph
+    let worded: import('@yaks/host').Host['text']
+    host.text = async (answer, wrote) => {
+      worded ??= (await import('./text.ts')).text(host)
+      return worded(answer, wrote)
+    }
     // A shutdown may need the runner, but opening a graph does not. Keep its
     // tool declarations lazy until a caller actually asks for them.
     let calls = () => host.runner

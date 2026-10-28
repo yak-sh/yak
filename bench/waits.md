@@ -76,11 +76,14 @@ transcript queries independently over 50,000 tasks and 1,000 two-KiB transcript
 entries. This fixed corpus catches scale-dependent work without depending on,
 modifying or claiming to reproduce every shape of the owner's live graph.
 
-`hook-waits` measures the installed SessionStart, SubagentStart, SessionEnd and
-PostToolUse doors. Starts return held-work context, SessionEnd releases a real
-claim, a main-thread HTTP hook delivers and marks pending bus work, and a
-subagent HTTP hook leaves that work pending. UserPromptSubmit remains measured
-by `person-commands`. There is no installed Stop or PreCompact hook to time.
+`hook-waits` measures the SessionStart, SubagentStart, SessionEnd and
+PostToolUse HTTP handlers in process, without a listener or child process. These
+figures exclude shell/curl transport and are checked against the older
+installed-hook ceilings; they do not measure the same end-to-end boundary as
+those baselines. Starts return held-work context, SessionEnd releases a claim, a
+main-thread HTTP hook delivers and marks pending bus work, and a subagent HTTP
+hook leaves that work pending. UserPromptSubmit remains measured by
+`person-commands`. There is no installed Stop or PreCompact hook to time.
 
 `terminal-interactions` measures real PTY comment typing to paint, typing to
 saved draft, and Enter to a saved and painted comment. Its query measurement

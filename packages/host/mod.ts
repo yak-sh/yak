@@ -135,6 +135,9 @@ export interface Host {
    * requests validate and answer without recording bookkeeping. Built on first
    * access, or during assembly when the effects role needs its handlers. */
   runner: Runner
+  /** Render a tool answer as plain text with this host's configured views.
+   * A writing tool reads its answer back as it now stands. */
+  text?: (answer: Bundle[], wrote?: boolean) => Promise<string>
   /** The work this process does that nobody asked for: the effect pool where
    * it serves `effects` (@yaks/effects `work` — any number of processes work
    * it at once), and each plugin's `./service` where it serves that plugin.

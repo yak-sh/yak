@@ -1,15 +1,17 @@
-/** Every installed lifecycle event through its real process or HTTP door.
+/** Lifecycle HTTP handlers in process, without listeners or child processes.
  * Each sample has fresh session/claim/bus work, so an empty successful no-op
  * cannot stand in for creating context, delivering a notice or releasing work.
- * The fixture owns its graph, transcript directory, server and process homes.
+ * This excludes the installed shell/curl transport; its CPU is measured live.
+ * The fixture owns its graph and transcript directory.
  */
+import type { Comp } from '@yaks/graph'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { lifecycle } from '../packages/session/hooks.ts'
+import { sessionEid } from '../packages/session/who.ts'
 import { PATH } from '../packages/session/routes.ts'
-import { settled } from './settled.ts'
 
 export let HOOK_WAITS = [
   'hook/SessionStart',
@@ -18,8 +20,6 @@ export let HOOK_WAITS = [
   'hook/PostToolUse-delivery',
   'hook/PostToolUse-subagent',
 ]
-let root = new URL('../', import.meta.url).pathname
-let decoder = new TextDecoder()
 export async function measure(
   args: string[] = [],
 ): Promise<Record<string, Samples>> {
@@ -31,44 +31,6 @@ export async function measure(
   let configPath = `${dir}/yak.json`
   let person = crypto.randomUUID()
   let host: Awaited<ReturnType<typeof compose>> | undefined
-  let server: Deno.HttpServer<Deno.NetAddr> | undefined
-  let env = {
-    TASKS_HOME: `${dir}/tasks`,
-    HARNESS_HOME: `${dir}/harness`,
-    HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
-    PROCESS_DIR: `${dir}/process`,
-    YAK_RUNTIME_CACHE: `${dir}/runtime`,
-    TASKS_SESSION: '',
-    CLAUDE_CODE_SESSION_ID: '',
-  }
-  let cli = async (argv: string[], hook: object) => {
-    let child = new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        '--config',
-        `${root}deno.json`,
-        `${root}packages/cli/yak.ts`,
-        '--config',
-        configPath,
-        '--no-duties',
-        ...argv,
-      ],
-      cwd: dir,
-      env,
-      stdin: 'piped',
-      stdout: 'piped',
-      stderr: 'piped',
-    }).spawn()
-    let writer = child.stdin.getWriter()
-    await writer.write(new TextEncoder().encode(JSON.stringify(hook)))
-    await writer.close()
-    let out = await child.output()
-    if (!out.success) {
-      throw new Error(`${argv.join(' ')}: ${decoder.decode(out.stderr)}`)
-    }
-    return decoder.decode(out.stdout)
-  }
   let results: Record<string, Samples> = {}
   let timed = async (
     name: string,
@@ -81,11 +43,11 @@ export async function measure(
       await run()
       samples.push({
         ...took(),
-        source: 'end-to-end',
+        source: 'in-process-handler',
         counts: { claims: 1, pending: 1 },
         details: {
           fixture:
-            'isolated starter SQLite; actual installed hook doors; duties disabled',
+            'isolated starter SQLite; in-process HTTP handler; no shell or socket; duties disabled',
         },
       })
     }
@@ -97,6 +59,9 @@ export async function measure(
     let config = starter(person)
     config.db = `${dir}/yak.db`
     config.duties = false
+    config.plugins = config.plugins?.filter((p) =>
+      !['@yaks/web', '@yaks/browse', '@yaks/canvas'].includes(String(p))
+    )
     config.plugins!.push('@yaks/notify', {
       use: '@yaks/mail',
       with: { sender: { via: 'stash' } },
@@ -108,7 +73,6 @@ export async function measure(
     )
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
-    await settled(host)
     let graph = host.graph
     await graph.apply([{
       entity: { eid: person },
@@ -150,56 +114,15 @@ export async function measure(
       ])
       return { session, task, notice, runner, mark }
     }
-    for (let event of ['SessionStart', 'SubagentStart']) {
-      await timed(`hook/${event}`, async () => {
-        let f = await fixture()
-        return async () => {
-          let out = await cli(['session', 'context', '--hook', '-'], {
-            session_id: f.runner,
-            hook_event_name: event,
-            cwd: dir,
-          })
-          if (!out.includes('claimed') || !out.includes(f.mark)) {
-            throw new Error(`missing held context: ${out}`)
-          }
-          let row = (await graph.get([f.session], ['session']))[0]
-          if (!row?.session) throw new Error('session missing')
-        }
-      })
-    }
-    await timed('hook/SessionEnd', async () => {
-      let f = await fixture()
-      return async () => {
-        await cli(['session', 'wrap', '--hook', '-'], {
-          session_id: f.runner,
-          hook_event_name: 'SessionEnd',
-          cwd: dir,
-        })
-        let rows = await graph.get([f.session, f.task], ['session', 'claim'])
-        if (
-          !rows.some((r) =>
-            r.entity.eid == f.session &&
-            (r.session as Record<string, unknown>)?.ended == true
-          ) || rows.some((r) => r.entity.eid == f.task && r.claim)
-        ) throw new Error('SessionEnd did not end and release its claim')
-      }
-    })
     if (!host.handler) throw new Error('missing web handler')
-    server = Deno.serve(
-      { hostname: '127.0.0.1', port: 0, onListen() {} },
-      host.handler,
-    )
-    let url = `http://127.0.0.1:${server.addr.port}${PATH}`
-    let post = async (runner: string, subagent = false) => {
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          session_id: runner,
-          hook_event_name: 'PostToolUse',
-          ...(subagent ? { agent_id: 'bench-child' } : {}),
+    let post = async (hook: object) => {
+      let response = await host!.handler!(
+        new Request(`http://hooks${PATH}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(hook),
         }),
-      })
+      )
       let answer = await response.json()
       if (!response.ok) {
         throw new Error(
@@ -208,19 +131,78 @@ export async function measure(
       }
       return answer
     }
+    let send = (runner: string, subagent = false) =>
+      post({
+        session_id: runner,
+        hook_event_name: 'PostToolUse',
+        ...(subagent ? { agent_id: 'bench-child' } : {}),
+      })
+    // Warm each handler before its samples, as on the long-running server.
+    for (let event of ['SessionStart', 'SubagentStart', 'SessionEnd']) {
+      for (let i = 0; i < 5; i++) {
+        let f = await fixture()
+        await post({
+          session_id: f.runner,
+          hook_event_name: event,
+          cwd: dir,
+          ...(event == 'SubagentStart' ? { agent_id: 'bench-child' } : {}),
+        })
+      }
+      await timed(`hook/${event}`, async () => {
+        let f = await fixture()
+        return async () => {
+          let answer = await post({
+            session_id: f.runner,
+            hook_event_name: event,
+            cwd: dir,
+            ...(event == 'SubagentStart' ? { agent_id: 'bench-child' } : {}),
+          })
+          if (event == 'SubagentStart') {
+            let [child] = await graph.get(
+              [sessionEid('bench-child', f.runner)],
+              ['session', 'spawned'],
+            )
+            if (
+              (child?.spawned as Comp)?.parent != f.session ||
+              !JSON.stringify(answer).includes('bench-child')
+            ) {
+              throw new Error(
+                'SubagentStart did not create and return its child session',
+              )
+            }
+          } else if (event == 'SessionStart') {
+            let out = JSON.stringify(answer)
+            if (!out.includes('claimed') || !out.includes(f.mark)) {
+              throw new Error(`missing held context: ${out}`)
+            }
+          } else {
+            let rows = await graph.get([f.session, f.task], [
+              'session',
+              'claim',
+            ])
+            if (
+              !rows.some((r) =>
+                r.entity.eid == f.session && (r.session as Comp)?.ended == true
+              ) ||
+              rows.some((r) => r.entity.eid == f.task && r.claim)
+            ) throw new Error('SessionEnd did not end and release its claim')
+          }
+        }
+      })
+    }
     // The door a person's tool calls reach is a `yak serve` that has answered
     // many. A fresh host's first requests compile the door's code (about
     // 70 ms, then 20, then steady), which is no wait anyone has twice, so
     // they are spent before timing.
     for (let i = 0; i < 5; i++) {
       let f = await fixture()
-      await post(f.runner)
-      await post(f.runner, true)
+      await send(f.runner)
+      await send(f.runner, true)
     }
     await timed('hook/PostToolUse-delivery', async () => {
       let f = await fixture()
       return async () => {
-        let answer = await post(f.runner)
+        let answer = await send(f.runner)
         if (!JSON.stringify(answer).includes(`Hook delivery ${f.notice}`)) {
           throw new Error(`missing bus context: ${JSON.stringify(answer)}`)
         }
@@ -232,7 +214,7 @@ export async function measure(
     await timed('hook/PostToolUse-subagent', async () => {
       let f = await fixture()
       return async () => {
-        let answer = await post(f.runner, true)
+        let answer = await send(f.runner, true)
         if (
           Object.keys(answer).length ||
           (await graph.get([f.notice], ['notified']))[0]?.notified ||
@@ -242,7 +224,6 @@ export async function measure(
     })
     return results
   } finally {
-    await server?.shutdown()
     await host?.close()
     await Deno.remove(dir, { recursive: true })
   }

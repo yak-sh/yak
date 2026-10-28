@@ -519,6 +519,21 @@ on stdin.
 | UserPromptSubmit            | `yak session context --hook -` | one timing line: prompt sent (or observed at hook time) and previous reply ended |
 | SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims, except the task a managed run is parked on        |
 
+SessionStart, SubagentStart and SessionEnd first post their JSON input to
+`POST /session/hook` using a small shell/curl command. The server runs the same
+tool and renders the same answer as the CLI; start events return it in
+`hookSpecificOutput.additionalContext`. A failed request (including a server
+that is down) retries the command shown above with the original input. Partial
+HTTP responses are discarded before retrying, and a failed fallback exits
+successfully. Requests have a two-second limit and local connection attempts a
+100 ms limit.
+
+Claude Code's
+[hook type support](https://code.claude.com/docs/en/hooks#prompt-based-hooks)
+excludes SessionStart from HTTP hooks, though HTTP response JSON supports
+additionalContext. Keeping a command wrapper also gives all three lifecycle
+events their local fallback.
+
 UserPromptSubmit reads `transcript_path` locally and prints plain stdout, which
 Claude Code adds as context on exit 0. Its documented input has no sent
 timestamp: a matching queued submission (or `prompt_id` already in the

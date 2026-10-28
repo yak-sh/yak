@@ -1,38 +1,7 @@
-// The injection loop's own half: the lifecycle entries a harness runs, and the
-// settings file they are merged into.
-//
-// A harness (Claude Code, and anything else with the same shape) runs a
-// command at the edges of a session and hands it the event as JSON on stdin.
-// That is all a graph needs to be told: the start of a session is where a
-// transcript becomes an entity and reads back what it was in the middle of,
-// and the end is where it records what it did and releases what it held. So
-// each of those entries is a `yak` subcommand and a `-`, which is the
-// conventional command-line argument for "read this value from stdin" — the
-// tool parses the payload, and nothing in between has to know the harness's
-// own JSON format.
-//
-// Between the edges, the turns are not carried: the harness writes every turn
-// to a transcript file of its own, and the package's duty reads it from there
-// (./service.ts). Two entries run between them, both posting the event to the
-// graph's hook door (./routes.ts), the one report that says whether a call
-// came from the session's own line of work or from a subagent sharing its id.
-// Before each MCP tool call, the door learns which run makes it, so the MCP
-// door writes as that run (./announce.ts); after each tool call, it adds what
-// the bus owes the session.
-//
-// Nothing here may fail loudly. A hook that exits non-zero is a session that
-// will not start, so every entry ends `|| true`: a graph that is not there
-// means no context today, never a wedged harness.
-//
-// It is NOT re-exported from the package's main module, and never will be: a
-// browser tab loading @yaks/session must reach no runtime API, and this module
-// writes a file. It is reached through `@yaks/session/tools`, which is a
-// server-side module and the right side of that boundary for a settings file.
-//
-// The merge is the careful part. A settings file is the person's, with their
-// own entries in it, so an install replaces what an earlier install wrote and
-// leaves everything else exactly where it was — identified by the commands
-// and the door's path, the only durable markers a JSON file carries.
+// Lifecycle commands post to the running server, preserving its JSON stdout.
+// Claude Code does not support HTTP SessionStart hooks. A small shell command
+// keeps its additionalContext and retries through the local CLI on failure.
+// The harness transcript remains the source of turns (./service.ts).
 
 import { PATH } from './routes.ts'
 
@@ -68,6 +37,25 @@ let post = (url: string, matcher?: string): Hook => ({
 /** The server a session's hook door is on, unless the caller names another. */
 export let SERVER = 'http://localhost:5173'
 
+// Keep a failed/partial HTTP response out of stdout before trying the CLI.
+let quote = (s: string) => "'" + s.replaceAll("'", "'\"'\"'") + "'"
+let relay = (door: string, fallback: string, timeout?: number): Hook =>
+  cmd(
+    'payload=$(cat); ' +
+      'via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; ' +
+      'case "${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}" in *_agent) ' +
+      'case "$PWD" in */.claude/worktrees/agent-*) ' +
+      'agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; ' +
+      'case "$agent" in \'\'|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; ' +
+      'if answer=$(printf %s "$payload" | curl --fail --silent ' +
+      '--connect-timeout 0.1 --max-time 2 ' +
+      '--header "x-via: $via" ' +
+      "--header 'content-type: application/json' --data-binary @- " +
+      quote(door) + '); then printf \'%s\\n\' "$answer"; ' +
+      `else printf %s "$payload" | ${fallback} || true; fi`,
+    timeout,
+  )
+
 /**
  * The entries this package owns, keyed by the harness event each responds to.
  *
@@ -80,14 +68,14 @@ export let lifecycle = (
 ): Record<string, Hook[]> => {
   let door = `${server.replace(/\/+$/, '')}${PATH}`
   return {
-    SessionStart: [cmd(`${yak} session context --hook - || true`)],
-    SubagentStart: [cmd(`${yak} session context --hook - || true`)],
+    SessionStart: [relay(door, `${yak} session context --hook -`)],
+    SubagentStart: [relay(door, `${yak} session context --hook -`)],
     UserPromptSubmit: [
       cmd(`${yak} session context --hook - 2>/dev/null || true`, 2),
     ],
     PreToolUse: [post(door, 'mcp__.*')],
     PostToolUse: [post(door)],
-    SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
+    SessionEnd: [relay(door, `${yak} session wrap --hook -`, 5)],
   }
 }
 
