@@ -3,6 +3,44 @@
  * beside a contemporaneous reference, and can never bank a new best or declare a budget passed. */
 import { host, loaded, median, type Run, type Samples } from '@yaks/benchmark'
 
+type Fixture = { args: string[]; prefix?: string }
+/** The same fixture selection admits monitor comparisons and collects them. */
+export let fixtures: Record<string, Fixture> = {
+  'platform-waits': {
+    args: ['bench/platform-waits-probe.ts'],
+    prefix: 'PLATFORM_WAITS_RESULT=',
+  },
+  'inbox-content': {
+    args: ['bench/inbox-content-probe.ts'],
+    prefix: 'INBOX_CONTENT_RESULT=',
+  },
+  ...Object.fromEntries([
+    'hook-waits',
+    'operation-commands',
+    'operation-scale',
+    'person-commands',
+    'terminal-interactions',
+  ].map((suite) => [suite, {
+    args: ['bench/standalone-worker.ts', `bench/${suite}.ts`],
+  }])),
+}
+
+/** Collect one sitting through its process boundary, or an in-memory one. */
+export let sample = async (
+  suite: string,
+  run: (args: string[]) => Promise<string>,
+): Promise<Record<string, Samples>> => {
+  let fixture = fixtures[suite]
+  if (!fixture) throw Error('No isolated paired fixture')
+  let output = await run(fixture.args)
+  let line = fixture.prefix
+    ? output.split('\n').findLast((line) => line.startsWith(fixture.prefix!))
+      ?.slice(fixture.prefix.length)
+    : output
+  if (!line) throw Error('Paired collector returned no measurements')
+  return JSON.parse(line)
+}
+
 export type Pair = { before: Run; current: Run; after: Run }
 export type Evidence = {
   verdict: 'changed' | 'unconfirmed' | 'inconclusive' | 'loaded'
@@ -112,17 +150,7 @@ export let collect = async (
 ): Promise<
   Pair & Evidence & { reference: string; revision: string; driverHash: string }
 > => {
-  if (
-    ![
-      'platform-waits',
-      'inbox-content',
-      'hook-waits',
-      'operation-commands',
-      'operation-scale',
-      'person-commands',
-    ]
-      .includes(suite)
-  ) {
+  if (!fixtures[suite]) {
     throw Error('No isolated paired fixture')
   }
   let text = new TextDecoder()
@@ -200,39 +228,17 @@ export let collect = async (
     let measure = async (at: number, slot: number) => {
       await resting()
       let dir = roots[at]
-      let direct = [
-        'hook-waits',
-        'operation-commands',
-        'operation-scale',
-        'person-commands',
-      ]
-        .includes(suite)
-      let probe = direct ? 'standalone-worker.ts' : `${suite}-probe.ts`
-      let rounds: Record<string, Samples>[] = []
-      for (let i = 0; i < 1; i++) {
-        let output = text.decode(
+      let samples = await sample(suite, async (args) =>
+        text.decode(
           await command(dir, Deno.execPath(), [
             'run',
             '-A',
             '--config',
             `${dir}/deno.json`,
-            `${dir}/bench/${probe}`,
-            ...direct ? [`bench/${suite}.ts`] : [],
+            ...args,
           ]),
-        )
-        if (direct) rounds.push(JSON.parse(output))
-        else {
-          let prefix = suite == 'platform-waits'
-            ? 'PLATFORM_WAITS_RESULT='
-            : 'INBOX_CONTENT_RESULT='
-          let line = output.split('\n').findLast((line) =>
-            line.startsWith(prefix)
-          )
-          if (!line) throw Error('Paired collector returned no measurements')
-          rounds.push(JSON.parse(line.slice(prefix.length)))
-        }
-      }
-      observations[slot].push(...rounds)
+        ))
+      observations[slot].push(samples)
       await resting()
     }
     for (

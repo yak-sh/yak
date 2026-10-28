@@ -1,6 +1,6 @@
 import { equal, test, throws } from '@yaks/testing'
 import type { Run } from '@yaks/benchmark'
-import { bracket, compare } from './paired.ts'
+import { bracket, compare, sample } from './paired.ts'
 
 let run = (values: number[], better: 'lower' | 'higher' = 'lower'): Run => ({
   version: 1,
@@ -160,5 +160,56 @@ test('load observed during paired probes cannot confirm code differences', () =>
       after: run([10, 11, 12]),
     }).verdict,
     'loaded',
+  )
+})
+
+test('terminal draft sittings keep a millisecond wobble unconfirmed', async () => {
+  let sitting = async (values: number[]) => {
+    let collectors: Record<string, string> = {
+      'bench/standalone-worker.ts bench/terminal-interactions.ts': JSON
+        .stringify({
+          'tui/comment-draft-save': values.map((value) => ({ value })),
+        }),
+    }
+    let samples = await sample(
+      'terminal-interactions',
+      (args) => Promise.resolve(collectors[args.join(' ')]),
+    )
+    equal(samples['tui/comment-draft-save'], values.map((value) => ({ value })))
+    return run(values)
+  }
+  let before = await sitting([498, 501, 499, 502, 497, 500])
+  let after = await sitting([499, 500, 498, 503, 498, 501])
+  equal(
+    compare({
+      before,
+      current: await sitting([499, 502, 500, 503, 498, 501]),
+      after,
+    }).verdict,
+    'unconfirmed',
+  )
+  equal(
+    compare({
+      before,
+      current: await sitting([510, 511, 510, 512, 509, 510]),
+      after,
+    }).verdict,
+    'changed',
+  )
+})
+
+test('paired probes read the last completed result amid diagnostic output', async () => {
+  let values = { work: [{ value: 490 }] }
+  equal(
+    await sample('platform-waits', () =>
+      Promise.resolve(
+        'diagnostic\nPLATFORM_WAITS_RESULT={}\n' +
+          `PLATFORM_WAITS_RESULT=${JSON.stringify(values)}\n`,
+      )),
+    values,
+  )
+  await throws(
+    () => sample('inbox-content', () => Promise.resolve('not ready')),
+    'Paired collector returned no measurements',
   )
 })

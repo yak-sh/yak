@@ -45,6 +45,7 @@ import { said, type Summary } from './cpu_profile.ts'
 import { runtimeBuild, runtimeContent } from '../packages/cli/runtime.ts'
 import { profiled } from './pages.ts'
 import { type History, judge, type Judgement } from './observations.ts'
+import { fixtures } from './paired.ts'
 
 /** Every suite this box measures itself; the CI and platform deploy suites are
  * timed where they run. */
@@ -420,14 +421,6 @@ let serving = async (): Promise<
   if (!builds.has(build.hash)) builds.set(build.hash, runtimeContent(build))
   return { key: await builds.get(build.hash)!, commit: build.commit }
 }
-let PAIRED = [
-  'platform-waits',
-  'inbox-content',
-  'hook-waits',
-  'operation-commands',
-  'operation-scale',
-  'person-commands',
-]
 /** A half-hour tick admits work for 25 minutes; what it could not reach is
  * owed to the next. */
 export let WINDOW = 25 * 60_000
@@ -623,7 +616,7 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
     if (product?.commit) run.commit = product.commit
     let details: string[] = []
     if (child.success || run.verdict == 'regressed') {
-      if (PAIRED.includes(suite)) {
+      if (fixtures[suite]) {
         let evidence = results.replace('.results.json', '.paired.json')
         let prefix = measurement(suite)
         let paired = await new Deno.Command(prefix[0], {
