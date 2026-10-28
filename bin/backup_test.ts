@@ -298,11 +298,38 @@ let parent = (pid: number) => {
 
 test('a backup stuck behind another is killed at its bound and reported', async () => {
   let f = await fixture()
+  // Only the test sends the alarm, once flock is waiting. Remove timeout's
+  // bound and kill grace, and flock's wait deadline, at the command boundary:
+  // none may expire while the busy box keeps the test from observing them.
+  let tools = `${f.dir}/tools`
+  await Deno.mkdir(tools)
+  for (
+    let [name, body] of [
+      // Unlike 0, inf keeps uutils timeout listening for SIGALRM.
+      [
+        'timeout',
+        'shift 3\nexec "$(PATH="${PATH#*:}" command -v timeout)" inf "$@"',
+      ],
+      [
+        'flock',
+        'shift 2\nexec "$(PATH="${PATH#*:}" command -v flock)" "$@"',
+      ],
+    ]
+  ) {
+    await Deno.writeTextFile(
+      `${tools}/${name}`,
+      `#!/bin/sh\nset -eu\n${body}\n`,
+      {
+        mode: 0o755,
+      },
+    )
+  }
   let path = `${f.data}/backup.lock`
   let lock = await Deno.open(path, { create: true, write: true })
   await lock.lock()
+  let backup: Deno.ChildProcess | undefined
   try {
-    let backup = f.start()
+    backup = f.start({ PATH: `${tools}:${Deno.env.get('PATH')}` })
     let flock = await until(() => waiter(path), {
       label: 'the backup to wait on the lock',
     })
@@ -323,6 +350,7 @@ test('a backup stuck behind another is killed at its bound and reported', async 
   } finally {
     await lock.unlock()
     lock.close()
+    await backup?.status
     await f.close()
   }
 })
