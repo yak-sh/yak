@@ -153,6 +153,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
       view: 'connections',
       connections: {
         on: true,
+        borrowed: [],
         list: [{
           eid: 'c',
           integration: 'Weather',
@@ -177,6 +178,8 @@ test('connections: the space’s ask of each person offers nothing to connect, a
             anyone: false,
             calls: 3,
             cap: 10,
+            lends: null,
+            borrower: null,
           }],
           saving: '',
           failed: '',
@@ -231,6 +234,7 @@ test('connections: the person’s own, then this space with what it could add, t
       view: 'connections',
       connections: {
         on: true,
+        borrowed: [],
         list: [
           shown('Mail', null),
           shown('Weather', 'ada'),
@@ -326,6 +330,7 @@ let listing = (
     view: 'connections',
     connections: {
       on: true,
+      borrowed: [],
       list: [added(status, listed)],
       services: [],
       built: [],
@@ -442,6 +447,7 @@ test('connections: a built integration is offered by its face, and a site is lin
       view: 'connections',
       connections: {
         on: true,
+        borrowed: [],
         list: [],
         services: [],
         built: [{ name: 'cal', keyed: false, face: { ...CAL, site } }],
