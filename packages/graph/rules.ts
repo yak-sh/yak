@@ -50,7 +50,7 @@ import { type Context, during, live as observed } from '@yaks/trace'
 // @yaks/logic's unification, planned). A rule that tries it is refused rather
 // than silently compared against the literal text `Now.at`.
 
-import { filter, index, matcher } from '@yaks/match'
+import { filter, index } from '@yaks/match'
 import {
   type And,
   declared,
@@ -374,9 +374,8 @@ let compile = (r: Rule, v: Vocab): Ready => {
     try {
       // Validate once, but retain the tree rather than a predicate whose
       // relative-time literals would keep the first firing's clock. The
-      // filter refuses whatever the matcher would (@yaks/match), and is what
-      // a phase of one bundle runs; a phase of more compiles the matcher when
-      // it first needs it.
+      // filter refuses whatever the matcher would (@yaks/match), and refreshes
+      // time-dependent predicates for each phase's moment.
       filter(p.query, v)
       ready.query = p.query
     } catch (e) {
@@ -519,9 +518,6 @@ export let fire = (
       of: (eid: Eid) => eid == views[0].entity.eid ? views[0] : undefined,
     }
     : index(views)
-  let positions = single
-    ? undefined
-    : new Map(views.map((v, i) => [v.entity.eid, i]))
   // Built once, however many rules name it: `#Now` is a single timestamp for
   // the whole phase because the resource is called once for the whole phase.
   let held = new Map<string, unknown>()
@@ -531,11 +527,8 @@ export let fire = (
   }
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
-  // @yaks/match retains static forms and refreshes time-dependent ones for
-  // this phase's moment. Parsed declarations remain shared across firings. A
-  // phase of more than one bundle selects from the frozen set at once:
-  // building the reference index once per rule, rather than once per entity,
-  // keeps the cost linear in the size of the batch.
+  // Every predicate shares the frozen reference index. Testing views directly
+  // retains their positions without building a second selection and id map.
   let moment = { now: tick.now ?? Date.now() }
   for (let [r, ready] of live) {
     // A mutable component not added by this rule must already be present.
@@ -560,16 +553,16 @@ export let fire = (
       }
       if (!possible) continue
     }
-    let matches = single
-      ? filter(ready.query!, tick.vocab, moment)(views[0], among) ? views : []
-      : matcher(ready.query!, tick.vocab, moment)(among)
-    matches.forEach((v) => {
+    let test = filter(ready.query!, tick.vocab, moment)
+    for (let i = 0; i < views.length; i++) {
+      let v = views[i]
+      if (!test(v, among)) continue
       if (
         tick.phase == 'effect' && ready.checked &&
         !ready.writes.some((name) => written!.get(v.entity.eid)?.has(name))
-      ) return
-      hits.push([r, ready, single ? 0 : positions!.get(v.entity.eid)!])
-    })
+      ) continue
+      hits.push([r, ready, i])
+    }
   }
   if (!hits.length) return bundles
   let firing = (out: Bundle[], [r, ready, i]: [Rule, Ready, number]) => {
