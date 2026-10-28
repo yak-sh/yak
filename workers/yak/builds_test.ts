@@ -50,6 +50,20 @@ test('builds: a failure is filed under its build, with its commit', () => {
   )
 })
 
+let logPages = [
+  Response.json({
+    success: true,
+    result: {
+      cursor: 'next-page',
+      truncated: true,
+      lines: [[1, '--- deno task check']],
+    },
+  }),
+  Response.json({
+    success: true,
+    result: { lines: [[2, 'error: TS2322 at sk-proj-private-value']] },
+  }),
+]
 test('builds: report links to the failing build and summarizes its log safely', async () => {
   let env = {
     CF_ACCOUNT: 'account',
@@ -65,17 +79,7 @@ test('builds: report links to the failing build and summarizes its log safely', 
       new Headers(init?.headers).get('authorization'),
       'Bearer secret-build-token',
     )
-    let first = urls.length == 1
-    return Promise.resolve(Response.json({
-      success: true,
-      result: {
-        cursor: first ? 'next-page' : undefined,
-        truncated: first,
-        lines: first
-          ? [[1, '--- deno task check']]
-          : [[2, 'error: TS2322 at sk-proj-private-value']],
-      },
-    }))
+    return Promise.resolve(logPages[urls.length - 1])
   }
   try {
     let report = await diagnosed(env, broke(event('failed'))!)
