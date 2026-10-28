@@ -1,7 +1,12 @@
 // Owner-only inspection of one Store's physical size and a kept write's dry
 // run cost. The Store answers counts and timings; no rows or SQL cross here.
 
-import type { Identity, StoreSize } from '@yaks/sqlite'
+import type {
+  Deletions,
+  DeletionWindow,
+  Identity,
+  StoreSize,
+} from '@yaks/sqlite'
 import type { Event } from '@yaks/trace'
 import type { Door } from './door.ts'
 import type { Version } from './running.ts'
@@ -14,6 +19,7 @@ export type Inspection = {
    * (graph.ts `#running`). */
   running?: { version: Version | null; restartedFor: Version | null }
   identity?: Identity
+  deletions?: Deletions
   dryRun?: {
     seq: number
     status: number
@@ -40,12 +46,17 @@ export let phases = (spans: readonly Event[]): Record<string, number> => {
 
 export let inspect = async (
   store: Door,
-  seq?: number,
-  eid?: string,
+  options: { seq?: number; eid?: string; deletions?: DeletionWindow } = {},
 ): Promise<Inspection> => {
+  let { seq, eid, deletions } = options
   let query = new URLSearchParams()
   if (seq != null) query.set('seq', String(seq))
   if (eid != null) query.set('eid', eid)
+  if (deletions) {
+    query.set('since', deletions.since)
+    query.set('until', deletions.until)
+    if (deletions.after != null) query.set('after', String(deletions.after))
+  }
   let r = await store(`/inspect?${query}`, {}, KERNEL)
   let result = await r.json() as Inspection & { message?: string }
   if (!r.ok) throw rejected(r.status, result.message ?? '')

@@ -3907,6 +3907,9 @@ let OURS: Row[] = [
         app: APP,
         seq: { type: 'integer', minimum: 1 },
         eid: { type: 'string', minLength: 1, maxLength: 256 },
+        since: { type: 'string', format: 'date-time' },
+        until: { type: 'string', format: 'date-time' },
+        after: { type: 'integer', minimum: 0 },
       },
       required: ['app'],
     },
@@ -3916,11 +3919,19 @@ let OURS: Row[] = [
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
       }
-      let result = await inspectStore(
-        store,
+      let result = await inspectStore(store, {
         seq,
-        args.eid == null ? undefined : String(args.eid),
-      )
+        eid: args.eid == null ? undefined : String(args.eid),
+        ...(args.since != null || args.until != null
+          ? {
+            deletions: {
+              since: String(args.since ?? ''),
+              until: String(args.until ?? ''),
+              after: args.after == null ? undefined : Number(args.after),
+            },
+          }
+          : {}),
+      })
       return {
         text: JSON.stringify(result),
         value: result,

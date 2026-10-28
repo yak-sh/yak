@@ -166,6 +166,9 @@ import type { Statements } from '@yaks/sql'
 import { type MigrationControl, migrations } from './migration.ts'
 export { catalog } from './catalog.ts'
 export {
+  type Deletions,
+  deletions,
+  type DeletionWindow,
   type Identity,
   identity,
   inspect,

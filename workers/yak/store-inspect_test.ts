@@ -1,6 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import type { Event } from '@yaks/trace'
-import { phases } from './store-inspect.ts'
+import { inspect, phases } from './store-inspect.ts'
+import { doorOf } from './door.ts'
 
 let span = (
   name: string,
@@ -36,4 +37,24 @@ test('inspection sums completed pipeline phases without counting their children'
     ]),
     { prepare: 0, gather: 5, transaction: 18, mutate: 5 },
   )
+})
+
+test('inspection carries a deletion window and its continuation to the Store', async () => {
+  let asked: URL | undefined
+  let deletions = { scanned: 1000, count: 20, minutes: {}, next: 2001 }
+  let store = doorOf((request) => {
+    asked = new URL(request.url)
+    return Promise.resolve(Response.json({ deletions }))
+  }, 'yak/platform')
+  let window = {
+    since: '2026-10-28T04:00:00Z',
+    until: '2026-10-28T05:00:00Z',
+    after: 1001,
+  }
+  equal(await inspect(store, { deletions: window }), { deletions })
+  equal(Object.fromEntries(asked!.searchParams), {
+    since: window.since,
+    until: window.until,
+    after: '1001',
+  })
 })

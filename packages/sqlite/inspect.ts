@@ -2,7 +2,51 @@
 // counts, never definitions, statement text, or row values.
 
 import { populations } from './population.ts'
-import { by, col, type Driver, lit, select, table } from '@yaks/sql'
+import { by, col, type Driver, gt, lit, select, table } from '@yaks/sql'
+
+export type DeletionWindow = { since: string; until: string; after?: number }
+export type Deletions = {
+  scanned: number
+  count: number
+  minutes: Record<string, number>
+  next: number | null
+}
+
+/** Count deletions in [since, until), reading at most 1,000 graves from the
+ * primary key. Continue with `next` until null; timestamps need no new index. */
+export let deletions = (db: Driver, window: DeletionWindow): Deletions => {
+  let since = Date.parse(window.since), until = Date.parse(window.until)
+  let after = window.after ?? 0
+  if (
+    !Number.isFinite(since) || !Number.isFinite(until) || since >= until ||
+    !Number.isSafeInteger(after) || after < 0
+  ) {
+    throw new RangeError(
+      'deletions needs since < until and a nonnegative cursor',
+    )
+  }
+  let rows = db.query(select({
+    cols: [col('entity'), col('deleted_at')],
+    from: table('tombstone'),
+    where: gt(col('entity'), lit(after)),
+    order: [col('entity')],
+    limit: lit(1000),
+  }))
+  let minutes: Record<string, number> = {}, count = 0
+  for (let row of rows) {
+    let at = Date.parse(String(row.deleted_at))
+    if (!(at >= since && at < until)) continue
+    let minute = new Date(Math.floor(at / 60_000) * 60_000).toISOString()
+    minutes[minute] = (minutes[minute] ?? 0) + 1
+    count++
+  }
+  return {
+    scanned: rows.length,
+    count,
+    minutes,
+    next: rows.length == 1000 ? Number(rows.at(-1)!.entity) : null,
+  }
+}
 
 export type TableSize = {
   name: string

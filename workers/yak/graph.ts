@@ -144,6 +144,7 @@ import {
   val,
 } from '@yaks/sql'
 import {
+  deletions as inspectDeletions,
   FIT,
   identity as inspectIdentity,
   inspect as inspectStorage,
@@ -4465,6 +4466,20 @@ export class Store {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
       let at = new URL(request.url).searchParams
+      if (at.has('since') || at.has('until')) {
+        try {
+          return Response.json({
+            deletions: inspectDeletions(this.#sql, {
+              since: at.get('since') ?? '',
+              until: at.get('until') ?? '',
+              after: at.has('after') ? Number(at.get('after')) : undefined,
+            }),
+          })
+        } catch (e) {
+          if (e instanceof RangeError) return refuse(new Refused(e.message))
+          throw e
+        }
+      }
       let eid = at.get('eid')
       if (eid) {
         return Response.json({ identity: inspectIdentity(this.#sql, eid) })

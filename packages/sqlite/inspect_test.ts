@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import { col, lit } from '@yaks/sql'
-import { identity, inspect } from './inspect.ts'
+import { deletions, identity, inspect } from './inspect.ts'
 import { open } from './db.ts'
 
 let counted = open(':memory:')
@@ -147,3 +147,54 @@ import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc } from '@yaks/archetype'
 import { docDoc } from '@yaks/doc'
 import { by } from '@yaks/sql'
+
+let deleted = open(':memory:')
+deleted.query({
+  t: 'create table',
+  name: 'tombstone',
+  cols: [
+    { name: 'entity', type: 'integer', pk: true },
+    { name: 'deleted_at', type: 'text' },
+  ],
+})
+let since = '2026-10-28T04:20:00.000Z', until = '2026-10-28T04:21:00.000Z'
+deleted.query({
+  t: 'insert',
+  into: 'tombstone',
+  cols: ['entity', 'deleted_at'],
+  rows: Array.from({ length: 1002 }, (_, i) => [
+    lit(i * 2 + 1),
+    lit(i == 0 ? '2026-10-28T04:19:59.999Z' : i == 1001 ? until : since),
+  ]),
+})
+
+let firstDeletions = deletions(deleted, { since, until })
+let nextDeletions = deletions(deleted, {
+  since,
+  until,
+  after: firstDeletions.next!,
+})
+test('deletion inspection counts a bounded page and resumes across sparse identities', () => {
+  assertEquals(firstDeletions, {
+    scanned: 1000,
+    count: 999,
+    minutes: { [since]: 999 },
+    next: 1999,
+  })
+  assertEquals(nextDeletions, {
+    scanned: 2,
+    count: 1,
+    minutes: { [since]: 1 },
+    next: null,
+  })
+})
+
+test('deletion inspection rejects an invalid window or cursor before reading', () => {
+  for (
+    let window of [
+      { since: 'invalid', until },
+      { since: until, until: since },
+      { since, until, after: -1 },
+    ]
+  ) assertThrows(() => deletions(deleted, window), RangeError)
+})
