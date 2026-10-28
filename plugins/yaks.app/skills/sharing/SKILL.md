@@ -292,8 +292,8 @@ address, the line its owner wrote about it, who made it, the code review's
 verdict and findings, and two links for the answer. He reviews every request,
 and nothing is listed until he approves it.
 
-The code review is the platform admin's act, whose credential an agent holds:
-the request reaches its agents as a task, and
+An agent holding the platform admin's credential does the code review: the
+request reaches yaks.app's agents as a task, and
 **`gallery_code_review(app: 'space/app', verdict: 'approve', findings, by, via)`**
 records the review and sends the letter; `verdict: 'reject'` says the code
 should not be listed, and he still decides. `app_files` reads the app's code for
