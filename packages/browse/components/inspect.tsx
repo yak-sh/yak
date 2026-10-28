@@ -98,8 +98,12 @@ let answer = (p: Plan): Answer => {
     }
   }
   let state = querySubscription(p.preds!, p.line)?.state
-  let rows = queryEids(p.preds!).value.map(held)
-    .filter((b): b is Bundle => !!b)
+  // Local membership can name a row loaded by a narrower projection. Only
+  // this query's answer establishes that its requested fields arrived.
+  let rows = state && state.status != 'ready'
+    ? []
+    : queryEids(p.preds!).value.map(held)
+      .filter((b): b is Bundle => !!b)
   return {
     rows,
     ready: !state || state.status == 'ready',
