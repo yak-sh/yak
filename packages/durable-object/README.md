@@ -213,9 +213,10 @@ memory limit, which no code of the object sees. `opaque(error)` is the runtime's
 own internal error, which names only a reference: the work is tried again, and
 reported if it keeps failing. `lost(error)` is the connection to the object
 dropped under a call, which the runtime names in words alone.
-`retried(send, replayable, retry)` sends a call again while it fails in words
-`retry` knows (`evicted` by default), pausing before each resend as `backoff`
-says.
+`retried(send, replayable, retry, wait)` sends a call again while it fails in
+words `retry` knows (`evicted` by default), pausing before each resend as
+`backoff` says; `wait` waits a pause out, `jittered(clock)` by default (half of
+it or more, on the runtime's clock unless given one), and a test hands its own.
 
 ```ts
 import { assertEquals } from '@std/assert'
@@ -244,7 +245,7 @@ The package has one import path, `@yaks/durable-object`:
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |
-| `lost`, `retried`, `backoff`                            | Send a call again when the object was reset or lost |
+| `lost`, `retried`, `backoff`, `jittered`                | Send a call again when the object was reset or lost |
 | `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                            |
 | `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                   |
 

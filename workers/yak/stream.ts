@@ -44,8 +44,8 @@
 import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './seo.ts'
 import type { Env } from './env.ts'
-import { fetchOf, type Namespace } from './door.ts'
-import { evicted, lost } from '@yaks/durable-object'
+import { fetchOf } from './door.ts'
+import { evicted, jittered, lost } from '@yaks/durable-object'
 import { behind, type Restartable } from './running.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
@@ -364,7 +364,8 @@ export class Wire {
 // eid, never anything a client says: who is asking was settled by identity.ts
 // before anything here is reached, and a session id only picks a stream
 // within the person it already belongs to.
-let wireOf = (ns: Namespace, person: string) => fetchOf(ns, person)
+let wireOf = (env: Env, person: string) =>
+  fetchOf(env.WIRE, person, jittered(env.CLOCK))
 
 // The object went away under a stream it held: reset (@yaks/durable-object
 // `evicted`), or the connection to it lost with it.
@@ -408,7 +409,7 @@ export let resumable = (
 // The GET's answer: this person's stream, resumed where the client says it
 // left off.
 export let listen = async (env: Env, person: string, req: Request) => {
-  let held = await wireOf(env.WIRE, person)(
+  let held = await wireOf(env, person)(
     () =>
       new Request('http://wire/open', {
         headers: Object.fromEntries(
@@ -437,7 +438,7 @@ export let rostered = async (
   person: string,
   said: Asked,
 ): Promise<string | undefined> => {
-  let r = await wireOf(env.WIRE, person)(
+  let r = await wireOf(env, person)(
     () =>
       new Request('http://wire/roster', {
         method: 'POST',
@@ -455,7 +456,7 @@ export let told = async (
   params?: unknown,
   reply?: string,
 ) => {
-  let r = await wireOf(env.WIRE, person)(
+  let r = await wireOf(env, person)(
     () =>
       new Request('http://wire/tell', {
         method: 'POST',

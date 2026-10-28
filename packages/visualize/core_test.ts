@@ -1,6 +1,6 @@
 /** Snapshot, lease and finite capture contracts. */
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { channel, peek } from '@yaks/trace'
 import type { Anatomy } from '@yaks/code/anatomy'
 import { observe } from './activity.ts'
@@ -12,7 +12,6 @@ import {
   emit,
   emptyAnatomy,
   fixedNow,
-  manualTimers,
   part,
   reasonOf,
 } from './testing.ts'
@@ -334,32 +333,31 @@ test('capture counts omitted records, not gap episodes, and releases its own lea
 })
 
 // The capture fixture observes a full overflow once, using the production
-// channel and manual timer; assertions inspect its bounded result and cleanup.
+// channel and a clock of its own; assertions inspect its bounded result and
+// cleanup.
 let overflow = await (async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
-  try {
-    let waiting = capture(graph, { wait: 10000 })
-    let observing = !!peek(graph)
-    let scheduled = timers.scheduled.map((t) => t.ms)
-    emit(graph, 400)
-    timers.fire(timers.scheduled[0].id)
-    let value = await waiting
-    return {
-      observing,
-      scheduled,
-      value,
-      pending: timers.pending.size,
-      closed: peek(graph),
-      invalid: (await capture({}, { wait: NaN })).events,
-    }
-  } finally {
-    timers.restore()
+  let waiting = capture(graph, { wait: 10000, clock: time })
+  let observing = !!peek(graph)
+  emit(graph, 400)
+  // Asked for 10 s, the wait ends at 2 s.
+  await time.advance(1999)
+  let waited = time.pending()
+  await time.advance(1)
+  let value = await waiting
+  return {
+    observing,
+    waited,
+    value,
+    pending: time.pending(),
+    closed: peek(graph),
+    invalid: (await capture({}, { wait: NaN, clock: time })).events,
   }
 })()
 test('capture wait is bounded and overflow during the observation is counted', () => {
   assert(overflow.observing)
-  assertEquals(overflow.scheduled, [2000])
+  assertEquals(overflow.waited, 1)
   assertEquals(overflow.value.events.length, 256)
   assertEquals(overflow.value.events[0].seq, 145)
   assertEquals(overflow.value.gap, 144)
@@ -369,25 +367,21 @@ test('capture wait is bounded and overflow during the observation is counted', (
 })
 
 test('capture cancellation before and during waiting preserves the reason and cleans up', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let before = new AbortController()
   let reason = new Error('cancelled capture')
   before.abort(reason)
-  try {
-    assertEquals(
-      await reasonOf(capture(graph, { signal: before.signal })),
-      reason,
-    )
-    assertEquals(peek(graph), undefined)
-    let stop = new AbortController()
-    let waiting = capture(graph, { wait: 2000, signal: stop.signal })
-    assertEquals(timers.pending.size, 1)
-    stop.abort(reason)
-    assertEquals(await reasonOf(waiting), reason)
-    assertEquals(timers.pending.size, 0)
-    assertEquals(peek(graph), undefined)
-  } finally {
-    timers.restore()
-  }
+  assertEquals(
+    await reasonOf(capture(graph, { signal: before.signal, clock: time })),
+    reason,
+  )
+  assertEquals(peek(graph), undefined)
+  let stop = new AbortController()
+  let waiting = capture(graph, { wait: 2000, signal: stop.signal, clock: time })
+  assertEquals(time.pending(), 1)
+  stop.abort(reason)
+  assertEquals(await reasonOf(waiting), reason)
+  assertEquals(time.pending(), 0)
+  assertEquals(peek(graph), undefined)
 })

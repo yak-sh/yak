@@ -67,6 +67,7 @@ import {
   driver,
   type DurableStorage,
   type Hibernation,
+  jittered,
   type Wire,
 } from '@yaks/durable-object'
 import { type Level, level, writes } from '@yaks/member'
@@ -482,7 +483,8 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 
 /** This space's object. The name is the space's eid, which never moves — a
  * slug does. */
-export let builderOf = (env: Env, space: string) => fetchOf(env.BUILDER, space)
+export let builderOf = (env: Env, space: string) =>
+  fetchOf(env.BUILDER, space, jittered(env.CLOCK))
 
 /**
  * The handshake, carried to the object with the kernel's own vouch on it and

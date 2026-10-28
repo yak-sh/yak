@@ -495,24 +495,19 @@ test('a flooding relay socket closes without affecting another socket', () => {
   let writer = fake(), peer = fake()
   let closed: number[] = []
   writer.close = (code) => void closed.push(code ?? 0)
-  attach(subs, writer)
+  // The writer's time stands still, so its pace never refills.
+  attach(subs, writer, undefined, () => 0)
   attach(subs, peer)
   peer.emit('message', JSON.stringify({ subscribe: '.book', id: 'books' }))
   peer.taken()
 
-  let date = Date.now
-  Date.now = () => 0
-  try {
-    for (let x = 0; x < 32; x++) {
-      writer.emit(
-        'message',
-        JSON.stringify({
-          relay: [{ entity: { eid: 'b1' }, browsing: { x } }],
-        }),
-      )
-    }
-  } finally {
-    Date.now = date
+  for (let x = 0; x < 32; x++) {
+    writer.emit(
+      'message',
+      JSON.stringify({
+        relay: [{ entity: { eid: 'b1' }, browsing: { x } }],
+      }),
+    )
   }
   assertEquals(closed, [1008])
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

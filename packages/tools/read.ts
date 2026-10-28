@@ -4,14 +4,15 @@ import { namedTool } from '@yaks/graph/call'
 import type { Opts, Runner } from './runner.ts'
 import { CallError } from './errors.ts'
 import { invoke } from './invoke.ts'
-import { results, toolEid } from './result.ts'
+import { measuring, results, toolEid } from './result.ts'
 
 /** A read-only runner refuses recorded work before it invokes a tool. */
 export let reader = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
   let by = new Map(tools.map((t) => [toolEid(t.name), t]))
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
-  let now = opts.now ?? (() => performance.now())
+  let clock = opts.clock ?? measuring
+  let now = () => clock.now()
   let { ending } = results(g.vocab, now)
   let refuse = (): Promise<never> =>
     Promise.reject(

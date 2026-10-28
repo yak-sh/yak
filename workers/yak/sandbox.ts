@@ -74,7 +74,8 @@ export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
 import { sentinel } from '@yaks/secrets'
 import type { Space, Tier } from './directory.ts'
-import { retried } from '@yaks/durable-object'
+import { evicted, jittered, retried } from '@yaks/durable-object'
+import type { Clock } from '@yaks/fp'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { refuse } from './tool.ts'
@@ -267,7 +268,16 @@ export let shared = (space: Space) => `build-${space.eid}`
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
 type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
-type Bound = Keys & { SANDBOX?: Sandboxes; WORKSPACES?: Workspaces }
+type Bound = Keys & {
+  SANDBOX?: Sandboxes
+  WORKSPACES?: Workspaces
+  CLOCK?: Clock
+}
+
+// A call into a box or its workspace, sent again while the runtime resets
+// the object, each pause waited out on the env's clock.
+let retrying = (env: Bound) => <T>(send: () => T | Promise<T>) =>
+  retried(send, true, evicted, jittered(env.CLOCK))
 
 // Whether a grant has enough life left to hand to a command. One command may
 // run for {@link TIMEOUT}, so a grant with less than that left is one that
@@ -421,7 +431,7 @@ export let workbench = async (
   let source = { id: shared(space) }
   let provider = cloudflareProvider(ns, {
     legacyRecreation: true,
-    retry: retried,
+    retry: retrying(env),
     env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
     sleepError: (e) =>
       caught(e, { request: 'sandbox sleep', space: space.slug }),
@@ -431,11 +441,11 @@ export let workbench = async (
   // retry or another command cannot overwrite the person's later work.
   let old = cloudflareProvider(ns, {
     legacyRecreation: true,
-    retry: retried,
+    retry: retrying(env),
   })
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  spend.copying ??= retried(() => workspace.fork(source.id, ref.id)).then(
+  spend.copying ??= retrying(env)(() => workspace.fork(source.id, ref.id)).then(
     async (processes) => {
       await bared(env, space, idOf(ns, source.id))
       return processes
@@ -497,7 +507,7 @@ export let destroyed = async (
   try {
     await cloudflareProvider(env.SANDBOX, {
       legacyRecreation: true,
-      retry: retried,
+      retry: retrying(env),
     }).dispose({
       id: named(space, person),
     })
@@ -521,17 +531,17 @@ export let destroyedAll = async (
   if (!ns) return false
   let provider = cloudflareProvider(ns, {
     legacyRecreation: true,
-    retry: retried,
+    retry: retrying(env),
   })
   let source = { id: shared(space) }
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  let copies = await retried(() => workspace.retire())
+  let copies = await retrying(env)(() => workspace.retire())
   for (let ref of [...copies.map((id) => ({ id })), source]) {
     await provider.dispose(ref)
     await bared(env, space, idOf(ns, ref.id))
   }
-  await retried(() => workspace.destroy())
+  await retrying(env)(() => workspace.destroy())
   return true
 }
 

@@ -125,8 +125,10 @@ arrow functions, compare by deep equality.
 `tick` yields one macrotask. `until` polls a function until its return value is
 truthy, then returns that value; a rejected or thrown error propagates. It
 accepts `timeout` (default 2000 ms), `poll` (default 5 ms), a `label` for the
-timeout error, and `now`, the clock the timeout counts on (by default the test's
-own time, below). A label function is evaluated when the timeout occurs.
+timeout error, and the `clock` it keeps both by: by default the test's own time
+(below) and the runtime's timers, or a test's own (see
+[Controlling time](#controlling-time)). A label function is evaluated when the
+timeout occurs.
 
 ```ts
 import { equal, throws, tick, until } from '@yaks/testing'
@@ -333,10 +335,19 @@ own.
 
 A **virtual clock** runs scheduled callbacks when a test advances time. Inject
 `clock()`'s `now` and `after` into the code's timer boundary.
-`after(ms, callback)` returns a cancellation function. `advance(ms)` awaits
+`after(ms, callback)` returns a cancellation function. `advance(ms)` first turns
+the event loop once, so work the caller queued sets its timers, then awaits
 callbacks in chronological order, including callbacks scheduled by callbacks;
-callbacks at the same time run in registration order. It leaves global timers
+callbacks at the same time run in registration order. `pending()` counts the
+callbacks set that have neither run nor been cancelled. It leaves global timers
 and `Date` unchanged.
+
+Code that reads the time or sets a timer takes a clock (@yaks/fp `Clock`, the
+runtime's `system` by default), and a test hands it one of its own. A test never
+replaces the runtime's clock or timers, with @std/testing's `FakeTime`, a stub
+of `setTimeout` or an assignment to `Date.now`: every test file in a run shares
+one runtime, and a faked global counts, moves and swallows timers that other
+files started, so the verdict depends on which files ran first.
 
 ```ts
 import { clock, equal } from '@yaks/testing'

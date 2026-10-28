@@ -513,7 +513,11 @@ let stranger = async (
   let ctx: Ctx = {
     env,
     dir: directory(
-      signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+      signedDirectory(
+        bound(env.DIRECTORY, dirPart.fetch, env),
+        copyOf(env),
+        env.CLOCK,
+      ),
       true,
     ),
     // Nobody. Everything below reads this as no reach, no membership and no
@@ -577,7 +581,11 @@ let CANARY = '/api/defect'
 let canary = async (req: Request, env: Env): Promise<Response> => {
   let { who } = await asking(env, req)
   let dir = directory(
-    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    signedDirectory(
+      bound(env.DIRECTORY, dirPart.fetch, env),
+      copyOf(env),
+      env.CLOCK,
+    ),
     true,
   )
   if (!who || !isTestAddress(await dir.emailAt(who.person) ?? '')) {
@@ -755,7 +763,11 @@ let answered = async (
   // request itself writes to the directory.
   let reopen = () => {
     let dir = directory(
-      signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+      signedDirectory(
+        bound(env.DIRECTORY, dirPart.fetch, env),
+        copyOf(env),
+        env.CLOCK,
+      ),
       true,
     )
     return auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir

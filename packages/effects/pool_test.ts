@@ -15,7 +15,7 @@ import {
   type Storage,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { after } from '@yaks/fp'
+import { after, system } from '@yaks/fp'
 import { loadVocab, pick } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
@@ -298,7 +298,7 @@ test('a worker told no max still starts a backlog a bounded slot at a time', asy
 
 test('a run that throws comes back due, and rests failed once its tries are spent', async () => {
   let t = 0
-  let a = proc(store(), { now: () => t })
+  let a = proc(store(), { clock: { ...system, now: () => t } })
   let tries = 0
   a.fx.handle({
     post_note: () => {
@@ -326,7 +326,7 @@ test('a run that throws comes back due, and rests failed once its tries are spen
 
 test('an error asking to be retried waits as long as it asks, unreported until its last try', async () => {
   let t = 0
-  let a = proc(store(), { now: () => t })
+  let a = proc(store(), { clock: { ...system, now: () => t } })
   let tries = 0
   a.fx.handle({
     post_note: () => {
@@ -350,7 +350,7 @@ test('an error asking to be retried waits as long as it asks, unreported until i
 
 test('a run that got somewhere counts its next failure as its first', async () => {
   let t = 0
-  let a = proc(store(), { now: () => t })
+  let a = proc(store(), { clock: { ...system, now: () => t } })
   let last: boolean[] = []
   a.fx.handle({
     post_note: async (_e, _tx, _write, attempt) => {
@@ -376,13 +376,13 @@ test('a run its worker dropped is run again, unless running twice is not safe', 
   let s = store()
   let eid = '00000000-0000-4000-8000-000000000001'
   // A worker that claims both runs as it writes them, and dies in both.
-  let dead = proc(s, { lease: 10, now: () => 0 })
+  let dead = proc(s, { lease: 10, clock: { ...system, now: () => 0 } })
   let hang = () => new Promise(() => {})
   dead.fx.handle({ post_note: hang, post_gone: hang })
   await dead.fx.work(dead.g)
   await dead.g.apply([post(eid)])
   await dead.g.apply([{ entity: { eid }, post: null }])
-  let next = proc(s, { now: () => 1_000 })
+  let next = proc(s, { clock: { ...system, now: () => 1_000 } })
   next.fx.handle({ post_note: next.note, post_gone: next.note })
   await next.fx.work(next.g)
   await next.fx.idle()
@@ -525,7 +525,11 @@ test('a process that stops leaves what it writes next for the others', async () 
 test('a worker told to stop claims nothing more, and keeps what it is running until it ends', async () => {
   let s = store()
   let t = 0
-  let server = proc(s, { owner: 'server', lease: 40, now: () => t })
+  let server = proc(s, {
+    owner: 'server',
+    lease: 40,
+    clock: { ...system, now: () => t },
+  })
   let finish!: () => void
   let going = new Promise<void>((go) => finish = go)
   server.fx.handle({
@@ -548,7 +552,7 @@ test('a worker told to stop claims nothing more, and keeps what it is running un
   await until(async () =>
     Date.parse(String((await run(server.g, 'post_note')).lease_expiry)) > t
   )
-  let next = proc(s, { owner: 'next', now: () => t })
+  let next = proc(s, { owner: 'next', clock: { ...system, now: () => t } })
   next.fx.handle(every(next.note))
   await next.fx.work(next.g)
   await next.fx.idle()
@@ -752,7 +756,7 @@ test('a worker that stays says what it is running and what ended, and takes its 
   let t = Date.now()
   let fx = effects(pooledBlog, {
     owner: 'server',
-    now: () => t,
+    clock: { ...system, now: () => t },
     cpu: () => 0,
     backoff: () => 60_000,
     page: 1,

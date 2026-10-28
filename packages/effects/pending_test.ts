@@ -1,5 +1,6 @@
 // A long-lived handler is already owned work, not a reason to scan every
 // handler's pending window while waiting for something else to arrive.
+import { system } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, ok, test } from '@yaks/testing'
@@ -13,7 +14,7 @@ let storage = ram(vocab),
 let fx = effects(vocab, {
   owner: 'worker',
   startup: 'manual',
-  now: () => now,
+  clock: { ...system, now: () => now },
   write: (bs) => g.apply(bs, { trusted: true }),
 })
 let g = graph({ storage, vocab, plugins: [fx] })

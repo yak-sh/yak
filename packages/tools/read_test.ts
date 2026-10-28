@@ -1,6 +1,6 @@
 // Transient direct reads use the same validation and answer shape without
 // committing runner bookkeeping or invoking a write reply.
-import { equal, test, throws } from '@yaks/testing'
+import { clock, equal, test, throws } from '@yaks/testing'
 import {
   argsOf,
   type Bundle,
@@ -111,7 +111,11 @@ test('read runners share reference resolution, attribution, limits and receipts'
   }
   let answers: Bundle[][] = []
   for (let make of [runner, reader]) {
-    let r = make(g, { tools: [tool], process: { kind: 'probe' }, now: () => 0 })
+    let r = make(g, {
+      tools: [tool],
+      process: { kind: 'probe' },
+      clock: clock(),
+    })
     let out = await r.read(call)
     equal(argsOf(asking!).target, target)
     equal(asking!.created, { by: 'person', via: 'session' })

@@ -25,9 +25,9 @@ equal(tally('status')([{ status: 'open' }, { status: 'open' }]), { open: 2 })
 
 ## Exports
 
-| Export     | Provides                                                                              |
-| ---------- | ------------------------------------------------------------------------------------- |
-| `@yaks/fp` | All functions, `Fn` (a function of any shape) and `Table` (see [Dispatch](#dispatch)) |
+| Export     | Provides                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)) and `Clock`, with `system` (see [Waits](#waits)) |
 
 ## Composition and values
 
@@ -263,14 +263,21 @@ equal(sorted, [1, 2, 2, 3, 4])
 
 ## Waits
 
+A **clock** (`Clock`) is the time code keeps: `now()` says what time it is, in
+milliseconds, and `after(ms, callback)` calls back after a delay and returns a
+function that cancels it. `system` is the runtime's clock, `Date.now` and
+`setTimeout`. Code that reads the time or sets a timer takes a clock, so a test
+hands it one of its own (@yaks/testing `clock()`) instead of faking the
+runtime's, which everything else in the runtime shares.
+
 `backoff(attempts)` returns an exponential wait in milliseconds: 1000 at attempt
-1, doubling up to 300000. `sleep(ms, signal?)` returns a promise that resolves
-when the timer expires or the signal aborts; aborting does not reject. An
-already aborted signal resolves without waiting.
+1, doubling up to 300000. `sleep(ms, signal?, clock?)` returns a promise that
+resolves when the clock's timer expires or the signal aborts; aborting does not
+reject. An already aborted signal resolves without waiting.
 
 ```ts
 import { backoff, sleep } from '@yaks/fp'
-import { equal } from '@yaks/testing'
+import { clock, equal } from '@yaks/testing'
 
 equal([1, 2, 3, 10].map(backoff), [1000, 2000, 4000, 300000])
 let controller = new AbortController()
@@ -278,10 +285,17 @@ let waiting = sleep(300000, controller.signal)
 controller.abort()
 equal(await waiting, undefined)
 equal(await sleep(300000, controller.signal), undefined)
+
+let time = clock(), woke = false
+let slept = sleep(60_000, undefined, time).then(() => woke = true)
+await time.advance(60_000)
+await slept
+equal([woke, time.now()], [true, 60_000])
 ```
 
 ## Limits
 
-The package has no dependencies. `sleep` needs the runtime's timer APIs and uses
-`AbortSignal` when one is supplied. Object copies are shallow, and these
-functions do not enforce immutability of their inputs or of user functions.
+The package has no dependencies. `system` needs the runtime's timer APIs, and
+`sleep` uses `AbortSignal` when one is supplied. Object copies are shallow, and
+these functions do not enforce immutability of their inputs or of user
+functions.

@@ -94,11 +94,12 @@ import { assembly } from '@yaks/host'
 storage binds, the assembly adds plugin extensions, then `Binding.extend` adds
 the host's own compilers. `Binding.install` prepares schema before graph-facet
 installers run. `Binding.graph` can add the host's own hooks and graph options
-around the contributed plugins. `Binding.ready` lends graph-dependent
-capabilities before effect factories run. `Host.meaning` ranks words by meaning
-among what a filter line admits: the index a plugin's graph facet offers, or one
-the binding lends in `Binding.host`, never both. `Binding.search` combines the
-host's text search with it.
+around the contributed plugins. `Binding.clock` (an @yaks/fp `Clock`) is the
+clock the graph and the tool runner keep, each its own when it is absent.
+`Binding.ready` lends graph-dependent capabilities before effect factories run.
+`Host.meaning` ranks words by meaning among what a filter line admits: the index
+a plugin's graph facet offers, or one the binding lends in `Binding.host`, never
+both. `Binding.search` combines the host's text search with it.
 
 ## Storage capabilities
 

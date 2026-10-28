@@ -2,6 +2,7 @@
 // graph whose letters wait, never a host that will not come up — and the first
 // process that can send sends them, once.
 
+import { system } from '@yaks/fp'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
@@ -36,7 +37,7 @@ let proc = async (storage: Storage, handlers: Handlers, at = 0) => {
     report: (error) => reports.push(error),
     tries: 1,
     owes: 'declared',
-    now: () => at,
+    clock: { ...system, now: () => at },
     // A declaration's own tries outrank `tries`: spend them all at once.
     backoff: () => 0,
   })

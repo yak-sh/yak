@@ -3,6 +3,7 @@
     "@yaks/cli": "platform",
     "@yaks/client": "platform",
     "@yaks/draft": "platform",
+    "@yaks/fp": "platform",
     "@yaks/markdown": "platform",
     "@yaks/rtc": "platform",
     "@yaks/tools": "platform",

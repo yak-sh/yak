@@ -1,4 +1,4 @@
-/** Value-free fixtures and manual timers for the MRI doors. No host is booted. */
+/** Value-free fixtures for the MRI doors. No host is booted. */
 import type { Anatomy, AnatomyPart } from '@yaks/code/anatomy'
 import type { Activity } from './activity.ts'
 import { channel } from '@yaks/trace'
@@ -163,57 +163,6 @@ export let reasonOf = async (waiting: Promise<unknown>): Promise<unknown> => {
   throw new Error('expected cancellation to reject')
 }
 
-type Timer = { kind: 'timeout' | 'interval'; ms: number; run: () => void }
-/** Replace only timers, not a server or clock. Each test restores in finally.
- * Capture completion and keepalives can be driven by facts, without sleeps. */
-export let manualTimers = () => {
-  let keys = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
-  let saved = keys.map((key) =>
-    [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-  )
-  let pending = new Map<number, Timer>()
-  let scheduled: { id: number; kind: Timer['kind']; ms: number }[] = []
-  let next = 0
-  let install = (key: string, value: unknown) =>
-    Object.defineProperty(globalThis, key, {
-      value,
-      configurable: true,
-      writable: true,
-    })
-  let make = (kind: Timer['kind']) =>
-  (
-    callback: (...args: unknown[]) => void,
-    ms = 0,
-    ...args: unknown[]
-  ) => {
-    let id = ++next
-    pending.set(id, { kind, ms, run: () => callback(...args) })
-    scheduled.push({ id, kind, ms })
-    return id
-  }
-  install('setTimeout', make('timeout'))
-  install('setInterval', make('interval'))
-  install('clearTimeout', (id: number) => pending.delete(id))
-  install('clearInterval', (id: number) => pending.delete(id))
-  return {
-    pending,
-    scheduled,
-    fire: (id: number) => {
-      let timer = pending.get(id)
-      if (!timer) throw new Error('fixture fired a missing timer')
-      if (timer.kind == 'timeout') pending.delete(id)
-      timer.run()
-    },
-    restore: () => {
-      for (let [key, descriptor] of saved) {
-        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
-        else Reflect.deleteProperty(globalThis, key)
-      }
-      pending.clear()
-    },
-  }
-}
-
 /** A coarse runtime clock demonstrates that a duration of zero is data. */
 export let fixedNow = (value = 0) => {
   let saved = Object.getOwnPropertyDescriptor(performance, 'now')
@@ -236,8 +185,13 @@ export let emit = (graph: object, count = 1) => {
   }
 }
 
-export let allowed = (graph: object = {}): Hosting => ({
+/** A host that lets anybody in, on a clock of the test's own when given. */
+export let allowed = (
+  graph: object = {},
+  clock?: Hosting['clock'],
+): Hosting => ({
   graph,
   who: () => null,
   anatomy,
+  ...clock ? { clock } : {},
 })

@@ -13,7 +13,7 @@ import { DIM, MODEL } from './embedding.ts'
 import { driver } from '@yaks/durable-object'
 import { left } from '@yaks/embedding'
 import { platformVocab } from './vocab.ts'
-import { type Bindings, type State, Store } from './graph.ts'
+import { type Bindings, type State, Store, type Time } from './graph.ts'
 import { profile, type Summary } from '../../packages/durable-object/profile.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { born } from '../../apps/vale/villagers.ts'
@@ -163,6 +163,15 @@ export let seedWorld = async (
   return villagers.map((row) => row.entity.eid)
 }
 
+// A Store's clock: the runtime's, until the fixture names the instant its
+// alarm goes off at.
+export let alarmed = () => {
+  let at: number | undefined
+  let now = () => at ?? Date.now()
+  let time: Time = { now }
+  return { time, now, ring: (instant: number) => void (at = instant) }
+}
+
 /** A Store's object state over a storage, holding what the Store hands
  * `waitUntil` the way the runtime holds it (release_cost_fixture.ts). */
 export type World = ReturnType<typeof objectState>
@@ -174,15 +183,20 @@ export type World = ReturnType<typeof objectState>
 // of wall clock (a drain at Store.EMBED) leaves the rest to the alarm it arms
 // a moment on, and that alarm is delivered here as the runtime delivers it,
 // so a busy machine changes only how long this takes. Work still owed with
-// no alarm coming back for it soon is a world that did not settle.
-export let settleWorld = async (store: Store, state: World) => {
+// no alarm coming back for it soon, by the Store's clock (`now`), is a world
+// that did not settle.
+export let settleWorld = async (
+  store: Store,
+  state: World,
+  now: () => number = Date.now,
+) => {
   let storage = state.context.storage
   for (;;) {
     await state.settled()
     let owed = await owing(store, storage)
     if (!owed) return
     let at = await storage.getAlarm?.()
-    if (at == null || at > Date.now() + PAUSE) {
+    if (at == null || at > now() + PAUSE) {
       throw new Error(`world effects did not settle: ${owed}`)
     }
     await storage.deleteAlarm?.()
@@ -215,9 +229,12 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     deserializeAttachment: () => ({ writer: { actor: { by: person } } }),
   }
   let state = objectState(storage)
+  let clock = alarmed()
   let store = new Store(
     { ...state.context, getWebSockets: () => [wire] },
     worldBindings(app, person),
+    undefined,
+    clock.time,
   )
   let headers = {
     'x-store': 'yourname/vale.f52dc2',
@@ -269,12 +286,12 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
   }
   await store.alarm()
   await settle(storage, () => store)
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()
   await post('/apply', [{ entity: { eid: hero }, player: {} }])
   let villagers = await seedWorld(store, post)
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   let at = Date.now()
   await store.webSocketMessage(
     wire,
@@ -285,7 +302,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       }],
     }),
   )
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   // Playing for five minutes still reaches the actual Store alarm, even
   // when the world has no periodic durable work to owe.
   let due = at + 5 * 60_000
@@ -323,13 +340,12 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       [Symbol.iterator]: () => result.values(),
     }
   }
-  let now = Date.now
-  Date.now = () => due
+  clock.ring(due)
   try {
     await rows.run('world alarm', async () => {
       await storage.deleteAlarm?.()
       await store.alarm()
-      await settleWorld(store, state)
+      await settleWorld(store, state, clock.now)
     })
     rows.flush(Infinity)
     let total = reports.reduce(
@@ -355,7 +371,6 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       ).slice(0, 20),
     }
   } finally {
-    Date.now = now
     storage.sql.exec = exec
   }
 }

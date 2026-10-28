@@ -38,7 +38,7 @@
 
 import { PROVISIONAL, type Write } from '@yaks/effects'
 import type { Bundle, Eid, Hook, Plugin, Tx } from '@yaks/graph'
-import { after, each, isPromise } from '@yaks/fp'
+import { after, type Clock, each, isPromise, sleep, system } from '@yaks/fp'
 import { dead } from '@yaks/graph/bundle'
 import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
@@ -126,8 +126,14 @@ let holding = (vault: Vault): Holding => {
 
 /** The plugin, over the vault its secrets are kept in and the door what it
  * says about a seal is written through: the graph's own `apply()`, trusted,
- * since `provisional` coming off is the host's word, never a client's. */
-export let secrets = (vault: Vault, write: Write): Plugin => {
+ * since `provisional` coming off is the host's word, never a client's. The
+ * clock says when a value held too long is let go, and waits out a seal's
+ * retry (default the runtime's). */
+export let secrets = (
+  vault: Vault,
+  write: Write,
+  clock: Clock = system,
+): Plugin => {
   let { waiting, minted } = holding(vault)
 
   // The handle for a secret being written: the one the vault keeps for it, the
@@ -135,13 +141,13 @@ export let secrets = (vault: Vault, write: Write): Plugin => {
   let handleOf = (eid?: Eid): string | Promise<string> =>
     !eid ? handle() : after(vault.read(eid), (kept) => {
       let h = kept?.handle ?? minted.get(eid)?.handle ?? handle()
-      if (!kept) minted.set(eid, { handle: h, until: Date.now() + HOLD_MS })
+      if (!kept) minted.set(eid, { handle: h, until: clock.now() + HOLD_MS })
       return h
     })
 
   let hold = async (value: string, eid?: Eid): Promise<string> => {
     let h = await handleOf(eid)
-    waiting.set(h, { value, eid, until: Date.now() + HOLD_MS })
+    waiting.set(h, { value, eid, until: clock.now() + HOLD_MS })
     return h
   }
 
@@ -183,9 +189,9 @@ export let secrets = (vault: Vault, write: Write): Plugin => {
   return {
     name: '@yaks/secrets',
     hooks: {
-      effect: sealing(vault, write),
+      effect: sealing(vault, write, clock),
       normalize: (bundles) => {
-        let now = Date.now()
+        let now = clock.now()
         for (let [h, w] of waiting) if (w.until < now) waiting.delete(h)
         for (let [e, m] of minted) if (m.until < now) minted.delete(e)
         if (!bundles.some((b) => writes(b) || behind(b))) return bundles
@@ -224,9 +230,11 @@ export let retryable = (e: unknown): boolean =>
 // backoff with jitter, as Cloudflare advises for D1 writes
 // (https://developers.cloudflare.com/d1/best-practices/retry-queries/).
 let TRIES = 5
-let pause = (n: number) =>
-  new Promise((go) =>
-    setTimeout(go, Math.min(2_000, 50 * 2 ** n) * (0.5 + Math.random() / 2))
+let pause = (n: number, clock: Clock) =>
+  sleep(
+    Math.min(2_000, 50 * 2 ** n) * (0.5 + Math.random() / 2),
+    undefined,
+    clock,
   )
 
 let told = (e: unknown) => e instanceof Error ? e.message : String(e)
@@ -246,7 +254,7 @@ let told = (e: unknown) => e instanceof Error ? e.message : String(e)
  * why sealing was given up on, and the original failure is rethrown for the
  * graph to report. Either way the value is gone, and the person gives it again.
  */
-let sealing = (vault: Vault, write: Write): Hook => {
+let sealing = (vault: Vault, write: Write, clock: Clock): Hook => {
   let { waiting, minted } = holding(vault)
   let seal = (eid: Eid, comp: Record<string, unknown>, tx: Tx) => {
     let h = comp.value
@@ -285,7 +293,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
               [PROVISIONAL]: { note: 'Saving the key, trying again' },
               content: { body: `saving the key, trying again: ${told(err)}` },
             }),
-            () => pause(n).then(() => attempt(n + 1)),
+            () => pause(n, clock).then(() => attempt(n + 1)),
           )
           : after(
             mark({

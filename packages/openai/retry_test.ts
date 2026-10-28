@@ -1,6 +1,5 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { ModelError } from '@yaks/model'
 import { ResponseError, responses, transport } from './mod.ts'
 
@@ -368,9 +367,11 @@ test('Retry-After accepts seconds and HTTP dates and caps large waits', async ()
     assertEquals(waits, [expected, Math.max(expected, 4000)])
   }
   let waits: number[] = []
+  let time = clock(Date.parse('Wed, 28 Oct 2026 12:00:00 GMT'))
   let client = transport({
     credentials,
     retries: 1,
+    clock: time,
     pause: (ms) => {
       waits.push(ms)
       return Promise.resolve()
@@ -380,13 +381,13 @@ test('Retry-After accepts seconds and HTTP dates and caps large waits', async ()
         new Response('', {
           status: 429,
           headers: {
-            'retry-after': new Date(Date.now() + 30_000).toUTCString(),
+            'retry-after': new Date(time.now() + 30_000).toUTCString(),
           },
         }),
       ),
   })
   await assertRejects(() => client.run(req))
-  assertEquals(waits[0] > 28_000 && waits[0] <= 30_000, true)
+  assertEquals(waits, [30_000])
 })
 
 test('stop during backoff cancels the wait and prevents another attempt', async () => {
@@ -421,12 +422,13 @@ let silent = (init?: RequestInit) =>
   )
 
 test('a stall is transient: the attempt after it completes the turn', async () => {
-  using time = new FakeTime()
+  let time = clock()
   let calls = 0
   let pauses: number[] = []
   let client = transport({
     credentials,
     stallMs: 20,
+    clock: time,
     pause: (ms) => {
       pauses.push(ms)
       return Promise.resolve()
@@ -435,7 +437,7 @@ test('a stall is transient: the attempt after it completes the turn', async () =
       ++calls == 1 ? silent(init) : Promise.resolve(complete()),
   })
   let ran = client.run(req)
-  await time.tickAsync(20)
+  await time.advance(20)
   assertEquals((await ran).items, [item('done').item])
   assertEquals(calls, 2)
   assertEquals(pauses, [1000])

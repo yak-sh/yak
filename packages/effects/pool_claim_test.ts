@@ -6,7 +6,7 @@ import {
   detached,
   guard,
 } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, system } from '@yaks/fp'
 import { matcher } from '@yaks/match'
 import { equal, test, throws } from '@yaks/testing'
 import { loadVocab, pick } from '@yaks/vocab'
@@ -336,7 +336,10 @@ let retried = async (w: ReturnType<typeof worker>, clock: { now: number }) => {
 let failing = () => {
   let clock = { now: 0 }
   return [
-    worker([], { singleOwner: true, now: () => clock.now }),
+    worker([], {
+      singleOwner: true,
+      clock: { ...system, now: () => clock.now },
+    }),
     clock,
   ] as const
 }

@@ -5,6 +5,7 @@
 // No SDK: the whole surface used is a few form-encoded POSTs and GETs, and a
 // package would be a build step (README §no build step) for less code than
 // this.
+import { type Clock, sleep } from '@yaks/fp'
 
 let API = 'https://api.stripe.com'
 
@@ -49,10 +50,11 @@ let said = (body: unknown, status: number) => {
 // saying another request held the object (`Stripe-Should-Retry: true`) — is
 // asked again, as Stripe's own libraries do, under one `Idempotency-Key`, so a
 // write asked twice is one write. {@link TRIES} times in all, a half second
-// and then a second apart: a person is waiting on the answer.
+// and then a second apart on the kernel's clock (env.ts `CLOCK`): a person is
+// waiting on the answer.
 export let TRIES = 3
 export let ask = async (
-  env: { STRIPE_KEY?: string },
+  env: { STRIPE_KEY?: string; CLOCK?: Clock },
   path: string,
   fields?: Record<string, unknown>,
   on?: string,
@@ -81,6 +83,6 @@ export let ask = async (
       return out as Record<string, unknown>
     }
     await r?.body?.cancel()
-    await new Promise((go) => setTimeout(go, 500 * n))
+    await sleep(500 * n, undefined, env.CLOCK)
   }
 }

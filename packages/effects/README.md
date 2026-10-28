@@ -495,7 +495,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effectDoc, effects } from '@yaks/effects'
-import { equal } from '@yaks/testing'
+import { clock, equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, {
   $defs: {
@@ -503,8 +503,8 @@ let vocab = loadVocab([effectDoc, {
     send_receipt: { effect: true, created: ['order'] },
   },
 }])
-let now = 0, calls = 0
-let fx = effects(vocab, { now: () => now })
+let time = clock(), calls = 0
+let fx = effects(vocab, { clock: time })
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 fx.handle({
   send_receipt: async (_event, _tx, _write, attempt) => {
@@ -516,24 +516,25 @@ fx.handle({
 })
 await g.apply([{ entity: { eid: 'order-1' }, order: {} }])
 await fx.work(g, undefined, 1)
-now = 999
+await time.advance(999)
 await fx.work(g, undefined, 1)
 equal(calls, 1)
-now = 1000
+await time.advance(1)
 await fx.work(g, undefined, 1)
 equal(calls, 2)
 equal(await g.read('.effect'), [])
 await fx.stop()
 ```
 
-Failures still follow the declaration's attempt limit and backoff:
+Failures still follow the declaration's attempt limit and backoff, which the
+[pool tests](./pool_test.ts) cover:
 
-```ts
+```ts ignore
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effectDoc, effects } from '@yaks/effects'
-import { equal } from '@yaks/testing'
+import { clock, equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, {
   $defs: {
@@ -541,10 +542,10 @@ let vocab = loadVocab([effectDoc, {
     send_receipt: { effect: true, created: ['order'], tries: 2 },
   },
 }])
-let now = 0
+let time = clock()
 let reports: string[] = []
 let fx = effects(vocab, {
-  now: () => now,
+  clock: time,
   report: (_e, job) => reports.push(job.handler),
 })
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
@@ -556,10 +557,10 @@ fx.handle({
   },
 })
 await g.apply([{ entity: { eid: 'o1' }, order: {} }])
-await fx.work(g)
+await fx.work(g, undefined, 1)
 equal(last, [false])
-now = 1000
-await fx.work(g)
+await time.advance(1000)
+await fx.work(g, undefined, 1)
 equal(last, [false, true])
 equal((await g.read('.effect'))[0].effect?.state, 'failed')
 equal(reports, ['send_receipt', 'send_receipt'])

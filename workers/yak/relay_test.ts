@@ -13,8 +13,8 @@ import type { Frame } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
-import { Store } from './graph.ts'
-import { test, until } from '@yaks/testing'
+import { Store, type Time } from './graph.ts'
+import { clock, test, until } from '@yaks/testing'
 
 let wire = (actor: Actor | null = { by: ADA }) => {
   let sent: Frame[] = []
@@ -91,8 +91,13 @@ let get = (store: Store, path: string) =>
   store.fetch(new Request(`http://store${path}`, { headers: headers() }))
 
 // A cookbook with one recipe in it, and two cooks watching it.
-let watching = async (ctx = state(), access = 'private', schema = SCHEMA) => {
-  let store = new Store(ctx)
+let watching = async (
+  ctx = state(),
+  access = 'private',
+  schema = SCHEMA,
+  time?: Time,
+) => {
+  let store = new Store(ctx, {}, undefined, time)
   assertEquals((await post(store, '/vocab', schema)).status, 200)
   assertEquals(
     (await store.fetch(
@@ -144,57 +149,55 @@ test('a finger moves, and only the other cooks hear it', async () => {
 })
 
 test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
-  let date = Date.now
-  let offset = 0
-  Date.now = () => date() + offset
-  try {
-    let { store, watch } = await watching()
-    let ada = await watch(), bert = await watch()
-    let move = (ws: ReturnType<typeof wire>, x: number) =>
-      store.webSocketMessage(
-        ws,
-        JSON.stringify({ relay: says(CAKE, { x }) }),
-      )
-
-    for (let x = 0; x < 10; x++, offset += 100) await move(ada, x)
-    await until(() =>
-      relay(bert).at(-1)?.presence &&
-      (relay(bert).at(-1)?.presence as { x: number }).x == 9
+  // The pace is read on the Store's clock, which only this case moves; its
+  // timers stay the runtime's.
+  let time = clock(Date.now())
+  let { store, watch } = await watching(state(), 'private', SCHEMA, {
+    now: time.now,
+  })
+  let ada = await watch(), bert = await watch()
+  let move = (ws: ReturnType<typeof wire>, x: number) =>
+    store.webSocketMessage(
+      ws,
+      JSON.stringify({ relay: says(CAKE, { x }) }),
     )
-    assertEquals(relay(bert).at(-1)?.presence, { x: 9 })
-    bert.sent.length = 0
 
-    let flood = await watch()
-    let at = date() + offset
-    Date.now = () => at
-    await move(flood, 10)
-    await move(flood, 11)
-    for (let x = 12; x < 19; x++) await move(flood, x)
-    let late = wire()
-    await store.webSocketMessage(
-      late,
-      JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-    )
-    assertEquals(late.sent[0].relay, says(CAKE, { x: 11 }))
-    assertEquals(flood.closed, [])
-
-    await move(flood, 19) // the eighth rejected relay closes only the flooder
-    Date.now = () => date() + offset
-    assertEquals(flood.closed, [1008])
-    assertEquals(ada.closed, [])
-    await until(() => relay(bert).at(-1)?.presence === null)
-    assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
-    assertEquals(late.closed, [])
-    await move(flood, 20)
-    assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
-    await move(ada, 21)
-    await until(() =>
-      (relay(late).at(-1)?.presence as { x?: number } | null)?.x == 21
-    )
-    assertEquals(relay(late).at(-1), says(CAKE, { x: 21 })[0])
-  } finally {
-    Date.now = date
+  for (let x = 0; x < 10; x++) {
+    await move(ada, x)
+    await time.advance(100)
   }
+  await until(() =>
+    relay(bert).at(-1)?.presence &&
+    (relay(bert).at(-1)?.presence as { x: number }).x == 9
+  )
+  assertEquals(relay(bert).at(-1)?.presence, { x: 9 })
+  bert.sent.length = 0
+
+  let flood = await watch()
+  await move(flood, 10)
+  await move(flood, 11)
+  for (let x = 12; x < 19; x++) await move(flood, x)
+  let late = wire()
+  await store.webSocketMessage(
+    late,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
+  assertEquals(late.sent[0].relay, says(CAKE, { x: 11 }))
+  assertEquals(flood.closed, [])
+
+  await move(flood, 19) // the eighth rejected relay closes only the flooder
+  assertEquals(flood.closed, [1008])
+  assertEquals(ada.closed, [])
+  await until(() => relay(bert).at(-1)?.presence === null)
+  assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
+  assertEquals(late.closed, [])
+  await move(flood, 20)
+  assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
+  await move(ada, 21)
+  await until(() =>
+    (relay(late).at(-1)?.presence as { x?: number } | null)?.x == 21
+  )
+  assertEquals(relay(late).at(-1), says(CAKE, { x: 21 })[0])
 })
 
 test('a cook who arrives late sees the fingers already on the page', async () => {

@@ -258,8 +258,14 @@ export let thrown = async (r: Response): Promise<Response> => {
  * Each carries the caller's deploy, so an object still on older code restarts
  * onto it rather than answering for it (running.ts `behind`). */
 export let fetchOf =
-  (ns: Namespace, name: string) => (make: () => Request): Promise<Response> =>
-    retried(() => ns.get(ns.idFromName(name)).fetch(stamped(make())))
+  (ns: Namespace, name: string, wait?: (ms: number) => Promise<void>) =>
+  (make: () => Request): Promise<Response> =>
+    retried(
+      () => ns.get(ns.idFromName(name)).fetch(stamped(make())),
+      true,
+      undefined,
+      wait,
+    )
 
 let stamped = (req: Request) => (stamp(req.headers), req)
 
@@ -268,7 +274,12 @@ let stamped = (req: Request) => (stamp(req.headers), req)
 let rebuildable = (init: RequestInit | Request) =>
   init instanceof Request ? !init.body : !(init.body instanceof ReadableStream)
 
-export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
+export let storeOf = (
+  ns: Namespace,
+  name: string,
+  app?: Served,
+  wait?: (ms: number) => Promise<void>,
+): Door => {
   // The stub is taken per call. It is an I/O object, and the runtime binds
   // one to the request that created it: a door memoized for the isolate
   // (meta.ts `doors`) and reused on the next request throws "cannot perform
@@ -280,7 +291,8 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // store that applied one answers the next as it answered the first
   // (writes.ts) rather than applying it again. A caller that will send the
   // write again itself (a page resending after a 202) names the key, and this
-  // door keeps it rather than minting one per call.
+  // door keeps it rather than minting one per call. `wait` waits out each
+  // pause before a resend (@yaks/durable-object `retried`).
   let door = doorOf(
     (req) => ns.get(ns.idFromName(name)).fetch(req),
     name,
@@ -309,6 +321,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
       },
       rebuildable(init) && options.replayable !== false,
       (e) => evicted(e) || (consuming && safe && opaque(e)),
+      wait,
     )
   }
   let send = (

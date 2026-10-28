@@ -19,6 +19,7 @@ import { effectDoc, held, leaseEid, take } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose as composing,
+  type ComposeOpts,
   type Config,
   dbOf,
   every,
@@ -34,8 +35,7 @@ import { lit } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
 import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
-import { test, until } from '@yaks/testing'
-import { FakeTime } from '@std/testing/time'
+import { clock, test, until } from '@yaks/testing'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -177,8 +177,8 @@ let serving = (host: { handler?: Handler }): Handler => {
 
 // Every role the config's graph has: what a test here assembles, unless it is
 // about which roles a process serves.
-let compose = (config: Config, load?: Load) =>
-  composing(config, every(config), load)
+let compose = (config: Config, load?: Load, opts?: ComposeOpts) =>
+  composing(config, every(config), load, opts)
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
@@ -494,7 +494,6 @@ test('a command line writes as the session it names, through the same door as HT
 })
 
 test('a process writes itself in, signs with that row, and stamps its exit', async () => {
-  using time = new FakeTime()
   let attempts = 0
   let contended: Plugged = {
     ...shop,
@@ -514,16 +513,20 @@ test('a process writes itself in, signs with that row, and stamps its exit', asy
       },
     },
   }
+  let time = clock()
   let pending = compose(
     { db: ':memory:', plugins: ['shop'] },
     only({ shop: contended }),
+    { clock: time },
   )
   // Attach the rejection before advancing the timer, so a broken open fails
-  // this assertion rather than becoming an unhandled rejection.
+  // this assertion rather than becoming an unhandled rejection. Opening reads
+  // files on its way to the first write, so the clock moves once the first
+  // retry is set.
   let result = pending.then((host) => ({ host }), (error) => ({ error }))
-  await time.runMicrotasks()
-  await time.tickAsync(1000)
-  await time.tickAsync(2000)
+  await until(time.pending)
+  await time.advance(1000)
+  await time.advance(2000)
   let opened = await result
   if ('error' in opened) throw opened.error
   let host = opened.host

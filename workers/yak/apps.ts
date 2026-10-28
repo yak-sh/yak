@@ -1620,7 +1620,11 @@ let named = (env: Env, who: Who, app?: App) =>
     ? Promise.resolve({} as Record<string, string>)
     : titling(
       directory(
-        signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+        signedDirectory(
+          bound(env.DIRECTORY, dirPart.fetch, env),
+          copyOf(env),
+          env.CLOCK,
+        ),
         true,
       ),
       who.person,
@@ -2344,7 +2348,11 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   let view = manageView(url.pathname)
   if (!view) return nothingHere(env)
   let dir = directory(
-    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    signedDirectory(
+      bound(env.DIRECTORY, dirPart.fetch, env),
+      copyOf(env),
+      env.CLOCK,
+    ),
     true,
   )
   let { person, until } = await whoIs(
@@ -2830,8 +2838,8 @@ let served = async (
   // the longer of the two rather than both.
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let serving = edge
-    ? publicDirectory(direct, copyOf(env), undefined, copied)
-    : signedDirectory(direct, copyOf(env))
+    ? publicDirectory(direct, copyOf(env), env.CLOCK, copied)
+    : signedDirectory(direct, copyOf(env), env.CLOCK)
   let dir = directory(serving, edge)
   // The space, the app at the address, the front page and the seat of the
   // person the cookie names, in one read of the directory: every rung below

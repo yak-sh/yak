@@ -12,6 +12,7 @@ import { platform, vocab } from './core.ts'
 import { Tracker } from './object.ts'
 import { sign } from './auth.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
+import { system } from '@yaks/fp'
 
 let fixture = (step = 15_000) => {
   let calls: string[] = []
@@ -158,7 +159,7 @@ let setup = (now: () => number = Date.now) => {
     equal(access.person, platform)
     equal(access.admin, true)
     return Promise.resolve('scratch-ticket')
-  }, now)
+  }, { ...system, now })
   let url = `https://tracker.test/canary?scope=platform&hash=${hash}`
   return { sent, object, w, url }
 }
@@ -429,7 +430,7 @@ let stalledWorker = worker(
     TRACKERS: { getByName: () => stalled },
   },
   sign,
-  () => later,
+  { ...system, now: () => later },
 )
 let nonce = crypto.randomUUID()
 let canaryUrl = `https://tracker.test/canary?scope=platform&hash=${hash}`

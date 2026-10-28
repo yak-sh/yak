@@ -49,6 +49,7 @@
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
 import type { Caller } from '@yaks/egress'
+import { type Clock, system } from '@yaks/fp'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { instrumentEid } from './instrument.ts'
 import { sha256 } from '@yaks/graph/sha256'
@@ -721,15 +722,15 @@ let PATIENCE = 1_000
 
 let LATE = `the router did not answer in ${PATIENCE}ms`
 
-// The work, or that sentence, whichever comes first. Both halves of the race
-// are handled, so a worker that answers after we stopped waiting is not an
-// unhandled rejection.
-let patient = <T>(work: Promise<T>) => {
-  let timer: ReturnType<typeof setTimeout>
+// The work, or that sentence, whichever comes first on `clock`. Both halves
+// of the race are handled, so a worker that answers after we stopped waiting
+// is not an unhandled rejection.
+let patient = <T>(work: Promise<T>, clock: Clock = system) => {
+  let cancel = () => {}
   return Promise.race([
-    work.finally(() => clearTimeout(timer)),
+    work.finally(() => cancel()),
     new Promise<never>((_, no) => {
-      timer = setTimeout(() => no(new Error(LATE)), PATIENCE)
+      cancel = clock.after(PATIENCE, () => no(new Error(LATE)))
     }),
   ])
 }
@@ -755,7 +756,7 @@ export let ahead = async (
 ): Promise<Response | null> => {
   let res
   try {
-    res = await patient(called(env, space, home, req, who))
+    res = await patient(called(env, space, home, req, who), env.CLOCK)
   } catch (e) {
     await threw(env, space, home, req, e)
     return null

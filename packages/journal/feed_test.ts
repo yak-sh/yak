@@ -172,14 +172,18 @@ let looping = async (each: Each) => {
 let firsts = (news: News) => news.applied.map((tx) => tx[0].entity.eid)
 
 let gate = Promise.withResolvers<void>()
+let handed = Promise.withResolvers<void>()
 let slow: News[] = []
 let busy = await looping(async (news) => {
   slow.push(news)
-  if (slow.length == 1) await gate.promise
+  if (slow.length > 1) return
+  handed.resolve()
+  await gate.promise
 })
 test('a busy consumer is handed what was heard meanwhile in one call', async () => {
   busy.write('p1')
   let first = busy.look()
+  await handed.promise
   for (let eid of ['p2', 'p3', 'p4']) busy.write(eid)
   await busy.look()
   gate.resolve()

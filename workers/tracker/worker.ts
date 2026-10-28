@@ -7,7 +7,8 @@ import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
-import { evicted, lost, opaque, retried } from '@yaks/durable-object'
+import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
+import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
@@ -182,8 +183,10 @@ export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
 export let worker = (
   env: Env,
   ticket: typeof sign = sign,
-  now: () => number = Date.now,
+  clock: Clock = system,
 ) => {
+  let now = clock.now
+  let wait = jittered(clock)
   let report = reporting(env)
   // Every call into an object goes through here, but trace admission, which
   // charges a budget and is sent once. The object can be reset, the
@@ -198,6 +201,7 @@ export let worker = (
       () => use(env.TRACKERS.getByName(scope)),
       true,
       (error) => evicted(error) || lost(error) || opaque(error),
+      wait,
     )
   // An HTTP door, its body read again by each send. A request without one has
   // nothing a send uses up, so each send takes it as it is: in Deno, copying
@@ -216,7 +220,7 @@ export let worker = (
       scope: platform,
       person: platform,
       admin: true,
-      exp: Date.now() / 1000 + 60,
+      exp: now() / 1000 + 60,
     }, env.TRACKER_SECRET)
     let headers = { authorization: `Bearer ${signed}` }
     return standing(

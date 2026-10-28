@@ -2,6 +2,7 @@
 // Backlog selection must bound SQLite's physical work, not just its answer.
 // All fixtures enter through graph.apply; the native handle is used only to
 // count VM instructions while the adapter executes ordinary graph reads.
+import { system } from '@yaks/fp'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -77,7 +78,7 @@ let fixture = (
   let fx = effects(vocab, {
     write: (b) => g.apply(b, { trusted: true }),
     report: (e) => void errors.push(e),
-    now: () => 0,
+    clock: { ...system, now: () => 0 },
     ...opts,
   })
   let g = graph({ storage: store, vocab, plugins: [fx] })

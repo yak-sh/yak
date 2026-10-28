@@ -1,6 +1,7 @@
 import { decode, stringify, unpack } from './_wire.js'
 import { browserDrafts, draftEid } from './_draft.js'
 import { durableOutbox } from './_outbox.js'
+import { system } from '@yaks/fp'
 export { draftEid }
 
 // The store an app's own pages talk to: one ES module, no build, served by
@@ -51,6 +52,9 @@ export { draftEid }
 // `store(base)` is those doors at an address you name, and what the bound
 // set is made of. Every app in a space shares one hostname, so
 // `store('/other/api/')` reads a sibling app's graph the same way.
+// `store(base, {clock})` keeps the store's waits (the outbox's and an
+// upload's retries, the socket's reconnects) on `clock` (@yaks/fp `Clock`),
+// which a test moves itself; unset, the runtime's.
 //
 // Errors need no wiring here: the kernel injects a reporter into every page
 // it serves (public/report.js), so a throw, an uncaught rejection, or a
@@ -374,7 +378,7 @@ let busy = (e) =>
 // Sent again while the way there failed, which waits for the browser to say it
 // is back online. A refusal is thrown at once. Each wait doubles, to fifteen
 // seconds.
-let again = async (call, tries = 0) => {
+let again = async (clock, call, tries = 0) => {
   try {
     return await call()
   } catch (e) {
@@ -383,9 +387,9 @@ let again = async (call, tries = 0) => {
       await new Promise((on) => addEventListener('online', on, { once: true }))
     }
     await new Promise((on) =>
-      setTimeout(on, Math.min(1000 * 2 ** tries, 15000))
+      clock.after(Math.min(1000 * 2 ** tries, 15000), on)
     )
-    return again(call, tries + 1)
+    return again(clock, call, tries + 1)
   }
 }
 
@@ -407,7 +411,7 @@ let lanes = async (items, go) => {
   if (failed) throw failed
 }
 
-export let store = (base) => {
+export let store = (base, { clock = system } = {}) => {
   base = based(base)
   let rawAsk = door(base)
   let vocabulary
@@ -449,6 +453,8 @@ export let store = (base) => {
       if (closed) throw new Error('Write outbox is closed')
       queue = durableOutbox({
         scope: `${base}:${person ?? 'anonymous'}`,
+        timer: (fn, ms) => clock.after(ms, fn),
+        cancelTimer: (cancel) => cancel(),
         send: async (key, payload) => {
           let current = await ask('me')
           // Closing while identity is in flight must not start another write
@@ -555,7 +561,7 @@ export let store = (base) => {
     let name = opts.name ?? file.name ?? ''
     let mime = file.type || 'application/octet-stream'
     if (file.size < SPLIT) {
-      return again(() =>
+      return again(clock, () =>
         ask('blob', {
           method: 'POST',
           headers: {
@@ -565,19 +571,17 @@ export let store = (base) => {
             ...(name ? { 'x-yak-name': encodeURIComponent(name) } : {}),
           },
           body: file,
-        })
-      )
+        }))
     }
     let { sha, states } = await hashed(file)
     let at = `blob/${sha}`
     let stand = () =>
-      again(() =>
+      again(clock, () =>
         ask(at, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ bytes: file.size, name, mime }),
-        })
-      )
+        }))
     // An upload the platform let go of (409) is begun again; a few rounds
     // with nothing finished is a fault, not a slow line.
     for (let round = 0; round < 4; round++) {
@@ -585,15 +589,14 @@ export let store = (base) => {
       if (!need) return done
       try {
         await lanes(need, (n) =>
-          again(() =>
+          again(clock, () =>
             ask(`${at}/${n}`, {
               method: 'PUT',
               // Where the hash stood before this part, so the door hashes it
               // on from there as it passes.
               headers: { 'x-yak-state': states[(n - 1) * part / MIB] },
               body: file.slice((n - 1) * part, n * part),
-            })
-          ))
+            })))
       } catch (e) {
         if (e.status != 409) throw e
       }
@@ -688,7 +691,7 @@ export let store = (base) => {
     s.onclose = () => {
       sock = null
       let again = () => subs.size && open()
-      if (subs.size) setTimeout(again, Math.min(1000 * 2 ** tries++, 15000))
+      if (subs.size) clock.after(Math.min(1000 * 2 ** tries++, 15000), again)
     }
     return s
   }

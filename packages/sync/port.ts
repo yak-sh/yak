@@ -2,6 +2,7 @@
  * MessagePort. The port belongs to the caller; closing the link removes the
  * listeners it added but does not close the port.
  */
+import { type Clock, system } from '@yaks/fp'
 import type { Frame } from './socket.ts'
 export type Port = Pick<
   MessagePort,
@@ -43,15 +44,18 @@ export let portLink = (port: Port, opts: {
   timeout?: number
   /** Maximum outstanding requests before a further one is rejected. */
   maxPending?: number
+  /** The clock request deadlines are kept by (default the runtime's). */
+  clock?: Clock
 } = {}): PortLink => {
   let next = 0, closed = false
+  let clock = opts.clock ?? system
   let stats = { sent: 0, received: 0, frames: 0 }
   let held = new Map<
     number,
     {
       resolve: (v: unknown) => void
       reject: (e: Error) => void
-      timer: ReturnType<typeof setTimeout> | undefined
+      cancel: () => void
     }
   >()
   let send = (packet: Omit<Packet, 'channel'>) => {
@@ -95,7 +99,7 @@ export let portLink = (port: Port, opts: {
     let pending = held.get(packet.id!)
     if (!pending) return
     held.delete(packet.id!)
-    clearTimeout(pending.timer)
+    pending.cancel()
     if ('error' in packet) {
       try {
         pending.reject(
@@ -124,7 +128,7 @@ export let portLink = (port: Port, opts: {
     port.removeEventListener('close', disconnected)
     if (held.size) reason ??= new Error('Message link closed')
     for (let pending of held.values()) {
-      clearTimeout(pending.timer)
+      pending.cancel()
       pending.reject(reason!)
     }
     held.clear()
@@ -152,15 +156,15 @@ export let portLink = (port: Port, opts: {
         let timeout = options.timeout === undefined
           ? opts.timeout ?? 30000
           : options.timeout
-        let timer = timeout === null ? undefined : setTimeout(() => {
+        let cancel = timeout === null ? () => {} : clock.after(timeout, () => {
           held.delete(id)
           reject(new Error('Message request timed out: ' + method))
-        }, timeout)
-        held.set(id, { resolve, reject, timer })
+        })
+        held.set(id, { resolve, reject, cancel })
         try {
           send({ id, method, value })
         } catch (error) {
-          clearTimeout(timer)
+          cancel()
           held.delete(id)
           reject(error)
         }

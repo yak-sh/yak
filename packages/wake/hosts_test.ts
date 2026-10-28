@@ -1,17 +1,18 @@
-// Host clocks choose when to call the same write. A fake web clock keeps
-// minute-long waits and shutdown races deterministic and fast.
+// Host clocks choose when to call the same write. A test clock handed to the
+// loop keeps minute-long waits and shutdown races deterministic and fast.
 
-import { test } from '@yaks/testing'
+import { type Clock, clock, test, until } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { arm, LOST, scheduled } from './cloudflare.ts'
 import { loop } from './deno.ts'
 import { store, T0, woken } from './testing.ts'
 
 let iso = (t: number) => new Date(t).toISOString()
-let advance = async (time: FakeTime, ms: number) => {
-  await time.tickAsync(ms)
-  await time.runMicrotasks()
+
+// Move the clock, then let the loop finish what that woke and sleep again.
+let advance = async (time: Clock, ms: number) => {
+  await time.advance(ms)
+  await until(time.pending)
 }
 
 test('scheduled uses the event instant and leaves later wakes alone', async () => {
@@ -56,7 +57,7 @@ test('a DO alarm fills the gap before a trigger and preserves earlier alarms', a
 })
 
 test('the loop sleeps to the earliest wake, caps empty waits, and stops', async () => {
-  using time = new FakeTime(T0)
+  let time = clock(T0)
   let stop = new AbortController()
   let g = woken(store())
   let fired: string[] = []
@@ -64,12 +65,13 @@ test('the loop sleeps to the earliest wake, caps empty waits, and stops', async 
   let running = loop(g, {
     signal: stop.signal,
     cap: 60_000,
+    clock: time,
     onTick: (r) => {
-      ticks.push(Date.now())
+      ticks.push(time.now())
       fired.push(...r.fired.map((b) => b.entity.eid))
     },
   })
-  await time.runMicrotasks()
+  await until(time.pending)
   g.apply([{
     entity: { eid: 'new' },
     wake: { at: iso(T0 + 65_000) },
@@ -83,12 +85,12 @@ test('the loop sleeps to the earliest wake, caps empty waits, and stops', async 
   assertEquals(ticks, [T0, T0 + 60_000, T0 + 65_000])
   stop.abort()
   await running
-  await advance(time, 120_000)
+  await time.advance(120_000)
   assertEquals(ticks.length, 3)
 })
 
 test('the loop retries refused wakes at the cap without a tight timer', async () => {
-  using time = new FakeTime(T0)
+  let time = clock(T0)
   let stop = new AbortController()
   let g = woken(store())
   g.apply([{ entity: { eid: 'held' }, wake: { at: iso(T0) } }])
@@ -106,11 +108,12 @@ test('the loop retries refused wakes at the cap without a tight timer', async ()
   let running = loop(g, {
     signal: stop.signal,
     cap: 1000,
+    clock: time,
     onTick: (r) => {
       counts.push(r.refused.length)
     },
   })
-  await time.runMicrotasks()
+  await until(time.pending)
   await advance(time, 999)
   assertEquals(counts, [1])
   closed = false
@@ -131,7 +134,7 @@ test('the loop refuses invalid caps and accepts an already stopped signal', asyn
 })
 
 test('the loop promptly visits a wake that became due during an effect', async () => {
-  using time = new FakeTime(T0)
+  let time = clock(T0)
   let stop = new AbortController()
   let g = woken(store())
   g.apply(['first', 'next'].map((eid, i) => ({
@@ -146,14 +149,14 @@ test('the loop promptly visits a wake that became due during an effect', async (
       match: '.wake, *fired',
       run: async ({ entity }) => {
         if (entity.eid == 'first') {
-          await new Promise((resolve) => setTimeout(resolve, 20))
+          await new Promise<void>((resolve) => time.after(20, resolve))
         }
         fired.push(entity.eid)
       },
     }],
   })
-  let running = loop(g, { signal: stop.signal })
-  await time.runMicrotasks()
+  let running = loop(g, { signal: stop.signal, clock: time })
+  await until(time.pending)
   await advance(time, 20)
   await advance(time, 1)
   assertEquals(fired, ['first', 'next'])

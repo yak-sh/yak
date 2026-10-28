@@ -79,6 +79,9 @@ export type Tick = {
   vocab: Vocab
   /** the phase's transaction (a detached one outside the batch's own) */
   tx: Tx
+  /** the moment a match compares relative times against, in ms (default:
+   * the time the phase fires) */
+  now?: number
   /** the phase running: what distinguishes a rule whose output still has to be
    * written from one whose output the `mutate` phase will write for it */
   phase: Phase
@@ -533,7 +536,7 @@ export let fire = (
   // phase of more than one bundle selects from the frozen set at once:
   // building the reference index once per rule, rather than once per entity,
   // keeps the cost linear in the size of the batch.
-  let moment = { now: Date.now() }
+  let moment = { now: tick.now ?? Date.now() }
   for (let [r, ready] of live) {
     // A mutable component not added by this rule must already be present.
     // These are unconditional clauses of the rule's filter (declared()), so

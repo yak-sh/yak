@@ -1,6 +1,5 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
 import {
   add,
@@ -16,7 +15,7 @@ import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
 
 test('closing the agent stops its migration monitor', async () => {
-  using time = new FakeTime()
+  const time = clock()
   const h = await harness()
   const read = h.migrations!.read
   let reads = 0
@@ -24,12 +23,12 @@ test('closing the agent stops its migration monitor', async () => {
     reads++
     return read()
   }
-  const a = local({ cwd: repo(), h })
+  const a = local({ cwd: repo(), h, clock: time })
   try {
-    time.tick(1000)
+    await time.advance(1000)
     assertEquals(reads, 1)
     await a.close()
-    time.tick(10_000)
+    await time.advance(10_000)
     assertEquals(reads, 1)
   } finally {
     await a.close()

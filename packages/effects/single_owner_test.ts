@@ -1,6 +1,7 @@
 // A single-owner store drains recorded runs without distributed claims or
 // incarnation start-up work. Durable attempts still distinguish a crash from
 // a reported failure, and the same pool bounds handlers in either mode.
+import { system } from '@yaks/fp'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, ok, test, until } from '@yaks/testing'
@@ -121,7 +122,10 @@ test('single owner writer-started runs contain no distributed claim', async () =
 
 test('single owner retries keep backoff and attempt limits without lease churn', async () => {
   let t = 0
-  let a = proc(store(), { now: () => t, backoff: () => 10 })
+  let a = proc(store(), {
+    clock: { ...system, now: () => t },
+    backoff: () => 10,
+  })
   a.fx.handle({
     post_note: () => {
       throw Error('failed')
@@ -217,7 +221,11 @@ for (let singleOwner of [true, false]) {
 
 test('single owner live work and idle never renew claims or take presence duties', async () => {
   let t = 0
-  let a = proc(store(), { owner: 'sole', lease: 4, now: () => t })
+  let a = proc(store(), {
+    owner: 'sole',
+    lease: 4,
+    clock: { ...system, now: () => t },
+  })
   let release = Promise.withResolvers<void>()
   a.fx.handle({
     post_note: async () => {
@@ -252,7 +260,10 @@ test('single owner live work and idle never renew claims or take presence duties
 
 test('single owner progress restores attempts before a later failure', async () => {
   let t = 0, calls = 0
-  let a = proc(store(), { now: () => t, backoff: () => 10 })
+  let a = proc(store(), {
+    clock: { ...system, now: () => t },
+    backoff: () => 10,
+  })
   a.fx.handle({
     post_note: async (_e, _tx, _write, attempt) => {
       calls++

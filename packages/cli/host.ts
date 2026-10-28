@@ -104,6 +104,7 @@ import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
 import { persist } from '@yaks/tools/persist'
+import { type Clock, system } from '@yaks/fp'
 import { files } from '@yaks/tracker/file'
 import type { Traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
@@ -247,6 +248,10 @@ export type ComposeOpts = {
    * keeps history (D-130964): read only as of a transaction, writing only to
    * the branch on one. Default: `$YAK_AT` or `$YAK_BRANCH`, else main. */
   mode?: { at: number } | { branch: number }
+  /** The clock the host keeps: its graph's and its runner's (@yaks/host
+   * `Binding.clock`), and its own waits, a process write storage refused and
+   * a drain step's warning (default the runtime's). */
+  clock?: Clock
 }
 
 // The mode a process opens its graph in, as its environment says.
@@ -390,6 +395,7 @@ let composed = async (
     )
   }
   let path = dbOf(config)
+  let clock = opts.clock ?? system
   let report = reporter(
     opts.readOnly ? {} : config,
     { by: selfEid(), via: selfEid() },
@@ -576,6 +582,7 @@ let composed = async (
             during: { process: selfEid() },
             tags: { step: 'process write' },
           }),
+        clock,
       )
     let finish = async (holder: Eid, end: Bundle) => {
       for (;;) {
@@ -637,6 +644,7 @@ let composed = async (
       actor: self,
       process: started({ roles: [...roles] })[PROCESS] as Comp,
       readOnly: opts.readOnly,
+      ...opts.clock ? { clock: opts.clock } : {},
       storage: (built, extend, _words, history) => {
         host = built
         let o = {
@@ -959,14 +967,14 @@ let composed = async (
       close: (code?: number) =>
         closing ??= (async () => {
           let wait = async <T>(name: string, work: () => T | Promise<T>) => {
-            let timer = setTimeout(
-              () => console.error(`host drain — ${name}`),
+            let cancel = clock.after(
               5000,
+              () => console.error(`host drain — ${name}`),
             )
             try {
               return await work()
             } finally {
-              clearTimeout(timer)
+              cancel()
             }
           }
           await wait('retire', retire)

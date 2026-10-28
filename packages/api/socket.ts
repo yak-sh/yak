@@ -147,7 +147,12 @@ let gate = (subs: Subs, to: Sink, now?: () => number) => {
   let bySink = gates.get(subs)
   if (!bySink) gates.set(subs, bySink = new WeakMap())
   let one = bySink.get(to)
-  if (!one) bySink.set(to, one = admission(subs.pace ?? (() => null), now))
+  if (!one) {
+    bySink.set(
+      to,
+      one = admission(subs.pace ?? (() => null), now ?? subs.now),
+    )
+  }
   return one
 }
 let peerOnly = (frame: Frame): frame is Frame & { relay: Bundle[] } =>
@@ -380,7 +385,8 @@ let dispatch = (
 /**
  * Connect a socket to a subscription registry: its messages become
  * subscriptions, and closing it drops them all. Returns the sink its frames
- * go to, which is also the key its subscriptions are held under.
+ * go to, which is also the key its subscriptions are held under. Without a
+ * `now`, relay pace reads the registry's ({@link Subs}).
  */
 export let attach = (
   subs: Subs,

@@ -328,14 +328,16 @@ export let keyed = (body: string): boolean => {
   }
 }
 
-let now = () => new Date(Date.now()).toISOString()
+// A write is stamped, and its receipts expire, on the clock of the Store that
+// keeps the log (graph.ts `Time`); unset, the runtime's.
+let stamp = (now: () => number) => new Date(now()).toISOString()
 
 /** Expire a bounded batch of ordinary receipts, never held user input.
  * A backlog is paid down by subsequent writes; an empty tail is checked at
  * most once a tenth of the resend window. An app write never owes the whole
  * directory's idle history. */
-let expire = (db: Driver) => {
-  let t = Date.now()
+let expire = (db: Driver, now: () => number) => {
+  let t = now()
   if (t - (swept.get(of(db)) ?? -Infinity) < WINDOW / 10) return
   let gone = new Date(t - WINDOW).toISOString()
   let rows = db.query({
@@ -362,15 +364,20 @@ let expire = (db: Driver) => {
 }
 
 /** Keep one write that cannot commit now; its place in the replay log. */
-export let keep = (db: Driver, req: Request, body: string): number => {
-  expire(db)
+export let keep = (
+  db: Driver,
+  req: Request,
+  body: string,
+  now: () => number = Date.now,
+): number => {
+  expire(db, now)
   idle.delete(of(db))
   let [row] = db.query({
     t: 'insert',
     into: LOG,
     cols: ['at', 'headers', 'body', KEY, 'generation'],
     rows: [[
-      val(now()),
+      val(stamp(now)),
       val(JSON.stringify([...req.headers])),
       val(body),
       val(req.headers.get(IDEMPOTENCY)),
@@ -482,10 +489,11 @@ export let received = (
   db: Driver,
   receipt: Receipt,
   answer: () => Bundle[],
+  now: () => number = Date.now,
 ) => {
   let key = receipt.request.headers.get(IDEMPOTENCY)
   if (!key) return
-  expire(db)
+  expire(db, now)
   let text = stringify(composed(answer()))
   let whole = fits(text)
   // Its sequence number is asked back only for an answer kept in parts: a
@@ -504,7 +512,7 @@ export let received = (
       'status',
     ],
     rows: [[
-      val(now()),
+      val(stamp(now)),
       val(JSON.stringify([...receipt.request.headers])),
       lit(''),
       val(key),
@@ -535,7 +543,12 @@ let chunks = (db: Driver, seq: number, text: string) => {
  * `apply()` returns after the transaction. An audited retry keeps its original
  * body and full answer in chunks. Ordinary large answers use chunks too,
  * so every resend receives the complete canonical answer. */
-export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
+export let landed = (
+  db: Driver,
+  seq: number,
+  answer: () => Bundle[],
+  now: () => number = Date.now,
+) => {
   let [row] = db.query(select({
     cols: [col(KEY), col('audit')],
     from: table(LOG),
@@ -550,7 +563,7 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
     table: LOG,
     set: {
       state: lit('applied'),
-      ...(row.audit == 1 ? {} : { at: val(now()), body: lit('') }),
+      ...(row.audit == 1 ? {} : { at: val(stamp(now)), body: lit('') }),
       answer: val(row.audit == 1 || !fits(text) ? null : text),
       status: lit(200),
     },

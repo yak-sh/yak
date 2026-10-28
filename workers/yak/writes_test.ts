@@ -1,13 +1,12 @@
-import { backoff } from '@yaks/durable-object'
 // The write log (writes.ts) over one store's storage, woken as new
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, sha256 } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
-import { Store } from './graph.ts'
+import { Store, type Time } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
 import { db, keep, named, state } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
@@ -26,11 +25,12 @@ import {
 
 let NAME = 'ada/notes'
 
-// One object's storage, and a way to wake it again over the same rows.
-let object = () => {
+// One object's storage, and a way to wake it again over the same rows, on
+// `time` when the case moves its own.
+let object = (time?: Time) => {
   let ctx = state()
-  let store = new Store(ctx)
-  let wake = () => store = new Store(ctx)
+  let store = new Store(ctx, {}, undefined, time)
+  let wake = () => store = new Store(ctx, {}, undefined, time)
   let fetch = (r: Request) => store.fetch(r)
   let door = () => metaOf(doorOf(fetch, NAME))
   let apply = (b: unknown[]) => door().apply(b as never, KERNEL)
@@ -261,27 +261,20 @@ test('an alarm replay during async readiness answers the waiting writer', async 
   assertEquals(o.writes(), 0)
 })
 
-// These cases check eviction/replay, not randomized wall-clock backoff.
-let withoutRetryDelay = async (run: () => Promise<void>) => {
-  let wait = backoff.wait
-  backoff.wait = () => Promise.resolve()
-  try {
-    await run()
-  } finally {
-    backoff.wait = wait
-  }
-}
+// These cases check eviction/replay, not randomized wall-clock backoff: a
+// door to a store that resets, whose resends wait out no pause.
+let resent = (o: ReturnType<typeof object>) =>
+  storeOf(resetting(o), NAME, undefined, () => Promise.resolve())
 
-test('a batch sent again after a reset lost its answer is applied once', () =>
-  withoutRetryDelay(async () => {
-    let o = object()
-    let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
-      [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
-      KERNEL,
-    )
-    let rows = await o.query('.doc.title=once')
-    assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
-  }))
+test('a batch sent again after a reset lost its answer is applied once', async () => {
+  let o = object()
+  let applied = await metaOf(resent(o)).apply(
+    [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
+    KERNEL,
+  )
+  let rows = await o.query('.doc.title=once')
+  assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
+})
 
 test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
   let o = object()
@@ -607,40 +600,39 @@ test('recent write inspection includes committed outcomes without credentials', 
   assertEquals(await (await door('/writes', {}, KERNEL)).json(), [])
 })
 
-test('a live keyed write commits its receipt without pending or running stages', () =>
-  withoutRetryDelay(async () => {
-    let o = object()
-    await o.query('.doc')
-    let sql = o.ctx.storage.sql
-    let exec = sql.exec
-    let stages: string[] = []
-    sql.exec = (query, ...bindings) => {
-      if (
-        /^insert into "yak_writes"/i.test(query) ||
-        (/^update "yak_writes"/i.test(query) &&
-          query.includes('set "state" = \'running\''))
-      ) {
-        stages.push(query)
-      }
-      return exec.call(sql, query, ...bindings)
+test('a live keyed write commits its receipt without pending or running stages', async () => {
+  let o = object()
+  await o.query('.doc')
+  let sql = o.ctx.storage.sql
+  let exec = sql.exec
+  let stages: string[] = []
+  sql.exec = (query, ...bindings) => {
+    if (
+      /^insert into "yak_writes"/i.test(query) ||
+      (/^update "yak_writes"/i.test(query) &&
+        query.includes('set "state" = \'running\''))
+    ) {
+      stages.push(query)
     }
-    try {
-      let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
-        [{ entity: { eid: '$n' }, doc: { title: 'receipt once' } }],
-        KERNEL,
-      )
-      assertEquals(
-        (await o.query('.doc.title="receipt once"')).map((b) => b.entity.eid),
-        [minted(applied).$n],
-      )
-      assertEquals(stages.length, 1)
-      assert(stages[0].includes("'applied'"))
-      assertEquals(o.writes('applied'), 1)
-      assertEquals(o.writes('pending'), 0)
-    } finally {
-      sql.exec = exec
-    }
-  }))
+    return exec.call(sql, query, ...bindings)
+  }
+  try {
+    let applied = await metaOf(resent(o)).apply(
+      [{ entity: { eid: '$n' }, doc: { title: 'receipt once' } }],
+      KERNEL,
+    )
+    assertEquals(
+      (await o.query('.doc.title="receipt once"')).map((b) => b.entity.eid),
+      [minted(applied).$n],
+    )
+    assertEquals(stages.length, 1)
+    assert(stages[0].includes("'applied'"))
+    assertEquals(o.writes('applied'), 1)
+    assertEquals(o.writes('pending'), 0)
+  } finally {
+    sql.exec = exec
+  }
+})
 
 test('receipt insertion failure rolls back the mutation and keeps replayable input', async () => {
   let o = object()
@@ -724,63 +716,61 @@ test('an ordinary receipt expires with its parts once its window has passed', as
   let o = object()
   await o.query('.doc')
   let d = db(o.ctx)
+  let time = clock(Date.now())
   let receipt = (key: string, answer: Bundle[]) =>
     received(d, {
       request: new Request('http://store/apply', {
         method: 'POST',
         headers: { [IDEMPOTENCY]: key },
       }),
-    }, () => answer)
-  let now = Date.now, at = now()
-  Date.now = () => at
-  try {
-    receipt('large', [titled('n', '🦊'.repeat(2_000_000))])
-    receipt('small', [titled('s', 'small')])
-    receipt('Outbox:ordinary', [])
-    let large = [titled('durable-large', 'x'.repeat(ROOM))]
-    receipt('outbox:large', large)
-    receipt('outbox:small', [titled('durable-small', 'kept')])
-    // Completing a held intent must retain its receipt just like a live one.
-    let seq = keepWrite(
-      d,
-      new Request('http://store/apply', {
-        method: 'POST',
-        headers: { [IDEMPOTENCY]: 'outbox:held' },
-      }),
-      '[]',
-    )
-    landed(d, seq, () => [])
-    let backlog = Array.from({ length: 40 }, (_, i) => `expired-${i}`)
-    for (let key of backlog) receipt(key, [titled(key, 'small')])
-    at += 5 * 60_000
-    receipt('later', [titled('l', 'later')])
-    assert(first(d, 'large') && first(d, 'small'))
-    at += 6 * 60_000
-    receipt('last', [titled('z', 'last')])
-    // Further writes pay down the backlog without another clock advance.
-    // None of the recent receipts or held input expires with it.
-    for (let i = 0; i < 4; i++) receipt(`drain-${i}`, [])
-    assertEquals([first(d, 'large'), first(d, 'small')], [null, null])
-    assert(backlog.every((key) => first(d, key) == null))
-    assertEquals(first(d, 'Outbox:ordinary'), null)
-    assertEquals(JSON.parse(first(d, 'outbox:large')!.answer), large)
-    assertEquals(JSON.parse(first(d, 'outbox:small')!.answer), [
-      titled('durable-small', 'kept'),
-    ])
-    assertEquals(JSON.parse(first(d, 'outbox:held')!.answer), [])
-    assert(
-      scan(d, 'yak_write_answers').every((r) =>
-        r.seq == first(d, 'outbox:large')!.seq
-      ),
-    )
-    assert(first(d, 'later') && first(d, 'last'))
-  } finally {
-    Date.now = now
-  }
+    }, () =>
+      answer, time.now)
+  receipt('large', [titled('n', '🦊'.repeat(2_000_000))])
+  receipt('small', [titled('s', 'small')])
+  receipt('Outbox:ordinary', [])
+  let large = [titled('durable-large', 'x'.repeat(ROOM))]
+  receipt('outbox:large', large)
+  receipt('outbox:small', [titled('durable-small', 'kept')])
+  // Completing a held intent must retain its receipt just like a live one.
+  let seq = keepWrite(
+    d,
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { [IDEMPOTENCY]: 'outbox:held' },
+    }),
+    '[]',
+    time.now,
+  )
+  landed(d, seq, () => [], time.now)
+  let backlog = Array.from({ length: 40 }, (_, i) => `expired-${i}`)
+  for (let key of backlog) receipt(key, [titled(key, 'small')])
+  await time.advance(5 * 60_000)
+  receipt('later', [titled('l', 'later')])
+  assert(first(d, 'large') && first(d, 'small'))
+  await time.advance(6 * 60_000)
+  receipt('last', [titled('z', 'last')])
+  // Further writes pay down the backlog without another clock advance.
+  // None of the recent receipts or held input expires with it.
+  for (let i = 0; i < 4; i++) receipt(`drain-${i}`, [])
+  assertEquals([first(d, 'large'), first(d, 'small')], [null, null])
+  assert(backlog.every((key) => first(d, key) == null))
+  assertEquals(first(d, 'Outbox:ordinary'), null)
+  assertEquals(JSON.parse(first(d, 'outbox:large')!.answer), large)
+  assertEquals(JSON.parse(first(d, 'outbox:small')!.answer), [
+    titled('durable-small', 'kept'),
+  ])
+  assertEquals(JSON.parse(first(d, 'outbox:held')!.answer), [])
+  assert(
+    scan(d, 'yak_write_answers').every((r) =>
+      r.seq == first(d, 'outbox:large')!.seq
+    ),
+  )
+  assert(first(d, 'later') && first(d, 'last'))
 })
 
 // Boot outside the cases: these checks time the write door, not Store setup.
-let durableReplay = object()
+let replayTime = clock(Date.now())
+let durableReplay = object({ now: replayTime.now })
 await durableReplay.apply([titled('edited', 'before')])
 let offlineIntent = await (async () => {
   let o = durableReplay
@@ -796,38 +786,37 @@ let offlineIntent = await (async () => {
         body,
       }),
     )
-  let now = Date.now, at = now()
-  Date.now = () => at
-  try {
-    let accepted = await send()
-    assertEquals(accepted.status, 200)
-    let answer = await accepted.text()
-    await o.apply([titled('edited', 'changed since acceptance')])
-    at += 6 * 60 * 60_000
-    // An unrelated write runs expiry before the client resends; a new Store
-    // also proves this does not depend on an incarnation's in-memory state.
-    received(db(o.ctx), {
+  let accepted = await send()
+  assertEquals(accepted.status, 200)
+  let answer = await accepted.text()
+  await o.apply([titled('edited', 'changed since acceptance')])
+  await replayTime.advance(6 * 60 * 60_000)
+  // An unrelated write runs expiry before the client resends; a new Store
+  // also proves this does not depend on an incarnation's in-memory state.
+  received(
+    db(o.ctx),
+    {
       request: new Request('http://store/apply', {
         headers: { [IDEMPOTENCY]: 'expiry-trigger' },
       }),
-    }, () => [])
-    o.wake()
-    await o.query('.doc')
-    let { graph } = await o.boot()
-    let alias = JSON.parse(answer).find((b: Bundle) => b.$alias == '$new')
-    let query = parse('.doc.title="offline intent"')
-    let request = fingerprinted(
-      new Request('http://store/apply', {
-        method: 'POST',
-        headers: { ...KERNEL, [IDEMPOTENCY]: 'outbox:replay' },
-        body,
-      }),
+    },
+    () => [],
+    replayTime.now,
+  )
+  o.wake()
+  await o.query('.doc')
+  let { graph } = await o.boot()
+  let alias = JSON.parse(answer).find((b: Bundle) => b.$alias == '$new')
+  let query = parse('.doc.title="offline intent"')
+  let request = fingerprinted(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { ...KERNEL, [IDEMPOTENCY]: 'outbox:replay' },
       body,
-    )
-    return { graph, request, log: db(o.ctx), answer, alias, query }
-  } finally {
-    Date.now = now
-  }
+    }),
+    body,
+  )
+  return { graph, request, log: db(o.ctx), answer, alias, query }
 })()
 
 test('an outbox intent replays its minted alias and guarded answer hours later', async () => {

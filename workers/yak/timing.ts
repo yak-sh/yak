@@ -6,10 +6,11 @@
 // until this existed the only thing anyone could see was the second the whole
 // chain took. A stage that grew is now visible in a curl.
 //
-// The clock is `Date.now()`, which in a Worker advances only when I/O
-// completes — so a mark measures waiting and reads zero for pure compute.
-// That is exactly the thing being measured here; a stage that is slow because
-// of CPU belongs in a profile, not a header.
+// The clock is `Date.now()` unless a caller hands the stopwatch its own, and
+// in a Worker it advances only when I/O completes — so a mark measures
+// waiting and reads zero for pure compute. That is exactly the thing being
+// measured here; a stage that is slow because of CPU belongs in a profile, not
+// a header.
 //
 // Three entries carry a count in `dur` rather than milliseconds: `hops`, the
 // round trips this request made to a store (door.ts), `stmts`, the statements
@@ -34,22 +35,22 @@ import { counts, type Tally, tallying } from './lib/hops.ts'
 
 export type Clock = ReturnType<typeof clock>
 
-export let clock = () => {
+export let clock = (now: () => number = Date.now) => {
   let marks: string[] = []
   let sums = new Map<string, number>()
   let tally: Tally = new Map()
-  let born = Date.now()
+  let born = now()
   let mark = (name: string, ms: number, desc?: string | null) =>
     marks.push(`${name};dur=${ms}${desc ? `;desc=${desc}` : ''}`)
   return {
     // One stage that happens many times — a put per file — summed under one
     // name, so a twenty-file write reads as one `put` and not twenty.
     sum: (name: string) => async <T>(work: () => Promise<T>): Promise<T> => {
-      let at = Date.now()
+      let at = now()
       try {
         return await work()
       } finally {
-        sums.set(name, (sums.get(name) ?? 0) + Date.now() - at)
+        sums.set(name, (sums.get(name) ?? 0) + now() - at)
       }
     },
     // One stage: whatever it answers is answered on, and the time it took is
@@ -65,12 +66,12 @@ export let clock = () => {
       work: () => Promise<T>,
       said?: (out: T) => string | null,
     ): Promise<T> => {
-      let at = Date.now()
+      let at = now()
       let out
       try {
         return out = await work()
       } finally {
-        mark(name, Date.now() - at, out === undefined ? null : said?.(out))
+        mark(name, now() - at, out === undefined ? null : said?.(out))
       }
     },
     // Timings from a trusted internal service, already named for that service.
@@ -80,8 +81,8 @@ export let clock = () => {
     },
     // A stage that is not one call: `since()` hands back the marker.
     since: () => {
-      let at = Date.now()
-      return (name: string) => mark(name, Date.now() - at)
+      let at = now()
+      return (name: string) => mark(name, now() - at)
     },
     // The request's round trips, counted wherever they are made rather than
     // threaded down to them (hops.ts): run the whole request in here and
@@ -100,7 +101,7 @@ export let clock = () => {
           [name, ms],
         ) => `${name};dur=${ms}`),
         `r2;dur=${r2}`,
-        `total;dur=${Date.now() - born}`,
+        `total;dur=${now() - born}`,
       ].map((mark) => mark.replace(/(^|, )(\w+);/g, `$1${prefix}$2;`)).join(
         ', ',
       )

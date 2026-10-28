@@ -1,7 +1,7 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
 import { tick, until } from './testing.ts'
-import { test as preparedTest } from '@yaks/testing'
+import { clock, test as preparedTest } from '@yaks/testing'
 import { resetArchetypesForTest } from './live_archetypes.ts'
 
 // Each case owns a clean tab. Leave its client lazy: pure cache derivations
@@ -76,6 +76,7 @@ import {
   subscriptionState,
   topZ,
   unsubscribe,
+  useClock,
   useRoute,
   useSocket,
 } from './live.ts'
@@ -91,7 +92,6 @@ import {
   assertStrictEquals,
   assertThrows,
 } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 
 // What a mounted view holds, each held by a component of its own (owned).
 let holding = new Map<Pred[], (() => void)[]>()
@@ -638,17 +638,17 @@ test('agreement diagnostics are inert until explicitly enabled', () => {
       filed: { eid: 'task', priority: 1 },
     },
   }
+  let time = clock()
   let scheduled = 0
-  let timer = globalThis.setTimeout
-  globalThis.setTimeout = ((..._args: Parameters<typeof setTimeout>) => {
-    scheduled++
-    return 0
-  }) as typeof setTimeout
+  let prior = useClock({
+    ...time,
+    after: (ms, callback) => (scheduled++, time.after(ms, callback)),
+  })
   try {
     assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['task'])
     assertAgree('board:board', '.task.status=open', ['task'], [])
   } finally {
-    globalThis.setTimeout = timer
+    useClock(prior)
   }
   assertEquals(scheduled, 0)
   assertEquals(subscriptionChecks(), undefined)
@@ -2644,7 +2644,8 @@ test('server-resolve: a refused page read of an id that names something is a fai
 test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
   clearResolved()
   cache.value = {}
-  using time = new FakeTime()
+  let time = clock()
+  let prior = useClock(time)
   let eid = 'cccccccc-0000-4000-8000-000000000007'
   let asked: Ask | undefined
   let f = stubResolve((_id, a) => {
@@ -2659,18 +2660,18 @@ test('server-resolve: a hanging server never stalls nav, never storms, and its l
     // A minute of reads while it hangs never launches a second request.
     for (let i = 0; i < 6; i++) {
       serverEid('T-7')
-      await time.tickAsync(10_000)
+      await time.advance(10_000)
     }
     assertEquals([f.calls.length, resolvingId('T-7')], [1, true])
     // However late the answer comes, it lands.
-    f.wire.say({
+    await f.wire.say({
       id: asked!.id,
       bundles: [{ entity: { eid, num: 7 }, task: {} }],
     })
-    await time.tickAsync(0)
     assertEquals([serverEid('T-7'), resolvingId('T-7')], [eid, false])
   } finally {
     f.restore()
+    useClock(prior)
   }
 })
 
@@ -2995,7 +2996,8 @@ test('a lost socket reconnects in place; the painted cache survives', async () =
   cache.value = {
     [D]: { entity: { eid: D, num: 1 }, doc: { eid: D, title: 't', body: 'b' } },
   }
-  using time = new FakeTime()
+  let time = clock()
+  let prior = useClock(time)
   let wire = host()
   let asks = () =>
     wire.asked().filter((a) => a.subscribe.startsWith(`.entity.eid=${D}`))
@@ -3003,20 +3005,21 @@ test('a lost socket reconnects in place; the painted cache survives', async () =
   let off = () => {}
   try {
     off = routeSub(D, ROW)
-    await time.runMicrotasks()
+    await tick()
     assertEquals([wire.dials(), asks()], [1, 1])
     wire.drop()
     // Down: nothing painted changes.
-    await time.tickAsync(100)
+    await time.advance(100)
     assertEquals(ent(D).doc?.title, 't')
     // Back: one new socket, the same rows, and the line asked again on it.
-    await time.tickAsync(1_000)
-    await time.runMicrotasks()
+    await time.advance(1_000)
+    await tick()
     assertEquals([wire.dials(), asks()], [2, 2])
     assertEquals(ent(D).doc?.title, 't')
   } finally {
     off()
     wire.free()
+    useClock(prior)
   }
 })
 

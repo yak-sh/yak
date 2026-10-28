@@ -1,16 +1,18 @@
 // A write waits for storage without repeating the work that produced it.
 // Only storage's explicit assurance that nothing committed permits a retry.
 
-import { backoff, sleep } from '@yaks/fp'
+import { backoff, type Clock, sleep, system } from '@yaks/fp'
 
 let retryable = (e: unknown): boolean =>
   !!e && typeof e == 'object' && 'retryable' in e && e.retryable === true
 
 /** Retry a write only when storage certifies that nothing committed. Report
- * the first refusal, then wait with backoff until it can be persisted. */
+ * the first refusal, then wait with backoff, on `clock`, until it can be
+ * persisted. */
 export let persist = async <T>(
   write: () => T | Promise<T>,
   report: (e: unknown) => unknown,
+  clock: Clock = system,
 ): Promise<T> => {
   for (let attempt = 1;; attempt++) {
     try {
@@ -18,7 +20,7 @@ export let persist = async <T>(
     } catch (e) {
       if (!retryable(e)) throw e
       if (attempt == 1) await report(e)
-      await sleep(backoff(attempt))
+      await sleep(backoff(attempt), undefined, clock)
     }
   }
 }

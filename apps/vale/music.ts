@@ -9,6 +9,7 @@ import {
   track,
 } from './music_catalog.ts'
 import type { Vec3 } from './play.ts'
+import { type Clock, system } from '@yaks/fp'
 
 let LOUD = 0.28
 let QUIET = 8
@@ -25,14 +26,15 @@ type Land = {
   next: string | null
   loading: boolean
   source: AudioBufferSourceNode | null
-  wait: ReturnType<typeof setTimeout> | null
+  wait: (() => void) | null
   target: number
 }
 
 let ctx: AudioContext | null = null
 let out: AudioNode | null = null
+let clock: Clock = system
 let current: Land | null = null
-let change: ReturnType<typeof setTimeout> | null = null
+let change: (() => void) | null = null
 let ducked = false
 let at: Vec3 | null = null
 let unavailable = new Set<string>()
@@ -90,7 +92,7 @@ let song = async (land: Land) => {
       land.source = null
       let index = songs.findIndex((song) => song.id == selected.id)
       land.next = songs[(index + 1) % songs.length].id
-      land.wait = setTimeout(() => void song(land), QUIET * 1000)
+      land.wait = clock.after(QUIET * 1000, () => void song(land))
     }
     source.start()
   } catch (error) {
@@ -136,7 +138,7 @@ let fade = (land: Land, to: number) => {
 
 let leave = (land: Land) => {
   if (current == land) current = null
-  if (land.wait != null) clearTimeout(land.wait)
+  land.wait?.()
   if (land.source) {
     land.source.onended = null
     land.source.stop()
@@ -162,7 +164,7 @@ let update = (pos: Vec3) => {
   let b = blend(pos[0], pos[2])
   let id = heard(b, current?.id ?? null)
   if (id == current?.id) {
-    if (change != null) clearTimeout(change)
+    change?.()
     change = null
     if (current) fade(current, (muted ? 0 : LOUD) * (ducked ? 0.35 : 1))
     return
@@ -170,15 +172,15 @@ let update = (pos: Vec3) => {
   if (current) {
     if (!current.source) {
       leave(current)
-      if (change != null) clearTimeout(change)
+      change?.()
       change = null
     } else if (change == null) {
       fade(current, 0)
-      change = setTimeout(() => {
+      change = clock.after(FADE * 1000, () => {
         if (current) leave(current)
         change = null
         if (at) update(at)
-      }, FADE * 1000)
+      })
     }
   }
   if (!current && id) {
@@ -203,10 +205,12 @@ export let music = {
     ducked = voice
     if (at) update(at)
   },
-  start: (c: AudioContext, into: AudioNode) => {
+  /** Play into `into` on `c`, timing songs and fades on `time`. */
+  start: (c: AudioContext, into: AudioNode, time: Clock = system) => {
     if (ctx) return
     ctx = c
     out = into
+    clock = time
     watch()
     if (at) update(at)
   },

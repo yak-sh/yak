@@ -21,6 +21,7 @@ import type { Limiter } from './rate.ts'
 import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
+import type { Clock } from '@yaks/fp'
 
 // The door's own word, said again here: every part of this kernel names its
 // bindings out of env.ts, and where a request may be handed is the door's to
@@ -61,6 +62,10 @@ export type Env = {
   APEX?: string
   // Local loopback probes may supply x-yak-host; never set on a deploy.
   LOCAL_DEV?: string
+  // The time the kernel keeps and its waits (@yaks/fp `Clock`); unset, the
+  // runtime's. Only a test sets it, so it moves its own kernel's time instead
+  // of the runtime's, which every test in the process shares.
+  CLOCK?: Clock
   STORE: Namespace
   // The directory's store answered in-process, set only by the object that IS
   // the directory for the jobs it runs (graph.ts, meta.ts `meta`). Absent, the

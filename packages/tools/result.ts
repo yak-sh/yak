@@ -8,6 +8,13 @@ import { effectsIn, type Vocab } from '@yaks/vocab'
 import { toolsDoc } from './vocab.ts'
 import { executionState } from './state.ts'
 import { valueIn } from './value.ts'
+import { type Clock, system } from '@yaks/fp'
+
+/** A runner's clock unless it is given one: the runtime's timers, and
+ * `performance.now`, which the wall clock's adjustments never move, for how
+ * long a call took. */
+export let measuring: Clock = { ...system, now: () => performance.now() }
+
 /** The two effects this package declares, as written in the vocabulary: the
  * call that is due now, and the one that is due once its wake has fired —
  * each a query the runner also asks on its own, for what a crash left. */

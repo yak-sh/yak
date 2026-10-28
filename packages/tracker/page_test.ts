@@ -2,7 +2,7 @@
 // classic script over a stand-in window, a resource error is fired at its
 // capture listener or a fetch is made through its wrapper, and what it asked
 // the server and what it sent to the report door are read.
-import { equal, test } from '@yaks/testing'
+import { clock, equal, test } from '@yaks/testing'
 
 let at = 'https://ada.yaks.app/cookbook/'
 let file = `${at}api/assets/80230632-aacf-41d8-8e97-f2477f05e38c/styles.css?v=5`
@@ -32,6 +32,7 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
+  let time = clock()
   let server = (url: string, init?: RequestInit) => {
     if (url.endsWith('/api/report')) {
       sent.push(init?.body as Blob)
@@ -71,9 +72,10 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
     addEventListener: (type: string, on: (e: unknown) => unknown) =>
       heard.set(type, on),
     removeEventListener: () => {},
-    // The soft state's wait, which these cases leave undrawn.
-    setTimeout: () => 0,
-    clearTimeout: () => {},
+    // The page's timers run on a clock of its own, which these cases never
+    // advance: the soft state's wait is left undrawn.
+    setTimeout: (f: () => void, ms = 0) => time.after(ms, f),
+    clearTimeout: (cancel?: () => void) => cancel?.(),
   }
   reporter(...globals.map((name) => scope[name]))
   let bodies = () =>

@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
-import { backoff, evicted } from '@yaks/durable-object'
+import { evicted } from '@yaks/durable-object'
 import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
@@ -38,16 +38,9 @@ let restartable = () => {
   }
   return { restarts, abort }
 }
-// Retry decisions are exercised here, not the runtime's randomized pause.
-let retrying = async (run: () => Promise<void>) => {
-  let wait = backoff.wait
-  backoff.wait = () => Promise.resolve()
-  try {
-    await run()
-  } finally {
-    backoff.wait = wait
-  }
-}
+// Retry decisions are exercised here, not the runtime's randomized pause: a
+// resend waits out none.
+let unpaused = () => Promise.resolve()
 let object = () => {
   let r = restartable()
   return { ...r, ctx: { storage: kvStorage(), abort: r.abort } }
@@ -108,49 +101,49 @@ test('an object says the version it runs and the deploy it restarted for', async
   })
 })
 
-test('a call that reaches a store on the old deploy is answered by the new one', () =>
-  retrying(async () => {
-    learn(B)
-    let o = object()
-    let old = new Store(o.ctx as never, { CF_VERSION_METADATA: A })
-    // The runtime starts the next incarnation on the new code, which answers.
-    let next = {
-      fetch: () => Promise.resolve(new Response('', { status: 404 })),
-    }
-    let ns = {
-      idFromName: (name: string) => name,
-      get: () => o.restarts.length ? next : old,
-    }
-    let answer = await storeOf(ns, 'ada/cookbook')('/restore')
-    assertEquals(answer.status, 404)
-    assertEquals(o.restarts.length, 1)
-  }))
+test('a call that reaches a store on the old deploy is answered by the new one', async () => {
+  learn(B)
+  let o = object()
+  let old = new Store(o.ctx as never, { CF_VERSION_METADATA: A })
+  // The runtime starts the next incarnation on the new code, which answers.
+  let next = {
+    fetch: () => Promise.resolve(new Response('', { status: 404 })),
+  }
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => o.restarts.length ? next : old,
+  }
+  let answer = await storeOf(ns, 'ada/cookbook', undefined, unpaused)(
+    '/restore',
+  )
+  assertEquals(answer.status, 404)
+  assertEquals(o.restarts.length, 1)
+})
 
 // The Wire and the Builder are reached through `fetchOf`, which stamps the
 // caller's deploy the way a store's door does (T-123489). Each is one
 // incarnation here.
 let through = (object: { fetch(req: Request): Promise<Response> }) =>
-  fetchOf({ idFromName: (n: string) => n, get: () => object }, 'ada')
+  fetchOf({ idFromName: (n: string) => n, get: () => object }, 'ada', unpaused)
 
-test('a Wire on an older deploy restarts once for a newer caller', () =>
-  retrying(async () => {
-    learn(B)
-    let r = restartable()
-    let wire = new Wire({ storage: kvStorage(), abort: r.abort }, {
-      CF_VERSION_METADATA: A,
+test('a Wire on an older deploy restarts once for a newer caller', async () => {
+  learn(B)
+  let r = restartable()
+  let wire = new Wire({ storage: kvStorage(), abort: r.abort }, {
+    CF_VERSION_METADATA: A,
+  })
+  let roster = () =>
+    new Request('http://wire/roster', {
+      method: 'POST',
+      body: JSON.stringify({ session: 's', version: 'v', names: [] }),
     })
-    let roster = () =>
-      new Request('http://wire/roster', {
-        method: 'POST',
-        body: JSON.stringify({ session: 's', version: 'v', names: [] }),
-      })
-    // The request in flight fails in the runtime's own words, and the caller's
-    // retry is served: started again on the same older code, the object is
-    // where the runtime means it to be.
-    assertEquals((await through(wire)(roster)).status, 200)
-    assertEquals(r.restarts.length, 1)
-    assert(evicted(new Error(r.restarts[0])))
-  }))
+  // The request in flight fails in the runtime's own words, and the caller's
+  // retry is served: started again on the same older code, the object is
+  // where the runtime means it to be.
+  assertEquals((await through(wire)(roster)).status, 200)
+  assertEquals(r.restarts.length, 1)
+  assert(evicted(new Error(r.restarts[0])))
+})
 
 // Each behavior gets its own incarnation; constructing it is fixture work.
 let builder = () => {
@@ -176,9 +169,8 @@ test('a watched Builder keeps its code for a newer caller', async () => {
   assertEquals(watched.restarts, [])
 })
 
-test('an idle Builder restarts for a newer caller', () =>
-  retrying(async () => {
-    learn(B)
-    assertEquals((await through(idle.instance)(ask)).status, 404)
-    assertEquals(idle.restarts.length, 1)
-  }))
+test('an idle Builder restarts for a newer caller', async () => {
+  learn(B)
+  assertEquals((await through(idle.instance)(ask)).status, 404)
+  assertEquals(idle.restarts.length, 1)
+})

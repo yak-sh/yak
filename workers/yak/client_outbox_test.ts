@@ -2,7 +2,7 @@
 // outbox. The package tests own disk recovery and ordering.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { store } from './public/client.js'
 
 let receipt = {
@@ -35,20 +35,9 @@ let base = 'https://outbox-client.test/notes/api/'
 
 let retriesPreserveReceipt = await (async () => {
   let calls: { key: string; body: string }[] = []
-  let alarms: (() => void)[] = []
-  let nativeTimer = globalThis.setTimeout
-  let runtimeTick = Promise.withResolvers<void>()
-  using _timers = stub(
-    globalThis,
-    'setTimeout',
-    ((fn: () => void, ms?: number, ...args: unknown[]) => {
-      // Only the outbox's retry belongs to this fixture. The shared kernel
-      // may yield an alarm/mover with a zero-delay timer while it runs.
-      if (ms !== 1000) return nativeTimer(fn, ms, ...args)
-      alarms.push(fn)
-      return 0
-    }) as typeof setTimeout,
-  )
+  // The store's own clock: the outbox waits on it after each answer that was
+  // no receipt.
+  let time = clock()
   let response = json(
     { ok: true, pending: true, aliases: {}, bundles: [] },
     202,
@@ -57,34 +46,31 @@ let retriesPreserveReceipt = await (async () => {
     calls.push({ key, body })
     return response.clone()
   })
-  let client = store(base)
+  let client = store(base, { clock: time })
   let changed = 0
   let off = client.outbox.onPending(() => changed++)
   try {
     await client.outbox.ready
-    // The kernel can schedule its own zero-delay work while a request fails.
-    setTimeout(() => runtimeTick.resolve(), 0)
     await assertRejects(() => client.apply(payload), Error, 'unsaved')
     let [pending] = client.outbox.pending()
     assertEquals(pending.state, 'pending')
     assertEquals(pending.sent, { entities: [payload] })
     assert(pending.key.startsWith('outbox:'))
     response = json({ bundles: [] }) // An incomplete 200 is no acceptance either.
-    await settled(() => alarms.length == 1)
-    alarms.shift()!()
-    await settled(() => alarms.length == 1)
+    await settled(() => time.pending() == 1)
+    await time.advance(1000)
+    await settled(() => time.pending() == 1)
     assertEquals(calls.length, 2)
     assertEquals(client.outbox.pending().length, 1)
     response = json(receipt)
     // Unknown has already rejected its caller: the saved receipt removes the
     // retained intent, not a fabricated success for that earlier caller.
-    alarms.shift()!()
+    await time.advance(1000)
     await settled(() => client.outbox.pending().length == 0)
     assertEquals(calls.length, 3)
     assert(calls.every((c) => c.key == calls[0].key && c.body == calls[0].body))
     assert(changed >= 2)
     assertEquals(await client.apply(payload), receipt)
-    await runtimeTick.promise
   } finally {
     off()
     client.outbox.close()

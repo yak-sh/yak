@@ -6,10 +6,8 @@
 // it back"); a dispatch namespace has no local implementation, so the worker's
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { stub } from '@std/testing/mock'
-import { backoff } from '@yaks/durable-object'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import { releaseFiles, staged } from './release.ts'
@@ -555,12 +553,14 @@ let restartFixture = async (answer: () => Response) => {
   let { env } = platform
   let store = env.STORE as unknown as Namespace
   let once = false
+  let deploys = 0
   let STORE: Namespace = {
     idFromName: (name) => name,
     get: (name) => ({
       fetch: async (req: Request) => {
         let deploy = name == PLATFORM_STORE &&
           (await req.clone().text()).includes('"deploy"')
+        if (deploy) deploys++
         let r = await store.get(name).fetch(req)
         if (!deploy || once) return r
         once = true
@@ -568,7 +568,9 @@ let restartFixture = async (answer: () => Response) => {
       },
     }),
   }
-  let restarting = { ...env, STORE } as Env
+  // The directory's own clock, which its resend waits out a pause on.
+  let time = clock()
+  let restarting = { ...env, STORE, CLOCK: time } as Env
   let dir = dirPart.directory(
     { fetch: (r: Request) => dirPart.fetch(r, restarting) },
     true,
@@ -593,6 +595,15 @@ let restartFixture = async (answer: () => Response) => {
     space,
     app,
     who: { person: ada, role: 'owner' } as Who,
+    deploys: () => deploys,
+    // `write`, with the directory's clock moved on a pause at a time until it
+    // settles.
+    settled: async <T>(write: Promise<T>) => {
+      let done = false
+      write.then(() => done = true, () => done = true)
+      while (!done) await time.advance(100)
+      return write
+    },
   }
 }
 
@@ -600,16 +611,11 @@ for (let [how, answer] of Object.entries(lost)) {
   let fixture = await restartFixture(answer)
   test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
     await using _platform = fixture.platform
-    // Retry timing is not this test's subject; keep the retry, not its jitter.
-    let paused: number[] = []
-    using _wait = stub(backoff, 'wait', (ms) => {
-      paused.push(ms)
-      return Promise.resolve()
-    })
-    let { dir, space, app, who } = fixture
-    await record(dir, who, app, 1, { a: 'b' }, '')
+    let { dir, space, app, who, deploys, settled } = fixture
+    await settled(record(dir, who, app, 1, { a: 'b' }, ''))
     assertEquals((await dir.deploys(app)).map((v) => v.version), [1])
     assertEquals((await dir.app(space, 'recipes'))?.version, 1)
-    assertEquals(paused, backoff.pauses.slice(0, 1))
+    // Sent again once, after the first pause.
+    assertEquals(deploys(), 2)
   })
 }

@@ -322,7 +322,14 @@ export let sockets = (
   let owed = new Map<string, Record<string, Ask>>()
   let reading = (held: Held | null): ReadOpts | undefined =>
     opts.read ? opts.read(held?.read, held?.writer) : held?.read
-  let defer = opts.defer ?? ((write) => void setTimeout(write, SETTLE))
+  // The registry's timers (@yaks/api `Subs`), unset the runtime's: read as a
+  // timer is set, so a clock probe never touches the registry.
+  let timer = (fn: () => void, ms: number) => {
+    if (subs.timer) return subs.timer(fn, ms)
+    let t = setTimeout(fn, ms)
+    return () => clearTimeout(t)
+  }
+  let defer = opts.defer ?? ((write) => void timer(write, SETTLE))
   let pay = () => {
     let due = [...owed]
     owed.clear()
@@ -524,7 +531,7 @@ export let sockets = (
         })
       },
     }
-    let fresh = queue(transport, undefined, () => open(ws), {
+    let fresh = queue(transport, timer, () => open(ws), {
       owed: held?.owed,
       fits: (frames) => {
         let held = ws.deserializeAttachment() as Held | null

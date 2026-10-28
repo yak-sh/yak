@@ -1180,7 +1180,8 @@ This example uses a zero grace period and an explicit watch check because it
 controls both sides, so it announces and applies where `run()` would also wait
 out the grace. Cooperating applications use the same maximum polling interval:
 `run()` defaults to one second plus a 100 ms margin, and `watchMigrations()`
-defaults to one second.
+defaults to one second. `watchMigrations(control, changed, intervalMs, clock)`
+polls on the @yaks/fp `Clock` it is given, the runtime's by default.
 
 ```ts
 import { open } from '@yaks/sqlite/db'

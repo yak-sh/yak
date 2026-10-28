@@ -1,12 +1,11 @@
 // Several pages share a level through the same store and socket doors used
 // by the game. One elected page must move several creatures without losing
 // its own hero or interrupting a hunt.
-import { equal, test } from '@yaks/testing'
+import { type Clock, clock, equal, test } from '@yaks/testing'
 import { assert } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { api } from '@yaks/api'
+import { api, subscriptions } from '@yaks/api'
 import { loadVocab } from '@yaks/vocab'
 import { pair } from '../../packages/sync/testing.ts'
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
@@ -20,7 +19,7 @@ import { comp } from './bundle.ts'
 import { flat } from './terrain.ts'
 import { placeOf } from './area.ts'
 import { seedDesigns } from './designs_fixture.ts'
-import { pass } from './clock_fixture.ts'
+import { timer } from './clock_fixture.ts'
 import type { Intent } from './input.ts'
 
 let idle: Intent = {
@@ -41,7 +40,8 @@ let idle: Intent = {
   zoom: 0,
 }
 
-let peers = () => {
+// The store, its sockets and every page keep the test's clock.
+let peers = (time: Clock) => {
   seedDesigns()
   let vocab = loadVocab([words, core, provenance])
   let store = graph({ storage: ram(vocab), vocab })
@@ -72,6 +72,13 @@ let peers = () => {
   let sockets: ReturnType<typeof pair>['server'][] = []
   let serve = api({
     graph: store,
+    subs: subscriptions(store, {
+      activity: store,
+      timer: timer(time),
+      now: time.now,
+    }),
+    socketTimer: timer(time),
+    socketNow: time.now,
     authenticate: () => ({ by: person }),
     upgrade: () => ({
       socket: sockets.shift()!,
@@ -80,7 +87,8 @@ let peers = () => {
   })
   let pages = heroes.map((eid) => {
     let page = connect(new URL('http://vale.test/'), vocab, {
-      time: () => Date.now(), // the game and its socket share this test's fake clock
+      time: time.now,
+      timer: timer(time),
       fetch: (r) => serve(r),
       connect: () => {
         let both = pair()
@@ -111,6 +119,8 @@ let peers = () => {
   }
 }
 
+let start = Date.parse('2026-10-28T12:00:00.000Z')
+
 let stand = (
   p: ReturnType<typeof peers>['pages'][number],
   x: number,
@@ -118,20 +128,20 @@ let stand = (
 ) =>
   p.net.move([{
     entity: { eid: p.eid },
-    position: { level: 'mossvale', x, y: 5, z, at: Date.now() },
+    position: { level: 'mossvale', x, y: 5, z, at: p.net.now() },
     motion: { yaw: 0, gait: 'idle', vx: 0, vz: 0, vy: 0 },
   }])
 
 test('peer relays leave my hero in place and several creatures chasing', async () => {
-  using time = new FakeTime()
-  using group = peers()
+  let time = clock(start)
+  using group = peers(time)
   let { pages, heroes, mobs } = group
-  await pass(time)
+  await time.advance(0)
   await Promise.all(pages.map((p) => p.net.settle()))
   for (let p of pages) {
     stand(p, 64, 68)
   }
-  await pass(time, 200)
+  await time.advance(200)
   let v = flat(5)
   for (let step = 0; step < 240; step++) {
     for (let p of pages) {
@@ -139,7 +149,7 @@ test('peer relays leave my hero in place and several creatures chasing', async (
       equal([f.body.x, f.body.z], [64, 68])
       if (step > 20) equal(f.others.length, 2)
     }
-    await pass(time, 16)
+    await time.advance(16)
   }
   for (let p of pages) {
     for (let eid of mobs) {
@@ -151,18 +161,18 @@ test('peer relays leave my hero in place and several creatures chasing', async (
 })
 
 test('an elected peer keeps chasing a retreating hero until the home leash', async () => {
-  using time = new FakeTime()
-  using group = peers()
+  let time = clock(start)
+  using group = peers(time)
   let { pages, mobs } = group
   let [owner, runner, witness] = pages
-  await pass(time)
+  await time.advance(0)
   await Promise.all(pages.map((p) => p.net.settle()))
   // Only the runner is inside the authored five-metre wake radius. The
   // first hero owns the creatures from across the clearing.
   stand(owner, 44, 64)
   stand(runner, 64, 68)
   stand(witness, 44, 70)
-  await pass(time, 200)
+  await time.advance(200)
   let v = flat(5)
   let step = async (moving = false) => {
     let frames = pages.map((p) =>
@@ -176,7 +186,7 @@ test('an elected peer keeps chasing a retreating hero until the home leash', asy
         0.016,
       )!
     )
-    await pass(time, 16)
+    await time.advance(16)
     return frames
   }
   let hunts = () => {

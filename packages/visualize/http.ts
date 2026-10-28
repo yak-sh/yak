@@ -1,4 +1,5 @@
 /** Portable authenticated doors. No runtime, storage adapter or entity reads. */
+import { type Clock, system } from '@yaks/fp'
 import { type Activity, observe } from './activity.ts'
 import { capture, MAX_LIMIT as EVENTS, MAX_WAIT } from './capture.ts'
 import {
@@ -15,6 +16,9 @@ export type Hosting = Supplier & {
   who?: (request: Request) => unknown | Promise<unknown>
   stopping?: AbortSignal
   report?: (error: unknown) => void
+  /** the clock a capture's wait and a stream's keepalives run on (default:
+   * the runtime's, @yaks/fp `system`) */
+  clock?: Clock
 }
 export type Route = {
   method: string
@@ -189,12 +193,22 @@ let stream = (host: Hosting, request: Request): Response => {
   let lost = 0
   let closed = false
   let off = () => {}
-  let timer: ReturnType<typeof setInterval> | undefined
+  let quiet = () => {}
   let controller: ReadableStreamDefaultController<Uint8Array>
+  // Every 15 s, a keepalive comment when no record is waiting to be read.
+  let keepalive = () => {
+    quiet = (host.clock ?? system).after(15000, () => {
+      if (closed) return
+      if (!pending.length && (controller.desiredSize ?? 0) > 0) {
+        controller.enqueue(encoder.encode(': keepalive\n\n'))
+      }
+      keepalive()
+    })
+  }
   let cleanup = () => {
     if (closed) return
     closed = true
-    clearInterval(timer)
+    quiet()
     off()
     observation.close()
     pending = []
@@ -251,11 +265,7 @@ let stream = (host: Hosting, request: Request): Response => {
       }))
       off = observation.subscribe(activity)
       for (let event of history) activity(event)
-      timer = setInterval(() => {
-        if (!pending.length && (controller.desiredSize ?? 0) > 0) {
-          controller.enqueue(encoder.encode(': keepalive\n\n'))
-        }
-      }, 15000)
+      keepalive()
       request.signal.addEventListener('abort', end, { once: true })
       host.stopping?.addEventListener('abort', end, { once: true })
       if (request.signal.aborted || host.stopping?.aborted) end()
@@ -315,6 +325,7 @@ export let http = (host: Hosting): Route[] => [
           limit: number(url, 'limit', EVENTS),
           wait: number(url, 'wait', MAX_WAIT, 0),
           signal: request.signal,
+          clock: host.clock,
         }),
       )
     }),

@@ -9,11 +9,8 @@ import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
-import { evicted, lost, opaque, retried } from '@yaks/durable-object'
-export type DirectoryCopyTimer = {
-  now(): number
-  after(ms: number, callback: () => void): () => void
-}
+import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
+import { type Clock, system } from '@yaks/fp'
 
 export type ServingCopyDoor = {
   read?(key: string): Promise<{ revision: number; body: string } | null>
@@ -110,15 +107,17 @@ export let fenced = async <T>(
   copy: ServingCopyDoor,
   write: (revision: number) => T | Promise<T>,
   committed: () => number,
+  clock: Clock = system,
   tries = 4,
 ): Promise<T> => {
+  let wait = jittered(clock)
   let failed = true
   try {
     for (;; tries--) {
       raising++
       let revision: number
       try {
-        revision = await retried(() => copy.begin(), true, moving)
+        revision = await retried(() => copy.begin(), true, moving, wait)
         held.add(revision)
       } finally {
         raising--
@@ -132,7 +131,7 @@ export let fenced = async <T>(
       } finally {
         released(revision)
       }
-      await retried(() => copy.finish(revision), true, moving)
+      await retried(() => copy.finish(revision), true, moving, wait)
       failed = false
       return out
     }
@@ -153,19 +152,12 @@ export let EPOCH = 'x-yak-directory-revision'
 export let MEND = 'x-yak-mend'
 /** How long a signed read waits for a directory write to release its fence. */
 export let FENCE_WAIT = 15_000
-let timer: DirectoryCopyTimer = {
-  now: Date.now,
-  after: (ms, done) => {
-    let id = setTimeout(done, ms)
-    return () => clearTimeout(id)
-  },
-}
 
 /** The real directory wins normally. Only a successful copy ends a stall. */
 export let publicDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
-  time = timer,
+  time: Clock = system,
   used: () => void = () => {},
 ): Fetcher & { stale?: boolean; versioned?: boolean } => {
   if (!copy) return via
@@ -259,7 +251,7 @@ export let anonymousPage = (req: Request) =>
 export let signedDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
-  time = timer,
+  time: Clock = system,
 ): Fetcher & { signed?: boolean } => {
   if (!copy) return via
   let began = time.now()

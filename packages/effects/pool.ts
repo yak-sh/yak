@@ -83,7 +83,7 @@
 // how busy it is (./worker.ts). Where it leaves the pool, the row goes too.
 
 import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, type Clock, system } from '@yaks/fp'
 import {
   during,
   outcome,
@@ -229,8 +229,10 @@ export type PoolOpts = {
   /** how long after the nth attempt the next is due, in milliseconds
    * (default: {@link backoff}) */
   backoff?: (attempts: number) => number
-  /** the clock, in milliseconds (default: `Date.now`) */
-  now?: () => number
+  /** the time the pool keeps, in milliseconds, and the timers it waits on:
+   * a retry's backoff, the turn and the nap between passes, a claim's renewal
+   * (default: the runtime's, @yaks/fp `system`) */
+  clock?: Clock
   /** ids for the rows it writes (default: `crypto.randomUUID()`) */
   mint?: () => Eid
   /** whether a process is known to be over (@yaks/process `gone`), so its
@@ -343,11 +345,15 @@ let said = (err: unknown): string =>
   err instanceof Error ? err.message : String(err)
 
 // Whether `p` is still going after `ms`: true when the wait ran out first.
-let still = (p: Promise<unknown>, ms: number): Promise<boolean> =>
+let still = (
+  p: Promise<unknown>,
+  ms: number,
+  time: Clock,
+): Promise<boolean> =>
   new Promise((answer) => {
-    let timer = setTimeout(() => answer(true), ms)
+    let cancel = time.after(ms, () => answer(true))
     let over = () => {
-      clearTimeout(timer)
+      cancel()
       answer(false)
     }
     p.then(over, over)
@@ -372,7 +378,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     throw new RangeError('effect page must be a positive integer')
   }
   let me = opts.owner ?? crypto.randomUUID()
-  let clock = opts.now ?? (() => Date.now())
+  let time = opts.clock ?? system
+  let clock = () => time.now()
   let hold = opts.lease ?? 60_000
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
@@ -523,7 +530,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             },
           })
           let due = Math.max(wait(tries), asked(err))
-          await sleep(due)
+          await sleep(due, undefined, time)
           tries++
         }
       }
@@ -905,12 +912,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           if (signal.aborted) break
           told(err)
         }
-        await sleep(more ? 0 : CAP, AbortSignal.any([signal, nap.signal]))
+        await sleep(
+          more ? 0 : CAP,
+          AbortSignal.any([signal, nap.signal]),
+          time,
+        )
         // A wake ends the nap at once, never the turn: what the pass started,
         // and a signal to stop, are heard before the next pass.
         if (nap.signal.aborted) {
           nap = new AbortController()
-          await sleep(0)
+          await sleep(0, undefined, time)
         }
       }
     } finally {
@@ -1037,7 +1048,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         await settled
         continue
       }
-      while (await still(settled, beat)) {
+      while (await still(settled, beat, time)) {
         if (!graph) continue
         await renew(graph).catch((err) =>
           ctx.report(err, {
@@ -1122,10 +1133,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
               ? Promise.race(pending)
               : Promise.all(pending)
             if (opts.singleOwner) await settled
-            else while (await still(settled, beat)) await renew(g)
+            else while (await still(settled, beat, time)) await renew(g)
           }
           // A turn for timers and I/O between passes, never after the last.
-          if (n + 1 < passes) await sleep(0)
+          if (n + 1 < passes) await sleep(0, undefined, time)
         }
         return
       }

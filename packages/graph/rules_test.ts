@@ -3,7 +3,7 @@
 // set it declared refuses the batch instead of writing, and what the `#Name`
 // resources of a tick are — one instant, read-only, and provided or refused.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { parse } from '@yaks/query'
@@ -81,7 +81,7 @@ test('a warmed rule observes its match changed back', () => {
 })
 
 for (let count of [1, 2]) {
-  test(`warmed admission refreshes relative-time rules (${count} rows)`, () => {
+  test(`warmed admission refreshes relative-time rules (${count} rows)`, async () => {
     let vocab = loadVocab([{
       $defs: {
         due: {
@@ -91,10 +91,13 @@ for (let count of [1, 2]) {
         },
       },
     }])
+    let now = Date.parse('2026-10-03T12:00:00Z')
+    let time = clock(now)
     let make = () =>
       graph({
         vocab,
         storage: memory(),
+        clock: time,
         plugins: [{
           name: 'deadline',
           admission: () => true,
@@ -107,22 +110,15 @@ for (let count of [1, 2]) {
           }],
         }],
       })
-    let now = Date.parse('2026-10-03T12:00:00Z')
     let input = Array.from({ length: count }, (_, i) => ({
       entity: { eid: `due-${i}` },
       due: { at: new Date(now + 60_000).toISOString() },
     }))
-    let clock = Date.now
-    Date.now = () => now
-    try {
-      let warmed = make()
-      assertEquals(sync(warmed.admit(input)), sync(make().admit(input)))
-      now += 120_000
-      for (let one of [make(), warmed]) {
-        assertThrows(() => one.admit(input), Refused, 'deadline passed')
-      }
-    } finally {
-      Date.now = clock
+    let warmed = make()
+    assertEquals(sync(warmed.admit(input)), sync(make().admit(input)))
+    await time.advance(120_000)
+    for (let one of [make(), warmed]) {
+      assertThrows(() => one.admit(input), Refused, 'deadline passed')
     }
   })
 }

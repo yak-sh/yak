@@ -66,7 +66,11 @@ let opened = async (
   let box = mailedTo(to, env)
   if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(
-    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    signedDirectory(
+      bound(env.DIRECTORY, dirPart.fetch, env),
+      copyOf(env),
+      env.CLOCK,
+    ),
     true,
   )
   // A subdomain the space has left still finds it, as its old hostname does

@@ -141,7 +141,8 @@ test('a store killed for its limits is reported, though the retry answers', asyn
       },
     }),
   }
-  let door = storeOf(ns, 'ada/notes')
+  // Its resend waits out no pause.
+  let door = storeOf(ns, 'ada/notes', undefined, () => Promise.resolve())
   assertEquals(await (await door('/query?q=private')).text(), 'ok')
   await s.done()
   assertEquals(s.seen.map((e) => tagsOf(e)), [

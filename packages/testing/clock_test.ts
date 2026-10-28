@@ -47,3 +47,29 @@ test('clock rejects backwards advances without changing time', async () => {
   await throws(() => time.advance(-1), 'nonnegative span')
   equal(time.now(), 10)
 })
+
+test('clock lets queued work set its timer before it advances', async () => {
+  let time = clock()
+  let rang = false
+  void (async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+    time.after(5, () => {
+      rang = true
+    })
+  })()
+  equal(time.pending(), 0)
+  await time.advance(5)
+  equal([rang, time.pending()], [true, 0])
+})
+
+test('clock counts what is set and neither ran nor was cancelled', async () => {
+  let time = clock()
+  let cancel = time.after(5, () => {})
+  time.after(10, () => {})
+  equal(time.pending(), 2)
+  cancel()
+  equal(time.pending(), 1)
+  await time.advance(10)
+  equal(time.pending(), 0)
+})

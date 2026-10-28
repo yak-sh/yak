@@ -1,5 +1,6 @@
 // Eligibility is the query the pool uses, including deadlines, ownership and
 // disabled work. The same query selects rows before the bounded claim window.
+import { system } from '@yaks/fp'
 import { type Bundle, graph } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import { ram } from '@yaks/ram'
@@ -54,7 +55,7 @@ let calls = 0, attempts = 0, reads = 0, now = 0
 let fx = effects(vocab, {
   owner: 'worker',
   startup: 'manual',
-  now: () => now,
+  clock: { ...system, now: () => now },
   gone: () => (calls++, false),
   write: (bs) => g.apply(bs, { trusted: true }),
 })

@@ -1,9 +1,8 @@
 // The Stripe client (stripe.ts): what goes on the wire, and a call asked
 // again when it did not get through, against a Stripe stood in by `fetch`.
-import { test } from '@yaks/testing'
+import { type Clock, clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { FakeTime } from '@std/testing/time'
 import { ask, form } from './stripe.ts'
 
 // --- what goes on the wire to Stripe -------------------------------------
@@ -53,20 +52,22 @@ let held = () =>
   })
 let lost = () => new TypeError('Network connection lost.')
 
-// `p`, with the fake clock run on until it settles, however many waits it
-// takes on the way.
-let settled = async <T>(time: FakeTime, p: Promise<T>) => {
+// `p`, with its clock moved on a second at a time until it settles, however
+// many waits it takes on the way.
+let settled = async <T>(time: Clock, p: Promise<T>) => {
   let done = false
   p.then(() => done = true, () => done = true)
-  while (!done) await time.nextAsync()
+  while (!done) await time.advance(1000)
   return p
 }
 
 test('a write that did not get through is asked again, as one write', async () => {
   for (let first of [lost(), held()]) {
-    using time = new FakeTime()
+    let time = clock()
     using s = stripe(first, made())
-    let out = ask(KEY, '/v1/customers', { email: 'ana@books.example' })
+    let out = ask({ ...KEY, CLOCK: time }, '/v1/customers', {
+      email: 'ana@books.example',
+    })
     assertEquals(await settled(time, out), { id: 'cus_1' })
     assertEquals(s.heard.length, 2)
     let [a, b] = s.heard.map((h) => h.get('idempotency-key'))
@@ -84,10 +85,10 @@ test('a refusal is said once, and a call never answered fails', async () => {
     await assertRejects(() => ask(KEY, '/v1/customers/cus_x'), 'No such')
     assertEquals(s.heard.length, 1)
   }
-  using time = new FakeTime()
+  let time = clock()
   using _ = stripe(lost(), lost(), lost(), lost())
   await assertRejects(
-    () => settled(time, ask(KEY, '/v1/customers/cus_1')),
+    () => settled(time, ask({ ...KEY, CLOCK: time }, '/v1/customers/cus_1')),
     TypeError,
   )
 })

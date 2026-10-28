@@ -335,7 +335,8 @@ metadata) for five minutes. After a transient discovery failure it continues the
 ask and cools down for at least a minute, or the error's longer retry delay. A
 host can supply a fifth `report(error)` argument to observe exhausted metadata
 discovery failures; permanent provider refusals still propagate. Provider
-implementations own HTTP retry/backoff before that fallback.
+implementations own HTTP retry/backoff before that fallback. Its sixth argument
+is the clock (@yaks/fp `Clock`, the runtime's by default) the cache expires by.
 
 `providerResolver` accepts an executor factory as its fourth argument, keyed by
 the selected provider's name. It prepares the provider's metadata and modalities

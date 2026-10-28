@@ -1,3 +1,4 @@
+import { system } from '@yaks/fp'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { effects } from '@yaks/effects'
@@ -35,7 +36,7 @@ let fixture = () => {
     let errors: unknown[] = []
     let fx = effects(vocab, {
       defer: true,
-      now: () => now,
+      clock: { ...system, now: () => now },
       report: (error) => void errors.push(error),
       write: (rows) => g.apply(rows, { trusted: true }),
     })

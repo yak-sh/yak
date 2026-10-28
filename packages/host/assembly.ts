@@ -1,6 +1,7 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
 import type { Actor, Comp, Graph, NamedTool } from '@yaks/graph'
 import type { graph } from '@yaks/graph'
+import type { Clock } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
 import { loadTools, type Search, tier } from '@yaks/graph/tools'
 import type { Reply, Runner, runner } from '@yaks/tools'
@@ -77,6 +78,9 @@ export type Binding = {
   actor?: Actor | null
   process?: Comp
   readOnly?: boolean
+  /** The clock the host keeps: its graph's and its runner's (default each
+   * one's own). */
+  clock?: Clock
   /** Per-host capabilities added to a configured occurrence's options. */
   options?: (plugin: string, options: Options) => Options
   /** Loading and binding evidence belongs to this host, never the shared plan. */
@@ -337,7 +341,7 @@ export let assemble = (
       bound('vocab', vocabs)
       part?.('anatomy')
       observed.declarations(docs, vocab)
-      let { host: lent, actor: self, process, readOnly } = binding
+      let { host: lent, actor: self, process, readOnly, clock } = binding
       let g: Graph | undefined
       let store: Host['storage'] | undefined
       let watching: Effects | undefined
@@ -484,6 +488,7 @@ export let assemble = (
         // effects, its start-up passes and the bulk loads it is handed are all
         // stored attributed to this process.
         ...(self ? { actor: self } : {}),
+        ...clock ? { clock } : {},
         plugins: [...contributed, fx],
       })
       binding.ready?.(host)
@@ -604,6 +609,7 @@ export let assemble = (
           // own, which is the accurate answer — a call arriving over HTTP acts on
           // the machine that received it.
           ...process ? { process } : {},
+          ...clock ? { clock } : {},
           report: (error, call, tool) =>
             readOnly ? console.error(error) : host.report?.(error, {
               actor: call.$actor ?? self ?? undefined,

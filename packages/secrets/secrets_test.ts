@@ -3,9 +3,9 @@ import { docDoc } from '@yaks/doc'
 // committed, the graph keeps the handle, and nothing refused leaves anything
 // behind.
 
-import { test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
+import type { Clock } from '@yaks/fp'
 import { provisionalDoc } from '@yaks/effects'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -37,12 +37,15 @@ import {
 // text carries a whole batch as JSON. `failed` records a terminal seal outcome;
 // the original failure reaches the graph's reporter.
 let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc, kernelDoc])
-let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
+let setup = <V extends Vault = Local>(
+  vault: V = ramVault() as V,
+  time?: Clock,
+) => {
   let reported: unknown[] = []
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), time)],
     report: (e) => void reported.push(e),
   })
   return { g, vault, reported }
@@ -257,14 +260,14 @@ test('the writer waits for the seal; a reader in between sees the mark', async (
 })
 
 test('a failure the vault calls retryable is provisional, tried again until it seals', async () => {
-  using time = new FakeTime()
-  let { g, vault, reported } = setup(failing(transient()))
+  let time = clock()
+  let { g, vault, reported } = setup(failing(transient()), time)
   let writing = g.apply([sealed('A', 'one')])
-  await time.runMicrotasks()
+  await until(time.pending)
   let said = (await whole(g, 'A'))!
   assertEquals(said.provisional, { note: 'Saving the key, trying again' })
   assert(String((said.content as Record<string, string>).body).includes('lost'))
-  await time.tickAsync(2_000)
+  await time.advance(2_000)
   await writing
   let now = (await whole(g, 'A'))!
   assertEquals([now.provisional, now.error, now.content], [
@@ -304,10 +307,10 @@ test('a terminal seal failure records its outcome, reports once and can be retri
 })
 
 test('a retryable failure that outlasts every try is reported', async () => {
-  using time = new FakeTime()
-  let { g, reported } = setup(failing(...[1, 2, 3, 4, 5].map(transient)))
+  let time = clock()
+  let { g, reported } = setup(failing(...[1, 2, 3, 4, 5].map(transient)), time)
   let writing = g.apply([sealed('A', 'one')])
-  for (let i = 0; i < 5; i++) await time.tickAsync(2_000)
+  for (let i = 0; i < 5; i++) await time.advance(2_000)
   await writing
   let said = (await whole(g, 'A'))!
   assertEquals(said.provisional, undefined)

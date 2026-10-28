@@ -3,7 +3,7 @@
 // over the asynchronous wrapper — that none of it depends on being
 // synchronous.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { record } from '@yaks/trace'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
@@ -1095,8 +1095,10 @@ for (let async of [false, true]) {
     let entries = 0
     let normalized = 0
     let bodies = 0
+    let time = clock()
     let one = graph({
       vocab: books,
+      clock: time,
       storage: {
         ...storage,
         tx: (body) => {
@@ -1118,14 +1120,10 @@ for (let async of [false, true]) {
         },
       }],
     })
-    let inert = globalThis.setTimeout
-    using _timer = stub(globalThis, 'setTimeout', (wake, _ms) => {
-      queueMicrotask(() => wake())
-      let id = inert(() => {}, 0)
-      clearTimeout(id)
-      return id
-    })
-    let out = await one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+    let applied = one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+    // The store is free again after the first wait, a second on.
+    await time.advance(1000)
+    let out = await applied
     assertEquals(at(out, 'b1', 'book').pages, 412)
     assertEquals([entries, normalized, bodies], [2, 1, 1])
   })

@@ -229,8 +229,9 @@ The loop rouses and ticks immediately, then sleeps until the next pending
 instant. Its default one-minute cap limits how long a new wake, or a sleeping
 one a write made hold, waits to be noticed, and how soon a refused wake is
 retried. Aborting releases the timer after any write in progress finishes.
-`@yaks/wake/service` exposes the same loop as a host service and logs refused
-wakes.
+`clock` (an @yaks/fp `Clock`, the runtime's by default) is what each tick reads
+its instant from and the loop sleeps on. `@yaks/wake/service` exposes the same
+loop as a host service and logs refused wakes.
 
 ## Lower-level functions
 
@@ -249,5 +250,5 @@ wakes.
 The core uses web-standard APIs and runs in Deno, Node, Cloudflare workerd, and
 browsers. Cron evaluation requires `Intl` and no `Temporal` polyfill. The
 Cloudflare adapter accepts alarm storage structurally and imports no Cloudflare
-global. The Deno loop uses `setTimeout` and `AbortSignal` and imports no
-Deno-only API. The core is checked with browser-only types.
+global. The Deno loop uses `setTimeout` (through its clock) and `AbortSignal`
+and imports no Deno-only API. The core is checked with browser-only types.

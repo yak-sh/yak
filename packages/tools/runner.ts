@@ -75,7 +75,8 @@ import { CallError, UnfinishedCall } from './errors.ts'
 export { UnfinishedCall } from './errors.ts'
 import { persist } from './persist.ts'
 import { invoke } from './invoke.ts'
-import { answerOf, results, toolEid, toolRow } from './result.ts'
+import { answerOf, measuring, results, toolEid, toolRow } from './result.ts'
+import type { Clock } from '@yaks/fp'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -104,8 +105,10 @@ export type Opts = {
    * say, which the transcript's own runner runs in the order the model asked
    * (@yaks/session). Omitted, it takes every call it has a tool for. */
   takes?: (call: Bundle) => boolean
-  /** the clock `result.ms` is measured with (default: `performance.now`) */
-  now?: () => number
+  /** the clock a runner keeps: `result.ms` is measured by its `now`, and a
+   * write storage refused is tried again after its `after` (default
+   * {@link measuring}) */
+  clock?: Clock
   /** the most characters an answer may take as JSON; past it the call is
    * refused as `too_large` (default {@link MOST}) */
   most?: number
@@ -230,7 +233,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
   let by = new Map(tools.map((t) => [toolEid(t.name), t]))
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
-  let now = opts.now ?? (() => performance.now())
+  let clock = opts.clock ?? measuring
+  let now = () => clock.now()
   let { rules: plans, held: claimed, ending } = results(g.vocab, now)
   let inflight = running.get(g) ?? new Map<Eid, Promise<Bundle[]>>()
   running.set(g, inflight)
@@ -437,6 +441,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let landed = await persist(
         () => g.apply(bundles, trusted ? { trusted } : undefined),
         (e) => opts.report?.(e, call, tool.name),
+        clock,
       )
       return keep ? landed : [...made, ...landed]
     }

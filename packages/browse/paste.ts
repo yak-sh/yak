@@ -1,4 +1,5 @@
 import { searchBoard } from '@yaks/canvas'
+import { type Clock, system } from '@yaks/fp'
 import { door } from './hosting.ts'
 // Pasted content → the right entity. Matchers in specificity order: a bare
 // eid or T-123 id lands a card on the EXISTING entity; a URL mints a web
@@ -78,7 +79,7 @@ let json = (text: string): Pasted | null => {
   return null
 }
 
-export let pasted = (raw: string): Pasted | null => {
+export let pasted = (raw: string, clock: Clock = system): Pasted | null => {
   let text = raw.trim()
   if (!text) return null
   // A handle written with a letter (`T#3f9a1c`) is an id too, so it is refused
@@ -101,9 +102,9 @@ export let pasted = (raw: string): Pasted | null => {
     // back over the ws as web.frozen_at + a doc with the page title).
     // Delayed a beat so the mint reaches the server first.
     if (door('freeze')) {
-      setTimeout(() => {
+      clock.after(300, () => {
         fetch(`${base()}/freeze?eid=${eid}`).catch(() => {})
-      }, 300)
+      })
     }
     return {
       changes: [{ eid, name: 'web', comp: { eid, url: text } }],

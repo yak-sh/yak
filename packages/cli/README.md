@@ -369,7 +369,10 @@ lease instead.
 6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
    for the one handler this host answers with.
 7. Creates the current process entity after registrations are ready, except for
-   a read-only host (`readOnly: true`) or one composed with `process: false`.
+   a read-only host (`readOnly: true`) or one composed with `process: false`. A
+   write storage refuses as retryable is tried again with backoff, waited out on
+   the `clock` option (an @yaks/fp `Clock`, the runtime's by default), which the
+   host's graph and tool runner keep too.
 
 **The schema follows the vocabulary** (D-121389). Everything a graph's file
 needs is one composed schema: migration control, blob storage, the store's

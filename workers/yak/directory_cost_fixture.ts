@@ -1,6 +1,6 @@
 // App lifecycle at the kernel seam, billed only to yak/platform by workerd's
 // SQL cursor counters. Other Stores and R2 belong to this isolated probe.
-import { type State, Store } from './graph.ts'
+import { type State, Store, type Time } from './graph.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE, storeOf } from './door.ts'
@@ -108,9 +108,10 @@ export let directoryLifecycleCost = async (
       })
     }
   }
-  store = new Store(context, env)
-  let now = Date.now, instant = now() + 11 * 60_000
-  Date.now = () => instant
+  // The steps run on a Store whose clock stands eleven minutes on, past
+  // every setup receipt's resend window.
+  let at = Date.now() + 11 * 60_000, later: Time = { now: () => at }
+  store = new Store(context, env, undefined, later)
   let m = meter(storage)
   // A step is billed for what it owed the directory's pool too.
   let run = async (name: string, args: Args) => {
@@ -155,7 +156,7 @@ export let directoryLifecycleCost = async (
       where: by({ k: 'schema' }),
     })
     m.step('deploy wake')
-    store = new Store(context, env)
+    store = new Store(context, env, undefined, later)
     await meta.query(`.entity.eid=${space.eid}`)
     m.step('wake alarm')
     await store.alarm()
@@ -163,7 +164,6 @@ export let directoryLifecycleCost = async (
     m.step(null)
     return { history, steps: m.steps, top: m.top(20) }
   } finally {
-    Date.now = now
     m.stop()
   }
 }

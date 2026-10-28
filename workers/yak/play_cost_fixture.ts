@@ -6,7 +6,7 @@
 import { index, repeatFixture } from './repeat_fixture.ts'
 import { fn, lit, op } from '@yaks/sql'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { Store } from './graph.ts'
+import { Store, type Time } from './graph.ts'
 import type { Bundle, Graph } from '@yaks/graph'
 import {
   type DurableStorage,
@@ -64,14 +64,21 @@ export let playMinute = async (
   minutes = 5,
 ): Promise<Report> => {
   let source = 'setup', measured = false
-  let now = Date.now,
-    set = globalThis.setTimeout,
-    clear = globalThis.clearTimeout
-  let at = Math.floor(now() / 1000) * 1000
+  let at = Math.floor(Date.now() / 1000) * 1000
   let sql = db.sql.exec.bind(db.sql)
-  // Setup receipts and play share one clock; wall time cannot move an expiry
-  // across the measured minute while the fixture builds its world.
-  Date.now = () => at
+  // The Store keeps the fixture's time and timers, which only the fixture
+  // moves: setup receipts and play share one clock, so wall time cannot move
+  // an expiry across the measured minute while the fixture builds its world.
+  let timers = new Map<number, { at: number; fn: () => void }>(),
+    next = 1
+  let time: Time = {
+    now: () => at,
+    timer: (fn, ms) => {
+      let id = next++
+      timers.set(id, { at: at + ms, fn })
+      return () => void timers.delete(id)
+    },
+  }
   try {
     let context = new AsyncLocalStorage<string>()
     let shapes = new Map<string, Cost>()
@@ -148,6 +155,8 @@ export let playMinute = async (
     let store = new Store(
       { ...state.context, getWebSockets: () => live },
       worldBindings(app, person),
+      undefined,
+      time,
     )
     let headers = {
       'x-store': 'probe/play-cost',
@@ -216,13 +225,11 @@ export let playMinute = async (
       if (held.rules.every((r) => !r.live || r.done)) break
       if (i == 99) throw new Error('lens fixture did not settle')
     }
-    await settleWorld(store, state)
+    await settleWorld(store, state, time.now)
     if (minutes) {
       await seedWorld(store, post)
-      await settleWorld(store, state)
+      await settleWorld(store, state, time.now)
     }
-    let timers = new Map<number, { at: number; fn: () => void }>(),
-      next = 1
     let settle = async <T>(work: Promise<T> | T): Promise<T> => {
       let done = false, value: T | undefined, error: unknown
       Promise.resolve(work).then((v) => {
@@ -240,7 +247,7 @@ export let playMinute = async (
             t.fn()
           }
         }
-        if (!done) await new Promise<void>((resolve) => set(resolve, 0))
+        if (!done) await new Promise<void>((resolve) => setTimeout(resolve, 0))
       }
       if (!done) throw new Error('play operation did not settle')
       if (error) throw error
@@ -258,14 +265,6 @@ export let playMinute = async (
         for (let k = 0; k < 20; k++) await Promise.resolve()
         if (rounds == 99) throw new Error('timer loop in play fixture')
       }
-    }
-    globalThis.setTimeout = ((fn: () => void, ms = 0) => {
-      let id = next++
-      timers.set(id, { at: at + ms, fn })
-      return id
-    }) as typeof setTimeout
-    globalThis.clearTimeout = (id) => {
-      timers.delete(Number(id))
     }
     measured = true
     source = 'live queries'
@@ -485,7 +484,7 @@ export let playMinute = async (
       if (alarm != null && alarm <= at) {
         await db.deleteAlarm?.()
         await settle(store.alarm())
-        await settle(settleWorld(store, state))
+        await settle(settleWorld(store, state, time.now))
       }
       for (let k = 0; k < 20; k++) await Promise.resolve()
     }
@@ -520,9 +519,6 @@ export let playMinute = async (
     }
   } finally {
     measured = false
-    Date.now = now
-    globalThis.setTimeout = set
-    globalThis.clearTimeout = clear
     db.sql.exec = sql
   }
 }

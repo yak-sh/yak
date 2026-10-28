@@ -73,6 +73,7 @@ import { type LiveClient, liveClient, quiet } from './live_client.ts'
 import { said } from '@yaks/client/named'
 import { outlived } from '@yaks/web/outlived'
 import type { Socket } from '@yaks/sync'
+import { type Clock, system } from '@yaks/fp'
 import type { Bundle, Entity } from '@yaks/graph'
 import { normalizeChanges } from './props.ts'
 import { forgetLegacy } from './idb.ts'
@@ -130,6 +131,14 @@ let componentView = (comp: Record<string, unknown>) => {
   }
   return view
 }
+// The tab's clock: its replica's reconnects and paces, and the checks it
+// defers. A test hands it one of its own.
+let time: Clock = system
+export let useClock = (clock: Clock): Clock => {
+  let prev = time
+  time = clock
+  return prev
+}
 let replica: LiveClient | undefined
 let replacing = false
 let makeClient = () => {
@@ -170,6 +179,7 @@ let makeClient = () => {
       return response
     },
     connect: (url) => socketFor(url),
+    timer: (fn, ms) => void time.after(ms, fn),
     // A refusal on a page that outlived a deploy is its old code asking the
     // new server what it no longer answers: the page reloads onto the code
     // now served. A read of an id that names nothing (one in the address, or a
@@ -1372,7 +1382,7 @@ let syncOutbox = (client = ensureClient()) => {
   let keys = new Set(writes.map((w) => w.key))
   for (let id of firstSeen.keys()) if (!keys.has(id)) firstSeen.delete(id)
   outboxWrites.value = writes.filter((w) => w.state === 'pending').map((w) => {
-    if (!firstSeen.has(w.key)) firstSeen.set(w.key, Date.now())
+    if (!firstSeen.has(w.key)) firstSeen.set(w.key, time.now())
     return {
       id: w.key,
       since: firstSeen.get(w.key)!,
@@ -1412,7 +1422,7 @@ let readLedger = (): Refusal[] => {
     let rs: Refusal[] = JSON.parse(
       globalThis.localStorage?.getItem(storageKey(LEDGER)) ?? '[]',
     )
-    let cutoff = Date.now() - REFUSAL_MAX_AGE_MS
+    let cutoff = time.now() - REFUSAL_MAX_AGE_MS
     return rs.filter((r) => r.at >= cutoff)
   } catch {
     return []
@@ -1453,7 +1463,7 @@ export let refuse = (id: string, reason: string, changes: Change[] = []) => {
   refusalStore.record({
     id,
     reason,
-    at: Date.now(),
+    at: time.now(),
     summary: summarize(changes),
   })
   syncRefused()
@@ -2011,7 +2021,7 @@ export let assertAgree = (
   let signature = JSON.stringify([q, expected, received])
   if (state.checked.get(sub) == signature) return
   state.checked.set(sub, signature)
-  setTimeout(() => {
+  time.after(20, () => {
     if (
       boardUses.get(sub)?.q != q || state.checked.get(sub) != signature
     ) return
@@ -2033,7 +2043,7 @@ export let assertAgree = (
     } else {
       console.assert(false, 'subscription divergence', note)
     }
-  }, 20)
+  })
 }
 
 let boardUses = new Map<string, { n: number; q: string }>()

@@ -1,4 +1,5 @@
 /** A bounded finite observation for commands and tools. */
+import { type Clock, system } from '@yaks/fp'
 import { type Activity, observe } from './activity.ts'
 import { bounded } from './snapshot.ts'
 
@@ -16,6 +17,8 @@ export type CaptureOptions = {
   limit?: number
   wait?: number
   signal?: AbortSignal
+  /** the clock the wait runs on (default: the runtime's, @yaks/fp `system`) */
+  clock?: Clock
 }
 
 export let capture = async (
@@ -36,16 +39,16 @@ export let capture = async (
     if (wait) {
       await new Promise<void>((resolve, reject) => {
         let done = () => {
-          clearTimeout(timer)
+          cancel()
           opts.signal?.removeEventListener('abort', abort)
           resolve()
         }
         let abort = () => {
-          clearTimeout(timer)
+          cancel()
           opts.signal?.removeEventListener('abort', abort)
           reject(opts.signal?.reason)
         }
-        let timer = setTimeout(done, wait)
+        let cancel = (opts.clock ?? system).after(wait, done)
         opts.signal?.addEventListener('abort', abort, { once: true })
       })
     }

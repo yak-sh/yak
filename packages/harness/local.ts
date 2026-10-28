@@ -67,7 +67,8 @@ export type Opts = ChildLimits & NotHarness & {
   /** where settings such as `HARNESS_STREAM` are read (default this process's
    * environment) */
   env?: (name: string) => string | undefined
-  /** Cooperating migrations must allow at least this polling interval. */
+  /** Cooperating migrations must allow at least this polling interval, which
+   * the migration monitor keeps by `clock`. */
   migrationPollMs?: number
   /** how long a transcript's lease stands between renewals, so how long a
    * process that died running it holds it up (ms) */
@@ -324,13 +325,18 @@ export let local = (opts: Opts): Local => {
         anchor,
       }),
   })
-  watch = h.migrations && watchMigrations(h.migrations, (reason) => {
-    // Stop scheduling immediately, but leave SQLite open for admitted work to
-    // drain. Restart is an explicit owner action, not a migration side effect.
-    void l.close(reason).catch((error) =>
-      report(error, { phase: 'migration-drain' })
-    )
-    console.error(reason.message)
-  }, opts.migrationPollMs ?? 1000)
+  watch = h.migrations && watchMigrations(
+    h.migrations,
+    (reason) => {
+      // Stop scheduling immediately, but leave SQLite open for admitted work to
+      // drain. Restart is an explicit owner action, not a migration side effect.
+      void l.close(reason).catch((error) =>
+        report(error, { phase: 'migration-drain' })
+      )
+      console.error(reason.message)
+    },
+    opts.migrationPollMs ?? 1000,
+    opts.clock,
+  )
   return l
 }

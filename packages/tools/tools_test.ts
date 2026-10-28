@@ -3,9 +3,8 @@
 // same rules registered as effects, which is how a call nobody is waiting on
 // (one another process wrote, one that was scheduled) gets run.
 
-import { test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import {
   argsOf,
   type Bundle,
@@ -636,9 +635,9 @@ test('a defect is an exception entity, a result, and a failed execution', async 
 
 for (let readOnly of [false, true]) {
   test(`a completed answer survives storage contention (${readOnly})`, async () => {
-    using time = new FakeTime()
+    let time = clock()
     let { g } = world()
-    let runs = 0, attempts = 0, now = 0
+    let runs = 0, attempts = 0
     let reports: unknown[] = [], batches: Bundle[][] = []
     let busy = Object.assign(new Error('storage unavailable'), {
       retryable: true,
@@ -646,15 +645,16 @@ for (let readOnly of [false, true]) {
     let tool: Tool = {
       ...echo,
       readOnly,
-      run: (call, graph) => {
+      // The tool takes 7 ms; the retries after it take seconds more.
+      run: async (call, graph) => {
         runs++
-        now = 7
+        await time.advance(7)
         return echo.run(call, graph)
       },
     }
     let r = runner(g, {
       tools: [tool],
-      now: () => now,
+      clock: time,
       report: (e) => void reports.push(e),
     })
     await r.ensure()
@@ -668,12 +668,10 @@ for (let readOnly of [false, true]) {
     }
     let call = called('example_echo', { value: 'precious' })
     let pending = r.call(call)
-    await time.runMicrotasks()
+    await until(() => reports.length)
     assertEquals(reports, [busy])
-    now = 100
-    await time.tickAsync(1000)
-    await time.runMicrotasks()
-    await time.tickAsync(2000)
+    await time.advance(1000)
+    await time.advance(2000)
     let answer = await pending
     assertEquals([runs, attempts], [1, 3])
     assertEquals(batches.every((b) => b === batches[0]), true)
@@ -1119,7 +1117,7 @@ test('a call its writer runs by an effect of its own is left to that effect', ()
   assertEquals(dispatched, [0, 0])
 })
 
-let clock = {
+let wakes = {
   wake: {
     component: true,
     properties: {
@@ -1134,7 +1132,7 @@ let clock = {
 }
 
 test('a call waiting on a wake that has not fired is not this tick', async () => {
-  let { g, r } = watched([echo], clock)
+  let { g, r } = watched([echo], wakes)
   await r.ensure()
   // Written, and sleeping: the ready rule says `!wake` and this one wears it.
   await g.apply([{
@@ -1153,7 +1151,7 @@ test('a call waiting on a wake that has not fired is not this tick', async () =>
 })
 
 test('a recurring call is a standing ask: one invocation per firing', async () => {
-  let { g, r } = watched([echo], clock)
+  let { g, r } = watched([echo], wakes)
   await r.ensure()
   // The schedule: a call that wears a recurrence. It is never answered
   // itself — each firing writes its own call, so the row keeps asking.

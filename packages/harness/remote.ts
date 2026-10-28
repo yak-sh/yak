@@ -13,6 +13,7 @@ import type { ModelSelection } from './model_selection.ts'
 import { client } from '@yaks/client'
 import type { Frame } from '@yaks/sync'
 import { portLink } from '@yaks/sync/port'
+import { type Clock, system } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import { render as tree } from '@yaks/preact'
 import { render } from '@yaks/text'
@@ -52,9 +53,12 @@ export let remote = async (
     /** the backend Worker to serve this graph in, lent and left running
      * (testing.ts `worker`); by default one of its own, ended with it */
     worker?: Worker
+    /** the clock this frontend keeps its deadlines by: each request's, and a
+     * close's (default the runtime's); kept here, never cloned to the worker */
+    clock?: Clock
   },
 ) => {
-  let { env = Deno.env.get, worker: lent, ...config } = options
+  let { env = Deno.env.get, worker: lent, clock = system, ...config } = options
   let worker = lent ?? new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },
@@ -82,6 +86,7 @@ export let remote = async (
   let windowRevision = 0
   let queued = Promise.resolve()
   let link = portLink(port, {
+    clock,
     frame: (frame: Frame) => {
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
@@ -415,7 +420,7 @@ export let remote = async (
       shutdown ??= (async () => {
         closing = true
         listeners.clear()
-        let timer: ReturnType<typeof setTimeout> | undefined
+        let cancel = () => {}
         let result = { drained: false }
         try {
           return result = await Promise.race([
@@ -423,14 +428,14 @@ export let remote = async (
             forced,
             new Promise<{ drained: boolean }>((resolve) => {
               if (options.timeout === null) return
-              timer = setTimeout(
-                () => resolve({ drained: false }),
+              cancel = clock.after(
                 options.timeout ?? 2000,
+                () => resolve({ drained: false }),
               )
             }),
           ])
         } finally {
-          clearTimeout(timer)
+          cancel()
           if (result.drained) release()
           else await end()
           await queued

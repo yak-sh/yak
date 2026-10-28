@@ -2,9 +2,8 @@
 // the items a stream becomes, how a refusal and a dead stream read, and where
 // a credential comes from.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { ModelError, type Request } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
 import { tokenUsage } from './responses.ts'
@@ -321,11 +320,12 @@ test('the Model shares refresh, redacted frame hooks, store, and anchor policy',
 })
 
 test('the Model maps the shared watchdog to ModelError', async () => {
-  using time = new FakeTime()
+  let time = clock()
   let model = responses({
     credential: () => codex,
     stallMs: 20,
     retries: 0,
+    clock: time,
     fetch: (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () =>
@@ -333,7 +333,7 @@ test('the Model maps the shared watchdog to ModelError', async () => {
       }),
   })
   let error = assertRejects(() => model(req), ModelError, 'transport stalled')
-  await time.tickAsync(20)
+  await time.advance(20)
   assertEquals((await error).code, 'stalled')
 })
 

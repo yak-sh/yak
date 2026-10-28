@@ -1,7 +1,6 @@
 import { derivedEid } from '@yaks/graph/identity'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
@@ -277,27 +276,28 @@ test('stuck model deadline is an expected bounded exit, not a crash', async () =
   let db = dir + '/shutdown.db'
   let installed = await harness(db)
   await installed.close()
+  // Only the frontend's deadlines keep this clock; dispatch is acknowledged by
+  // the real worker before advancing it. Test the existing 2s boundary.
+  let time = clock()
   let r = await remote({
     config: at(db),
     cwd: dir,
     fake: 'stuck',
     streaming: true,
+    clock: time,
   })
   try {
     await r.agent.start('stuck')
     await r.testing!.started()
     {
-      // Only the frontend deadline uses this clock; dispatch is acknowledged
-      // by the real worker before advancing it. Test the existing 2s boundary.
-      using time = new FakeTime()
       let settled = false
       let closing = r.close().then((result) => {
         settled = true
         return result
       })
-      await time.tickAsync(1999)
+      await time.advance(1999)
       assertEquals(settled, false)
-      await time.tickAsync(1)
+      await time.advance(1)
       assertEquals(await closing, { drained: false })
     }
     // Its Worker was ended where it stood, and wrote its ending first: the
@@ -390,24 +390,25 @@ test('unbounded graceful close finishes a slow response beyond the old deadline'
   let db = dir + '/graceful.db'
   let installed = await harness(db)
   await installed.close()
+  let time = clock()
   let r = await remote({
     worker: worker(),
     config: at(db),
     cwd: dir,
     fake: 'held',
     streaming: true,
+    clock: time,
   })
   try {
     let id = await r.agent.start('finish before exit')
     await r.testing!.started()
     {
-      using time = new FakeTime()
       let settled = false
       let closing = r.close({ timeout: null }).then((result) => {
         settled = true
         return result
       })
-      await time.tickAsync(31000)
+      await time.advance(31000)
       assertEquals(settled, false, 'graceful close must keep draining')
       await r.testing!.release()
       assertEquals(await closing, { drained: true })

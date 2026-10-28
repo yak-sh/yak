@@ -30,7 +30,11 @@ export let usesOf = (env: Env, space: Space, app: App) => {
 
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
   let dir = directory(
-    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    signedDirectory(
+      bound(env.DIRECTORY, dirPart.fetch, env),
+      copyOf(env),
+      env.CLOCK,
+    ),
     true,
   )
   return (await Promise.all(slugs.map((s) => dir.app(space, s))))

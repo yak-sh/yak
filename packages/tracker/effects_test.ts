@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { system } from '@yaks/fp'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { fixture, vocab } from './fixture_test.ts'
@@ -42,10 +43,10 @@ for (let backend of ['ram', 'sqlite']) {
 }
 
 test('declared effects group intake and retain occurrences downstream', async () => {
-  let at = '2026-10-02T00:00:10Z'
+  let at = '2026-10-02T00:00:10.000Z'
   let g = fixture(
     { to: crypto.randomUUID(), store: 'box', retain: 1 },
-    () => at,
+    { ...system, now: () => Date.parse(at) },
   )
   for (let i = 1; i <= 3; i++) {
     await g.apply(
@@ -82,7 +83,7 @@ test('declared effects group intake and retain occurrences downstream', async ()
       },
     }], { trusted: true })
     // Opening and regression are different occasions even if their clocks match.
-    at = version == 2 ? '2026-10-02T00:00:10Z' : '2026-10-02T00:00:30Z'
+    at = version == 2 ? '2026-10-02T00:00:10.000Z' : '2026-10-02T00:00:30.000Z'
     await hit(`back-${version}`, version)
     let [back] = await g.get([bug.entity.eid])
     equal(comp(back, 'regressed').at, at)
@@ -98,5 +99,5 @@ test('declared effects group intake and retain occurrences downstream', async ()
     await g.apply([{ entity: letter.entity, delivered: {} }], { trusted: true })
     equal((await g.read('.bug .notified')).length, 1)
   }
-  equal(comp(first, 'mail').at, '2026-10-02T00:00:10Z')
+  equal(comp(first, 'mail').at, '2026-10-02T00:00:10.000Z')
 })

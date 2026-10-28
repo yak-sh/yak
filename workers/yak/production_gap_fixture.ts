@@ -3,7 +3,7 @@
 import { index, repeatFixture } from './repeat_fixture.ts'
 import { fn, lit, op } from '@yaks/sql'
 import { type State, Store } from './graph.ts'
-import { settleWorld, worldBindings } from './play_world_fixture.ts'
+import { alarmed, settleWorld, worldBindings } from './play_world_fixture.ts'
 import { objectState } from './release_cost_fixture.ts'
 import { parseTools } from '@yaks/tools/declared'
 import { graph } from '@yaks/graph'
@@ -75,7 +75,8 @@ export let productionGap = async (
   let state = objectState(storage)
   let context = { ...state.context, getWebSockets: () => live }
   let binds = worldBindings(app, person)
-  let store = new Store(context, binds)
+  let clock = alarmed()
+  let store = new Store(context, binds, undefined, clock.time)
   let headers = {
     'x-store': 'yourname/vale.f52dc2',
     'x-yak-access': 'private',
@@ -269,14 +270,14 @@ export let productionGap = async (
       )
     }
   }
-  store = new Store(context, binds)
+  store = new Store(context, binds, undefined, clock.time)
   g = (await store.door).graph
   await store.alarm()
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()
   await post('/apply', [{ entity: { eid: hero }, player: {} }])
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   let ws = wire(person)
   live.push(ws)
   await store.fetch(new Request('http://store/vocab', { headers }))
@@ -300,7 +301,7 @@ export let productionGap = async (
       )
     }
   }
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   let before = await g.read('.wake&?call&?villager')
   let at = Date.now()
   await store.webSocketMessage(
@@ -318,7 +319,7 @@ export let productionGap = async (
       }],
     }),
   )
-  await settleWorld(store, state)
+  await settleWorld(store, state, clock.now)
   let reports: Summary[] = [],
     shapes = new Map<
       string,
@@ -349,14 +350,13 @@ export let productionGap = async (
       [Symbol.iterator]: () => rows.values(),
     }
   }
-  if (cold) store = new Store(context, binds)
-  let now = Date.now
-  Date.now = () => at + 301000
+  if (cold) store = new Store(context, binds, undefined, clock.time)
+  clock.ring(at + 301000)
   try {
     await p.run('retained release world alarm', async () => {
       await storage.deleteAlarm?.()
       await store.alarm()
-      await settleWorld(store, state)
+      await settleWorld(store, state, clock.now)
     })
     p.flush(Infinity)
     storage.sql.exec = exec
@@ -383,7 +383,6 @@ export let productionGap = async (
       ).slice(0, 20),
     }
   } finally {
-    Date.now = now
     storage.sql.exec = exec
   }
 }

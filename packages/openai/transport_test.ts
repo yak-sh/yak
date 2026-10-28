@@ -1,8 +1,7 @@
 // The Responses client against scripted SSE: provider drift and secret
 // boundaries are transport facts, so every case stops before runner logic.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import {
   ResponseEvent,
   ResponseFault,
@@ -620,12 +619,13 @@ let hang = (init?: RequestInit) =>
   })
 
 test('responses fails a connect that never returns a response', async () => {
-  using time = new FakeTime()
+  let time = clock()
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
     retries: 0,
     stallMs: 20,
+    clock: time,
     fetch: (_input, init) =>
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () =>
@@ -633,7 +633,7 @@ test('responses fails a connect that never returns a response', async () => {
       }),
   })
   let error = assertRejects(() => client.run({ model: 'm', input: [] }))
-  await time.tickAsync(20)
+  await time.advance(20)
   assertEquals(
     (await error as ResponseFault).message,
     'responses: transport stalled',
@@ -641,16 +641,17 @@ test('responses fails a connect that never returns a response', async () => {
 })
 
 test('responses fails a stream that stalls after connecting', async () => {
-  using time = new FakeTime()
+  let time = clock()
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
     retries: 0,
     stallMs: 20,
+    clock: time,
     fetch: (_input, init) => Promise.resolve(new Response(hang(init))),
   })
   let error = assertRejects(() => client.run({ model: 'm', input: [] }))
-  await time.tickAsync(20)
+  await time.advance(20)
   assertEquals(
     (await error as ResponseFault).message,
     'responses: stream stalled',
@@ -773,12 +774,13 @@ test('a second 401 fails without refreshing again and keeps the request id', asy
 })
 
 test('watchdog bounds both a missing first frame and a stalled HTTP error body', async () => {
-  using time = new FakeTime()
+  let time = clock()
   for (let status of [200, 400]) {
     let client = transport({
       credentials: auth(),
       retries: 0,
       stallMs: 20,
+      clock: time,
       fetch: (_url, init) =>
         Promise.resolve(
           new Response(
@@ -797,7 +799,7 @@ test('watchdog bounds both a missing first frame and a stalled HTTP error body',
       Error,
       'stream stalled',
     )
-    await time.tickAsync(20)
+    await time.advance(20)
     await stalled
   }
 })

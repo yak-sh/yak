@@ -80,6 +80,8 @@ export type Guard = Where & {
   /** Canonical identity of a vouched instrument, including stored identities
    * retained while a host migrates its attribution. Defaults to exact eids. */
   instrument?: Instrument
+  /** the time pace is kept by, in ms (default: `Date.now`) */
+  now?: () => number
 }
 
 /** The principal a signed transaction acts as: every bundle in it was signed by
@@ -263,6 +265,7 @@ export let guarding = (where: Guard): Hook => {
   let paces = pacesIn(where.vocab)
   let instrument = where.instrument ?? ((via: Eid) => via)
   let within = where.within ?? {}
+  let now = where.now ?? Date.now
   if (Object.keys(paces).length && !where.vocab.comp('_pace')) {
     throw new Error('stored pacing needs memberDoc in the graph vocabulary')
   }
@@ -289,7 +292,7 @@ export let guarding = (where: Guard): Hook => {
                 inside(tx, who, where.app, bundles, via, within, instrument),
                 (b) => adding(tx, who, where.app, b, via, permits, instrument),
               ),
-              (b) => pacing(paces, tx, b, Date.now(), where.instrument),
+              (b) => pacing(paces, tx, b, now(), where.instrument),
             )
           },
         ),

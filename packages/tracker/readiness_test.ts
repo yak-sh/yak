@@ -1,5 +1,6 @@
 // Readiness changes and edited source inputs owe their own tracker work.
 
+import { system } from '@yaks/fp'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -16,7 +17,7 @@ let now = 0, notified: string[] = [], reports: unknown[] = []
 let options: Options = {}
 let fx = registry(pooled, {
   write: (b) => g.apply(b, { trusted: true }),
-  now: () => now,
+  clock: { ...system, now: () => now },
   report: (error) => reports.push(error),
 })
 let g = graph({ vocab: pooled, storage: ram(pooled), plugins: [fx] })

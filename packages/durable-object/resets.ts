@@ -11,7 +11,7 @@
 // out of retries, and that is a failure; so is a reset our own code caused: a
 // storage operation over its timeout, or a kill for the CPU or memory limit.
 
-import { sleep } from '@yaks/fp'
+import { type Clock, sleep, system } from '@yaks/fp'
 
 let MOVED = [
   'Durable Object instance is no longer active',
@@ -170,28 +170,33 @@ export let lost = (e: unknown): boolean =>
 // internal error for ten to twenty seconds, so the pauses together outlast
 // that: a read waits for the object rather than failing a person's page or
 // leaving a store out of an answer. Only a call that keeps failing spends
-// them. `wait` spends a pause, half of it or more, so calls that failed
-// together do not return together; a test replaces it.
-export let backoff: { pauses: number[]; wait: (ms: number) => Promise<void> } =
-  {
-    pauses: [100, 500, 2000, 5000, 15000],
-    wait: (ms) => sleep(ms / 2 + Math.random() * ms / 2),
-  }
+// them.
+export let backoff: { pauses: number[] } = {
+  pauses: [100, 500, 2000, 5000, 15000],
+}
+
+/** How `retried` waits out a pause: half of it or more, so calls that failed
+ * together do not return together, on `clock` (the runtime's by default). */
+export let jittered = (clock: Clock = system) => (ms: number): Promise<void> =>
+  sleep(ms / 2 + Math.random() * ms / 2, undefined, clock)
 
 /**
  * Send one replayable call again while it fails in words `retry` knows,
- * pausing before each resend, once per `backoff` pause. The last failure
- * propagates unchanged.
+ * pausing before each resend, once per `backoff` pause, as `wait` waits one
+ * (`jittered` on the runtime's clock by default; a test hands its own). The
+ * last failure propagates unchanged.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * backoff.wait = () => Promise.resolve()
  * let sends = 0
  * let send = () => {
  *   if (++sends < 3) throw new Error('Network connection lost.')
  *   return 'answered'
  * }
- * assertEquals(await retried(send, true, lost), 'answered')
+ * let paused: number[] = []
+ * let wait = (ms: number) => Promise.resolve(void paused.push(ms))
+ * assertEquals(await retried(send, true, lost, wait), 'answered')
+ * assertEquals(paused, [100, 500])
  * assertEquals(sends, 3)
  * ```
  */
@@ -199,6 +204,7 @@ export let retried = async <T>(
   send: () => T | Promise<T>,
   replayable = true,
   retry: (error: unknown) => boolean = evicted,
+  wait: (ms: number) => Promise<void> = jittered(),
 ): Promise<T> => {
   for (let sent = 0;; sent++) {
     try {
@@ -206,7 +212,7 @@ export let retried = async <T>(
     } catch (e) {
       let pause = backoff.pauses[sent]
       if (!retry(e) || !replayable || pause == null) throw e
-      await backoff.wait(pause)
+      await wait(pause)
     }
   }
 }

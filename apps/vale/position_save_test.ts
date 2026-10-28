@@ -1,8 +1,7 @@
 // Hero movement stays live between saves; only players keep a snapshot.
-import { equal, test } from '@yaks/testing'
-import { FakeTime } from '@std/testing/time'
-import { pass } from './clock_fixture.ts'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Clock, clock, equal, test } from '@yaks/testing'
+import { timer } from './clock_fixture.ts'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
@@ -12,21 +11,25 @@ import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 import words from './vocab.json' with { type: 'json' }
 import { comp } from './bundle.ts'
 
+// A registry whose saves run on the test's own clock.
+let live = (g: Graph, time: Clock) =>
+  subscriptions(g, { timer: timer(time), now: time.now })
+let start = Date.parse('2026-10-03T18:00:00.000Z')
+
 test('hero saves use position age, settle after disconnect and never save wildlife', async () => {
-  using clock = new FakeTime()
   let vocab = loadVocab([words, core])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply([{ entity: { eid: 'hero' }, player: {} }])
-  let subs = subscriptions(g), sink = () => {}
-  let at = Date.now()
+  let time = clock(start), subs = live(g, time), sink = () => {}
+  let at = time.now()
   let move = (eid: string, x: number) => [{
     entity: { eid },
-    position: { level: 'mossvale', x, y: 5, z: 128, at: Date.now() },
+    position: { level: 'mossvale', x, y: 5, z: 128, at: time.now() },
   }]
   let stored = () => comp((g.get(['hero']) as Bundle[])[0], 'position')
   await subs.relay(sink, move('hero', 128))
   equal(stored().x, 128)
-  await pass(clock, 10_000)
+  await time.advance(10_000)
   await subs.relay(sink, move('hero', 135))
   await subs.relay(sink, move('wildlife', 130))
   equal(stored().x, 128)
@@ -37,27 +40,25 @@ test('hero saves use position age, settle after disconnect and never save wildli
   equal(comp((await subs.read(connected))[0], 'position').x, 135)
   await subs.drop(sink)
   equal((await subs.read(connected)).length, 0)
-  await pass(clock, 19_999)
+  await time.advance(19_999)
   equal(stored().x, 128)
-  await pass(clock, 1)
+  await time.advance(1)
   equal([stored().x, stored().at], [135, at + 10_000])
   equal(comp((g.get(['wildlife']) as Bundle[])[0], 'position'), {})
 })
 
 test('hibernation restores surviving hero holders and peer wake observers may read and write', async () => {
-  using clock = new FakeTime()
   let vocab = loadVocab([words, core])
   let g = graph({ storage: ram(vocab), vocab })
-  let at = Date.now()
-  let position = { level: 'mossvale', x: 128, y: 5, z: 128, at }
+  let time = clock(start), before = live(g, time), sink = () => {}
+  let position = { level: 'mossvale', x: 128, y: 5, z: 128, at: time.now() }
   await g.apply([
     { entity: { eid: 'connected' }, player: {}, position },
     { entity: { eid: 'offline' }, player: {}, position },
   ])
-  let before = subscriptions(g), sink = () => {}
   await before.relay(sink, [{ entity: { eid: 'connected' }, position }])
   let keys = before.relaying(sink)
-  let after = subscriptions(g), connected = '.player .position.level=mossvale'
+  let after = live(g, time), connected = '.player .position.level=mossvale'
   equal(await after.read(connected), [])
   let heard: number[] = []
   let off = after.observe(async () => {
@@ -66,10 +67,10 @@ test('hibernation restores surviving hero holders and peer wake observers may re
   })
   await after.relayed(sink, keys)
   equal((await after.read(connected)).map((r) => r.entity.eid), ['connected'])
-  await pass(clock)
+  await time.advance(0)
   equal(heard[0], 1)
   await after.drop(sink)
-  await pass(clock)
+  await time.advance(0)
   equal(heard.includes(0), true)
   equal(await after.read(connected), [])
   off()

@@ -1,13 +1,11 @@
-import { test } from '@yaks/testing'
+import { clock as virtual, test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { stub } from '@std/testing/mock'
 import { clock, timed } from './timing.ts'
 
-test('worker Server-Timing names wall time total', () => {
-  let now = 1000
-  using _date = stub(Date, 'now', () => now)
-  let c = clock()
-  now += 41
+test('worker Server-Timing names wall time total', async () => {
+  let time = virtual(1000)
+  let c = clock(time.now)
+  await time.advance(41)
   let response = timed(new Response('ok'), c)
   assertEquals(
     response.headers.get('server-timing'),

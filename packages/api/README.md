@@ -562,7 +562,9 @@ opens. Relay frames wait up to 16 ms and merge recent patches, retaining a clear
 before a later partial patch. A membership or stored-data frame flushes
 preceding relays first. Admission uses the component's declared pace, caps
 unpaced traffic, and closes persistent floods. Rejected inputs leave accepted
-values intact.
+values intact. Relay pace reads the registry's time, the `now` given to
+`subscriptions`, unless `attach` was given one; @yaks/durable-object's sockets
+also set their frame queues' timers with the registry's `timer`.
 
 ```ts
 import { decode, type Frame, queue } from '@yaks/api'

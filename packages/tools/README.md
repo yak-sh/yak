@@ -437,7 +437,9 @@ calls. `owner` identifies the call claim holder. `process` supplies
 `{pid, command, cwd}` on the call handed to the tool and is never stored by the
 runner. `otherwise` answers calls naming tools the runner lacks; without it,
 those calls are left for another runner. `takes(call)` can restrict which calls
-the runner accepts. `now` supplies the clock measuring `result.ms`.
+the runner accepts. `clock` (an @yaks/fp `Clock`) is what it keeps time by: its
+`now` measures `result.ms`, and a write storage refused waits on its `after`
+before trying again. The default is the runtime's timers with `performance.now`.
 
 The runner uses `who(call)` when applying tool answers. **Call authority** is
 the identity of whoever last decided its executable request. Changing the tool
@@ -733,7 +735,8 @@ boundary without a recorded runner. Its `read` method validates, resolves
 references, attributes answers and reports faults in the same way; methods for
 recorded work refuse. `@yaks/tools/result` supplies the tool identities and
 answer formatting shared by both runners. `@yaks/tools/persist` supplies
-storage-certified write retries without loading either runner.
+storage-certified write retries without loading either runner;
+`persist(write, report, clock?)` waits out its backoff on the clock it is given.
 `@yaks/tools/fault` classifies defects, and `@yaks/tools/errors` keeps shared
 invocation error identities.
 

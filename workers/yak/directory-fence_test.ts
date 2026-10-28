@@ -2,7 +2,8 @@
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
 import { backoff } from '@yaks/durable-object'
 import { select, table } from '@yaks/sql'
-import { equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
+import type { Clock } from '@yaks/fp'
 import { doorOf, IDEMPOTENCY, PLATFORM_STORE } from './door.ts'
 import { EPOCH, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
@@ -16,7 +17,7 @@ import {
 } from './serving-copy.ts'
 import { db, slot, state } from './testing.ts'
 
-let fixture = async (rules: Rule[] = []) => {
+let fixture = async (rules: Rule[] = [], time?: Clock) => {
   let saved: ServingCopyState | undefined
   let persistence = {
     read: () => saved,
@@ -54,6 +55,7 @@ let fixture = async (rules: Rule[] = []) => {
   let ctx = state(PLATFORM_STORE)
   let store: Store
   let env = {
+    CLOCK: time,
     STORE_TRACING: 'off',
     SERVING_COPY: { idFromName: (name: string) => name, get: () => rpc },
     STORE: {
@@ -516,21 +518,25 @@ await proof(
 let moving =
   (times: number, error = 'internal error; reference = moving') => () =>
     times-- > 0 ? Promise.reject(new Error(error)) : Promise.resolve()
-let instantly = async <T>(run: () => Promise<T>) => {
-  let wait = backoff.wait
-  backoff.wait = () => Promise.resolve()
-  try {
-    return await run()
-  } finally {
-    backoff.wait = wait
+// A Store on a clock of its own, and its write run with that clock moved on,
+// each of the copy's pauses at a time, until the write settles.
+let paused = async () => {
+  let time = clock()
+  let f = await fixture([], time)
+  let settled = async <T>(write: Promise<T>) => {
+    let done = false
+    write.then(() => done = true, () => done = true)
+    while (!done) await time.advance(backoff.pauses[0])
+    return write
   }
+  return { f, settled }
 }
 
 await proof('a write waits out a copy that moves under it', async () => {
-  let f = await fixture()
+  let { f, settled } = await paused()
   f.onBegin(moving(1))
   f.onFinish(moving(1, 'Network connection lost.'))
-  let error = await instantly(() => refusal(() => f.at.apply(patch, KERNEL)))
+  let error = await settled(refusal(() => f.at.apply(patch, KERNEL)))
   return () => {
     equal(error, '')
     equal(f.committed(), { access: 'private', epoch: String(f.initial + 2) })
@@ -544,9 +550,9 @@ await proof('a write waits out a copy that moves under it', async () => {
 await proof(
   'a copy still moving after the pauses fails the write, which commits nothing',
   async () => {
-    let f = await fixture()
+    let { f, settled } = await paused()
     f.onBegin(moving(Infinity))
-    let error = await instantly(() => refusal(() => f.at.apply(patch, KERNEL)))
+    let error = await settled(refusal(() => f.at.apply(patch, KERNEL)))
     return () => {
       ok(error.includes('internal error'), error)
       equal(f.committed(), { access: 'public', epoch: String(f.initial) })

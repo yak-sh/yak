@@ -1,38 +1,11 @@
 // Poll committed revisions, not computed session status. A file can be written
 // by another process, which an in-process subscription would never hear.
+import { type Clock, sleep, system } from '@yaks/fp'
 import type { Graph } from '@yaks/graph'
-
-/** The time a wait keeps: when it is, and a callback after a delay that the
- * returned function cancels. */
-export type Clock = {
-  now: () => number
-  after: (ms: number, callback: () => void) => () => void
-}
-
-/** The system's clock. */
-export let system: Clock = {
-  now: () => Date.now(),
-  after: (ms, callback) => {
-    let timer = setTimeout(callback, ms)
-    return () => clearTimeout(timer)
-  },
-}
 
 // The first beat. Each beat doubles it up to `every`, so a wait answers within
 // about the time it has already waited, and a long one costs a read a beat.
 let start = 25
-
-let pause = (clock: Clock, ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((resolve) => {
-    let done = () => {
-      cancel()
-      signal?.removeEventListener('abort', done)
-      resolve()
-    }
-    let cancel = clock.after(ms, done)
-    signal?.addEventListener('abort', done, { once: true })
-    if (signal?.aborted) done()
-  })
 
 /** Read initially and after committed changes, on a beat that starts at 25 ms
  * and doubles until it is `every` (a second by default). Always yield once
@@ -62,10 +35,10 @@ export async function* changes(
       yield done
     }
     if (done) return
-    await pause(
-      clock,
+    await sleep(
       Math.min(beat, Math.max(0, end - clock.now())),
       options.signal,
+      clock,
     )
     beat = Math.min(beat * 2, every)
   }

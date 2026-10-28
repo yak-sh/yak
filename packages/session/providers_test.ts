@@ -7,7 +7,7 @@ import { type Comp, graph, identityEid } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { type Model, modelDoc, ModelError } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { answers, providerResolver } from './providers.ts'
 
@@ -110,7 +110,7 @@ test('resolved provider snapshots dispatch retention on every reply and keeps ex
   assertEquals(reply.cacheExpiresAt, null)
 })
 
-let discovery = async (pending = true) => {
+let discovery = async (pending = true, time = clock()) => {
   let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc], [
     kernelKeywords,
     edgeKeywords,
@@ -145,6 +145,7 @@ let discovery = async (pending = true) => {
     undefined,
     undefined,
     (error) => errors.push(error),
+    time,
   )
   let ask = async (id = ids[0]) => {
     let served = await resolve({ provider }, (await g.get([id]))[0])
@@ -156,16 +157,6 @@ let discovery = async (pending = true) => {
 // Drive separate real graph/resolver scenarios while the module prepares. Each
 // assertion below observes a frozen outcome; no test depends on another test's
 // graph, clock, or execution order.
-let clocked = async <T>(run: (advance: (ms: number) => void) => Promise<T>) => {
-  let now = Date.now
-  let clock = 1_800_000_000_000
-  Date.now = () => clock
-  try {
-    return await run((ms) => clock += ms)
-  } finally {
-    Date.now = now
-  }
-}
 
 let confirmedWithoutPrice = await (async () => {
   let h = await discovery(false)
@@ -223,8 +214,9 @@ test('an empty discovery catalog is retained for a newly pending model', () => {
   assertEquals(concurrentDiscovery.afterEmptyCache, { lists: 1, asks: 3 })
 })
 
-let exhaustedDiscovery = await clocked(async (advance) => {
-  let h = await discovery()
+let exhaustedDiscovery = await (async () => {
+  let time = clock(1_800_000_000_000)
+  let h = await discovery(true, time)
   let lists = 0
   let failure = new ModelError('http_429', 'Model listing says 429', {
     after: 120_000,
@@ -243,14 +235,14 @@ let exhaustedDiscovery = await clocked(async (advance) => {
   await Promise.all(h.ids.map((id) => h.ask(id)))
   let initial = snapshot()
   await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
-  advance(60_001)
+  await time.advance(60_001)
   await h.ask()
   let duringCooldown = snapshot()
   await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
-  advance(60_000)
+  await time.advance(60_000)
   await h.ask()
   return Object.freeze({ initial, duringCooldown, afterCooldown: snapshot() })
-})
+})()
 
 test('transient metadata exhaustion reports once without suppressing concurrent asks', () => {
   assertEquals(exhaustedDiscovery.initial, {
@@ -279,8 +271,9 @@ test('metadata discovery retries after the provider cooldown expires', () => {
   })
 })
 
-let infoCache = await clocked(async (advance) => {
-  let h = await discovery(false)
+let infoCache = await (async () => {
+  let time = clock(1_800_000_000_000)
+  let h = await discovery(false, time)
   let infos = 0
   h.fake.info = (name) => {
     infos++
@@ -291,13 +284,13 @@ let infoCache = await clocked(async (advance) => {
   }
   await Promise.all([h.ask(), h.ask()])
   let concurrent = infos
-  advance(299_999)
+  await time.advance(299_999)
   await h.ask()
   let beforeExpiry = infos
-  advance(2)
+  await time.advance(2)
   await h.ask()
   return Object.freeze({ concurrent, beforeExpiry, afterExpiry: infos })
-})
+})()
 
 test('missing-price metadata shares concurrent per-model info requests', () => {
   assertEquals(infoCache.concurrent, 1)

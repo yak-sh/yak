@@ -1,7 +1,7 @@
 /** Authenticated native HTTP and bounded SSE contracts. */
 /// <reference lib="deno.ns" />
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { channel, peek } from '@yaks/trace'
 import { observe } from './activity.ts'
 import { events, guarded, type Hosting } from './http.ts'
@@ -11,7 +11,6 @@ import {
   anatomy,
   door,
   emit,
-  manualTimers,
   readFrame,
   recorded,
   req,
@@ -244,14 +243,14 @@ test('malformed and future event cursors are refused without leaving a lease', a
 })
 
 test('SSE hello and same-epoch replay retain order, IDs and explicit omission counts', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let held = observe(graph)
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
     emit(graph, 300)
     let response = await events(
-      allowed(graph),
+      allowed(graph, time),
       req('/visualize/events', {
         headers: { 'last-event-id': `${held.epoch}:10` },
       }),
@@ -272,22 +271,21 @@ test('SSE hello and same-epoch replay retain order, IDs and explicit omission co
     let next = await readFrame(reader)
     assertEquals(recorded(next).seq, 46)
     await reader.cancel()
-    assertEquals(timers.pending.size, 0)
+    assertEquals(time.pending(), 0)
     assert(peek(graph))
   } finally {
     await reader?.cancel()
     held.close()
-    timers.restore()
   }
   assertEquals(peek(graph), undefined)
 })
 
 test('stream overflow counts records only and hello survives a stalled reader', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
-    let response = await events(allowed(graph), req('/visualize/events'))
+    let response = await events(allowed(graph, time), req('/visualize/events'))
     emit(graph, 400)
     reader = response.body!.getReader()
     assertEquals((await readFrame(reader)).type, 'hello')
@@ -307,16 +305,15 @@ test('stream overflow counts records only and hello survives a stalled reader', 
     assertEquals(received.at(-1), 400)
     assert(received.every((n, i) => !i || received[i - 1] < n))
     await reader.cancel()
-    assertEquals(timers.pending.size, 0)
+    assertEquals(time.pending(), 0)
     assertEquals(peek(graph), undefined)
   } finally {
     await reader?.cancel()
-    timers.restore()
   }
 })
 
 test('tail resume skips retained observations and cannot reconstruct idle work', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let held = observe(graph)
   emit(graph, 2)
@@ -329,7 +326,7 @@ test('tail resume skips retained observations and cannot reconstruct idle work',
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
     let response = await events(
-      allowed(graph),
+      allowed(graph, time),
       req('/visualize/events?tail=1', {
         headers: { 'last-event-id': `${old}:2` },
       }),
@@ -345,86 +342,80 @@ test('tail resume skips retained observations and cannot reconstruct idle work',
     assertEquals(recorded(next).epoch, hello.data.epoch)
     await reader.cancel()
     assertEquals(peek(graph), undefined)
-    assertEquals(timers.pending.size, 0)
+    assertEquals(time.pending(), 0)
   } finally {
     await reader?.cancel()
-    timers.restore()
   }
 })
 
 test('stream abort, host close and reader cancellation release independent leases', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let request = new AbortController()
   let closing = new AbortController()
   let readers: ReadableStreamDefaultReader<Uint8Array>[] = []
   try {
     let a = await events(
-      allowed(graph),
+      allowed(graph, time),
       req('/visualize/events', {
         signal: request.signal,
       }),
     )
     let b = await events(
-      { ...allowed(graph), stopping: closing.signal },
+      { ...allowed(graph, time), stopping: closing.signal },
       req('/visualize/events'),
     )
     readers = [a.body!.getReader(), b.body!.getReader()]
     await readFrame(readers[0])
     await readFrame(readers[1])
-    assertEquals(timers.pending.size, 2)
+    assertEquals(time.pending(), 2)
     request.abort()
     assertEquals((await readers[0].read()).done, true)
     assert(peek(graph))
-    assertEquals(timers.pending.size, 1)
+    assertEquals(time.pending(), 1)
     closing.abort()
     assertEquals((await readers[1].read()).done, true)
     assertEquals(peek(graph), undefined)
-    assertEquals(timers.pending.size, 0)
+    assertEquals(time.pending(), 0)
   } finally {
     for (let reader of readers) await reader.cancel()
-    timers.restore()
   }
 })
 
 test('cancelling an in-flight HTTP capture is cancellation, not a server fault', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let stop = new AbortController()
   let reported = 0
-  try {
-    let waiting = door(
-      {
-        ...allowed(graph),
-        report: () => {
-          reported++
-        },
+  let waiting = door(
+    {
+      ...allowed(graph, time),
+      report: () => {
+        reported++
       },
-      '/visualize/activity?wait=2000',
-      { signal: stop.signal },
-    )
-    await Promise.resolve()
-    assert(peek(graph))
-    stop.abort()
-    let response = await waiting
-    assertEquals(response.status, 499)
-    assertEquals(reported, 0)
-    assertEquals(timers.pending.size, 0)
-    assertEquals(peek(graph), undefined)
-  } finally {
-    timers.restore()
-  }
+    },
+    '/visualize/activity?wait=2000',
+    { signal: stop.signal },
+  )
+  await Promise.resolve()
+  assert(peek(graph))
+  stop.abort()
+  let response = await waiting
+  assertEquals(response.status, 499)
+  assertEquals(reported, 0)
+  assertEquals(time.pending(), 0)
+  assertEquals(peek(graph), undefined)
 })
 
 test('tail EventSource reconnect honors a same-epoch cursor instead of skipping work', async () => {
-  let timers = manualTimers()
+  let time = clock()
   let graph = {}
   let held = observe(graph)
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
     emit(graph, 3)
     let response = await events(
-      allowed(graph),
+      allowed(graph, time),
       req('/visualize/events?tail=1', {
         headers: { 'last-event-id': `${held.epoch}:1` },
       }),
@@ -436,6 +427,5 @@ test('tail EventSource reconnect honors a same-epoch cursor instead of skipping 
   } finally {
     await reader?.cancel()
     held.close()
-    timers.restore()
   }
 })

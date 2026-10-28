@@ -6,6 +6,7 @@
 // for is not refused here — it is somebody else's to answer: a command-line
 // agent @yaks/spawn launches, or another host lent that provider.
 
+import { type Clock, system } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import {
   confirmed,
@@ -79,13 +80,15 @@ export let offerFor = (
 /** The resolver a runner asks with (./react.ts `Deps.resolveModel`). One
  * `override` for every provider (a test's, an embedder's) still asks by the
  * provider's name for the model, and still refuses a provider that does not
- * serve it; a model nobody serves is asked by its own name. */
+ * serve it; a model nobody serves is asked by its own name. `clock` is the
+ * time its metadata cache expires by and its asks are stamped with. */
 export let providerResolver = (
   g: Graph,
   implementations: Readonly<Record<string, Model>>,
   override?: Model,
   executorFor?: (provider: string) => Promise<Executor | undefined>,
   report?: (error: unknown) => void,
+  clock: Clock = system,
 ): (using: Comp | undefined, model: Bundle) => Promise<Served> => {
   // A resolver lives with its runner. Share discovery across simultaneously
   // resumed transcripts, not just requests for the same selected model. An
@@ -102,7 +105,7 @@ export let providerResolver = (
     let cache = catalogs.get(serve)
     if (!cache) catalogs.set(serve, cache = new Map())
     let kept = cache.get(key)
-    if (kept && kept.until > Date.now()) return kept.value
+    if (kept && kept.until > clock.now()) return kept.value
     let entry = {
       until: Infinity,
       value: Promise.resolve([] as Listed[]),
@@ -113,7 +116,7 @@ export let providerResolver = (
         let listed = name == null
           ? await serve.list?.() ?? []
           : [await serve.info?.(name)].filter((m): m is Listed => !!m)
-        entry.until = Date.now() + 300_000
+        entry.until = clock.now() + 300_000
         return listed
       } catch (error) {
         if (error instanceof ModelError && !error.retry) {
@@ -123,7 +126,7 @@ export let providerResolver = (
         // Discovery is optional preparation, not a paid model request. An
         // exhausted transient outage must not fail the session; cool down even
         // when the endpoint returns no metadata, and report the lost enrichment.
-        entry.until = Date.now() + Math.max(
+        entry.until = clock.now() + Math.max(
           60_000,
           error instanceof ModelError ? error.retry?.after ?? 0 : 0,
         )
@@ -202,7 +205,7 @@ export let providerResolver = (
         ? await g.get([found.provider], ['provider'])
         : []
       let cache = {
-        requestedAt: Date.now(),
+        requestedAt: clock.now(),
         retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
       }
       let reply = await serve(prepare(req, listing))

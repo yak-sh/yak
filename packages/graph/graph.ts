@@ -57,7 +57,7 @@ import {
   peek,
   recording,
 } from '@yaks/trace'
-import { after, each, isPromise } from '@yaks/fp'
+import { after, type Clock, each, isPromise, sleep, system } from '@yaks/fp'
 import {
   type Actor,
   type Bundle,
@@ -171,7 +171,9 @@ export type ApplyOpts = {
    * nothing keeps them for history, so a plugin holding a copy of one, such
    * as @yaks/blob's bytes, lets it go. Refused unless `trusted` is true. */
   expiring?: boolean
-  /** the timestamp every stamp in this batch uses, ISO-8601 (default: now) */
+  /** the batch's moment, ISO-8601: what every stamp in it uses and its rules
+   * compare relative times against (default: the graph's clock as the apply
+   * begins) */
   now?: string
   /** a dry run: every phase runs and the transaction is rolled back instead of
    * committed, so nothing is written and no effect observes it. The return
@@ -229,10 +231,12 @@ export type Options = {
   /** Per-entity provenance policy; false leaves created/updated to another
    * graph. Mark stamping still runs. */
   provenance?: StampPolicy | false
-  /** the calling program's provenance clock, sampled once when a rule first
-   * asks for #Now. `ApplyOpts.now` takes precedence. The default is still the
-   * time the apply started. */
-  clock?: () => string
+  /** the graph's clock (default: the runtime's, @yaks/fp `system`). An apply
+   * reads its time once, as it begins, unless `ApplyOpts.now` names the
+   * moment: #Now and every stamp are that moment, and rules compare relative
+   * times against it. A transaction the store refused before it began is
+   * tried again after the clock's timer. */
+  clock?: Clock
   /** a calling program with an enclosing transaction of its own may queue
    * observers until that transaction commits. Discard the queue on rollback.
    * Deferred observers do not change what this apply returns; any writes they
@@ -356,6 +360,8 @@ type Run = {
   tracing?: Context
   parent: () => string | undefined
   resources: Record<string, Resource>
+  /** the apply's moment, in ms: what its rules read relative times against */
+  now: number
   timed: Timing
   admit: (
     bundles: Bundle[],
@@ -395,6 +401,7 @@ export let graph = (opts: Options): Graph => {
   let plugins = [...(opts.plugins ?? [])]
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
+  let clock = opts.clock ?? system
 
   let phaseHooks = new Map<Phase, [string, Hook][]>()
   let phaseRules = new Map<Phase, Rule[]>()
@@ -658,6 +665,7 @@ export let graph = (opts: Options): Graph => {
       let out = fire(rules, {
         vocab,
         tx,
+        now: run.now,
         phase: name,
         bundles,
         resources: run.resources,
@@ -702,10 +710,14 @@ export let graph = (opts: Options): Graph => {
     let current = tracing?.parent
     let checking = false
     let st = state()
-    // When the apply began, written out only once something reads it.
-    let began = Date.now()
+    // The apply's moment, read off the clock once as it begins unless the
+    // batch names its own: what every stamp is written with and every rule
+    // reads relative times against. A host's clock may read context that
+    // lasts only as long as the call, and observers can run after it returns.
+    // Written out only once something reads it.
+    let began = o.now == null ? clock.now() : Date.parse(o.now)
     let instant: string | undefined
-    let moment = () => instant ??= o.now ?? opts.clock?.() ?? iso(began)
+    let moment = () => instant ??= o.now ?? iso(began)
     let traced = (tx: Tx): Tx =>
       tracing ? retained(tx, () => ({ ...tracing, parent: current })) : tx
     let protecting = (tx: Tx, pending: Bundle[] = []): Tx => {
@@ -762,6 +774,7 @@ export let graph = (opts: Options): Graph => {
       tracing,
       parent: () => current,
       resources,
+      now: began,
       timed,
       admit: (b, tx, pending) => referring(admit(b, vocab, true), tx, pending),
       actors: (b, tx) => actors(b, tx),
@@ -843,6 +856,7 @@ export let graph = (opts: Options): Graph => {
                   fire([rule], {
                     vocab,
                     tx: outside,
+                    now: began,
                     phase: 'effect',
                     bundles: applied,
                     resources: shared,
@@ -1155,11 +1169,13 @@ export let graph = (opts: Options): Graph => {
         committed = timed(
           'transaction',
           () =>
-            enter((begun) =>
-              storage.tx((tx) => {
-                begun()
-                return transacting(tx)
-              }, { admission: checking })
+            enter(
+              (begun) =>
+                storage.tx((tx) => {
+                  begun()
+                  return transacting(tx)
+                }, { admission: checking }),
+              (ms) => sleep(ms, undefined, clock),
             ),
         )
       } catch (e) {
@@ -1171,9 +1187,6 @@ export let graph = (opts: Options): Graph => {
         if (!defer) {
           return tracing ? timed('effect', () => effects(b)) : effects(b)
         }
-        // Sample the calling program's clock while its transaction-scoped
-        // context still exists.
-        moment()
         defer(() =>
           after(
             tracing ? timed('effect', () => effects(b)) : effects(b),

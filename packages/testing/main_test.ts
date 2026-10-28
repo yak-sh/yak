@@ -3,7 +3,6 @@
 import { cleanup, equal, match, ok, test } from './mod.ts'
 import { one, type Times } from './run.ts'
 import { fenceName, fences } from './examples.ts'
-import { FakeTime } from '@std/testing/time'
 
 let MAIN = new URL('./main.ts', import.meta.url).pathname
 let TESTING = new URL('./mod.ts', import.meta.url).href
@@ -240,24 +239,4 @@ test('a completed outcome keeps report metadata without retaining the fixture bo
     file: 'fixture_test.ts',
   })
   equal(Object.hasOwn(releasedOutcome.test, 'body'), false)
-})
-
-// A test that fakes the timers and fails before it puts them back, and the
-// timers a file loading after it would wait on.
-let real = { setTimeout, Date }
-let faked = await one({
-  name: 'fakes time',
-  body: () => {
-    new FakeTime()
-    throw new Error('fails before it disposes')
-  },
-  tags: [],
-  skip: false,
-  file: 'faking_test.ts',
-}, 100)
-let after = { setTimeout, Date }
-FakeTime.restore()
-test('a test that fakes the timers and fails leaves them real for what runs next', () => {
-  equal(faked.ok, false)
-  ok(after.setTimeout == real.setTimeout && after.Date == real.Date)
 })

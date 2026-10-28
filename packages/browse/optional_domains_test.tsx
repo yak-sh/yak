@@ -1,5 +1,5 @@
 import { QueryList } from './components/views/List.tsx'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -119,38 +119,33 @@ test('a store that declares no person is never asked for one', async () => {
 })
 
 test('legacy freeze is not offered or scheduled without a host door', () => {
-  let prior = globalThis.setTimeout
+  let time = clock()
   let scheduled = 0
-  globalThis.setTimeout = Object.assign(() => {
-    scheduled++
-    return 0
-  }, prior)
+  let spec = pasted('https://example.com/a', {
+    ...time,
+    after: (ms, callback) => (scheduled++, time.after(ms, callback)),
+  })!
+  assertEquals(spec.changes.map((c) => c.name), ['web'])
+  assertEquals(scheduled, 0)
+  let seen = mount(h(Web, {
+    e: {
+      eid: spec.target,
+      num: 0,
+      kind: 'web',
+      refs: [],
+      kids: [],
+      web: { eid: spec.target, url: 'https://example.com/a' },
+    },
+  }))
   try {
-    let spec = pasted('https://example.com/a')!
-    assertEquals(spec.changes.map((c) => c.name), ['web'])
-    assertEquals(scheduled, 0)
-    let seen = mount(h(Web, {
-      e: {
-        eid: spec.target,
-        num: 0,
-        kind: 'web',
-        refs: [],
-        kids: [],
-        web: { eid: spec.target, url: 'https://example.com/a' },
-      },
-    }))
-    try {
-      assertEquals(
-        seen.root.textContent?.includes('https://example.com/a'),
-        true,
-      )
-      assertEquals(seen.root.querySelector('button'), null)
-      assertEquals(seen.root.textContent?.includes('freezing'), false)
-    } finally {
-      seen.free()
-    }
+    assertEquals(
+      seen.root.textContent?.includes('https://example.com/a'),
+      true,
+    )
+    assertEquals(seen.root.querySelector('button'), null)
+    assertEquals(seen.root.textContent?.includes('freezing'), false)
   } finally {
-    globalThis.setTimeout = prior
+    seen.free()
   }
 })
 

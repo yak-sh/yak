@@ -55,6 +55,7 @@ export type LiveClient = ReturnType<typeof liveClient>
 export let liveClient = (opts: {
   url: string
   fetch?: ClientOpts['fetch']
+  timer?: ClientOpts['timer']
   report?: Told
   connect: (url: string) => Socket
   changed: (eids: string[]) => void

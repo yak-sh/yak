@@ -3,7 +3,6 @@ import { graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, test, throws } from '@yaks/testing'
 import { loadVocab, pick } from '@yaks/vocab'
-import { stub } from '@std/testing/mock'
 import { CAP, effectDoc, type PoolOpts } from './pool.ts'
 import { effects } from './registry.ts'
 import { enqueue } from './enqueue.ts'
@@ -19,10 +18,24 @@ let fixture = (
   o: { storage?: Storage; watch?: PoolOpts['watch'] } = {},
 ) => {
   let ran = Promise.withResolvers<void>(), count = 0
+  // The worker's clock: a zero-delay turn is a microtask, and its polling nap
+  // never ends on its own, so only a wake cuts it short.
+  let nap = { asleep: Promise.withResolvers<void>(), cleared: 0 }
   let fx = effects(vocab, {
     singleOwner: true,
     defer: true,
-    now: () => 0,
+    clock: {
+      now: () => 0,
+      after: (ms, run) => {
+        if (ms === 0) {
+          queueMicrotask(run)
+          return () => {}
+        }
+        equal(ms, CAP)
+        nap.asleep.resolve()
+        return () => void nap.cleared++
+      },
+    },
     write: (bs) => g.apply(bs, { trusted: true }),
     watch: o.watch,
   })
@@ -49,32 +62,22 @@ let fixture = (
       ran.resolve()
     },
   })
-  return { fx, g, ran, count: () => count }
+  return { fx, g, ran, nap, count: () => count }
 }
 let seed = [{ entity: { eid: 'a' }, item: {} }]
 type Fixture = ReturnType<typeof fixture>
-// Work the pool until its first nap, then `act`, told how many times that nap
-// was cut short. The polling timer never fires: only a wake ends the nap.
+// Work the pool until its first nap, then `act`, told how many times a nap was
+// cut short since. The polling timer never fires: only a wake ends the nap.
 let napping = async <T>(
   h: Fixture,
   act: (cleared: () => number) => Promise<T>,
 ): Promise<T> => {
-  let asleep = Promise.withResolvers<void>(), cleared = 0
-  using _timer = stub(globalThis, 'setTimeout', (run, ms) => {
-    if (ms === 0) queueMicrotask(run as () => void)
-    else {
-      equal(ms, CAP)
-      asleep.resolve()
-    }
-    return (ms === CAP ? 1 : 0) as unknown as ReturnType<typeof setTimeout>
-  })
-  using _clear = stub(globalThis, 'clearTimeout', (id) => {
-    if (Number(id) === 1) cleared++
-  })
+  h.nap.asleep = Promise.withResolvers<void>()
+  h.nap.cleared = 0
   let stop = new AbortController(), loop = h.fx.work(h.g, stop.signal)
   try {
-    await asleep.promise
-    return await act(() => cleared)
+    await h.nap.asleep.promise
+    return await act(() => h.nap.cleared)
   } finally {
     stop.abort()
     await loop

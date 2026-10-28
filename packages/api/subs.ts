@@ -190,6 +190,11 @@ export type Subs = {
   pace?: (comp: string) => number | null
   /** The query deciding when a peer component is saved. */
   save?: (comp: string) => string | null
+  /** The registry's clock, as {@link subscriptions} was given it: the time a
+   * socket serving it reads (relay pace, clock replies) and how it sets its
+   * timers (frame queues). Unset, the runtime's. */
+  now?: () => number
+  timer?: Timer
   /** The keys one sink's relayed values are held under — small enough to
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
@@ -443,10 +448,11 @@ export let subscriptions = (graph: Graph, opts: {
    * that subscription after this commit. It does not subscribe to those rows. */
   invalidate?: (query: string, applied: Bundle[]) => boolean
   /** How every timer of the registry is set: a `durable: "5s"` relayed
-   * value's expiry, a pending save's retry and a relay batch's flush
-   * (default: setTimeout). */
+   * value's expiry, a pending save's retry, a relay batch's flush and the
+   * frame queue of a socket serving it (default: setTimeout). */
   timer?: Timer
-  /** Clock used by pending save queries (default: Date.now). */
+  /** The registry's time: what pending save queries and the relay pace of a
+   * socket serving it read (default: Date.now). */
   now?: () => number
   /** How many closed answers stand at once for a page to ask again (default
    * 256). */
@@ -2579,5 +2585,7 @@ export let subscriptions = (graph: Graph, opts: {
       }),
     pace: (comp) => peerComp(comp) ? paceOf(graph.vocab, comp) : null,
     save: (comp) => saveOf(graph.vocab, comp),
+    now: opts.now,
+    timer: opts.timer,
   }
 }

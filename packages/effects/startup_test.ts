@@ -8,7 +8,7 @@ import {
   guard,
   type Storage,
 } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, system } from '@yaks/fp'
 import { matcher } from '@yaks/match'
 import { memory } from '../graph/testing.ts'
 import { equal, match, test, throws } from '@yaks/testing'
@@ -162,7 +162,10 @@ for (let singleOwner of [false, true]) {
 // A deployment already owed the run; a new registry is its next wake.
 let deployed = proc({ singleOwner: true }, store())
 await deployed.fx.startup(deployed.g)
-let woken = proc({ singleOwner: true, now: () => 0 }, deployed.storage)
+let woken = proc(
+  { singleOwner: true, clock: { ...system, now: () => 0 } },
+  deployed.storage,
+)
 woken.fx.handle({
   boot: (e, _tx, _write, attempt) => {
     equal(e.kind, 'started')
@@ -180,7 +183,10 @@ test('deployment startup survives a wake and records failure for retry', async (
 })
 
 // A failed first attempt is the input to recovery after another wake.
-let interrupted = proc({ singleOwner: true, now: () => 0 }, store())
+let interrupted = proc(
+  { singleOwner: true, clock: { ...system, now: () => 0 } },
+  store(),
+)
 await interrupted.fx.startup(interrupted.g)
 interrupted.fx.handle({
   boot: () => {
@@ -188,7 +194,10 @@ interrupted.fx.handle({
   },
 })
 await work(interrupted)
-let retried = proc({ singleOwner: true, now: () => 1000 }, interrupted.storage)
+let retried = proc(
+  { singleOwner: true, clock: { ...system, now: () => 1000 } },
+  interrupted.storage,
+)
 retried.fx.handle({
   boot: (e, _tx, _write, attempt) => {
     equal(e.kind, 'started')

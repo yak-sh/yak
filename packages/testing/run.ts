@@ -15,22 +15,12 @@ export type Outcome = {
   errors: unknown[]
 }
 
-// The clock and timers a test cannot fake: @std/testing's FakeTime swaps the
-// globals while a test runs.
+// The runner's own clock and timers, as the runtime made them: a test that
+// replaced the globals still ends at its deadline and is timed on the real
+// clock.
 let now = performance.now.bind(performance)
 let later = setTimeout
 let cancel = clearTimeout
-
-// The timers as the runtime made them. A test that swaps them and ends
-// without putting them back, failing or never ending, would leave them fake
-// for every file after it, and a module's top-level `await until(…)` would
-// wait forever; so after each test they are the runtime's again.
-let timers = { Date, setTimeout, clearTimeout, setInterval, clearInterval }
-let timeout = AbortSignal.timeout
-let unfake = () => {
-  Object.assign(globalThis, timers)
-  AbortSignal.timeout = timeout
-}
 
 /** What a thread has spent so far, in milliseconds: on a CPU, and runnable
  * but waiting for one another process held. */
@@ -163,7 +153,6 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   } finally {
     ms = now() - start
     cancel(timer)
-    unfake()
   }
   errors.push(...stray.splice(0))
   return {

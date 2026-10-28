@@ -1,6 +1,7 @@
 // Signed serving uses the real Apps/MCP doors and directory Store. Only the
 // transport's stall, independent copy RPC and remote worker are fixtures.
-import { clock, equal, ok, test } from '@yaks/testing'
+import type { Clock } from '@yaks/fp'
+import { clock, equal, ok, test, tick } from '@yaks/testing'
 import { fetch as appFetch } from './apps.ts'
 import * as dirPart from './directory.ts'
 import {
@@ -330,47 +331,34 @@ await proof('a directory refusal is answered at once', async () => {
   return () => equal(answer.answer().status, 404)
 })
 
-// Apps and MCP must install signedDirectory themselves. Their production timer
-// uses the runtime globals; replace that boundary only while a stalled call is
-// in flight, leaving the directory binding raw (never double-wrapped).
-let deadline = async (run: () => Promise<Response>, allowPending = false) => {
+// Apps and MCP install signedDirectory themselves, on the kernel's clock
+// (env.ts `CLOCK`). A stalled call is handed a clock of its own, leaving the
+// directory binding raw (never double-wrapped).
+let deadline = async (
+  run: (time: Clock) => Promise<Response>,
+  allowPending = false,
+) => {
   let time = clock()
-  let set = globalThis.setTimeout, clear = globalThis.clearTimeout
-  let next = 0, cancellations = new Map<number, () => void>()
-  globalThis.setTimeout = ((callback: () => void, ms = 0) => {
-    let id = ++next
-    cancellations.set(id, time.after(ms, callback))
-    return id
-  }) as typeof set
-  globalThis.clearTimeout = ((id: number) => {
-    cancellations.get(id)?.()
-    cancellations.delete(id)
-  }) as typeof clear
-  try {
-    let work = observing(run())
+  let work = observing(run(time))
+  await flush()
+  let pending = work.pending()
+  // Crypto and Store continuations can register sequential directory reads.
+  // No sleep/polling: only explicitly scheduled virtual deadlines are run.
+  for (let n = 0; n < 32 && work.pending(); n++) {
+    await time.advance(25)
     await flush()
-    let pending = work.pending()
-    // Crypto and Store continuations can register sequential directory reads.
-    // No sleep/polling: only explicitly scheduled virtual deadlines are run.
-    for (let n = 0; n < 32 && work.pending(); n++) {
-      await time.advance(25)
-      await flush()
-      // WebCrypto completes on the runtime's task queue, not a promise turn.
-      await new Promise<void>((done) => set(done, 0))
-    }
-    let unavailable = work.pending()
-    if (allowPending && unavailable) {
-      return {
-        pending,
-        unavailable,
-        response: new Response('pending observation'),
-      }
-    }
-    return { pending, unavailable, response: work.answer() }
-  } finally {
-    globalThis.setTimeout = set
-    globalThis.clearTimeout = clear
+    // WebCrypto completes on the runtime's task queue, not a promise turn.
+    await tick()
   }
+  let unavailable = work.pending()
+  if (allowPending && unavailable) {
+    return {
+      pending,
+      unavailable,
+      response: new Response('pending observation'),
+    }
+  }
+  return { pending, unavailable, response: work.answer() }
 }
 
 let fixture = async (kind: 'grant' | 'member') => {
@@ -420,8 +408,11 @@ let fixture = async (kind: 'grant' | 'member') => {
   p.env.DIRECTORY = {
     fetch: (req) => stalled ? new Promise(() => {}) : dirPart.fetch(req, p.env),
   }
-  let page = () => appFetch(visit('/cookbook/', { headers: { cookie } }), p.env)
-  let mcp = () =>
+  // The kernel a call is made to, on a clock of its own when it has one.
+  let on = (time?: Clock) => time ? { ...p.env, CLOCK: time } : p.env
+  let page = (time?: Clock) =>
+    appFetch(visit('/cookbook/', { headers: { cookie } }), on(time))
+  let mcp = (time?: Clock) =>
     mcpFetch(
       new Request('https://yaks.app/mcp', {
         method: 'POST',
@@ -436,7 +427,7 @@ let fixture = async (kind: 'grant' | 'member') => {
           },
         }),
       }),
-      p.env,
+      on(time),
     )
   // Seed actual private store data, using its ordinary trusted Store door.
   let appStore = p.env.STORE.get(p.env.STORE.idFromName(app.store!))
@@ -459,10 +450,10 @@ let fixture = async (kind: 'grant' | 'member') => {
     mcp,
     calls,
     bearers,
-    bearer: (token: string) =>
+    bearer: (token: string, time?: Clock) =>
       appFetch(
         visit('/cookbook/api/query?q=.doc', { headers: { [GRANT]: token } }),
-        p.env,
+        on(time),
       ),
     dir,
     space,
@@ -612,13 +603,13 @@ for (let kind of ['grant', 'member'] as const) {
       await f.revoke()
       await f.restart()
       f.stall()
-      let blocked = await deadline(() => f.bearer(bearer), true)
+      let blocked = await deadline((time) => f.bearer(bearer, time), true)
       let blockedBody = await blocked.response.text()
       f.stall(false)
       let current = await f.bearer(bearer), currentBody = await current.text()
       await f.settled()
       f.stall()
-      let again = await deadline(() => f.bearer(bearer)),
+      let again = await deadline((time) => f.bearer(bearer, time)),
         againBody = await again.response.text()
       await f[Symbol.asyncDispose]()
       return () => {

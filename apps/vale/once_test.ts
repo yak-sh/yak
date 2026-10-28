@@ -1,22 +1,28 @@
 // A delayed store answer must still decide which hero the gate shows.
-import { test } from '@yaks/testing'
+import { clock, test, tick } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { once } from './once.ts'
 
 test('a delayed query returns its rows instead of an empty answer', async () => {
-  let calls = 0
-  let rows = await once<{ player: object }>(
+  let calls = 0, time = clock()
+  let rows = once<{ player: object }>(
     new URL('https://example.test/vale/api/query?.player'),
-    () => {
+    (_, { signal }) => {
       calls++
       return calls == 1
-        ? Promise.reject(new DOMException('signal timed out', 'TimeoutError'))
+        ? new Promise((_, fail) =>
+          signal!.addEventListener('abort', () => fail(signal!.reason))
+        )
         : Promise.resolve(Response.json([{ player: {} }]))
     },
-    () => Promise.resolve(),
+    time,
   )
+  await time.advance(8000)
+  await tick()
+  assertEquals(calls, 1)
+  await time.advance(1000)
+  assertEquals(await rows, [{ player: {} }])
   assertEquals(calls, 2)
-  assertEquals(rows, [{ player: {} }])
 })
 
 test('a refused query cannot say this person has no hero', async () => {
@@ -26,7 +32,7 @@ test('a refused query cannot say this person has no hero', async () => {
       once(
         new URL('https://example.test/vale/api/query?.player'),
         () => (calls++, Promise.resolve(new Response('', { status: 400 }))),
-        () => Promise.resolve(),
+        clock(),
       ),
     Error,
     '400',

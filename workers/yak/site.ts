@@ -91,6 +91,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let serving = publicDirectory(
     bound(env.DIRECTORY, dirPart.fetch, env),
     req.headers.has('x-yak-no-copy') ? undefined : copyOf(env),
+    env.CLOCK,
   )
   let dir = directory(serving)
   let page: Response

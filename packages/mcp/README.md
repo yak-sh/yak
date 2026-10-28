@@ -375,8 +375,10 @@ option with no call.
 
 The legacy transport has no SSE stream. It waits for each call's outcome by
 default. A host can set `timeout` to limit how long it waits for a legacy reply;
-timing out does not cancel a tool already running. Modern traffic uses the SDK
-HTTP entry and its protocol validation and streaming.
+timing out does not cancel a tool already running. `clock` (an @yaks/fp `Clock`,
+by default the runtime's) keeps that timeout and the handler's runner's time.
+Modern traffic uses the SDK HTTP entry and its protocol validation and
+streaming.
 
 ## Repository skills
 

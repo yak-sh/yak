@@ -1,14 +1,8 @@
-// Tests move a fake clock without waiting on a real one.
-import { setImmediate } from 'node:timers/promises'
-import type { FakeTime } from '@std/testing/time'
+// Tests move a clock of their own (@yaks/testing `clock()`) without waiting on
+// a real one.
+import type { Clock } from '@yaks/testing'
 
-/** Settle what is queued, then move the fake clock `ms` on, firing every
- * timer that falls due: `tickAsync`, in microseconds of wall time. Both let
- * the event loop turn first, so every microtask queued runs; `tickAsync`
- * turns it with a real `setTimeout`, which takes a millisecond or two, and
- * this with `setImmediate`, which FakeTime leaves real and which waits on
- * no clock. */
-export let pass = async (time: FakeTime, ms = 0) => {
-  await setImmediate()
-  time.tick(ms)
-}
+/** `time` as a `setTimeout`-shaped timer seam (@yaks/api and @yaks/client
+ * `timer`): `fn` after `ms`, returning its cancel. */
+export let timer = (time: Clock) => (fn: () => void, ms: number) =>
+  time.after(ms, fn)

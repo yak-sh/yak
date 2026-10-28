@@ -15,7 +15,8 @@ import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
-import { changes, type Clock, system } from './wait.ts'
+import { type Clock, system } from '@yaks/fp'
+import { changes } from './wait.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */

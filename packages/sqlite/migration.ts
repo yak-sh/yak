@@ -10,6 +10,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
+import { type Clock, system } from '@yaks/fp'
 
 const CONTROL = '_yaks_migration'
 export type MigrationState = {
@@ -229,21 +230,22 @@ export function migrations(db: Driver): MigrationControl {
 /** One polling loop per application connection, no per-operation queries. A
  * generation change latches even if pending was missed. Callback runs once;
  * caller owns admission/drain/close policy. Poll errors also stop the
- * monitor. */
+ * monitor. It polls on `clock` (default the runtime's). */
 export function watchMigrations(
   control: Pick<MigrationControl, 'read' | 'ready'>,
   changed: (reason: Error) => void,
   intervalMs = 1000,
+  clock: Clock = system,
 ): MigrationWatch {
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new TypeError('Invalid polling interval')
   }
   const baseline = control.ready()
   let stopped = false
-  let timer: ReturnType<typeof setInterval> | undefined
+  let cancel = () => {}
   const stop = () => {
     stopped = true
-    clearInterval(timer)
+    cancel()
   }
   const check = () => {
     if (stopped) return
@@ -264,6 +266,12 @@ export function watchMigrations(
       changed(error)
     }
   }
-  timer = setInterval(check, intervalMs)
+  const poll = () => {
+    cancel = clock.after(intervalMs, () => {
+      check()
+      if (!stopped) poll()
+    })
+  }
+  poll()
   return { check, stop }
 }

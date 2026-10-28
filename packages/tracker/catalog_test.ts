@@ -1,6 +1,7 @@
 // Catalog outages wait in the effects pool. A terminal report stays useful
 // tracker text, but cannot recursively ask the failed catalog to enrich it.
 
+import { system } from '@yaks/fp'
 import { equal, test } from '@yaks/testing'
 import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
@@ -35,7 +36,7 @@ for (let recover of [true, false]) {
     let reporting: (unknown | Promise<unknown>)[] = []
     let fx = registry(vocab, {
       write: (b) => g.apply(b, { trusted: true }),
-      now: () => now,
+      clock: { ...system, now: () => now },
       report: (error, job) => {
         reports++
         reporting.push(g.apply(
@@ -109,7 +110,7 @@ for (let recover of [true, false]) {
       ready = true
       let next = registry(vocab, {
         write: (b) => g.apply(b, { trusted: true }),
-        now: () => now,
+        clock: { ...system, now: () => now },
       })
       next.handle(effects({ graph: g }, { enrich }))
       await next.work(g)

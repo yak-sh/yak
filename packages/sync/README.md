@@ -538,7 +538,8 @@ import { portLink } from '@yaks/sync/port'
 ```
 
 Requests default to a 30-second timeout and at most 256 outstanding requests.
-`timeout` and `maxPending` configure these limits. Per-request
+`timeout` and `maxPending` configure these limits, and `clock` (an @yaks/fp
+`Clock`, by default the runtime's) keeps the deadlines. Per-request
 `{ timeout: null }` disables its deadline; disconnection still rejects it. A
 timeout does not cancel work at the other end. `close()` removes listeners,
 notifies the other end, and rejects pending requests without terminating or

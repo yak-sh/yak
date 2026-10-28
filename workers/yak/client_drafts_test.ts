@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { parseHTML } from 'linkedom'
-import { test } from '@yaks/testing'
+import { type Clock, clock, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { kernel, seed, unique } from './probe.ts'
 
@@ -110,20 +110,6 @@ let row = (eid: string, text: string, rev: number): Bundle => ({
   entity: { eid },
   draft: { by: 'jo', place: 'compose', text, rev },
 })
-// These tests control acceptance, not backoff time. Keep retry boundaries
-// asynchronous without making a pending receipt test spend wall-clock seconds.
-let nativeTimeout = globalThis.setTimeout
-let retryTimers = () =>
-  stub(
-    globalThis,
-    'setTimeout',
-    ((fn: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) => {
-      if (ms != 1000) return nativeTimeout(fn, ms, ...args)
-      queueMicrotask(() => (fn as (...args: unknown[]) => void)(...args))
-      return 0
-    }) as typeof setTimeout,
-  )
-
 let settled = async (ready: () => boolean) => {
   for (let i = 0; i < 100 && !ready(); i++) await Promise.resolve()
   assert(ready(), 'transport did not settle')
@@ -131,8 +117,10 @@ let settled = async (ready: () => boolean) => {
 
 let base = 'https://draft-client.test/notes/api/'
 let stores: { outbox: { close: () => void } }[] = []
-let store = (url: string) => {
-  let value = publicClient.store(url)
+// Each store keeps a clock of the test's own, which only a test that waits out
+// a retry moves.
+let store = (url: string, time: Clock = clock()) => {
+  let value = publicClient.store(url, { clock: time })
   stores.push(value)
   return value
 }
@@ -193,7 +181,7 @@ test('public drafts recover a reload without crossing app or person scopes', asy
 let pendingReceipt = await (async () => {
   let calls: Call[] = [], reports: unknown[] = []
   let started = deferred<void>(), accepted = deferred<Response>()
-  using _timers = retryTimers()
+  let time = clock()
   using wire = transport((call) => {
     calls.push(call)
     if (calls.length == 1) {
@@ -211,7 +199,7 @@ let pendingReceipt = await (async () => {
     })
   })
   let stash = storage()
-  let desk = store(base).drafts({
+  let desk = store(base, time).drafts({
     by: 'jo',
     stash,
     pace: 0,
@@ -222,6 +210,7 @@ let pendingReceipt = await (async () => {
     desk.type('compose', 'first')
     await settled(() => reports.length == 1)
     let initialText = desk.text('compose')
+    await time.advance(1000)
     await started.promise
     wire.hear([row(eid, 'first', 1)])
     desk.type('compose', 'first, and still typing')
@@ -271,17 +260,28 @@ let pendingSend = await (async () => {
     pace: 0,
     report: (e: unknown) => reports.push(e),
   }
-  let client = publicClient.store(base)
+  let time = clock()
+  let client = publicClient.store(base, { clock: time })
   let desk = client.drafts(opts)
   let eid = publicClient.draftEid('jo', 'compose')
   desk.type('compose', 'Never lose this send')
   await settled(() => stash.length == 0)
-  return { calls, reports, stash, opts, client, desk, eid, hear: wire.hear }
+  return {
+    calls,
+    reports,
+    stash,
+    opts,
+    time,
+    client,
+    desk,
+    eid,
+    hear: wire.hear,
+  }
 })()
 
 test('public drafts preserve a pending send across reload instead of accepting watch text', async () => {
-  let { calls, reports, stash, opts, client, desk, eid, hear } = pendingSend
-  using _timers = retryTimers()
+  let { calls, reports, stash, opts, time, client, desk, eid, hear } =
+    pendingSend
   using _wire = transport((call) => {
     calls.push(call)
     return json({ pending: true, bundles: call.bundles }, 202)
@@ -298,6 +298,9 @@ test('public drafts preserve a pending send across reload instead of accepting w
     assertEquals(await send, false)
     assertEquals(desk.text('compose'), 'Never lose this send')
     assertEquals(reports.length, 1)
+    // The outbox sends it again once its wait is over.
+    await time.advance(1000)
+    await settled(() => calls.length == 3)
     assert(calls.length >= 2)
     let retries = calls.slice(1)
     assert(retries[0].key)

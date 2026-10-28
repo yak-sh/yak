@@ -184,10 +184,10 @@ test('a Store row profile attributes SQL to the HTTP route', async () => {
       },
     }
   }
-  let at = Date.now()
-  using _clock = stub(Date, 'now', () => at)
+  // The profile's minute is the Store's clock, which only this case moves.
+  let time = clock(Date.now())
   using logged = stub(console, 'log')
-  let store = new Store(ctx)
+  let store = new Store(ctx, {}, undefined, { now: time.now })
   let vouch = { ...headers(owner), 'x-store': 'yourname/vale.f52dc2' }
   let request = (path: string, method = 'GET', body?: string) =>
     new Request(`http://store${path}`, { method, headers: vouch, body })
@@ -196,9 +196,9 @@ test('a Store row profile attributes SQL to the HTTP route', async () => {
     (await store.fetch(request('/vocab', 'POST', SCHEMA))).status,
     200,
   )
-  at++
+  await time.advance(1)
   assertEquals((await store.fetch(request('/query?q=.recipe'))).status, 200)
-  at += 60_000
+  await time.advance(60_000)
   assertEquals((await store.fetch(request('/query?q=.recipe'))).status, 200)
 
   let reports = logged.calls

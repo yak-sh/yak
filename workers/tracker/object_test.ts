@@ -1,7 +1,7 @@
 // A failed boot still serves refusals and retries on the next request. A
 // read outage cannot affect trusted intake into another independently held DO.
 // Mail activation and delivery run at pure and in-memory handler seams.
-import { equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
 import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { type State, Tracker } from './object.ts'
@@ -144,7 +144,7 @@ let fixture = () => {
   let g = graph({
     vocab,
     storage: ram(vocab, options),
-    clock: () => '2026-10-05T00:00:00.000Z',
+    clock: clock(Date.parse('2026-10-05T00:00:00.000Z')),
   })
   let put = (rows: Parameters<typeof g.apply>[0]) =>
     g.apply(rows, { trusted: true, stamp: false })

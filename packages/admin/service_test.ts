@@ -4,6 +4,7 @@
 // rolled back past gets none. Each deploy a look shows is timed once, and
 // slower deploys, or a home page that does not answer, are reported.
 import { equal, match, ok, test } from '@yaks/testing'
+import { system } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -73,7 +74,7 @@ let fixture = (
   let g = graph({
     vocab,
     storage: ram(vocab),
-    clock: () => new Date(at.now).toISOString(),
+    clock: { ...system, now: () => at.now },
   })
   let report = (error: unknown, context?: Record<string, unknown>) => {
     reports.push([error as Error, context ?? {}])

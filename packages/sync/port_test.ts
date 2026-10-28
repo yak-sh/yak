@@ -1,7 +1,6 @@
 /// <reference lib="deno.ns" />
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { portLink } from '@yaks/sync/port'
 
 class Conflict extends Error {
@@ -141,9 +140,9 @@ test('real worker crash rejects pending requests', async () => {
 })
 
 test('request deadline override can wait indefinitely but disconnect still rejects', async () => {
-  using time = new FakeTime()
+  const time = clock()
   const { port1, port2 } = new MessageChannel()
-  const link = portLink(port1, { timeout: 10 })
+  const link = portLink(port1, { timeout: 10, clock: time })
   try {
     const ordinary = assertRejects(
       () => link.request('ordinary'),
@@ -165,7 +164,7 @@ test('request deadline override can wait indefinitely but disconnect still rejec
       Error,
       'Message link closed',
     )
-    await time.tickAsync(31000)
+    await time.advance(31000)
     await ordinary
     await bounded
     assertEquals(ended, false)

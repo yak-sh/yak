@@ -1,8 +1,7 @@
 // A Vale objective, from the person's command through the app Store's wake
 // and worker, while no page runs. Only Jev's outside answer is scripted.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { flat } from '../../apps/vale/terrain.ts'
 import { rows as themes } from '../../apps/vale/themes_fixture.ts'
 import { workerOf } from '../../apps/vale/worker.js'
@@ -22,8 +21,10 @@ let read = (door: ReturnType<typeof appStore>, line: string, who = ADA_OWNS) =>
   door(`/query?q=${encodeURIComponent(line)}`, {}, who).then((r) => r.json())
 
 test('a companion works off-page across pause, restart and retry', async () => {
-  using time = new FakeTime('2026-09-28T00:00:00.000Z')
-  let p = platform()
+  // The kernel's clock, which only this test moves: its Stores' wakes, writes
+  // and effects keep it.
+  let time = clock(Date.parse('2026-09-28T00:00:00.000Z'))
+  let p = platform({ CLOCK: time })
   try {
     let k = await seeded(p.env)
     let name = storeName(k.space, k.app)
@@ -82,7 +83,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
       entities: [{
         entity: { eid: hero },
         player: {},
-        position: { level: 'mossvale', x: 1, z: 5, at: Date.now() },
+        position: { level: 'mossvale', x: 1, z: 5, at: time.now() },
       }],
     })
 
@@ -157,7 +158,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
     // so a tick is read once every call its firings asked for has run.
     let asked = 0
     let fire = async () => {
-      let ticked = await store.tick(Date.now())
+      let ticked = await store.tick(time.now())
       asked += ticked.fired.length
       for (let i = 0; i < 1000; i++) {
         let calls = await read(door, `.call.source=${eid}&?execution`)
@@ -165,11 +166,11 @@ test('a companion works off-page across pause, restart and retry', async () => {
           c.execution && c.execution.state != 'running'
         )
         if (ran.length == asked) return ticked
-        await time.tickAsync(0)
+        await time.advance(0)
       }
       throw new Error(`the ${asked} calls the firings asked for never ran`)
     }
-    time.tick(5_000)
+    await time.advance(5_000)
     let first = await fire()
     let [chosen] = await read(door, `.entity.eid=${eid}&?companion`)
     assert(
@@ -194,7 +195,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
         wake: null,
       }],
     })
-    time.tick(5_000)
+    await time.advance(5_000)
     store = new Store(p.states.get(name)!, p.env)
     let ns = p.env.STORE
     p.env.STORE = {
@@ -226,7 +227,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
       }],
     })
     for (let i = 0; i < 8; i++) {
-      time.tick(5_000)
+      await time.advance(5_000)
       await fire()
       let [current] = await read(door, `.entity.eid=${eid}&?companion`)
       if (current.companion.status == 'Done') break
@@ -271,7 +272,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
     let dispose = p[Symbol.asyncDispose]().then(() => {
       disposed = true
     })
-    for (let n = 0; !disposed && n < 1000; n++) await time.tickAsync(0)
+    for (let n = 0; !disposed && n < 1000; n++) await time.advance(0)
     assert(disposed, 'Store disposal drains on the controlled clock')
     await dispose
   }

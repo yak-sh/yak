@@ -257,6 +257,7 @@ A write inside its clock's interval is refused with `Paced`, carrying `actor`
 the writer may try again). Writing the same values is a retry and starts no
 clock. Clearing a component goes at once and preserves its clock; deleting the
 entity removes its clocks with it. `pacesIn(vocab)` reads the stored paces back.
+The guard's `now` is the time its clocks are kept by (default `Date.now`).
 
 The package also declares `_pace{writes}`, a server-owned component on each
 paced entity. Its JSON ledger keeps independent component/via clocks; changing

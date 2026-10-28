@@ -1,6 +1,6 @@
 // Retry the public callers, not just the helper: stubs consume POST bodies
 // before failing, and each new stub permits only one call.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
@@ -13,7 +13,7 @@ import {
   cloudflareProvider,
   type Sandboxes,
 } from '@yaks/sandbox/cloudflare'
-import { backoff, retried } from '@yaks/durable-object'
+import { backoff, evicted, retried } from '@yaks/durable-object'
 import { listen, rostered, told } from './stream.ts'
 
 let space: Space = {
@@ -52,7 +52,16 @@ let sends = (errors: Error[]) =>
     : Math.min(errors.length + 1, backoff.pauses.length + 1)
 // The pauses between sends are recorded here, never slept.
 let paused: number[] = []
-backoff.wait = (ms) => Promise.resolve(void paused.push(ms))
+let pause = (ms: number) => Promise.resolve(void paused.push(ms))
+// The env's clock, which a caller's resend waits out its pause on, and a call
+// run with it moved on until the call settles.
+let time = clock()
+let settled = async <T>(call: Promise<T>) => {
+  let done = false
+  call.then(() => done = true, () => done = true)
+  while (!done) await time.advance(backoff.pauses[0])
+  return call
+}
 let fails = (errors: Error[]) => sends(errors) == errors.length
 let upgrade = () =>
   new Request('https://ada.yaks.app/api/build', {
@@ -157,11 +166,16 @@ let retrying = async (errors: Error[]) => {
   let sent = 0
   paused.length = 0
   let call = () =>
-    retried(() => {
-      let error = errors[sent++]
-      if (error) throw error
-      return 'ok'
-    })
+    retried(
+      () => {
+        let error = errors[sent++]
+        if (error) throw error
+        return 'ok'
+      },
+      true,
+      evicted,
+      pause,
+    )
   if (fails(errors)) {
     assertEquals(await assertRejects(call), errors.at(-1))
   } else assertEquals(await call(), 'ok')
@@ -180,6 +194,7 @@ for (let caller of callers) {
   // The env is taken once; each run swaps the namespace behind it.
   let current: Namespace
   let { env } = platform('test', {
+    CLOCK: time,
     [caller.binding]: {
       idFromName: (name: string) => current.idFromName(name),
       get: (id: unknown) => current.get(id as never),
@@ -216,7 +231,7 @@ for (let caller of callers) {
         }
       },
     }
-    await caller.run(env)
+    await settled(caller.run(env))
     assertEquals(gets, 2)
     assertEquals(new Set(seen).size, 2)
   })
@@ -272,7 +287,7 @@ for (let { method, args, result } of methods) {
           }
           let provider = cloudflareProvider(ns, {
             legacyRecreation: true,
-            retry: retried,
+            retry: (send) => retried(send, true, evicted, pause),
           })
           let ref = { id: named(space, who.person!) }
           let { workspace: machine } = await provider.connect(ref)
@@ -316,13 +331,16 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
         ++destroy == 1 ? Promise.reject(flagged()) : Promise.resolve(),
     }),
   }
-  await workbench(
-    { SANDBOX: ns, WORKSPACES: workspaces(ns) },
+  await settled(workbench(
+    { SANDBOX: ns, WORKSPACES: workspaces(ns), CLOCK: time },
     space,
     who.person,
     { since: null },
+  ))
+  assertEquals(
+    await settled(destroyed({ SANDBOX: ns, CLOCK: time }, space, who.person!)),
+    true,
   )
-  assertEquals(await destroyed({ SANDBOX: ns }, space, who.person!), true)
   assertEquals(sleep, 2)
   assertEquals(destroy, 2)
 })

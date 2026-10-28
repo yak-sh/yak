@@ -87,6 +87,7 @@ export let namedClient = (opts: {
   wireVault?: Parameters<typeof wireIdb>[0]
   url: string
   fetch?: ClientOpts['fetch']
+  timer?: ClientOpts['timer']
   report?: Told
   connect: (url: string) => Socket
   changed: (eids: string[]) => void
@@ -196,6 +197,7 @@ export let namedClient = (opts: {
       ? wireIdb(opts.wireVault)
       : false,
     fetch: opts.fetch,
+    timer: opts.timer,
     report: (trouble) =>
       (opts.report ?? said)({
         ...trouble,

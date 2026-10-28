@@ -91,6 +91,15 @@ ran, which is not an assertion.
 - Time is an input a test controls. Inject @yaks/testing's `clock()` at the
   subject's timer boundary and `await time.advance(ms)` to run due callbacks;
   no timer delay or polling is needed to check expiry, retries or windows.
+  Code that reads the time or sets a timer takes a `Clock` (@yaks/fp: `now`,
+  `after`, the runtime's `system` by default); when it lacks one, give it
+  one. Never fake the runtime's clock or timers (`FakeTime`, a `stub` of
+  `setTimeout` or `Date.now`, an assignment to either): every file in a run
+  shares one runtime, and a faked global counts, moves and swallows timers
+  other files started, so a verdict depends on what ran before it. A
+  module's exported setting a test assigns (a default wait, a pause) is
+  shared the same way; the code takes it as an argument instead, as
+  @yaks/durable-object's `retried` takes its `wait`.
   Await asynchronous work's completion directly. `tick` and `until` belong
   where an integration depends on the runtime itself progressing, rather
   than to tests of time behavior. Inside workerd the clock doesn't move while

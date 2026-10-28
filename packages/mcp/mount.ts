@@ -40,6 +40,7 @@ import { status } from '@yaks/graph/errors'
 import { namedTool } from '@yaks/graph/call'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
+import { type Clock, system } from '@yaks/fp'
 import {
   type Exchange,
   instructed,
@@ -63,6 +64,9 @@ export type MountOptions = Omit<Options, 'actor'> & {
   authenticate?: Authenticate
   /** Legacy one-shot call timeout in ms; modern exchanges use client cancellation. */
   timeout?: number
+  /** The clock the handler keeps time by: the legacy `timeout`, and its
+   * runner's (default the runtime's). */
+  clock?: Clock
 }
 
 let refused = (message: string, code: number) =>
@@ -181,23 +185,24 @@ let mirrored = (request: Request, body: unknown): Request => {
 let ask = async (
   mcp: ReturnType<typeof server>,
   request: JSONRPCMessage,
-  ms?: number,
+  ms: number | undefined,
+  clock: Clock,
 ): Promise<unknown> => {
   let [mine, theirs] = InMemoryTransport.createLinkedPair()
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let cancel = () => {}
   try {
     await mcp.connect(theirs)
     let reply = new Promise<unknown>((ok, no) => {
       mine.onmessage = ok
       if (ms != null) {
-        timer = setTimeout(() => no(new Error('mcp timeout')), ms)
+        cancel = clock.after(ms, () => no(new Error('mcp timeout')))
       }
     })
     await mine.start()
     await mine.send(request)
     return await reply
   } finally {
-    clearTimeout(timer)
+    cancel()
     await mcp.close()
   }
 }
@@ -217,6 +222,7 @@ export let mcp = (opts: MountOptions): Handler => {
     throw new Error('the MCP session graph has no session vocabulary')
   }
   let ms = opts.timeout
+  let clock = opts.clock ?? system
   // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
   // running is one run however many requests ask about it.
@@ -227,6 +233,7 @@ export let mcp = (opts: MountOptions): Handler => {
       host: opts.graph,
       report: opts.report ?? logged,
       ...opts.reply ? { reply: opts.reply } : {},
+      ...opts.clock ? { clock: opts.clock } : {},
     })
   let callers = new WeakMap<
     Request,
@@ -300,7 +307,7 @@ export let mcp = (opts: MountOptions): Handler => {
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
       await prepared(built, opts, exchange)
-      let answer = json(await ask(built, rpc.data, ms))
+      let answer = json(await ask(built, rpc.data, ms, clock))
       if (conn) answer.headers.set(ID, conn.id)
       return answer
     } catch (err) {

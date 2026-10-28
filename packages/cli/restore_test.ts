@@ -2,7 +2,7 @@
 // the command schema admits the flag, guards refuse stale writes, and remote
 // commands never acquire the local filesystem door's authority.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, graph, mint, signed } from '@yaks/graph'
 import { books, comp, memory } from '../graph/testing.ts'
@@ -36,7 +36,7 @@ let fixture = (held: Bundle[] = []) => {
   let g = graph({
     vocab: books,
     storage,
-    clock: () => now,
+    clock: clock(Date.parse(now)),
     plugins: [{
       name: 'record',
       hooks: { journal: (bs) => (journal.push(...bs), bs) },

@@ -423,15 +423,38 @@ export let bsearch = <T>(x: T) => (xs: readonly T[]): number => {
 export let backoff = (attempts: number): number =>
   Math.min(300_000, 1000 * 2 ** (attempts - 1))
 
+/** The time code keeps: what time it is, and a callback after a delay that
+ * the returned function cancels. Code that reads the time or sets a timer
+ * takes one, so a test hands it a clock of its own (@yaks/testing `clock()`)
+ * instead of faking the runtime's, which every other test in the runtime
+ * shares. */
+export type Clock = {
+  now: () => number
+  after: (ms: number, callback: () => void) => () => void
+}
+
+/** The runtime's clock: `Date.now` and `setTimeout`. */
+export let system: Clock = {
+  now: () => Date.now(),
+  after: (ms, callback) => {
+    let timer = setTimeout(callback, ms)
+    return () => clearTimeout(timer)
+  },
+}
+
 /** A timer cut short by a signal; a cancelled wait resolves without work. */
-export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+export let sleep = (
+  ms: number,
+  signal?: AbortSignal,
+  clock: Clock = system,
+): Promise<void> =>
   new Promise((wake) => {
     let done = () => {
-      clearTimeout(timer)
+      cancel()
       signal?.removeEventListener('abort', done)
       wake()
     }
-    let timer = setTimeout(done, ms)
+    let cancel = clock.after(ms, done)
     signal?.addEventListener('abort', done, { once: true })
     if (signal?.aborted) done()
   })

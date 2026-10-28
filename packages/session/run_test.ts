@@ -7,6 +7,7 @@
 // Processes here are graphs over one in-memory SQLite store, which computes a
 // transcript's status the way a box's does.
 
+import { system } from '@yaks/fp'
 import { assert, assertEquals } from '@std/assert'
 import {
   type Bundle,
@@ -121,7 +122,7 @@ let proc = (
     owner: holder,
     max,
     write: (b) => g.apply(b, { trusted: true }),
-    ...now ? { now } : {},
+    ...now ? { clock: { ...system, now } } : {},
   })
   let g = graph({ storage: s, vocab, plugins: [sessions(), fx] })
   let r: Runner = {

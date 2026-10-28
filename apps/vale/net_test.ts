@@ -1,8 +1,6 @@
 // The page waits for all of the store's words before it opens a local graph.
-import { test } from '@yaks/testing'
+import { clock, test, tick } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
-import { pass } from './clock_fixture.ts'
 import { client } from '@yaks/client'
 import { docs as invocationDocs } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
@@ -17,43 +15,38 @@ import { docDoc } from '@yaks/doc'
 import { apiDoc } from '@yaks/api/vocab'
 
 test('a vocabulary 500 recovers before the page can query created', async () => {
-  using time = new FakeTime()
-  let fetchBefore = globalThis.fetch
+  let time = clock()
   let calls = 0
   let urls: string[] = []
-  try {
-    globalThis.fetch = (url) => {
-      urls.push(String(url))
-      return Promise.resolve(
-        ++calls == 1
-          ? new Response('store unavailable', { status: 500 })
-          : Response.json([words, core, provenance]),
-      )
-    }
-
-    let opened = false
-    let opening = vocabulary(new URL('https://example.test/vale/api/'))
-      .then((vocab) => {
-        opened = true
-        return vocab
-      })
-    await pass(time)
-    assertEquals(calls, 1)
-    assertEquals(opened, false)
-    await pass(time, 1000)
-    let vocab = await opening
-    assertEquals(calls, 2)
-    assertEquals(
-      urls,
-      Array(2).fill('https://example.test/vale/api/vocab.json'),
+  let get = (url: URL) => {
+    urls.push(String(url))
+    return Promise.resolve(
+      ++calls == 1
+        ? new Response('store unavailable', { status: 500 })
+        : Response.json([words, core, provenance]),
     )
-    assertEquals(vocab.comp('created')?.name, 'created')
-    let page = client(vocab, [], { vault: false, wireVault: false })
-    assertEquals(page.read('.player&.created.by="person"&*'), [])
-    page.close()
-  } finally {
-    globalThis.fetch = fetchBefore
   }
+
+  let opened = false
+  let opening = vocabulary(new URL('https://example.test/vale/api/'), get, time)
+    .then((vocab) => {
+      opened = true
+      return vocab
+    })
+  await time.advance(0)
+  assertEquals(calls, 1)
+  assertEquals(opened, false)
+  await time.advance(1000)
+  let vocab = await opening
+  assertEquals(calls, 2)
+  assertEquals(
+    urls,
+    Array(2).fill('https://example.test/vale/api/vocab.json'),
+  )
+  assertEquals(vocab.comp('created')?.name, 'created')
+  let page = client(vocab, [], { vault: false, wireVault: false })
+  assertEquals(page.read('.player&.created.by="person"&*'), [])
+  page.close()
 })
 
 test('creature builds use the server answer without matching computed current locally', async () => {
@@ -376,7 +369,6 @@ test('a returning hero cannot gather a life already known by their bag', () => {
 test('a gathering refused locally or by the store does not break later writes', async () => {
   seedDesigns()
   for (let where of ['page', 'store'] as const) {
-    using time = new FakeTime()
     let vocab = loadVocab([words, core, provenance, apiDoc])
     let store = graph({ storage: ram(vocab), vocab })
     store.apply([{ entity: { eid: 'hero' }, player: {} }, harvest('first')])
@@ -397,7 +389,7 @@ test('a gathering refused locally or by the store does not break later writes', 
     let { net, page, receive } = client
     if (where == 'page') receive('.item.owner=', [harvest('first')])
     net.keep(harvest('second'))
-    await pass(time)
+    await tick()
     assertEquals(trouble.length, 1, where)
     assert(
       String(trouble[0].error ?? trouble[0].refused?.message).includes(
@@ -413,7 +405,7 @@ test('a gathering refused locally or by the store does not break later writes', 
     )
     assertEquals(sent.length, where == 'page' ? 0 : 1, where)
     net.keep(harvest('third', 'another-tree'))
-    await pass(time)
+    await tick()
     assertEquals(trouble.length, 1, where)
     assertEquals((await store.read('.gathered')).map((b) => b.entity.eid), [
       'first',

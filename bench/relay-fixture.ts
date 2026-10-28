@@ -1,7 +1,9 @@
 // T-64601's ordinary-admission workload, retained by T-64638 (ed5e921b1).
 // A sample submits one value and waits for admission/staging on a warmed Store.
 // Simulated 100ms turns satisfy presence's pace; fanout and checked delivery
-// to an observer run outside timing. The same fixture accepts a historical root.
+// to an observer run outside timing. The same fixture accepts a historical root
+// whose Store, graph and guard take the clock it gives them. The fixture's time
+// is its own: it never replaces the runtime's clock or timers.
 import type { durable } from '../packages/durable-object/testing.ts'
 
 import { RELAY_ENTITIES, RELAY_TICKS, relayBenchmarkName } from './names.ts'
@@ -73,7 +75,9 @@ const measured = (db: ReturnType<typeof durable>) => {
 
 export type RelayFixture = {
   run(ticks?: number): Promise<number>
-  next(timing: { start(): void; end(): void }): Promise<void>
+  /** One sample, sent at `at` (default: the fixture's time, 100 ms on each
+   * round). */
+  next(timing: { start(): void; end(): void }, at?: number): Promise<void>
   reset(): void
   counts(): RelayCounts
   close(): Promise<void>
@@ -89,7 +93,8 @@ export async function relayFixture(
     { length: entities },
     (_, i) => `c0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
   )
-  let now = Date.now(), value = 0
+  // The time a sample is sent at, and the fixture's own: 100 ms on each round.
+  let round = Date.now(), now = round, value = 0
   const batch = (eid: string, x: number) => [{
     entity: { eid },
     presence: { x },
@@ -103,11 +108,26 @@ export async function relayFixture(
   if (variant == 'store-relay') {
     const { Store } = await import(root + '/workers/yak/graph.ts')
     const live: unknown[] = []
-    const store = new Store({
-      storage: m.db,
-      acceptWebSocket: (ws: unknown) => live.push(ws),
-      getWebSockets: () => live,
-    })
+    // The Store's clock (graph.ts `Time`): the fixture's time, and the timers
+    // a sample sets held by that sample; the others are the runtime's.
+    let held: ((fn: () => void, ms: number) => () => void) | undefined
+    const store = new Store(
+      {
+        storage: m.db,
+        acceptWebSocket: (ws: unknown) => live.push(ws),
+        getWebSockets: () => live,
+      },
+      {},
+      undefined,
+      {
+        now: () => now,
+        timer: (fn: () => void, ms: number) => {
+          if (held) return held(fn, ms)
+          const t = setTimeout(fn, ms)
+          return () => clearTimeout(t)
+        },
+      },
+    )
     const post = async (path: string, body: unknown) => {
       const response = await store.fetch(
         new Request('http://store' + path, {
@@ -169,16 +189,15 @@ export async function relayFixture(
     )
     received.length = 0
     send = async (i, x, timing) => {
-      const set = globalThis.setTimeout, clear = globalThis.clearTimeout
       let flush: (() => void) | undefined, cancelled = false, flushing = false
       const delivery: (() => void)[] = []
       const staged = Promise.withResolvers<void>()
-      // This isolated benchmark owns its timers. Registration occurs after
+      // The sample holds the Store's timers. Registration occurs after
       // admission; its microtask runs after stage has filled the pending batch.
-      globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+      held = (fn, ms) => {
         if (flushing && ms === 16) {
           delivery.push(fn)
-          return -2
+          return () => {}
         }
         if (ms !== 16 || flush) throw new Error(`Unexpected relay timer: ${ms}`)
         flush = fn
@@ -191,14 +210,13 @@ export async function relayFixture(
             staged.reject(error)
           }
         })
-        return -1
-      }) as typeof setTimeout
-      globalThis.clearTimeout = ((id?: number) => {
-        if (id === -2) return
-        if (id !== -1) return clear(id)
-        if (!flushing) throw new Error('Relay staging cancelled before fanout')
-        cancelled = true
-      }) as typeof clearTimeout
+        return () => {
+          if (!flushing) {
+            throw new Error('Relay staging cancelled before fanout')
+          }
+          cancelled = true
+        }
+      }
       try {
         const raw = JSON.stringify({ relay: batch(eids[i], x) })
         timingValue = true
@@ -228,8 +246,7 @@ export async function relayFixture(
         received.length = 0
       } finally {
         timingValue = false
-        globalThis.setTimeout = set
-        globalThis.clearTimeout = clear
+        held = undefined
       }
     }
     close = async () => {
@@ -251,10 +268,15 @@ export async function relayFixture(
     const { admitSchema } = await import(
       root + '/packages/graph/admit_schema.ts'
     )
+    const { system } = await import(root + '/packages/fp/mod.ts')
     const vocab = loadVocab([kernelDoc, provenanceDoc, memberDoc, schema], [
       memberKeywords,
     ])
-    const g = graph({ storage: storage(m.db, vocab), vocab })
+    const g = graph({
+      storage: storage(m.db, vocab),
+      vocab,
+      clock: { ...system, now: () => now },
+    })
     await g.install()
     await g.apply([{ entity: { eid: APP }, access: { mode: 'private' } }, {
       entity: { eid: ADA },
@@ -264,7 +286,7 @@ export async function relayFixture(
     }, ...eids.map((eid) => ({ entity: { eid }, hero: { name: 'Ada' } }))], {
       trusted: true,
     })
-    g.use(members({ app: APP, vocab }))
+    g.use(members({ app: APP, vocab, now: () => now }))
     g.use(admitSchema(vocab))
     send = (i, x, timing) => {
       timing.start()
@@ -283,10 +305,9 @@ export async function relayFixture(
     }
   } else throw new Error(`Unknown relay variant: ${variant}`)
   let index = 0
-  const next = async (timing: { start(): void; end(): void }) => {
-    const date = Date.now
-    if (index === 0) now += 100
-    Date.now = () => now
+  const next = async (timing: { start(): void; end(): void }, at?: number) => {
+    if (index === 0) round += 100
+    now = at ?? round
     try {
       await send(index, value, {
         start: () => {
@@ -300,7 +321,6 @@ export async function relayFixture(
       })
     } finally {
       m.counting(false)
-      Date.now = date
     }
     if (++index === entities) {
       index = 0

@@ -1,9 +1,8 @@
 // Cold, provisional and confirmed-empty are distinct read states.
-import { test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { effect } from '@preact/signals'
-import { FakeTime } from '@std/testing/time'
 import { held, host } from './host_testing.ts'
 import {
   aggValue,
@@ -19,6 +18,7 @@ import {
   routeName,
   subscriptionState,
   unsubscribe,
+  useClock,
   useRoute,
 } from './live.ts'
 
@@ -135,7 +135,8 @@ test('a read keeps its answer through a lost socket until the next one', async (
   let TALLY = '.task&.tally=task.status'
   let open = 2
   cache.value = {}
-  using time = new FakeTime()
+  let time = clock()
+  let prior = useClock(time)
   let wire = host((a) =>
     a.subscribe.startsWith('.entry')
       ? { bundles: [{ entity: { eid: E, num: 1 }, entry: { session: S } }] }
@@ -153,21 +154,21 @@ test('a read keeps its answer through a lost socket until the next one', async (
     open: 2,
   }
   try {
-    await time.tickAsync(0)
+    await until(() => reads().open, { label: 'the first answer' })
     assertEquals(reads(), answered)
     wire.drop()
     assertEquals(reads(), answered)
     open = 3
-    await time.tickAsync(1_000)
-    await time.tickAsync(0)
+    await time.advance(1_000)
+    await until(() => reads().open == 3, { label: 'the next answer' })
     assertEquals(reads(), { ...answered, open: 3 })
     let ask = wire.asked().findLast((a) => a.subscribe.startsWith(TALLY))!
-    void wire.say({ id: ask.id, refused: { error: 'Refused', message: 'no' } })
-    await time.tickAsync(0)
+    await wire.say({ id: ask.id, refused: { error: 'Refused', message: 'no' } })
     assertEquals(reads().open, undefined)
   } finally {
     off()
     wire.free()
+    useClock(prior)
   }
 })
 

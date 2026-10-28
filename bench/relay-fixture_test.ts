@@ -8,15 +8,10 @@ const advancing = await relayFixture(1)
 const rejected = await relayFixture(1)
 const skipped = await relayFixture(1)
 // Exhaust the pace bucket's remaining burst token at a fixed earlier epoch.
-await skipped.next({
-  start: () => {
-    Date.now = () => 0
-  },
-  end: () => {},
-})
+await skipped.next({ start: () => {}, end: () => {} }, 0)
 
 for (let turn of ['first', 'second', 'third']) {
-  test(`the ${turn} relay sample stages a paced value before fanout and restores globals`, async () => {
+  test(`the ${turn} relay sample stages a paced value before fanout and leaves the runtime's clock and timers alone`, async () => {
     const date = Date.now, set = setTimeout, clear = clearTimeout
     const events: string[] = []
     advancing.reset()
@@ -37,7 +32,7 @@ for (let turn of ['first', 'second', 'third']) {
   })
 }
 
-test('a failed relay sample restores the clock and timers', async () => {
+test("a failed relay sample leaves the runtime's clock and timers alone", async () => {
   const date = Date.now, set = setTimeout, clear = clearTimeout
   await assertRejects(
     () =>
@@ -59,13 +54,7 @@ test('a pace-skipped value cannot produce a relay sample', async () => {
   const date = Date.now
   let samples = 0
   await assertRejects(
-    () =>
-      skipped.next({
-        start: () => {
-          Date.now = () => 0
-        },
-        end: () => samples++,
-      }),
+    () => skipped.next({ start: () => {}, end: () => samples++ }, 0),
     Error,
     'Relay finished without staging a value',
   )

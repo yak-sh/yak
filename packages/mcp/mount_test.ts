@@ -3,9 +3,8 @@
 // the door and nowhere else, and every other shape of request refused in its
 // own words.
 
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { served, subscriptions, Unauthorized } from '@yaks/api'
@@ -84,7 +83,7 @@ test('the door answers the protocol, and signs what a tool writes', async () => 
 })
 
 test('a slow tool answers with its committed outcome', async () => {
-  using time = new FakeTime()
+  let time = clock()
   let graph = shopGraph()
   let started = Promise.withResolvers<void>()
   let finish = Promise.withResolvers<void>()
@@ -101,10 +100,10 @@ test('a slow tool answers with its committed outcome', async () => {
       },
     }],
   })
-  let door = mcp({ graph })
+  let door = mcp({ graph, clock: time })
   let waiting = door(call('shelve'))
   await started.promise
-  time.tick(60_001)
+  await time.advance(60_001)
   finish.resolve()
   let reply = await waiting
   assertEquals(reply.status, 200)

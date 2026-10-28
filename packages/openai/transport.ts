@@ -1,6 +1,7 @@
 // One implementation of the Responses HTTP protocol, shared by the
 // provider-neutral Model adapter and
 // callers that need provider-native items, usage, evidence, and frame hooks.
+import { type Clock, sleep, system } from '@yaks/fp'
 import { CODEX, type Credential as ProviderCredential } from './credential.ts'
 import { jsonFrames } from './sse.ts'
 
@@ -61,6 +62,8 @@ export type ResponseFault = Error & {
   status?: number
   code?: string
   retry?: { after: number }
+  /** how long the provider asked to wait, in milliseconds, when it answered */
+  wait?: number
   limits?: RateLimits
   evidence?: ResponseEvent[]
   items?: ResponseItem[]
@@ -90,7 +93,11 @@ export type ResponseOptions = {
    * seconds of patience is not an outage. 0 (the default) stops at `retries`;
    * the wait is the same backoff, so the total is wall-clock, not attempts. */
   patienceMs?: number
+  /** How a backoff waits; default a sleep on `clock`. */
   pause?: (ms: number) => Promise<void>
+  /** The time the watchdog, backoff, Retry-After dates and `reach`'s timeout
+   * keep. Default the runtime's (@yaks/fp `system`). */
+  clock?: Clock
   id?: () => string
   /** Replace default body shaping for compatible providers. */
   shape?: (request: ResponseRequest) => Record<string, unknown>
@@ -151,9 +158,6 @@ let knownItems = new Set([
   'custom_tool_call',
 ])
 
-let sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms))
-
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
 
@@ -162,7 +166,7 @@ let record = (value: unknown): value is Record<string, unknown> =>
 // calls kick() to push the deadline forward. The caller reads stalled() to turn
 // that self-abort into a diagnosable fault instead of a silent hang. A relayed
 // stop aborts too, but leaves stalled() false so the caller keeps its own path.
-let watchdog = (ms: number, stop?: AbortSignal) => {
+let watchdog = (ms: number, clock: Clock, stop?: AbortSignal) => {
   // With no deadline and nothing to relay, there is nothing to abort. A relayed
   // stop still goes through a signal of its own, so it arrives as an abort.
   if (!ms && !stop) {
@@ -175,15 +179,15 @@ let watchdog = (ms: number, stop?: AbortSignal) => {
   }
   let control = new AbortController()
   let stalled = false
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let cancel = () => {}
   let relay = () => control.abort()
   let kick = () => {
     if (!ms || control.signal.aborted) return
-    clearTimeout(timer)
-    timer = setTimeout(() => {
+    cancel()
+    cancel = clock.after(ms, () => {
       stalled = true
       control.abort()
-    }, ms)
+    })
   }
   if (stop?.aborted) control.abort()
   else stop?.addEventListener('abort', relay, { once: true })
@@ -193,7 +197,7 @@ let watchdog = (ms: number, stop?: AbortSignal) => {
     kick,
     stalled: () => stalled,
     close: () => {
-      clearTimeout(timer)
+      cancel()
       stop?.removeEventListener('abort', relay)
     },
   }
@@ -214,8 +218,11 @@ export class ResponseError extends Error {
     this.name = 'ResponseError'
   }
 
+  /** How long the provider asked to wait, in milliseconds, when it answered. */
+  wait = 0
+
   get retry(): { after: number } | undefined {
-    return transient(this) ? { after: retryAfter(this) } : undefined
+    return transient(this) ? { after: this.wait } : undefined
   }
 }
 
@@ -283,19 +290,17 @@ let waitIn = (text: string) => {
 }
 
 /** How long the provider asked to wait before the next attempt, in
- * milliseconds, up to a minute: a Retry-After header, or a rate limit's
- * "try again in". */
-let waitOf = (kept: RateLimits | undefined, text: string) => {
-  let value = kept?.['retry-after']
+ * milliseconds, up to a minute, as of `now`: a Retry-After header, or a rate
+ * limit's "try again in". */
+let waitOf = (kept: RateLimits, text: string, now: number) => {
+  let value = kept['retry-after']
   let ms = !value
     ? waitIn(text)
     : /^\d+(\.\d+)?$/.test(value)
     ? Number(value) * 1000
-    : Date.parse(value) - Date.now()
+    : Date.parse(value) - now
   return Number.isFinite(ms) ? Math.min(60_000, Math.max(0, ms)) : 0
 }
-
-let retryAfter = (error: ResponseError) => waitOf(error.limits, error.message)
 
 // A failure's line, in the provider's own words: what ended the request, then
 // its code and its message, and for a rate limit (`limit`, the wait it asked
@@ -313,32 +318,29 @@ let said = (what: string, detail: (string | undefined)[], limit?: number) => {
 // Stop is prompt even during backoff, and never starts another HTTP attempt.
 let backoff = (
   ms: number,
+  clock: Clock,
   signal?: AbortSignal,
   pause?: ResponseOptions['pause'],
 ) => {
-  if (!signal) return pause ? pause(ms) : sleep(ms)
+  if (!pause) {
+    return sleep(ms, signal, clock).then(() => signal?.throwIfAborted())
+  }
+  if (!signal) return pause(ms)
   return new Promise<void>((resolve, reject) => {
-    signal?.throwIfAborted()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let close = () => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', abort)
-    }
+    signal.throwIfAborted()
+    let close = () => signal.removeEventListener('abort', abort)
     let abort = () => {
       close()
-      reject(signal?.reason)
+      reject(signal.reason)
     }
-    let done = () => {
+    signal.addEventListener('abort', abort, { once: true })
+    Promise.resolve().then(() => pause(ms)).then(() => {
       close()
       resolve()
-    }
-    signal?.addEventListener('abort', abort, { once: true })
-    if (pause) {
-      Promise.resolve().then(() => pause(ms)).then(done, (error) => {
-        close()
-        reject(error)
-      })
-    } else timer = setTimeout(done, ms)
+    }, (error) => {
+      close()
+      reject(error)
+    })
   })
 }
 
@@ -496,6 +498,7 @@ let usage = (value: unknown): ResponseUsage | undefined => {
 let terminal = async (
   response: Response,
   secrets: string[],
+  clock: Clock,
   notify?: RunOptions['event'],
   kick?: () => void,
 ): Promise<ResponseResult> => {
@@ -540,10 +543,12 @@ let terminal = async (
       incomplete(frame as ResponseEvent)
     let reason = eventMessage(frame as ResponseEvent)
     let kept = limits(response.headers)
-    let rate = limited(200, code) ? waitOf(kept, reason ?? '') : undefined
+    let wait = waitOf(kept, reason ?? '', clock.now())
+    let rate = limited(200, code) ? wait : undefined
     return fault(kind, said(kind, [code, reason], rate), {
       code,
       limits: kept,
+      wait,
       ...frame ? { body: JSON.stringify(frame) } : {},
       evidence: frame ? [...unknown, frame as ResponseEvent] : unknown,
       items,
@@ -583,9 +588,9 @@ let credential = (value: TransportCredential, optional = false) => {
 let credentials = async (
   load: () => TransportCredential | Promise<TransportCredential>,
   message: string,
+  pause: (ms: number) => Promise<void>,
   optional = false,
   retries = 0,
-  pause: (ms: number) => Promise<void> = sleep,
   hint?: string,
   redact = false,
 ) => {
@@ -628,7 +633,8 @@ export let transport = (options: ResponseOptions): {
   let retries = Math.max(0, options.retries ?? 2)
   let patienceMs = Math.max(0, options.patienceMs ?? 0)
   let stallMs = Math.max(0, options.stallMs ?? 0)
-  let pause = options.pause ?? sleep
+  let clock = options.clock ?? system
+  let pause = options.pause ?? ((ms: number) => sleep(ms, undefined, clock))
   let id = options.id ?? (() => crypto.randomUUID())
   // Refresh replaces the credential at the HTTP edge, but completed provider
   // items from later turns may still echo something seen before the refresh.
@@ -649,9 +655,9 @@ export let transport = (options: ResponseOptions): {
     let auth = await credentials(
       options.credentials.get,
       CREDENTIAL_FAULT,
+      pause,
       options.authentication == 'optional',
       retries,
-      pause,
       options.credentials.hint,
       options.redact,
     )
@@ -698,7 +704,7 @@ export let transport = (options: ResponseOptions): {
       // first frame, and every mid-stream gap — each frame pushing it forward.
       // A trip aborts its own signal (not run.signal), so the throw below is a
       // named stall the caller can fail on, never a silent hang.
-      let dog = watchdog(stallMs, run.signal)
+      let dog = watchdog(stallMs, clock, run.signal)
       try {
         let response: Response
         try {
@@ -733,9 +739,9 @@ export let transport = (options: ResponseOptions): {
           auth = await credentials(
             () => options.credentials.refresh!(auth),
             'responses: credential refresh failed',
+            pause,
             options.authentication == 'optional',
             retries,
-            pause,
             undefined,
             options.redact,
           )
@@ -752,9 +758,8 @@ export let transport = (options: ResponseOptions): {
           let status = response.status
           let { code, reason } = explain(body, secrets)
           let kept = limits(response.headers)
-          let rate = limited(status, code)
-            ? waitOf(kept, reason ?? '')
-            : undefined
+          let wait = waitOf(kept, reason ?? '', clock.now())
+          let rate = limited(status, code) ? wait : undefined
           throw fault(
             `http_${status}`,
             said(`HTTP ${status}`, [reason], rate),
@@ -762,11 +767,12 @@ export let transport = (options: ResponseOptions): {
               status,
               code,
               limits: kept,
+              wait,
               ...body ? { body: scrub(body, secrets) as string } : {},
             },
           )
         }
-        return await terminal(response, secrets, async (event) => {
+        return await terminal(response, secrets, clock, async (event) => {
           try {
             await run.event?.(event)
           } catch (error) {
@@ -799,10 +805,10 @@ export let transport = (options: ResponseOptions): {
         dog.close()
         let wait = Math.max(
           Math.min(1000 * 4 ** failures++, 60_000),
-          retryAfter(fail),
+          fail.wait,
         )
         waited += wait
-        await backoff(wait, run.signal, options.pause)
+        await backoff(wait, clock, run.signal, options.pause)
       } finally {
         dog.close()
       }
@@ -822,6 +828,7 @@ export let transport = (options: ResponseOptions): {
       auth = await credentials(
         options.credentials.get,
         CREDENTIAL_FAULT,
+        pause,
         options.authentication == 'optional',
       )
     } catch {
@@ -834,16 +841,20 @@ export let transport = (options: ResponseOptions): {
     if (auth.account) headers.set('chatgpt-account-id', auth.account)
     let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
       .replace(/\/$/, '')
+    // A watchdog never kicked is a plain deadline.
+    let deadline = watchdog(5000, clock)
     try {
       let response = await fetcher(`${endpoint}/models`, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(5000),
+        signal: deadline.signal,
       })
       await response.body?.cancel()
       return true
     } catch {
       return false
+    } finally {
+      deadline.close()
     }
   }
 

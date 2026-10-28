@@ -9,6 +9,7 @@ import {
   type Storage,
 } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
+import { type Clock, system } from '@yaks/fp'
 import { Refused } from '@yaks/graph/errors'
 import { guard } from '@yaks/graph/guard'
 import { loadVocab } from '@yaks/vocab'
@@ -37,7 +38,7 @@ export let vocab = loadVocab([
 
 export let fixture = (
   options?: Options,
-  clock = () => '2026-10-02T00:00:10Z',
+  clock: Clock = { ...system, now: () => Date.parse('2026-10-02T00:00:10Z') },
   adapt = (g: Graph): Graph => g,
   storage: Storage = ram(vocab, { computed }),
 ) => {

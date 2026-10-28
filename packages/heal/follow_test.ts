@@ -1,7 +1,7 @@
 // The follower reads a separate RAM tracker and writes a RAM box with no bug
 // vocabulary or spawn handlers. Tests observe committed requests, never agents.
 
-import { equal, ok, test, throws } from '@yaks/testing'
+import { clock, equal, ok, test, throws } from '@yaks/testing'
 import {
   type Bundle,
   type Comp,
@@ -107,7 +107,7 @@ let trackerGraph = (unstamped = false) => {
   return graph({
     vocab: schema,
     storage: ram(schema, { computed }),
-    clock: () => '2026-10-02T00:00:10Z',
+    clock: clock(Date.parse('2026-10-02T00:00:10Z')),
   })
 }
 

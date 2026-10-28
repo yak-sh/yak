@@ -194,7 +194,7 @@ import {
   semantic,
   watch as watchEmbedding,
 } from '@yaks/embedding'
-import { after, isPromise } from '@yaks/fp'
+import { after, type Clock, isPromise, system } from '@yaks/fp'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
   type Context,
@@ -642,12 +642,22 @@ export type Bindings = Partial<Env> & {
   STORE?: Namespace
 }
 
-/** A Store's clock: the time its traces are stamped with, and the time and
- * timers its live queries run on (@yaks/api `subscriptions`); unset, the
- * runtime's. Every Store in a process shares the runtime's clock, so a test
- * that moves one Store's time gives it a clock of its own instead of faking
- * the runtime's. */
+/** A Store's clock: the time its traces, row profile and write log are
+ * stamped with, its wakes, alarms and effects keep, and the time and timers
+ * its live queries and their sockets run on (@yaks/api `subscriptions`), its
+ * directory reads and its model's deadline wait on; unset, the kernel's
+ * (env.ts `CLOCK`), else the runtime's. Every Store in a process shares the
+ * runtime's clock, so a test that moves one Store's time gives it a clock of
+ * its own instead of faking the runtime's. */
 export type Time = { now?: () => number; timer?: Timer }
+
+// The kernel's clock as a Store's time, and a Store's time as a clock.
+let timeOf = (clock?: Clock): Time =>
+  clock ? { now: clock.now, timer: (fn, ms) => clock.after(ms, fn) } : {}
+let clockOf = ({ now, timer }: Time): Clock => ({
+  now: now ?? system.now,
+  after: timer ? (ms, fn) => timer(fn, ms) : system.after,
+})
 
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
@@ -971,6 +981,7 @@ export class Store {
   #traceRate = 0
   #traceQuota: RequestState = new Map()
   #time: Time
+  #now = () => this.#time.now?.() ?? Date.now()
   #measure = (rowsRead?: number, rowsWritten?: number) => {
     hop('stmts')
     if (rowsRead != null) hop('rows', rowsRead)
@@ -1109,11 +1120,12 @@ export class Store {
     ctx: State,
     bind: Bindings = {},
     rules: Rule[] = RULES,
-    time: Time = {},
+    time: Time = timeOf(bind.CLOCK),
     facetLoad: Load = load,
   ) {
     this.#load = facetLoad
     this.#time = time
+    this.#born = this.#now()
     this.#ctx = ctx
     this.#bind = bind
     this.#rules = rules
@@ -1356,11 +1368,13 @@ export class Store {
     let name = this.#get('name') ?? ''
     let declaration = meant(this.#get('vocab'))
     if (name == 'yourname/vale.f52dc2' && !this.#profile) {
-      this.#profile = profile((summary) =>
-        console.log(
-          'yak store rows',
-          JSON.stringify({ store: name, ...summary }),
-        )
+      this.#profile = profile(
+        (summary) =>
+          console.log(
+            'yak store rows',
+            JSON.stringify({ store: name, ...summary }),
+          ),
+        this.#now,
       )
     }
     let observe = this.#profile?.observe
@@ -1417,6 +1431,7 @@ export class Store {
     // on every write would answer it with another break, forever.
     let fx = effects(vocab, {
       write: (b) => this.#trust(b, null),
+      clock: clockOf(this.#time),
       singleOwner: true,
       startup: 'manual',
       // A builder output (2) starts a downstream builder call (3). The
@@ -1558,6 +1573,7 @@ export class Store {
       graph: (options) => {
         let g = graph({
           ...options,
+          clock: clockOf(this.#time),
           report: (error, { phase, plugin }) =>
             defect(error, { request: `${plugin} ${phase}`, store: name }),
           ...(own ? {} : { teach: teach(this.#bind) }),
@@ -1697,7 +1713,7 @@ export class Store {
           if (unfenced(bundles)) return under(UNREAD)
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
-          return fenced(copy, under, this.#committed)
+          return fenced(copy, under, this.#committed, clockOf(this.#time))
         }
         g.admit = (bundles, opts) =>
           this.#copyWrite.run(
@@ -1915,9 +1931,9 @@ export class Store {
           status: 503,
         })
       }
-      let began = Date.now()
+      let began = this.#now()
       while (revision < Number(this.#get('policy') ?? 0)) {
-        if (!this.#bind.STORE || Date.now() - began >= FENCE_WAIT) {
+        if (!this.#bind.STORE || this.#now() - began >= FENCE_WAIT) {
           throw Object.assign(
             new Refused('Serving authorization unavailable'),
             {
@@ -2237,15 +2253,19 @@ export class Store {
   #directoryTransport() {
     let ns = this.#bind.STORE
     if (!ns) throw new Refused('directory unavailable')
-    return signedDirectory({
-      fetch: (req) => {
-        // Store authorization never takes the directory part's TTL, even in
-        // hosts without the independent-copy binding (including cold wakes).
-        let headers = new Headers(req.headers)
-        headers.set(EPOCH, '1')
-        return directoryFetch(new Request(req, { headers }), { STORE: ns })
+    return signedDirectory(
+      {
+        fetch: (req) => {
+          // Store authorization never takes the directory part's TTL, even in
+          // hosts without the independent-copy binding (including cold wakes).
+          let headers = new Headers(req.headers)
+          headers.set(EPOCH, '1')
+          return directoryFetch(new Request(req, { headers }), { STORE: ns })
+        },
       },
-    }, this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined)
+      this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined,
+      clockOf(this.#time),
+    )
   }
 
   #directory() {
@@ -2878,7 +2898,7 @@ export class Store {
   #conditionalWakes: ReturnType<typeof conditionalWakes> | undefined
   #rouse = async (bundles: Bundle[]): Promise<Bundle[]> => {
     this.#conditionalWakes ??= conditionalWakes(this.#clock)
-    let { refused } = await this.#conditionalWakes(bundles, Date.now())
+    let { refused } = await this.#conditionalWakes(bundles, this.#now())
     for (let { wake, error } of refused) {
       defect(error, {
         request: `wake ${wake.entity.eid}`,
@@ -2913,7 +2933,7 @@ export class Store {
     let control = request && new URL(request.url).pathname == '/trace'
     let requested = !control && this.#traceNext > 0
     if (requested) this.#traceNext--
-    let origin = Date.now() - performance.now()
+    let origin = this.#now() - performance.now()
     let captured = await record(this, () =>
       during(
         peek(this)!.begin({ kind: 'request', name, package: 'workers/yak' }),
@@ -2948,7 +2968,7 @@ export class Store {
       ? selectRequest({
         op: root.kind,
         name: root.name,
-        now: (this.#time.now ?? Date.now)(),
+        now: this.#now(),
         rowsRead,
         rowsWritten,
         requested,
@@ -3006,7 +3026,7 @@ export class Store {
    * stretch nobody was there for is. Dormancy is delivered durably by the
    * directory; this store never polls it.
    */
-  async tick(now = Date.now()): Promise<Ticked> {
+  async tick(now = this.#now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
     await this.#ensureStarted()
     let run = async () => {
@@ -3032,7 +3052,7 @@ export class Store {
 
   // When this incarnation began: a platform job marked begun before it was
   // begun by an instance that is gone (wake.ts `resumed`).
-  #born = Date.now()
+  #born: number
 
   /** The runtime's clock going off: whatever this object armed itself for.
    * A run the runtime cut off is retried, on whatever instance holds the
@@ -3083,7 +3103,7 @@ export class Store {
             (job, e) => this.#broke(`wake ${job}`, e),
           )
         }
-        await this.#tick(Date.now())
+        await this.#tick(this.#now())
         this.#workingEffects()
         this.#embedding()
         await this.#moving()
@@ -3235,7 +3255,7 @@ export class Store {
   // while the store serves the shape it holds.
 
   // A moment from now: the wake that armed it answers first.
-  #soon = () => new Date(Date.now() + PAUSE).toISOString()
+  #soon = () => new Date(this.#now() + PAUSE).toISOString()
 
   #stamp = (rule: Rule): Stamp | null => {
     let held = this.#get(rule.mark)
@@ -3390,7 +3410,7 @@ export class Store {
       ) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
-        let now = new Date().toISOString()
+        let now = new Date(this.#now()).toISOString()
         let s: Stamp
         let vocabWas = this.#get('vocab')
         try {
@@ -3418,7 +3438,9 @@ export class Store {
                 this.#put(rule.mark, JSON.stringify(s))
                 return s
               }))
-          s = copy ? await fenced(copy, moved, this.#committed) : moved()
+          s = copy
+            ? await fenced(copy, moved, this.#committed, clockOf(this.#time))
+            : moved()
         } catch (e) {
           this.#kv.clear()
           this.#halted.add(rule.mark)
@@ -3493,7 +3515,7 @@ export class Store {
         ))
         : []
       if (pending.length) {
-        let now = Date.now()
+        let now = this.#now()
         let next = Math.min(...pending.map((b) => {
           let e = b.effect as Comp
           return Date.parse(String(e.next ?? '')) ||
@@ -3518,7 +3540,7 @@ export class Store {
     }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arming(
-        new Date(Date.now() + Store.RETRY).toISOString(),
+        new Date(this.#now() + Store.RETRY).toISOString(),
         'effects retry',
       )
         .catch((e) =>
@@ -3556,7 +3578,7 @@ export class Store {
   // outlives the incarnations its retries wake.
   #ride = (store: string | null, ride: Ride) => {
     let was: Outage | null = JSON.parse(this.#get('embedding-outage') ?? 'null')
-    let { outage, report, log } = ride(was, Date.now())
+    let { outage, report, log } = ride(was, this.#now())
     if (outage != was) this.#put('embedding-outage', JSON.stringify(outage))
     if (log) console.warn('yak store embedding', store, log)
     if (report) {
@@ -3577,7 +3599,7 @@ export class Store {
     if (this.#dormant) return
     let model = embedder(this.#bind)
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
-    if (Date.now() < this.#vectorRetry) {
+    if (this.#now() < this.#vectorRetry) {
       // An alarm sooner than the retry spends the one the failure armed.
       let name = this.#name()
       void this.#arming(
@@ -3604,10 +3626,16 @@ export class Store {
       do {
         this.#vectorAgain = false
         let { statements: db, fields } = this.#texts
+        // The model's deadline is on the Store's clock.
+        let deadline = new AbortController()
+        let cancel = clockOf(this.#time).after(
+          Store.EMBED,
+          () => deadline.abort(new DOMException('timed out', 'TimeoutError')),
+        )
         let done = await drain(db, fields, model, {
-          signal: AbortSignal.timeout(Store.EMBED),
+          signal: deadline.signal,
           queued,
-        })
+        }).finally(cancel)
         queued = undefined
         if (this.#dormant) return
         // A text the model will not take is the text's, not the store's: it
@@ -3627,7 +3655,7 @@ export class Store {
       }
     })().catch(async (error) => {
       this.#ride(name, failed(error))
-      this.#vectorRetry = Date.now() + Store.RETRY
+      this.#vectorRetry = this.#now() + Store.RETRY
       await this.#arming(
         new Date(this.#vectorRetry).toISOString(),
         'embedding retry',
@@ -3741,7 +3769,7 @@ export class Store {
     // object's plugins load while its storage opens (`#awake`): an isolate
     // that never ran them evaluates their modules then, and nothing in that
     // touches storage, so a dormant object loses nothing but the CPU.
-    let waking = !this.#started, woke = Date.now()
+    let waking = !this.#started, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
     // A caller on a later deploy restarts this object before it does anything
@@ -3764,7 +3792,7 @@ export class Store {
       if (this.#startedDormant) this.#started = null
       await this.#ensureStarted()
       if (this.#refused) return this.#stalled()
-      await this.#arming(new Date().toISOString())
+      await this.#arming(new Date(this.#now()).toISOString())
       return json({ ok: true })
     }
     if (!await this.#awake()) {
@@ -3787,7 +3815,7 @@ export class Store {
     await this.#ensureStarted(request)
     let tally = this.#pending
     this.#pending = new Map()
-    waited(tally, waking, woke, Date.now())
+    waited(tally, waking, woke, this.#now())
     let run = () =>
       tallying(tally, async () => {
         let base = request.headers.get('x-yak-base-release')
@@ -3956,12 +3984,12 @@ export class Store {
               new Response(committed.answer, JSONED),
             )
           }
-          seq = keep(this.#sql, request, body)
+          seq = keep(this.#sql, request, body, this.#now)
           aside(this.#sql, seq, await said(r.clone()))
           return this.#park(seq, await said(r))
         }
       }
-      seq = was?.seq ?? keep(this.#sql, request, body)
+      seq = was?.seq ?? keep(this.#sql, request, body, this.#now)
     } catch (e) {
       if (e instanceof Refused) {
         return (e as Refused & { status?: number }).status == 503
@@ -3980,7 +4008,7 @@ export class Store {
               new Response(was.answer, JSONED),
             )
           }
-          let seq = was?.seq ?? keep(this.#sql, request, body)
+          let seq = was?.seq ?? keep(this.#sql, request, body, this.#now)
           aside(this.#sql, seq, String(e))
           return this.#park(seq, String(e))
         } catch {
@@ -4102,7 +4130,7 @@ export class Store {
     return parked(seq, why)
   }
 
-  #retry = () => this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+  #retry = () => this.#arming(new Date(this.#now() + Store.RETRY).toISOString())
 
   // A word, for a report from an object that may be too broken to say it.
   #said(k: Word): string | null {
@@ -4287,8 +4315,8 @@ export class Store {
         if (this.#landing != null) {
           let answer = () => published(this.#vocab, bundles)
           if (typeof this.#landing == 'number') {
-            landed(this.#sql, this.#landing, answer)
-          } else received(this.#sql, this.#landing, answer)
+            landed(this.#sql, this.#landing, answer, this.#now)
+          } else received(this.#sql, this.#landing, answer, this.#now)
           this.#landing = null
         }
         return bundles
@@ -4612,7 +4640,7 @@ export class Store {
     // nothing while it sat there. Kernel only, like the erase.
     if (path == '/alarm' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      await this.#arming(new Date().toISOString())
+      await this.#arming(new Date(this.#now()).toISOString())
       return Response.json({ ok: true })
     }
     // The mover's door (mover.ts), a sweep's one question of each store:
@@ -4637,7 +4665,7 @@ export class Store {
           this.#moveOnly = true
           await this.#ctx.storage.put?.('moving', true)
         }
-        await this.#arming(new Date().toISOString(), 'mover')
+        await this.#arming(new Date(this.#now()).toISOString(), 'mover')
       }
       let rules: Standing[] = this.#moves().map((r) => ({
         mark: r.mark,
@@ -5068,6 +5096,8 @@ export class Store {
         (subs.enqueue ?? subs.relay)(by(sink), bundles, writing(writer)),
       pace: subs.pace,
       save: subs.save,
+      now: subs.now,
+      timer: subs.timer,
       relaying: (sink) => subs.relaying(by(sink)),
       relayed: (sink, keys) => subs.relayed(by(sink), keys),
     }
@@ -5439,7 +5469,7 @@ export class Store {
 
   /** A frame from a client: a subscription opened or closed. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): Promise<void> {
-    let received = Date.now()
+    let received = this.#now()
     return this.#traced(
       'ws message',
       () => this.#socketMessage(ws, data, received),

@@ -69,7 +69,8 @@ process, not a sandbox or a separate fault-isolated process.
   diagnostics. There is no automatic deadline. A second Ctrl+C ends the worker
   where it stands, preserving the last durable checkpoints; independent
   supervised processes remain running. OS SIGINT follows the same two-stage
-  path. Programmatic `remote.close()` retains its two-second default;
+  path. Programmatic `remote.close()` retains its two-second default, kept, like
+  every request's deadline, by `remote()`'s `clock` option;
   `close({timeout: null})` drains indefinitely, and `force()` releases that wait
   explicitly. Terminal cleanup follows drain or explicit force. Queued children
   remain queued for restart.

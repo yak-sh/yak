@@ -30,10 +30,9 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { FakeTime } from '@std/testing/time'
 import { parse } from 'es-module-lexer/js'
 import type { Wire } from '@yaks/durable-object'
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import {
@@ -1671,17 +1670,15 @@ test(
     })
     let response: Response | undefined
     let failed: unknown
-    {
-      // Exercise the real one-second router deadline without sleeping for it.
-      // Install after fixture setup, and restore before unrelated store reads.
-      using time = new FakeTime(Date.now())
-      void k.at('/garden/print').then(
-        (r) => response = r,
-        (e) => failed = e,
-      )
-      await entered.promise
-      await time.tickAsync(1_000)
-    }
+    // The one-second router deadline, on a clock this request alone keeps,
+    // so nothing sleeps for it.
+    let time = clock(Date.now())
+    void apps.fetch(visit('/garden/print'), { ...k.env, CLOCK: time }).then(
+      (r) => response = r,
+      (e) => failed = e,
+    )
+    await entered.promise
+    await time.advance(1_000)
     await until(() => failed !== undefined || response !== undefined)
     if (failed) throw failed
     assert(response)

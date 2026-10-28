@@ -60,6 +60,7 @@ export { storage, type Store } from './store.ts'
 export {
   backoff,
   evicted,
+  jittered,
   killed,
   lost,
   moved,

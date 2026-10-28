@@ -7,7 +7,7 @@
  * @module
  */
 
-import { sleep } from '@yaks/fp'
+import { type Clock, sleep, system } from '@yaks/fp'
 import { soonest } from './due.ts'
 import { rouse } from './while.ts'
 import { type Driver, tick, type Ticked } from './tick.ts'
@@ -24,6 +24,9 @@ export type LoopOpts = {
   /** called after each tick with the fired and rejected wakes, a wake its
    * `while` could not arm among the rejected */
   onTick?: (result: Ticked) => void | Promise<void>
+  /** the time each tick is at, and the timer the loop sleeps on (default the
+   * runtime's) */
+  clock?: Clock
 }
 
 /**
@@ -50,6 +53,7 @@ export let loop = async (
   opts: LoopOpts = {},
 ): Promise<void> => {
   let cap = opts.cap ?? 60_000
+  let clock = opts.clock ?? system
   if (!Number.isFinite(cap) || cap <= 0 || cap > 2_147_483_647) {
     throw new RangeError('wake loop cap must be within setTimeout range')
   }
@@ -57,7 +61,7 @@ export let loop = async (
   // short-lived process — a one-off command run to fire whatever is overdue —
   // and it still owes the graph the tick it was started for.
   do {
-    let now = Date.now()
+    let now = clock.now()
     let { refused } = await rouse(graph, now)
     let result = await tick(graph, now)
     await opts.onTick?.({ ...result, refused: [...refused, ...result.refused] })
@@ -66,8 +70,9 @@ export let loop = async (
     // effect ran needs a zero-delay pass, not a whole cap's extra wait.
     let at = await soonest(graph, now)
     await sleep(
-      Math.min(cap, Math.max(0, (at ?? Infinity) - Date.now())),
+      Math.min(cap, Math.max(0, (at ?? Infinity) - clock.now())),
       opts.signal,
+      clock,
     )
   } while (!opts.signal?.aborted)
 }

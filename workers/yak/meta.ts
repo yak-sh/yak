@@ -22,6 +22,8 @@ import { stringify } from '@yaks/vocab/wire'
 import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
+import { jittered } from '@yaks/durable-object'
+import type { Clock } from '@yaks/fp'
 import { Pending, said } from './writes.ts'
 
 /** The meta store, in the graph's own wire. */
@@ -150,10 +152,20 @@ let doors = new WeakMap<object, Meta>()
  * fetch to its own stub does not start a new chain but deepens the one it is
  * on, and a sweep that asks the directory once per space ran out of depth
  * (T-34844). In-process, the question is a method call. */
-export let meta = (env: { STORE: Namespace; META?: Meta }): Meta => {
+export let meta = (
+  env: { STORE: Namespace; META?: Meta; CLOCK?: Clock },
+): Meta => {
   if (env.META) return env.META
   let ns = env.STORE as unknown as object
   let held = doors.get(ns)
-  if (!held) doors.set(ns, held = metaOf(storeOf(env.STORE, PLATFORM_STORE)))
+  if (!held) {
+    let door = storeOf(
+      env.STORE,
+      PLATFORM_STORE,
+      undefined,
+      jittered(env.CLOCK),
+    )
+    doors.set(ns, held = metaOf(door))
+  }
   return held
 }

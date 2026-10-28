@@ -1,5 +1,6 @@
 /// <reference lib="deno.ns" />
 import { equal, test, throws, until } from '@yaks/testing'
+import { system } from '@yaks/fp'
 import { type Bundle, type Comp, derivedEid, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -56,7 +57,7 @@ let fixture = (
   let g = graph({
     vocab,
     storage: ram(vocab),
-    clock: () => new Date(at).toISOString(),
+    clock: { ...system, now: () => at },
   })
   g.apply([{ entity: { eid: 'a' } }, { entity: { eid: 'b' } }])
   let timers = new Set<{ at: number; fn: () => void }>()

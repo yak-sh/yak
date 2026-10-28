@@ -1,5 +1,6 @@
 // A temporarily unavailable dependency keeps its original durable intent,
 // across worker replacements and without spending failure retries.
+import { system } from '@yaks/fp'
 import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, match, test } from '@yaks/testing'
@@ -20,7 +21,7 @@ for (let singleOwner of [false, true]) {
         owner,
         singleOwner,
         defer: true,
-        now: () => now,
+        clock: { ...system, now: () => now },
         write: (bs) => g.apply(bs, { trusted: true }),
         report: () => {},
       })

@@ -81,6 +81,12 @@ asking:
     let lending = store('/lending/api/')
     let loans = await lending.query('.loan')
 
+`store(base, {clock})` keeps the store's waits on `clock` instead of the
+browser's timers: the outbox's and an upload's retries, and the socket's
+reconnects. `clock.after(ms, fn)` calls `fn` once `ms` milliseconds have passed
+and returns a function that cancels it, so a test of a page moves the store's
+time itself.
+
 ## Client functions
 
 ### apply(bundles)

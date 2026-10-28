@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { after } from '@yaks/fp'
+import { after, system } from '@yaks/fp'
 import { graph } from './graph.ts'
 import { token } from './guard.ts'
 import { type Storage } from './storage.ts'
@@ -190,10 +190,13 @@ test('a host may defer effects; its clock is frozen before context leaves', () =
   let g = graph({
     storage: memory(),
     vocab: books,
-    clock: () => {
-      assert(active)
-      clocks++
-      return '2026-09-10T00:00:00Z'
+    clock: {
+      ...system,
+      now: () => {
+        assert(active)
+        clocks++
+        return Date.parse('2026-09-10T00:00:00Z')
+      },
     },
     deferEffects: (run) => queued.push(run),
     plugins: [{
@@ -210,7 +213,7 @@ test('a host may defer effects; its clock is frozen before context leaves', () =
   let bundles = [{ entity: { eid: 'a' }, book: {} }]
   let out = g.apply(bundles)
   assert(!(out instanceof Promise))
-  assertEquals(comp(out[0], 'created').at, '2026-09-10T00:00:00Z')
+  assertEquals(comp(out[0], 'created').at, '2026-09-10T00:00:00.000Z')
   assertEquals([clocks, observations, queued.length], [1, 0, 1])
   active = false
   queued.pop()!()

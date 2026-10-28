@@ -964,7 +964,8 @@ running, it polls that table once per second. A new announcement or completed
 generation stops new execution, drains active work, and closes the database;
 subsequent commands report that a restart is required. It does not automatically
 restart the worker. `migrationPollMs` can configure the interval in
-`agent`/`remote` options.
+`agent`/`remote` options; `local()` polls on its `clock` option (an @yaks/fp
+`Clock`, the runtime's by default).
 
 The harness observes `h.migrations` when storage offers a migration monitor.
 Migration tooling uses `migrations(driver)` on a dedicated adapter connection.

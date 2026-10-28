@@ -1,11 +1,14 @@
 // A virtual clock runs scheduled callbacks only when a test advances time.
 // Consumers inject its operations at their timer boundary.
+import { setImmediate } from 'node:timers/promises'
 
 /** A clock whose time and scheduled callbacks are controlled by the caller. */
 export type Clock = {
   now: () => number
   after: (ms: number, callback: () => void | Promise<void>) => () => void
   advance: (ms: number) => Promise<void>
+  /** How many callbacks are set and have neither run nor been cancelled. */
+  pending: () => number
 }
 
 /** Create a virtual clock at a chosen time, in milliseconds. */
@@ -31,6 +34,10 @@ export let clock = (start = 0): Clock => {
           'clock: advance requires a finite, nonnegative span',
         )
       }
+      // What the caller queued runs first, as it would before the runtime's
+      // next timer: code that awaits on its way to setting a timer sets it.
+      // `setImmediate` turns the event loop without waiting on a clock.
+      await setImmediate()
       let end = time + ms
       while (true) {
         let due: number | undefined
@@ -48,5 +55,6 @@ export let clock = (start = 0): Clock => {
       }
       time = end
     },
+    pending: () => pending.size,
   }
 }

@@ -4,8 +4,13 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { equal, test, throws } from '@yaks/testing'
 import { type Stub, worker } from './worker.ts'
 import { backoff } from '@yaks/durable-object'
+import { type Clock, system } from '@yaks/fp'
 
-backoff.wait = () => Promise.resolve()
+// The worker's clock, on which a resend waits out no pause.
+let instant: Clock = {
+  ...system,
+  after: (_ms, go) => (queueMicrotask(go), () => {}),
+}
 
 // The object's failure as its stub hands it over, its stack already said: a
 // report reads the stack, and formatting a fresh one is the runtime's work,
@@ -29,18 +34,22 @@ let fixture = (doors: Partial<Stub> = {}) => {
   }
   // No stub reads a ticket, so a scratch one stands in for signing: a
   // WebCrypto call, which Deno answers from a thread pool on a later turn.
-  let w = worker({
-    BUNDLE_HASH: hash,
-    TRACKER_SECRET: 'scratch',
-    CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000012' },
-    TRACKERS: { getByName: () => stub },
-    ERRORS: {
-      send: (rows) => {
-        sent.push(rows)
-        return Promise.resolve()
+  let w = worker(
+    {
+      BUNDLE_HASH: hash,
+      TRACKER_SECRET: 'scratch',
+      CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000012' },
+      TRACKERS: { getByName: () => stub },
+      ERRORS: {
+        send: (rows) => {
+          sent.push(rows)
+          return Promise.resolve()
+        },
       },
     },
-  }, () => Promise.resolve('scratch-ticket'))
+    () => Promise.resolve('scratch-ticket'),
+    instant,
+  )
   let check = (entrypoint: string) => {
     let [failure, companion] = sent.at(-1)!
     equal((failure.error as Comp).tags, {

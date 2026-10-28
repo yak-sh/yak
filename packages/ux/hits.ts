@@ -5,6 +5,7 @@
 // server search; the hook here debounces it and aborts a stale request, so a
 // late answer never repaints a newer query.
 import { useEffect, useState } from 'preact/hooks'
+import { type Clock, system } from '@yaks/fp'
 
 /** A server search: the entities a line answers, at most `limit`. */
 export type Find<T> = (
@@ -43,15 +44,16 @@ export let pickLine = (q: string, comp = ''): string => {
 }
 
 /** A live picker's hits, asked of `find`: refetched as the line settles
- * (`settle` ms without a change, 150 by default), the last request aborted so
- * a slow answer can't overwrite a newer one. An empty line clears the list
- * without a round trip. The answer is an answer to a query, not a component's
- * own state, so it is held here. */
+ * (`settle` ms on `clock` without a change, 150 by default), the last request
+ * aborted so a slow answer can't overwrite a newer one. An empty line clears
+ * the list without a round trip. The answer is an answer to a query, not a
+ * component's own state, so it is held here. */
 export let useHits = <T>(
   line: string,
   limit: number,
   find: Find<T>,
   settle = 150,
+  clock: Clock = system,
 ): T[] => {
   let [found, setFound] = useState<T[]>([])
   useEffect(() => {
@@ -60,14 +62,14 @@ export let useHits = <T>(
       return
     }
     let abort = new AbortController()
-    let timer = setTimeout(
-      () => find(line, limit, abort.signal).then(setFound).catch(() => {}),
+    let cancel = clock.after(
       settle,
+      () => find(line, limit, abort.signal).then(setFound).catch(() => {}),
     )
     return () => {
-      clearTimeout(timer)
+      cancel()
       abort.abort()
     }
-  }, [line, limit, settle])
+  }, [line, limit, settle, clock])
   return found
 }

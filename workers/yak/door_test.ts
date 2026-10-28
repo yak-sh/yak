@@ -2,15 +2,17 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { ACCEPTED, doorOf, type Namespace, storeOf } from './door.ts'
+import { ACCEPTED, doorOf, type Namespace, storeOf as door } from './door.ts'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 import { metaOf } from './meta.ts'
 
-// The pauses between a call's sends are recorded here, never slept.
+// Every store door here records the pauses between a call's sends, never
+// sleeps them.
 let paused: number[] = []
-backoff.wait = (ms) => Promise.resolve(void paused.push(ms))
+let storeOf = (n: Namespace, name: string) =>
+  door(n, name, undefined, (ms) => Promise.resolve(void paused.push(ms)))
 
 test('a request sums statement counts from each store response', async () => {
   let tally = new Map<string, number>()
