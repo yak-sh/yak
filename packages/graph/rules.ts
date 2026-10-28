@@ -490,7 +490,7 @@ export let fire = (
   if (bundles.length == 1) {
     let b = bundles[0]
     let view = merged(tick.of?.(b.entity.eid) ?? null, b)
-    if (b.$actor) view.$actor ??= b.$actor
+    if (b.$actor && !view.$actor) view = { ...view, $actor: b.$actor }
     views = [view]
     written?.set(b.entity.eid, new Set(Object.keys(b)))
   } else {
@@ -500,7 +500,7 @@ export let fire = (
       let view = merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b)
       // The writer the entity's own bundles named, where one did: a batch can
       // carry more than one writer's work (./stamp.ts `writers`).
-      if (b.$actor) view.$actor ??= b.$actor
+      if (b.$actor && !view.$actor) view = { ...view, $actor: b.$actor }
       seen.set(eid, view)
       if (written) {
         let names = written.get(eid) ?? new Set<string>()
@@ -608,11 +608,8 @@ export let fire = (
         }
       }
       if (!names.length) return out
-      let emitted = [{ entity: { eid: views[i].entity.eid }, ...patch }]
-      return after(
-        tick.admit ? tick.admit(emitted) : emitted,
-        (accepted) => [...out, ...accepted],
-      )
+      out.push({ entity: { eid: views[i].entity.eid }, ...patch })
+      return out
     })
   }
   return after(
@@ -642,9 +639,13 @@ export let fire = (
       // batch has already been written and whatever a rule produced has to be
       // written here. Before `mutate`, it is still to come and will write it.
       let late = PHASES.indexOf(tick.phase) >= PHASES.indexOf('mutate')
-      return late
-        ? after(tick.tx.patch(made), () => [...bundles, ...made])
-        : [...bundles, ...made]
+      return after(
+        tick.admit ? tick.admit(made) : made,
+        (accepted) =>
+          late
+            ? after(tick.tx.patch(accepted), () => [...bundles, ...accepted])
+            : [...bundles, ...accepted],
+      )
     },
   )
 }
