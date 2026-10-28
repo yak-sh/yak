@@ -19,6 +19,7 @@ import { bind, type BindOpts } from './bind.ts'
 import {
   as,
   compile,
+  type Compiled,
   type Extension,
   lit,
   type Screen,
@@ -52,15 +53,18 @@ let query = (a: string, b = a) =>
     eq('link.right', list(b)),
     eq('mark.owner', list(a)),
   ))
+// A kept statement's answer is the binder's, and its origin renders to it.
+let agrees = (actual: Compiled, expected: Compiled) => {
+  equal([actual.sql, actual.params], [expected.sql, expected.params])
+  if (actual.origin) equal(render(actual.origin).sql, actual.sql)
+}
 let same = (
   q: ReturnType<typeof and>,
   opts: BindOpts = {},
-  expected?: ReturnType<typeof render>,
+  expected?: Compiled,
 ) => {
   let actual = compile(q, vocab, opts)
-  expected ??= render(bind(q, vocab, opts))
-  equal([actual.sql, actual.params], [expected.sql, expected.params])
-  if (actual.origin) equal(render(actual.origin).sql, actual.sql)
+  agrees(actual, expected ?? render(bind(q, vocab, opts)))
   return actual
 }
 
@@ -307,11 +311,15 @@ for (
     ['human identity', and(eq('entity.eid', '0'.repeat(40))), {}],
   ] as [string, ReturnType<typeof and>, BindOpts][]
 ) {
-  // The binder's answer, worked out as the file loads: the case times the
-  // three asks, the third the kept statement's first hit.
+  // The binder's answer and the first two asks, the second the proof, worked
+  // out as the file loads: the case times the third, the kept statement's
+  // first hit, and holds all three to the binder's answer.
   let expected = render(bind(q, vocab, opts))
+  let asked = [compile(q, vocab, opts), compile(q, vocab, opts)]
   test(`${name} shapes answer as the binder does, asked again`, () => {
-    for (let k = 0; k < 3; k++) same(q, opts, expected)
+    for (let actual of [...asked, compile(q, vocab, opts)]) {
+      agrees(actual, expected)
+    }
   })
 }
 

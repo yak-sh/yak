@@ -533,9 +533,8 @@ test('a windowed query refills when a member leaves its fixed owner', () => {
   assertEquals(left.gone, ['r2'])
 })
 
-// A backlink query on one of two books, among reviews of each, its answer
-// and reads followed through a commit that changes a review of the other book
-// and adds another, then through a review moving onto its book.
+// Two books with a review each, a backlink subscription opened on the first,
+// its reads followed from there.
 let backlinked = (more: string) => {
   let g = shop()
   let [b1, b2] = [derivedEid('fixture:b1'), derivedEid('fixture:b2')]
@@ -552,24 +551,30 @@ let backlinked = (more: string) => {
   }
   let e = ear()
   subscriptions(spy).open(e.to, 'refs', `.refs=${b1}&?review${more}`)
-  assertEquals(e.take().map(ids), [['r1']])
+  let first = e.take()
   reads.length = 0
-
-  g.apply([
-    { entity: { eid: 'r2' }, review: { stars: 5 } },
-    { entity: { eid: 'r3' }, review: { book: b2, stars: 1 } },
-  ])
-  assertEquals([reads, e.take()], [[], []])
-
-  g.apply([{ entity: { eid: 'r2' }, review: { book: b1 } }])
-  assertEquals(e.take().map((f) => ids(f).includes('r2')), [true])
+  return { g, b1, b2, reads, e, first }
 }
 
-test('a backlink query ignores writes to what references something else', () =>
-  backlinked(''))
+for (let [name, more] of [['', ''], ['windowed ', '&.limit=5']]) {
+  let other = backlinked(more)
+  test(`a ${name}backlink query ignores writes to what references something else`, () => {
+    let { g, b2, reads, e, first } = other
+    assertEquals(first.map(ids), [['r1']])
+    g.apply([
+      { entity: { eid: 'r2' }, review: { stars: 5 } },
+      { entity: { eid: 'r3' }, review: { book: b2, stars: 1 } },
+    ])
+    assertEquals([reads, e.take()], [[], []])
+  })
 
-test('a windowed backlink query ignores writes to what references something else', () =>
-  backlinked('&.limit=5'))
+  let moving = backlinked(more)
+  test(`a ${name}backlink query hears a reference move onto its entity`, () => {
+    let { g, b1, e } = moving
+    g.apply([{ entity: { eid: 'r2' }, review: { book: b1 } }])
+    assertEquals(e.take().map((f) => ids(f).includes('r2')), [true])
+  })
+}
 
 test('windowed property filters skip births without their components', () => {
   let g = shop()

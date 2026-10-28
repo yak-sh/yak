@@ -117,18 +117,26 @@ test('batch reservations reject duplicate explicit entries and rollback', async 
   assertEquals(await transcript(g, 's'), [])
 })
 
+// A child session, its first input, its parent and the parent's entry it
+// forks from, written in one batch with the child first.
+let childFirst = (): Bundle[] => [
+  { entity: { eid: 'child' }, session: {}, fork: { from: 'anchor' } },
+  { entity: { eid: 'child-input' }, entry: { session: 'child' } },
+  { entity: { eid: 'parent' }, session: {} },
+  { entity: { eid: 'anchor' }, entry: { session: 'parent' } },
+]
+let forking = locked(store()), forked = childFirst()
 test('batch child-before-parent order still allocates after the new fork anchor', async () => {
-  let g = locked(store())
-  await g.apply([
-    { entity: { eid: 'child' }, session: {}, fork: { from: 'anchor' } },
-    { entity: { eid: 'child-input' }, entry: { session: 'child' } },
-    { entity: { eid: 'parent' }, session: {} },
-    { entity: { eid: 'anchor' }, entry: { session: 'parent' } },
-  ])
-  assertEquals(positions(await transcript(g, 'child')), [1, 2])
+  await forking.apply(forked)
+  assertEquals(positions(await transcript(forking, 'child')), [1, 2])
+})
+
+let anchored = locked(store())
+await anchored.apply(childFirst())
+test('an entry allocated in a batch keeps its position', async () => {
   await assertRejects(
     async () => {
-      await g.apply([{ entity: { eid: 'anchor' }, entry: { seq: 4 } }])
+      await anchored.apply([{ entity: { eid: 'anchor' }, entry: { seq: 4 } }])
     },
     Error,
     'cannot move',
