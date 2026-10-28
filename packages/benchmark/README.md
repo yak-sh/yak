@@ -119,6 +119,32 @@ distribution of operation times. Native timed benches keep every invocation
 sample. All samples must be finite and nonnegative; Deno averages must be
 positive.
 
+## CPU time
+
+A sample may carry `cpu`: the CPU time its step took, in the bench's unit, as
+this process and its finished children used it, every thread, user and system
+(`cputime()`, getrusage(2) on Linux). Other work on a busy box barely moves it,
+where it stretches the step's wall time. `bench()` records it for every timed
+invocation; an externally measured bench takes it with `stopwatch()`, whose
+reading spreads into the sample. A round keeps the median of its samples' CPU
+times as `cpu` when every sample has one.
+
+```ts
+import { type Sample, stopwatch } from '@yaks/benchmark'
+import { ok } from '@yaks/testing'
+
+let took = stopwatch()
+let x = 0
+for (let i = 0; i < 1e4; i++) x += i
+let sample: Sample = { ...took(), source: 'end-to-end' }
+ok(x > 0 && sample.value >= 0 && (sample.cpu ?? 0) >= 0)
+```
+
+A child counts once it has exited and been waited for, so a step whose work runs
+in a process that outlives it (a server, a browser, a terminal kept open across
+samples) cannot be measured this way, and keeps only its wall time. So does a
+step that waits on I/O, where the wait is what a person feels.
+
 ## Runner and ratchet
 
 `run()` writes a result in all three modes. `check` reads the committed baseline
@@ -382,9 +408,9 @@ try {
 
 | Subpath  | Exports                                                                                                                                                                                                                                         | Purpose                                            |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
+| `.`      | `bench`, `stopwatch`, `run`, `Regressed`                                                                                                                                                                                                        | Timed callbacks and JSON runner.                   |
 | `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
-| `.`      | `busy`, `waited`, `configure`, `host`                                                                                                                                                                                                           | Process reporter factory and current host context. |
+| `.`      | `busy`, `cputime`, `waited`, `configure`, `host`                                                                                                                                                                                                | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
 
@@ -393,21 +419,3 @@ Those consume the completed run through a reporter. Writing JSON needs Deno
 filesystem permission; host metadata needs environment, read and Git execution
 permission. The root export targets Deno; the pure modules themselves have no
 machine effects.
-
-## Independent observation comparison
-
-`difference(reference, current, better, significance)` compares independent
-observations with an exact one-sided rank permutation test, retaining ties. It
-returns `slower`, `unconfirmed` or `inconclusive`, the probability and both
-medians. At least three observations on each side are needed. Consecutive rounds
-sharing one sitting's conditions must be aggregated into one observation. The
-caller owns reference provenance, load exclusion and correction for multiple
-comparisons.
-
-```ts
-import { difference } from '@yaks/benchmark'
-import { equal } from '@yaks/testing'
-
-equal(difference([100, 101, 102], [110, 111, 112]).verdict, 'slower')
-equal(difference([100], [110, 111, 112]).verdict, 'inconclusive')
-```

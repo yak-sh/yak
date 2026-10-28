@@ -34,74 +34,37 @@ such a run, and a check there past its limit says `loaded`, not `regressed`.
 
 ## The monitor
 
-Nothing gates on a bench; bench/monitor.ts watches them instead. Isolated suites
-with paired fixtures compare the baseline revision and current revision on every
-screen, including when the absolute budget passes. The same driver runs
-reference/current/reference brackets under the box-wide lock. A completed
-comparison is settled once; it does not enqueue another confirmation or bank its
-single-run screen. The report names only metrics the paired evidence found
-slower. Load is sampled before and after the actual probes, not afterward while
-their results are aggregated.
+Nothing gates on a bench; bench/monitor.ts watches them instead, and a "got
+slower" bug it files means the code got slower. It screens each suite with one
+run against its committed baseline. A screen past its limit is never evidence by
+itself: the monitor then measures the code the baseline was banked at beside the
+code now, at the same moment ([side by side](#side-by-side-on-a-shared-box)),
+and reports only the benches that comparison finds slower, with the commits
+between the two. A busy box slows both alike, so it files nothing. Every suite
+is judged this way and none opts in, except those that measure the live box
+(`LIVE`: pages, page-content, worker-health, app-deploy), which have no older
+code to run beside them and so never report a slowdown.
 
-Live `pages` and `page-content` retain quiet one-run sitting medians in
-`~/.cache/yak/bench/<suite>.history.json`. A source fingerprint of the serving
-process's pinned runtime identifies the product; checkout commits, runtime slots
-and restarts alone do not change it. CSS, HTML, dependency configuration and
-production package, Worker and app sources participate; docs and tests do not.
-The fingerprint is read before and after measurement so a mixed-build run
-confirms nothing. Screens within fifteen minutes count as one sitting;
-best-of-three confirmations cannot enter this distribution.
+A check that can tell nothing reports nothing and is owed to a later tick: a
+busy box (other work over a quarter of its CPUs), a busy benchmark lock, a
+measurement past its time cap, older code that cannot run today's bench. A suite
+that fails (no baseline, a crash, a page that never paints) is checked again at
+once and reported only when it fails again, so a bug says the bench is broken.
+@yaks/heal sends a regression or a failure to an agent like any other bug.
 
-A quiet absolute pass starts a missing reference. Three independent reference
-observations are needed before comparison, and suspicious observations never
-initialize a reference. A changed product's candidate observations accumulate
-across ticks against the frozen reference. An exact one-sided rank permutation
-test compares medians, with its 5% significance divided among the suite's
-metrics; a statistically proven speedup replaces that metric's reference. The
-last twelve observations of each distribution are retained with revision, time,
-load and CPU-use evidence. This can detect persistent shifts inside the absolute
-ratchet's noise margin. Insufficient evidence is inconclusive, keeps its
-observations, and neither reports a code regression nor banks a best. A missing
-reference is logged explicitly; scalar baseline values are never fabricated into
-samples. A comparison is statistical evidence, not a guarantee of instant
-detection or zero false positives.
-
-Other suites screen against the absolute ratchet and confirm with three runs. A
-one-run pass never banks a new minimum. The monitor measures nothing while the
-box is loaded and loaded results confirm nothing, bank nothing and mark nothing
-good. A suite that cannot run (no baseline, a crash, a page that never paints, a
-run past its time cap) reports a failure. @yaks/heal sends confirmed regressions
-and failures to an agent like any other bug. Cron runs it from the main checkout
-through bin/bench-monitor: every suite at 02:23, user-facing suites every 30
-minutes (`--hourly`), and pages after each web-unit change (`--restarted`,
-checked every 15 minutes). The user-facing suites collect serially under the
-box-wide lock, so fixtures never measure one another. The hourly lane holds a
-persistent queue in `~/.cache/yak/bench/hourly-queue.json`, with one lane lock
-around loading, collecting and saving it. Each tick stops admitting work after
-25 minutes; an admitted collection keeps its ten-minute limit. A busy box lock
-or a loaded box leaves the exact job owed and ends the tick.
-
-All screens in a cohort precede their confirmations. An hour-old confirmation
-gets priority over fresh arrivals so repeated screens cannot starve it.
-Completed screens are not duplicated within an hour; unfinished screens and
-confirmations carry to the next tick rather than restarting the queue at pages.
-A crash may repeat the in-flight job, but cannot silently discard it.
-Unconfirmed and inconclusive paired measurements are neither failures nor
-passes.
-
-Run the scheduled queue with `bin/bench-monitor --hourly`. It never starts
-parallel collectors, extends measurement limits or interrupts another lock
-holder.
-
-The monitor keeps its best measurements in `~/.cache/yak/bench/best/`: each
-bench's committed median, or a better one a quiet run of the monitor's found
-past the noise, retaining the wider slack its quiet measurements learned.
-Reading the committed baseline does not erase measured slack. A slower
-observation never raises it, but a committed median that got worse since the
-monitor last read it (kept beside it as `<suite>.committed.json`) was banked
-slower on purpose, and the best takes it. Normal checks never rewrite the
-committed baseline. Last good commits and the web unit are kept in
-`~/.cache/yak/bench/monitor.json`.
+Cron runs it from the main checkout through bin/bench-monitor: every suite at
+02:23, user-facing suites every 30 minutes (`--hourly`), and pages after each
+web-unit change (`--restarted`, checked every 15 minutes). The user-facing
+suites collect serially under the box-wide lock, so fixtures never measure one
+another. The hourly lane holds a persistent queue in
+`~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
+checking and saving it. Each tick stops admitting work after 25 minutes; an
+admitted screen keeps its ten-minute limit, and a comparison its half hour. A
+busy box lock or a loaded box leaves the owed suite at the head of the queue and
+ends the tick; a suite checked in the last hour is not owed again. It never
+starts parallel collectors, extends measurement limits or interrupts another
+lock holder. The monitor banks nothing: a baseline moves only by
+`bench:ratchet`.
 
 ## Inbox content
 
@@ -427,39 +390,27 @@ residual and create-scaling investigation.
 hibernation probe. These are separate from the fixed ratchet composition and
 from the test suite.
 
-### Paired confirmation on a shared box
+### Side by side on a shared box
 
-A **paired confirmation** runs the same current benchmark driver against the
-product revision where its baseline was banked and the current product revision.
-The monitor uses it on each screen of `platform-waits`, `inbox-content`,
-`hook-waits`, `operation-commands`, `operation-scale` and `person-commands`. It
-holds the box-wide lock across interleaved reference/current/reference rounds
-(at least six, increasing with metric count for the within-bracket sign
-comparison). Each probe owns its seeded graph; no live database is copied.
-Historical product code includes its historical probe adapter, so an
-incompatible adapter fails the comparison with a diagnostic.
-
-Raw milliseconds, baseline limits and the absolute regression remain in the
-saved results. The paired result is separate evidence, never adjusted
-milliseconds. It records the two revisions, current driver hash, actual host CPU
-and all round observations. Disjoint current/reference ranges, or a consistent
-deterioration within every bracket beyond both flanking references, show a
-measured revision difference conditional on the bracket, not proof of code
-causality: contention concentrated in the current windows can still mislead it.
-Reference ranges and their central observations must overlap. Drift in any
-metric makes the whole comparison inconclusive, including otherwise separated
-metrics.
-
-An overlapping current range is _unconfirmed_, not equivalent and not a budget
-pass. An unconfirmed or inconclusive comparison neither banks a best nor marks a
-last-good run. Adapter failures remain reported with their diagnostics. The next
-scheduled measurement retries. Live `pages` and `page-content` use the
-independent sitting comparison above: their changing graph and backend are not
-an isolated paired fixture.
+bench/paired.ts measures a suite at two product revisions, by default the one
+its baseline was banked at and HEAD, under the same driver: this checkout's
+bench files and @yaks/benchmark, copied into an archive of each revision. It
+holds the box-wide lock across rounds of reference, current, reference (at least
+six, more with more benches, for the within-round sign comparison); each probe
+owns its seeded graph and no live database is copied. A bench is slower when
+every round's current figure is past both references beside it (or every current
+figure past every reference one) and its median is past the reference's by more
+than the slack its baseline banked. The figure is CPU time where every sample
+carries it (@yaks/benchmark `stopwatch`), since a busy box barely moves it, and
+wall time where a step waits on I/O or works in a process that outlives it.
+Other work on the box during the bracket is recorded, not refused, since it
+slows both revisions alike; reference rounds that drift apart make the whole
+comparison inconclusive. So does older code that cannot run today's driver; a
+failure of the current code's bench is a failure. The comparison banks nothing.
 
 To inspect one directly while holding the shared measurement lock:
 
 ```sh
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/paired.ts \
-  platform-waits /tmp/platform-paired.json
+  hook-waits /tmp/hook-paired.json [--reference=REV] [--current=REV]
 ```

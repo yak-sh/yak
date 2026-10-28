@@ -1,314 +1,148 @@
-/** What the bench monitor reports, and what it remembers as good, for each
- * sequence of checks a suite can give it. */
+/** What the bench monitor reports for each sequence of checks a suite can give
+ * it. */
 import type { Run } from '@yaks/benchmark'
 import { equal, test } from '@yaks/testing'
-import {
-  committed,
-  moving,
-  type Outcome,
-  type State,
-  watch,
-} from './monitor.ts'
+import { judged, type Outcome, watch } from './monitor.ts'
+import type { Judgement } from './paired.ts'
 
-let steps = await committed('harness-steps')
-let expected = JSON.parse(
-  await Deno.readTextFile(
-    new URL('../packages/harness/steps.baseline.json', import.meta.url),
-  ),
-)
-test('the monitor reads a suite baseline outside bench', () => {
-  equal(steps, expected)
-})
-
-let run = (
-  verdict: Run['verdict'],
-  commit = 'c2',
-  busy: number | null = null,
-): Run => ({
+let run = (verdict: Run['verdict'], busy: number | null = null): Run => ({
   version: 1,
   suite: 's',
   metric: 'm',
   workload: 1,
-  at: `at-${commit}`,
-  commit,
+  at: 'at-c2',
+  commit: 'c2',
   runtime: 'r',
   cpu: 'c',
   load: [1, 1, 1],
   busy,
-  rounds: 3,
+  rounds: 1,
   benches: [],
-  tolerance: .1,
+  tolerance: 0,
   verdict,
-  regressions: verdict == 'regressed'
-    ? [{
-      name: 'task/warm',
-      unit: 'ms',
-      baseline: 1000,
-      limit: 1200,
-      current: 1500,
-      change: .5,
-    }]
-    : [],
+  regressions: [],
 })
 let outcome = (v: Outcome['verdict']): Outcome =>
-  v == 'failed'
-    ? { verdict: v, error: 'did not paint' }
-    : v == 'passed' || v == 'measured' || v == 'regressed'
+  v == 'failed' ? { verdict: v, error: 'did not paint' } : v == 'regressed'
+    ? {
+      verdict: v,
+      run: {
+        ...run(v),
+        regressions: [{
+          name: 'task/warm (CPU)',
+          unit: 'ms',
+          baseline: 1000,
+          limit: 1000,
+          current: 1500,
+          change: .5,
+        }],
+      },
+      reference: 'c1',
+      evidence: ['evidence: e.json'],
+    }
+    : v == 'passed' || v == 'measured'
     ? { verdict: v, run: run(v) }
     : { verdict: v }
 
-// Each suite's checks in order; what was reported (title line), what each
-// suite came to, and the good commits remembered after.
+// Each suite's checks in order; what was reported (title line) and what each
+// suite came to.
 let monitor = async (checks: Record<string, Outcome['verdict'][]>) => {
-  let state: State = { good: { s: { commit: 'c1', at: 'at-c1' } } }
-  let reports: string[] = [], asked: (string | undefined)[] = []
-  let runs: (number | undefined)[] = []
-  let verdicts = await watch(Object.keys(checks), state, {
-    check: (suite, n) => {
-      runs.push(n)
-      return Promise.resolve(outcome(checks[suite].shift()!))
+  let reports: string[] = [], asked: string[] = []
+  let verdicts = await watch(Object.keys(checks), {
+    check: (suite) => {
+      let next = checks[suite].shift()
+      if (!next) throw new Error('baseline missing')
+      return Promise.resolve(outcome(next))
     },
     report: (error, suite, kind) => {
       reports.push(`${kind} ${suite}: ${error.message.split('\n')[0]}`)
       return Promise.resolve()
     },
-    since: (_suite, from) => {
+    since: (from) => {
       asked.push(from)
       return Promise.resolve(['c2 the change'])
     },
   })
-  let good = Object.fromEntries(
-    Object.entries(state.good).map(([k, g]) => [k, g.commit]),
-  )
-  return { reports, verdicts, good, asked, runs }
+  return { reports, verdicts, asked }
 }
 
-test('a regression counts only when a check as banked confirms it', async () => {
-  equal(await monitor({ s: ['regressed', 'passed'] }), {
-    reports: [],
-    verdicts: { s: 'passed' },
-    good: { s: 'c2' },
-    asked: [],
-    runs: [1, undefined],
-  })
-  equal(await monitor({ s: ['regressed', 'regressed'] }), {
+test('a slowdown the side-by-side comparison found is reported with the commits since the code it beat', async () => {
+  equal(await monitor({ s: ['regressed'] }), {
     reports: [
-      'regressed s: s got slower: task/warm 1,500 ms, over its limit of 1,200 ms (best 1,000 ms)',
+      'regressed s: s got slower: task/warm (CPU) 1,500 ms, 1,000 ms for the code before it',
     ],
     verdicts: { s: 'regressed' },
-    good: { s: 'c1' },
     asked: ['c1'],
-    runs: [1, undefined],
   })
 })
 
-// The letter a confirmed regression sends, given what profiling said.
-let letter = async (profile: () => Promise<string[]>) => {
-  let sent: string[] = []
-  await watch(['s'], { good: {} }, {
-    check: () => Promise.resolve(outcome('regressed')),
-    since: () => Promise.resolve([]),
-    report: (error) => (sent.push(error.message), Promise.resolve()),
-    profile,
-  })
-  return sent[0].split('\n').slice(-3, -1)
-}
-
-test('a confirmed regression says what its pages spent, or why it cannot', async () => {
-  equal(
-    await letter(() =>
-      Promise.resolve(['task/warm profiled: …', 'profiles: d'])
-    ),
-    ['task/warm profiled: …', 'profiles: d'],
-  )
-  equal(await letter(() => Promise.reject(new Error('no Chrome'))), [
-    '(none: the box or the data changed)',
-    'the pages could not be profiled: Error: no Chrome',
-  ])
-})
-
-test('a suite that cannot run is reported, and others still run', async () => {
-  equal(await monitor({ s: ['failed'], t: ['passed'] }), {
+test('a failure is reported only when the check at once fails again', async () => {
+  equal(await monitor({ s: ['failed', 'failed'], t: ['failed', 'passed'] }), {
     reports: ['failed s: s could not be measured: did not paint'],
     verdicts: { s: 'failed', t: 'passed' },
-    good: { s: 'c1', t: 'c2' },
     asked: [],
-    runs: [1, 1],
   })
-})
-
-test('a thrown check is reported and cannot hide the next suite', async () => {
-  let reports: string[] = []
-  let out = await watch(['broken', 'good'], { good: {} }, {
-    check: (suite) => {
-      if (suite == 'broken') throw new Error('baseline missing')
-      return Promise.resolve(outcome('passed'))
-    },
-    since: () => Promise.resolve([]),
-    report: (error) => {
-      reports.push(error.message)
-      return Promise.resolve()
-    },
-  })
-  equal(out, { broken: 'failed', good: 'passed' })
-  equal(reports, ['broken could not be measured: baseline missing'])
-})
-
-test('confirmed measurements bank drops even when another metric regressed', async () => {
-  let banked: string[] = []
-  await watch(['s'], { good: {} }, {
-    check: () => Promise.resolve(outcome('regressed')),
-    since: () => Promise.resolve([]),
-    report: () => Promise.resolve(),
-    bank: (suite, run) => {
-      banked.push(`${suite}:${run.verdict}`)
-      return Promise.resolve()
-    },
-  })
-  equal(banked, ['s:regressed'])
-})
-
-test('a busy measurement lock defers without reporting, banking, or marking good', async () => {
-  let state: State = { good: { s: { commit: 'c1', at: 'at-c1' } } }
-  let banked: string[] = [], reports: string[] = []
-  let verdicts = await watch(['s', 't'], state, {
-    check: (suite) =>
-      Promise.resolve(outcome(suite == 's' ? 'deferred' : 'passed')),
-    since: () => Promise.resolve([]),
-    bank: (suite) => {
-      banked.push(suite)
-      return Promise.resolve()
-    },
-    report: (error) => {
-      reports.push(error.message)
-      return Promise.resolve()
-    },
-  })
-  equal(verdicts, { s: 'deferred', t: 'passed' })
-  equal(state.good.s, { commit: 'c1', at: 'at-c1' })
-  equal(state.good.t, { commit: 'c2', at: 'at-c2' })
-  equal(banked, [])
-  equal(reports, [])
-})
-
-test('a deferred confirmation cannot confirm the screening regression', async () => {
-  equal(await monitor({ s: ['regressed', 'deferred'] }), {
+  equal(await monitor({ s: ['failed', 'loaded'] }), {
     reports: [],
-    verdicts: { s: 'deferred' },
-    good: { s: 'c1' },
+    verdicts: { s: 'loaded' },
     asked: [],
-    runs: [1, undefined],
   })
 })
 
-test('a loaded box is not confirmed, reported or banked', async () => {
-  equal(await monitor({ s: ['regressed', 'loaded'], t: ['loaded'] }), {
-    reports: [],
-    verdicts: { s: 'loaded', t: 'loaded' },
-    good: { s: 'c1' },
+test('a thrown check is a failure and cannot hide the next suite', async () => {
+  equal(await monitor({ broken: [], good: ['passed'] }), {
+    reports: ['failed broken: broken could not be measured: baseline missing'],
+    verdicts: { broken: 'failed', good: 'passed' },
     asked: [],
-    runs: [1, undefined, 1],
   })
 })
 
-test('a pass on a box that grew loaded marks nothing good and banks nothing', async () => {
-  let state: State = { good: {} }, banked: string[] = []
-  await watch(['s'], state, {
-    check: () =>
-      Promise.resolve({ verdict: 'passed', run: run('passed', 'c3', .5) }),
-    since: () => Promise.resolve([]),
-    report: () => Promise.resolve(),
-    bank: (suite) => {
-      banked.push(suite)
-      return Promise.resolve()
+test('a check that could tell nothing reports nothing', async () => {
+  equal(
+    await monitor({
+      s: ['deferred'],
+      t: ['loaded'],
+      u: ['inconclusive'],
+      v: ['measured'],
+    }),
+    {
+      reports: [],
+      verdicts: {
+        s: 'deferred',
+        t: 'loaded',
+        u: 'inconclusive',
+        v: 'measured',
+      },
+      asked: [],
     },
-  })
-  equal([state.good.s?.commit, banked], [undefined, []])
+  )
 })
 
-for (let verdict of ['loaded', 'unconfirmed', 'inconclusive'] as const) {
-  test(`${verdict} is neither a budget pass nor a new best`, async () => {
-    let state: State = { good: { s: { commit: 'old', at: 'then' } } }
-    let banked = false, reported = false
-    equal(
-      await watch(['s'], state, {
-        check: () => Promise.resolve({ verdict }),
-        since: () => Promise.resolve([]),
-        bank: () => {
-          banked = true
-          return Promise.resolve()
-        },
-        report: () => {
-          reported = true
-          return Promise.resolve()
-        },
-      }),
-      { s: verdict },
-    )
-    equal(state.good.s, { commit: 'old', at: 'then' })
-    equal(banked, false)
-    equal(reported, false)
-  })
-}
-
-test('a one-run screen never banks its lucky minimum', async () => {
-  let banked = false
-  await watch(['s'], { good: {} }, {
-    check: () => Promise.resolve(outcome('passed')),
-    since: () => Promise.resolve([]),
-    report: () => Promise.resolve(),
-    bank: () => {
-      banked = true
-      return Promise.resolve()
-    },
-  })
-  equal(banked, false)
-})
-
-let source = {
-  version: 1 as const,
-  suite: 's',
-  metric: 'm',
-  workload: 1,
-  runtime: 'r',
-  cpu: 'c',
-  tolerance: .1,
-  benches: [{
-    name: 'work',
+test('a comparison names the benches it found slower and the time it judged', () => {
+  let comparison = (name: string, figure: 'cpu' | 'wall', now: number) => ({
+    name,
     unit: 'ms',
-    better: 'lower' as const,
-    median: 100,
-    tolerance: .1,
-  }],
-}
-test('reading the committed baseline retains measured between-run slack', () => {
-  let previous = {
-    ...source,
-    benches: [{ ...source.benches[0], median: 90, tolerance: .3 }],
-  }
-  equal(moving(source, previous, source).benches[0].tolerance, .3)
-  let slower = { ...source, benches: [{ ...source.benches[0], median: 150 }] }
-  equal(moving(slower, previous, source).benches[0].tolerance, .1)
-})
-
-test('interleaved evidence already confirmed needs one check and never banks its screen', async () => {
-  let checked = 0, banked = 0, reports = 0
-  await watch(['s'], { good: {} }, {
-    check: () => {
-      checked++
-      return Promise.resolve(
-        { ...outcome('regressed'), confirmed: true } as Outcome,
-      )
-    },
-    bank: () => {
-      banked++
-      return Promise.resolve()
-    },
-    report: () => {
-      reports++
-      return Promise.resolve()
-    },
-    since: () => Promise.resolve([]),
+    figure,
+    before: [],
+    current: [],
+    after: [],
+    reference: 100,
+    now,
   })
-  equal([checked, banked, reports], [1, 0, 1])
+  let evidence: Judgement = {
+    verdict: 'slower',
+    slower: ['a', 'c'],
+    comparisons: [
+      comparison('a', 'cpu', 130),
+      comparison('b', 'cpu', 101),
+      comparison('c', 'wall', 150),
+    ],
+    revision: 'c3',
+    current: run('measured', .1),
+  }
+  let out = judged(run('regressed', .05), evidence)
+  equal(
+    [out.commit, out.busy, out.regressions.map((r) => [r.name, r.current])],
+    ['c3', .1, [['a (CPU)', 130], ['c', 150]]],
+  )
 })

@@ -1,20 +1,22 @@
-/** Runs the box's bench suites on their own and tells the tracker when one has
- * become slower, so @yaks/heal sends it to an agent like any other bug. It is
+/** Runs the box's bench suites on their own and tells the tracker when the
+ * code got slower, so @yaks/heal sends it to an agent like any other bug. It is
  * monitoring, not a gate: nothing waits on it and nothing is refused.
  *
- * Isolated suites compare both revisions under interleaved host conditions,
- * even when their absolute budget passes. Live pages retain independent quiet
- * sitting medians attached to the pinned product's source content. A reference
- * freezes when product content changes; a candidate must separate statistically
- * from it, and a proven speedup becomes that metric's reference. Missing or
- * drifting evidence is inconclusive and carries no budget pass or new best.
- * The box is sampled at rest, and a loaded measurement confirms nothing.
- * An absolute breach alone is a screen, never evidence of a code regression.
- * A confirmed regression reports its comparisons and the commits since the
- * last good run. A suite that crashes or exceeds its cap reports a failure.
- * Each suite reports under one fault, so a suite that stays slow adds hits to
- * its open bug, and one that turns slow again after its bug was resolved
- * reopens it.
+ * A "got slower" bug means the code got slower. Each suite is screened with
+ * one run against its committed baseline, and a screen past its limit is
+ * never evidence by itself: the monitor then measures the code the baseline
+ * was banked at beside the code now, at the same moment (bench/paired.ts),
+ * and reports only the benches that comparison finds slower. Every suite is
+ * judged that way, except those that measure the live box (`LIVE`), which
+ * have no older code to run beside them and so never report a slowdown.
+ *
+ * A check that can tell nothing reports nothing: a busy box, a busy lock, a
+ * measurement past its time cap, older code that cannot run today's bench. A
+ * suite that fails is checked again at once and reported only when it fails
+ * again, so a bug says the bench is broken, not that the box was busy. Each
+ * suite reports under one fault, so a suite that stays slow adds hits to its
+ * open bug, and one that turns slow again after its bug was resolved reopens
+ * it.
  *
  * The box runs this from cron: every suite once a day, and `--hourly` every 30
  * minutes for user-facing waits, from a queue that carries what one tick could
@@ -22,30 +24,15 @@
  * when the live web unit has changed since it last looked, that is once after
  * each `yak restart`.
  *
- *   deno run -A bench/monitor.ts [suite ...] [--restarted]
+ *   deno run -A bench/monitor.ts [suite ...] [--hourly] [--restarted]
  *
- * What it last saw (the web unit, each suite's last good commit) is kept in
- * `~/.cache/yak/bench/monitor.json`; losing it only widens the commits listed
- * to those since the suite's baseline was banked. */
-import {
-  type Baseline,
-  baseline,
-  busy,
-  incomparable,
-  loaded,
-  median,
-  type Regression,
-  type Run,
-} from '@yaks/benchmark'
+ * The web unit it last saw is kept in `~/.cache/yak/bench/monitor.json`. */
+import { busy, loaded, type Regression, type Run } from '@yaks/benchmark'
 import { diagnostic } from './diagnostic.ts'
 import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
-import { said, type Summary } from './cpu_profile.ts'
-import { runtimeBuild, runtimeContent } from '../packages/cli/runtime.ts'
-import { profiled } from './pages.ts'
-import { type History, judge, type Judgement } from './observations.ts'
-import { fixtures } from './paired.ts'
+import type { Judgement } from './paired.ts'
 
 /** Every suite this box measures itself; the CI and platform deploy suites are
  * timed where they run. */
@@ -102,100 +89,86 @@ export let HOURLY = [
   'worker-health',
 ]
 
+/** Suites that measure the live box (its server, its workers, its deploys),
+ * so no older code can run beside them: they report only failures. */
+export let LIVE = ['pages', 'page-content', 'worker-health', 'app-deploy']
+
 /** Deploy checks need fresh observations before comparison. */
 export let MEASURE: Record<string, string[]> = {
   'app-deploy': ['bench/run.ts', 'app-deploy', 'time'],
 }
 
-/** One suite's check: its run, a failure, or a check that could tell nothing:
- * the benchmark lock was busy (`deferred`), the box was loaded (`loaded`), or
- * a paired comparison could not separate the revisions. */
+/** One suite's check: a run, judged; a failure; or a check that could tell
+ * nothing: the benchmark lock was busy (`deferred`), the box was loaded
+ * (`loaded`), or the comparison could not be made (`inconclusive`). */
 export type Outcome =
+  | { verdict: 'passed' | 'measured'; run: Run }
   | {
-    verdict: 'passed' | 'measured' | 'regressed'
+    verdict: 'regressed'
     run: Run
-    confirmed?: boolean
-    evidence?: string[]
+    /** The commit the current code was measured beside. */
+    reference: string
+    evidence: string[]
   }
   | { verdict: 'failed'; error: string }
-  | { verdict: 'deferred' | 'loaded' | 'unconfirmed' | 'inconclusive' }
-export type Good = { commit: string; at: string }
-export type State = { web?: string; good: Record<string, Good> }
+  | { verdict: 'deferred' | 'loaded' | 'inconclusive' }
+export type State = { web?: string }
 export type Monitor = {
-  /** One check of a suite, over `runs` runs, else as its baseline was banked. */
-  check: (suite: string, runs?: number) => Promise<Outcome>
+  check: (suite: string) => Promise<Outcome>
   report: (
     error: Error,
     suite: string,
     kind: 'regressed' | 'failed',
   ) => Promise<void>
   /** Commits after `from` up to the checkout's head, one line each. */
-  since: (suite: string, from?: string) => Promise<string[]>
-  bank?: (suite: string, run: Run) => Promise<void>
-  /** What the benches over their limits spent their time on, a line each,
-   * for the letter a confirmed regression sends. */
-  profile?: (suite: string, run: Run) => Promise<string[]>
+  since: (from: string) => Promise<string[]>
 }
 
 let numbers = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
 let figure = (n: number, unit: string) => `${numbers.format(n)} ${unit}`
-let over = (r: Regression) =>
-  `${r.name} ${figure(r.current, r.unit)}, over its limit of ${
-    figure(r.limit, r.unit)
-  } (best ${figure(r.baseline, r.unit)})`
 
-/** The letter a confirmed regression sends: its first line is the bug's
- * title, the rest what a fixer reads first. */
+/** The letter a regression sends: its first line is the bug's title, the
+ * rest what a fixer reads first. */
 export let regressed = (
   suite: string,
-  run: Run,
-  good: Good | undefined,
+  outcome: Extract<Outcome, { verdict: 'regressed' }>,
   commits: string[],
-  profiles: string[] = [],
-  evidence: string[] = [],
 ): string => {
-  let describe = evidence.length
-    ? (r: Regression) =>
-      `${r.name} ${figure(r.current, r.unit)}, reference median ${
-        figure(r.baseline, r.unit)
-      }`
-    : over
+  let { run, reference } = outcome
+  let describe = (r: Regression) =>
+    `${r.name} ${figure(r.current, r.unit)}, ${
+      figure(r.baseline, r.unit)
+    } for the code before it`
   return [
     `${suite} got slower: ${describe(run.regressions[0])}`,
     ...run.regressions.slice(1).map((r) => `also ${describe(r)}`),
-    `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, ${
+    `measured side by side at ${run.commit?.slice(0, 9)} and ${
+      reference.slice(0, 9)
+    } on ${run.at}, ${
       run.busy == null
         ? 'how busy the box was is unknown'
         : `other work used at most ${
           Math.round(run.busy * 100)
         }% of the box's CPUs`
     }`,
-    good
-      ? `commits since its last good run at ${
-        good.commit.slice(0, 9)
-      } (${good.at}):`
-      : 'commits since its baseline was banked:',
-    ...commits.length ? commits : ['(none: the box or the data changed)'],
-    ...evidence,
-    ...profiles,
-    `re-run: deno task bench:check ${suite}`,
+    `commits since ${reference.slice(0, 9)}:`,
+    ...commits.length ? commits : ['(none)'],
+    ...outcome.evidence,
+    `re-run: deno run -A bench/paired.ts ${suite} <evidence.json>`,
   ].join('\n')
 }
 
-/** Screen each suite with one run, confirm a regression with a check taken as
- * its baseline was banked (unless already interleaved), report confirmed or broken suites, and say which
- * suites are good now. A check that could tell nothing reports nothing, banks
- * nothing and marks nothing good; it is owed to a later tick. */
+/** Check each suite and report a slowdown or a suite that fails twice running.
+ * A check that could tell nothing reports nothing; it is owed to a later tick. */
 export let watch = async (
   suites: string[],
-  state: State,
   m: Monitor,
 ): Promise<Record<string, Outcome['verdict']>> => {
   let out: Record<string, Outcome['verdict']> = {}
   for (let suite of suites) {
-    let safe = async (runs?: number): Promise<Outcome> => {
+    let safe = async (): Promise<Outcome> => {
       try {
-        return await m.check(suite, runs)
+        return await m.check(suite)
       } catch (error) {
         return {
           verdict: 'failed',
@@ -203,30 +176,8 @@ export let watch = async (
         }
       }
     }
-    let outcome = await safe(1)
-    let confirmed = outcome.verdict == 'regressed'
-    if (confirmed && !('confirmed' in outcome && outcome.confirmed)) {
-      outcome = await safe()
-    }
-    if ('run' in outcome && loaded(outcome.run)) outcome = { verdict: 'loaded' }
-    if (!('run' in outcome) && outcome.verdict != 'failed') {
-      out[suite] = outcome.verdict
-      continue
-    }
-    if (
-      confirmed && 'run' in outcome && !outcome.confirmed &&
-      !loaded(outcome.run)
-    ) {
-      try {
-        await m.bank?.(suite, outcome.run)
-      } catch (error) {
-        await m.report(
-          new Error(`${suite} best could not be saved: ${error}`),
-          suite,
-          'failed',
-        )
-      }
-    }
+    let outcome = await safe()
+    if (outcome.verdict == 'failed') outcome = await safe()
     out[suite] = outcome.verdict
     if (outcome.verdict == 'failed') {
       await m.report(
@@ -235,31 +186,35 @@ export let watch = async (
         'failed',
       )
     } else if (outcome.verdict == 'regressed') {
-      let good = state.good[suite]
-      let commits = await m.since(suite, good?.commit)
-      let profiles = await m.profile?.(suite, outcome.run).catch((error) => [
-        `the pages could not be profiled: ${error}`,
-      ]) ?? []
       await m.report(
         new Error(
-          regressed(
-            suite,
-            outcome.run,
-            good,
-            commits,
-            profiles,
-            outcome.evidence,
-          ),
+          regressed(suite, outcome, await m.since(outcome.reference)),
         ),
         suite,
         'regressed',
       )
-    } else if (outcome.run.commit) {
-      state.good[suite] = { commit: outcome.run.commit, at: outcome.run.at }
     }
   }
   return out
 }
+
+/** The regressions a comparison found, as the screen's run reports them. */
+export let judged = (run: Run, evidence: Judgement): Run => ({
+  ...run,
+  commit: evidence.revision ?? run.commit,
+  busy: Math.max(run.busy ?? 0, evidence.current?.busy ?? 0),
+  verdict: 'regressed',
+  regressions: evidence.comparisons.filter((b) =>
+    evidence.slower.includes(b.name)
+  ).map((b) => ({
+    name: b.figure == 'cpu' ? `${b.name} (CPU)` : b.name,
+    unit: b.unit,
+    baseline: b.reference,
+    limit: b.reference,
+    current: b.now,
+    change: b.reference == 0 ? null : Math.abs(b.now / b.reference - 1),
+  })),
+})
 
 let root = new URL('../', import.meta.url).pathname
 let git = async (...args: string[]) => {
@@ -272,117 +227,22 @@ let git = async (...args: string[]) => {
   return success ? new TextDecoder().decode(stdout).trim() : ''
 }
 let home = Deno.env.get('HOME') ?? '/tmp'
-let STATE = `${home}/.cache/yak/bench/monitor.json`
+let CACHE = `${home}/.cache/yak/bench`
+let STATE = `${CACHE}/monitor.json`
 /** Where the monitor's app-deploy rows go, beside its state, so a scheduled run
  * leaves the checkout clean. The suite's baseline stays in the repo. */
-export let RECORDS = `${home}/.cache/yak/bench/app-deploys.jsonl`
+export let RECORDS = `${CACHE}/app-deploys.jsonl`
 let env = { APP_DEPLOY_RECORD: RECORDS }
 let load = async (): Promise<State> => {
   try {
     return JSON.parse(await Deno.readTextFile(STATE))
   } catch {
-    return { good: {} }
+    return {}
   }
 }
 let save = async (state: State) => {
-  await Deno.mkdir(STATE.replace(/\/[^/]+$/, ''), { recursive: true })
+  await Deno.mkdir(CACHE, { recursive: true })
   await Deno.writeTextFile(STATE, JSON.stringify(state, null, 2) + '\n')
-}
-
-/** Keep the monitor's moving best beside its state: each bench's committed
- * median, or the better one a quiet run of the monitor's found past the noise
- * (`baseline()`), held to the slack the committed baseline measured. A slower
- * run never raises it; a committed median banked slower on purpose
- * (`--slower`) does (`moving`). */
-let bank = async (path: string, value: Baseline) => {
-  let tmp = `${path}.${Deno.pid}.tmp`
-  try {
-    await Deno.writeTextFile(tmp, JSON.stringify(value, null, 2) + '\n')
-    await Deno.rename(tmp, path)
-  } finally {
-    await Deno.remove(tmp).catch(() => {})
-  }
-}
-export let committed = async (suite: string): Promise<Baseline> => {
-  let { standalone } = await import('./standalone.ts')
-  let entry = standalone.find((b) => b.suite().name == suite)
-  let path = entry?.baseline ?? `bench/${suite}.baseline.json`
-  return JSON.parse(await Deno.readTextFile(`${root}${path}`))
-}
-type Bench = Baseline['benches'][number]
-/** The monitor's best of a committed baseline (`source`), given the best it
- * kept (`previous`) and the committed baseline it last read (`read`): each
- * bench's better median of the two, except where the committed one got worse
- * since it was read, a slower banking, which the best takes as it is.
- *
- * ```ts
- * import type { Baseline } from '@yaks/benchmark'
- * import { moving } from './monitor.ts'
- * import { equal } from '@yaks/testing'
- *
- * let at = (median: number): Baseline => ({
- *   version: 1, suite: 's', metric: 'm', workload: 1, runtime: 'r', cpu: 'c',
- *   tolerance: .1,
- *   benches: [{ name: 'b', unit: 'ms', better: 'lower', median }],
- * })
- * let best = (source: number, previous: number, read?: number) =>
- *   moving(at(source), at(previous), read ? at(read) : undefined)
- *     .benches[0].median
- * equal(best(10, 8, 10), 8)
- * equal(best(7, 8, 10), 7)
- * equal(best(20, 8, 10), 20)
- * equal(best(20, 8), 8)
- * ```
- */
-export let moving = (
-  source: Baseline,
-  previous?: Baseline,
-  read?: Baseline,
-): Baseline => {
-  // A protocol change gets its own source reference, not incomparable old data.
-  let find = (base: Baseline | undefined, b: Bench) =>
-    base && !incomparable(base, source)
-      ? base.benches.find((c) =>
-        c.name == b.name && c.unit == b.unit && c.better == b.better &&
-        c.resolution == b.resolution
-      )
-      : undefined
-  let better = (b: Bench, x: number, y: number) =>
-    b.better == 'lower' ? Math.min(x, y) : Math.max(x, y)
-  return {
-    ...source,
-    benches: source.benches.map((b) => {
-      let old = find(previous, b), was = find(read, b)
-      let worse = was && better(b, was.median, b.median) != b.median
-      return {
-        ...b,
-        median: old && !worse ? better(b, old.median, b.median) : b.median,
-        tolerance: old && !worse
-          ? Math.max(
-            b.tolerance ?? source.tolerance,
-            old.tolerance ?? previous!.tolerance,
-          )
-          : b.tolerance,
-      }
-    }),
-  }
-}
-let json = async (path: string): Promise<Baseline | undefined> => {
-  try {
-    return JSON.parse(await Deno.readTextFile(path))
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
-  }
-}
-let reference = async (suite: string) => {
-  let source = await committed(suite)
-  let dir = `${home}/.cache/yak/bench/best`
-  await Deno.mkdir(dir, { recursive: true })
-  let path = `${dir}/${suite}.baseline.json`
-  let read = `${dir}/${suite}.committed.json`
-  await bank(path, moving(source, await json(path), await json(read)))
-  await bank(read, source)
-  return path
 }
 
 /** The live web unit, as `systemctl --user` names it. */
@@ -402,33 +262,16 @@ let web = async (): Promise<string | undefined> => {
   return new TextDecoder().decode(stdout).trim().split(/\s+/)[0] || undefined
 }
 
-let builds = new Map<string, Promise<string>>()
-let serving = async (): Promise<
-  { key: string; commit?: string } | undefined
-> => {
-  let unit = await web()
-  if (!unit) return undefined
-  let { stdout, success } = await new Deno.Command('systemctl', {
-    args: ['--user', 'show', unit, '-p', 'MainPID', '--value'],
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  if (!success) return undefined
-  let build = await runtimeBuild(
-    Number(new TextDecoder().decode(stdout).trim()),
-  )
-  if (!build) return undefined
-  if (!builds.has(build.hash)) builds.set(build.hash, runtimeContent(build))
-  return { key: await builds.get(build.hash)!, commit: build.commit }
-}
 /** A half-hour tick admits work for 25 minutes; what it could not reach is
  * owed to the next. */
 export let WINDOW = 25 * 60_000
 
 /** Command prefix at the process seam: a busy box-wide lock exits 75 at once,
- * leaving the check owed, and a measurement over its cap is killed. The flock
- * parent keeps the descriptor; detached collectors cannot inherit it. */
-export let measurement = (suite: string): string[] => [
+ * leaving the check owed, and a measurement over its cap is killed. A
+ * user-facing suite's screen has ten minutes; a comparison runs it a dozen
+ * times or more, so it has half an hour. The flock parent keeps the
+ * descriptor; detached collectors cannot inherit it. */
+export let measurement = (suite: string, paired = false): string[] => [
   'flock',
   '--close',
   '--nonblock',
@@ -436,121 +279,43 @@ export let measurement = (suite: string): string[] => [
   '/tmp/yaks-throughput-bench.lock',
   'timeout',
   '--kill-after=10',
-  HOURLY.includes(suite) ? '600' : '10800',
+  HOURLY.includes(suite) ? paired ? '1800' : '600' : '10800',
 ]
 
-/** Where the monitor keeps the profiles it takes, the newest KEPT of them. */
-let PROFILES = `${home}/.cache/yak/bench/profiles`, KEPT = 20
-
-/** Profile, in Chrome, each page of a suite of the box's pages that is over
- * its limit (bench/pages.ts `profile`), a run of its own so no figure is
- * taken with the profiler on, and say what each bench spent: one line per
- * bench, then where the profiles are. */
-let profile = async (suite: string, run: Run): Promise<string[]> => {
-  if (!profiled[suite]) return []
-  let names = [...new Set(run.regressions.map((r) => r.name.split('/')[0]))]
-  let dir = `${PROFILES}/${suite}-${run.at.replace(/[^\w-]/g, '')}`
-  let args = measurement(suite)
-  let child = await new Deno.Command(args[0], {
-    args: [
-      ...args.slice(1),
-      Deno.execPath(),
-      'run',
-      '-A',
-      'bench/pages.ts',
-      'profile',
-      suite,
-      dir,
-      ...names,
-    ],
+/** One step of a check under the benchmark lock and its time cap: what it
+ * printed to stderr, or why it said nothing. */
+let measured = async (suite: string, args: string[]) => {
+  let prefix = measurement(suite, args[0] == 'bench/paired.ts')
+  let child = await new Deno.Command(prefix[0], {
+    args: [...prefix.slice(1), Deno.execPath(), 'run', '-A', ...args],
     cwd: root,
     env,
     stdout: 'inherit',
     stderr: 'piped',
   }).output()
-  if (child.code == 75) {
-    return ['the pages were not profiled: the benchmark lock was busy']
-  }
-  if (!child.success) {
-    return [
-      `the pages could not be profiled: ${
-        diagnostic(new TextDecoder().decode(child.stderr), child.code)
-      }`,
-    ]
-  }
-  let all = [...Deno.readDirSync(PROFILES)].map((e) => e.name).sort()
-  for (let old of all.slice(0, -KEPT)) {
-    await Deno.remove(`${PROFILES}/${old}`, { recursive: true }).catch(() => {})
-  }
-  let lines = await Promise.all(run.regressions.map(async (r) => {
-    let at = `${dir}/${r.name.replace('/', '-')}.json`
-    let s: Summary & { ms: number } = JSON.parse(await Deno.readTextFile(at))
-    return `${r.name} profiled (${s.ms} ms with the profiler on): ${said(s)}`
-  }))
-  return [...lines, `profiles: ${dir}`]
-}
-
-/** Reference history is serialized across daily, hourly and restart lanes.
- * Only screens enter it: a best-of-three confirmation has a different sampling
- * distribution. The serving runtime's source content identifies the product. */
-let observations = async (
-  suite: string,
-  key: string,
-  run: Run,
-  record: boolean,
-): Promise<Judgement> => {
-  let path = `${home}/.cache/yak/bench/${suite}.history.json`
-  using lock = await Deno.open(`${path}.lock`, {
-    create: true,
-    read: true,
-    write: true,
-  })
-  await lock.lock(true)
-  try {
-    let history: History = {}
-    try {
-      history = JSON.parse(await Deno.readTextFile(path))
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
-    }
-    let evidence = judge(history, key, run, record)
-    let temporary = `${path}.${Deno.pid}.tmp`
-    await Deno.writeTextFile(temporary, JSON.stringify(history, null, 2) + '\n')
-    await Deno.rename(temporary, path)
-    console.log(
-      `${suite}: between-sitting ${evidence.verdict}; reference ${
-        history.reference?.observations.length ?? 0
-      }, candidate ${
-        history.candidate?.observations.length ?? 0
-      }; evidence ${path}`,
-    )
-    // Legacy scalar baselines carry no independent observations. Their absolute
-    // breaches remain unconfirmed until quiet passes establish a reference.
-    if (
-      evidence.verdict != 'loaded' &&
-      (history.reference?.observations.length ?? 0) < 3
-    ) {
-      console.log(
-        `${suite}: reference not established; absolute breach is unconfirmed`,
-      )
-      return { verdict: 'inconclusive', slower: [], comparisons: [] }
-    }
-    return evidence
-  } finally {
-    await lock.unlock()
+  await Deno.stderr.write(child.stderr)
+  let said = new TextDecoder().decode(child.stderr)
+  return {
+    ...child,
+    said,
+    // A busy lock leaves the check owed; a run past its cap tells nothing.
+    unjudged: child.code == 75
+      ? 'deferred' as const
+      : child.code == 124 || child.code == 137
+      ? 'inconclusive' as const
+      : undefined,
   }
 }
 
-/** `deno task bench:check <suite>` in this checkout, read back from the run
- * it writes. A loaded box is not measured at all: the bench would add to the
- * load and its figures could tell nothing. */
-let check = async (suite: string, runs?: number): Promise<Outcome> => {
+/** Screen a suite with `deno task bench:check <suite> --runs=1`, and judge a
+ * screen past its limit by measuring the code beside the code before it. A
+ * loaded box is not measured at all: the bench would add to the load and its
+ * figures could tell nothing. */
+let check = async (suite: string): Promise<Outcome> => {
   // Sampled while the monitor sleeps, past its own start-up.
   if (loaded({ busy: await busy(2000) ?? null })) {
     return { verdict: 'loaded' }
   }
-  let live = suite == 'pages' || suite == 'page-content'
-  let product = live ? await serving() : undefined
   if (MEASURE[suite]) {
     let timed = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', ...MEASURE[suite]],
@@ -560,190 +325,81 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
       stderr: 'piped',
     }).output()
     if (!timed.success) {
-      let said = new TextDecoder().decode(timed.stderr)
       await Deno.stderr.write(timed.stderr)
       return {
         verdict: 'failed',
-        error: diagnostic(said, timed.code),
+        error: diagnostic(new TextDecoder().decode(timed.stderr), timed.code),
       }
     }
   }
-  let path = await reference(suite)
-  let results = `${home}/.cache/yak/bench/${suite}.${Deno.pid}.results.json`
+  let results = `${CACHE}/${suite}.${Deno.pid}.results.json`
   await Deno.remove(results).catch(() => {})
-  let args = measurement(suite)
-  let child = await new Deno.Command(args[0], {
-    args: [
-      ...args.slice(1),
-      Deno.execPath(),
-      'run',
-      '-A',
-      'bench/run.ts',
-      'check',
-      suite,
-      `--baseline=${path}`,
-      `--output=${results}`,
-      '--lock-held',
-      ...runs ? [`--runs=${runs}`] : [],
-    ],
-    cwd: root,
-    env,
-    stdout: 'inherit',
-    stderr: 'piped',
-  }).output()
-  if (child.code == 75) return { verdict: 'deferred' }
-  let said = new TextDecoder().decode(child.stderr)
-  await Deno.stderr.write(child.stderr)
-  if (child.code == 124 || child.code == 137) {
+  let screen = await measured(suite, [
+    'bench/run.ts',
+    'check',
+    suite,
+    `--output=${results}`,
+    '--lock-held',
+    '--runs=1',
+  ])
+  if (screen.unjudged) return { verdict: screen.unjudged }
+  let run: Run
+  try {
+    run = JSON.parse(await Deno.readTextFile(results))
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+    return { verdict: 'failed', error: diagnostic(screen.said, screen.code) }
+  } finally {
+    await Deno.remove(results).catch(() => {})
+  }
+  if (LIVE.includes(suite)) {
+    let after = await busy(1000)
+    if (after != null) run.busy = Math.max(run.busy ?? 0, after)
+  }
+  if (run.verdict == 'loaded' || loaded(run)) return { verdict: 'loaded' }
+  if (run.verdict == 'passed' || run.verdict == 'measured') {
+    return { verdict: run.verdict, run }
+  }
+  if (run.verdict != 'regressed') {
+    return { verdict: 'failed', error: diagnostic(screen.said, screen.code) }
+  }
+  if (LIVE.includes(suite)) return { verdict: 'inconclusive' }
+  let path = `${CACHE}/${suite}.${Deno.pid}.paired.json`
+  let paired = await measured(suite, ['bench/paired.ts', suite, path])
+  if (paired.unjudged) return { verdict: paired.unjudged }
+  let evidence: Judgement = JSON.parse(await Deno.readTextFile(path))
+  if (evidence.verdict == 'failed') {
     return {
       verdict: 'failed',
-      error: 'measurement ran past its time cap; no result accepted' +
-        (said.trim() ? `\n${diagnostic(said, child.code)}` : ''),
+      error: `${evidence.error}\nevidence: ${path}`,
     }
   }
-  // The run's file is read once and deleted, unless a failure names it.
-  let keep = false
-  try {
-    let run: Run = JSON.parse(await Deno.readTextFile(results))
-    if (live) {
-      let after = await busy(1000)
-      if (after != null) run.busy = Math.max(run.busy ?? 0, after)
-    }
-    if (run.verdict == 'loaded' || loaded(run)) return { verdict: 'loaded' }
-    if (live && (!product || product.key != (await serving())?.key)) {
-      return { verdict: 'inconclusive' }
-    }
-    if (product?.commit) run.commit = product.commit
-    let details: string[] = []
-    if (child.success || run.verdict == 'regressed') {
-      if (fixtures[suite]) {
-        let evidence = results.replace('.results.json', '.paired.json')
-        let prefix = measurement(suite)
-        let paired = await new Deno.Command(prefix[0], {
-          args: [
-            ...prefix.slice(1),
-            Deno.execPath(),
-            'run',
-            '-A',
-            'bench/paired.ts',
-            suite,
-            evidence,
-          ],
-          cwd: root,
-          env,
-          stdout: 'inherit',
-          stderr: 'inherit',
-        }).output()
-        if (paired.code == 75) return { verdict: 'deferred' }
-        if (!paired.success) {
-          keep = true
-          return {
-            verdict: 'failed',
-            error: 'Paired measurement failed; raw result retained at ' +
-              results,
-          }
-        }
-        let comparison = JSON.parse(await Deno.readTextFile(evidence))
-        console.log(
-          `${suite}: paired ${comparison.verdict}; raw evidence ${evidence}`,
-        )
-        if (comparison.verdict != 'changed') {
-          return { verdict: comparison.verdict }
-        }
-        run.regressions = run.benches.filter((b) =>
-          comparison.slower.includes(b.name)
-        ).map((b) => {
-          let samples = comparison.comparisons.find((c: { name: string }) =>
-            c.name == b.name
-          )
-          let reference = median([...samples.before, ...samples.after])
-          let current = median(samples.current)
-          return {
-            name: b.name,
-            unit: b.unit,
-            baseline: reference,
-            limit: reference,
-            current,
-            change: reference == 0
-              ? null
-              : (current / reference - 1) * (b.better == 'lower' ? 1 : -1),
-          }
-        })
-        run.verdict = 'regressed'
-        return {
-          verdict: 'regressed',
-          run,
-          confirmed: true,
-          evidence: [`interleaved reference evidence: ${evidence}`],
-        }
-      }
-      if (suite == 'pages' || suite == 'page-content') {
-        let key = product?.key
-        if (key) {
-          let evidence = await observations(suite, key, run, runs == 1)
-          details = [
-            `between-sitting reference/candidate evidence: ${home}/.cache/yak/bench/${suite}.history.json`,
-            ...evidence.comparisons.map((b) =>
-              `${b.name}: one-sided rank probability ${
-                b.probability ?? 'insufficient observations'
-              }`
-            ),
-          ]
-          if (evidence.verdict != 'slower') return { verdict: evidence.verdict }
-          run.regressions = evidence.comparisons.filter((b) =>
-            b.verdict == 'slower'
-          ).map((b) => {
-            let metric = run.benches.find((c) => c.name == b.name)!
-            return {
-              name: b.name,
-              unit: metric.unit,
-              baseline: b.reference!,
-              limit: b.reference!,
-              current: b.current!,
-              change: b.reference == 0
-                ? null
-                : (b.current! / b.reference! - 1) *
-                  (metric.better == 'lower' ? 1 : -1),
-            }
-          })
-          run.verdict = 'regressed'
-          return {
-            verdict: 'regressed',
-            run,
-            confirmed: true,
-            evidence: details,
-          }
-        }
-      }
-      return { verdict: run.verdict as 'passed', run, evidence: details }
-    }
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) {
-      keep = true
-      return {
-        verdict: 'failed',
-        error: `${error}; raw result retained at ${results}`,
-      }
-    }
-  } finally {
-    if (!keep) await Deno.remove(results).catch(() => {})
+  if (evidence.verdict == 'same') {
+    await Deno.remove(path)
+    return { verdict: 'passed', run: { ...run, verdict: 'passed' } }
+  }
+  if (evidence.verdict != 'slower') {
+    console.log(`${suite}: ${evidence.verdict}: ${evidence.error ?? ''}`)
+    await Deno.remove(path)
+    return { verdict: evidence.verdict }
   }
   return {
-    verdict: 'failed',
-    error: diagnostic(said, child.code),
+    verdict: 'regressed',
+    run: judged(run, evidence),
+    reference: evidence.reference!,
+    evidence: [`evidence: ${path}`],
   }
 }
 
 if (import.meta.main) {
   let started = Date.now()
   let restarted = Deno.args.includes('--restarted')
-  let named = Deno.args.filter((a) => !a.startsWith('--'))
-  let state = await load()
   let hourly = Deno.args.includes('--hourly')
+  let named = Deno.args.filter((a) => !a.startsWith('--'))
   let suites = named.length ? named : hourly ? HOURLY : SUITES
   let restartedWeb = restarted ? await web() : undefined
   if (restarted) {
-    if (!restartedWeb || restartedWeb == state.web) Deno.exit(0)
+    if (!restartedWeb || restartedWeb == (await load()).web) Deno.exit(0)
     suites = ['pages', 'page-content']
   }
   let path = configPath()
@@ -752,30 +408,15 @@ if (import.meta.main) {
   })
   let monitor: Monitor = {
     check,
-    profile,
-    bank: async (suite, run) => {
-      let path = await reference(suite)
-      let before = await Deno.readTextFile(path)
-      await bank(path, baseline(run, 0, JSON.parse(before) as Baseline))
-    },
     report: (error, suite, kind) =>
       send(error, {
         fault: `bench ${kind}: ${suite}`,
         during: { kind: 'bench' },
         tags: { job: 'bench', suite },
       }),
-    since: async (suite, from) => {
-      from ??= await git(
-        'log',
-        '-1',
-        '--format=%H',
-        '--',
-        `bench/${suite}.baseline.json`,
-      )
-      let lines = from
-        ? (await git('log', '--format=%h %s', `${from}..HEAD`)).split('\n')
-          .filter(Boolean)
-        : []
+    since: async (from) => {
+      let lines = (await git('log', '--format=%h %s', `${from}..HEAD`))
+        .split('\n').filter(Boolean)
       return lines.length > 40
         ? [...lines.slice(0, 40), `… ${lines.length - 40} more`]
         : lines
@@ -783,7 +424,7 @@ if (import.meta.main) {
   }
   let verdicts: Record<string, Outcome['verdict']> = {}
   if (hourly) {
-    let queuePath = `${home}/.cache/yak/bench/hourly-queue.json`
+    let queuePath = `${CACHE}/hourly-queue.json`
     let queue: Queue = { jobs: [], screened: {} }
     try {
       queue = JSON.parse(await Deno.readTextFile(queuePath))
@@ -791,49 +432,36 @@ if (import.meta.main) {
       if (!(error instanceof Deno.errors.NotFound)) throw error
     }
     enqueue(queue, suites, Date.now())
-    let persist = async () => {
-      let temporary = queuePath + '.' + Deno.pid + '.tmp'
-      await Deno.mkdir(`${home}/.cache/yak/bench`, { recursive: true })
-      await Deno.writeTextFile(temporary, JSON.stringify(queue, null, 2) + '\n')
-      await Deno.rename(temporary, queuePath)
-    }
     await drain(queue, {
       now: Date.now,
       deadline: started + WINDOW,
-      save: persist,
-      check: (job) => check(job.suite, job.phase == 'screen' ? 1 : undefined),
-      settle: async (job, outcome) => {
-        let found = await watch([job.suite], state, {
-          ...monitor,
-          check: () => Promise.resolve(outcome),
-        })
+      save: async () => {
+        let temporary = queuePath + '.' + Deno.pid + '.tmp'
+        await Deno.mkdir(CACHE, { recursive: true })
+        await Deno.writeTextFile(
+          temporary,
+          JSON.stringify(queue, null, 2) + '\n',
+        )
+        await Deno.rename(temporary, queuePath)
+      },
+      check: async (job) => {
+        let found = await watch([job.suite], monitor)
         Object.assign(verdicts, found)
-        let current = await load()
-        if (state.good[job.suite]) {
-          current.good[job.suite] = state.good[job.suite]
-        }
-        await save(current)
+        return found[job.suite]
       },
     })
     console.log(
       `hourly queue: ${queue.jobs.length} pending; unfinished work carries to the next tick`,
     )
-  } else verdicts = await watch(suites, state, monitor)
+  } else verdicts = await watch(suites, monitor)
   await send.close()
-  // Another run (a restart's, beside the daily one) may have saved since this
-  // one loaded: keep what it saw, and add only the suites run here.
-  let latest = await load()
   // A restart check the lock or the load kept back is owed on the next tick.
   if (
     restartedWeb &&
     !Object.values(verdicts).some((v) => v == 'deferred' || v == 'loaded')
   ) {
-    latest.web = restartedWeb
+    await save({ web: restartedWeb })
   }
-  for (let suite of suites) {
-    if (state.good[suite]) latest.good[suite] = state.good[suite]
-  }
-  await save(latest)
   for (let [suite, verdict] of Object.entries(verdicts)) {
     console.log(`${suite}: ${verdict}`)
   }

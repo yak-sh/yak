@@ -33,7 +33,9 @@ let measured = (
 
 export type Registration = {
   baseline: string
-  suite: (args?: string[]) => CollectedSuite
+  /** The suite, measuring the code checked out at `root`, this checkout's by
+   * default: bench/paired.ts measures an older revision's beside it. */
+  suite: (args?: string[], root?: string) => CollectedSuite
   /** The least slack its benches bank, where its drift over a day exceeds
    * the box's usual (`FLOOR` in ./run.ts). */
   floor?: number
@@ -47,7 +49,7 @@ let registration = (
   deno: boolean,
 ): Registration => ({
   baseline: `bench/${name}.baseline.json`,
-  suite: (args = []) => ({
+  suite: (args = [], root) => ({
     name,
     metric: deno ? 'median-of-deno-averages' : 'median-of-round-medians',
     workload: name == 'graph-activity'
@@ -67,6 +69,7 @@ let registration = (
         args: deno
           ? ['bench', '-A', '--json', file]
           : ['run', '-A', 'bench/standalone-worker.ts', file, ...args],
+        cwd: root,
         stdout: 'piped',
         stderr: 'inherit',
       }).output()

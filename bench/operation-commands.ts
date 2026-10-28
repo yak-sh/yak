@@ -4,7 +4,7 @@
  * to this collection; no duties, providers, external connections or live writes.
  */
 import { remainingFixtures } from './operation-fixtures.ts'
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import type { Bundle } from '@yaks/graph'
 import { sessionEnv } from '@yaks/session'
 import { compose } from '../packages/cli/host.ts'
@@ -692,9 +692,9 @@ async function collect(
             throw new Error(`${name} fixture setup failed`, { cause: error })
           }
           let input = operation.args()
-          let start = performance.now()
+          let took = stopwatch()
           let text: string
-          let value: number
+          let reading: { value: number; cpu?: number }
           try {
             if (door == 'cli') text = await cli(operation, input)
             else {
@@ -711,7 +711,7 @@ async function collect(
               }
               text = JSON.stringify(answer)
             }
-            value = performance.now() - start
+            reading = took()
             // Checks are outside the clock: the endpoint's complete response is
             // timed, while read-back proves a saved change rather than an ack.
             await operation.verify(text, input)
@@ -728,7 +728,7 @@ async function collect(
             operation.after?.()
           }
           samples.push({
-            value,
+            ...reading,
             source: 'end-to-end',
             counts: { tasks, transcriptEntries: scale ? SCALE_ENTRIES : 0 },
             details: {

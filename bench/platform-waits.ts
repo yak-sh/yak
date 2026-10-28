@@ -51,7 +51,10 @@ export let NAMES = [
 ] as const
 
 /** Registration is inert: only collect starts the isolated probe process. */
-export let suite = (args: string[] = []): CollectedSuite => {
+export let suite = (
+  args: string[] = [],
+  root = new URL('../', import.meta.url).pathname,
+): CollectedSuite => {
   if (args.length) throw new Error('platform-waits takes no arguments')
   return {
     name: 'platform-waits',
@@ -64,9 +67,9 @@ export let suite = (args: string[] = []): CollectedSuite => {
         args: [
           'run',
           '-A',
-          new URL('./platform-waits-probe.ts', import.meta.url).pathname,
+          `${root}/bench/platform-waits-probe.ts`,
         ],
-        cwd: new URL('../', import.meta.url).pathname,
+        cwd: root,
         stdout: 'piped',
         stderr: 'inherit',
       }).output()

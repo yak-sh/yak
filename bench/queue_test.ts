@@ -1,147 +1,84 @@
 import { equal, test } from '@yaks/testing'
 import { drain, enqueue, type Queue } from './queue.ts'
 import type { Outcome } from './monitor.ts'
-let failed: Outcome = { verdict: 'failed', error: 'fixture failure' }
-test('unfinished screens carry across ticks rather than restarting the first suite', async () => {
+
+let io = (verdict: Outcome['verdict'], seen: string[] = []) => ({
+  now: () => 0,
+  deadline: 1,
+  save: () => Promise.resolve(),
+  check: (j: { suite: string }) => {
+    seen.push(j.suite)
+    return Promise.resolve(verdict)
+  },
+})
+
+test('unfinished checks carry across ticks rather than restarting the first suite', async () => {
   let q: Queue = { jobs: [], screened: {} }, now = 0, seen: string[] = []
   enqueue(q, ['a', 'b', 'c'], now)
-  let io = {
+  let tick = {
+    ...io('failed'),
     now: () => now,
     deadline: 2,
-    save: () => Promise.resolve(),
     check: (j: { suite: string }) => {
       seen.push(j.suite)
       now++
-      return Promise.resolve(failed)
+      return Promise.resolve('failed' as const)
     },
-    settle: () => Promise.resolve(),
   }
-  await drain(q, io)
-  equal(seen, ['a', 'b'])
-  equal(q.jobs.map((j) => j.suite), ['c'])
+  await drain(q, tick)
+  equal([seen, q.jobs.map((j) => j.suite)], [['a', 'b'], ['c']])
   q = JSON.parse(JSON.stringify(q))
   enqueue(q, ['a', 'b', 'c'], now)
-  await drain(q, { ...io, deadline: 4 })
-  equal(seen, ['a', 'b', 'c'])
-  equal(q.jobs, [])
+  await drain(q, { ...tick, deadline: 4 })
+  equal([seen, q.jobs], [['a', 'b', 'c'], []])
 })
-test('a busy lock or a loaded box retains the exact owed job, and unknown measurements finish without a false failure', async () => {
-  let q: Queue = { jobs: [], screened: {} }, settled: string[] = []
+
+test('a busy lock or a loaded box keeps the owed job; a check that told nothing still finishes', async () => {
+  let q: Queue = { jobs: [], screened: {} }
   enqueue(q, ['a', 'b'], 0)
-  let io = {
-    now: () => 0,
-    deadline: 1,
-    save: () => Promise.resolve(),
-    check: () => Promise.resolve({ verdict: 'deferred' } as Outcome),
-    settle: (_j: unknown, o: Outcome) => {
-      settled.push(o.verdict)
-      return Promise.resolve()
-    },
-  }
-  await drain(q, io)
-  await drain(q, {
-    ...io,
-    check: () => Promise.resolve({ verdict: 'loaded' } as Outcome),
-  })
+  await drain(q, io('deferred'))
+  await drain(q, io('loaded'))
   equal(q.jobs.map((j) => j.suite), ['a', 'b'])
-  equal(settled, [])
-  await drain(q, {
-    ...io,
-    check: () => Promise.resolve({ verdict: 'inconclusive' } as Outcome),
-  })
-  equal(settled, ['inconclusive', 'inconclusive'])
+  await drain(q, io('inconclusive'))
   equal(q.jobs, [])
 })
-test('all screens precede slow confirmations and duplicate enqueues cannot grow backlog', () => {
-  let q: Queue = {
-    jobs: [{ suite: 'a', phase: 'confirm', due: 0 }],
-    screened: { a: 0 },
-  }
-  enqueue(q, ['a', 'b', 'c'], 1)
-  enqueue(q, ['a', 'b', 'c'], 1)
-  equal(q.jobs.map((j) => [j.suite, j.phase]), [['b', 'screen'], [
-    'c',
-    'screen',
-  ], ['a', 'confirm']])
-})
 
-test('a fresh cron tick cannot starve an older confirmation', () => {
-  let q: Queue = {
-    jobs: [{ suite: 'a', phase: 'confirm', due: 0 }],
-    screened: { a: 1 },
-  }
-  enqueue(q, ['a', 'b'], 3_600_001)
+test('a suite is owed once, and not again within the hour it was checked', () => {
+  let q: Queue = { jobs: [], screened: { c: 0 } }
+  enqueue(q, ['a', 'b', 'c'], 1)
+  enqueue(q, ['a', 'b', 'c'], 1)
   equal(q.jobs.map((j) => j.suite), ['a', 'b'])
+  q.jobs = []
+  enqueue(q, ['c'], 3_600_000)
+  equal(q.jobs.map((j) => j.suite), ['c'])
 })
 
-test('new screens lead young confirmations but an hour-old confirmation cannot starve', () => {
-  let q: Queue = {
-    jobs: [{ suite: 'a', phase: 'confirm', due: 0 }],
-    screened: { a: 0 },
-  }
-  enqueue(q, ['a', 'b'], 1)
-  equal(q.jobs.map((j) => j.suite), ['b', 'a'])
-  enqueue(q, ['a', 'b', 'c'], 3_600_000)
-  equal(q.jobs.map((j) => j.suite), ['a', 'b', 'c'])
-  equal(q.jobs[0].due, 0)
-})
-
-test('crash before settlement cannot acknowledge a result that was not saved', async () => {
+test('a crash before the result is saved leaves the job owed', async () => {
   let q: Queue = { jobs: [], screened: {} }
   enqueue(q, ['a'], 0)
   let failed = false
   try {
     await drain(q, {
-      now: () => 0,
-      deadline: 1,
-      save: () => Promise.resolve(),
-      check: () => Promise.resolve({ verdict: 'inconclusive' }),
-      settle: () => Promise.reject(Error('disk unavailable')),
+      ...io('passed'),
+      check: () => Promise.reject(Error('tracker unavailable')),
     })
   } catch {
     failed = true
   }
-  equal(failed, true)
-  equal(q.jobs.map((j) => j.suite), ['a'])
-  equal(q.screened, {})
+  equal([failed, q.jobs.map((j) => j.suite), q.screened], [true, ['a'], {}])
 })
 
-test('an admitted job keeps its active allowance while next job carries over', async () => {
+test('an admitted job keeps its active allowance while the next carries over', async () => {
   let q: Queue = { jobs: [], screened: {} }, now = 0, seen: string[] = []
   enqueue(q, ['a', 'b'], 0)
   await drain(q, {
+    ...io('passed', seen),
     now: () => now,
-    deadline: 1,
-    save: () => Promise.resolve(),
     check: (j) => {
       seen.push(j.suite)
       now = 600_000
-      return Promise.resolve({ verdict: 'inconclusive' })
-    },
-    settle: () => Promise.resolve(),
-  })
-  equal(seen, ['a'])
-  equal(q.jobs.map((j) => j.suite), ['b'])
-})
-
-test('an interleaved screen already confirmed settles once without another job', async () => {
-  let q: Queue = { jobs: [], screened: {} }, settled = 0
-  enqueue(q, ['s'], 0)
-  await drain(q, {
-    now: () => 0,
-    deadline: 1,
-    save: () => Promise.resolve(),
-    check: () =>
-      Promise.resolve({
-        verdict: 'regressed',
-        confirmed: true,
-        run: {} as never,
-      }),
-    settle: () => {
-      settled++
-      return Promise.resolve()
+      return Promise.resolve('passed')
     },
   })
-  equal(settled, 1)
-  equal(q.jobs, [])
+  equal([seen, q.jobs.map((j) => j.suite)], [['a'], ['b']])
 })

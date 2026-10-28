@@ -1,24 +1,19 @@
-/** A durable fair measurement queue. Screens precede confirmations, and work
- * survives a cron window or a busy box without restarting from the first suite. */
+/** A durable fair measurement queue: work survives a cron window or a busy box
+ * without restarting from the first suite. */
 import type { Outcome } from './monitor.ts'
-export type Job = { suite: string; phase: 'screen' | 'confirm'; due: number }
+export type Job = { suite: string; due: number }
 export type Queue = { jobs: Job[]; screened: Record<string, number> }
+/** Owe each suite not checked in the last hour, once, oldest first. */
 export let enqueue = (q: Queue, suites: string[], now: number) => {
   for (let suite of suites) {
     if (
       !q.jobs.some((j) => j.suite == suite) &&
       now - (q.screened[suite] ?? -Infinity) >= 3_600_000
     ) {
-      q.jobs.push({ suite, phase: 'screen', due: now })
+      q.jobs.push({ suite, due: now })
     }
   }
-  let priority = (j: Job) =>
-    j.phase == 'confirm' && now - j.due >= 3_600_000
-      ? -1
-      : j.phase == 'screen'
-      ? 0
-      : 1
-  q.jobs.sort((a, b) => priority(a) - priority(b) || a.due - b.due)
+  q.jobs.sort((a, b) => a.due - b.due)
 }
 /** A check has its original active timeout. Lock contention or a loaded box
  * consumes no job: the tick stops, and the job waits at the head of the queue;
@@ -27,35 +22,15 @@ export let drain = async (q: Queue, io: {
   now: () => number
   deadline: number
   save: () => Promise<void>
-  check: (job: Job) => Promise<Outcome>
-  settle: (job: Job, outcome: Outcome) => Promise<void>
+  check: (job: Job) => Promise<Outcome['verdict']>
 }) => {
   await io.save()
   while (q.jobs.length && io.now() < io.deadline) {
     let job = q.jobs[0]
-    let outcome: Outcome
-    try {
-      outcome = await io.check(job)
-    } catch (error) {
-      outcome = {
-        verdict: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
-    if (outcome.verdict == 'deferred' || outcome.verdict == 'loaded') return
-    if (
-      !(job.phase == 'screen' && outcome.verdict == 'regressed' &&
-        !outcome.confirmed)
-    ) {
-      await io.settle(job, outcome)
-    }
+    let verdict = await io.check(job)
+    if (verdict == 'deferred' || verdict == 'loaded') return
     q.jobs.shift()
-    if (job.phase == 'screen') {
-      q.screened[job.suite] = io.now()
-      if (outcome.verdict == 'regressed' && !outcome.confirmed) {
-        q.jobs.push({ ...job, phase: 'confirm' })
-      }
-    }
+    q.screened[job.suite] = io.now()
     await io.save()
   }
 }

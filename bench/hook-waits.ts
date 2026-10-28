@@ -3,7 +3,7 @@
  * cannot stand in for creating context, delivering a notice or releasing work.
  * The fixture owns its graph, transcript directory, server and process homes.
  */
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -76,10 +76,10 @@ export async function measure(
     let samples: Sample[] = []
     for (let i = 0; i < n; i++) {
       let run = await setup()
-      let start = performance.now()
+      let took = stopwatch()
       await run()
       samples.push({
-        value: performance.now() - start,
+        ...took(),
         source: 'end-to-end',
         counts: { claims: 1, pending: 1 },
         details: {

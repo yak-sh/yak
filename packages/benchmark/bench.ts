@@ -2,6 +2,7 @@
  * operations normalizes a batch, while iterations keeps individual samples. */
 import type { Bench, Sample, Workload } from './result.ts'
 import { during, peek, record } from '@yaks/trace'
+import { cputime } from './host.ts'
 
 type DurationUnit = 'ns' | 'us' | 'ms' | 's'
 export type TimeUnit = DurationUnit | `${DurationUnit}/${string}`
@@ -18,6 +19,21 @@ export type TimedBench = Pick<Workload, 'name' | 'resolution'> & {
   /** Record this target's work (for example, a graph). Without a target, the
    * tree contains the bench invocation's own span. */
   target?: object
+}
+
+/** Start timing a step; the function it returns says how long it took since,
+ * in ms: its wall time, and its CPU time where the box says (host.ts
+ * `cputime`). An externally measured bench spreads the reading into its
+ * sample, `{ ...took(), source }`. */
+export let stopwatch = (): () => { value: number; cpu?: number } => {
+  // The wall interval sits inside the CPU one, so it never pays for a reading.
+  let cpu = cputime(), wall = performance.now()
+  return () => {
+    let value = performance.now() - wall, now = cputime()
+    return cpu === undefined || now === undefined
+      ? { value }
+      : { value, cpu: now - cpu }
+  }
 }
 
 export let bench = (options: TimedBench): Bench => {
@@ -50,13 +66,17 @@ export let bench = (options: TimedBench): Bench => {
         try {
           await options.setup?.(context)
           let timed = () => {
-            let start = performance.now()
+            let took = stopwatch()
             let result = options.run(context)
-            let done = (): Sample => ({
-              value: (performance.now() - start) * scale / operations,
-              counts: { operations },
-              source: 'invocation',
-            })
+            let done = (): Sample => {
+              let { value, cpu } = took()
+              return {
+                value: value * scale / operations,
+                ...cpu === undefined ? {} : { cpu: cpu * scale / operations },
+                counts: { operations },
+                source: 'invocation',
+              }
+            }
             // A sync workload must not pay for a Promise turn inside its timing.
             return result &&
                 typeof (result as PromiseLike<unknown>).then == 'function'

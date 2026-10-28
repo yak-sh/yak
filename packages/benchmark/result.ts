@@ -6,6 +6,10 @@ import type { Event } from '@yaks/trace'
 
 export type Sample = {
   value: number
+  /** The CPU time the step took, in the bench's unit: this process's and its
+   * finished children's (host.ts `cputime`). Absent where the step's work runs
+   * in a process that outlives it, or where the box does not say. */
+  cpu?: number
   counts?: Record<string, number>
   source?: string
   details?: unknown
@@ -41,6 +45,8 @@ export type CollectedSuite = Omit<Suite, 'benches'> & {
 export type Round = {
   index: number
   median: number
+  /** The median of its samples' CPU time, where every sample has one. */
+  cpu?: number
   /** Reserved for the recorded span tree, rather than live channel history. */
   spans: readonly Event[] | null
 }
@@ -134,6 +140,7 @@ export let samples = (input: Samples): Sample[] => {
   if (!out.length) throw new Error('Expected at least one sample')
   return out.map((s) => {
     value(s.value)
+    if (s.cpu !== undefined) value(s.cpu)
     for (let count of Object.values(s.counts ?? {})) value(count)
     return { ...s, counts: s.counts && { ...s.counts } }
   })

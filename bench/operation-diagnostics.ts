@@ -1,7 +1,7 @@
 /** Populated diagnostic production doors over private SQLite. The catalogue
  * transport is redirected to an owned loopback fixture; its figure measures
  * local CLI/catalogue handling, never OpenAI latency or credential completion. */
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -165,7 +165,7 @@ export let measure = async (
           await host.graph.apply([{ entity: { eid: session }, home: null }])
         }
         let before = requests
-        let start = performance.now()
+        let took = stopwatch()
         let text: string
         if (name.startsWith('connector/')) {
           let home = name.includes('session-home')
@@ -220,7 +220,7 @@ export let measure = async (
           }
           text = decode.decode(out.stdout)
         }
-        let value = performance.now() - start
+        let reading = took()
         if (name.includes('model-list')) {
           includes(text, 'operation-local-catalogue')
           includes(text, '8192')
@@ -246,7 +246,7 @@ export let measure = async (
           }
         }
         samples.push({
-          value,
+          ...reading,
           source: 'end-to-end',
           counts: { tasks: 2000 },
           details: {

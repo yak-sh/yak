@@ -1,8 +1,15 @@
 import { equal, test, throws } from '@yaks/testing'
-import type { Run } from '@yaks/benchmark'
-import { bracket, compare, sample } from './paired.ts'
+import type { Baseline, Run } from '@yaks/benchmark'
+import { bracket, compare } from './paired.ts'
 
-let run = (values: number[], better: 'lower' | 'higher' = 'lower'): Run => ({
+// One sitting's round medians (wall), and their CPU times where given.
+let run = (
+  values: number[],
+  { better = 'lower', cpu }: {
+    better?: 'lower' | 'higher'
+    cpu?: number[]
+  } = {},
+): Run => ({
   version: 1,
   suite: 'fixture',
   metric: 'wall-ms',
@@ -13,9 +20,9 @@ let run = (values: number[], better: 'lower' | 'higher' = 'lower'): Run => ({
   cpu: 'test',
   load: [],
   busy: null,
-  rounds: 3,
+  rounds: values.length,
   tolerance: 0,
-  verdict: 'regressed',
+  verdict: 'measured',
   regressions: [],
   benches: [{
     name: 'work',
@@ -25,70 +32,99 @@ let run = (values: number[], better: 'lower' | 'higher' = 'lower'): Run => ({
     spread: 0,
     spans: null,
     samples: values.map((value, round) => ({ value, round })),
-    rounds: values.map((median, index) => ({ index, median, spans: null })),
+    rounds: values.map((median, index) => ({
+      index,
+      median,
+      ...cpu ? { cpu: cpu[index] } : {},
+      spans: null,
+    })),
   }],
 })
+let banked = (tolerance: number) =>
+  ({
+    tolerance,
+    benches: [{ name: 'work', unit: 'ms', better: 'lower', median: 1 }],
+  }) as Baseline
+let verdict = (
+  before: Run,
+  current: Run,
+  after = before,
+  base?: Baseline,
+) => compare({ before, current, after }, base).verdict
 
-equal(
-  compare({
-    before: run([10, 11, 12]),
-    current: run([10, 11, 12]),
-    after: run([10, 11, 12]),
-  }).verdict,
-  'unconfirmed',
-)
-
+let shared = [100, 130, 110, 125, 105, 120]
 for (let pressure of [1, 4, 12]) {
-  let values = (xs: number[]) => run(xs.map((x) => x * pressure))
-  let before = values([10, 11, 12]), after = values([10, 11, 12])
-  test(`shared contention ${pressure} leaves equivalent code unconfirmed and added work detected`, () => {
-    equal(
-      compare({ before, current: values([10, 11, 12]), after }).verdict,
-      'unconfirmed',
-    )
-    equal(compare({ before, current: values([20, 21, 22]), after }).slower, [
-      'work',
-    ])
-    equal(
-      compare({ before, current: values([20, 21, 22]), after }).verdict,
-      'changed',
-    )
+  let at = (xs: number[]) => run(xs.map((x) => x * pressure))
+  test(`a box ${pressure} times as busy slows both alike: the same code is the same, added work is slower`, () => {
+    equal(verdict(at(shared), at(shared)), 'same')
+    equal(verdict(at(shared), at(shared.map((n) => n * 2))), 'slower')
   })
 }
+
+test('a slowdown counts only past a tenth and the slack its baseline banked', () => {
+  let times = (k: number) => run(shared.map((n) => n * k))
+  equal(verdict(run(shared), times(1.05)), 'same')
+  equal(verdict(run(shared), times(1.15)), 'slower')
+  equal(verdict(run(shared), times(1.15), run(shared), banked(.2)), 'same')
+  equal(verdict(run(shared), times(1.25), run(shared), banked(.2)), 'slower')
+})
+
+test('CPU time is judged where every round carries it, so a wall-clock wobble is not a slowdown', () => {
+  let cpu = [50, 51, 50, 52, 49, 50]
+  let reference = run(shared, { cpu })
+  let stretched = run(shared.map((n) => n * 1.5), { cpu })
+  equal(verdict(reference, stretched), 'same')
+  equal(
+    compare({ before: reference, current: stretched, after: reference })
+      .comparisons[0].figure,
+    'cpu',
+  )
+  equal(
+    verdict(reference, run(shared, { cpu: cpu.map((n) => n * 1.3) })),
+    'slower',
+  )
+  equal(verdict(run(shared), stretched), 'slower')
+})
+
 test('a moving reference is inconclusive rather than a code regression', () => {
   equal(
-    compare({
-      before: run([1, 2, 3]),
-      current: run([10, 11, 12]),
-      after: run([10, 11, 12]),
-    }).verdict,
+    verdict(
+      run([1, 2, 3, 2, 1, 3]),
+      run([10, 11, 12, 11, 10, 12]),
+      run([10, 11, 12, 11, 10, 12]),
+    ),
     'inconclusive',
   )
 })
-test('a faster current code and reversed throughput retain direction', () => {
+
+test('a bench whose reference drifted is not judged, and hides nothing beside it', () => {
+  let both = (x: Run, y: number[]): Run => ({
+    ...x,
+    benches: [...x.benches, { ...run(y).benches[0], name: 'other' }],
+  })
+  let before = both(run(shared), [1, 2, 3, 2, 1, 3])
+  let after = both(run(shared), [10, 11, 12, 11, 10, 12])
+  let doubled = both(run(shared.map((n) => n * 2)), [5, 6, 5, 6, 5, 6])
   equal(
-    compare({
-      before: run([10, 11, 12]),
-      current: run([1, 2, 3]),
-      after: run([10, 11, 12]),
-    }).verdict,
-    'unconfirmed',
-  )
-  equal(
-    compare({
-      before: run([10, 11, 12], 'higher'),
-      current: run([1, 2, 3], 'higher'),
-      after: run([10, 11, 12], 'higher'),
-    }).verdict,
-    'changed',
+    [
+      verdict(before, doubled, after),
+      verdict(before, both(run(shared), [5, 6, 5, 6, 5, 6]), after),
+    ],
+    ['slower', 'inconclusive'],
   )
 })
-test('incomparable or missing paired observations never establish equivalence', () => {
+
+test('faster code is the same, and higher-is-better keeps its direction', () => {
+  let tens = [10, 11, 12, 11, 10, 12], ones = [1, 2, 3, 2, 1, 3]
+  equal(verdict(run(tens), run(ones)), 'same')
   equal(
-    compare({ before: run([]), current: run([1, 2, 3]), after: run([1, 2, 3]) })
-      .verdict,
-    'inconclusive',
+    verdict(run(tens, { better: 'higher' }), run(ones, { better: 'higher' })),
+    'slower',
   )
+})
+
+test('missing observations are inconclusive, and incomparable runs refuse', () => {
+  equal(verdict(run([]), run([1, 2, 3])), 'inconclusive')
   throws(() =>
     compare({
       before: { ...run([1, 2, 3]), workload: 2 },
@@ -98,27 +134,20 @@ test('incomparable or missing paired observations never establish equivalence', 
   )
 })
 
-test('overlapping outliers do not hide reference drift', () => {
+test('a busy box during the bracket is recorded, and still judged', () => {
+  let busy = (r: Run) => ({ ...r, busy: .8 })
+  equal(verdict(busy(run(shared)), busy(run(shared))), 'same')
   equal(
-    compare({
-      before: run([1, 2, 100]),
-      current: run([110, 111, 112]),
-      after: run([90, 100, 101]),
-    }).verdict,
-    'inconclusive',
+    verdict(busy(run(shared)), busy(run(shared.map((n) => n * 2)))),
+    'slower',
   )
 })
 
 test('bracket orders reference/current/reference and closes on a failed adapter', async () => {
   let seen: string[] = []
+  let close = () => (seen.push('closed'), Promise.resolve())
   equal(
-    await bracket((v) => {
-      seen.push(v)
-      return Promise.resolve(v)
-    }, () => {
-      seen.push('closed')
-      return Promise.resolve()
-    }),
+    await bracket((v) => (seen.push(v), Promise.resolve(v)), close),
     { before: 'reference', current: 'current', after: 'reference' },
   )
   equal(seen, ['reference', 'current', 'reference', 'closed'])
@@ -128,88 +157,6 @@ test('bracket orders reference/current/reference and closes on a failed adapter'
       seen.push(v)
       if (v == 'current') throw Error('missing API')
       return Promise.resolve(v)
-    }, () => {
-      seen.push('closed')
-      return Promise.resolve()
-    }), 'missing API')
+    }, close), 'missing API')
   equal(seen, ['reference', 'current', 'closed'])
-})
-
-test('interleaved small slowdowns survive wide drift shared by both revisions', () => {
-  let shared = [100, 130, 110, 125, 105, 120]
-  equal(
-    compare({
-      before: run(shared),
-      current: run(shared.map((n) => n * 1.05)),
-      after: run(shared),
-    }).verdict,
-    'changed',
-  )
-  equal(
-    compare({ before: run(shared), current: run(shared), after: run(shared) })
-      .verdict,
-    'unconfirmed',
-  )
-})
-
-test('load observed during paired probes cannot confirm code differences', () => {
-  equal(
-    compare({
-      before: run([10, 11, 12]),
-      current: { ...run([20, 21, 22]), busy: .8 },
-      after: run([10, 11, 12]),
-    }).verdict,
-    'loaded',
-  )
-})
-
-test('terminal draft sittings keep a millisecond wobble unconfirmed', async () => {
-  let sitting = async (values: number[]) => {
-    let collectors: Record<string, string> = {
-      'bench/standalone-worker.ts bench/terminal-interactions.ts': JSON
-        .stringify({
-          'tui/comment-draft-save': values.map((value) => ({ value })),
-        }),
-    }
-    let samples = await sample(
-      'terminal-interactions',
-      (args) => Promise.resolve(collectors[args.join(' ')]),
-    )
-    equal(samples['tui/comment-draft-save'], values.map((value) => ({ value })))
-    return run(values)
-  }
-  let before = await sitting([498, 501, 499, 502, 497, 500])
-  let after = await sitting([499, 500, 498, 503, 498, 501])
-  equal(
-    compare({
-      before,
-      current: await sitting([499, 502, 500, 503, 498, 501]),
-      after,
-    }).verdict,
-    'unconfirmed',
-  )
-  equal(
-    compare({
-      before,
-      current: await sitting([510, 511, 510, 512, 509, 510]),
-      after,
-    }).verdict,
-    'changed',
-  )
-})
-
-test('paired probes read the last completed result amid diagnostic output', async () => {
-  let values = { work: [{ value: 490 }] }
-  equal(
-    await sample('platform-waits', () =>
-      Promise.resolve(
-        'diagnostic\nPLATFORM_WAITS_RESULT={}\n' +
-          `PLATFORM_WAITS_RESULT=${JSON.stringify(values)}\n`,
-      )),
-    values,
-  )
-  await throws(
-    () => sample('inbox-content', () => Promise.resolve('not ready')),
-    'Paired collector returned no measurements',
-  )
 })

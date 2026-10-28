@@ -192,10 +192,10 @@ existing suites.
 
 All four suites bank best-of-three runs, three round medians per run, three
 samples per round, with tolerance zero. All are registered in `SUITES` and
-`HOURLY`, under the existing persistent scheduler's absolute 25-minute deadline,
-including lock wait and confirmation. The installed cron invokes that lane every
-30 minutes; missed collection reports failure rather than blanket success.
-Existing baseline, budget and floor records are not raised or reaccepted.
+`HOURLY`, under the persistent scheduler's 25-minute window. The installed cron
+invokes that lane every 30 minutes; a collection that fails twice running
+reports a failure. Existing baseline, budget and floor records are not raised or
+reaccepted.
 
 ### Explicit dependencies, not successful local coverage
 
@@ -229,10 +229,10 @@ external waits and have their own tests/records; a local kernel number is not
 those waits. Inbox is benchmarkable only when its view is loaded and offered; a
 fallback detail page is never accepted as an Inbox measurement.
 
-The half-hour monitor screens user-facing suites and confirms slower figures
-with a three-run check. A check is bounded at ten minutes, so a hang itself is
-reported rather than hiding later suites. The local moving best banks drops past
-the noise without changing source baselines.
+The half-hour monitor screens user-facing suites and judges a screen past its
+limit by measuring the code beside the code its baseline was banked at
+([README](README.md#the-monitor)). A check is bounded at ten minutes, so a hang
+cannot hide later suites; a run past that cap tells nothing and reports nothing.
 
 The registered-door gaps above, external provider latency and remote Cloudflare
 timings remain outside these isolated fixture measurements. Platform management
@@ -287,8 +287,8 @@ checkout, login/mail-code forms and destructive account/space confirmation pages
 are outside these management operation families. Provider generation and
 external payment completion are not replaced by a fast local response. The daily
 and half-hour monitor include `platform-waits` through shared `HOURLY`; a
-confirmed regression or bounded collection failure files a tracker bug. A long
-throughput lane cannot delay it.
+side-by-side slowdown or a collection that fails twice running files a tracker
+bug. A long throughput lane cannot delay it.
 
 Chrome intercepts absolute platform stylesheet and fixture icon URLs and
 rewrites them to the isolated kernel; every other browser origin is denied.

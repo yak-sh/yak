@@ -51,7 +51,10 @@ export let inboxPages = (): Page[] => {
   }]
 }
 
-export let suite = (args: string[] = []): CollectedSuite => {
+export let suite = (
+  args: string[] = [],
+  root = new URL('../', import.meta.url).pathname,
+): CollectedSuite => {
   if (args.length) {
     throw new Error('inbox-content uses only its fixed isolated fixture')
   }
@@ -72,9 +75,9 @@ export let suite = (args: string[] = []): CollectedSuite => {
         args: [
           'run',
           '-A',
-          new URL('./inbox-content-probe.ts', import.meta.url).pathname,
+          `${root}/bench/inbox-content-probe.ts`,
         ],
-        cwd: new URL('../', import.meta.url).pathname,
+        cwd: root,
         stdout: 'piped',
         stderr: 'inherit',
       }).output()

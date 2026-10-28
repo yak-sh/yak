@@ -103,6 +103,34 @@ export let busy = async (ms = 1000): Promise<number | undefined> => {
     : (after - before) / (took * 1000 * navigator.hardwareConcurrency)
 }
 
+let rusage: ((who: number) => number) | null | undefined
+/** The CPU time this process and its finished children have used, in ms:
+ * every thread's, user and system, as getrusage(2) keeps it; undefined where
+ * the platform does not say. Two readings bracket the CPU a step took, which
+ * other work on the box barely moves, where it stretches the step's wall
+ * time. A child counts once it has exited and been waited for, so a step
+ * whose work runs in a process that outlives it is not measured this way. */
+export let cputime = (): number | undefined => {
+  if (rusage === undefined) {
+    try {
+      if (Deno.build.os != 'linux') throw new Error('glibc layout only')
+      let { symbols } = Deno.dlopen('libc.so.6', {
+        getrusage: { parameters: ['i32', 'buffer'], result: 'i32' },
+      })
+      // struct rusage opens with ru_utime and ru_stime, two 64-bit timevals.
+      let usage = new BigInt64Array(18)
+      rusage = (who) => {
+        symbols.getrusage(who, usage)
+        return Number(usage[0] + usage[2]) * 1e3 +
+          Number(usage[1] + usage[3]) / 1e3
+      }
+    } catch {
+      rusage = null
+    }
+  }
+  return rusage ? rusage(0) + rusage(-1) : undefined
+}
+
 /** How long the calling thread has waited for a CPU since it started, in ms:
  * the time other work took from it, as Linux keeps it (schedstat's run delay);
  * undefined where the platform does not say. Two readings bracket what load

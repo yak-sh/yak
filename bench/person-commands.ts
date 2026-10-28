@@ -3,7 +3,7 @@
  * graph. All databases, terminal state and owned processes go away in finally.
  * Timings include the response/paint, not merely dispatch. No detached duties.
  */
-import type { Samples } from '@yaks/benchmark'
+import { type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -103,10 +103,13 @@ export async function measure(
   let timed = async (name: string, run: () => Promise<void>) => {
     let samples = []
     for (let i = 0; i < n; i++) {
-      let start = performance.now()
+      let took = stopwatch()
       await run()
+      let { value, cpu } = took()
       samples.push({
-        value: performance.now() - start,
+        // A terminal paints in a tmux pane that outlives the sample, so its
+        // CPU is not this process's: wall time is its figure.
+        ...name.startsWith('tui/') ? { value } : { value, cpu },
         source: 'end-to-end',
         counts: { tasks: TASKS },
         details: {

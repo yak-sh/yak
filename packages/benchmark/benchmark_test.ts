@@ -96,6 +96,21 @@ test('runs retain raw samples, round medians, counts and host metadata', async (
   })
 })
 
+test('a round keeps its samples’ median CPU time only when every sample has one', async () => {
+  let f = fixture([{
+    name: 'work',
+    unit: 'ms',
+    sample: (round) =>
+      [
+        [{ value: 9, cpu: 3 }, { value: 8, cpu: 1 }, { value: 7, cpu: 2 }],
+        [{ value: 9, cpu: 3 }, { value: 8 }],
+      ][round],
+  }, bench({ name: 'timed', unit: 'us', run: () => {} })])
+  let result = await run(f.suite, { ...f.options, rounds: 2 })
+  equal(result.benches[0].rounds.map((r) => r.cpu), [2, undefined])
+  ok(result.benches[1].rounds.every((r) => r.cpu! >= 0))
+})
+
 test('host reporter factories resolve each run, after JSON, including regression', async () => {
   let f = fixture()
   let seen: [unknown, string][] = []

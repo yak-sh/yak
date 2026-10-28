@@ -3,6 +3,7 @@
 export {
   bench,
   type Iteration,
+  stopwatch,
   type TimedBench,
   type TimeUnit,
 } from './bench.ts'
@@ -34,6 +35,7 @@ export {
 export {
   busy,
   configure,
+  cputime,
   type Host,
   host,
   type ReportedRun,
@@ -42,4 +44,3 @@ export {
   waited,
 } from './host.ts'
 export { type Files, type Options, Regressed, run } from './runner.ts'
-export { type Difference, difference } from './difference.ts'

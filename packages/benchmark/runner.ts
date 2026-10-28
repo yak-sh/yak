@@ -304,9 +304,13 @@ let measure = async (
         let middle = [...raw].sort((a, b) =>
           a.value - b.value
         )[Math.floor(raw.length / 2)]
+        let cpu = raw.map((s) => s.cpu)
         b.rounds.push({
           index: round,
           median: median(raw.map((s) => s.value)),
+          ...cpu.every((n) => n !== undefined)
+            ? { cpu: median(cpu as number[]) }
+            : {},
           spans: middle.spans ?? null,
         })
       }

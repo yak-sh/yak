@@ -9,8 +9,9 @@
 # each appending to ~/.tasks-bench.log, beside backup's and tidy's logs.
 #
 # Bounded: a run that hangs must not stack under the next one. A night when
-# several suites need confirming takes hours: the throughput suite alone is
-# about 17 minutes a run, once to screen and three times to confirm. Not niced:
+# several suites screen past their limits takes hours: the throughput suite
+# alone is about 17 minutes a run, and a side-by-side comparison of two
+# revisions is a dozen runs or more. Not niced:
 # a measurement taken at low priority measures the box's other work.
 set -u
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"

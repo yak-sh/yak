@@ -41,6 +41,9 @@ type Input = {
   measure?: (mode: string) => Promise<DenoReport>
   counts?: () => Promise<Record<string, Sample>>
   host?: () => Promise<Host>
+  /** The checkout whose code it measures; this process's working directory
+   * by default. */
+  root?: string
 }
 export let throughput = (input: Input = {}): CollectedSuite => {
   let recording = input.recording ?? false
@@ -77,7 +80,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
       for (let mode of modes) {
         console.error(`throughput: round ${round + 1}/7, ${mode}`)
         let report = await (input.measure ?? ((mode) =>
-          measure(mode, input.filter)))(
+          measure(mode, input.filter, input.root)))(
             mode,
           )
         if (report.runtime != machine.runtime || report.cpu != machine.cpu) {
@@ -89,19 +92,25 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           )
           : mode == 'pipeline'
           ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
-          : storageNames().filter((name) => name.split('/')[1] == mode)
+          : storageNames().filter((name) =>
+            name.split('/')[1] == mode
+          )
         Object.assign(out, extract(report, names))
       }
       for (let [name, sample] of Object.entries(out)) {
         sample.value /= bundlesPerOp(name) * (recording ? RECORDING_BATCHES : 1)
       }
       if (recording) return out
-      counts ??= await (input.counts ?? measureCounts)()
+      counts ??= await (input.counts ?? (() => measureCounts(input.root)))()
       return { ...out, ...counts }
     },
   }
 }
-let measure = async (mode: string, filter?: string): Promise<DenoReport> => {
+let measure = async (
+  mode: string,
+  filter?: string,
+  root?: string,
+): Promise<DenoReport> => {
   let env: Record<string, string> = {
     BENCH_RECORDING: mode.startsWith('recording-')
       ? mode.slice('recording-'.length)
@@ -129,6 +138,7 @@ let measure = async (mode: string, filter?: string): Promise<DenoReport> => {
         ? ['bench/apply_bench.ts', 'bench/relay_bench.ts']
         : files),
     ],
+    cwd: root,
     env,
     stdout: 'piped',
     stderr: 'inherit',
@@ -136,11 +146,12 @@ let measure = async (mode: string, filter?: string): Promise<DenoReport> => {
   if (!child.success) throw new Error(`deno bench failed (${child.code})`)
   return JSON.parse(new TextDecoder().decode(child.stdout))
 }
-let measureCounts = async () => {
+let measureCounts = async (root?: string) => {
   let out: Record<string, Sample> = {}
   for (let file of ['bench/apply-fixture.ts', 'bench/relay-fixture.ts']) {
     let child = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', file, '--counts'],
+      cwd: root,
       stdout: 'piped',
       stderr: 'inherit',
     }).output()
