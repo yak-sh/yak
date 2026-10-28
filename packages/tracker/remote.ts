@@ -24,6 +24,15 @@ let WAIT = 5_000, TRIES = 12
 export let late = (error: unknown) =>
   error instanceof DOMException && error.name == 'TimeoutError'
 
+/// unavailable(503) -> true
+/// unavailable(429) -> true
+/// unavailable(403) -> false
+/** Whether an answer's status says the tracker cannot answer for now (it timed
+ * out, is busy, or failed on its side), which a later try can recover from;
+ * any other refusal is its answer to what was asked. */
+export let unavailable = (status: number) =>
+  status == 408 || status == 429 || status >= 500
+
 // One attempt on a connection of its own, closed once the whole answer is in
 // hand. Outside Deno the runtime owns the connections.
 let attempt = async (go: typeof fetch, url: URL, init: RequestInit) => {

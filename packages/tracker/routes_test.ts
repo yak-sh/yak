@@ -45,32 +45,32 @@ test('remote trace doors preserve pages and use a platform-admin ticket the Work
   equal((await door[0].handle(request(`traces?scope=${id}`))).status, 200)
   equal(calls.length, 2)
 })
-test('remote failures are explicit and contain no upstream body, URL, ticket or secret', async () => {
-  let req = new Request('http://box/tracker/traces')
-  equal((await routes({})[0].handle(req)).status, 503)
-  equal(
-    (await routes({}, { remote: { url: 'https://tracker.invalid' } })[0].handle(
-      req,
-    )).status,
-    503,
-  )
-  let door = routes(
+// What the box's door answers where the remote is unconfigured, has no
+// secret, or answers each status: a refusal of what was asked is 502, and a
+// tracker that cannot answer for now 503.
+let door = (remote?: { url: string; secret?: string }, status = 200) =>
+  routes(
     {},
-    { remote: { url: 'https://tracker.invalid', secret } },
-    (() =>
-      Promise.resolve(new Response(secret, { status: 403 }))) as typeof fetch,
-  )[0]
-  let r = await door.handle(req)
-  equal(r.status, 502)
-  ok(!(await r.text()).includes(secret))
-  equal(
-    await authorize(
-      new Request('http://worker', {
-        headers: { authorization: `Bearer ${nonAdmin}` },
-      }),
-      secret,
-      derivedEid('tracker|platform'),
-    ),
-    null,
-  )
+    { remote },
+    (() => Promise.resolve(new Response(secret, { status }))) as typeof fetch,
+  )[0].handle(new Request('http://box/tracker/traces'))
+let failures = await Promise.all([
+  door(),
+  door({ url: 'https://tracker.invalid' }),
+  ...[403, 429, 500, 503].map((status) =>
+    door({ url: 'https://tracker.invalid', secret }, status)
+  ),
+])
+let bodies = await Promise.all(failures.map((r) => r.text()))
+let nonAdminAccess = await authorize(
+  new Request('http://worker', {
+    headers: { authorization: `Bearer ${nonAdmin}` },
+  }),
+  secret,
+  derivedEid('tracker|platform'),
+)
+test('remote failures are explicit and contain no upstream body, URL, ticket or secret', () => {
+  equal(failures.map((r) => r.status), [503, 503, 502, 503, 503, 503])
+  ok(!bodies.some((body) => body.includes(secret)))
+  equal(nonAdminAccess, null)
 })

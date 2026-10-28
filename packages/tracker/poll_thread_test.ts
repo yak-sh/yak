@@ -78,12 +78,13 @@ test('closing poll doors rejects reads and marks without starting a worker', asy
 })
 
 // Closing while a read is in flight owns and cancels the whole thread. Its
-// rejected page must not schedule a fresh inter-poll timer after shutdown.
+// rejected page must not leave a timer behind it: none set after shutdown,
+// and every one set before it cancelled.
 let timers = 0
 let closing = poll({ url: 'http://127.0.0.1:1', secret: 'test-only' }, '.bug', {
   timer: () => {
     timers++
-    return () => {}
+    return () => void timers--
   },
 })
 closing.close()

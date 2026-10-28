@@ -6,9 +6,14 @@
 // the poll reads only those again. A whole read is left for the first poll,
 // and for a tag the tracker no longer knows what moved since. Marks go
 // through the same signed transport.
+//
+// A poll the tracker cannot answer for now is a log line, and the next poll
+// tries again. Only a tracker that has not answered for OUTAGE is reported,
+// once, since the box is the witness when the platform tracker is down; any
+// other failed poll is reported at once.
 import type { Bundle } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
-import { mark, type Remote } from './remote.ts'
+import { late, mark, type Remote } from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
 import { pollThread } from './poll_thread.ts'
@@ -65,8 +70,12 @@ export type PollOpts = {
    * in ms (default: the request's own bound, a minute), so every poll
    * settles */
   timeout?: number
-  /** a failed poll; the next one retries */
+  /** a failure to fix: a poll that failed other than by the tracker being
+   * out of reach, at once, and the tracker not answering for OUTAGE, once */
   report?: (error: unknown) => void
+  /** a poll the tracker could not answer, which the next one retries, and
+   * its answering again (default: `console.warn`) */
+  log?: (line: string) => void
   /** where it asks (default: signed doors on a dedicated worker event loop) */
   doors?: Doors
   /** how a wait is set — between polls, and a page's deadline — returning
@@ -75,6 +84,19 @@ export type PollOpts = {
 }
 
 const PAGE = 100, PAGES = 100
+
+/** How long the platform tracker may go unanswered before a poll reports it,
+ * in ms: five minutes, ten polls at the default pace. Each read already
+ * retries for up to a minute (./remote.ts), and what has passed on its own (a
+ * Durable Object reset, a runtime that stalls for half a minute, a bad path to
+ * one colo) was over well within it. Past it, the platform's own reports may
+ * not be landing, and nobody else is saying so. */
+export const OUTAGE = 300_000
+
+// A read the tracker could not answer for now, which a later poll can
+// recover from: a refusal of 503 or 504 (./routes.ts `read`), or a page past
+// its own deadline.
+class Unavailable extends Error {}
 
 /** A page of the bugs `params` asks for, or that nothing moved since `tag`;
  * a refusal throws. */
@@ -249,14 +271,47 @@ export let poll = (
       ? deadline(opts.timeout)
       : { signal: stop.signal, cancel: () => {} }
     try {
-      let result = await doors.bugs(params, signal, tag)
-      if (!result.ok) throw Error(result.error)
+      let result = await doors.bugs(params, signal, tag).catch((error) => {
+        // Past the deadline, the poll's own thread gives up on the page.
+        throw late(error)
+          ? new Unavailable('Remote tracker did not answer in time')
+          : error
+      })
+      if (!result.ok) {
+        throw result.status == 503 || result.status == 504
+          ? new Unavailable(result.error)
+          : Error(result.error)
+      }
       return result
     } finally {
       cancel()
     }
   }
+  let log = opts.log ?? console.warn
+  let every = opts.every ?? 30_000
+  // Since the tracker last answered: the polls it could not answer, the last
+  // one's failure, and what cancels the report owed once that lasts OUTAGE.
+  // Its clock starts with the poll, so one that hangs is unanswered too.
+  let down: { failed: number; error?: unknown; cancel: () => void } | undefined
+  let unanswered = () =>
+    down ??= {
+      failed: 0,
+      cancel: timer(() => {
+        if (stop.signal.aborted) return
+        opts.report?.(
+          Error(
+            `Remote tracker has not answered for ${OUTAGE / 60_000} minutes`,
+            { cause: down?.error },
+          ),
+        )
+      }, OUTAGE),
+    }
+  let over = () => {
+    down?.cancel()
+    down = undefined
+  }
   let pass = async () => {
+    let outage = unanswered()
     try {
       let fresh = await since(page, query, held)
       if (fresh) {
@@ -264,10 +319,22 @@ export let poll = (
         held = fresh.tag
       }
       ready = true
+      if (outage.failed) {
+        log(`Remote tracker answered again after ${outage.failed} failed polls`)
+      }
+      over()
     } catch (error) {
       if (stop.signal.aborted) return
       ready = false
-      opts.report?.(error)
+      if (error instanceof Unavailable) {
+        let again = `polling again every ${every / 1000} s`
+        if (!outage.failed++) log(`${error.message}; ${again}`)
+        outage.error = error
+      } else {
+        // It answered, wrongly, or this side failed: a bug now, not an outage.
+        over()
+        opts.report?.(error)
+      }
     }
     for (let fn of listeners) fn(value)
   }
@@ -286,7 +353,7 @@ export let poll = (
   ;(async () => {
     while (!stop.signal.aborted) {
       await pass()
-      if (!stop.signal.aborted) await wait(opts.every ?? 30_000)
+      if (!stop.signal.aborted) await wait(every)
     }
   })()
   return {
@@ -303,6 +370,7 @@ export let poll = (
     },
     close: () => {
       stop.abort()
+      down?.cancel()
       thread?.close()
     },
     mutate: async (bundles) => {

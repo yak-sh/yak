@@ -5,6 +5,7 @@
 import { clock, equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { type Doors, poll, type Polled, signed } from './poll.ts'
+import type { Read } from './routes.ts'
 
 let worker = (count: number) => {
   let bugs = Array.from({ length: count }, (_, i) => ({
@@ -73,25 +74,34 @@ test('a poll reads bugs by id whatever its query, a page of ids to a request', (
   equal(named.named.map((ids) => ids.length), [100, 51])
 })
 
-// Signing and the failed response are the fixture. Await the subscriber, not
-// a timer, and retain the observed failure after closing its owned poll.
-let failedReports: unknown[] = []
-let failed = await polled(poll(remote, '.bug', {
-  doors: signed(
-    remote,
-    (() => Promise.resolve(new Response('', { status: 500 }))) as typeof fetch,
-  ),
-  report: (error) => failedReports.push(error),
-}))
-failed.close()
-test('a failed poll is reported and leaves the answer not ready', () => {
-  equal([failed.ready, failedReports.map(String)], [false, [
-    'Error: Remote tracker refused the read (500)',
+// Signing and the refused response are the fixture: a refusal of what was
+// asked is a bug at once, and a tracker that cannot answer for now a log line.
+// Await the subscriber, not a timer.
+let through = async (status: number) => {
+  let filed: string[] = [], logged: string[] = []
+  let go = () => Promise.resolve(new Response('', { status }))
+  let open = await polled(poll(remote, '.bug', {
+    doors: signed(remote, go as typeof fetch),
+    report: (error) => filed.push(String(error)),
+    log: (line) => logged.push(line),
+  }))
+  open.close()
+  return [open.ready, filed, logged]
+}
+let refusedRead = await through(400), busyRead = await through(503)
+test('a refused read is reported at once, and a busy tracker is logged', () => {
+  equal(refusedRead, [
+    false,
+    ['Error: Remote tracker refused the read (400)'],
+    [],
+  ])
+  equal(busyRead, [false, [], [
+    'Remote tracker refused the read (503); polling again every 30 s',
   ]])
 })
 
 test('a poll that hangs settles as failed, and says it timed out', async () => {
-  let failures: unknown[] = []
+  let filed: unknown[] = [], logged: string[] = []
   let time = clock()
   // A fetch that never answers, until its signal gives up on it.
   let hang = ((_: unknown, init?: RequestInit) =>
@@ -104,14 +114,113 @@ test('a poll that hangs settles as failed, and says it timed out', async () => {
     timeout: 5,
     timer: (fn, ms) => time.after(ms, fn),
     doors: signed(remote, hang),
-    report: (error) => failures.push(error),
+    report: (error) => filed.push(error),
+    log: (line) => logged.push(line),
   }))
   await time.advance(5)
   let open = await hung
-  equal([open.ready, failures.map(String)], [false, [
-    'Error: Remote tracker did not answer in time',
+  equal([open.ready, filed, logged], [false, [], [
+    'Remote tracker did not answer in time; polling again every 30 s',
   ]])
   open.close()
+})
+
+// What a poll on a held clock files and logs over its polls, 30 s apart, the
+// Worker answering each as `said` says: by a name below, or a thrown failure.
+let replies: Record<string, Read> = {
+  ok: { ok: true, value: [] },
+  invalid: { ok: true, value: 'not a page' },
+  refused: {
+    ok: false,
+    error: 'Remote tracker refused the read (400)',
+    status: 502,
+  },
+  busy: {
+    ok: false,
+    error: 'Remote tracker refused the read (503)',
+    status: 503,
+  },
+  late: {
+    ok: false,
+    error: 'Remote tracker did not answer in time',
+    status: 504,
+  },
+}
+let polls = async (...said: (string | Error)[]) => {
+  let time = clock(), filed: string[] = [], logged: string[] = []
+  let left = [...said]
+  let resting = Promise.withResolvers<void>()
+  let open = poll(remote, '.bug', {
+    timer: (fn, ms) => {
+      if (ms == 30_000) resting.resolve()
+      return time.after(ms, fn)
+    },
+    doors: {
+      bugs: () => {
+        let next = left.shift() ?? 'ok'
+        return next instanceof Error
+          ? Promise.reject(next)
+          : Promise.resolve(replies[next])
+      },
+      mark: () => Promise.resolve(),
+    },
+    report: (error) => {
+      let { cause } = error as Error
+      filed.push(`${time.now() / 1000} s ${error}${cause ? ` (${cause})` : ''}`)
+    },
+    log: (line) => logged.push(line),
+  })
+  for (let _ of said) {
+    await resting.promise
+    resting = Promise.withResolvers()
+    await time.advance(30_000)
+  }
+  open.close()
+  return { filed, logged }
+}
+let times = (n: number, said: string) => Array<string>(n).fill(said)
+
+test('a poll that fails and recovers files nothing, and logs both', async () => {
+  equal(await polls('busy', 'late', 'ok'), {
+    filed: [],
+    logged: [
+      'Remote tracker refused the read (503); polling again every 30 s',
+      'Remote tracker answered again after 2 failed polls',
+    ],
+  })
+})
+
+test('a tracker that stays unanswered is filed once, five minutes in', async () => {
+  equal((await polls(...times(12, 'late'))).filed, [
+    '300 s Error: Remote tracker has not answered for 5 minutes (Error: Remote tracker did not answer in time)',
+  ])
+})
+
+test('an answer restarts the five minutes', async () => {
+  equal((await polls(...times(9, 'busy'), 'ok', ...times(10, 'busy'))).filed, [
+    '600 s Error: Remote tracker has not answered for 5 minutes (Error: Remote tracker refused the read (503))',
+  ])
+})
+
+test('a poll that never settles is unanswered too', async () => {
+  let time = clock(), filed: unknown[] = []
+  let open = poll(remote, '.bug', {
+    timer: (fn, ms) => time.after(ms, fn),
+    doors: { bugs: () => new Promise(() => {}), mark: () => Promise.resolve() },
+    report: (error) => filed.push(String(error)),
+  })
+  await time.advance(300_000)
+  open.close()
+  equal(filed, ['Error: Remote tracker has not answered for 5 minutes'])
+})
+
+test('any other failed poll is filed at once', async () => {
+  let failed = Error('Remote tracker poll worker failed')
+  equal((await polls('refused', 'invalid', failed, 'ok')).filed, [
+    '0 s Error: Remote tracker refused the read (400)',
+    '30 s Error: Remote tracker returned an invalid page of bugs',
+    '60 s Error: Remote tracker poll worker failed',
+  ])
 })
 
 // A Worker that tags its answer: a poll holding the tag is told nothing moved.

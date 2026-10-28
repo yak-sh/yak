@@ -2,14 +2,21 @@
  * every request so the CLI's vault-backed secret can rotate without a restart.
  * Remote bundles are never applied to the box's graph. */
 import type { Route } from '@yaks/api'
-import { late, type Remote, request as upstream } from './remote.ts'
+import {
+  late,
+  type Remote,
+  request as upstream,
+  unavailable,
+} from './remote.ts'
 
 export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** What a read answered: its value and the tag it was read at, or that
  * nothing moved since the tag it was asked with, or the refusal and the
- * status it is. */
+ * status it is: 503 where the tracker is out of reach or cannot answer for
+ * now, 504 where it did not answer in time, and 502 or 404 where it refused
+ * what was asked. */
 export type Read =
   | { ok: true; value: unknown; tag?: string; unchanged?: false }
   | { ok: true; value?: undefined; tag: string; unchanged: true }
@@ -62,34 +69,40 @@ export let read = async (
   for (let key of path == 'bugs' ? ['query', 'since'] : []) {
     if (query.has(key)) params.set(key, query.get(key)!)
   }
+  let response: Response
   try {
-    let response = await upstream(
+    response = await upstream(
       remote,
       path,
       params,
       { signal, ...tag ? { headers: { 'if-none-match': tag } } : {} },
       go,
     )
-    let etag = response.headers.get('etag') ?? undefined
-    if (response.status == 304 && etag) {
-      return { ok: true, tag: etag, unchanged: true }
-    }
-    if (!response.ok) {
-      return refused(
-        `Remote tracker refused the read (${response.status})`,
-        response.status == 404 ? 404 : 502,
-      )
-    }
+  } catch (error) {
+    // Neither a credential, ticket, configured URL nor upstream body is an error report.
+    return late(error)
+      ? refused('Remote tracker did not answer in time', 504)
+      : refused('Remote tracker is unavailable', 503)
+  }
+  let etag = response.headers.get('etag') ?? undefined
+  if (response.status == 304 && etag) {
+    return { ok: true, tag: etag, unchanged: true }
+  }
+  let { status } = response
+  if (!response.ok) {
+    return refused(
+      `Remote tracker refused the read (${status})`,
+      status == 404 ? 404 : unavailable(status) ? 503 : 502,
+    )
+  }
+  try {
     return {
       ok: true,
       value: await response.json(),
       ...etag ? { tag: etag } : {},
     }
-  } catch (error) {
-    // Neither a credential, ticket, configured URL nor upstream body is an error report.
-    return late(error)
-      ? refused('Remote tracker did not answer in time', 504)
-      : refused('Remote tracker is unavailable', 502)
+  } catch {
+    return refused('Remote tracker answered a read that is not JSON', 502)
   }
 }
 

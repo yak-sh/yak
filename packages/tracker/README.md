@@ -324,6 +324,13 @@ calls. An unexpected worker failure rejects those calls and the next poll starts
 a replacement. `PollOpts.doors` still overrides the transport for an embedding
 host or a test. This placement changes no remote attempt timeout or retry count.
 
+A poll the Worker cannot answer for now (a read refused 503 or 504, see `read`'s
+statuses) is a log line, and the next poll tries again. A Worker that has not
+answered for five minutes (`OUTAGE`), failing or hanging, is reported once, with
+the last failure as its cause: when the platform tracker is down, the box is
+what says so. Any other failed poll (a refusal of what was asked, an invalid
+page, a failed worker) is reported at once.
+
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
 errors or mark bugs. Box captures carry `error.tags.source=box`; the Worker
