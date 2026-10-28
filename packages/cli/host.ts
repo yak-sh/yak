@@ -54,7 +54,6 @@ import { sandboxCapabilities } from './sandboxes.ts'
  */
 
 import { UNNUMBERED } from './init.ts'
-import { cpuUsage } from 'node:process'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
@@ -715,8 +714,10 @@ let composed = async (
           lease: config.lease,
           gone: built.gone,
           // How busy a worker says its process is (@yaks/effects worker).
+          // Deno's `process` global loads node:process when it is first
+          // read, about 20 ms that a command running no worker never pays.
           cpu: () => {
-            let { user, system } = cpuUsage()
+            let { user, system } = process.cpuUsage()
             return (user + system) / 1000
           },
           nudge: opts.thread?.nudge,

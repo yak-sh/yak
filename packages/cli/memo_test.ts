@@ -393,18 +393,14 @@ test('an optional source appearing while absence is witnessed invalidates the me
   equal((await racing.get()).run, 2)
 })
 
-test('unrelated directory changes refresh absence proofs without deriving again', async () => {
+test('a directory that keeps moving is never listed or rewritten by a hit', async () => {
   let f = copy(absence.f)
-  f.files.set('/source/unrelated.txt', 'new')
-  equal((await f.get()).run, 1)
-  let stat = f.io.statSync
-  let missing: string[] = []
-  f.io.statSync = (path) => {
-    if (path == '/source/deno.jsonc' || path == '/source/deno.lock') {
-      missing.push(path)
-    }
-    return stat(path)
+  let kept = f.files.get(f.memo())
+  let listed: string[] = []
+  f.io.readDirSync = (dir) => (listed.push(dir), [])
+  for (let i = 0; i < 2; i++) {
+    f.files.set(`/source/unrelated-${i}.txt`, 'new')
+    equal((await f.get()).run, 1)
   }
-  equal((await f.get()).run, 1)
-  equal(missing, [])
+  equal([listed, f.files.get(f.memo()) == kept], [[], true])
 })

@@ -3,9 +3,9 @@
 // dependencies cannot be proved leaves the ordinary derivation in charge.
 // Every command asks, so a hit is proved the way a version control index
 // proves a clean tree: by each source's stat as it was read, or its
-// directory's stat while it remains absent, and by contents where a stat moved. A memo nothing has read for a day (a
-// deleted worktree's, a probe config's, an older version's) goes at the next
-// miss.
+// directory's stat while it remains absent, and by contents where a stat
+// moved. A memo nothing has read for a day (a deleted worktree's, a probe
+// config's, an older version's) goes at the next miss.
 
 /** A source module, or an optional facet of a configured package. */
 export type MemoRoot = string | readonly [plugin: string, facet: string]
@@ -338,8 +338,11 @@ export let remember = async <T>(
       Array.isArray(known.files) && known.files.length > 0 &&
       Array.isArray(known.stats) && known.stats.length == known.files.length
     ) {
+      // A witness whose directory moved proves nothing, and its leaf is
+      // stat'd instead. A hit never lists a directory or rewrites the memo:
+      // an ancestor that is always moving (/tmp, a home directory) would
+      // cost every command a listing of it.
       let directories = new Map<string, string>()
-      let stale = false
       let stats = known.files.map((path) => {
         let witness = known.absent?.[path]
         if (witness) {
@@ -347,14 +350,10 @@ export let remember = async <T>(
           let now = directories.get(parent)
           if (now === undefined) directories.set(parent, now = stat(parent))
           if (now && now == before) return 'absent'
-          stale = true
         }
         return stat(path)
       })
       if (stats.every((s, i) => s && s == known.stats[i])) {
-        if (stale) {
-          keep({ ...known, absent: absent(known.files, stats, known.absent) })
-        }
         seen()
         return known.value
       }

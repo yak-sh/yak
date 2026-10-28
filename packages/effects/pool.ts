@@ -842,7 +842,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let speaks = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(WORKER)
     let lag = speaks ? lagging() : undefined
     let spoke = -Infinity
-    let spent = { cpu: opts.cpu?.(), at: performance.now() }
+    let spent = {
+      cpu: speaks ? opts.cpu?.() : undefined,
+      at: performance.now(),
+    }
     let say = async () => {
       let now = clock()
       let was = spent
