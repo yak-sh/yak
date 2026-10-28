@@ -81,21 +81,26 @@ export type NamedClient = {
   ready(sub: string): boolean
   patch(bundles: Bundle[]): Bundle[] | Promise<Bundle[]>
 }
-export let namedClient = (opts: {
-  vocab: Vocab
-  batch?: (work: () => void) => void
-  wireVault?: Parameters<typeof wireIdb>[0]
-  url: string
-  fetch?: ClientOpts['fetch']
-  timer?: ClientOpts['timer']
-  report?: Told
-  connect: (url: string) => Socket
-  changed: (eids: string[]) => void
-  ready: (sub: string) => void
-  // A frame the socket carried, once the box has landed it, with the names
-  // whose line it answers and whether it replaced the whole set.
-  frame: (subs: string[], f: Frame, reset: boolean) => void
-}): NamedClient => {
+export let namedClient = (
+  opts:
+    & Omit<
+      ClientOpts,
+      'wireVault' | 'report' | 'vault' | 'retainUnownedProps' | 'provenance'
+    >
+    & {
+      vocab: Vocab
+      batch?: (work: () => void) => void
+      wireVault?: Parameters<typeof wireIdb>[0]
+      url: string
+      report?: Told
+      connect: (url: string) => Socket
+      changed: (eids: string[]) => void
+      ready: (sub: string) => void
+      // A frame the socket carried, once the box has landed it, with the names
+      // whose line it answers and whether it replaced the whole set.
+      frame: (subs: string[], f: Frame, reset: boolean) => void
+    },
+): NamedClient => {
   let handles = new Map<string, { line: string; watch: Watch }>()
   let named = new Map<string, Set<string>>() // line -> the names holding it
   let lines = new Map<string, string>() // wire id -> line
@@ -188,7 +193,7 @@ export let namedClient = (opts: {
     },
   })
   let box: Client = client(opts.vocab, [], {
-    url: opts.url,
+    ...opts,
     connect: (url) => tap(opts.connect(url)),
     vault: false,
     retainUnownedProps: true,
@@ -196,8 +201,6 @@ export let namedClient = (opts: {
     wireVault: opts.wireVault && globalThis.indexedDB
       ? wireIdb(opts.wireVault)
       : false,
-    fetch: opts.fetch,
-    timer: opts.timer,
     report: (trouble) =>
       (opts.report ?? said)({
         ...trouble,
