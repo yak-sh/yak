@@ -767,8 +767,10 @@ entity number 7. A list of text binds as one JSON parameter however long it is,
 and integers are spelled out in the statement (`spelled`), binding nothing: a
 list SQLite reads from JSON costs a row per member. One eid is an equality. A
 host that keeps its statements by their text (`stable`, as the box's driver
-does: `Driver.stable`) binds every list as one JSON parameter, so a read's text
-is the same whatever its ids, and is prepared once.
+does: `Driver.stable`) binds every list of more than one value as one JSON
+parameter, so a read's text is the same whatever its ids, and is prepared once.
+One value is an equality there too: SQLite cannot tell that a JSON array holds
+no null, so a negated test against one rereads it for every row.
 
 ```ts
 import { compile, identity } from '@yaks/sql'

@@ -533,7 +533,7 @@ test('a screened page answers alike with the catalog cold or held', () => {
       on.rows(`.doc !marker .limit=${limit++}`),
       expected.map((eid) => ({ eid })),
     )
-    assertEquals(ran.some((sql) => sql.includes('"archetype" in')), held)
+    assertEquals(ran.some((sql) => /"archetype" (in|=) /.test(sql)), held)
   }
   hold()
   page(cold(), ['c', 'a'], false)

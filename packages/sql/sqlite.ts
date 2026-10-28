@@ -275,10 +275,14 @@ let among = (c: string, vals: (string | number)[]): Frag =>
       params: [],
     }
     : listed(c, vals)
-let listed = (c: string, vals: (string | number)[]): Frag => ({
-  sql: `${c} in (select value from json_each(?))`,
-  params: [JSON.stringify(vals)],
-})
+// One value is an equality. SQLite cannot tell that a JSON array holds no
+// null, so a membership whose null result differs from false (under `not` or
+// `coalesce`) reads the list's first entry again for every row it tests.
+let listed = (c: string, vals: (string | number)[]): Frag =>
+  vals.length == 1 ? { sql: `${c} = ?`, params: vals } : {
+    sql: `${c} in (select value from json_each(?))`,
+    params: [JSON.stringify(vals)],
+  }
 
 // The expression an equality tests and the one scalar it binds, or null for
 // any other predicate.
