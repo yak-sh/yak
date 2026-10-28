@@ -76,18 +76,17 @@ jobs:
       # budget (bin/test-budget.ts): a test over 1 ms that
       # bench/test-budget.json does not list fails the step, as on any run;
       # and here, a whole run on the gate, where the records are taken, so
-      # does a listed test slower than its record. The money
-      # paths reach Stripe's sandbox, so the runner's environment carries
-      # STRIPE_KEY. A job its system unit starts is not told where the user
-      # manager listens, and the sandboxes' scopes need it: XDG_RUNTIME_DIR.
+      # does a listed test slower than its record. The run keeps its scratch
+      # where the box's runs do, in memory under /dev/shm (bin/scratch.ts).
+      # The money paths reach Stripe's sandbox, so the runner's environment
+      # carries STRIPE_KEY. A job its system unit starts is not told where the
+      # user manager listens, and the sandboxes' scopes need it:
+      # XDG_RUNTIME_DIR.
       # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would
       # never see this line, the file would fail to parse.
       - name: tests
         env:
           SUITE_STEP: tests
-          # An owned base on tmpfs lets scratch sweep cancelled runs' leftovers;
-          # scratch makes it.
-          TMPDIR: /tmp/yak-gate
         # All of it (`--all`): this machine keeps no record of what passed
         # before, and only a whole run holds the records.
         run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all --verbose'

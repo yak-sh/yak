@@ -12,23 +12,27 @@
 // packages/harness/task_entry_test.ts fail (T-37621). Inside the run directory
 // those checkouts die with the run.
 //
-// Three doors close the directory: normal exit, an accepted signal, and the
-// next run's stale sweep inside an explicitly owned base (a SIGKILLed run
-// cannot clean up after itself). Shared /tmp is never swept. Each door first
-// ends the processes still running in the directory, since a test's server
-// outlives a test killed before its `finally`, and its launcher's child sits
-// in a session of its own. Afterwards the run reports any new `tasks-*` entry
-// that appeared in the base directory: that is a spawn site writing to a
-// hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
-// free on this box three times (T-20558).
+// The base holds nothing but run directories: /dev/shm/yak-test, on this box
+// and on the gate alike, unless the caller names another with TMPDIR. It is
+// tmpfs, so a test that writes files takes the same time here as on the
+// gate, where the test budget's records are taken; with runs on this box's
+// disk a file-backed SQLite test took ten to forty times as long (T-132967).
+// A base in memory has to stay swept, since a run's checkouts and workerd
+// state reach hundreds of megabytes.
 //
-// That check reads the base directory, so a stray is only attributable while
-// the base is this run's to watch — and the caller already says which case it
-// is by naming TMPDIR or not. A named base (a scratchpad, a CI run) is nobody
-// else's, so a stray there is this run's leak and fails it. An unnamed one is
-// the shared `/tmp`, where this box runs CI and several worktrees at once: a
-// `tasks-*` entry there may be another run's, so it prints as a warning
-// naming the rule and the run passes (T-37656).
+// Three doors close the directory: normal exit, an accepted signal, and the
+// next run's sweep of the base, since a SIGKILLed run cannot clean up after
+// itself. Every run in a base is this box's, so a run directory named by a
+// pid that is gone is a run that is gone. Each door first ends the processes
+// still running in the directory, since a test's server outlives a test
+// killed before its `finally`, and its launcher's child sits in a session of
+// its own.
+//
+// Afterwards the run reports any new `tasks-*` entry that appeared in /tmp:
+// that is a spawn site writing to a hard-coded `/tmp` instead of TMPDIR, and
+// it is how /tmp filled to 0 bytes free on this box three times (T-20558).
+// Every worktree's run shares /tmp, so an entry there may be another run's: it
+// prints as a warning naming the rule, and the run passes (T-37656).
 //
 // Everything a run does to the box beyond its directories goes through a
 // `Machine`: the processes it reads and signals, the clock it waits on, the
@@ -42,8 +46,10 @@ export type Proc = { pid: number; env: string[]; cwd: string }
 
 /** The box a run acts on. A test hands in one of its own. */
 export type Machine = {
-  /** The base a caller who names none shares with the whole box. */
+  /** The temp directory the whole box shares, where a literal `/tmp` lands. */
   tmp: string
+  /** The base a run goes in when its caller names none: the box's own. */
+  base: string
   /** The processes now running, but this one. */
   ps: () => Proc[]
   /** A process's command line, empty once it is gone. */
@@ -110,12 +116,21 @@ export let procfs = (
 
 let here = procfs()
 
+// In memory where the box has a tmpfs for it, as Linux does at /dev/shm.
+let memory = (shm = '/dev/shm', tmp = '/tmp') => {
+  try {
+    if (Deno.statSync(shm).isDirectory) return `${shm}/yak-test`
+  } catch { /* none here */ }
+  return `${tmp}/yak-test`
+}
+
 /** Whether a process on this box has yet to exit. */
 export let running = here.running
 
 /** This box. */
 export let machine: Machine = {
   tmp: '/tmp',
+  base: memory(),
   ...here,
   kill: (pid, signal) => {
     try {
@@ -147,16 +162,12 @@ export let machine: Machine = {
   },
 }
 
-/** Where temp dirs land for a process that has not been given a run dir. */
+/** The base a run's directory goes in: the one its caller names, or the
+ * box's own. */
 export let tmpBase = (
   env: { TMPDIR?: string } = Deno.env.toObject(),
-  tmp = machine.tmp,
-) => env.TMPDIR || tmp
-
-/** Whether the base is this run's alone — the caller named it, so nobody
- * else mints there and a stray can be blamed on this run. */
-export let ours = (env: { TMPDIR?: string } = Deno.env.toObject()) =>
-  !!env.TMPDIR
+  base = machine.base,
+) => env.TMPDIR || base
 
 /** The `tasks-*` entries of a directory — the family this repo mints. */
 export let tasksEntries = (base: string) => {
@@ -266,10 +277,10 @@ export let strays = (base: string, before: Set<string>) =>
     .sort()
 
 /**
- * Run a command in a run directory of its own under the base `env` names,
- * with `env` as its whole environment, and remove the directory once the
- * command ends. A `tasks-*` entry that appeared beside it is reported on
- * `say`. Answers the exit code the run ends with.
+ * Run a command in a run directory of its own under the base `env` names, or
+ * the box's own, with `env` as its whole environment, and remove the
+ * directory once the command ends. A `tasks-*` entry that appeared in /tmp
+ * meanwhile is reported on `say`. Answers the exit code the run ends with.
  */
 export let scratch = async (
   argv: string[],
@@ -277,19 +288,14 @@ export let scratch = async (
   say: (line: string) => void = console.error,
   m: Machine = machine,
 ): Promise<number> => {
-  let base = tmpBase(env, m.tmp)
-  let mine = ours(env)
-  if (mine) Deno.mkdirSync(base, { recursive: true })
-  // One read of the base serves both: a shared /tmp holds thousands of entries.
-  let before = tasksEntries(base)
-  // A dead PID proves no process owns it, not that this run owns its files.
-  // The default /tmp is shared with other sessions.
-  if (mine) {
-    for (let name of stale(before, m.running)) {
-      ended(await reap(`${base}/${name}`, m), say)
-    }
-    sweep(base, m.running, before)
+  let base = tmpBase(env, m.base)
+  Deno.mkdirSync(base, { recursive: true })
+  let runs = tasksEntries(base)
+  for (let name of stale(runs, m.running)) {
+    ended(await reap(`${base}/${name}`, m), say)
   }
+  sweep(base, m.running, runs)
+  let before = tasksEntries(m.tmp)
 
   // Git hooks export repository-local coordinates. A fixture's `git -C`
   // does not override GIT_DIR: `init --bare` can reinitialize the caller's
@@ -341,27 +347,21 @@ export let scratch = async (
     held = error
   }
 
-  let leaked = strays(base, before)
+  let leaked = strays(m.tmp, before)
   if (held) say(`could not remove ${dir}: ${held}`)
   if (leaked.length) {
     let many = `${leaked.length} temp entr${leaked.length == 1 ? 'y' : 'ies'}`
+    say(`\n─── ${many} appeared in ${m.tmp} while the run ran ───`)
+    for (let name of leaked) say(`  ${m.tmp}/${name}`)
     say(
-      `\n─── ${many} ${
-        mine ? 'leaked outside' : 'appeared beside'
-      } the run directory ───`,
-    )
-    for (let name of leaked) say(`  ${base}/${name}`)
-    say(
-      mine
-        ? 'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.'
-        : `Not failing: ${base} is shared, so these may be another run's.\n` +
-          'Name a base of your own (TMPDIR=<dir>) and the check is exact.',
+      'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.\n' +
+        `Not failing: ${m.tmp} is shared, so these may be another run's.`,
     )
   }
 
   let signal = raise ?? status.signal
   if (signal) return signal == 'SIGINT' ? 130 : 143
-  return status.code || (held || (mine && leaked.length) ? 1 : 0)
+  return status.code || (held ? 1 : 0)
 }
 
 if (import.meta.main) {

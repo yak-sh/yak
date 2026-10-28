@@ -188,15 +188,19 @@ stronger.
   each file the first time its code runs there. The records are the gate's:
   its whole run (`deno task test --all`) fails a listed test past its record
   (times the list's slack); a whole run elsewhere says them without holding
-  them, and a narrowed one says neither. This box keeps a run's temporary
-  files on disk where the gate keeps them in memory, and shares its CPUs, so
-  here a file-backed SQLite test takes ten to forty times its record and a
-  process-spawning one up to four. A platform's wall clock is said, never
-  held: it adds every wait among the run's processes, so no run of it is a
-  floor, and workerd's tests, not held one by one, have no time held. Nothing
-  joins the list: a new or renamed test is held to 1 ms from its first run.
-  Getting a kernel test under it pulls you to drop the checks that "only
-  exist across the door". Nearly every one is a decision some function makes
+  them, and a narrowed one says neither. A run here keeps its temporary files
+  in memory as the gate's does, so a test that writes files takes the same
+  time on both. What still differs is the CPU: a test's own time leaves out
+  what its own thread waited for one, not what the processes it starts
+  waited, and agents' runs share this box's CPUs. In a whole run here, 25
+  listed tests, most of them starting processes or running a kernel, took
+  1.05 to 3.8 times what the gate's took, past their records, and 9 unlisted
+  ones ran 1.0 to 1.3 ms where the gate's ran under 1. A platform's wall
+  clock is said, never held: it adds every wait among the run's processes, so
+  no run of it is a floor, and workerd's tests, not held one by one, have no
+  time held. Nothing joins the list: a new or renamed test is held to 1 ms
+  from its first run. Getting a kernel test under it pulls you to drop the
+  checks that "only exist across the door". Nearly every one is a decision some function makes
   (who may see or delete what, which version serves): move it there,
   extracting the function if it's inline, and drop nothing. `--write` takes
   off what got fast and lowers the records; `--from=<dir> --write` does it
@@ -233,9 +237,12 @@ stronger.
   `TASKS_HOME`, `PROCESS_DIR`, `HARNESS_HOME` and `HARNESS_WORKTREE_DIR` point
   inside it, and it's removed when the run ends. Run tests with machine effects
   (processes, worktrees, harness children) through `deno task test` so they get
-  it. Name a base of your own (`TMPDIR=<scratchpad>`) and a stray write to
-  `/tmp` fails the run instead of warning. Shared `/tmp` is the whole box's: a
-  dead pid proves no process owns an entry there, not that you do.
+  it. The directory is in memory, under /dev/shm/yak-test on the box and on the
+  gate alike, so a test that writes files takes the same time on both; each
+  run removes what killed runs left there, and `TMPDIR=<dir>` names another
+  base. A `tasks-*` entry that appears in `/tmp` during a run is a spawn site
+  writing to a literal `/tmp`: the run says it as a warning, since every
+  worktree's run shares `/tmp`.
 - A run sets `TASKS_TEST_RUN`, and a run started inside one refuses. Git in a
   run sees no global config and never prompts (`GIT` in bin/test.ts).
 

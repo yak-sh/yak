@@ -2,7 +2,6 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   inside,
-  ours,
   procfs,
   reap,
   running,
@@ -38,8 +37,13 @@ type Running = {
   cmd: string
   deaf?: Deno.Signal
 }
-let rig = ({ tmp = '/nowhere', child = (_: Record<string, string>) => {} }: {
+let rig = ({
+  tmp = '/nowhere',
+  base = '/nowhere',
+  child = (_: Record<string, string>) => {},
+}: {
   tmp?: string
+  base?: string
   child?: (env: Record<string, string>) => number | void
 } = {}) => {
   let table = new Map<number, Running>()
@@ -48,6 +52,7 @@ let rig = ({ tmp = '/nowhere', child = (_: Record<string, string>) => {} }: {
   return {
     ...clock(),
     tmp,
+    base,
     signals,
     spawn: (p: Partial<Running> = {}) => {
       table.set(++next, { env: {}, cwd: '/', cmd: 'sleep 30', ...p })
@@ -74,16 +79,12 @@ let rig = ({ tmp = '/nowhere', child = (_: Record<string, string>) => {} }: {
   }
 }
 
-test('the base is TMPDIR, and /tmp only when nothing named one', () => {
-  assertEquals(tmpBase({ TMPDIR: '/tmp/tasks-run-7' }), '/tmp/tasks-run-7')
-  assertEquals(tmpBase({}), '/tmp')
-})
-
-// Naming a base is the whole claim to it: the shared /tmp carries other runs'
-// `tasks-*` entries, so a stray there is a warning and not this run's failure.
-test('a stray is blamed only on a base the caller named', () => {
-  assertEquals(ours({ TMPDIR: '/tmp/scratchpad' }), true)
-  assertEquals(ours({}), false)
+test("the base is TMPDIR, and the box's own when nothing named one", () => {
+  assertEquals(
+    tmpBase({ TMPDIR: '/tmp/scratchpad' }, '/own'),
+    '/tmp/scratchpad',
+  )
+  assertEquals(tmpBase({}, '/own'), '/own')
 })
 
 test('only the tasks-* family counts as ours', () =>
@@ -131,37 +132,29 @@ test('procfs reads the process table, and a zombie no longer runs', () =>
     assertEquals([box.command(42), box.running(42)], ['sleep 30', false])
   }))
 
-// The predicate above decides an exit code, and it was the exit code that
-// failed runs which had leaked nothing — so the wiring gets its own proof.
-// The run leaks by hand: a command that mkdirs a `tasks-*` entry in the base
-// is exactly the spawn site writing past TMPDIR that the guard is for.
-let leaks = async (dir: string, env: Record<string, string>, stray: string) => {
-  let said: string[] = []
-  let box = rig({ tmp: dir, child: () => Deno.mkdirSync(`${dir}/${stray}`) })
-  let code = await scratch(['mkdir'], env, (l) => said.push(l), box)
-  return [code, said.join('\n')] as const
-}
-
-test('a stray fails a named base and only warns on the shared one', () =>
-  base([], async (dir) => {
-    let [code, err] = await leaks(dir, { TMPDIR: dir }, 'tasks-e2e-a')
-    assertEquals(code, 1)
-    assertStringIncludes(err, 'leaked outside the run directory')
-
-    // No TMPDIR: the base is the box's shared one, also CI's and every other
-    // worktree's, so the entry is reported and the run still passes.
-    let [shared, warning] = await leaks(dir, {}, 'tasks-e2e-b')
-    assertEquals(shared, 0)
-    assertStringIncludes(warning, 'appeared beside the run directory')
-    assertStringIncludes(warning, 'Not failing')
+// The run leaks by hand: a command that mkdirs a `tasks-*` entry in /tmp is
+// exactly the spawn site writing past TMPDIR the check is for. Every
+// worktree's run shares /tmp, so the entry is said and the run still passes.
+test('a stray in /tmp is said, and the run passes', () =>
+  base([], async (tmp) => {
+    let said: string[] = []
+    let box = rig({
+      tmp,
+      base: `${tmp}/base`,
+      child: () => Deno.mkdirSync(`${tmp}/tasks-e2e-a`),
+    })
+    assertEquals(await scratch(['mkdir'], {}, (l) => said.push(l), box), 0)
+    assertStringIncludes(said.join('\n'), `${tmp}/tasks-e2e-a`)
+    assertStringIncludes(said.join('\n'), 'Not failing')
   }))
 
-test('a default scratch run leaves another dead run directory alone', () =>
-  base(['tasks-run-4242'], async (tmp) => {
-    let work = `${tmp}/tasks-run-4242/work`
-    Deno.writeTextFileSync(work, 'another session')
-    assertEquals(await scratch(['true'], {}, () => {}, rig({ tmp })), 0)
-    assertEquals(Deno.readTextFileSync(work), 'another session')
+test("the box's own base loses the runs that are gone and keeps the live", () =>
+  base([], async (dir) => {
+    let box = rig({ tmp: dir, base: dir })
+    let live = `${dir}/tasks-run-${box.spawn()}`
+    for (let run of [live, `${dir}/tasks-run-4242`]) Deno.mkdirSync(run)
+    assertEquals(await scratch(['true'], {}, () => {}, box), 0)
+    assertEquals([...tasksEntries(dir)], [live.slice(dir.length + 1)])
   }))
 
 test('scratch lends every machine state directory inside its own run', () =>
@@ -169,7 +162,7 @@ test('scratch lends every machine state directory inside its own run', () =>
     // A fresh runner's named base may not exist, even its parent.
     let dir = `${root}/missing/base`
     let env: Record<string, string> = {}
-    let box = rig({ child: (given) => void (env = given) })
+    let box = rig({ tmp: root, child: (given) => void (env = given) })
     assertEquals(
       await scratch(
         ['env'],
@@ -294,7 +287,7 @@ test('reap cuts off what outlasts its wait, and what started meanwhile', async (
 test('a run ends a detached process it left behind and says so', () =>
   base([], async (dir) => {
     let said: string[] = []
-    let box = rig({ child: (env) => void box.spawn({ env }) })
+    let box = rig({ tmp: dir, child: (env) => void box.spawn({ env }) })
     assertEquals(
       await scratch(['sh'], { TMPDIR: dir }, (l) => said.push(l), box),
       0,

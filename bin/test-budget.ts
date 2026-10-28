@@ -11,12 +11,14 @@
 // - a listed test fails when it takes longer than its record allows (the
 //   record times `slack.times`, plus `slack.ms`) in a run of the whole suite
 //   (`--all`, no path or tag) on the gate (CI), where the records are taken.
-//   Many listed tests wait on more than a CPU: files, the processes they
-//   start. The box keeps a run's temporary files on disk where the gate keeps
-//   them in memory, and shares its CPUs among agents' runs, so there a
-//   file-backed SQLite test takes ten to forty times its record and a
-//   process-spawning one up to four: a whole run elsewhere says them and
-//   holds none, and a narrowed one says none.
+//   The box keeps a run's temporary files in memory as the gate does
+//   (bin/scratch.ts), so a test that writes files takes the same time on
+//   both. The CPUs still differ: agents' runs share the box's, and a test's
+//   own time (below) leaves out what its own thread waited for one, not what
+//   the processes it starts waited. In a whole run on the box, 25 listed
+//   tests, most of them starting processes or running a kernel, took 1.05 to
+//   3.8 times what the gate's took, past their records (T-132967). So a whole
+//   run elsewhere says them and holds none, and a narrowed one says none.
 //
 // A test is held to its own time: its wall clock less what its runtime
 // waited for a CPU another process held (`own`, packages/testing run.ts
