@@ -14,16 +14,28 @@
 // owner asks (`gallery: true`) and the platform answers, and until it answers
 // the app is not on any page here.
 //
-// The platform's admin decides through gallery_review (the CLI's admin
-// gallery command calls the same tool), or the signed letter's web form.
-// Review requests reach the operator at task@bot.yak.sh. Both doors write the
-// same decision, with the actor in by and the session or credential in via.
+// Why the review. M-4522: what goes out under our name is ours to allow, and
+// the platform's owner is who allows it. Every ask is a letter to the
+// platform's own mailbox, which reaches him, carrying two signed links to the
+// review door. The door draws on a GET and acts on a POST, and only for an
+// owner of the meta space signed in on the web (`staff`), the same line the
+// space delete door draws (erase.ts).
 //
-// The two words on the row (vocab.ts `gallery`) say the whole state:
+// Jeff, 2026-10-28: "All gallery reviews come to me. You need the ability to
+// *skip* review and to approve if I ask you to do so, but normal gallery
+// review goes to me". So the platform admin's credential, which an agent
+// holds, can do the same two things, and does them only when he asks: answer
+// an ask (gallery_review), or list an app with no letter at all (`review:
+// false` beside `gallery: true`, tools.ts `toGallery`); `yak admin gallery`
+// calls one or the other. Every door writes one decision (`decision`), with
+// the actor in by and the session or credential in via.
+//
+// The words on the row (vocab.ts `gallery`) say the whole state:
 //
 //   nothing      the app never asked
 //   asked_at     the owner asked, the letter went, nobody has answered
 //   listed_at    we said yes — it is on the page and in the search
+//   reviewed_at  who decided, when and why (decision, by, via, reason)
 //
 // What delists. Withdrawing is one word off the row: `gallery: false` and
 // `app_unpublish` clear it, so a later publish has to ask again — a listing on
@@ -51,7 +63,7 @@ import type { Actor, Bundle } from '@yaks/graph'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
-import { type Host, hosted, url as siteUrl } from './host.ts'
+import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
@@ -63,9 +75,6 @@ import { staff } from './admin.ts'
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
 export let IMAGE = `${PATH}/image/`
-
-// The operator reviews submissions from its own inbox.
-export let DESK = 'task@bot.yak.sh'
 
 // A week to get to it. Longer than the hour a space's death gets (erase.ts
 // LIFE), because nothing here is destroyed and nobody is waiting at a form:
@@ -414,10 +423,11 @@ ${foot}
 
 // ---- the letter, and the door it points at -----------------------------
 
-// The letter to the desk. Everything a decision needs is in it — what the app
-// is called, what it says it is, where it lives and who made it — because
-// whoever reads it should not have to go looking. It carries the agent command
-// and signed website links to the same decision.
+// The letter to the platform's own mailbox (host.ts `replyTo`), which reaches
+// its owner. Everything a decision needs is in it — what the app is called,
+// what it says it is, where it lives and who made it — because whoever reads
+// it should not have to go looking, and the two links are the whole of the
+// answer.
 export let letter = (at: {
   title: string
   about: string
@@ -425,9 +435,8 @@ export let letter = (at: {
   owner: string
   yes: string
   no: string
-  app?: string
-}, _env: Host = {}): Letter => ({
-  to: DESK,
+}, env: Host = {}): Letter => ({
+  to: replyTo(env),
   subject: `Gallery: ${at.title}?`,
   body: `${at.owner} asked to show an app on the yaks.app gallery.
 
@@ -436,17 +445,6 @@ export let letter = (at: {
   ${at.about || '(no description)'}
   by ${at.owner}
 
-Review the app and its listing, then decide as the platform admin:
-${
-    at.app
-      ? `yak admin gallery ${at.app} approve --as admin@bot.yak.sh
-yak admin gallery ${at.app} decline --as admin@bot.yak.sh
-`
-      : ''
-  }
-The MCP tool is gallery_review; use by for the project actor and via for the session.
-
-Or use the website:
 Yes, list it:
 ${at.yes}
 
@@ -461,7 +459,9 @@ These links expire in one week.`,
 // before anyone reads it must not be able to list an app by doing its job.
 //
 // The ticket says which app and which answer; the cookie says who is answering
-// (`staff`). The agent door instead verifies the admin's bearer credential.
+// (`staff`). Both are needed: the ticket because the kernel signed what is
+// being decided, the cookie because the letter also lands in the box's graph,
+// where agents read mail.
 let review = (at: {
   title: string
   about: string
@@ -550,8 +550,9 @@ export let ask = (env: Env, app: App, now = new Date()) =>
     }],
   })
 
-/** The decision shared by the agent tool and the web form. A decline clears
- * the pending ask while retaining who decided and why. */
+/** The decision every door writes: the review link, gallery_review, and an
+ * ask that skips review. A decline clears the pending ask while retaining who
+ * decided and why. */
 export let decision = (
   app: App,
   approve: boolean,

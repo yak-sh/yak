@@ -46,7 +46,7 @@ import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { appTools } from './tool-grammar.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Actor, Bundle } from '@yaks/graph'
 import { VERSION } from './seo.ts'
 import {
   appDoc,
@@ -630,19 +630,30 @@ let owns = async (ctx: Ctx, args: Args) => owner(await inSpace(ctx, args, true))
 // The caller as the space's owner, on one of its apps. Offering an app to the
 // whole platform is the space's act, not one its editors make: an editor
 // writes the app's files, and publishing hands the code to strangers.
-let ownsApp = async (ctx: Ctx, args: Args) =>
-  owner(await inApp(ctx, args, true))
+// `over` is the platform admin's standing as an owner in every space, which
+// only an ask that skips gallery review uses (`skipping`).
+let ownsApp = async (ctx: Ctx, args: Args, over = false) =>
+  owner(await inApp(ctx, args, true, over))
 
 // Asking for the gallery (gallery.ts, T-34476), from either door that takes
 // the word — `app_publish(gallery: true)` and `app_set(gallery: true)`. The
-// ask is one stamp and a letter to the desk that decides; the listing is not
-// ours to write, here or anywhere else, because the page it lands on is ours
-// (M-4522).
+// ask is one stamp and a letter to the platform's owner, who decides; the
+// listing is not the app owner's to write, because the page it lands on is
+// ours (M-4522).
 //
 // Asking again while it is already listed changes nothing and says so: a
 // second letter about a decision already made is noise at the one mailbox this
 // whole mechanism depends on somebody reading.
-let toGallery = async (ctx: Ctx, space: Space, app: App) => {
+//
+// `skip` is the platform admin listing the app with no letter, which an agent
+// does only when the platform's owner asks (`skipping`). It passes the same
+// checks an ask does, and writes the decision a review would.
+let toGallery = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  skip: Actor | null = null,
+) => {
   if (!app.published) {
     throw refuse(
       'conflict',
@@ -660,6 +671,10 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
         'app_set(screenshot: …), or give its index.html an og:image',
     )
   }
+  if (skip) {
+    await decideGallery(ctx.env, app, true, skip, 'listed without review')
+    return 'listed' as const
+  }
   if (!ctx.env.SESSION_SECRET) {
     throw new Error('the platform cannot sign a gallery link here')
   }
@@ -671,7 +686,6 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   // the row exactly as it was, and asking again is the whole retry.
   try {
     await mail(ctx.env)(galleryLetter({
-      app: `${space.slug}/${app.slug}`,
       title: app.title,
       about: app.published.about,
       url: url(space, app, ctx.env),
@@ -690,6 +704,55 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   }
   await askGallery(ctx.env, app)
   return 'asked' as const
+}
+
+// Who a gallery decision is recorded as (gallery.ts `decision`). The admin's
+// credential acts for whoever asked an agent to use it: `by` names that actor,
+// the platform's owner by his address when he asked for this exact act, else
+// the agent's project, and `via` the session. Unsaid, the caller and its
+// credential.
+let decider = async (ctx: Ctx, args: Args): Promise<Actor> => {
+  let by = args.by == null ? ctx.person : text(args.by, 'by')
+  if (by.includes('@')) {
+    let person = await ctx.dir.personAt(by.toLowerCase())
+    if (!person) throw refuse('missing', `nobody on yaks.app is ${by}`)
+    by = person
+  }
+  let via = args.via == null ? ctx.who?.instrument : text(args.via, 'via')
+  return { by, ...(via ? { via } : {}) }
+}
+
+// `review: false` beside `gallery: true`: the ask lists the app at once, with
+// no letter. Only the platform admin may, and an agent holding that credential
+// does it only when the platform's owner asks; every other ask goes to him.
+let skipping = async (ctx: Ctx, args: Args): Promise<Actor | null> => {
+  if (args.review == null || flag(args.review, 'review')) return null
+  if (args.gallery == null || !flag(args.gallery, 'gallery')) {
+    throw refuse('arguments', 'review: false goes with gallery: true')
+  }
+  if (!await admin(ctx)) {
+    throw refuse(
+      'access',
+      'only the platform admin lists an app without review; ask with ' +
+        'gallery: true and yaks.app reviews it',
+    )
+  }
+  return await decider(ctx, args)
+}
+
+// What app_set and app_publish say about skipping review, the same on both.
+let SKIP = {
+  review: {
+    type: 'boolean',
+    description: 'false, with gallery: true, lists the app at once without ' +
+      "review. Only the platform admin may, and only when the platform's " +
+      'owner asks; every other ask goes to him for review',
+  },
+  by: str(
+    "with review: false, who the listing is recorded as: the platform's " +
+      'owner (his address) when he asked for it; never a session',
+  ),
+  via: str('with review: false, the session listing it'),
 }
 
 // What every app in the space declares as its own, in app order, oldest
@@ -4035,6 +4098,7 @@ let OURS: Row[] = [
             'approves it. false to remove it, or withdraw the submission, ' +
             'at once',
         },
+        ...SKIP,
         screenshot: str(
           'the eid returned by uploading an image to this app with ' +
             'POST /<app>/api/blob, for its gallery card and the homepage ' +
@@ -4061,7 +4125,8 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true)
+      let skip = await skipping(ctx, args)
+      let { space, app, who } = await inApp(ctx, args, true, !!skip)
       let title = args.title == null ? null : titled(args.title)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
@@ -4252,7 +4317,7 @@ let OURS: Row[] = [
       await blobs.delete(keys)
       let now: App
       if (ctx.reopen) {
-        let current = await reacquire(ctx, space, app)
+        let current = await reacquire(ctx, space, app, true, !!skip)
         space = current.space
         who = current.who
         now = current.app!
@@ -4262,7 +4327,7 @@ let OURS: Row[] = [
       // the same call is already in it.
       let shown: Standing | null = null
       if (show) {
-        shown = await toGallery(ctx, space, now)
+        shown = await toGallery(ctx, space, now, skip)
       } else if (show == false && onGallery(now) != 'no') {
         await unGallery(ctx.env, now)
         shown = 'no'
@@ -5037,11 +5102,13 @@ let OURS: Row[] = [
             'page of yaks apps. It appears there once yaks.app approves it; ' +
             'app_set(app, gallery: false) withdraws it at any time',
         },
+        ...SKIP,
       },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await ownsApp(ctx, args)
+      let skip = await skipping(ctx, args)
+      let { space, app, who } = await ownsApp(ctx, args, !!skip)
       // A name is claimed once. Publishing again with none said keeps the
       // name the offer already has: a republish that quietly renamed
       // `chore-chart` to the app's slug left everyone who had been told to
@@ -5101,12 +5168,12 @@ let OURS: Row[] = [
       if (show) {
         let now: App
         if (ctx.reopen) {
-          let current = await reacquire(ctx, space, app)
+          let current = await reacquire(ctx, space, app, true, !!skip)
           space = current.space
           who = current.who
           now = current.app!
         } else now = (await ctx.dir.app(space, app.slug))!
-        shown = await toGallery(ctx, space, now)
+        shown = await toGallery(ctx, space, now, skip)
       } else if (show == false && onGallery(app) != 'no') {
         await unGallery(ctx.env, app)
         shown = 'no'
@@ -6071,7 +6138,8 @@ let OURS: Row[] = [
         app: str('the published app to review, as space/app'),
         decision: { type: 'string', enum: ['approve', 'decline'] },
         by: str(
-          'the actor deciding, such as the operator project eid; never a session',
+          "who the decision is recorded as: the platform's owner (his " +
+            'address) when he asked for this decision; never a session',
         ),
         via: str('the session making the decision'),
         reason: str('why the app and listing were approved or declined'),
@@ -6094,10 +6162,13 @@ let OURS: Row[] = [
       if (!approve && args.decision != 'decline') {
         throw refuse('arguments', 'decision is approve or decline')
       }
-      await decideGallery(ctx.env, at.app, approve, {
-        by: typeof args.by == 'string' ? args.by : ctx.person,
-        via: typeof args.via == 'string' ? args.via : ctx.who?.instrument,
-      }, typeof args.reason == 'string' ? args.reason : '')
+      await decideGallery(
+        ctx.env,
+        at.app,
+        approve,
+        await decider(ctx, args),
+        typeof args.reason == 'string' ? args.reason : '',
+      )
       return {
         text: `${name}: ${
           approve

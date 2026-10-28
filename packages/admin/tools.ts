@@ -166,22 +166,42 @@ export let tracker = async (
   return { remote: { url: remote?.url, secret } }
 }
 
-/** Review through the hosted tool with this call's actor and session. Account
- * selection stays at the admin boundary shared by every operation. */
+/** A gallery decision through the hosted tools, recorded as this call's
+ * actor and session: approve or decline answers a request (gallery_review),
+ * and list asks with review skipped (app_set `review: false`). A `by` the call
+ * names, the platform owner's address when he asked for the act, stands in for
+ * the caller's own. Account selection stays at the admin boundary shared by
+ * every operation. */
 export let review = async (bearer: string, call: Bundle): Promise<string> => {
   let a = argsOf(call)
   let actor = who(call)
+  let by = a.by ?? actor?.by
+  let stamp = {
+    ...(by ? { by } : {}),
+    ...(actor?.via ? { via: actor.via } : {}),
+  }
+  let [space, app, extra] = String(a.app).split('/')
+  if (!space || !app || extra != null) {
+    throw new CallError('app', 'name the app as space/app')
+  }
   return saidBy(
-    await rpc(bearer)('tools/call', {
-      name: 'gallery_review',
-      arguments: {
-        app: a.app,
-        decision: a.decision,
-        ...(actor?.by ? { by: actor.by } : {}),
-        ...(actor?.via ? { via: actor.via } : {}),
-        ...(a.reason ? { reason: a.reason } : {}),
-      },
-    }),
+    await rpc(bearer)(
+      'tools/call',
+      a.decision == 'list'
+        ? {
+          name: 'app_set',
+          arguments: { space, app, gallery: true, review: false, ...stamp },
+        }
+        : {
+          name: 'gallery_review',
+          arguments: {
+            app: a.app,
+            decision: a.decision,
+            ...stamp,
+            ...(a.reason ? { reason: a.reason } : {}),
+          },
+        },
+    ),
   )
 }
 

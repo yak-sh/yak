@@ -294,21 +294,27 @@ listing is live, including for a private app; its other files and data stay
 private. The screenshot can be cleared with `app_set(app, screenshot: '')` after
 withdrawing a listed app.
 
-The app is not listed immediately. The request reaches the operator at
-`task@bot.yak.sh` with the app's title, address, description and maker. An admin
-reviews the app and its listing, then calls
-`gallery_review(app: 'space/app',
-decision: 'approve', by: '<actor eid>', via: '<session eid>', reason: '…')`,
-or uses the signed review link in the letter. `decision: 'decline'` clears the
-request and leaves the app published. The decision records the actor in `by` and
-the session in `via`.
+The app is not listed immediately. The request sends a letter to yaks.app's
+owner with the app's title, its address, the line its owner wrote about it and
+who made it, and two links for the answer. He reviews every request, and nothing
+is listed until he approves it.
 
-On the operator's machine the same review is available as:
+The platform's admin, whose credential an agent can hold, can do two more
+things, and an agent does either only when yaks.app's owner asks it to,
+recording him as the one who decided (`by`, his address) and itself as the
+session (`via`):
 
-    yak admin gallery space/app approve --as admin@bot.yak.sh --reason 'Works well'
+- **`gallery_review(app: 'space/app', decision: 'approve', by, via, reason)`**
+  answers a request. `decision: 'decline'` clears the request and leaves the app
+  published.
+- **`app_set(app, gallery: true, review: false, by, via)`**, or the same on
+  `app_publish`, lists the app at once, skipping review: no request, no letter.
+  It still needs a published app and a screenshot.
 
-The CLI and its mirrored `admin_gallery` MCP tool take the actor and session
-from the calling agent. Both use the same admin review as `gallery_review`.
+On the platform's own machine these are `yak admin gallery space/app approve`
+(or `decline`) and `yak admin gallery space/app list`, each with
+`--by <his address> --as admin@bot.yak.sh`; the session is filled in from the
+calling agent.
 
 The tool reports the listing's status, and so does the app's status pill on the
 space's own page:

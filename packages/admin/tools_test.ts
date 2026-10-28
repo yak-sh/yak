@@ -98,23 +98,16 @@ test('fee uses computed own account by default and --as selects another bearer',
   }
 })
 
-test('gallery review forwards the project actor and session with the admin bearer', async () => {
-  let actor = { by: 'operator-project', via: 'operator-session' }
-  let args = {
-    app: 'jeff/housebook',
-    decision: 'approve',
-    reason: 'Works well',
-  }
+// What the hosted tools are asked, for each gallery decision the CLI takes.
+let forwarded = async (args: Record<string, string>) => {
+  let sent: unknown
   await answering((url, init) => {
     equal(url, 'https://yaks.app/mcp')
     equal(
       new Headers(init?.headers).get('authorization'),
       'Bearer admin-bearer',
     )
-    equal(JSON.parse(String(init?.body)).params, {
-      name: 'gallery_review',
-      arguments: { ...args, ...actor },
-    })
+    sent = JSON.parse(String(init?.body)).params
     return Response.json({
       result: { content: [{ type: 'text', text: 'listed' }] },
     })
@@ -123,10 +116,36 @@ test('gallery review forwards the project actor and session with the admin beare
       await review('admin-bearer', {
         entity: { eid: 'call' },
         call: { args },
-        created: actor,
+        created: { by: 'operator-project', via: 'operator-session' },
       }),
       'listed',
     )
+  })
+  return sent
+}
+
+test('a gallery decision goes to the hosted tool as the caller, or whoever it names', async () => {
+  let app = 'jeff/housebook'
+  equal(await forwarded({ app, decision: 'approve', reason: 'Works' }), {
+    name: 'gallery_review',
+    arguments: {
+      app,
+      decision: 'approve',
+      by: 'operator-project',
+      via: 'operator-session',
+      reason: 'Works',
+    },
+  })
+  equal(await forwarded({ app, decision: 'list', by: 'jeff@yak.sh' }), {
+    name: 'app_set',
+    arguments: {
+      space: 'jeff',
+      app: 'housebook',
+      gallery: true,
+      review: false,
+      by: 'jeff@yak.sh',
+      via: 'operator-session',
+    },
   })
 })
 

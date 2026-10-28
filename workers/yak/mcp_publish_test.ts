@@ -12,6 +12,7 @@ import {
   connector,
   kernel,
   letter,
+  letters,
   num,
   signIn,
   txt,
@@ -298,11 +299,12 @@ test('an app is published by name, and the name is one app', async () => {
   }
 })
 
-// The whole of T-34475: an owner asks for the gallery, a letter carries the
-// decision, and the app is on the public page — and in a stranger's search —
-// only after an admin approves it through the web or agent door (gallery.ts).
-// Then the two ways off it: withdrawing, which clears the word, and the trash,
-// which writes nothing and gives the listing back on a restore.
+// The whole of T-34475: an owner asks for the gallery, a letter to the
+// platform's owner carries the decision, and the app is on the public page —
+// and in a stranger's search — only after an admin approves it through the web
+// or agent door (gallery.ts). Then the two ways off it: withdrawing, which
+// clears the word, and the trash, which writes nothing and gives the listing
+// back on a restore. Last, the admin skipping review, with no letter at all.
 test('an app reaches the gallery only when yaks.app says yes', async () => {
   let k = await kernel()
   let published = unique('recipes')
@@ -336,7 +338,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertEquals(cards(await empty.text()), 0)
 
     // The letter, at the platform's own mailbox, carrying both answers.
-    let post = await letter(k, 'task@bot.yak.sh', 'Recipe box')
+    let post = await letter(k, 'hello@yaks.app', 'Recipe box')
     assertStringIncludes(post.body, `https://${mine}.yaks.app/recipes/`)
     assertStringIncludes(post.body, 'Somewhere to keep recipes')
     let [yes, no] = [
@@ -540,6 +542,39 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
       0,
     )
+    // Skipping review is the platform admin's alone. It lists the app at once,
+    // sends nobody a letter, and records whoever the admin names as asking.
+    let skip = { space: mine, app: 'recipes', gallery: true, review: false }
+    await assertRejects(
+      () => agent.tool('app_set', skip),
+      Error,
+      'only the platform admin',
+    )
+    let sent = letters(k, 'hello@yaks.app').length
+    let via = crypto.randomUUID()
+    assertStringIncludes(
+      await reviewer.tool('app_set', { ...skip, by: jeff.email, via }),
+      'listed in the gallery',
+    )
+    assertEquals(
+      cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
+      1,
+    )
+    assertEquals(letters(k, 'hello@yaks.app').length, sent)
+    let skipped = (await reviewer.call('tools/call', {
+      name: 'graph_query',
+      arguments: { app: 'yak/platform', q: `.gallery.via=${via}&?gallery` },
+    })).structuredContent.result[0]?.gallery
+    let person = (await reviewer.call('tools/call', {
+      name: 'graph_query',
+      arguments: {
+        app: 'yak/platform',
+        q: `.person&.email.address=${jeff.email}`,
+      },
+    })).structuredContent.result[0]?.entity.eid
+    assertEquals(skipped?.by.eid, person)
+    assertEquals(skipped?.decision, 'approved')
+    await agent.tool('app_set', { space: mine, app: 'recipes', gallery: false })
     // An app that was never published cannot be shown: the gallery is what a
     // person can install.
     await agent.tool('app_new', { slug: 'draft', title: 'Draft' })

@@ -197,7 +197,7 @@ test('words find a listing by its name and its own description', () => {
   assertEquals(found(all, 'recipe', 1).map((a) => a.eid), ['a'])
 })
 
-// The letter carries what the operator needs for a decision:
+// The letter carries what the platform's owner needs for a decision:
 // what the app is, where it lives, who made it, and the two answers.
 test('the letter names the app, its maker, and both answers', () => {
   let l = letter({
@@ -208,7 +208,7 @@ test('the letter names the app, its maker, and both answers', () => {
     yes: 'https://yaks.app/gallery/review?t=yes',
     no: 'https://yaks.app/gallery/review?t=no',
   })
-  assertEquals(l.to, 'task@bot.yak.sh')
+  assertEquals(l.to, 'hello@yaks.app')
   assertStringIncludes(l.subject, 'Recipe box')
   assertStringIncludes(l.body, 'Jeff')
   assertStringIncludes(l.body, 'https://jeff.yaks.app/recipes/')
@@ -244,7 +244,7 @@ test('staging gallery listings, reviews and mail stay on its own host', async ()
       yes,
       no: door('no', env),
     }, env).to,
-    'task@bot.yak.sh',
+    'hello@yaks.fyi',
   )
 })
 

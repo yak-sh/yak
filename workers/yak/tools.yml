@@ -405,8 +405,10 @@ app_set:
     routing, as globs of paths its worker.js handles before the app owning
     them: ["/recipes/*"] sends everything under /recipes/ to the front page;
     an empty list puts every path back. gallery: true submits a published app
-    to https://yaks.app/gallery, the public page of yaks apps; false
-    withdraws it at once. screenshot takes the eid of an image uploaded to
+    to https://yaks.app/gallery, the public page of yaks apps, for review by
+    the platform's owner; false withdraws it at once. review: false with
+    gallery: true lists it without review: only the platform admin may, and
+    only when the platform's owner asks. screenshot takes the eid of an image uploaded to
     this app through /api/blob for its gallery and homepage cards, without
     redeploying; an empty string clears it. forget with a slug this app has
     left drops it: it stops redirecting and another app can take it, final
@@ -641,8 +643,10 @@ app_publish:
     call app_update. Only the space owner may publish. gallery: true also
     submits it to be shown on https://yaks.app/gallery, a public page of
     what people have made. That is separate from publishing. It is not
-    listed at once; yaks.app reviews the submission and decides, and the app
-    is published either way. Returns the published name and version, how to
+    listed at once; the platform's owner reviews the submission and decides,
+    and the app is published either way. review: false lists it at once
+    instead: only the platform admin may, and only when the platform's owner
+    asks. Returns the published name and version, how to
     install it, and any gallery submission status. Documentation:
     https://yaks.app/docs/sharing.
 app_unpublish:
@@ -886,9 +890,10 @@ builder_supply:
 gallery_review:
   title: Review a gallery listing
   description: >-
-    Approve or decline a submitted gallery listing. Only the platform admin
-    may decide. Review that the app works, its screenshot and description read
-    well, and its content is appropriate for the gallery before approving.
-    app names the offer as space/app. by is the actor making the decision,
-    such as the operator project eid; via is the session. reason records why.
-    A decline leaves the app published and lets its owner submit again.
+    Approve or decline a submitted gallery listing as the platform admin.
+    Every submission goes to the platform's owner for review, so decide one
+    only when he asks you to, and record him: by is his address, via is the
+    session, reason records why. app names the offer as space/app. A decline
+    leaves the app published and lets its owner submit again. Listing an app
+    without review, which also waits for him to ask, is app_set(app,
+    gallery: true, review: false).
