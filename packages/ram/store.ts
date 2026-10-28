@@ -602,6 +602,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   let patch = (bundles: Bundle[]): Entity[] => {
     let born: Entity[] = []
+    // New identities need no component indexes until their payload is ready.
+    let reserved = new Map<Eid, Bundle>()
+    let keep = (eid: Eid, b: Bundle) =>
+      reserved.has(eid) ? reserved.set(eid, b) : put(eid, b)
     let excluded = new Set<string>()
     if (typeof base.number == 'object') {
       for (let name of base.number.except) {
@@ -656,7 +660,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     // Create a record for every eid this write touches or points at, so that a
     // reference may name a target created by the same write, in any order.
     let birth = (eid: Eid) => {
-      let rec = rows.get(eid)
+      let rec = reserved.get(eid) ?? rows.get(eid)
       let told = stated.has(eid)
       if (rec) {
         if (told && (rec.entity.num ?? null) !== stated.get(eid)) {
@@ -664,7 +668,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
           // cleared by `null`.
           save(eid)
           let entity = { ...unnumbered(rec.entity), ...take(eid) }
-          put(eid, { ...rec, entity })
+          keep(eid, { ...rec, entity })
         } else if (
           // A record an earlier reference made is numbered when a bundle of
           // its own arrives, if it still carries nothing: an unnumbered entity
@@ -674,22 +678,22 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         ) {
           save(eid)
           let entity = { ...rec.entity, ...numbered() }
-          put(eid, { ...rec, entity })
+          keep(eid, { ...rec, entity })
           born.push(entity)
         }
         return
       }
       save(eid)
-      let reserved = cold.get(eid)
+      let identity = cold.get(eid)
       cold.delete(eid)
-      let entity = reserved
-        ? told ? { ...unnumbered(reserved), ...take(eid) } : reserved
+      let entity = identity
+        ? told ? { ...unnumbered(identity), ...take(eid) } : identity
         : {
           eid,
           ...told ? take(eid) : own.has(eid) && counts(eid) ? numbered() : {},
         }
-      put(eid, { entity })
-      if (!reserved) born.push(entity)
+      reserved.set(eid, { entity })
+      if (!identity) born.push(entity)
     }
     for (let b of bundles) {
       if (buried(rows.get(b.entity.eid))) continue
@@ -703,22 +707,27 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     for (let b of bundles) {
       let eid = b.entity.eid
-      let rec = rows.get(eid)
+      let rec = reserved.get(eid) ?? rows.get(eid)
+      let was = rec
       let patches = comps(b)
       let archetype = b.entity.archetype
       if (
         rec && archetype !== undefined && archetype !== rec.entity.archetype
       ) {
-        save(eid)
         let entity = { ...rec.entity, archetype }
-        put(eid, rec = { ...rec, entity })
+        rec = { ...rec, entity }
       }
-      if (!rec || buried(rec) || !patches.length) continue
+      if (!rec || buried(rec)) continue
       let held = merged(rec, patches)
-      if (held == rec) continue
+      if (reserved.delete(eid)) {
+        put(eid, held)
+        continue
+      }
+      if (held == was) continue
       save(eid)
       put(eid, held)
     }
+    for (let [eid, rec] of reserved) put(eid, rec)
     return born
   }
 

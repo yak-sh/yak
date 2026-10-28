@@ -276,6 +276,19 @@ test('a mirror adopts an explicit unnumbered spine', () => {
   assertEquals(at(s, 'blob').entity, { eid: 'blob' })
 })
 
+let restored = shopRam()
+put(restored, { entity: { eid: 'p1' }, product: { maker: 'm1' } })
+restored.tx((tx) => tx.evict(['m1']))
+test('a restored reference target keeps the number allocated in its batch', () => {
+  let born = put(
+    restored,
+    { entity: { eid: 'm1' }, doc: { title: 'Maker' } },
+    { entity: { eid: 'p1' }, product: { maker: 'm1' } },
+  )
+  assertEquals(born, [{ eid: 'm1', num: 2 }])
+  assertEquals(at(restored, 'm1').entity, { eid: 'm1', num: 2 })
+})
+
 test('physical eviction reserves identity and rolls back with nested transactions', () => {
   let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'p1', num: 90 }, doc: { title: 'payload' } })
