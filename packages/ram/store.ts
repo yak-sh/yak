@@ -717,8 +717,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         let entity = { ...rec.entity, archetype }
         rec = { ...rec, entity }
       }
-      if (!rec || buried(rec)) continue
-      let held = merged(rec, patches)
+      if (!rec) continue
+      let held = buried(rec) ? rec : merged(rec, patches)
       if (reserved.delete(eid)) {
         put(eid, held)
         continue
