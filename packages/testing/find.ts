@@ -19,6 +19,17 @@ export let tested = (path: string): boolean => /_test\.[mc]?[jt]sx?$/.test(path)
 export let paged = (path: string): boolean =>
   !tested(path) && (module(path) || path.endsWith('.md'))
 
+/// written('.README.md.plan.4242.example.ts') -> 4242
+/// written('.mod.ts.3.4242.example.tsx') -> 4242
+/// written('README.md') -> undefined
+/** The process that wrote a file beside a page while the page was keyed or
+ * its examples loaded (./load.ts `beside`), by the file's name; none for any
+ * other file. */
+export let written = (name: string): number | undefined => {
+  let pid = name.match(/^\..+\.(\d+)\.example\.[jt]sx?$/)?.[1]
+  return pid ? Number(pid) : undefined
+}
+
 /** Every file under the paths, sorted, each once. */
 export let walk = async (paths: string[]): Promise<string[]> => {
   let out = new Set<string>()

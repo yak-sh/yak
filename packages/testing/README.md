@@ -67,11 +67,14 @@ try {
 
 ## Exports
 
-| Export               | Provides                                                                                                                            |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/testing`      | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock` |
-| `@yaks/testing/find` | `tested`, `paged`, `walk`, `examples`, `find`                                                                                       |
-| `@yaks/testing/main` | The Deno runner entry point                                                                                                         |
+| Export                 | Provides                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/testing`        | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`       |
+| `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                             |
+| `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                  |
+| `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`; the pass record: `passed`, `remember`, `forget`, `recall`, `note` |
+| `@yaks/testing/reads`  | `AUDIT`, `audit`, `mark`, `reads`, `audited`, `path`: what each file read as it ran                                                       |
+| `@yaks/testing/main`   | The Deno runner entry point                                                                                                               |
 
 ## Declaring tests
 
@@ -231,7 +234,8 @@ try {
 
 ```sh
 deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
-  [--also=path]... [--timeout=ms] [--times=dir] [--verbose] path...
+  [--also=path]... [--keys=file] [--timeout=ms] [--times=dir] [--verbose] \
+  path...
 ```
 
 A path names a test module, a page, or a directory holding them. Files load one
@@ -255,21 +259,35 @@ to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
 planning and loading, each file's load, each test that ran with its file, name,
 time, whether it passed and how much of its time it `waited` for a CPU another
 process held (Linux's run-queue wait, `queued`; 0 elsewhere), each file the run
-remembered as passed, with its key in the pass record (`forget` from
+remembered as passed, with its proof in the pass record (`forget` from
 `@yaks/testing/deps` takes one back), and how many tests it skipped and files it
 left out as unchanged.
 
-A file whose tests all passed is skipped while its dependencies are unchanged:
-its module dependencies resolved by `deno info`, files named with a literal
-`new URL('./fixture.json', import.meta.url)`, the runner, config, lock, Deno
-version and paths supplied by `--also`. Directories named this way track the
-place, not its contents. The pass record is
-`$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
-when `XDG_CACHE_HOME` is unset, shared by checkouts on the machine. `--all`
-bypasses it; a run filtered by tag records no passes.
+A file whose tests all passed is skipped while its dependencies are unchanged.
+Its **key** holds what it depends on before it runs: its module dependencies
+resolved by `deno info`, files named with a literal
+`new URL('./fixture.json', import.meta.url)`, the runner (by what loads with it,
+not a module it imports only when a run asks for it), config, lock, Deno version
+and paths supplied by `--also`. A directory named this way is a place, not its
+contents, and a directory's listing leaves out what the runner writes beside a
+page while it runs. Started with `DENO_AUDIT_PERMISSIONS` naming a file, the
+runner also sees what each file reads as it runs: a directory it walks (its
+listing), a file at a path it computes, a module it imports by a computed
+specifier (with that module's whole graph). A pass is then kept by its
+**proof**: the key, and what each of those holds. The runner takes the variable
+out of its environment before any test runs, since a Deno child that inherited
+it would empty the file; what a child process reads is not seen. The pass record
+is `$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
+when `XDG_CACHE_HOME` is unset, shared by checkouts on the machine, and what
+each key's file read is kept beside it in `tests-read.json`. `--all` bypasses
+the record; a run filtered by tag records no passes. `--keys` names a JSON file
+holding the key of each file given, from a caller that chose them already
+(`choose` from `@yaks/testing/choose`): every file given runs.
 
-In this repository, `deno task test` starts one runner runtime per platform:
-deno, browser, terminal and workerd.
+In this repository, `deno task test` chooses what runs before it starts
+anything, then starts one runner runtime for each platform holding a file that
+runs (deno, browser, terminal and workerd), each auditing into a file of its
+own.
 
 ## Controlling time
 
@@ -299,6 +317,7 @@ equal([expired, time.now()], [true, 120])
 Assertions and waiting work in runtimes with timers. Without `Deno.test` or the
 runner, declaring tests does not execute them. The runner and discovery
 functions need Deno. The runner uses `deno info` for dependencies and `/proc` to
-identify temporary examples left by ended processes. Files read in ways other
-than the dependency forms above are not tracked: include them with `--also` or
-use `--all`.
+identify temporary examples left by ended processes. Without the audit, files
+read in ways other than the dependency forms above are not tracked; with it,
+what a child process reads still is not: include those with `--also` or use
+`--all`.

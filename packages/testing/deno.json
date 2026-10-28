@@ -3,9 +3,11 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./choose": "./choose.ts",
     "./deps": "./deps.ts",
     "./find": "./find.ts",
-    "./main": "./main.ts"
+    "./main": "./main.ts",
+    "./reads": "./reads.ts"
   },
   "license": "Apache-2.0",
   "description": "Declare tests, check their results, and run test modules and examples in one runtime. The runner skips files whose dependencies have not changed since they passed.",

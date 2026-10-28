@@ -309,7 +309,9 @@ let said = (rows: Seen[], b: Budget) =>
 
 /** What a run of the suite measured: each platform's times, the run's exit
  * code, what kind of run it was, the files it ran unchanged since they passed
- * (`unchanged`), and what it took in milliseconds. */
+ * (`unchanged`), what it took in milliseconds, and how many files it left out
+ * as unchanged since they passed, where it chose them before any platform
+ * ran. */
 export type Measured = {
   code: number
   runs: Record<string, Times>
@@ -317,6 +319,7 @@ export type Measured = {
   whole: boolean
   same?: string[]
   ms?: number
+  left?: number
 }
 
 /** A set of times kept in `dir`: bench/test-times/, or a gate's, with the
@@ -438,25 +441,27 @@ let seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 /**
  * The run in one line: its verdict by its exit code, the tests that passed
  * and failed on every platform, those skipped and the files left out as
- * unchanged since they passed, the tests the budget flags, and what the run
- * took.
+ * unchanged since they passed (`left`, or as each platform says), the tests
+ * the budget flags, and what the run took.
  */
 export let closing = (
   exit: number,
   runs: Record<string, Times>,
   flagged: number,
   ms?: number,
+  left?: number,
 ) => {
   let all = Object.values(runs)
   let tests = all.flatMap((r) => r.tests)
   let failed = tests.filter((t) => !t.ok).length
   let sum = (k: 'ignored' | 'left') => all.reduce((n, r) => n + (r[k] ?? 0), 0)
+  let unchanged = left ?? sum('left')
   return `${exit ? 'FAILED' : 'ok'} | ${
     [
       `${tests.length - failed} passed`,
       `${failed} failed`,
       ...sum('ignored') ? [`${sum('ignored')} ignored`] : [],
-      ...sum('left') ? [`${sum('left')} unchanged since they passed`] : [],
+      ...unchanged ? [`${unchanged} unchanged since they passed`] : [],
       `${flagged} over budget`,
     ].join(' | ')
   }${ms == null ? '' : ` (${seconds(ms)})`}`
@@ -469,7 +474,7 @@ export let closing = (
  * would shrink. */
 export let hold = async (
   b: Budget,
-  { code, runs, gate, whole, same, ms }: Measured,
+  { code, runs, gate, whole, same, ms, left }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
@@ -559,7 +564,7 @@ export let hold = async (
   let exit = code || (!report && failing(j, gated).length ? 1 : 0)
   // A run a signal stopped measured nothing to sum.
   if (!code || Object.keys(runs).length) {
-    let line = closing(exit, runs, j.over.length + slower.length, ms)
+    let line = closing(exit, runs, j.over.length + slower.length, ms, left)
     lines.push(verbose ? `\n${line}` : line)
   }
   if (lines.length) console.log(lines.join('\n'))

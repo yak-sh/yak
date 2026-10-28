@@ -120,16 +120,16 @@ stronger.
   carries) narrows it; `--all` runs files the skip would leave out.
 - Today a run still starts processes, and T-132170 is taking them away. It
   goes through a chain of Deno processes (bin/scratch.ts, bin/test.ts, its
-  coordinator and that one's guard), then starts one runtime for each platform
-  the selection holds, each running `deno info` for the skip. A selection with anything under workers/ first runs
-  `ready()` (workers/yak/wrangler.ts: `npm ci` when its install is stale, five
-  asset generators as `deno run`, and Stripe's sandbox key, through `op` when
-  `STRIPE_KEY` isn't set). One with a `*_workerd_test.ts` also starts workerd
-  with its kernel. So while you work, name the package you changed, and keep
-  workerd out unless your change is about the runtime itself: `deno task test
-  --tag=deno workers/yak/<file>`. The landing run names nothing (below); today
-  it starts workerd and `ready()` even when no test there needs them, which
-  T-132949 is taking away.
+  coordinator and that one's guard). It first chooses what runs, keying every
+  file with one `deno info` (@yaks/testing/choose), then starts one runtime
+  for each platform holding a file that runs. When a file under workers/ runs,
+  it first runs `ready()` (workers/yak/wrangler.ts: `npm ci` when its install
+  is stale, five asset generators as `deno run`, and Stripe's sandbox key,
+  through `op` when `STRIPE_KEY` isn't set); when a `*_workerd_test.ts` runs,
+  it also starts workerd with its kernel. Neither starts for a change that
+  reaches none of their tests. While you work, name the package you changed:
+  `deno task test --tag=deno workers/yak/<file>`. The landing run names
+  nothing (below).
 - A run says only what you act on, since its output is read again on every
   later turn: each failure's name, file and error (its frames in the checkout,
   cut to 30 lines), a line naming the slowest few tests the budget flags, and
@@ -138,13 +138,22 @@ stronger.
   findings in full; the gate and the Workers build pass it, since their logs
   are read whole.
 - A file whose tests all passed is skipped while nothing it depends on has
-  changed: its module graph as `deno info` sees it, files it names beside
-  itself with `new URL(…, import.meta.url)`, the runner, config, lock and Deno
-  version (packages/testing/deps.ts). "N unchanged since they passed" is that
-  skip, not a pass you just earned. A file read any other way isn't seen, so a
-  change to one wants `--all` until T-132949 lands: a directory walk (as in
-  packages/vocab_test.ts), a computed import, a doctest's dynamic import. The record is `~/.cache/yak/tests-passed.json`,
-  shared by every checkout.
+  changed (packages/testing/deps.ts). Its key holds its module graph as `deno
+  info` sees it (a doctest's imports, and a literal `import('…')`, included),
+  files it names beside itself with `new URL(…, import.meta.url)`, the runner
+  and what starts it (bin/test.ts `RUNS`, each by what loads with it, so the
+  Worker's modules bin/test.ts imports only for the Worker's tests key only
+  those), the SQLite library the run opens, config, lock and Deno version, and
+  for a workerd test what the kernel is made of (workers/yak/probe-suite.ts
+  `MADE`). Each runtime also audits what each file reads as it runs
+  (`DENO_AUDIT_PERMISSIONS`, packages/testing/reads.ts): a directory it walks
+  (as packages/vocab_test.ts does), a file at a path it computes, a module it
+  imports by a computed specifier, with its graph. A pass is kept by that too.
+  "N unchanged since they passed" is that skip, not a pass you just earned.
+  What a child process reads (a `git`, `sqlite3` or `deno` child) isn't seen,
+  so a change only a child reads wants `--all`, and a test that reads through
+  Deno instead is seen. The record is `~/.cache/yak/tests-passed.json`, and
+  what each file read `tests-read.json` beside it, shared by every checkout.
 - That skip is how a run knows which tests a change can break: `deno task
   test` with no path runs exactly the files whose key your change moved, your
   package's own and every consumer's, and leaves the rest. It is the run

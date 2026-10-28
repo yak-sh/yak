@@ -184,6 +184,37 @@ let door = (server: Harness) =>
     },
   )
 
+// The Workers the kernel runs beside it, by name: each one's main module,
+// from workers/yak.
+let BESIDE = {
+  'probe-tracker': '../tracker/index.ts',
+  'probe-sandbox-provider': 'sandbox_provider_probe.js',
+  'probe-scripts': 'probe-scripts.js',
+  'probe-store-cost': 'store_cost_probe.ts',
+  'probe-tracker-trace-bound': 'tracker_trace_bound_probe.ts',
+  'probe-store-trace-bound': 'store_trace_bound_probe.ts',
+  'probe-store-trace': 'store_trace_probe.ts',
+  'probe-play-cost': 'play_cost_probe.ts',
+  'probe-defects': 'defects_probe.ts',
+}
+
+let beside = (name: keyof typeof BESIDE, config: Record<string, unknown>) => ({
+  config: { name, main: BESIDE[name], ...config },
+})
+
+/** What the run's kernel is made of beside a workerd test's own graph: the
+ * Worker and its config, each Worker beside it, the lock that pins workerd,
+ * its SQLite and the bundler, and this module, which makes it (bin/test.ts
+ * keys every workerd test by them). */
+export let MADE: URL[] = [
+  'probe-suite.ts',
+  'index.ts',
+  'wrangler.toml',
+  'package.json',
+  'package-lock.json',
+  ...Object.values(BESIDE),
+].map((f) => new URL(f, import.meta.url))
+
 /** The run's kernel, and how its tests reach it. The runner has made the
  * Worker's `node_modules` current before any of its tests load (bin/test.ts),
  * so this bundles from a tree nothing is installing. */
@@ -219,167 +250,131 @@ export let probeSuite = async () => {
     root: dir,
     workers: [
       { config: kernel },
-      {
-        config: {
-          name: 'probe-tracker',
-          main: '../tracker/index.ts',
-          compatibility_date: kernel.compatibility_date,
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          vars: { TRACKER_SECRET: trackerSecret },
-          durable_objects: {
-            bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
-          },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
-          queues: {
-            producers: [{ binding: 'ERRORS', queue: 'probe-errors' }],
-            consumers: [{
-              queue: 'probe-errors',
-              max_batch_size: 100,
-              max_batch_timeout: 1,
-            }],
-          },
+      beside('probe-tracker', {
+        compatibility_date: kernel.compatibility_date,
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        vars: { TRACKER_SECRET: trackerSecret },
+        durable_objects: {
+          bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
         },
-      },
-      {
-        config: {
-          name: 'probe-sandbox-provider',
-          main: 'sandbox_provider_probe.js',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [
-              { name: 'SANDBOX', class_name: 'ContainerProbe' },
-              { name: 'WORKSPACES', class_name: 'WorkspaceProbe' },
-            ],
-          },
-          migrations: [{
-            tag: 'v1',
-            new_sqlite_classes: ['ContainerProbe', 'WorkspaceProbe'],
+        migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
+        queues: {
+          producers: [{ binding: 'ERRORS', queue: 'probe-errors' }],
+          consumers: [{
+            queue: 'probe-errors',
+            max_batch_size: 100,
+            max_batch_timeout: 1,
           }],
         },
-      },
-      {
-        config: {
-          name: 'probe-scripts',
-          main: 'probe-scripts.js',
-          compatibility_date: '2025-05-08',
-          worker_loaders: [{ binding: 'LOADER' }],
-          services: [{ binding: 'KERNEL', service: 'yak' }],
+      }),
+      beside('probe-sandbox-provider', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [
+            { name: 'SANDBOX', class_name: 'ContainerProbe' },
+            { name: 'WORKSPACES', class_name: 'WorkspaceProbe' },
+          ],
         },
-      },
-      {
-        config: {
-          name: 'probe-store-cost',
-          main: 'store_cost_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [{ name: 'COST', class_name: 'StoreCost' }],
-          },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreCost'] }],
+        migrations: [{
+          tag: 'v1',
+          new_sqlite_classes: ['ContainerProbe', 'WorkspaceProbe'],
+        }],
+      }),
+      beside('probe-scripts', {
+        compatibility_date: '2025-05-08',
+        worker_loaders: [{ binding: 'LOADER' }],
+        services: [{ binding: 'KERNEL', service: 'yak' }],
+      }),
+      beside('probe-store-cost', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [{ name: 'COST', class_name: 'StoreCost' }],
         },
-      },
-      {
-        config: {
-          name: 'probe-tracker-trace-bound',
-          main: 'tracker_trace_bound_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [{
-              name: 'TRACKER_BOUND',
-              class_name: 'TrackerTraceBound',
-            }, { name: 'FRESH', class_name: 'TrackerTraceFresh' }],
-          },
-          migrations: [{
-            tag: 'v1',
-            new_sqlite_classes: ['TrackerTraceBound', 'TrackerTraceFresh'],
-          }],
+        migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreCost'] }],
+      }),
+      beside('probe-tracker-trace-bound', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [{
+            name: 'TRACKER_BOUND',
+            class_name: 'TrackerTraceBound',
+          }, { name: 'FRESH', class_name: 'TrackerTraceFresh' }],
         },
-      },
-      {
-        config: {
-          name: 'probe-store-trace-bound',
-          main: 'store_trace_bound_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [{ name: 'BOUND', class_name: 'StoreTraceBound' }],
-          },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTraceBound'] }],
+        migrations: [{
+          tag: 'v1',
+          new_sqlite_classes: ['TrackerTraceBound', 'TrackerTraceFresh'],
+        }],
+      }),
+      beside('probe-store-trace-bound', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [{ name: 'BOUND', class_name: 'StoreTraceBound' }],
         },
-      },
-      {
-        config: {
-          name: 'probe-store-trace',
-          main: 'store_trace_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [{ name: 'TRACE', class_name: 'StoreTrace' }],
-          },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTrace'] }],
+        migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTraceBound'] }],
+      }),
+      beside('probe-store-trace', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [{ name: 'TRACE', class_name: 'StoreTrace' }],
         },
-      },
-      {
-        config: {
-          name: 'probe-play-cost',
-          main: 'play_cost_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [
-              { name: 'PLAY', class_name: 'PlayCost' },
-              { name: 'GIT_COST', class_name: 'GitCostStore' },
-              { name: 'STORE', class_name: 'Store' },
-            ],
-          },
-          migrations: [{
-            tag: 'v1',
-            new_sqlite_classes: ['PlayCost', 'Store', 'GitCostStore'],
-          }],
-          r2_buckets: [{
-            binding: 'BLOBS',
-            bucket_name: 'probe-directory-cost',
-          }],
+        migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTrace'] }],
+      }),
+      beside('probe-play-cost', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [
+            { name: 'PLAY', class_name: 'PlayCost' },
+            { name: 'GIT_COST', class_name: 'GitCostStore' },
+            { name: 'STORE', class_name: 'Store' },
+          ],
         },
-      },
-      {
-        config: {
-          name: 'probe-defects',
-          main: 'defects_probe.ts',
-          compatibility_date: '2025-05-08',
-          compatibility_flags: kernel.compatibility_flags,
-          tsconfig: kernel.tsconfig,
-          alias: kernel.alias,
-          durable_objects: {
-            bindings: [
-              { name: 'PROBE', class_name: 'Probe' },
-              { name: 'STORECASE', class_name: 'StoreCases' },
-            ],
-          },
-          migrations: [{
-            tag: 'v1',
-            new_classes: ['Probe'],
-            new_sqlite_classes: ['StoreCases'],
-          }],
-          vars: { CAPTURE_URL: cf.url },
+        migrations: [{
+          tag: 'v1',
+          new_sqlite_classes: ['PlayCost', 'Store', 'GitCostStore'],
+        }],
+        r2_buckets: [{
+          binding: 'BLOBS',
+          bucket_name: 'probe-directory-cost',
+        }],
+      }),
+      beside('probe-defects', {
+        compatibility_date: '2025-05-08',
+        compatibility_flags: kernel.compatibility_flags,
+        tsconfig: kernel.tsconfig,
+        alias: kernel.alias,
+        durable_objects: {
+          bindings: [
+            { name: 'PROBE', class_name: 'Probe' },
+            { name: 'STORECASE', class_name: 'StoreCases' },
+          ],
         },
-      },
+        migrations: [{
+          tag: 'v1',
+          new_classes: ['Probe'],
+          new_sqlite_classes: ['StoreCases'],
+        }],
+        vars: { CAPTURE_URL: cf.url },
+      }),
     ],
   })
   // Wrangler resolves the config's tsconfig against the working directory

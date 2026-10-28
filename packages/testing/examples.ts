@@ -198,12 +198,17 @@ export let bound = (statement: string): string[] =>
     .split(/[\s,]+/).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n))
 
 /// specifiers("import { a } from 'x'\nimport 'y'") -> ['x', 'y']
-/** What an example's imports name. */
-export let specifiers = (code: string) =>
-  hoist(code).imports.map((s) =>
+/// specifiers("let { ram } = await import('@yaks/ram')") -> ['@yaks/ram']
+/// specifiers('await import(`./${name}.ts`)') -> []
+/** What an example's imports name: its import statements, and each
+ * `import(…)` of a literal specifier. */
+export let specifiers = (code: string) => [
+  ...hoist(code).imports.map((s) =>
     s.match(/(?:^import|\bfrom)\s*['"]([^'"]+)/)?.[1]
-  )
-    .filter((s): s is string => !!s)
+  ).filter((s): s is string => !!s),
+  ...[...code.matchAll(/\bimport\(\s*(['"`])([^'"`$]+)\1\s*[,)]/g)]
+    .map((m) => m[2]),
+]
 
 // Words that cannot be bound by a destructuring pattern.
 let RESERVED = new Set(

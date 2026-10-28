@@ -12,6 +12,7 @@ import {
   module,
   specifiers,
 } from './examples.ts'
+import { written } from './find.ts'
 import { test } from './suite.ts'
 
 let url = (path: string) => new URL(path, `file://${Deno.cwd()}/`).href
@@ -32,8 +33,6 @@ export let beside = (page: string, tag: string, lang = 'ts') => {
   }.${tag}.${Deno.pid}.example.${EXT[lang] ?? 'ts'}`
 }
 
-let STRAY = /^\..+\.(\d+)\.example\.[jt]sx?$/
-
 let alive = (pid: number) => {
   try {
     return Deno.statSync(`/proc/${pid}`).isDirectory
@@ -49,7 +48,7 @@ export let sweep = async (pages: string[]) => {
   )
   for (let dir of dirs) {
     for await (let e of Deno.readDir(dir)) {
-      let pid = Number(e.name.match(STRAY)?.[1])
+      let pid = written(e.name)
       if (pid && !alive(pid)) {
         await Deno.remove(`${dir}${e.name}`).catch(() => {})
       }
@@ -63,17 +62,19 @@ let runs = (source: string, page: string) => ({
 })
 
 /**
- * For each page, a module importing what its examples import (the page
- * itself too, when it is a module), written beside it: what the page's
- * examples depend on, as a module graph can say. The caller removes them.
+ * For each page, a module importing what its examples import, fenced or
+ * doctest, statically or by a literal `import(…)` (the page itself too, when
+ * it is a module), written beside it: what the page's examples depend on, as
+ * a module graph can say. The caller removes them.
  */
 export let plan = async (pages: string[]) =>
   await Promise.all(pages.map(async (page) => {
-    let { fenced } = runs(await Deno.readTextFile(page), page)
+    let { fenced, lines } = runs(await Deno.readTextFile(page), page)
     let base = page.slice(page.lastIndexOf('/') + 1)
     let named = new Set([
       ...module(page) ? [`./${base}`] : [],
-      ...fenced.flatMap((f) => specifiers(f.code)),
+      ...[...fenced, ...lines.filter((l) => !l.skip)]
+        .flatMap((e) => specifiers(e.code)),
     ])
     let path = beside(page, 'plan')
     await Deno.writeTextFile(
