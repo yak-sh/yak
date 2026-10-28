@@ -43,7 +43,7 @@ import { normalize } from '@yaks/tracker'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'
-import { accountUrl } from './workers_api.ts'
+import { accountUrl, resent } from './workers_api.ts'
 
 /** The part of a Workers Builds event this reads. */
 export type Built = {
@@ -244,7 +244,7 @@ export let logsOf = async (env: Env, uuid?: string) => {
       )
       let at = new URL(url)
       if (cursor) at.searchParams.set('cursor', cursor)
-      let res = await fetch(at, {
+      let res = await resent(at.href, {
         headers: { authorization: `Bearer ${env.BUILD_LOG_TOKEN}` },
         signal,
       })

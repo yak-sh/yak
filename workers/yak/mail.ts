@@ -22,6 +22,7 @@
 import type { Env } from './env.ts'
 import { esc } from './html.ts'
 import { deliver, type Payload, Unsent } from '@yaks/mail'
+import { resent } from './workers_api.ts'
 
 // `to` is one address or several. Email Sending takes a list, and one send to
 // several recipients is one letter: it either reaches every reader or none, so
@@ -63,13 +64,9 @@ export let sending = (
   env: Host = {},
   pause = sleep,
 ): Mail => {
-  // The global fetch, looked up at each call rather than held unbound.
-  let post = deliver({
-    account,
-    token,
-    base: api,
-    fetch: (u, i) => fetch(u, i),
-  })
+  // The fetch every Cloudflare call goes through (workers_api.ts), which
+  // sends a POST once: a send that failed may have left.
+  let post = deliver({ account, token, base: api, fetch: resent })
   return async (l) => {
     if (!token || !account) throw new Error('mail is not configured')
     let body: Payload = {

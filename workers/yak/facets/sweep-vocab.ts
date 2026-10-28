@@ -21,8 +21,16 @@ export let sweepDoc: VocabDoc = {
           format: 'date-time',
           stamped: true,
           description:
-            'when the first of the runs that died unfinished in a row began; ' +
-            'null once one ends',
+            'when the first of the runs in a row that died unfinished, or ' +
+            'that Cloudflare could not answer, began; null once one finishes',
+        },
+        reported: {
+          type: 'string',
+          format: 'date-time',
+          stamped: true,
+          description:
+            'when the runs since `since` that Cloudflare could not answer ' +
+            'were reported as an outage, once; null once one finishes',
         },
         through: {
           type: 'string',

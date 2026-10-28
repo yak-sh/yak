@@ -193,6 +193,14 @@ an eid derived from the hour, so a look repeated after a restart lands once. It
 reports through the box's spool, never through the platform tracker's Worker, so
 a jump in that tracker is still heard.
 
+A look that fails is tried again five minutes later, for the same hour. A query
+Cloudflare fails on its own side (a 5xx or a 429) is sent again within each look
+(workers/yak/workers_api.ts `resent`), and a look it fails through every resend
+is a log line; once Cloudflare has not answered for five minutes, the outage is
+reported once, with the last failure as its cause. Any other failure, such as a
+token refused 401 or 403, is reported at once. Either is one report until a look
+succeeds.
+
 ```json
 {
   "use": "@yaks/admin",

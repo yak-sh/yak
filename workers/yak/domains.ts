@@ -24,6 +24,7 @@
 // Unset, every door here refuses saying so — a domain half-attached would
 // leave a billable hostname at Cloudflare with nothing pointing at it.
 import { answered } from './dispatch.ts'
+import { resent } from './workers_api.ts'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from './host.ts'
 import { type Host as Hostname, stamp } from './directory.ts'
@@ -100,7 +101,7 @@ let api = (env: Env, path: string) =>
   `/zones/${env.CF_ZONE}/custom_hostnames${path}`
 
 let sent = (env: Env, path: string, init: RequestInit = {}) =>
-  fetch(api(env, path), {
+  resent(api(env, path), {
     ...init,
     headers: {
       authorization: `Bearer ${env.CF_HOSTNAMES_TOKEN}`,

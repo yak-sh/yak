@@ -3,6 +3,9 @@
 import { equal, test } from '@yaks/testing'
 import { swept } from './kills.ts'
 import type { Env } from './env.ts'
+import { resends } from './workers_api.ts'
+
+resends.wait = () => Promise.resolve()
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
@@ -72,4 +75,42 @@ test('each run reports the kills since the last one, and reads on from there', a
   } finally {
     globalThis.fetch = fetch
   }
+})
+
+// 2026-10-28T17:48Z: Cloudflare answered the sweep's query 500, "Internal
+// authentication error: internal server error". Sent again, it answers; one
+// it fails through every resend is `Unavailable` (wake.ts `reporting`), and a
+// token it refuses is a failure of ours.
+let SAID = JSON.stringify({
+  success: false,
+  errors: [{
+    code: 10500,
+    message: 'Internal authentication error: internal server error',
+  }],
+})
+let after = async (statuses: number[]) => {
+  let fetch = globalThis.fetch
+  globalThis.fetch = () => {
+    let status = statuses.shift() ?? 200
+    return Promise.resolve(
+      status == 200
+        ? Response.json({ data: { viewer: { accounts: [{}] } } })
+        : new Response(SAID, { status }),
+    )
+  }
+  try {
+    let env = { CF_ANALYTICS_TOKEN: 'test' } as Env
+    return await swept(env, iso('04:50'), at('05:00'), () => {})
+      .catch((e: Error) => e.name)
+  } finally {
+    globalThis.fetch = fetch
+  }
+}
+
+test('a query Cloudflare fails on its own side is sent again, and one it fails throughout is Unavailable', async () => {
+  let got = []
+  for (let statuses of [[500], [500, 500, 500, 500], [403]]) {
+    got.push(await after(statuses))
+  }
+  equal(got, [iso('04:55'), 'Unavailable', 'Error'])
 })

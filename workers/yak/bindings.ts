@@ -8,7 +8,7 @@ import { KERNEL, meta } from './meta.ts'
 import { type Bound, type Config, requests } from './wrangler_app.ts'
 import { NAMESPACE, namespace } from './dispatch.ts'
 import { refuse } from './tool.ts'
-import { accountUrl, resent } from './workers_api.ts'
+import { accountUrl, failure, passing, resent } from './workers_api.ts'
 
 export type Binding = Bound & { eid: string; app: string }
 type Request = ReturnType<typeof requests>[number]
@@ -101,9 +101,12 @@ let api = async (
     /[\r\n]+/g,
     ' ',
   )
-  let denied = [401, 403].includes(r.status) ||
-    /authenticat|authoriz|permission|access denied/i.test(why)
-  throw new Error(
+  // A 500 can say "Internal authentication error" too: Cloudflare's own
+  // failure, which no scope would mend.
+  let denied = !passing(r.status) && ([401, 403].includes(r.status) ||
+    /authenticat|authoriz|permission|access denied/i.test(why))
+  throw failure(
+    r.status,
     `cloudflare ${type}: ${why}` +
       (denied
         ? ` — CF_WORKERS_TOKEN needs ${scopes[type]}; token scopes: ${SCOPES}`

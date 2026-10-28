@@ -55,7 +55,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
 import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
-import { accountUrl, resent } from './workers_api.ts'
+import { accountUrl, failure, resent } from './workers_api.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
@@ -783,7 +783,8 @@ let api = (env: Env, path: string) =>
 
 // What the API answered, or the sentence it refused with. Cloudflare wraps
 // every reply in `{success, errors, result}`, so a failure is read out of
-// the body and not only off the status. Exported because that envelope is
+// the body and not only off the status, and one that was Cloudflare's own is
+// `Unavailable` (workers_api.ts `failure`). Exported because that envelope is
 // the whole account API's, not this door's: domains.ts speaks the same one.
 export let answered = async (r: Response) => {
   let body = await r.text()
@@ -800,7 +801,10 @@ export let answered = async (r: Response) => {
   })()
   if (r.ok && said?.success) return said.result
   let why = said?.errors?.map((e) => e.message).filter(Boolean).join('; ')
-  throw new Error(`cloudflare: ${why || body.slice(0, 400) || r.status}`)
+  throw failure(
+    r.status,
+    `cloudflare: ${why || body.slice(0, 400) || r.status}`,
+  )
 }
 
 export let sent = (env: Env, path: string, init: RequestInit) =>

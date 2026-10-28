@@ -20,6 +20,7 @@ import {
 } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
+import { Unavailable } from '../../workers/yak/workers_api.ts'
 
 // The words the catch-up writes, and the entity they sit on.
 let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
@@ -282,6 +283,59 @@ test('the service reads a settled head no more, and a failing look once', async 
   equal(f.looked, 1)
   equal(reports.length, 1)
   match(String(reports[0]), /origin is unreachable/)
+})
+
+// The usage watch's looks, five minutes apart, each failing as `fails` says
+// (`down`: Cloudflare's own failure through every resend) until the last,
+// which answers: what it reported.
+let watched = async (fails: ('down' | 'refused')[]) => {
+  let f = fixture({ sha: HEAD })
+  let stop = new AbortController()
+  let reports: string[] = []
+  let looks = 0
+  let usage = () => {
+    // Each look after the first comes five minutes after the one before.
+    if (looks) f.at.now += 5 * MIN
+    let fail = fails[looks++]
+    if (!fail) stop.abort()
+    return fail == 'down'
+      ? Promise.reject(new Unavailable('analytics: HTTP 500'))
+      : fail
+      ? Promise.reject(new Error('analytics: HTTP 403'))
+      : Promise.resolve(undefined)
+  }
+  let warn = console.warn
+  console.warn = () => {}
+  try {
+    await service(
+      {
+        graph: f.g,
+        report: (error, context) => {
+          let { message, cause } = error as Error
+          if (context?.tags?.duty == 'usage watch') {
+            reports.push(cause ? `${message} (${cause})` : message)
+          }
+        },
+      },
+      { every: 0, account: 'a', analytics: 't' },
+      stop.signal,
+      f.doors,
+      usage,
+    )
+  } finally {
+    console.warn = warn
+  }
+  return reports
+}
+
+test("the usage watch says Cloudflare's analytics is down once it has stayed down, and a refusal at once", async () => {
+  equal(await watched(['down']), [])
+  equal(await watched(['down', 'down', 'down']), [
+    "Cloudflare's analytics has not answered since " +
+    `${new Date(landed).toISOString()} ` +
+    '(Unavailable: analytics: HTTP 500)',
+  ])
+  equal(await watched(['refused', 'refused']), ['analytics: HTTP 403'])
 })
 
 test('a look cut off by shutdown is not reported', async () => {

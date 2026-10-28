@@ -20,6 +20,7 @@ import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
 import { reporting, resumed, STUCK } from './wake.ts'
+import { Unavailable } from './workers_api.ts'
 import { appStore, storeName } from './directory.ts'
 import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
 import { ADA, platform as probe, seeded } from './serving-probe.ts'
@@ -167,7 +168,66 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
     return Promise.resolve()
   })
   assert((marks[0] as { began: string }).began)
-  assertEquals(marks[1], { began: null, since: null })
+  assertEquals(marks[1], { began: null, since: null, reported: null })
+})
+
+// A run Cloudflare could not answer through every resend, on a row holding
+// `sweep`, at `now`: the marks it ends with, and what it reported.
+let down = new Unavailable('analytics: HTTP 500: Internal authentication error')
+let ran = async (
+  sweep: Record<string, string | null>,
+  now: number,
+  run: () => Promise<unknown> = () => Promise.reject(down),
+) => {
+  let ended: unknown
+  let reported: [string, string?][] = []
+  let META = {
+    apply: (b: Bundle[]) => (ended = b[0].sweep, Promise.resolve(b)),
+  }
+  let row = { entity: { eid: 'yak-kills' }, sweep: { kind: 'kills', ...sweep } }
+  let warn = console.warn
+  console.warn = () => {}
+  try {
+    await reporting({ META } as unknown as Env, row, run, () => now, (_, e) => {
+      let { message, cause } = e as Error
+      reported.push([message, (cause as Error | undefined)?.message])
+      return Promise.resolve()
+    }).catch(() => {})
+  } finally {
+    console.warn = warn
+  }
+  return { ended, reported }
+}
+
+test('a run Cloudflare could not answer is reported once no run has finished for STUCK, once', async () => {
+  let began = iso('05:00'), since = new Date(at('05:00') - STUCK).toISOString()
+  // Inside the allowance it starts or continues the streak, and says nothing.
+  assertEquals(await ran({}, at('05:00')), {
+    ended: { began: null, since: began, reported: null },
+    reported: [],
+  })
+  // Once no run has finished for STUCK, it is reported with its cause.
+  assertEquals(await ran({ since }, at('05:00')), {
+    ended: { began: null, since, reported: began },
+    reported: [[
+      `wake kills: no run has finished since ${since}; ` +
+      `Cloudflare could not answer the run begun ${began}`,
+      down.message,
+    ]],
+  })
+  // Reported, it says nothing more; a run that finishes ends the streak.
+  let told = { since, reported: began }
+  assertEquals((await ran(told, at('05:05'))).reported, [])
+  assertEquals(
+    (await ran(told, at('05:10'), () => Promise.resolve())).ended,
+    { began: null, since: null, reported: null },
+  )
+  // Any other failure is reported at once.
+  let refused = () => Promise.reject(new Error('analytics: HTTP 403'))
+  assertEquals((await ran({}, at('05:00'), refused)).reported, [[
+    'analytics: HTTP 403',
+    undefined,
+  ]])
 })
 
 // The runtime moved the directory to a new instance in the middle of its

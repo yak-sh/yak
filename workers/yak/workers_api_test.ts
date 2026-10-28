@@ -1,12 +1,14 @@
 // How many times the account API's fetch sends a call that Cloudflare answers
-// with one status each time, or drops (`null`).
+// with one status each time, or drops (`null`), and what the caller gets.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { resends, resent } from './workers_api.ts'
 
 resends.wait = () => Promise.resolve()
 
-let sends = async ([method, status]: [string, number | null]) => {
+type Call = [string, number | null, boolean?]
+
+let sends = async ([method, status, idempotent]: Call) => {
   let n = 0
   let was = globalThis.fetch
   globalThis.fetch = (() => {
@@ -16,27 +18,35 @@ let sends = async ([method, status]: [string, number | null]) => {
       : Promise.resolve(new Response(null, { status }))
   }) as typeof fetch
   try {
-    await resent('https://api.cloudflare.test/x', { method }).catch(() => {})
+    let got = await resent(
+      'https://api.cloudflare.test/x',
+      { method },
+      idempotent == null ? {} : { idempotent },
+    ).then((r) => r.status, (e: Error) => e.name)
+    return [n, got]
   } finally {
     globalThis.fetch = was
   }
-  return n
 }
 
-test("Cloudflare's own failures are sent again; a refusal, a POST or a PATCH once", async () => {
-  let calls: [string, number | null][] = [
-    ['GET', 500],
-    ['PUT', 503],
-    ['DELETE', 429],
-    ['GET', null],
-    ['GET', 200],
-    ['GET', 404],
-    ['PUT', 400],
-    ['DELETE', 403],
-    ['POST', 500],
-    ['PATCH', null],
+test("Cloudflare's own failures are sent again; a refusal once, and a POST or a PATCH unless it only reads", async () => {
+  let calls: [Call, [number, number | string]][] = [
+    [['GET', 500], [4, 500]],
+    [['PUT', 503], [4, 503]],
+    [['DELETE', 429], [4, 429]],
+    [['GET', null], [4, 'Unavailable']],
+    [['GET', 200], [1, 200]],
+    [['GET', 404], [1, 404]],
+    [['PUT', 400], [1, 400]],
+    [['DELETE', 403], [1, 403]],
+    [['POST', 500], [1, 500]],
+    [['PATCH', null], [1, 'TypeError']],
+    // A query that only reads, as an analytics read is.
+    [['POST', 500, true], [4, 500]],
+    [['POST', null, true], [4, 'Unavailable']],
+    [['POST', 403, true], [1, 403]],
   ]
   let got = []
-  for (let call of calls) got.push(await sends(call))
-  assertEquals(got, [4, 4, 4, 4, 1, 1, 1, 1, 1, 1])
+  for (let [call] of calls) got.push(await sends(call))
+  assertEquals(got, calls.map(([, want]) => want))
 })

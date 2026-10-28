@@ -73,6 +73,7 @@ import {
   variables,
 } from './usage.ts'
 import { ask, said as answered } from '../../workers/yak/analytics.ts'
+import { Unavailable } from '../../workers/yak/workers_api.ts'
 
 /** How long the service waits between looks at main. */
 export let EVERY = 60_000
@@ -499,6 +500,11 @@ export let analytics = (options: Options): Usage =>
  * hold an hour within minutes of its end. */
 export let SETTLE = 10 * 60_000
 
+/** How long Cloudflare's analytics may go unanswered before the usage watch
+ * reports it: one look after the first that failed, each riding out about
+ * eight seconds of resends (workers/yak/workers_api.ts `resent`). */
+export let OUTAGE = 5 * EVERY
+
 /** One look at an hour's usage: every jump it finds, reported, or none
  * without a token to look with. */
 export let look = async (
@@ -524,20 +530,44 @@ let watch = async (
   report: Report,
 ) => {
   if (!usage) return
-  let done = -Infinity, failing = false
+  // Since the last look that succeeded: when the first that failed began, and
+  // whether the failing has been reported.
+  let done = -Infinity, down: number | undefined, told = false
   for (;;) {
     let hour = Math.floor((doors.now() - SETTLE) / HOUR) * HOUR - HOUR
     if (hour > done) {
+      let at = doors.now()
       try {
         await look(usage, report, hour)
         done = hour
-        failing = false
+        down = undefined
+        told = false
       } catch (error) {
-        // A failing look is one report until a look succeeds again, and the
-        // next look asks for the same hour. A look with no token passes its
-        // hour, so a token that cannot be read is asked for once an hour.
-        if (!failing) await report(error, { tags: { duty: 'usage watch' } })
-        failing = true
+        // The next look asks for the same hour, and the failing is one report
+        // until a look succeeds again. A look Cloudflare could not answer
+        // (`Unavailable`, its own failure through every resend) is a line in
+        // the log until none has been answered for OUTAGE; any other failure
+        // is reported at once. A look with no token passes its hour, so a
+        // token that cannot be read is asked for once an hour.
+        down ??= at
+        let outage = error instanceof Unavailable
+        if (outage && doors.now() - down < OUTAGE) {
+          console.warn(`@yaks/admin — usage watch: ${String(error)}`)
+        } else if (!told) {
+          told = true
+          let since = new Date(down).toISOString()
+          await report(
+            outage
+              ? Error(
+                `Cloudflare's analytics has not answered since ${since}`,
+                {
+                  cause: error,
+                },
+              )
+              : error,
+            { tags: { duty: 'usage watch' } },
+          )
+        }
       }
     }
     if (signal.aborted) return

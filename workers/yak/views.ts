@@ -40,6 +40,7 @@ import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
 import { caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
+import { failure, resent } from './workers_api.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90
@@ -285,21 +286,25 @@ export let HEDGE = 1500
 /**
  * One query, run. The API takes SQL as the request body and answers JSON. A
  * dataset nobody has written to yet does not exist, and that is an app with no
- * views rather than a failure, so a 404 is an empty answer. Asked again past
- * HEDGE (`hedged`), so one stalled query does not hold up a page.
+ * views rather than a failure, so a 404 is an empty answer. A query only
+ * reads, so one Cloudflare fails on its own side is sent again (workers_api.ts
+ * `resent`), and one that stalls is asked again past HEDGE (`hedged`), so
+ * neither holds up a page.
  */
 export let ran = (env: Env, sql: string): Promise<Rows> =>
   elapsed('analytics_wait', () => hedged(() => asking(env, sql), HEDGE))
 
 let asking = async (env: Env, sql: string): Promise<Rows> => {
-  let res = await globalThis.fetch(sqlAt(env), {
+  let res = await resent(sqlAt(env), {
     method: 'POST',
     headers: { authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}` },
     body: sql,
-  })
+  }, { idempotent: true })
   let said = await res.text()
   if (res.status == 404) return []
-  if (!res.ok) throw new Error(`analytics ${res.status}: ${said.slice(0, 200)}`)
+  if (!res.ok) {
+    throw failure(res.status, `analytics ${res.status}: ${said.slice(0, 200)}`)
+  }
   return (JSON.parse(said) as Said).data ?? []
 }
 

@@ -41,6 +41,7 @@ import * as dirPart from './directory.ts'
 import { directory, type Space, stamp, type Tunnel } from './directory.ts'
 import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
+import { resent } from './workers_api.ts'
 import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
 import { adminWho } from './identity.ts'
@@ -55,9 +56,11 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 // The account the platform makes tunnels in, or null until its token is set.
+// Its calls, and the gateways' below, go through the fetch every Cloudflare
+// call does (workers_api.ts).
 let account = (env: Env): Api | null =>
   env.CF_TUNNEL_TOKEN && env.CF_ACCOUNT
-    ? { account: env.CF_ACCOUNT, token: env.CF_TUNNEL_TOKEN }
+    ? { account: env.CF_ACCOUNT, token: env.CF_TUNNEL_TOKEN, fetch: resent }
     : null
 
 let NO_TOKEN =
@@ -68,7 +71,7 @@ let NO_TOKEN =
 let front = (env: Env) =>
   env.CF_WORKERS_TOKEN && env.CF_ACCOUNT
     ? gateways(
-      { account: env.CF_ACCOUNT, token: env.CF_WORKERS_TOKEN },
+      { account: env.CF_ACCOUNT, token: env.CF_WORKERS_TOKEN, fetch: resent },
       namespace(env),
     )
     : null

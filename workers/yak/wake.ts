@@ -18,6 +18,13 @@
 // only once no run has finished for `STUCK` since the first one of the streak
 // began (`sweep.since`), and every death after that says so again.
 //
+// A run Cloudflare could not answer for now (workers_api.ts `Unavailable`:
+// its own failure, through every resend) is the same: no fault of the job's,
+// and the next run does what it could not. It is a line in the log and the
+// streak goes on; once no run has finished for `STUCK`, the outage is
+// reported once (`sweep.reported`), with the failure as its cause. Any other
+// failure is reported at once.
+//
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
 // at its first calendar instant at or after the moment it was discovered.
@@ -26,6 +33,7 @@ import { Stale } from '@yaks/graph/errors'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
+import { Unavailable } from './workers_api.ts'
 import type { Wake as Schedule } from '@yaks/wake'
 
 /** A directory schedule row, with the tags its job matches. */
@@ -89,29 +97,75 @@ export type Fired = { entity: { eid: string }; sweep?: unknown }
 let jobOf = (row: Fired) =>
   (row.sweep as { kind?: string } | undefined)?.kind ?? row.entity.eid
 
+type Marks = Record<string, string | null>
+
+/** Where a job's failure is written down: the directory's exception log. */
+export type Report = (job: string, error: unknown) => Promise<unknown>
+
 /** Run a platform job with its row marked begun until it ends, and keep a
- * failure in the directory's exception log. */
+ * failure in the directory's exception log; one Cloudflare could not answer
+ * only once no run has finished for {@link STUCK}. */
 export let reporting = async (
   env: Env,
   row: Fired,
   run: () => Promise<unknown>,
+  now = () => Date.now(),
+  report: Report = (job, error) => reported(env, job, error),
 ): Promise<undefined> => {
-  let mark = (sweep: Record<string, string | null>) =>
+  let mark = (sweep: Marks) =>
     meta(env).apply([{ entity: row.entity, sweep }], KERNEL)
-  await mark({ began: new Date().toISOString() })
+  let job = jobOf(row)
+  let began = new Date(now()).toISOString()
+  await mark({ began })
+  let ended: Marks = { began: null, since: null, reported: null }
   try {
     await run()
   } catch (error) {
-    await reported(env, jobOf(row), error)
-    throw error
+    if (!(error instanceof Unavailable)) {
+      await report(job, error)
+      throw error
+    }
+    ended = await unanswered(row, began, error, now(), report)
   } finally {
-    await mark({ began: null, since: null })
-      .catch((e) => reported(env, jobOf(row), e))
+    await mark(ended).catch((e) => report(job, e))
   }
 }
 
-/** How long a job may go without a run finishing before a death is reported:
- * longer than a burst of deploys, shorter than anyone waits for a sweep. */
+// A run Cloudflare could not answer: the streak it continues, reported once
+// it has lasted STUCK, and a line in the log until then.
+let unanswered = async (
+  row: Fired,
+  began: string,
+  error: Unavailable,
+  now: number,
+  report: Report,
+): Promise<Marks> => {
+  let job = jobOf(row)
+  let sweep = (row.sweep ?? {}) as {
+    since?: string | null
+    reported?: string | null
+  }
+  let since = sweep.since ?? began
+  let told = sweep.reported ?? null
+  if (!told && now - Date.parse(since) >= STUCK) {
+    told = new Date(now).toISOString()
+    await report(
+      job,
+      new Error(
+        `wake ${job}: no run has finished since ${since}; ` +
+          `Cloudflare could not answer the run begun ${began}`,
+        { cause: error },
+      ),
+    )
+  } else {
+    console.warn(`wake ${job}: ${error.message}; the next run tries again`)
+  }
+  return { began: null, since, reported: told }
+}
+
+/** How long a job may go without a run finishing before that is reported,
+ * whether its runs died or Cloudflare could not answer them: longer than a
+ * burst of deploys, shorter than anyone waits for a sweep. */
 export let STUCK = 15 * 60_000
 
 /** The jobs an object died in the middle of: a run marked begun before this
