@@ -8,6 +8,8 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
+import type { Storage } from './storage.ts'
+import { and, eq } from '@yaks/query/core'
 import { Refused } from './admit.ts'
 import { books, comp, memory } from './testing.ts'
 import { ram } from '@yaks/ram'
@@ -79,6 +81,47 @@ test('a write naming nothing is refused before anything is minted', () => {
 
 test('a read naming nothing is refused too', () => {
   assertThrows(() => g(numbered).read('.review.book=B-9'), Refused)
+})
+
+// A store that proves a revision, which every write moves, and a plugin that
+// hears every id and finds a `B-` id by the title an entity carries.
+let revised = (): Storage => {
+  let store = memory(), at = 0
+  return {
+    ...store,
+    revision: () => at,
+    tx: (body, o) => (at++, store.tx(body, o)),
+  }
+}
+let heard: string[] = []
+let titled: Plugin = {
+  name: 'titled',
+  address: (tx, ids) => {
+    heard.push(...ids)
+    return new Map(
+      ids.filter((id) => id.startsWith('B-')).map((id) => {
+        let [b] = tx.read(and(eq('doc.title', id))) as Bundle[]
+        return [id, b?.entity.eid ?? null]
+      }),
+    )
+  },
+}
+
+test('an id is asked once while the store is unchanged, and again after a write', () => {
+  let one = graph({ storage: revised(), vocab: books, plugins: [titled] })
+  one.apply([{ entity: { eid: 'dune' }, doc: { title: 'B-7' } }])
+  heard = []
+  assertEquals(one.address(['B-7', 'dune']), new Map([['B-7', 'dune']]))
+  assertEquals(one.address(['dune', 'B-7']), new Map([['B-7', 'dune']]))
+  assertThrows(() => one.address(['B-8']), Refused, 'B-8 names nothing')
+  assertEquals(heard, ['B-7', 'dune', 'B-8'])
+  one.apply([{ entity: { eid: 'emma' }, doc: { title: 'B-8' } }])
+  heard = []
+  assertEquals(
+    one.address(['B-8', 'B-7']),
+    new Map([['B-8', 'emma'], ['B-7', 'dune']]),
+  )
+  assertEquals(heard, ['B-8', 'B-7'])
 })
 
 // A handle as a person copies it: the hex after the `#`, which a shell takes

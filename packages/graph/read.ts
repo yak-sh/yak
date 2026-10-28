@@ -25,7 +25,7 @@ import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
 
 /** The committed storage a reader needs, without any mutation methods. */
-export type ReadStorage = Pick<Storage, 'read' | 'rows' | 'get'>
+export type ReadStorage = Pick<Storage, 'read' | 'rows' | 'get' | 'revision'>
 export type Reader =
   & Pick<
     Graph,
@@ -60,6 +60,9 @@ export let continuing = <A, B>(
 let fits = (id: string, eids: Eid[]): string =>
   `${id} names ${eids.length} entities (${eids.slice(0, 3).join(', ')}` +
   `${eids.length > 3 ? ', …' : ''}); give more of it`
+
+/** How many addressed ids a reader keeps for one revision of its store. */
+let ANSWERED = 10_000
 
 /** Read through the graph's projection and addressing rules. An owning host
  * can supply its traced committed transaction; otherwise only reads are
@@ -141,15 +144,54 @@ export let reader = (opts: {
   // A reader's ids are asked under its scope (`scoped`, already applied to
   // `readOpts`), so an id names to it only what it may see: one naming what
   // is hidden from it names nothing, as one naming nothing does.
+  //
+  // What an id names follows from the stored rows, the reader's options and
+  // the kind asked for, so while the store's revision holds
+  // (`Storage.revision`) an id asked again is answered as it was, and the
+  // plugins hear each id once. A plugin may look up every id, an eid too
+  // (@yaks/alias keeps the eids a migration retired), and a computation
+  // names the same eids in read after read: an inbox's summary names two
+  // hundred in a hundred reads. A store that proves no revision is asked
+  // every time.
+  let answered: { at: unknown; ids: Map<string, Eid> } | undefined
   let address = (
     ids: string[],
     kind?: string,
     readOpts?: ReadOpts,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
-    let asks = plugins.flatMap((p) => p.address ?? [])
-    if (!ids.length || !asks.length && !ids.some(handled)) {
+    if (!ids.length || !plugins.some((p) => p.address) && !ids.some(handled)) {
       return new Map<string, Eid>()
     }
+    let at = storage.revision?.()
+    if (at === undefined) return resolve(ids, kind, readOpts)
+    if (answered?.at !== at || answered.ids.size > ANSWERED) {
+      answered = { at, ids: new Map() }
+    }
+    let held = answered.ids
+    // The call's own cancellation and trace parent change no answer.
+    let { signal: _signal, parent: _parent, ...asking } = readOpts ?? {}
+    let as = JSON.stringify([kind ?? null, asking]) + '\n'
+    let fresh = [...new Set(ids.filter((id) => !held.has(as + id)))]
+    return continuing(
+      fresh.length ? resolve(fresh, kind, readOpts) : new Map<string, Eid>(),
+      (found) => {
+        for (let id of fresh) held.set(as + id, found.get(id) ?? id)
+        let out = new Map<string, Eid>()
+        for (let id of ids) {
+          let eid = held.get(as + id)!
+          if (eid != id) out.set(id, eid)
+        }
+        return out
+      },
+    )
+  }
+  // Every address plugin asked about `ids`, then the bare handles.
+  let resolve = (
+    ids: string[],
+    kind?: string,
+    readOpts?: ReadOpts,
+  ): Map<string, Eid> | Promise<Map<string, Eid>> => {
+    let asks = plugins.flatMap((p) => p.address ?? [])
     let outside = outsideRead()
     let under = (o?: ReadOpts) => ({ ...readOpts, ...o })
     let read = (q: Query, o?: ReadOpts, comps?: string[]) =>
@@ -510,6 +552,8 @@ export let reader = (opts: {
     get: (ids, comps, o) => get(ids, comps, scoped(o)),
     use: (plugin) => {
       plugins.push(plugin)
+      // A plugin that addresses ids may answer what the others did not.
+      if (plugin.address) answered = undefined
       if (plugin.ask) askHooks.push(plugin)
       if (plugin.answer) answerHooks.push(plugin)
       if (plugin.view) viewHooks.push(plugin)
