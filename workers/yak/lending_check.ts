@@ -35,6 +35,8 @@ import { lasting } from './testing.ts'
 import { call } from './tools.ts'
 import { minted } from './session.ts'
 import { reaching } from './agent.ts'
+import { connector, fresh, type Person, signIn, unique } from './probe.ts'
+import { parseHTML } from 'linkedom'
 
 let comp = (b: Bundle | undefined, key: string) => (b?.[key] ?? {}) as Comp
 let key = 'lender-private-key'
@@ -410,4 +412,174 @@ test('a named connector read from a second installed copy follows its component 
   assertEquals(rows.map((b) => comp(b, 'lendingnote').body), [
     'The friend’s note',
   ])
+})
+
+// The connections page, as each side's browser opens it and presses its
+// buttons: the kernel's own doors, over HTTP, the page read on a document.
+test('the connections page lends, shows the loan on both sides, and replaces and recalls it', async () => {
+  let k = await fresh({
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+  })
+  try {
+    let jeff = await signIn(k), friend = await signIn(k)
+    let [his, hers] = [jeff, friend].map((p) => p.email.split('@')[0])
+    let open = async (who: Person, space: string) =>
+      parseHTML(
+        await (await k.at(k.host, `/manage/connections?space=${space}`, {
+          headers: { cookie: who.cookie },
+        })).text(),
+      ).document
+    // A button pressed with what its form holds, and any field typed first.
+    let press = async (
+      who: Person,
+      doc: Document,
+      button: Element,
+      typed: Record<string, string> = {},
+    ) => {
+      let at = button.getAttribute('form')
+      let form = (at ? doc.getElementById(at) : button.closest('form'))!
+      let body = new URLSearchParams()
+      for (let f of form.querySelectorAll('input[name]')) {
+        if (f.getAttribute('form') && f.getAttribute('form') != at) continue
+        body.set(f.getAttribute('name')!, f.getAttribute('value') ?? '')
+      }
+      for (let [name, value] of Object.entries(typed)) body.set(name, value)
+      body.set(button.getAttribute('name')!, button.getAttribute('value')!)
+      let r = await k.at(k.host, form.getAttribute('action')!, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          cookie: who.cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      })
+      return parseHTML(await r.text()).document.querySelector('.Say')
+        ?.textContent ?? ''
+    }
+    let card = (doc: Document, title: string) =>
+      [...doc.querySelectorAll('[data-connection]')].find((c) =>
+        c.querySelector('.Card_Title')?.textContent == title
+      )!
+    let button = (within: Element, label: string) =>
+      [...within.querySelectorAll('button')].find((b) =>
+        b.textContent == label
+      )!
+    let text = (e?: Element | null) =>
+      e?.textContent?.replace(/\s+/g, ' ') ?? ''
+
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'study', title: 'Bible Study' })
+    await agent.tool('app_files', {
+      app: 'study',
+      op: 'write',
+      path: 'index.html',
+      content: '<h1>Study</h1>',
+    })
+    await agent.tool('app_deploy', { app: 'study' })
+    await agent.tool('connection_need', {
+      app: 'study',
+      integration: 'ESV',
+      hosts: ['api.esv.org'],
+    })
+    let doc = await open(jeff, his)
+    assertStringIncludes(
+      await press(jeff, doc, button(card(doc, 'ESV'), 'Save key'), {
+        key: 'jeffs-esv-key',
+      }),
+      'Saved',
+    )
+    doc = await open(jeff, his)
+    assertStringIncludes(
+      await press(jeff, doc, button(card(doc, 'ESV'), 'Lend'), { cap: '2' }),
+      '2 calls a month',
+    )
+    let name = unique('study')
+    await agent.tool('app_publish', { app: 'study', name })
+    let theirs = connector(k, friend.cookie)
+    for (let as of ['study', 'again', 'third']) {
+      await theirs.tool('app_install', { name, as })
+    }
+
+    // The borrower: whose it is, the cap, and a key of their own to paste.
+    let away = await open(friend, hers)
+    let lent = [...away.querySelectorAll('[data-borrowed]')]
+    assertEquals(lent.length, 3)
+    assertStringIncludes(text(lent[0]), `Borrowed from ${his}`)
+    assertStringIncludes(text(lent[0]), '0 of 2 calls this month')
+    assertStringIncludes(text(lent[0]), 'Use your own key')
+    assertEquals(away.querySelector('[data-connection]'), null)
+
+    // The lender: each copy by its space, its calls against the cap.
+    doc = await open(jeff, his)
+    let esv = card(doc, 'ESV')
+    let rows = [...esv.querySelectorAll('.Rows_Item')].map(text)
+    assertEquals(rows.length, 4)
+    assertStringIncludes(
+      rows[0],
+      'Lent to installed copies, 2 calls a month each',
+    )
+    assertStringIncludes(
+      rows[1],
+      `${hers}Their copy of Bible Study · 0 of 2 calls this month`,
+    )
+    assertStringIncludes(
+      await press(jeff, doc, button(esv, 'Save'), { cap: '5' }),
+      '5 calls a month',
+    )
+    away = await open(friend, hers)
+    assertStringIncludes(
+      text(away.querySelector('[data-borrowed]')),
+      '0 of 5 calls this month',
+    )
+
+    // The borrower's own key replaces one copy's loan, the connection that
+    // made replaces a second's, and the lender recalls the third.
+    let first = away.querySelector('[data-borrowed]')!
+    assertStringIncludes(
+      await press(friend, away, button(first, 'Save key'), {
+        key: 'friends-key',
+      }),
+      'your own connection',
+    )
+    away = await open(friend, hers)
+    let second = away.querySelector('[data-borrowed]')!
+    assertEquals(text(second).includes('Use your own key'), false)
+    assertStringIncludes(
+      await press(friend, away, button(second, 'Use your own')),
+      'can now use ESV',
+    )
+    doc = await open(jeff, his)
+    esv = card(doc, 'ESV')
+    let borrowers = [...esv.querySelectorAll('.Rows_Item')].filter((r) =>
+      r.textContent!.includes('Their copy')
+    )
+    assertEquals(borrowers.length, 1)
+    assertStringIncludes(
+      await press(jeff, doc, button(borrowers[0], 'Recall')),
+      'Stopped lending to that copy',
+    )
+    away = await open(friend, hers)
+    assertEquals(away.querySelectorAll('[data-borrowed]').length, 0)
+    let held = [...away.querySelectorAll('[data-connection]')].map(text)
+    assertEquals(held.length, 2)
+    let mine = held.find((c) => c.includes('Connected'))!
+    assertEquals(mine.match(/Bible Studyenv\.ESV/g)?.length, 2, mine)
+    assert(held.some((c) => c.includes('Needs connecting')), held.join('\n'))
+
+    // Stopping lends to nobody more, and the lender's own app keeps its key.
+    doc = await open(jeff, his)
+    assertStringIncludes(
+      await press(jeff, doc, button(card(doc, 'ESV'), 'Stop lending')),
+      'Stopped lending',
+    )
+    doc = await open(jeff, his)
+    let after = text(card(doc, 'ESV'))
+    assert(!after.includes('Lent to installed copies'), after)
+    assertStringIncludes(after, 'Connected')
+    assertStringIncludes(after, 'Lend to copies of Bible Study')
+  } finally {
+    await k.stop()
+  }
 })

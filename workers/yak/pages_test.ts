@@ -12,7 +12,7 @@ import {
   spaceBinned,
   spaceIndex,
 } from './pages.ts'
-import type { Connections } from './connections.ts'
+import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -405,6 +405,114 @@ test('connections: a page opened to add one from the directory offers it first, 
       'value="add">Save key',
     ]
   ) assertStringIncludes(card, text)
+})
+
+// An app's use of a connection, as a row draws it.
+let used = (over: Partial<Using> = {}): Using => ({
+  app: 'notes',
+  title: 'Notes',
+  binding: 'WEATHER',
+  direct: false,
+  anyone: false,
+  calls: 0,
+  cap: null,
+  lends: null,
+  borrower: null,
+  ...over,
+})
+// Each button on the first card matching `at`, read off its markup (a
+// document costs a millisecond to parse): its label, its `do`, and the app and
+// cap its form posts, the form a `form` attribute names or the one around it.
+let buttons = async (at: string, connections: Partial<Connections>) => {
+  let html = await desk({
+    ...page,
+    view: 'connections',
+    connections: {
+      on: true,
+      borrowed: [],
+      list: [],
+      services: [],
+      built: [],
+      ...connections,
+    },
+  }, env).text()
+  let from = html.lastIndexOf('<section', html.indexOf(at))
+  let card = html.slice(from, html.indexOf('</section>', from))
+  let forms = [...card.matchAll(/<form([^>]*)>(.*?)<\/form>/gs)]
+  let attr = (tag: string, name: string) =>
+    tag.match(new RegExp(` ${name}="([^"]*)"`))?.[1]
+  let field = (form: string, name: string) =>
+    form.match(new RegExp(`name="${name}"[^>]* value="([^"]*)"`))?.[1]
+  return {
+    text: card.replace(/<[^>]*>/g, ''),
+    pressed: forms.flatMap(([, , inner]) =>
+      [...inner.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map(
+        ([, tag, label]) => {
+          let named = attr(tag, 'form')
+          let form = named
+            ? forms.find(([, head]) => attr(head, 'id') == named)![2]
+            : inner
+          return [
+            label,
+            attr(tag, 'value'),
+            field(form, 'app'),
+            field(form, 'cap'),
+          ]
+        },
+      )
+    ),
+  }
+}
+
+test('connections: a lent connection names each copy borrowing it, recalls one, and changes or stops the lend', async () => {
+  let { text, pressed } = await buttons('data-connection=', {
+    list: [{
+      ...added('connected'),
+      apps: [
+        used({ app: 'copy', calls: 3, cap: 5, borrower: 'Sam' }),
+        used({ lends: 5 }),
+      ],
+    }],
+  })
+  assertStringIncludes(text, 'Lent to installed copies, 5 calls a month each')
+  assertStringIncludes(text, 'SamTheir copy of Notes · 3 of 5 calls this month')
+  assertEquals(
+    pressed.filter(([, does]) => does == 'recall' || does == 'lend'),
+    [
+      ['Recall', 'recall', 'copy', undefined],
+      ['Save', 'lend', 'notes', '5'],
+      ['Stop lending', 'lend', 'notes', undefined],
+    ],
+  )
+})
+
+test('connections: a borrowed connection says whose it is, and gives way to a key, a sign-in or the space’s own', async () => {
+  let lent: Borrowed = {
+    eid: 'lent',
+    integration: 'Weather',
+    face: named('Weather'),
+    keyed: true,
+    hosts: ['api.weather.test'],
+    lender: 'Jeff',
+    space: 'ada',
+    app: used({ app: 'copy', calls: 3, cap: 100 }),
+  }
+  let replaced = async (borrowed: Borrowed, list: Shown[] = []) => {
+    let { text, pressed } = await buttons('data-borrowed=', {
+      borrowed: [borrowed],
+      list,
+    })
+    assertStringIncludes(text, 'Borrowed from Jeff')
+    assertStringIncludes(text, '3 of 100 calls this month')
+    return pressed
+  }
+  assertEquals(await replaced(lent), [['Save key', 'own', 'copy', undefined]])
+  assertEquals(await replaced({ ...lent, keyed: false }), [
+    ['Connect your own', 'own', 'copy', undefined],
+  ])
+  assertEquals(await replaced(lent, [added('connected')]), [
+    ['Use your own', 'attach', 'copy', undefined],
+  ])
 })
 
 test('askConnect: how to get the key, above the box it is pasted in', async () => {

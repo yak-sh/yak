@@ -12,7 +12,13 @@
 
 import type { Frame } from './build.ts'
 import type { Agent } from './connected.ts'
-import type { Connections, Face, Shown, Using } from './connections.ts'
+import type {
+  Borrowed,
+  Connections,
+  Face,
+  Shown,
+  Using,
+} from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
@@ -948,17 +954,21 @@ let press = (value: string, label: string, quiet = true) =>
     quiet ? ' Button-quiet' : ''
   }" type="submit" name="do" value="${value}">${label}</button>`
 
-let calls = (a: Using) =>
+let callsOf = (n: number) => `${n} ${n == 1 ? 'call' : 'calls'}`
+
+// The calls an app made through a connection this month, against its cap.
+let calls = (a: { calls: number; cap: number | null }) =>
   a.cap == null
-    ? `${a.calls} ${a.calls == 1 ? 'call' : 'calls'} this month`
-    : `${a.calls} of ${a.cap} calls this month`
+    ? `${callsOf(a.calls)} this month`
+    : `${a.calls} of ${callsOf(a.cap)} this month`
 
 // One connection, as a card: its head says what it is and how it stands and
 // holds what acts on all of it (connecting, disconnecting); under it the key
-// it still wants, how to get one, the apps using it, a box to let one more
-// use it, and folded away what few people need: the name its code reads, a
-// new key, and for a service this space added, what it says and whether it
-// is listed. The space's side of an app that asks each person to connect
+// it still wants, how to get one, the apps using it and the copies borrowing
+// it, a box to let one more use it, and folded away what few people need:
+// lending it to the copies people install, the name its code reads, a new
+// key, and for a service this space added, what it says and whether it is
+// listed. The space's side of an app that asks each person to connect
 // their own is only the ask: nothing here connects it, and it stays while
 // the app asks. Its forms post for the space that keeps it, or for the
 // page's own when it is the person's.
@@ -1007,15 +1017,19 @@ let connection = (
       ),
     )
     : ''
+  let forApp = (a: Using, inner: string, at = '') =>
+    form(`<input type="hidden" name="app" value="${esc(a.app)}">${inner}`, at)
   // An app that uses it: what its code reads and, for one it shares, who may
   // call out through it there, which the person opens to anyone or closes to
   // members, and the calls it made through it this month against any cap. A
-  // person's own is only ever theirs to call out through.
+  // person's own is only ever theirs to call out through. A copy another
+  // space borrows it for is that space, its calls against the cap it was lent
+  // under, and the button that takes the loan back.
   let using = (a: Using) =>
     `<li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
-      esc(a.title)
+      esc(a.borrower ?? a.title)
     }</strong><span class="Rows_Meta">${
-      [
+      (a.borrower != null ? [`Their copy of ${esc(a.title)}`, calls(a)] : [
         `<code>env.${esc(a.binding)}</code>${
           a.direct ? ', the key itself' : ''
         }`,
@@ -1025,19 +1039,25 @@ let connection = (
           ? 'Anyone may call out'
           : 'Only members call out',
         calls(a),
-      ].filter(Boolean).join(' · ')
+        a.lends == null
+          ? ''
+          : `Lent to installed copies, ${callsOf(a.lends)} a month each`,
+      ]).filter(Boolean).join(' · ')
     }</span></div>${
       c.each ? '' : `<div class="Rows_Actions">${
-        form(
-          `<input type="hidden" name="app" value="${esc(a.app)}">${
-            press(
-              a.anyone ? 'close' : 'open',
-              a.anyone ? 'Members only' : 'Open to anyone',
-            )
-          }`,
+        forApp(
+          a,
+          a.borrower != null ? press('recall', 'Recall') : press(
+            a.anyone ? 'close' : 'open',
+            a.anyone ? 'Members only' : 'Open to anyone',
+          ),
         )
       }</div>`
     }</li>`
+  // The space's own apps first, then the copies borrowing it.
+  let rows = [...c.apps].sort((a, b) =>
+    Number(a.borrower != null) - Number(b.borrower != null)
+  )
   let apps = ask
     ? c.apps.length
       ? `<p class="Card_Sub">Each person who uses ${
@@ -1045,7 +1065,7 @@ let connection = (
       } connects their own account, from the app.</p>`
       : ''
     : c.apps.length
-    ? `<ul class="Rows">${c.apps.map(using).join('')}</ul>`
+    ? `<ul class="Rows">${rows.map(using).join('')}</ul>`
     : '<p class="Card_Sub">No app uses it yet.</p>'
   // Letting one more app use it: the app, and, folded under the advanced
   // options, the name its code reads it by, which most never change.
@@ -1163,7 +1183,34 @@ let connection = (
       )
     }</details>`
     : ''
-  let folded = named + replace + reached + listing + told
+  // Lending it to the copies people install of an app here: the calls a
+  // month each copy may make, saved again to change it, and the button that
+  // stops lending and takes every loan back. Only a shared sentinel the app
+  // holds is lent, never the key itself.
+  let lendable = c.status == 'connected' && !c.own && !c.each
+  let lend = (a: Using) => {
+    let field = `${id('lend')}-${esc(a.app)}`
+    let stop = `${field}-stop`
+    return forApp(
+      a,
+      labeled(
+        field,
+        `Lend to copies of ${esc(a.title)}`,
+        `<div class="Form_Line"><input class="Field" id="${field}" name="cap" type="number" min="1" step="1" inputmode="numeric" value="${
+          a.lends ?? 100
+        }" required>${press('lend', a.lends == null ? 'Lend' : 'Save')}${
+          a.lends == null
+            ? ''
+            : `<button class="Button Button-quiet" type="submit" form="${stop}" name="do" value="lend">Stop lending</button>`
+        }</div>`,
+        'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
+      ),
+    ) + (a.lends == null ? '' : forApp(a, '', ` id="${stop}" hidden`))
+  }
+  let lent = lendable
+    ? c.apps.filter((a) => a.borrower == null && !a.direct).map(lend).join('')
+    : ''
+  let folded = lent + named + replace + reached + listing + told
   return `<section class="Card" data-connection="${esc(c.eid)}">${
     heading(esc(c.face.title), {
       mark: logo(c.face),
@@ -1177,6 +1224,57 @@ let connection = (
       ? `<details class="More"><summary>Advanced options</summary><div class="More_Body">${folded}</div></details>`
       : ''
   }</section>`
+}
+
+// A connection an app here borrows from the space that lent it with the app,
+// as a card: its head says whose it is, its row what the app has spent of the
+// cap it was lent under, and what replaces it is the space's own: a
+// connection it holds already, a sign-in, or a key pasted under the fold.
+let borrowing = (
+  b: Borrowed,
+  on: boolean,
+  mine?: Shown,
+  enable?: string[],
+) => {
+  let form = (inner: string, connection = b.eid) =>
+    `<form method="post" action="${
+      esc(enabling(managePath('connections', b.space), enable))
+    }"><input type="hidden" name="connection" value="${
+      esc(connection)
+    }"><input type="hidden" name="app" value="${
+      esc(b.app.app)
+    }">${inner}</form>`
+  let actions = mine
+    ? form(press('attach', 'Use your own'), mine.eid)
+    : on && !b.keyed
+    ? form(press('own', 'Connect your own'))
+    : ''
+  let id = `own-${esc(b.eid)}-${esc(b.app.app)}`
+  let own = on && b.keyed && !mine
+    ? `<details class="More"><summary>Use your own key</summary><div class="More_Body">${b.face.instructions}${
+      form(
+        keyBox(
+          id,
+          'Paste your key',
+          press('own', 'Save key', false),
+          reach(b.hosts),
+        ),
+      )
+    }</div></details>`
+    : ''
+  return `<section class="Card" data-borrowed="${esc(b.eid)}">${
+    heading(esc(b.face.title), {
+      mark: logo(b.face),
+      status: status(`Borrowed from ${esc(b.lender)}`, 'good'),
+      actions,
+    })
+  }${about(b.face)}<p class="Card_Sub">${esc(b.app.title)} calls out with ${
+    esc(b.lender)
+  }’s key until you use your own. The key stays hidden, and neither of you sees the other’s data.</p><ul class="Rows"><li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
+    esc(b.app.title)
+  }</strong><span class="Rows_Meta"><code>env.${esc(b.app.binding)}</code> · ${
+    calls(b.app)
+  }</span></div></li></ul>${own}</section>`
 }
 
 // The page: the person's own connections and the services that hold a
@@ -1260,8 +1358,19 @@ let connections = (at: DeskPage, env: Host) => {
       }.</p></section>`
     ).join('')
   let spaces = [
-    ...new Set([at.space, ...first.flatMap((one) => one.space ?? [])]),
+    ...new Set([
+      at.space,
+      ...first.flatMap((one) => one.space ?? []),
+      ...c.borrowed.map((b) => b.space),
+    ]),
   ]
+  // What a space holds already that could replace a loan: a connected
+  // connection through the same service.
+  let mine = (b: Borrowed) =>
+    first.find((one) =>
+      one.space == b.space && one.integration == b.integration &&
+      one.status == 'connected' && !one.failed && !one.each
+    )
   return `${
     c.on
       ? ''
@@ -1269,7 +1378,7 @@ let connections = (at: DeskPage, env: Host) => {
         heading("Keys can't be saved here yet")
       }<p class="Card_Sub">This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
   }${
-    c.list.length || c.services.length
+    c.list.length || c.services.length || c.borrowed.length
       ? ''
       : `<section class="Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
   }${group('Yours', yours)}${
@@ -1278,6 +1387,8 @@ let connections = (at: DeskPage, env: Host) => {
         spaceHost(env, space),
         first.filter((one) => one.space == space)
           .map((one) => connection(one, c.on, undefined, c.enable)).join('') +
+          c.borrowed.filter((b) => b.space == space)
+            .map((b) => borrowing(b, c.on, mine(b), c.enable)).join('') +
           (space == at.space
             ? c.built.map(offer).join('') + (c.on ? add : '')
             : ''),

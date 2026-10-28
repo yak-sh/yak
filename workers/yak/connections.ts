@@ -218,6 +218,8 @@ export type Borrowed = {
   face: Face
   /** connected by pasting a key, rather than by signing in */
   keyed: boolean
+  /** where its key may be sent, and so a key of the borrower's own */
+  hosts: string[]
   /** the space lending it, as its people call it */
   lender: string
   /** the space here whose app borrows it, by slug */
@@ -573,6 +575,7 @@ export let connectionsOf = async (
           integration,
           face: await faceOf(integration, i),
           keyed: !i || keyed(i),
+          hosts: i?.hosts ?? [],
           lender: names.get(String(c.owner)) ?? 'another space',
           space: slugs.get(owners[String(comp(l, 'edge').from)])!,
           app: usingOf(l),
