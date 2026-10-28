@@ -81,8 +81,9 @@ test('a caller stopping a request preserves its cancellation, not an outage', as
 // A delivery the tracker could not answer for now is `Unavailable`, which
 // the next pass rides out; any other failure is a bug.
 let delivered = (status: number, at = remote) =>
-  delivery(at, () => Promise.resolve(new Response(null, { status })))([])
-    .then(() => 'sent', failure)
+  Promise.resolve(
+    delivery(at, () => Promise.resolve(new Response(null, { status })))([]),
+  ).then(() => 'sent', failure)
 
 test('a delivery the tracker could not answer for now is unavailable, and any other failure is not', async () => {
   equal(
