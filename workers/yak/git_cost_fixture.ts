@@ -12,6 +12,13 @@ import { DIR, oid, treeEntries, treeOf } from '@yaks/git'
 import { r2Objects } from './lib/objects.ts'
 import { directoryStanding } from './directory_standing_fixture.ts'
 
+// The runtime's socket factory, declared structurally as build.ts does.
+declare let WebSocketPair: { new (): { 0: unknown; 1: Socket } }
+type Socket = { accept(): void; close(): void }
+
+/** yak/git, metered. The meter is this incarnation's memory, which workerd
+ * drops when no request has reached the object for ten seconds; `/_cost/hold`
+ * answers a socket that holds the object while it is open. */
 export class GitCostStore {
   #store: Store
   #meter: ReturnType<typeof meter>
@@ -22,6 +29,16 @@ export class GitCostStore {
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
     let url = new URL(req.url)
+    if (url.pathname == '/_cost/hold') {
+      let pair = new WebSocketPair()
+      pair[1].accept()
+      return new Response(
+        null,
+        { status: 101, webSocket: pair[0] } as ResponseInit & {
+          webSocket: unknown
+        },
+      )
+    }
     if (url.pathname == '/_cost/step') {
       this.#meter.step(url.searchParams.get('name'))
       return Response.json({})
@@ -169,6 +186,16 @@ export let gitPushCost = async (
     if (name) url.searchParams.set('name', name)
     await git.fetch(new Request(url))
   }
+  // An upload never reaches yak/git, and 530 files on a loaded box outlast
+  // its ten idle seconds: the deploy behind them met a fresh incarnation with
+  // no step open, and the report lost the first push (T-127900). Held, one
+  // incarnation meters every step, and no wake is billed inside one.
+  let hold = (await git.fetch(
+    new Request('http://cost/_cost/hold', {
+      headers: { upgrade: 'websocket' },
+    }),
+  ) as Response & { webSocket: Socket }).webSocket
+  hold.accept()
   try {
     await step('first push')
     await upload(paths)
@@ -198,5 +225,6 @@ export let gitPushCost = async (
     return { count, changed, heads, commits, ...report }
   } finally {
     await step(null)
+    hold.close()
   }
 }
