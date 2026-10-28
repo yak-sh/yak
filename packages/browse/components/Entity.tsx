@@ -10,17 +10,8 @@ import { views as genericViews } from '@yaks/render/views'
 // @yaks/render selects them; @yaks/preact mounts the selected component.
 import { and, parse } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
-import { useErrorBoundary } from 'preact/hooks'
-import {
-  ent,
-  mutate,
-  myActor,
-  myMode,
-  problem,
-  reveal,
-  rows,
-  shown,
-} from '../live.ts'
+import { Fault } from './Fault.tsx'
+import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Ent, idOf, statusOf, vocab } from '../types.ts'
 import { navigate } from './nav.tsx'
 import { type Action, define, defineActions, renderView } from './registry.ts'
@@ -556,35 +547,10 @@ defineActions([
 // beside it and the page around it paint. One bad view costs one slot, never
 // the page.
 let Veil = block('section', 'Quarantine', { Reveal: 'button' })
-let Fault = block('section', 'Fault', { Retry: 'button' })
-let said = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
-let EntityFace = (
-  { eid, view, ...rest }: {
-    eid: string
-    view?: string
-    [x: string]: unknown
-  },
+type FaceProps = { eid: string; view?: string; [x: string]: unknown }
+let EntityBody = (
+  { eid, view, ...rest }: FaceProps,
 ) => {
-  let [error, retry] = useErrorBoundary((error) => {
-    // The page tracker files console.error's first argument, with the stack
-    // of the error beside it.
-    console.error(
-      `the ${view ?? 'default'} view of ${eid} could not be drawn: ${
-        said(error)
-      }`,
-      error,
-    )
-    problem.value = `a view could not be drawn: ${said(error)}`
-  })
-  if (error) {
-    return (
-      <Fault>
-        This {view ?? ''} view could not be drawn: {said(error)}
-        <Fault.Retry type='button' onClick={retry}>retry</Fault.Retry>
-      </Fault>
-    )
-  }
   let e = ent(eid)
   if (!shown(eid)) {
     return (
@@ -600,5 +566,11 @@ let EntityFace = (
   // same title in its body keep two states (@yaks/ux).
   return <Ux at={view ?? 'default'}>{renderView(e, view, rest)}</Ux>
 }
+
+let EntityFace = (props: FaceProps) => (
+  <Fault place={`the ${props.view ?? 'default'} view of ${props.eid}`}>
+    <EntityBody {...props} />
+  </Fault>
+)
 
 export let Entity = memo(EntityFace)

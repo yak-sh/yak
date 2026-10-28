@@ -33,6 +33,7 @@ import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
 import { type Home, type Offer, offerPlaces } from './offers.ts'
 import { learnGlyphs } from './icons.tsx'
+import { Fault } from './Fault.tsx'
 import type { IconNode } from 'lucide'
 
 let held = (eid: string): Bundle | undefined =>
@@ -182,7 +183,7 @@ export let inspectViews: Entry[] = adaptViews([
 // Query and map pages are chosen by the same registry as entity pages. The
 // temporary bundle identifies the page; its query is caller context, not data
 // written into the server graph.
-export let PagePart = (
+let PageBody = (
   { view, eid = `browse-page:${view}`, ...ctx }: {
     view: string
     eid?: string
@@ -204,6 +205,11 @@ export let PagePart = (
     })
     : null
 }
+
+export let PagePart = (props: Parameters<typeof PageBody>[0]) =>
+  <Fault key={props.eid ?? props.view} place={props.view}>
+    <PageBody {...props} />
+  </Fault>
 
 /** An entity as it was just after a transaction (`at`), or, without one, a
  * deleted entity as it was last: @yaks/inspect's `Past`, through the app's

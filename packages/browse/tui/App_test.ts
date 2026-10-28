@@ -23,6 +23,9 @@ import { start } from '../terminal-route.ts'
 import { views as docViews } from '@yaks/doc/views'
 import { inspectViews } from '@yaks/inspect/views'
 import { contributedViews, InspectPage } from '../components/inspect.tsx'
+import { PagePart } from '../components/inspect.tsx'
+import { onFailure } from '../failure.ts'
+import { pane } from './testing.ts'
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 test('terminal CLI routes ids, map and queries to Browse pages', () => {
@@ -118,5 +121,54 @@ test('the terminal draws a prepared contributed Markdown body', () => {
     ok(root.querySelector('strong'))
   } finally {
     render(null, target)
+  }
+})
+
+test('a broken destination reports and leaves its siblings usable in the terminal', async () => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  let error = new Error('broken destination')
+  let reports: unknown[][] = []
+  let restore = onFailure((...args) => {
+    reports.push(args)
+  })
+  let broken = true
+  let drop = extend([{
+    view: 'Test.Destination',
+    match: true,
+    Render: () => {
+      if (broken) throw error
+      return h('p', {}, 'recovered destination')
+    },
+  }])
+  try {
+    await act(() =>
+      render(
+        h(
+          'div',
+          {},
+          h('p', {}, 'working navigation'),
+          h(PagePart, { view: 'Test.Destination' }),
+        ),
+        target,
+      )
+    )
+    let text = pane(root).lines.map((line) =>
+      line.map((span) => span.text).join('')
+    ).join('\n')
+    ok(text.includes('working navigation'))
+    ok(
+      text.includes('broken destination'),
+      JSON.stringify({ text, content: root.textContent, reports }),
+    )
+    equal(reports, [[error, 'Test.Destination']])
+    broken = false
+    await act(() => root.querySelector('.Fault_Retry')!.click())
+    ok(root.textContent.includes('recovered destination'))
+    equal(reports.length, 1)
+  } finally {
+    render(null, target)
+    restore()
+    drop()
   }
 })

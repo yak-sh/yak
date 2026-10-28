@@ -51,6 +51,7 @@ import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 import { Configuration } from './Configuration.tsx'
 import { New } from './New.tsx'
 import { Peek } from './Peek.tsx'
+import { Fault } from './Fault.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -392,21 +393,37 @@ export let App = () => {
         run.value = null
       }}
     >
-      <Navigation />
+      <Fault place='Navigation'>
+        <Navigation />
+      </Fault>
       <Shell.Shade
         type='button'
         aria-label='Close navigation'
         onClick={() => openSidebar(false)}
       />
       <Shell.Main>
-        <Page key={route.value} at={route.value} />
-        <Status />
+        <Fault key={route.value} place='Page'>
+          <Page at={route.value} />
+        </Fault>
+        <Fault place='Status'>
+          <Status />
+        </Fault>
       </Shell.Main>
-      <Peek />
-      <Menu />
-      <Run />
-      <Search open={(eid) => navigate(entityPath(idOf(ent(eid))))} />
-      <Keybindings />
+      <Fault place='Peek'>
+        <Peek />
+      </Fault>
+      <Fault place='Menu'>
+        <Menu />
+      </Fault>
+      <Fault place='Run'>
+        <Run />
+      </Fault>
+      <Fault place='Search'>
+        <Search open={(eid) => navigate(entityPath(idOf(ent(eid))))} />
+      </Fault>
+      <Fault place='Keybindings'>
+        <Keybindings />
+      </Fault>
     </Shell>
   )
 }

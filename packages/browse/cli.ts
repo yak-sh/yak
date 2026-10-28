@@ -34,22 +34,35 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
         )
         : { url, wire: {} }
       let { open } = await import('./terminal.ts')
-      await open(connection.url, {
-        what: String(args.what ?? ''),
-        inspect: name == 'inspect',
-        wire: connection.wire,
-        facets: async () =>
-          (await Promise.all(
-            (host.config.plugins ?? []).map((p) =>
-              subpath<import('./components/inspect.tsx').Facet>(
-                used(p),
-                'views',
-              )
-            ),
-          )).filter((f) => f != null),
+      let { onFailure } = await import('./failure.ts')
+      let restore = onFailure((error, place) => {
+        void host.report?.(error, {
+          tags: { step: 'render', place, command: `yak ${name}` },
+        })
       })
+      try {
+        await open(connection.url, {
+          what: String(args.what ?? ''),
+          inspect: name == 'inspect',
+          wire: connection.wire,
+          facets: async () =>
+            (await Promise.all(
+              (host.config.plugins ?? []).map((p) =>
+                subpath<import('./components/inspect.tsx').Facet>(
+                  used(p),
+                  'views',
+                )
+              ),
+            )).filter((f) => f != null),
+        })
+      } finally {
+        restore()
+      }
       return 0
     } catch (error) {
+      await host.report?.(error, {
+        tags: { step: 'terminal', command: `yak ${name}` },
+      })
       context.note(
         error instanceof Error ? error.stack ?? error.message : String(error),
       )
