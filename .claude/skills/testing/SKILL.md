@@ -47,8 +47,17 @@ not running on certain platforms, the systematic fix is to *remove the code's
 ability to see the platform*" (15ce9bf9). He would rather recover than gate
 (M-37965): every commit on main runs the whole suite
 (.github/workflows/gate.yml), the tracker reports what breaks live, and a
-failure is fixed forward. So a run here is the few tests your change could
-break, and nothing more.
+failure is fixed forward.
+
+Before you land, see what main's gate will say about your change: `deno task
+gate` runs main's checks, then the tests your change can reach. Which tests is
+the dependency graph's choice, not yours: a path you pick misses the consumer
+that breaks. Over two weeks main's gate went red in 695 runs: 382 had a check
+the landing agent never ran, 140 a test outside the paths it named (or a hang
+one caused), 223 a time or a SQLite step count that came out differently on the
+runner than on the box, and 41 Cloudflare's deploy timing (T-132935). Jeff,
+2026-10-28, verbatim, when the bug for it was resolved once more while main
+kept going red: "Stop resolving it and fix it!"
 
 This is the automated half of finishing a change; `end-to-end-checks` is the
 half done by hand, in your own process, and `platform-visualize` observes what
@@ -116,9 +125,11 @@ stronger.
   `ready()` (workers/yak/wrangler.ts: `npm ci` when its install is stale, five
   asset generators as `deno run`, and Stripe's sandbox key, through `op` when
   `STRIPE_KEY` isn't set). One with a `*_workerd_test.ts` also starts workerd
-  with its kernel. So name the package you changed, and keep workerd out
-  unless your change is about the runtime itself: `deno task test --tag=deno
-  workers/yak/<file>`.
+  with its kernel. So while you work, name the package you changed, and keep
+  workerd out unless your change is about the runtime itself: `deno task test
+  --tag=deno workers/yak/<file>`. The landing run names nothing (below); today
+  it starts workerd and `ready()` even when no test there needs them, which
+  T-132949 is taking away.
 - A run says only what you act on, since its output is read again on every
   later turn: each failure's name, file and error (its frames in the checkout,
   cut to 30 lines), a line naming the slowest few tests the budget flags, and
@@ -131,19 +142,22 @@ stronger.
   itself with `new URL(…, import.meta.url)`, the runner, config, lock and Deno
   version (packages/testing/deps.ts). "N unchanged since they passed" is that
   skip, not a pass you just earned. A file read any other way isn't seen, so a
-  change to one wants `--all`. The record is `~/.cache/yak/tests-passed.json`,
+  change to one wants `--all` until T-132949 lands: a directory walk (as in
+  packages/vocab_test.ts), a computed import, a doctest's dynamic import. The record is `~/.cache/yak/tests-passed.json`,
   shared by every checkout.
-- Packages exist so a change can be checked where it lives: run the package
-  you changed (`deno task test packages/<name>`), and a change inside one yaks
-  app at most `deno task test apps/<name>`. A shared interface's consumers you
-  can name belong in that selection too: SQL and SQLite reads are exercised by
-  blob's predicates, paths and projections, not just the storage packages.
-  Vocabulary declarations also meet in `packages/vocab_test.ts`, whose
-  directory walk needs `--all` to see changed JSON files. The whole suite,
-  workerd's included, is what main runs on every commit; a change to how
-  @yaks/query parses, @yaks/match evaluates, @yaks/sql compiles, @yaks/sqlite
-  plans or @yaks/graph applies is checked across every consumer there, and
-  what goes red is fixed forward. It isn't a run for this box.
+- That skip is how a run knows which tests a change can break: `deno task
+  test` with no path runs exactly the files whose key your change moved, your
+  package's own and every consumer's, and leaves the rest. It is the run
+  before landing (`deno task gate` makes it). Packages exist so a change can
+  be checked where it lives, and the graph is what says where that is: a
+  change inside one package reaches its tests and its dependents', a change
+  to how @yaks/query parses or @yaks/graph applies reaches nearly all of them.
+  A path narrows a run while you work (`deno task test packages/<name>`); it
+  is not the landing run, since the consumer outside it is what turns main
+  red. When the record holds little of main's head (on 2026-10-28 it held 424
+  of its files) the landing run is the suite, about nine minutes on the box;
+  once every landing runs it, the record holds main's head and a run costs
+  what the change reaches.
 - Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
   fails it unless bench/test-budget.json lists it. What is held is the test's
   own time: its wall clock less what its runtime waited for a CPU another
@@ -186,18 +200,20 @@ stronger.
   into one process; a question of speed is answered by timing the code in your
   own.
 - `deno task check` (fmt, lint, bytes, types, raycast, publish, browser,
-  workers and content) is separate from tests, and `deno task gate` runs both.
-  Both are main's, on every commit, not runs for this box: `deno task check`
-  starts its nine checks at once, each a process of its own (bin/check.ts),
-  and `check:raycast` runs `npm ci`. Before landing, run `deno fmt` and `deno
-  lint` on the files you changed (main refuses both), and the one check your
-  change touches (`deno task check:types`, …), which says its output whole. In
-  a whole run each check says one line, and a failed one its output, cut to
-  its first and last lines; `--verbose` says every check's output as it
-  comes.
+  workers and content) is separate from tests, and `deno task gate` runs both,
+  the check first. Its nine checks start at once (bin/check.ts), each keeping
+  a cache, so after a small change it takes seconds (5.7s on the box with
+  warm caches), and the first in a new worktree, or after a rebase over much
+  new work, about two minutes. Each check says one line, and a failed one its
+  output, cut to its first and last lines; `deno task check:types` (or any
+  one) says its output whole, and `--verbose` says every check's output as it
+  comes. What these caught on main
+  is what agents skipped: README prose left unformatted, slow types in a
+  public API (`check:publish`), a generated file not regenerated
+  (`check:content`), and type errors.
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
-- A run doesn't type-check (`--no-check`); the gate does. `deno check` the files
-  you changed, test files included, before landing.
+- A test run doesn't type-check (`--no-check`); `check:types` does, test files
+  included.
 - Each run lives in a directory of its own (bin/scratch.ts): `TMPDIR`,
   `TASKS_HOME`, `PROCESS_DIR`, `HARNESS_HOME` and `HARNESS_WORKTREE_DIR` point
   inside it, and it's removed when the run ends. Run tests with machine effects

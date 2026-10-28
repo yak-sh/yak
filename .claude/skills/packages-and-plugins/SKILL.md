@@ -187,10 +187,9 @@ override is for undoing your own earlier work or a change you were asked to
 undo, and the commit message says which.
 
 A change here feels finished when each moved idea has one home and nothing
-reaches the old one, the checks the move touches are green (`deno task
-check:types`, and `check:browser`, `check:workers` and `check:publish`, where
-cycles and browser leaks show up), and the package's README and
-packages/README.md describe it as it is. The whole `deno task check` starts
-nine checks at once, so main runs it on every commit, not this box.
+reaches the old one, `deno task gate` is green (its checks are where cycles,
+slow types and browser leaks show up: `check:publish`, `check:browser`,
+`check:workers`), and the package's README and packages/README.md describe it
+as it is.
 
 When this skill is wrong or missing something, fix it in the same change.
