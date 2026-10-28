@@ -712,10 +712,14 @@ windows. `.order=book.price` is ascending and a leading `-` makes it descending.
 Paths can follow references. Explicit ordering uses descending entity number and
 then integer id to break ties. Without explicit ordering, a `.limit` or `.after`
 window reads newest first; a complete result reads oldest first. Unnumbered
-entities use integer id alone. A `.after` cursor is bound like any other value,
-so every page of one query is the same statement. A `.limit` is written into the
-statement, because SQLite prepares a statement again each time its limit is
-bound.
+entities use integer id alone, and so does a `.limit` window without `.order` or
+`.after` whose every match holds a component that no numbered entity holds, as
+the store's census says (`Census.numbered`): a page of `.edge.to=<eid>` then
+reads its own rows through the index its filter seeks, instead of sorting every
+match by a number none of them has. A `.after` cursor is bound like any other
+value, so every page of one query is the same statement. A `.limit` is written
+into the statement, because SQLite prepares a statement again each time its
+limit is bound.
 
 ```ts
 import { compile } from '@yaks/sql'

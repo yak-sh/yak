@@ -9,7 +9,8 @@
 // whole number a numeric property is compared above or below, stood in for by
 // its place, plus every input the lowering reads: the options' data, the
 // registries by identity, the extensions' hooks, the archetype catalog's
-// answers, and the census's choices of road (./bind.ts `walks`, `crowded`).
+// answers, and the census's choices of road (./bind.ts `walks`, `crowded`,
+// `numbered`).
 // The values a kept statement binds anew are the clock, the root candidates
 // (`eids`), those ids and numbers, and the integer ids the ids resolve to.
 //
@@ -70,6 +71,7 @@ type Asked =
   | { presence: Presence; ids: readonly number[] | undefined }
   | { walks: string; page?: number; answer: boolean }
   | { crowded: string; n: number; answer: boolean | undefined }
+  | { numbered: string; answer: boolean | undefined }
 type Kept = {
   sql: string
   params: (Param | Bind)[]
@@ -131,7 +133,7 @@ let recorded = (
 let choosing = (
   census: Census | undefined,
   log: Asked[],
-): Pick<Heard, 'walks' | 'crowded'> =>
+): Pick<Heard, 'walks' | 'crowded' | 'numbered'> =>
   census
     ? {
       walks: (comp, page) => {
@@ -142,6 +144,11 @@ let choosing = (
       crowded: (comp, n) => {
         let answer = crowded(census, comp, n)
         log.push({ crowded: comp, n, answer })
+        return answer
+      },
+      numbered: (comp) => {
+        let answer = census.numbered?.(comp)
+        log.push({ numbered: comp, answer })
         return answer
       },
     }
@@ -169,6 +176,8 @@ let stands = (asked: Asked[], opts: BindOpts): boolean =>
       ? walks(opts.census, a.walks, a.page) === a.answer
       : 'crowded' in a
       ? crowded(opts.census, a.crowded, a.n) === a.answer
+      : 'numbered' in a
+      ? opts.census?.numbered?.(a.numbered) === a.answer
       : 'presence' in a
       ? !!opts.archetypes && alike(opts.archetypes(a.presence), a.ids)
       : opts.archetypes?.held === a.held
@@ -183,6 +192,8 @@ let agree = (a: Asked[], b: Asked[]) =>
       : 'crowded' in x
       ? 'crowded' in y && x.crowded == y.crowded && x.n == y.n &&
         x.answer === y.answer
+      : 'numbered' in x
+      ? 'numbered' in y && x.numbered == y.numbered && x.answer === y.answer
       : 'presence' in x
       ? 'presence' in y && alike(x.ids, y.ids) &&
         JSON.stringify(x.presence) == JSON.stringify(y.presence)

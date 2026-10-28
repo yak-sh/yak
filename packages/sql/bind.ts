@@ -190,12 +190,18 @@ export type BindOpts = {
  * entities hold a component (`undefined` when the store keeps no count), the
  * entity table's largest id, and, for a store that keeps no count, whether a
  * component's table holds more than so many rows, which reads at most one
- * more than that. */
+ * more than that; and whether any entity holding a component has a number
+ * (`undefined` when the store cannot tell). */
 export type Census = {
   held: (comp: string) => number | undefined
   largest: () => number
   exceeds?: (comp: string, n: number) => boolean
+  numbered?: Numbered
 }
+
+/** Whether any entity holding `comp` has a number, as the store tells it:
+ * `false` only where none does. */
+export type Numbered = (comp: string) => boolean | undefined
 
 /** Whether a page of `comp`'s owners in EID order is shorter walking the
  * entity's EID index than driving through the owners, as `census` sizes the
@@ -297,6 +303,8 @@ type Ctx = {
   walks?: Walks
   /** whether more than so many rows of a component are stored (`crowded`) */
   crowded?: Crowded
+  /** whether any entity holding a component has a number (`Census`) */
+  numbered?: Numbered
   /** the computed component whose rows this query reads as its spine, when it
    * reads a backing's rather than the entity table */
   spine?: string
@@ -1722,6 +1730,36 @@ let facetOf = (
   return { comp: hop.comp, present: op == '~' || op == EXISTS }
 }
 
+// The component a clause admits only an entity holding: one it tests the
+// presence of, or one a stored property of which it tests as `needs` a row
+// for (`.edge.to=<eid>` holds only for an entity with an edge).
+let needOf = (ctx: Ctx, c: Clause): string | undefined => {
+  if (c.kind != 'pred' || c.not || c.where || c.path.length > 2) return
+  let [comp, prop] = c.path
+  if (
+    comp == 'entity' || !ctx.v.comp(comp) || ctx.v.assoc(comp) ||
+    computed(ctx.v, comp) || claims(ctx, 'pred')
+  ) return
+  let p = prop == null ? undefined : ctx.v.prop(comp, prop)
+  if (prop != null && (!p || p.computed || ctx.derived[`${comp}.${prop}`])) {
+    return
+  }
+  return needs(opOf(c), c.value) ? comp : undefined
+}
+
+// Whether no entity a clause admits has a number, as the store tells it
+// (`Census.numbered`): a conjunction's where one of its parts', an
+// alternation's where each arm's, and a test's where the component it needs
+// is one no holder of which has a number.
+let unnumbered = (ctx: Ctx, c: Clause): boolean => {
+  if (c.kind == 'and') return c.clauses.some((x) => unnumbered(ctx, x))
+  if (c.kind == 'or') {
+    return c.clauses.length > 0 && c.clauses.every((x) => unnumbered(ctx, x))
+  }
+  let comp = needOf(ctx, c)
+  return comp != null && ctx.numbered?.(comp) === false
+}
+
 // The computed components a clause holds only for an entity wearing — what
 // decides the spine a query reads (./spine.ts). A conjunction wants what any of
 // its parts wants and an alternation what all of them want; `.entity.eid=` naming
@@ -3090,6 +3128,7 @@ export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
 export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & {
   walks?: Walks
   crowded?: Crowded
+  numbered?: Numbered
 }
 
 export let prepared = (
@@ -3153,6 +3192,11 @@ export let prepared = (
       opts.absent?.includes(comp)
         ? false
         : (heard.crowded ?? ((c, n) => crowded(opts.census, c, n)))(comp, n),
+    // nor any holder to have a number
+    numbered: (comp) =>
+      opts.absent?.includes(comp)
+        ? false
+        : (heard.numbered ?? opts.census?.numbered)?.(comp),
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
@@ -3548,8 +3592,20 @@ let lower = (
   // stands alone where there is no number at all. Left to the num column, a
   // store that mints none would be ordering by the same NULL in every row,
   // which is to say by whatever the planner chose.
+  //
+  // Where no entity a window can hold has a number, the number is the same
+  // NULL in every row, and the id alone is its order. The box numbers no edge,
+  // effect or file (its config's `numbers.except`), and sorted by a number
+  // they lack, a page of `.edge.to=<eid>` read every edge to the entity (up
+  // to 3,156 there), and a page of `.edge` every one of 984,053. Ordered by
+  // the id, which the index the filter seeks keeps, a page reads its rows and
+  // stops. An ordering and a cursor keep the number: a cursor's anchor need
+  // not be one of the rows. A complete result reads every match whatever its
+  // order, and asks nothing.
   let down = !physical && (sort || limit || after) ? ' desc' : ''
-  if (numbered && !ordered.includes(`"entity"."num"${down}`)) {
+  let counts = numbered && (!limit || !!sort || !!after ||
+    !filters.some((c) => unnumbered(ctx, c)))
+  if (counts && !ordered.includes(`"entity"."num"${down}`)) {
     ordered.push(`"entity"."num"${down}`)
   }
   let owner = ctx.d.ownerKey('entity')
@@ -4566,6 +4622,7 @@ let visible = (
       extend: heard.extend,
       walks: heard.walks,
       crowded: heard.crowded,
+      numbered: heard.numbered,
     },
   )
   return {

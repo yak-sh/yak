@@ -261,6 +261,7 @@ type Counted = {
   installed?: boolean
   held: Map<string, number | undefined>
   looked: Map<string, boolean>
+  numbered: Map<string, boolean>
   largest?: number
 }
 let counts = new WeakMap<Driver, Counted>()
@@ -268,16 +269,42 @@ let counted = (driver: Driver): Counted => {
   let at = revision(driver, 'data')
   let held = counts.get(driver)
   if (held?.at != at) {
-    counts.set(driver, held = { at, held: new Map(), looked: new Map() })
+    counts.set(
+      driver,
+      held = { at, held: new Map(), looked: new Map(), numbered: new Map() },
+    )
   }
   return held
 }
 
+// Whether any entity holding `comp` has a number: a seek of the number index
+// (`entity(archetype, num)`) for each archetype that holds it, and one for
+// the entities no archetype describes yet, which may hold it too.
+let numbering = (driver: Driver, comp: string): boolean =>
+  driver.query(select({
+      cols: [lit(1)],
+      from: table(MEMBERSHIP, 'm'),
+      joins: [{ how: 'cross', src: table('entity', 'e') }],
+      where: and(
+        eq(col('component', 'm'), lit(comp)),
+        eq(col('archetype', 'e'), col('archetype', 'm')),
+        notNull(col('num', 'e')),
+      ),
+      limit: lit(1),
+    })).length > 0 ||
+  driver.query(select({
+      cols: [lit(1)],
+      from: table('entity'),
+      where: and(isNull(col('archetype')), notNull(col('num'))),
+      limit: lit(1),
+    })).length > 0
+
 /** What a read's plans are sized by (@yaks/sql `Census`): a component's
  * counted population, once the file keeps populations, the entity table's
- * largest id, one seek, and whether a component's table holds more than so
- * many rows, a bounded look. Each is read only when a plan asks, and once
- * while the rows it read stand. */
+ * largest id, one seek, whether a component's table holds more than so
+ * many rows, a bounded look, and whether any entity holding a component has
+ * a number, a seek per archetype holding it. Each is read only when a plan
+ * asks, and once while the rows it read stand. */
 export let census = (driver: Driver): Census => ({
   held: (comp) => {
     let at = counted(driver)
@@ -305,6 +332,12 @@ export let census = (driver: Driver): Census => ({
       looked.set(key, more)
     }
     return more
+  },
+  numbered: (comp) => {
+    let at = counted(driver)
+    if (!(at.installed ??= installed(driver))) return
+    if (!at.numbered.has(comp)) at.numbered.set(comp, numbering(driver, comp))
+    return at.numbered.get(comp)
   },
 })
 
