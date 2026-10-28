@@ -70,7 +70,7 @@ try {
 | Export                 | Provides                                                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@yaks/testing`        | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks` |
-| `@yaks/testing/own`    | `own`, `waits`: a process's own time, for a coordinator that imports no tests                                                                                |
+| `@yaks/testing/own`    | `own`, `waits`, `held`, `started`: a process's own time, for a coordinator that imports no tests                                                             |
 | `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                |
 | `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                                     |
 | `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`; the pass record: `passed`, `remember`, `forget`, `recall`, `note`                    |
@@ -299,11 +299,11 @@ accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
 planning and loading, each file's load, each test that ran with its file, name,
-time, whether it passed and how much of its time it `waited` for a CPU another
-process held (Linux's run-queue wait, `queued`; 0 elsewhere), each file the run
-remembered as passed, with its proof in the pass record (`forget` from
-`@yaks/testing/deps` takes one back), and how many tests it skipped and files it
-left out as unchanged.
+time, whether it passed and how much of its time it, or a process it started,
+`waited` for a CPU another process held (Linux's run-queue wait; 0 elsewhere),
+each file the run remembered as passed, with its proof in the pass record
+(`forget` from `@yaks/testing/deps` takes one back), and how many tests it
+skipped and files it left out as unchanged.
 
 A file whose tests all passed is skipped while its dependencies are unchanged.
 Its **key** holds what it depends on before it runs: its module dependencies

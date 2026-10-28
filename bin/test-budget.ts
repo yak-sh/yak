@@ -13,18 +13,20 @@
 //   (`--all`, no path or tag) on the gate (CI), where the records are taken.
 //   The box keeps a run's temporary files in memory as the gate does
 //   (bin/scratch.ts), so a test that writes files takes the same time on
-//   both. The CPUs still differ: agents' runs share the box's, and a test's
-//   own time (below) leaves out what its own thread waited for one, not what
-//   the processes it starts waited. In a whole run on the box, 25 listed
-//   tests, most of them starting processes or running a kernel, took 1.05 to
-//   3.8 times what the gate's took, past their records (T-132967). So a whole
-//   run elsewhere says them and holds none, and a narrowed one says none.
+//   both. The CPUs still differ: agents' runs share the box's two cores and
+//   their hyperthreads, and a thread whose sibling is busy runs slower
+//   without waiting. In a whole run on the box, 25 listed tests, most of them
+//   starting processes or running a kernel, took 1.05 to 3.8 times what the
+//   gate's took, past their records (T-132967), before a test's own time
+//   left out what the processes it starts wait. So a whole run elsewhere says
+//   them and holds none, and a narrowed one says none.
 //
-// A test is held to its own time: its wall clock less what its runtime
-// waited for a CPU another process held (`own`, packages/testing run.ts
-// `waited`). The shared runner's host, or a busy box, stretches every test's
-// wall clock by that wait; a test that got slower takes longer on the CPU or
-// waits longer on what it awaits, and that it still owns.
+// A test is held to its own time: its wall clock less what its runtime's
+// thread, and the processes it started, waited for a CPU another process held
+// (`own`, packages/testing run.ts `waited`). The shared runner's host, or a
+// busy box, stretches every test's wall clock by that wait; a test that got
+// slower takes longer on the CPU or waits longer on what it awaits, and that
+// it still owns.
 //
 // What runs beside a test still adds to its own time: the gate's runner
 // shares its CPU's cache and memory with the box, and a process busy on

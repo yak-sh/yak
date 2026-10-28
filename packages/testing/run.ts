@@ -1,7 +1,7 @@
 // Runs collected tests one at a time, in the order they were declared, and
 // says how each went in the lines `deno test` prints (`name ... ok (12ms)`),
 // which what watches a run reads.
-import { own } from './own.ts'
+import { held, own, started } from './own.ts'
 import { closing, type Test } from './suite.ts'
 
 /** How one test went. */
@@ -10,7 +10,8 @@ export type Outcome = {
   ok: boolean
   skipped: boolean
   ms: number
-  /** Of `ms`, what the runtime waited for a CPU another process held. */
+  /** Of `ms`, what the test's thread, or a process it started, waited for a
+   * CPU another process held (`waited`). */
   waited: number
   errors: unknown[]
 }
@@ -43,14 +44,19 @@ export let sched = (): Sched => {
 /// waited(2, { ran: 0, wait: 0 }, { ran: 0.5, wait: 0.25 }) -> 0.25
 /// waited(2, { ran: 1, wait: 1 }, { ran: 2.5, wait: 4 }) -> 0.5
 /// waited(0.25, { ran: 0, wait: 0 }, { ran: 1, wait: 5 }) -> 0
-/** Of `ms`, what the thread waited for a CPU between two readings (`sched`).
- * Linux brings both up to date only as the thread leaves a CPU or gets one
- * back, so a reading can charge a wait or a run that began before the first;
- * a thread never waits while it runs, so what it waited is at most what the
- * wall clock leaves beside its time on the CPU, and a test's own time never
- * falls below that. */
-export let waited = (ms: number, from: Sched, to: Sched) =>
-  Math.min(Math.max(0, ms - (to.ran - from.ran)), to.wait - from.wait)
+/// waited(60, { ran: 0, wait: 0 }, { ran: 2, wait: 1 }, 30) -> 31
+/** Of `ms`, what the thread waited for a CPU between two readings (`sched`),
+ * and what the processes it started were held waiting for one meanwhile
+ * (`children`, ./own.ts `held`). Linux brings both up to date only as the
+ * thread leaves a CPU or gets one back, so a reading can charge a wait or a
+ * run that began before the first; a thread never waits while it runs, so
+ * what it waited is at most what the wall clock leaves beside its time on the
+ * CPU, and a test's own time never falls below that. */
+export let waited = (ms: number, from: Sched, to: Sched, children = 0) =>
+  Math.min(
+    Math.max(0, ms - (to.ran - from.ran)),
+    to.wait - from.wait + children,
+  )
 
 /** A time for each of some tests, by file and by test name, in milliseconds
  * (main.ts `--until`). */
@@ -143,6 +149,20 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
     }
     timer = later(check, Math.min(timeout, 1000))
   })
+  // What the processes the test starts are held waiting for a CPU, looked at
+  // while it awaits (./own.ts `held`), each millisecond or, where a look
+  // takes longer than a twentieth of that, twenty looks' time apart: a child
+  // that ends between two looks takes its last wait with it. A look with no
+  // child is one read, and a test that never awaits a millisecond pays for
+  // none.
+  let children = held(started)
+  children()
+  let look = () => {
+    let began = now()
+    children()
+    ticker = later(look, Math.max(1, 20 * (now() - began)))
+  }
+  let ticker = later(look, 1)
   let from = sched()
   let start = now()
   let ms = 0
@@ -153,14 +173,16 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   } finally {
     ms = now() - start
     cancel(timer)
+    cancel(ticker)
   }
+  let to = sched()
   errors.push(...stray.splice(0))
   return {
     test: reported,
     ok: !errors.length,
     skipped: false,
     ms,
-    waited: waited(ms, from, sched()),
+    waited: waited(ms, from, to, children()),
     errors,
   }
 }

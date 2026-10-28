@@ -1,5 +1,5 @@
 import { equal, test, until } from '@yaks/testing'
-import { own, waits } from './own.ts'
+import { own, started, waits } from './own.ts'
 
 // A clock over scripted looks: what each look finds each thread has waited,
 // and the wall clock at the clock's making and at each call after it.
@@ -51,4 +51,11 @@ test('waits reads every thread of a process and of the processes it started', ()
   equal(found.length, 2)
   equal(found.includes(`/proc/${shell.pid}/task/${shell.pid}`), true)
   equal(waits(2 ** 30).size, 0)
+})
+
+test('started reads the main thread of each process the runtime started, not its own threads', () => {
+  let found = [...started().keys()]
+  equal(found.includes(`/proc/${shell.pid}/task/${shell.pid}`), true)
+  equal(found.some((at) => at.startsWith(`/proc/${Deno.pid}/`)), false)
+  equal(started(2 ** 30).size, 0)
 })

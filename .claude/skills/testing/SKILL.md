@@ -185,10 +185,12 @@ stronger.
   what the change reaches.
 - Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
   fails it unless bench/test-budget.json lists it. What is held is the test's
-  own time: its wall clock less what its runtime waited for a CPU another
-  process held (Linux's /proc/thread-self/schedstat, the wait capped so own
-  time never falls below the thread's time on the CPU). A test's own work,
-  and anything it awaits, still counts, and so does load: the gate's runner
+  own time: its wall clock less what its runtime's thread, and the main
+  thread of each process it started, waited for a CPU another process held
+  (Linux's schedstat, the processes looked at about each millisecond the
+  test awaits, the wait capped so own time never falls below the thread's
+  time on the CPU). A test's own work, and anything it awaits, still counts,
+  and so does load: the gate's runner
   shares this box's CPU cache and memory, and a core busy beside a test makes
   it slower. Load only ever adds, so a test is held to the fastest time it
   ran in. It is held with the code under it warm: V8 interprets a function
@@ -211,12 +213,12 @@ stronger.
   (times the list's slack); a whole run elsewhere says them without holding
   them, and a narrowed one says neither. A run here keeps its temporary files
   in memory as the gate's does, so a test that writes files takes the same
-  time on both. What still differs is the CPU: a test's own time leaves out
-  what its own thread waited for one, not what the processes it starts
-  waited, and agents' runs share this box's CPUs: two cores and their
-  hyperthreads (host CPUs 4-5 and 10-11), so a test whose sibling thread is
-  busy runs slower without waiting at all. In a whole run here, 25
-  listed tests, most of them starting processes or running a kernel, took
+  time on both. What still differs is the CPU: agents' runs share this box's
+  CPUs, two cores and their hyperthreads (host CPUs 4-5 and 10-11), so a
+  test whose sibling thread is busy runs slower without waiting at all, and
+  a child that ends between two looks takes its last wait with it. In a
+  whole run here, before own time left out what a test's processes waited,
+  25 listed tests, most of them starting processes or running a kernel, took
   1.05 to 3.8 times what the gate's took, past their records, and 9 unlisted
   ones ran 1.0 to 1.3 ms where the gate's ran under 1. A platform's wall
   clock is said, never held: it adds every wait among the run's processes, so
