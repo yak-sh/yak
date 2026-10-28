@@ -40,6 +40,14 @@ test('a file opens in WAL with NORMAL sync, a bounded journal and incremental au
   }
 })
 
+test('a database named without a directory makes none', () => {
+  let name = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
+  open(name).close()
+  for (let made of [name, name.slice(0, -1)]) {
+    assertThrows(() => Deno.statSync(made), Deno.errors.NotFound)
+  }
+})
+
 test('an in-memory database leaves the journal size unlimited', () => {
   using sql = scratch()
   assertEquals(sql.query({ t: 'pragma', name: 'journal_size_limit' }), [{

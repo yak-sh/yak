@@ -47,10 +47,10 @@ export type Opened = Driver & { close: () => void }
  */
 export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
   if (opts.readOnly) return reader(path)
-  if (path != ':memory:') {
-    let dir = path.slice(0, path.lastIndexOf('/'))
-    if (dir) Deno.mkdirSync(dir, { recursive: true })
-  }
+  // A file's directory, made when absent. A name with none (`graph.db`, a
+  // `file:` URI such as `file:x?mode=memory`) is SQLite's to resolve.
+  let dir = path.startsWith('file:') ? 0 : path.lastIndexOf('/')
+  if (dir > 0) Deno.mkdirSync(path.slice(0, dir), { recursive: true })
   let db = new Database(path)
   // The busy timeout before anything else: the driver reads the schema as it
   // is built, and a file another connection holds locked (its last checkpoint,
