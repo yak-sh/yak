@@ -9,5 +9,7 @@ if (shared) Deno.env.set('DENO_DIR', shared)
 
 // The fetch API's classes, loaded before any test runs. Deno loads a global's
 // script the first time it is read, and loading Response took 0.6 to 2 ms of
-// whichever test made the first one.
+// whichever test made the first one. A URL's first search params are read
+// here too: the test that read them first paid 0.3 ms.
 void [Headers, Request, Response]
+new URL('https://x.test/?a').searchParams.has('a')
