@@ -157,7 +157,9 @@ stronger.
   changed (packages/testing/deps.ts). Its key holds its module graph as `deno
   info` sees it (a doctest's imports, and a literal `import('…')`, included),
   files it names beside itself with `new URL(…, import.meta.url)`, the runner
-  and what starts it (bin/test.ts `RUNS`, each by what loads with it, so the
+  and what starts it (bin/test.ts `RUNS` names its unconditional delayed
+  imports too, including the budget records and tool pins, each by what loads
+  with it, so the
   Worker's modules bin/test.ts imports only for the Worker's tests key only
   those), the SQLite library the run opens, config, lock and Deno version, and
   for a workerd test what the kernel is made of (workers/yak/probe-suite.ts
@@ -208,28 +210,27 @@ stronger.
   runs one, as the gate does) is spared: the same code passed the budget, so
   a time over the line is the run's. A test gets slower when its code or
   what it imports changes, which changes the file's key, so the gate holds
-  each file the first time its code runs there. The records are the gate's:
-  its whole run (`deno task test --all`) fails a listed test past its record
-  (times the list's slack); a whole run elsewhere says them without holding
-  them, and a narrowed one says neither. A run here keeps its temporary files
-  in memory as the gate's does, so a test that writes files takes the same
-  time on both. What still differs is the CPU: agents' runs share this box's
-  CPUs, two cores and their hyperthreads (host CPUs 4-5 and 10-11), so a
-  test whose sibling thread is busy runs slower without waiting at all, and
-  a child that ends between two looks takes its last wait with it. In a
-  whole run here, before own time left out what a test's processes waited,
-  25 listed tests, most of them starting processes or running a kernel, took
-  1.05 to 3.8 times what the gate's took, past their records, and 9 unlisted
-  ones ran 1.0 to 1.3 ms where the gate's ran under 1. A platform's wall
-  clock is said, never held: it adds every wait among the run's processes, so
-  no run of it is a floor, and workerd's tests, not held one by one, have no
-  time held. Nothing joins the list: a new or renamed test is held to 1 ms
-  from its first run. Getting a kernel test under it pulls you to drop the
-  checks that "only exist across the door". Nearly every one is a decision some function makes
-  (who may see or delete what, which version serves): move it there,
-  extracting the function if it's inline, and drop nothing. `--write` takes
-  off what got fast and lowers the records; `--from=<dir> --write` does it
-  from a gate's kept times (its `suite-timings` artifact).
+  each file the first time its code runs there. Every run holds listed tests
+  to their records (times the list's slack), including a no-path run chosen
+  by the dependency graph and a run narrowed by a path or tag. Local runs
+  and main's gate use the same verdict, re-measure a listed regression
+  before failing it, and take back its file's cached pass. A run here keeps
+  its temporary files in memory as the gate's does, so a test that writes
+  files takes the same time on both. A platform's wall clock is said, never
+  held: it adds every wait among the run's processes, so no run of it is a
+  floor, and workerd's tests, not held one by one, have no time held.
+  Nothing joins the list: a new or renamed test is held to 1 ms from its
+  first run. Getting a kernel test under it pulls you to drop the checks
+  that "only exist across the door". Nearly every one is a decision some
+  function makes (who may see or delete what, which version serves): move it
+  there, extracting the function if it's inline, and drop nothing. `--write`
+  takes off what got fast and lowers the records; `--from=<dir> --write`
+  does it from a gate's kept times (its `suite-timings` artifact).
+- A tool's build is part of the environment too. When backup tests run, the
+  box and gate use the same checksum-verified rclone package
+  (bin/test-tools.ts), cached beside the SQLite library. Other tests pay
+  for no tool install. The backup command respects its caller's PATH so that selection
+  reaches every process it starts.
 - A red gate's verdict closes its tests step, and `gh run view --log` cuts that
   step short: read the job's whole log, `gh api
   repos/yak-sh/yak/actions/jobs/<job id>/logs`.

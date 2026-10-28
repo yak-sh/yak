@@ -13,6 +13,12 @@ import {
 import { type Clock, system } from '@yaks/fp'
 
 const CONTROL = '_yaks_migration'
+let one = eq(col('singleton'), lit(1))
+let reading = select({ from: table(CONTROL), where: one })
+let begin: Stmt = { t: 'begin', mode: 'immediate' }
+let commit: Stmt = { t: 'commit' }
+let rollback: Stmt = { t: 'rollback' }
+
 export type MigrationState = {
   generation: number
   migration: string
@@ -72,11 +78,10 @@ export function migrationSchema(): Stmt[] {
 
 /** Bind migration control over a graph a writer has brought to its schema. */
 export function migrations(db: Driver): MigrationControl {
-  const one = eq(col('singleton'), lit(1))
   const set = (set: Record<string, Expr>) =>
     db.query({ t: 'update', table: CONTROL, set, where: one })
   const read = (): MigrationState | undefined => {
-    const r = db.query(select({ from: table(CONTROL), where: one }))[0]
+    const r = db.query(reading)[0]
     return r && {
       generation: Number(r.generation),
       migration: String(r.migration),
@@ -90,13 +95,13 @@ export function migrations(db: Driver): MigrationControl {
   // BEGIN IMMEDIATE serializes claims across connections. These APIs must not
   // run inside a caller's transaction: the announcement must become visible.
   const transaction = <T>(body: () => T): T => {
-    db.query({ t: 'begin', mode: 'immediate' })
+    db.query(begin)
     try {
       const value = body()
-      db.query({ t: 'commit' })
+      db.query(commit)
       return value
     } catch (error) {
-      db.query({ t: 'rollback' })
+      db.query(rollback)
       throw error
     }
   }

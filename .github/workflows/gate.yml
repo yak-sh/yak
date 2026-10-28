@@ -17,6 +17,8 @@
 # box's, from apt: google-chrome-stable, sqlite3, rclone (bin/backup),
 # bubblewrap and python3 (packages/process sandboxes), and cc, which builds the
 # one SQLite library every test opens, here as on the box (bin/sqlite.ts).
+# The tests select their pinned rclone package through bin/test-tools.ts;
+# apt upgrades and the box's Homebrew build do not change their timings.
 # yak-runner lingers, so its systemd user manager runs, with cpu, memory and
 # pids delegated, for the sandboxes' scopes. `runs-on` names the custom label
 # `yak`, so a workflow can never silently fall back to a hosted runner.
@@ -75,8 +77,8 @@ jobs:
       # Every platform's tests (bin/test.ts), workerd's included, held to the
       # budget (bin/test-budget.ts): a test over 1 ms that
       # bench/test-budget.json does not list fails the step, as on any run;
-      # and here, a whole run on the gate, where the records are taken, so
-      # does a listed test slower than its record. The run keeps its scratch
+      # and so does a listed test slower than its record, on every run.
+      # The run keeps its scratch
       # where the box's runs do, in memory under /dev/shm (bin/scratch.ts).
       # The money paths reach Stripe's sandbox, so the runner's environment
       # carries STRIPE_KEY. A job its system unit starts is not told where the
@@ -88,7 +90,7 @@ jobs:
         env:
           SUITE_STEP: tests
         # All of it (`--all`): this machine keeps no record of what passed
-        # before, and only a whole run holds the records.
+        # before. Local runs leave unchanged files out using their dependency keys.
         run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all --verbose'
 
       - name: retain suite timings

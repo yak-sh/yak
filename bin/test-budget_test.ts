@@ -92,10 +92,9 @@ test('a test is held to its own time, not what it waited for a CPU', () => {
   equal(judge(list, again).over, [])
 })
 
-test('a listed test past its record fails only where the records are held', () => {
+test('listed and unlisted regressions fail the same run', () => {
   let j = ran({ over: 3, slow: 200, quick: 0.2 })
-  equal(names(failing(j, false)), ['over'])
-  equal(names(failing(j, true)), ['over', 'slow'])
+  equal(names(failing(j)), ['over', 'slow'])
 })
 
 test('a file holding a test the run fails has its pass taken back', () => {
@@ -103,10 +102,9 @@ test('a file holding a test the run fails has its pass taken back', () => {
     deno: deno({ over: 3, quick: 0.2 }),
     browser: deno({ fine: 0.4 }, 1000, 'b_test.ts'),
   }
-  equal(retracted(runs, failing(judge(list, runs), false)), ['a_test.ts'])
+  equal(retracted(runs, failing(judge(list, runs))), ['a_test.ts'])
   let slower = { deno: deno({ slow: 200 }) }
-  equal(retracted(slower, failing(judge(list, slower), false)), [])
-  equal(retracted(slower, failing(judge(list, slower), true)), ['a_test.ts'])
+  equal(retracted(slower, failing(judge(list, slower))), ['a_test.ts'])
 })
 
 test('a file unchanged since it passed is spared, one changed is held', () => {
@@ -120,7 +118,7 @@ test('a file unchanged since it passed is spared, one changed is held', () => {
     [],
     ['over', 'slow'],
   ])
-  equal(retracted(runs, failing(j, true)), ['b_test.ts'])
+  equal(retracted(runs, failing(j)), ['b_test.ts'])
 })
 
 test('a test the list does not name is held to the budget', () => {
@@ -162,7 +160,7 @@ test("a platform's wall clock is said, never held, and workerd's tests are not h
     deno: deno({ quick: 0.2 }, 9e9),
     workerd: { wall: 5, tests: [{ file: 'w.ts', name: 'w', ms: 9, ok: true }] },
   })
-  equal(failing(j, true), [])
+  equal(failing(j), [])
   equal(j.walls, [
     { platform: 'deno', ms: 9e9 },
     { platform: 'workerd', ms: 5 },

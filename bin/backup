@@ -41,11 +41,11 @@
 # VACUUM INTO rebuilt a torn freelist into a clean snapshot (T-34578) and hid
 # it for two days.
 #
-# Cron-safe: explicit PATH, no interactivity, and every failure exits nonzero,
+# Cron-safe: fallback tool paths, no interactivity, every failure exits nonzero,
 # which the supervisor reports to the tracker.
 set -eu
 set -o pipefail
-export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="${PATH:+$PATH:}$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Bounded, or it is not a backup but an outage: a run that outlives the night
 # stacks the next on top of it. So the whole run re-execs under a supervisor
@@ -280,13 +280,14 @@ backup() {
   kept=$(printf '%s\n' "$nights" | tail -n "$keep")
   printf '%s\n' "$kept" | grep -qxF "$night" ||
     die "$night is not listed complete; every night is kept"
-  all=$(rclone lsf --dirs-only "$remote/snapshots")
-  for old in $(printf '%s\n' "$all" | sed 's#/$##'); do
-    printf '%s\n' "$kept" | grep -qxF "$old" && continue
-    rclone delete "$remote/snapshots/$old"
-    rclone rmdirs "$remote/snapshots/$old"
-    say "dropped $old"
+  # One filtered walk removes old and partial nights together. Keeping each
+  # complete night's whole prefix protects every file in it, while --rmdirs
+  # also removes the empty directories a local remote leaves behind.
+  set --
+  for n in $kept; do
+    set -- "$@" --exclude "/$n/**"
   done
+  rclone delete --rmdirs "$remote/snapshots" "$@"
 
   n=$(awk -F "$tab" '$1 == "yak.db" && $2 == "entity" { print $3 }' \
     "$work/counts")

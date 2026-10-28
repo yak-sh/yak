@@ -192,64 +192,48 @@ test('scratch lends every machine state directory inside its own run', () =>
     }
   }))
 
-test('scratch git fixtures do not inherit the caller repository', async () => {
-  let root = Deno.makeTempDirSync({ prefix: 'scratch-git-' })
-  let caller = `${root}/caller`
-  let env = {
-    PATH: Deno.env.get('PATH') ?? '',
-    DENO_DIR: Deno.env.get('DENO_DIR') ?? '',
-  }
-  let git = async (...args: string[]) => {
-    let out = await new Deno.Command('git', {
-      args,
-      env,
-      clearEnv: true,
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    assertEquals(out.code, 0, new TextDecoder().decode(out.stderr))
-    return new TextDecoder().decode(out.stdout).trim()
-  }
-  try {
-    await git('init', '-q', caller)
-    let config = Deno.readTextFileSync(`${caller}/.git/config`)
-    // As in a hook: cwd is not the repository selector. An init with no
-    // destination must create the fixture, not reinitialize this caller.
-    let script = `
-      let fixture = Deno.makeTempDirSync();
-      for (let args of [
-        ['init', '--bare', '-q'],
-        ['config', '--get', 'core.bare'],
-      ]) {
-        let out = await new Deno.Command('git', {
-          args: ['-C', fixture, ...args], stdout: 'piped', stderr: 'piped',
-        }).output();
-        if (!out.success) throw new Error(new TextDecoder().decode(out.stderr));
-        if (args[0] === 'config' && new TextDecoder().decode(out.stdout).trim() !== 'true') {
-          throw new Error('fixture is not bare');
-        }
-      }
-      if (!Deno.statSync(fixture + '/config').isFile) throw new Error('fixture was not created');
-    `
-    let code = await scratch([Deno.execPath(), 'eval', script], {
-      ...env,
-      TMPDIR: root,
-      GIT_DIR: `${caller}/.git`,
-      GIT_COMMON_DIR: `${caller}/.git`,
-      GIT_INDEX_FILE: `${caller}/.git/index`,
-      GIT_OBJECT_DIRECTORY: `${caller}/.git/objects`,
-    })
-    assertEquals(Deno.readTextFileSync(`${caller}/.git/config`), config)
-    assertEquals(code, 0)
+test('scratch git fixtures do not inherit the caller repository', () =>
+  base(['caller'], async (root) => {
+    let caller = `${root}/caller`
+    let config = '[core]\n\tbare = false\n'
+    Deno.writeTextFileSync(`${caller}/config`, config)
+    let local = {
+      GIT_DIR: caller,
+      GIT_COMMON_DIR: caller,
+      GIT_INDEX_FILE: `${caller}/index`,
+      GIT_OBJECT_DIRECTORY: `${caller}/objects`,
+      GIT_CONFIG_PARAMETERS: "'core.bare=false'",
+    }
+    let env = { ...local, TMPDIR: root, PATH: '/tools' }
+    let given: Record<string, string> = {}, initialized = ''
+    let box = {
+      ...rig({
+        tmp: root,
+        child: (child) => {
+          given = child
+          let fixture = `${child.TMPDIR}/fixture`
+          Deno.mkdirSync(fixture)
+          // Git's repository selector wins over `git -C fixture init --bare`.
+          // The process boundary models that effect, without starting Git.
+          Deno.writeTextFileSync(
+            `${child.GIT_DIR ?? fixture}/config`,
+            '[core]\n\tbare = true\n',
+          )
+          initialized = Deno.readTextFileSync(`${fixture}/config`)
+        },
+      }),
+      gitLocal: () => Promise.resolve(Object.keys(local)),
+    }
     assertEquals(
-      await git('-C', caller, 'rev-parse', '--is-bare-repository'),
-      'false',
+      await scratch(['git', 'init', '--bare'], env, () => {}, box),
+      0,
     )
-    assertEquals(await git('-C', caller, 'status', '--porcelain'), '')
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
-})
+    assertEquals(Deno.readTextFileSync(`${caller}/config`), config)
+    assertEquals(initialized, '[core]\n\tbare = true\n')
+    for (let name of Object.keys(local)) assertEquals(given[name], undefined)
+    assertEquals(given.PATH, env.PATH)
+    assertEquals(env, { ...local, TMPDIR: root, PATH: '/tools' })
+  }))
 
 // A test's server outlives a test killed before its `finally`, in a session of
 // its own; what still marks it is the run in its environment or its cwd.

@@ -493,21 +493,45 @@ test('a thread that wrote runs down wakes the worker beside it', async () => {
   await serving
 })
 
-test('a worker that stays drains a backlog wider than a pass without waiting between them', async () => {
+let wide = await (async () => {
   let s = store()
   let cli = proc(s)
   cli.fx.handle(every(cli.note))
   await cli.g.apply(Array.from({ length: 64 }, (_, i) => post(`p${i}`)))
-  let server = proc(s, { owner: 'server' })
-  server.fx.handle(every(server.note))
+  return s
+})()
+
+test('a worker that stays drains a backlog wider than a pass without waiting between them', async () => {
+  let drained = Promise.withResolvers<'drained'>()
+  let idle = Promise.withResolvers<'idle'>()
+  let server = proc(wide, {
+    owner: 'server',
+    clock: {
+      now: () => 0,
+      after: (ms, go) => {
+        // Short yields run; an idle nap cannot end on its own.
+        if (ms == 0) queueMicrotask(go)
+        else idle.resolve('idle')
+        return () => {}
+      },
+    },
+  })
+  server.fx.handle(every((...args) => {
+    server.note(...args)
+    if (server.ran.length == 64) drained.resolve('drained')
+  }))
   let up = new AbortController()
   let serving = server.fx.work(server.g, up.signal)
   try {
-    // Well inside the pass the worker would otherwise wait for.
-    await until(() => server.ran.length == 64, { timeout: 500 })
+    assertEquals(await Promise.race([drained.promise, idle.promise]), 'drained')
+    assertEquals(
+      server.ran.sort(),
+      Array.from({ length: 64 }, (_, i) => `created p${i}`).sort(),
+    )
   } finally {
     up.abort()
     await serving
+    await server.fx.idle()
   }
 })
 

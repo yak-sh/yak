@@ -2,9 +2,11 @@
 import { equal, ok, test } from '@yaks/testing'
 import { assertRejects, assertThrows } from '@std/assert'
 import { compose } from '@yaks/cli/host'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 import { integrationEid } from '@yaks/connections/identity'
-import { reveal, secretEid } from '@yaks/secrets'
+import { ramVault, reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import { ended, Refused, review, runs } from './tools.ts'
@@ -291,18 +293,26 @@ test('infrastructure rejects a throwaway but accepts the admin and own account w
   }
 })
 
+let empty = loadVocab([])
+let unread = graph({ vocab: empty, storage: ram(empty) })
+let fee = runs({
+  graph: unread,
+  vault: ramVault(),
+  stopping: AbortSignal.abort(),
+  get config(): never {
+    throw new Error('invalid fee read accounts')
+  },
+}).admin_fee
+
 for (let bps of ['2.5', '-5', 'lots']) {
-  let { host, ask } = await box()
   test(`invalid basis points ${bps} are rejected before reading accounts`, async () => {
-    try {
-      await assertRejects(
-        () => ask('admin_fee', { bps }),
-        CallError,
-        'basis points',
-      )
-    } finally {
-      await host.close()
-    }
+    await assertRejects(
+      async () => {
+        await fee({ entity: { eid: 'call' }, call: { args: { bps } } }, unread)
+      },
+      CallError,
+      'basis points',
+    )
   })
 }
 

@@ -53,6 +53,7 @@ let { runTestCommands } = await import('./phases.ts')
 let { budget, hold, measure, OWN, read } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
 let { library } = await import('./sqlite.ts')
+let { tools } = await import('./test-tools.ts')
 
 export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
@@ -311,10 +312,16 @@ export let ALSO = [
 /** What runs every file: the runner, this file starting it, the preload, and
  * the scratch directory `deno task test` gives them (./scratch.ts). Each is
  * keyed by what loads with it: the Worker's modules this file imports only
- * for a run with the Worker's tests are those tests' to depend on. */
+ * for a run with the Worker's tests are those tests' to depend on. Imports
+ * delayed until after the nested-run refusal are explicit roots here too,
+ * so their budget records and tool packages participate in every key. */
 export let RUNS = [
   rel(import.meta.resolve('@yaks/testing/main')),
   rel(import.meta.url),
+  rel(new URL('./phases.ts', import.meta.url)),
+  rel(new URL('./test-budget.ts', import.meta.url)),
+  rel(new URL('./test-tools.ts', import.meta.url)),
+  rel(new URL('./sqlite.ts', import.meta.url)),
   rel(new URL('./test-runtime.ts', import.meta.url)),
   rel(new URL('./scratch.ts', import.meta.url)),
 ]
@@ -591,6 +598,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // what the Worker's tests need, each only for a file that runs. Every
   // runtime is handed the keys, so none makes them again.
   let { keys, run } = await chosen(files, flags.includes('--all'), [sqlite])
+  let bins = await tools(run)
+  if (bins.length) {
+    Deno.env.set('PATH', [...bins, Deno.env.get('PATH') ?? ''].join(':'))
+  }
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   // The Worker's npm dependencies, current before any test loads: workerd

@@ -9,17 +9,9 @@
 // - a test the list does not name fails when it takes over the budget, on
 //   every run;
 // - a listed test fails when it takes longer than its record allows (the
-//   record times `slack.times`, plus `slack.ms`) in a run of the whole suite
-//   (`--all`, no path or tag) on the gate (CI), where the records are taken.
-//   The box keeps a run's temporary files in memory as the gate does
-//   (bin/scratch.ts), so a test that writes files takes the same time on
-//   both. The CPUs still differ: agents' runs share the box's two cores and
-//   their hyperthreads, and a thread whose sibling is busy runs slower
-//   without waiting. In a whole run on the box, 25 listed tests, most of them
-//   starting processes or running a kernel, took 1.05 to 3.8 times what the
-//   gate's took, past their records (T-132967), before a test's own time
-//   left out what the processes it starts wait. So a whole run elsewhere says
-//   them and holds none, and a narrowed one says none.
+//   record times `slack.times`, plus `slack.ms`) on every run, including a
+//   no-path run chosen by the dependency graph. CI and local runs hold the
+//   same records, and a path or tag changes only which tests run.
 //
 // A test is held to its own time: its wall clock less what its runtime's
 // thread, and the processes it started, waited for a CPU another process held
@@ -298,20 +290,18 @@ export let lines = (b: Budget, rows: Seen[]): Lines => {
 }
 
 /** The tests a run fails: each over the budget, and each listed one slower
- * than its record allows where the records are held (`gated`). */
-export let failing = (j: Judged, gated: boolean): Seen[] =>
-  gated ? [...j.over, ...j.slower] : j.over
+ * than its record allows. Every run holds the same lines. */
+export let failing = (j: Judged): Seen[] => [...j.over, ...j.slower]
 
 /// let b = { budget: 1, leave: 0.5, slack: { times: 2, ms: 0 }, tests: { 'a_test.ts': { y: 3 } } }
 /// let run = (x: number, y: number) => ({ wall: 9e9, tests: [{ file: 'a_test.ts', name: 'x', ms: x, ok: true }, { file: 'a_test.ts', name: 'y', ms: y, ok: true }] })
-/// failed(b, { code: 0, gate: true, whole: true, runs: { deno: run(2, 7) } }) -> ['a_test.ts: x', 'a_test.ts: y']
-/// failed(b, { code: 0, gate: false, whole: true, runs: { deno: run(2, 7) } }) -> ['a_test.ts: x']
-/// failed(b, { code: 0, gate: true, whole: true, runs: { deno: run(0.4, 5) } }) -> []
+/// failed(b, { runs: { deno: run(2, 7) } }) -> ['a_test.ts: x', 'a_test.ts: y']
+/// failed(b, { runs: { deno: run(0.4, 5) } }) -> []
 /** What a measured run fails the budget on, each test said in a line by its
  * file and name. The same tests over on two runs say the same lines
  * (bench/ci.ts holds a red run to that). */
-export let failed = (b: Budget, m: Measured): string[] =>
-  failing(judge(b, m.runs, m.same), m.whole && m.gate)
+export let failed = (b: Budget, m: Pick<Measured, 'runs' | 'same'>): string[] =>
+  failing(judge(b, m.runs, m.same))
     .map((s) => `${s.file}: ${s.key}`)
 
 /** The passes the runs remembered that the budget takes back: the keys of the
@@ -346,7 +336,6 @@ let said = (rows: Seen[], b: Budget) =>
 export type Measured = {
   code: number
   runs: Record<string, Times>
-  gate: boolean
   whole: boolean
   same?: string[]
   ms?: number
@@ -357,7 +346,7 @@ export type Measured = {
  * code its run ended with. */
 export let read = async (dir: string): Promise<Measured> => {
   let runs: Record<string, Times> = {}
-  let meta = { gate: false, whole: false }
+  let meta = { whole: false }
   for await (let e of Deno.readDir(dir)) {
     if (!e.name.endsWith('.json')) continue
     let held = JSON.parse(await Deno.readTextFile(`${dir}/${e.name}`))
@@ -405,15 +394,13 @@ export let measure = async (
   whole: boolean,
   verbose = false,
 ): Promise<Measured> => {
-  let gate = Deno.env.get('CI') == 'true'
-  let gated = gate && whole
   let start = performance.now()
   // Before the run: each runtime remembers what it passed as it ends.
   let before = passed()
   let { code, stopped, runs } = await timed(suite, [])
-  if (stopped) return { code, runs: {}, gate, whole }
+  if (stopped) return { code, runs: {}, whole }
   let same = unchanged(runs, before)
-  let slow = failing(judge(b, runs, same), gated)
+  let slow = failing(judge(b, runs, same))
   let stop: number | undefined
   if (slow.length) {
     if (verbose) {
@@ -443,10 +430,10 @@ export let measure = async (
       }
     }
     runs = fastest(runs, again)
-    slow = failing(judge(b, runs, same), gated)
+    slow = failing(judge(b, runs, same))
   }
   forget(retracted(runs, slow))
-  if (stop != null) return { code: stop, runs: {}, gate, whole }
+  if (stop != null) return { code: stop, runs: {}, whole }
   if (whole) {
     await Deno.remove(KEPT, { recursive: true }).catch(() => {})
     await Deno.mkdir(KEPT, { recursive: true })
@@ -455,10 +442,10 @@ export let measure = async (
     }
     await Deno.writeTextFile(
       `${KEPT}run.json`,
-      JSON.stringify({ gate, whole, code, same }),
+      JSON.stringify({ whole, code, same }),
     )
   }
-  return { code, runs, gate, whole, same, ms: performance.now() - start }
+  return { code, runs, whole, same, ms: performance.now() - start }
 }
 
 // A test on one line: what it took, its record, its name and file.
@@ -521,7 +508,7 @@ export let closing = (
  * would shrink. */
 export let hold = async (
   b: Budget,
-  { code, runs, gate, whole, same, ms, left }: Measured,
+  { code, runs, whole, same, ms, left }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
@@ -530,10 +517,9 @@ export let hold = async (
   let j = judge(b, runs, same)
   // Only a whole run knows which tests are gone, and only one that passed: a
   // runtime that died wrote no times, and every test it held would read as
-  // gone. The records are held on the gate's, where they are taken.
+  // gone.
   if (!whole || code) j.gone = []
-  let gated = whole && gate
-  let slower = whole ? j.slower : []
+  let slower = j.slower
   let shrinking = j.within.length + j.gone.length + j.faster.length
   let spared =
     'test(s) over the line in files unchanged since they passed, spared'
@@ -553,11 +539,7 @@ export let hold = async (
     )
     section(
       `${j.slower.length} listed test(s) slower than their record allows`,
-      !slower.length
-        ? []
-        : gated
-        ? said(slower, b)
-        : [...said(slower, b), '  Held on the gate, where records are taken.'],
+      said(slower, b),
     )
     section(
       `${j.spared.length} ${spared}`,
@@ -590,9 +572,9 @@ export let hold = async (
     }
     if (slower.length) {
       lines.push(
-        `${slower.length} listed test(s) slower than their record allows${
-          gated ? '' : ', held on the gate'
-        }: ${worst(slower, b)}`,
+        `${slower.length} listed test(s) slower than their record allows: ${
+          worst(slower, b)
+        }`,
       )
     }
     if (j.spared.length) {
@@ -608,7 +590,7 @@ export let hold = async (
     let next = shrunk(b, j)
     await Deno.writeTextFile(LIST, JSON.stringify(next, null, 2) + '\n')
   }
-  let exit = code || (!report && failing(j, gated).length ? 1 : 0)
+  let exit = code || (!report && failing(j).length ? 1 : 0)
   // A run a signal stopped measured nothing to sum.
   if (!code || Object.keys(runs).length) {
     let line = closing(exit, runs, j.over.length + slower.length, ms, left)
