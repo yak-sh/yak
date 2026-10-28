@@ -765,7 +765,10 @@ An **Identity** is an operand list split into `eids` and entity `nums`.
 `identity` uses [@yaks/id](../id/README.md) to read display ids such as `B-7` as
 entity number 7. A list of text binds as one JSON parameter however long it is,
 and integers are spelled out in the statement (`spelled`), binding nothing: a
-list SQLite reads from JSON costs a row per member. One eid is an equality.
+list SQLite reads from JSON costs a row per member. One eid is an equality. A
+host that keeps its statements by their text (`stable`, as the box's driver
+does: `Driver.stable`) binds every list as one JSON parameter, so a read's text
+is the same whatever its ids, and is prepared once.
 
 ```ts
 import { compile, identity } from '@yaks/sql'
@@ -785,6 +788,9 @@ equal(identity('eid', 'b1,B-7'), { eids: ['b1'], nums: [7] })
 equal(compile(parse('.entity.eid=b1,b2'), vocab).params, ['["b1","b2"]'])
 equal(compile(parse('.entity.eid=b1'), vocab).params, ['b1'])
 equal(compile(parse('.entity.num=3,4'), vocab).params, [])
+equal(compile(parse('.entity.num=3,4'), vocab, { stable: true }).params, [
+  '[3,4]',
+])
 ```
 
 A reference equality drives the statement from its column's index. So does an
