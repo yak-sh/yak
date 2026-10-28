@@ -1204,7 +1204,7 @@ export let graph = (opts: Options): Graph => {
     // values that admission discards must not introduce a lookup or refusal.
     let referring = (
       named: Bundle[],
-      tx: ReadTx = outsideRead(),
+      tx: ReadTx = outside,
       pending: Bundle[] = [],
       aliases = false,
     ): Bundle[] | Promise<Bundle[]> => {
@@ -1259,7 +1259,7 @@ export let graph = (opts: Options): Graph => {
     // it. Resolve it before either stamps or journal hooks can consume it.
     let actors = (
       named: Bundle[],
-      tx: ReadTx = outsideRead(),
+      tx: ReadTx = outside,
     ): Bundle[] | Promise<Bundle[]> => {
       if (
         !named.some((b) =>
@@ -1347,7 +1347,7 @@ export let graph = (opts: Options): Graph => {
                   opts.teach,
                   o.replica,
                 ),
-                (b) => referring(b, outsideRead(), [], true),
+                (b) => referring(b, outside, [], true),
               ),
           ),
         // Derive the id, then check it still matches: an id derived from a
