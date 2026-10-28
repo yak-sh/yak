@@ -294,10 +294,10 @@ let measured = async (suite: string, args: string[]) => {
     stderr: 'piped',
   }).output()
   await Deno.stderr.write(child.stderr)
-  let said = new TextDecoder().decode(child.stderr)
+  // Never spread the output: its stdout getter throws when stdout is not piped.
   return {
-    ...child,
-    said,
+    code: child.code,
+    said: new TextDecoder().decode(child.stderr),
     // A busy lock leaves the check owed; a run past its cap tells nothing.
     unjudged: child.code == 75
       ? 'deferred' as const
