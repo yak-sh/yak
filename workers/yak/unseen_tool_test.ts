@@ -18,6 +18,7 @@ import {
 } from './unseen.ts'
 import type { Who } from './session.ts'
 import { tallying } from './lib/hops.ts'
+import { ticket } from './app-errors.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   await using p = platform()
@@ -93,6 +94,10 @@ let tracker = (rows: unknown[] = []) => {
 let space = { eid: 'space-1', slug: 'ada' } as Space
 let cook = { eid: 'app-1', slug: 'cookbook' } as App
 let ada: Who = { person: ADA, role: 'owner' }
+// The kernel carries a space's tracker ticket for half its minute: signed
+// here, as an isolate's earlier request in the space signs it, so the case
+// times its reads and not WebCrypto's thread pool.
+await ticket(tracker().env, space, ada)
 
 test('app_errors says a break once, and its id archives every time', () => {
   let hits = [1, 2, 3].map((n) => ({

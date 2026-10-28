@@ -24,6 +24,40 @@ let request = (
     : recall(store, path, send)
 }
 
+// A ticket to a space's tracker lives a minute. One is signed for each caller
+// and kind of ask and carried for its first half: a burst of requests in a
+// space signs once, not once a second, and every ticket sent has at least
+// half a minute left. The ticket is kept, never the promise of it, so no
+// request waits on work another request started.
+let held = new Map<string, { secret: string; exp: number; token: string }>()
+
+/** The ticket a read (or, with `ingest`, a mark) of a space's tracker
+ * carries. */
+export let ticket = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  ingest = false,
+) => {
+  let secret = env.TRACKER_SECRET
+  if (!secret) throw Error('tracker is unavailable')
+  let access = {
+    scope: space.eid,
+    person: who.person || 'kernel',
+    admin: true,
+    ...ingest ? { ingest: true } : {},
+  }
+  let key = JSON.stringify(access)
+  let now = Math.floor(Date.now() / 1000)
+  let had = held.get(key)
+  if (had?.secret == secret && had.exp - now > 30) return had.token
+  let exp = now + 60
+  let token = await sign({ ...access, exp }, secret)
+  if (held.size > 1000) held.clear()
+  held.set(key, { secret, exp, token })
+  return token
+}
+
 let sent = async (
   env: Env,
   space: Space,
@@ -31,14 +65,8 @@ let sent = async (
   path: string,
   init: RequestInit,
 ): Promise<unknown> => {
-  if (!env.TRACKER || !env.TRACKER_SECRET) throw Error('tracker is unavailable')
-  let token = await sign({
-    scope: space.eid,
-    person: who.person || 'kernel',
-    admin: true,
-    ...init.method == 'POST' ? { ingest: true } : {},
-    exp: Math.floor(Date.now() / 1000) + 60,
-  }, env.TRACKER_SECRET)
+  if (!env.TRACKER) throw Error('tracker is unavailable')
+  let token = await ticket(env, space, who, init.method == 'POST')
   let url = new URL(`https://tracker.internal${path}`)
   url.searchParams.set('scope', space.eid)
   let response = await env.TRACKER.fetch(
