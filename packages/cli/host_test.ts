@@ -63,6 +63,7 @@ let doc: VocabDoc = {
       properties: {
         at: { type: 'string', stamped: true },
         by: { type: 'string', stamped: true },
+        via: { type: 'string', stamped: true },
       },
     },
     // Its other half: an entity that is touched twice is stamped twice, and
@@ -764,6 +765,11 @@ test('start-up work is owed by a process that starts working the effects, and by
 // the answer are written down as they go, and a call somebody else wrote is
 // run by the effect the server registers.
 
+let stamp = (row: Bundle) => {
+  let { by, via } = row.created as Comp
+  return { by, via }
+}
+
 test('the door calls the tool, and the call is the transcript', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
@@ -793,16 +799,17 @@ test('the door calls the tool, and the call is the transcript', async () => {
     }
     let text = reply.result.content[0].text
 
-    // What was asked, and what came back, both written down — and the book
-    // the tool answered is signed as the person who asked, not the server.
+    // What was asked, and what came back, both written down. Nobody named
+    // the caller, so the call and the book come through the process for
+    // nobody: a process is an instrument, never an actor (@yaks/mcp).
     let [call] = await host.graph.read('.call&?created&?execution')
     assertEquals((call.call as Comp).to, toolEid('book_add'))
-    assertEquals((call.created as Comp).by, me)
+    assertEquals(stamp(call), { by: undefined, via: me })
     assertEquals((call.execution as Comp).state, 'done')
     let [result] = await host.graph.read('.result')
     assertEquals((result.result as Comp).call, call.entity.eid)
     let [book] = await host.graph.read('.book&?created')
-    assertEquals((book.created as Comp).by, me)
+    assertEquals(stamp(book), { by: undefined, via: me })
     // The reply says the book it made, with the id to find it by.
     assertStringIncludes(text, book.entity.eid)
     assertStringIncludes(text, 'shelved Spring')
