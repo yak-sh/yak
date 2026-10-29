@@ -5,6 +5,9 @@ export const APPLY_SIZES = [200, 1000] as const
 export const APPLY_MODES = ['file', 'ram'] as const
 export const APPLY_WORK = ['edit', 'create'] as const
 export const APPLY_SHAPES = ['alone', 'batch'] as const
+// Each callback already applies 200 or 1,000 bundles. Paired collection rounds
+// repeat those CPU observations; these counts only warm and time one callback.
+export const APPLY_SAMPLING = { n: 1, warmup: 1 } as const
 export const applyBenchmarkNames = (recording = false) =>
   APPLY_MODES.flatMap((mode) =>
     APPLY_WORK.flatMap((work) =>

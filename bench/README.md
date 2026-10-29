@@ -188,11 +188,13 @@ reference and current workers perform the same seed preparation before their
 discarded collection. The graph is warmed before measuring. Every edited entity
 already exists; every created entity is absent. Creates cannot turn into edits
 or grow the corpus across samples. Each sample verifies the saved titles, stamps
-and archetype pointers after timing. The collector takes exactly ten measured
-iterations and five warmup iterations per apply case. SQLite writes use ordinary
-commits; there is no enclosing rollback transaction. A file sample starts on a
-WAL checkpointed during warmup, so a checkpoint of setup's own pages never lands
-in its timed apply.
+and archetype pointers after timing. The shared apply declaration takes one
+measured invocation and one warmup per case in each collector. Every invocation
+still applies the full 200 or 1,000 bundles; paired rounds repeat these CPU
+observations after each worker's discarded collection. SQLite writes use
+ordinary commits; there is no enclosing rollback transaction. A file sample
+starts on a WAL checkpointed during warmup, so a checkpoint of setup's own pages
+never lands in its timed apply.
 
 The ratchet divides each Deno operation by N and records **ns/bundle**,
 displayed as **µs/bundle**. `counts` reports SQL statements per apply and per
@@ -210,9 +212,9 @@ measures the same edit/create, alone/batch, SQLite/RAM and 200/1,000-bundle
 cases. The two modes run in separate Deno processes so recording cannot alter
 the unsubscribed process’s JIT feedback. Process order alternates each round.
 Each recording invocation groups five fresh fixture workloads into a finite
-minute with a shared ordinary-sample quota and summary buffer. Two measured
-invocations and one warmup preserve ten measured workloads and five warmups per
-case. It buffers all completed events by minute and assembles root-first trees,
+minute with a shared ordinary-sample quota and summary buffer. One measured
+invocation and one warmup each process five complete fixture workloads per case.
+It buffers all completed events by minute and assembles root-first trees,
 including SQL and both tracker flush phases. It samples every completed tree
 with the default slow thresholds and a shared ordinary-sample quota, then
 summarizes closed minutes. The finite minute is closed inside timing so summary

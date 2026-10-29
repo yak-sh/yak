@@ -1,6 +1,7 @@
 // Timed apply boundary only: seed, warmup, verification and disposal excluded.
 import {
   APPLY_MODES,
+  APPLY_SAMPLING,
   APPLY_SHAPES,
   APPLY_SIZES,
   APPLY_WORK,
@@ -25,8 +26,7 @@ for (let mode of APPLY_MODES) {
           name: `apply/${mode}/${work}-${shape}-${n}${
             active ? '/subscribed' : ''
           }`,
-          n: grouped ? 2 : 10,
-          warmup: grouped ? 1 : 5,
+          ...APPLY_SAMPLING,
           fn: async (b) => {
             let fixtures: Awaited<ReturnType<typeof applyFixture>>[] = []
             let recorder: ReturnType<typeof applyRecording> | undefined
