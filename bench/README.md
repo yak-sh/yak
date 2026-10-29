@@ -34,7 +34,9 @@ averages without waiting for a quiet box or running a load-control worker.
 To convert an existing suite's baseline to CPU, use
 `deno run -A bench/rebank.ts <suite>`. It measures the baseline's product
 revision beside current code under the same driver and banks only the reference
-CPU readings, retaining any current regression in the evidence. See
+CPU readings, retaining any current regression in the evidence. Each bench keeps
+its own reference commit; partial acceptance preserves the reference of every
+retained median. Mixed baselines are compared in groups by reference. See
 [baseline conversion](suites.md#baseline-conversion).
 
 ## The monitor
@@ -250,13 +252,17 @@ socket round trip or fanout to observers.
 
 ## Samples and comparison
 
-The runner takes seven independent collector process averages per case,
-sequentially, and records their median, raw samples, runtime, CPU, source
-revision, units and Linux load averages. The shared Deno collector measures CPU
-for batches of registered workloads, honoring their explicit timing boundaries;
-it retains wall averages alongside CPU averages. These are batch averages, not
-per-invocation medians. The result metric carries `/cpu`. Storage modes run in
-separate processes, followed by the graph/relay cases.
+The throughput runner takes seven collection rounds per case, sequentially, and
+records their median, raw samples, runtime, CPU, source revision, units and
+Linux load averages. Collector processes retain warmed product imports across
+rounds; each collection creates and disposes fresh fixtures. The shared Deno
+collector measures CPU for batches of registered workloads, honoring their
+explicit timing boundaries. After discarded calibration and bounded
+whole-invocation warmup, each sample keeps the median of five CPU batch
+averages, the five readings in `details.cpuSamples`, and the matching wall
+average. These are batch averages, not per-invocation medians. The result metric
+carries `/cpu`. Storage modes run in separate processes, followed by the
+graph/relay cases.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
@@ -378,22 +384,24 @@ residual and create-scaling investigation.
 
 ### Side by side on a shared box
 
-bench/paired.ts measures a suite at two product revisions, by default the one
-its baseline was banked at and HEAD, under the same driver: this checkout's
-bench files and @yaks/benchmark, copied into an archive of each revision. It
-holds the box-wide lock across one unmeasured run of each, so no round times one
-tree's cold compile caches against the other's warm ones, then rounds of
-reference, current, reference (at least six, more with more benches, for the
-within-round sign comparison); each probe owns its seeded graph and no live
-database is copied. A bench is slower when every round's current figure is past
-both references beside it (or every current figure past every reference one) and
-its median is past the reference's by more than the slack its baseline banked.
-The figure is CPU time in every suite (@yaks/benchmark `stopwatch`); missing CPU
-never falls back to wall time. Collectors include CPU from long-lived processes
-through external counters or server reports. Other work on the box during the
-bracket is recorded; reference rounds that drift apart make the whole comparison
-inconclusive. So does older code that cannot run today's driver; a failure of
-the current code's bench is a failure. The comparison banks nothing.
+bench/paired.ts groups benchmarks by the reference commit of their banked
+median, then measures each group at that revision and HEAD under the same
+driver: this checkout's bench files and @yaks/benchmark, copied into an archive
+of each revision. It holds the box-wide lock across one unmeasured run of each,
+so no round times one tree's cold compile caches against the other's warm ones.
+Separate collectors keep the before, current and after sequences equally warm
+through rounds of reference, current, reference (at least six, more with more
+benches, for the within-round sign comparison); each probe owns its seeded graph
+and no live database is copied. A bench is slower when every round's current
+figure is past both references beside it (or every current figure past every
+reference one) and its median is past the reference's by more than the slack its
+baseline banked. The figure is CPU time in every suite (@yaks/benchmark
+`stopwatch`); missing CPU never falls back to wall time. Collectors include CPU
+from long-lived processes through external counters or server reports. Other
+work on the box during the bracket is recorded; reference rounds that drift
+apart make the whole comparison inconclusive. So does older code that cannot run
+today's driver; a failure of the current code's bench is a failure. The
+comparison banks nothing.
 
 To inspect one directly while holding the shared measurement lock:
 

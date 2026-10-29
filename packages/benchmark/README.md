@@ -94,7 +94,9 @@ equal(await relay.sample(1), {
 
 A `CollectedSuite` supplies `collect(round)` and workload names and units. Its
 collector returns a map of samples for exactly those names, allowing one child
-process to measure several benches. Missing, extra and duplicate names fail.
+process to measure several benches. Missing, extra and duplicate names fail. A
+suite can supply `close()` to dispose persistent collectors; the runner calls it
+after measurement, including on failure.
 
 `@yaks/benchmark/deno` imports reports from a CPU-aware Deno workload collector.
 Each result supplies its wall average (`avg`) and CPU average (`cpu`), both in
@@ -116,12 +118,13 @@ equal(imported.read.source, 'deno-cpu-average')
 equal(imported.read.details, { avg: 42, cpu: 30, n: 100 })
 ```
 
-The collector supplies batch averages and statistics, not individual invocation
-timings. These samples retain that provenance and their statistics; they cannot
-reconstruct the distribution of operation times. Native timed benches keep every
-invocation sample. All samples must be finite and nonnegative; imported wall
-averages must be positive and imported CPU averages are required. Native
-`deno bench --json` output lacks the CPU average and cannot be imported.
+The collector supplies aggregates of batch averages and statistics, not
+individual invocation timings. These samples retain that provenance and their
+statistics; they cannot reconstruct the distribution of operation times. Native
+timed benches keep every invocation sample. All samples must be finite and
+nonnegative; imported wall averages must be positive and imported CPU averages
+are required. Native `deno bench --json` output lacks the CPU average and cannot
+be imported.
 
 ## CPU time
 
@@ -180,6 +183,12 @@ product, not a measurement; `slower: ['close']` makes that decision for the
 named benches only, and every other bench stays as banked. A baseline banked on
 another runtime, CPU or workload version is no reference, and an exact
 acceptance banks the suite as measured.
+
+Each baseline bench can retain a `reference` commit for its median. Acceptance
+stamps a changed median with the measured run's commit and preserves the
+reference of every retained median, including benches outside a scoped
+acceptance. A baseline with one shared reference also keeps it at the top level;
+that field remains the fallback for older baselines without bench references.
 
 When judging `value`, a run is **loaded** when other work used more than `BUSY`
 (a quarter) of the box's CPUs (`loaded()`). Before each round of a check or an

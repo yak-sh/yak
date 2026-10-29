@@ -7,10 +7,19 @@ and the monitor's paired comparison requires CPU in every round; neither falls
 back to wall time. SQL statement and row counts remain separate measurements.
 
 `bench/deno-worker.ts` collects existing `Deno.bench` declarations with the
-shared CPU clock. It warms each workload, measures batches, and reports CPU and
-wall averages in ns/op. Explicit `start()` and `end()` boundaries exclude
-fixture setup and teardown. The workload files need no separate CPU
-instrumentation.
+shared CPU clock. It calibrates a batch count, discards calibration, and warms
+whole invocations, including fixture setup and teardown, for a bounded CPU
+interval (100 ms by default, at most 20 batches). It then reports the median of
+five batch CPU averages in ns/op, retaining all five in `details.cpuSamples` and
+the matching wall average. Explicit `start()` and `end()` boundaries exclude
+fixture setup and teardown from measured work. Workload files need no separate
+CPU instrumentation.
+
+Collectors retain their process and product imports across rounds. Deno workload
+modules load afresh for each collection, with fixture disposal awaited before
+the result returns. Standalone collectors call the module's `measure()` to
+create and dispose each fixture. The suite's `close()` releases its collectors
+after measurement, including on failure.
 
 ## Process accounting
 
@@ -34,8 +43,12 @@ waiting rather than CPU work.
 
 ## Baseline conversion
 
-A CPU baseline measures the product revision named by the existing baseline,
-using the current driver. Run the conversion for selected registered suites:
+A CPU baseline measures each benchmark at its own reference product revision,
+using the current driver. A partial acceptance can leave a suite with medians
+banked at different revisions. The paired collector groups benchmarks by their
+`benches[].reference`, measuring only each group against its reference; a
+top-level `reference` remains the fallback for homogeneous or older baselines.
+Run the conversion for selected registered suites:
 
 ```sh
 deno run -A bench/rebank.ts throughput relay-admission
@@ -48,12 +61,20 @@ and the shared CPU clock over their own product code. Each probe owns its
 fixture; no live graph is copied.
 
 Only the reference readings are banked. Their spread supplies the baseline's
-slack, and `reference` retains the measured product commit. A slower current
-reading stays visible in the comparison rather than becoming the CPU baseline.
-An inconclusive comparison or failed workload banks nothing.
+slack, and each bench's `reference` retains its measured product commit. A
+slower current reading stays visible in the comparison rather than becoming the
+CPU baseline. An inconclusive comparison or failed workload banks nothing.
 `bench/<suite>.rebank.results.json` retains the evidence and
 `bench/cpu-baselines.json` records each suite's reference, current revision,
-verdict and figures. Commit the baseline changes and retained evidence together.
+verdict and figures.
+
+`bench/baseline-references.json` records the reference selection for each
+benchmark group and its source. `kind: "recorded"` identifies an explicitly
+recorded measurement revision; `kind: "derived"` identifies the Git revision
+that introduced the unchanged median when no measured revision was recorded. A
+derived origin is a reconstruction, not proof of which checkout produced the old
+measurement. The conversion retains this provenance beside its CPU results.
+Commit the baseline changes and retained evidence together.
 
 ## Command timing
 
