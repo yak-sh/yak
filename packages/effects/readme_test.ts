@@ -9,7 +9,7 @@ import {
   take,
   until,
 } from '@yaks/effects'
-import { equal, test } from '@yaks/testing'
+import { clock, equal, match, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -103,3 +103,43 @@ const example13 = await (async () => {
   }
 })()
 test('holding releases its lease after abort', example13)
+
+let receipt = async (retry = false) => {
+  let vocab = loadVocab([effectDoc, {
+    $defs: {
+      order: { component: true },
+      send_receipt: { effect: true, created: ['order'], tries: 2 },
+    },
+  }])
+  let time = clock(), last: boolean[] = [], reports: string[] = []
+  let fx = effects(vocab, {
+    clock: time,
+    report: (_error, job) => reports.push(job.handler),
+  })
+  let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+  fx.handle({
+    send_receipt: (_event, _write, _tx, attempt) => {
+      last.push(attempt!.last())
+      throw Error('mail unavailable')
+    },
+  })
+  await g.apply([{ entity: { eid: 'o1' }, order: {} }])
+  if (retry) {
+    await fx.work(g, undefined, 1)
+    await time.advance(1000)
+  }
+  return { fx, g, last, reports }
+}
+
+for (let retry of [false, true]) {
+  let { fx, g, last, reports } = await receipt(retry)
+  test(`the receipt example ${retry ? 'stops after its last failure' : 'schedules its first retry'}`, async () => {
+    await fx.work(g, undefined, 1)
+    equal(last, retry ? [false, true] : [false])
+    match((await g.read('.effect'))[0], {
+      effect: { state: retry ? 'failed' : 'pending', attempts: retry ? 2 : 1 },
+    })
+    equal(reports, retry ? ['send_receipt', 'send_receipt'] : ['send_receipt'])
+    await fx.stop()
+  })
+}

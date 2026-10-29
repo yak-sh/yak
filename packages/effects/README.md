@@ -526,9 +526,10 @@ equal(await g.read('.effect'), [])
 await fx.stop()
 ```
 
-Failures follow the declaration's attempt limit and backoff:
+Failures follow the declaration's attempt limit and backoff. The
+[retry example tests](./readme_test.ts) prepare each attempt separately.
 
-```ts
+```ts ignore
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
