@@ -5483,11 +5483,6 @@
     "evidence": "bench/operation-lifecycle.rebank.results.json"
   },
   {
-    "suite": "platform-waits",
-    "verdict": "failed",
-    "error": "Error: platform-waits probe failed (1)\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/platform-waits.ts:74:15)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:157:20"
-  },
-  {
     "suite": "operation-checkout",
     "baseline": "bench/operation-checkout.baseline.json",
     "references": {
@@ -6659,5 +6654,1317 @@
       }
     ],
     "evidence": "bench/harness-window.rebank.results.json"
+  },
+  {
+    "suite": "platform-waits",
+    "baseline": "bench/platform-waits.baseline.json",
+    "references": {
+      "management/html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "management/connections-html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "management/trash-html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "management/billing-html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "management/connect-html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "app/html": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/app-list": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/file-list": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/graph-query": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "management/settings-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/people-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/new-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/visits-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/selling-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/apps-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/settings-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/connections-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/trash-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/billing-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/connect-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/people-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/new-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/visits-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "management/selling-populated-html": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/settings-name": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/settings-space": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/restore": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/people-resend": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-add": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-signin": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-key": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-disconnect": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-attach": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-open": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/connections-close": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/selling-start": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/app-new-upload": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/app-update-upload": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/selling-stop": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/billing-checkout": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/billing-portal": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+      "form/agent-disconnect": "a851193acf98c69bfa4cc99dc2e907eb7668fc23"
+    },
+    "provenance": [
+      {
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "kind": "derived",
+        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "management/html",
+          "management/connections-html",
+          "management/trash-html",
+          "management/billing-html",
+          "management/connect-html",
+          "app/html",
+          "connector/app-list",
+          "connector/file-list",
+          "connector/graph-query",
+          "connector/graph-apply"
+        ]
+      },
+      {
+        "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "kind": "derived",
+        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "management/settings-html",
+          "management/people-html",
+          "management/new-html",
+          "management/visits-html",
+          "management/selling-html",
+          "management/apps-populated-html",
+          "management/settings-populated-html",
+          "management/connections-populated-html",
+          "management/trash-populated-html",
+          "management/billing-populated-html",
+          "management/connect-populated-html",
+          "management/people-populated-html",
+          "management/new-populated-html",
+          "management/visits-populated-html",
+          "management/selling-populated-html",
+          "form/settings-name",
+          "form/settings-space",
+          "form/restore",
+          "form/people-resend",
+          "form/connections-add",
+          "form/connections-signin",
+          "form/connections-key",
+          "form/connections-disconnect",
+          "form/connections-attach",
+          "form/connections-open",
+          "form/connections-close",
+          "form/selling-start",
+          "form/app-new-upload",
+          "form/app-update-upload",
+          "form/selling-stop",
+          "form/billing-checkout",
+          "form/billing-portal",
+          "form/agent-disconnect"
+        ]
+      }
+    ],
+    "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "plan": [
+      {
+        "suite": "platform-waits",
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+        "names": [
+          "management/html",
+          "management/connections-html",
+          "management/trash-html",
+          "management/billing-html",
+          "management/connect-html",
+          "app/html",
+          "connector/app-list",
+          "connector/file-list",
+          "connector/graph-query",
+          "connector/graph-apply"
+        ],
+        "rounds": 3,
+        "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+        "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+        "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+        "protocol": "paired-cpu-1"
+      },
+      {
+        "suite": "platform-waits",
+        "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+        "names": [
+          "management/settings-html",
+          "management/people-html",
+          "management/new-html",
+          "management/visits-html",
+          "management/selling-html",
+          "management/apps-populated-html",
+          "management/settings-populated-html",
+          "management/connections-populated-html",
+          "management/trash-populated-html",
+          "management/billing-populated-html",
+          "management/connect-populated-html",
+          "management/people-populated-html",
+          "management/new-populated-html",
+          "management/visits-populated-html",
+          "management/selling-populated-html",
+          "form/settings-name",
+          "form/settings-space",
+          "form/restore",
+          "form/people-resend",
+          "form/connections-add",
+          "form/connections-signin",
+          "form/connections-key",
+          "form/connections-disconnect",
+          "form/connections-attach",
+          "form/connections-open",
+          "form/connections-close",
+          "form/selling-start",
+          "form/app-new-upload",
+          "form/app-update-upload",
+          "form/selling-stop",
+          "form/billing-checkout",
+          "form/billing-portal",
+          "form/agent-disconnect"
+        ],
+        "rounds": 3,
+        "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+        "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+        "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+        "protocol": "paired-cpu-1"
+      }
+    ],
+    "complete": true,
+    "groups": [
+      {
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "management/html",
+          "management/connections-html",
+          "management/trash-html",
+          "management/billing-html",
+          "management/connect-html",
+          "app/html",
+          "connector/app-list",
+          "connector/file-list",
+          "connector/graph-query",
+          "connector/graph-apply"
+        ],
+        "collection": {
+          "suite": "platform-waits",
+          "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+          "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+          "names": [
+            "management/html",
+            "management/connections-html",
+            "management/trash-html",
+            "management/billing-html",
+            "management/connect-html",
+            "app/html",
+            "connector/app-list",
+            "connector/file-list",
+            "connector/graph-query",
+            "connector/graph-apply"
+          ],
+          "rounds": 3,
+          "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      },
+      {
+        "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "management/settings-html",
+          "management/people-html",
+          "management/new-html",
+          "management/visits-html",
+          "management/selling-html",
+          "management/apps-populated-html",
+          "management/settings-populated-html",
+          "management/connections-populated-html",
+          "management/trash-populated-html",
+          "management/billing-populated-html",
+          "management/connect-populated-html",
+          "management/people-populated-html",
+          "management/new-populated-html",
+          "management/visits-populated-html",
+          "management/selling-populated-html",
+          "form/settings-name",
+          "form/settings-space",
+          "form/restore",
+          "form/people-resend",
+          "form/connections-add",
+          "form/connections-signin",
+          "form/connections-key",
+          "form/connections-disconnect",
+          "form/connections-attach",
+          "form/connections-open",
+          "form/connections-close",
+          "form/selling-start",
+          "form/app-new-upload",
+          "form/app-update-upload",
+          "form/selling-stop",
+          "form/billing-checkout",
+          "form/billing-portal",
+          "form/agent-disconnect"
+        ],
+        "collection": {
+          "suite": "platform-waits",
+          "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+          "revision": "0ecf196d606f32d727d61a166a4a83ac3cd02a90",
+          "names": [
+            "management/settings-html",
+            "management/people-html",
+            "management/new-html",
+            "management/visits-html",
+            "management/selling-html",
+            "management/apps-populated-html",
+            "management/settings-populated-html",
+            "management/connections-populated-html",
+            "management/trash-populated-html",
+            "management/billing-populated-html",
+            "management/connect-populated-html",
+            "management/people-populated-html",
+            "management/new-populated-html",
+            "management/visits-populated-html",
+            "management/selling-populated-html",
+            "form/settings-name",
+            "form/settings-space",
+            "form/restore",
+            "form/people-resend",
+            "form/connections-add",
+            "form/connections-signin",
+            "form/connections-key",
+            "form/connections-disconnect",
+            "form/connections-attach",
+            "form/connections-open",
+            "form/connections-close",
+            "form/selling-start",
+            "form/app-new-upload",
+            "form/app-update-upload",
+            "form/selling-stop",
+            "form/billing-checkout",
+            "form/billing-portal",
+            "form/agent-disconnect"
+          ],
+          "rounds": 3,
+          "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      }
+    ],
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "management/html",
+      "management/connections-html",
+      "management/trash-html",
+      "management/billing-html",
+      "management/connect-html",
+      "app/html"
+    ],
+    "comparisons": [
+      {
+        "name": "management/html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          4.662999999999556,
+          3.9780000000000655,
+          4.524000000000342
+        ],
+        "current": [
+          10.34900000000016,
+          7.393000000000029,
+          10.276000000000295
+        ],
+        "after": [
+          5.203000000000429,
+          3.4710000000004584,
+          3.5219999999999345
+        ],
+        "reference": 4.251000000000204,
+        "now": 10.276000000000295
+      },
+      {
+        "name": "management/connections-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          6.018000000000029,
+          6.623999999999796,
+          8.072000000000116
+        ],
+        "current": [
+          13.06399999999985,
+          11.951000000000022,
+          11.826000000000022
+        ],
+        "after": [
+          6.362999999999374,
+          5.030999999999949,
+          4.96599999999944
+        ],
+        "reference": 6.190499999999702,
+        "now": 11.951000000000022
+      },
+      {
+        "name": "management/trash-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          2.3739999999997963,
+          2.27599999999984,
+          1.662000000000262
+        ],
+        "current": [
+          5.677000000000135,
+          6.221000000000004,
+          5.855000000000018
+        ],
+        "after": [
+          2.0490000000008877,
+          1.613999999999578,
+          1.5319999999992433
+        ],
+        "reference": 1.8555000000005748,
+        "now": 5.855000000000018
+      },
+      {
+        "name": "management/billing-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          2.1939999999995052,
+          2.274000000000342,
+          1.7289999999993597
+        ],
+        "current": [
+          3.6089999999999236,
+          3.938999999999851,
+          2.7770000000000437
+        ],
+        "after": [
+          1.9130000000004657,
+          1.438999999999396,
+          1.4470000000001164
+        ],
+        "reference": 1.8209999999999127,
+        "now": 3.6089999999999236
+      },
+      {
+        "name": "management/connect-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          2.78899999999976,
+          2.912000000000262,
+          2.0560000000004948
+        ],
+        "current": [
+          4.893999999999778,
+          4.585000000000036,
+          3.411999999999807
+        ],
+        "after": [
+          2.5649999999996,
+          1.75,
+          1.9429999999993015
+        ],
+        "reference": 2.3105000000000473,
+        "now": 4.585000000000036
+      },
+      {
+        "name": "app/html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          3.503999999998996,
+          3.3479999999999563,
+          3.5380000000004657
+        ],
+        "current": [
+          7.576000000000022,
+          4.260000000000218,
+          4.070999999999913
+        ],
+        "after": [
+          3.6710000000002765,
+          2.975000000000364,
+          2.6630000000004657
+        ],
+        "reference": 3.425999999999476,
+        "now": 4.260000000000218
+      },
+      {
+        "name": "connector/app-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          15.800000000001091,
+          12.481999999999971,
+          14.338999999999942
+        ],
+        "current": [
+          14.213999999999942,
+          9.56100000000015,
+          10.389000000000124
+        ],
+        "after": [
+          14.317000000000917,
+          10.804000000000087,
+          10.623000000000502
+        ],
+        "reference": 13.399500000000444,
+        "now": 10.389000000000124
+      },
+      {
+        "name": "connector/file-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          13.99200000000019,
+          13.287000000000262,
+          11.259000000000015
+        ],
+        "current": [
+          17.649000000000342,
+          13.25799999999981,
+          14.92300000000023
+        ],
+        "after": [
+          13.981999999999971,
+          9.466999999999643,
+          10.50799999999981
+        ],
+        "reference": 12.273000000000138,
+        "now": 14.92300000000023
+      },
+      {
+        "name": "connector/graph-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          18.759000000000015,
+          13.766999999999825,
+          12.077000000000226
+        ],
+        "current": [
+          13.472000000000207,
+          10.782000000000153,
+          12.355999999999767
+        ],
+        "after": [
+          16.701000000000022,
+          10.703999999999724,
+          10.78900000000067
+        ],
+        "reference": 12.922000000000025,
+        "now": 12.355999999999767
+      },
+      {
+        "name": "connector/graph-apply",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          23.841999999999643,
+          16.864000000000487,
+          21.063000000000102
+        ],
+        "current": [
+          19.97900000000027,
+          17.17199999999957,
+          21.221000000000004
+        ],
+        "after": [
+          18.829000000000633,
+          16.764000000000124,
+          23.396999999999935
+        ],
+        "reference": 19.946000000000367,
+        "now": 19.97900000000027
+      },
+      {
+        "name": "management/settings-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.72400000000016,
+          4.944999999999709,
+          5.582999999999629
+        ],
+        "current": [
+          4.416999999999916,
+          5.4539999999997235,
+          5.824999999999818
+        ],
+        "after": [
+          5.195999999999913,
+          4.661000000000058,
+          5.507999999999811
+        ],
+        "reference": 5.070499999999811,
+        "now": 5.4539999999997235
+      },
+      {
+        "name": "management/people-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.848999999999251,
+          4.545999999999367,
+          5.552999999999884
+        ],
+        "current": [
+          5.404999999999745,
+          4.2029999999999745,
+          4.639999999999873
+        ],
+        "after": [
+          5.898000000000138,
+          4.438000000000102,
+          4.818000000000211
+        ],
+        "reference": 4.833499999999731,
+        "now": 4.639999999999873
+      },
+      {
+        "name": "management/new-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.219000000000051,
+          4.300000000000182,
+          3.7409999999999854
+        ],
+        "current": [
+          2.479000000000269,
+          2.425999999999931,
+          2.467999999999847
+        ],
+        "after": [
+          5.372000000000298,
+          2.856999999999971,
+          3.4420000000009168
+        ],
+        "reference": 3.980000000000018,
+        "now": 2.467999999999847
+      },
+      {
+        "name": "management/visits-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          7.538000000000466,
+          7.374000000000706,
+          6.113999999999578
+        ],
+        "current": [
+          3.2470000000002983,
+          2.5520000000001346,
+          3.0160000000000764
+        ],
+        "after": [
+          6.1229999999995925,
+          6.670000000000073,
+          8.25
+        ],
+        "reference": 7.022000000000389,
+        "now": 3.0160000000000764
+      },
+      {
+        "name": "management/selling-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          3.3120000000008076,
+          3.280999999999949,
+          3.661000000000058
+        ],
+        "current": [
+          3.8530000000000655,
+          2.831000000000131,
+          3.606000000000222
+        ],
+        "after": [
+          3.393000000000029,
+          2.5979999999999563,
+          4.0020000000004075
+        ],
+        "reference": 3.3525000000004184,
+        "now": 3.606000000000222
+      },
+      {
+        "name": "management/apps-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          7.183999999999287,
+          7.604000000000269,
+          6.7960000000002765
+        ],
+        "current": [
+          6.170999999999822,
+          5.119999999999891,
+          7.184999999999945
+        ],
+        "after": [
+          7.088999999999942,
+          6.15900000000056,
+          8.587999999999738
+        ],
+        "reference": 7.136499999999614,
+        "now": 6.170999999999822
+      },
+      {
+        "name": "management/settings-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          5.744999999999891,
+          4.738000000000284,
+          4.876000000000204
+        ],
+        "current": [
+          5.333999999999833,
+          5.313999999999851,
+          4.781999999999698
+        ],
+        "after": [
+          4.9520000000002256,
+          4.8969999999999345,
+          6.315000000000509
+        ],
+        "reference": 4.92450000000008,
+        "now": 5.313999999999851
+      },
+      {
+        "name": "management/connections-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          14.351999999999862,
+          13.662000000000262,
+          14.666999999999462
+        ],
+        "current": [
+          13.472999999999956,
+          14.625,
+          14.291999999999916
+        ],
+        "after": [
+          13.25799999999981,
+          14.202000000000226,
+          19.3799999999992
+        ],
+        "reference": 14.277000000000044,
+        "now": 14.291999999999916
+      },
+      {
+        "name": "management/trash-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          3.7590000000000146,
+          3.333999999998923,
+          3.6899999999996
+        ],
+        "current": [
+          2.71100000000024,
+          2.5120000000006257,
+          2.581000000000131
+        ],
+        "after": [
+          3.1959999999999127,
+          6.895000000000437,
+          6.290000000000873
+        ],
+        "reference": 3.724499999999807,
+        "now": 2.581000000000131
+      },
+      {
+        "name": "management/billing-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          3.206000000000131,
+          2.9989999999997963,
+          3.4270000000005894
+        ],
+        "current": [
+          2.499000000000251,
+          2.451000000000022,
+          2.5670000000000073
+        ],
+        "after": [
+          3.1289999999999054,
+          3.7990000000008877,
+          4.997000000000298
+        ],
+        "reference": 3.31650000000036,
+        "now": 2.499000000000251
+      },
+      {
+        "name": "management/connect-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.201000000000022,
+          3.21100000000024,
+          4.850999999999658
+        ],
+        "current": [
+          3.5149999999998727,
+          3.0839999999998327,
+          3.2469999999998436
+        ],
+        "after": [
+          4.756999999999607,
+          3.905999999999949,
+          5.3049999999993815
+        ],
+        "reference": 4.4789999999998145,
+        "now": 3.2469999999998436
+      },
+      {
+        "name": "management/people-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.848999999999251,
+          4.545999999999367,
+          5.552999999999884
+        ],
+        "current": [
+          5.404999999999745,
+          4.2029999999999745,
+          4.639999999999873
+        ],
+        "after": [
+          5.898000000000138,
+          4.438000000000102,
+          4.818000000000211
+        ],
+        "reference": 4.833499999999731,
+        "now": 4.639999999999873
+      },
+      {
+        "name": "management/new-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.219000000000051,
+          4.300000000000182,
+          3.7409999999999854
+        ],
+        "current": [
+          2.479000000000269,
+          2.425999999999931,
+          2.467999999999847
+        ],
+        "after": [
+          5.372000000000298,
+          2.856999999999971,
+          3.4420000000009168
+        ],
+        "reference": 3.980000000000018,
+        "now": 2.467999999999847
+      },
+      {
+        "name": "management/visits-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          7.538000000000466,
+          7.374000000000706,
+          6.113999999999578
+        ],
+        "current": [
+          3.2470000000002983,
+          2.5520000000001346,
+          3.0160000000000764
+        ],
+        "after": [
+          6.1229999999995925,
+          6.670000000000073,
+          8.25
+        ],
+        "reference": 7.022000000000389,
+        "now": 3.0160000000000764
+      },
+      {
+        "name": "management/selling-populated-html",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          3.3120000000008076,
+          3.280999999999949,
+          3.661000000000058
+        ],
+        "current": [
+          3.8530000000000655,
+          2.831000000000131,
+          3.606000000000222
+        ],
+        "after": [
+          3.393000000000029,
+          2.5979999999999563,
+          4.0020000000004075
+        ],
+        "reference": 3.3525000000004184,
+        "now": 3.606000000000222
+      },
+      {
+        "name": "form/settings-name",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          20.300000000000182,
+          20.06500000000051,
+          22.34100000000035
+        ],
+        "current": [
+          18.18399999999974,
+          24.677999999999884,
+          25.445999999999913
+        ],
+        "after": [
+          20.110999999999876,
+          20.32300000000032,
+          27.262000000000626
+        ],
+        "reference": 20.31150000000025,
+        "now": 24.677999999999884
+      },
+      {
+        "name": "form/settings-space",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          19.067000000000007,
+          21.52899999999954,
+          25.028000000000247
+        ],
+        "current": [
+          16.462999999999738,
+          19.70799999999963,
+          15.917999999999665
+        ],
+        "after": [
+          19.891999999999825,
+          22.272000000000844,
+          26.217999999999847
+        ],
+        "reference": 21.900500000000193,
+        "now": 16.462999999999738
+      },
+      {
+        "name": "form/restore",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          23.841999999998734,
+          31.679000000000087,
+          27.95299999999952
+        ],
+        "current": [
+          18.827999999999975,
+          19.463000000000193,
+          21.744000000000142
+        ],
+        "after": [
+          28.054000000000087,
+          32.25300000000061,
+          24.454999999999927
+        ],
+        "reference": 28.003499999999804,
+        "now": 19.463000000000193
+      },
+      {
+        "name": "form/people-resend",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          16.29899999999907,
+          19.744000000000597,
+          18.25799999999981
+        ],
+        "current": [
+          24.445999999999913,
+          18.78899999999976,
+          17.644999999999527
+        ],
+        "after": [
+          20.80999999999949,
+          21.21600000000035,
+          16.717999999999847
+        ],
+        "reference": 19.001000000000204,
+        "now": 18.78899999999976
+      },
+      {
+        "name": "form/connections-add",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          42.85499999999956,
+          47.87700000000041,
+          51.04900000000089
+        ],
+        "current": [
+          36.70299999999952,
+          34.35099999999966,
+          43.524999999999636
+        ],
+        "after": [
+          45.90599999999995,
+          55.2549999999992,
+          49.75500000000011
+        ],
+        "reference": 48.81600000000026,
+        "now": 36.70299999999952
+      },
+      {
+        "name": "form/connections-signin",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          15.699999999998909,
+          15.240999999999985,
+          19.674999999999272
+        ],
+        "current": [
+          11.67699999999968,
+          12.025000000001455,
+          14.761000000000422
+        ],
+        "after": [
+          12.67699999999968,
+          15.284999999999854,
+          11.748999999999796
+        ],
+        "reference": 15.26299999999992,
+        "now": 12.025000000001455
+      },
+      {
+        "name": "form/connections-key",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          44.57500000000073,
+          41.90599999999995,
+          37.15400000000045
+        ],
+        "current": [
+          27.16700000000037,
+          34.10199999999986,
+          43.01599999999962
+        ],
+        "after": [
+          33.956999999999425,
+          44.31800000000021,
+          39.197000000000116
+        ],
+        "reference": 40.55150000000003,
+        "now": 34.10199999999986
+      },
+      {
+        "name": "form/connections-disconnect",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          36.29199999999946,
+          35.035000000000764,
+          40.29399999999987
+        ],
+        "current": [
+          33.12800000000061,
+          31.131000000000313,
+          41.58600000000024
+        ],
+        "after": [
+          36.9369999999999,
+          49.84599999999773,
+          40.753999999998996
+        ],
+        "reference": 38.615499999999884,
+        "now": 33.12800000000061
+      },
+      {
+        "name": "form/connections-attach",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          51.185999999999694,
+          54.91600000000108,
+          46.41700000000128
+        ],
+        "current": [
+          52.2529999999997,
+          46.149999999999636,
+          62.68299999999999
+        ],
+        "after": [
+          49.66700000000128,
+          50.64900000000125,
+          53.14799999999923
+        ],
+        "reference": 50.91750000000047,
+        "now": 52.2529999999997
+      },
+      {
+        "name": "form/connections-open",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          30.314000000000306,
+          35.077000000001135,
+          39.18399999999929
+        ],
+        "current": [
+          33.40299999999934,
+          33.378999999999905,
+          47.8070000000007
+        ],
+        "after": [
+          32.59900000000198,
+          35.38299999999981,
+          25.41700000000128
+        ],
+        "reference": 33.83800000000156,
+        "now": 33.40299999999934
+      },
+      {
+        "name": "form/connections-close",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          32.53199999999924,
+          33.37699999999859,
+          36.8650000000016
+        ],
+        "current": [
+          30.83299999999963,
+          30.98400000000038,
+          39.95299999999952
+        ],
+        "after": [
+          27.545000000000073,
+          37.62200000000121,
+          28.441999999999098
+        ],
+        "reference": 32.954499999998916,
+        "now": 30.98400000000038
+      },
+      {
+        "name": "form/selling-start",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          11.693999999999505,
+          10.712000000001353,
+          12.829999999998108
+        ],
+        "current": [
+          10.122999999999593,
+          10.554000000000087,
+          19.927999999999884
+        ],
+        "after": [
+          14.15099999999984,
+          12.046999999998661,
+          13.045000000001892
+        ],
+        "reference": 12.438499999998385,
+        "now": 10.554000000000087
+      },
+      {
+        "name": "form/app-new-upload",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          73.77900000000045,
+          79.10199999999895,
+          87.53299999999945
+        ],
+        "current": [
+          62.70399999999972,
+          73.35100000000057,
+          87.44499999999971
+        ],
+        "after": [
+          72.01499999999942,
+          82.94999999999891,
+          64.39400000000023
+        ],
+        "reference": 76.4404999999997,
+        "now": 73.35100000000057
+      },
+      {
+        "name": "form/app-update-upload",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          49.492999999998574,
+          48.236000000000786,
+          51.676000000003114
+        ],
+        "current": [
+          55.96099999999933,
+          63.07799999999952,
+          68.59900000000016
+        ],
+        "after": [
+          41.45800000000236,
+          58.96299999999974,
+          45.07800000000134
+        ],
+        "reference": 48.86449999999968,
+        "now": 63.07799999999952
+      },
+      {
+        "name": "form/selling-stop",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          16.11200000000099,
+          16.532000000001062,
+          16.006000000001222
+        ],
+        "current": [
+          12.045000000000073,
+          17.67200000000048,
+          18.59900000000016
+        ],
+        "after": [
+          16.772000000000844,
+          16.337999999999738,
+          16.94300000000294
+        ],
+        "reference": 16.4350000000004,
+        "now": 17.67200000000048
+      },
+      {
+        "name": "form/billing-checkout",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          10.18999999999869,
+          7.279999999998836,
+          8.20600000000195
+        ],
+        "current": [
+          8.983000000000175,
+          13.819999999999709,
+          15.95299999999952
+        ],
+        "after": [
+          11.734999999996944,
+          8.218999999999141,
+          7.672000000002299
+        ],
+        "reference": 8.212500000000546,
+        "now": 13.819999999999709
+      },
+      {
+        "name": "form/billing-portal",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          2.0489999999990687,
+          1.477999999999156,
+          1.6149999999979627
+        ],
+        "current": [
+          0.9619999999995343,
+          1.2880000000004657,
+          1.4220000000004802
+        ],
+        "after": [
+          1.6959999999999127,
+          1.558999999999287,
+          1.3760000000002037
+        ],
+        "reference": 1.5869999999986248,
+        "now": 1.2880000000004657
+      },
+      {
+        "name": "form/agent-disconnect",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "before": [
+          4.14600000000064,
+          4.798000000000684,
+          3.9979999999995925
+        ],
+        "current": [
+          3.350000000000364,
+          3.963999999999942,
+          4.255999999999403
+        ],
+        "after": [
+          3.816999999999098,
+          6.25,
+          5.286000000000058
+        ],
+        "reference": 4.472000000000662,
+        "now": 3.963999999999942
+      }
+    ],
+    "evidence": "bench/platform-waits.rebank.results.json"
   }
 ]
