@@ -115,16 +115,12 @@ export let inventory = async (
     ].sort(),
     httpTools,
     scope:
-      'Measured names identify operations, not every variant of their arguments; code_sync/land/file-cites MCP success unavailable; separate cwd-refusal metrics do not claim completion.',
+      'Measured names identify operations, not every variant of their arguments; checkout code_sync and file citation verification assert persisted connector work.',
     measuredTools: toolNames.filter((name) => measured.has(name)),
     unmeasuredTools: toolNames.filter((name) => !measured.has(name)),
-    unsupportedDoors: {
-      code_sync:
-        'MCP process.cwd unavailable; refusal banked, successful CLI measured',
+    unmeasuredDoors: {
       land:
-        'MCP process.cwd unavailable; refusal banked, private CLI land measured',
-      file_cites_verify:
-        'MCP process.cwd unavailable; refusal banked, CLI file citation measured',
+        'Successful landing is measured through the private CLI fixture; the connector would repeat that mutation.',
     },
   }
 }

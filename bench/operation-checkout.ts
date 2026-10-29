@@ -1,6 +1,4 @@
-/** Checkout-specific citations and honest MCP cwd refusals. These refused
- * operations measure the real unavailable boundary, never successful sync or
- * landing. A missing MCP process.cwd remains an explicit product dependency. */
+/** Checkout-specific citations and code sync through the CLI and connector. */
 import type { Operation } from './operation-commands.ts'
 import type { OperationContext } from './operation-local.ts'
 import { measureCheckout } from './operation-commands.ts'
@@ -11,9 +9,8 @@ import { identities } from '@yaks/graph/identity'
 export let CHECKOUT_NAMES = [
   'cli/file-cites-verify',
   'cli/file-cites-check',
-  'connector/code-sync-cwd-refusal',
-  'connector/land-cwd-refusal',
-  'connector/file-cites-verify-cwd-refusal',
+  'connector/file-cites-verify',
+  'connector/code-sync',
 ]
 export let checkoutOperations = async (
   c: OperationContext,
@@ -52,30 +49,12 @@ export let checkoutOperations = async (
       revision: null,
     }])
   }
-  let refuse = (
-    family: string,
-    tool: string,
-    command: string[],
-    args: () => Record<string, unknown>,
-  ): Operation => ({
-    family,
-    tool,
-    command,
-    doors: ['connector'],
-    expectedError: true,
-    prepare,
-    args,
-    verify: (text) => {
-      includes(text, 'cwd')
-      includes(text, 'checkout')
-    },
-  })
   return [
     {
       family: 'file-cites-verify',
       tool: 'cites_verify',
       command: ['cites', 'verify'],
-      doors: ['cli'],
+      doors: ['cli', 'connector'],
       cwd: path,
       prepare,
       args: () => ({ cite: citation.entity.eid }),
@@ -94,19 +73,18 @@ export let checkoutOperations = async (
       args: () => ({ of: PERSONA, path: 'mod.ts' }),
       verify: (text) => includes(text, 'never checked'),
     },
-    refuse(
-      'code-sync-cwd-refusal',
-      'code_sync',
-      ['code', 'sync'],
-      () => ({ full: true }),
-    ),
-    refuse('land-cwd-refusal', 'land', ['land'], () => ({})),
-    refuse(
-      'file-cites-verify-cwd-refusal',
-      'cites_verify',
-      ['cites', 'verify'],
-      () => ({ cite: citation.entity.eid }),
-    ),
+    {
+      family: 'code-sync',
+      tool: 'code_sync',
+      command: ['code', 'sync'],
+      doors: ['connector'],
+      args: () => ({ full: true }),
+      verify: async (text) => {
+        includes(text, 'read 2 files')
+        await saved('.symbol.name=operationValue', 'operationValue')
+        await saved('.package.name="@operation/fixture"', '@operation/fixture')
+      },
+    },
   ]
 }
 export let measure = measureCheckout
