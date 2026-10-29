@@ -2107,11 +2107,6 @@
     "evidence": "bench/operation-sessions.rebank.results.json"
   },
   {
-    "suite": "platform-waits",
-    "verdict": "failed",
-    "error": "Error: platform-waits probe failed (1)\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/platform-waits.ts:61:15)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:149:20"
-  },
-  {
     "suite": "operation-remaining",
     "baseline": "bench/operation-remaining.baseline.json",
     "references": {
@@ -3625,11 +3620,6 @@
       }
     ],
     "evidence": "bench/operation-remaining.rebank.results.json"
-  },
-  {
-    "suite": "operation-checkout",
-    "verdict": "failed",
-    "error": "Error: Error: connector/code-sync-cwd-refusal measurement failed: code_sync: /tmp/T-127678-operations-311a04af825c3da3/checkout: read 2 files (1 exports, 0 imports, 1 packages) in 43 ms.\n    at collect (file:///tmp/bench-paired-83c831450833e3f1/1/bench/operation-commands.ts:700:19)\n    at async serve (file:///tmp/bench-paired-83c831450833e3f1/1/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-83c831450833e3f1/1/bench/standalone-worker.ts:5:1\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/collector.ts:53:33)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/standalone.ts:79:22)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:149:20"
   },
   {
     "suite": "operation-diagnostics",
@@ -5510,5 +5500,188 @@
       }
     ],
     "evidence": "bench/operation-lifecycle.rebank.results.json"
+  },
+  {
+    "suite": "platform-waits",
+    "verdict": "failed",
+    "error": "Error: platform-waits probe failed (1)\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/platform-waits.ts:74:15)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:157:20"
+  },
+  {
+    "suite": "operation-checkout",
+    "baseline": "bench/operation-checkout.baseline.json",
+    "references": {
+      "cli/file-cites-verify": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/file-cites-check": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/file-cites-verify": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+      "connector/code-sync": "685c2f1af9eb9ba02935552e0292346d4b0f60d1"
+    },
+    "provenance": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-checkout.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/file-cites-verify",
+          "cli/file-cites-check"
+        ]
+      },
+      {
+        "reference": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+        "kind": "derived",
+        "source": "Earliest composed MCP runner carrying process.cwd: 685c2f1af passes host.runner to the MCP transport. Successful checkout operations replace obsolete missing-cwd refusals.",
+        "correction": {
+          "previousReference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+          "workloadChange": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+          "reason": "The three previous connector workloads expected missing-cwd refusals. The composed runner now supplies cwd, so those workloads are retired; code sync and citation verification measure successful persisted work. Connector land is retired rather than invoking a mutation while expecting refusal.",
+          "retiredMedians": [
+            {
+              "name": "connector/code-sync-cwd-refusal",
+              "unit": "ms",
+              "median": 25.831763999999566
+            },
+            {
+              "name": "connector/land-cwd-refusal",
+              "unit": "ms",
+              "median": 18.71299799999997
+            },
+            {
+              "name": "connector/file-cites-verify-cwd-refusal",
+              "unit": "ms",
+              "median": 19.425269999999728
+            }
+          ]
+        },
+        "benches": [
+          "connector/code-sync",
+          "connector/file-cites-verify"
+        ]
+      }
+    ],
+    "revision": "5fc2e2f1d75728f8d1f3c7c69a0f9e69598d1dc3",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "revision": "5fc2e2f1d75728f8d1f3c7c69a0f9e69598d1dc3",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "cli/file-cites-verify",
+          "cli/file-cites-check"
+        ]
+      },
+      {
+        "reference": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+        "revision": "5fc2e2f1d75728f8d1f3c7c69a0f9e69598d1dc3",
+        "rounds": 3,
+        "verdict": "inconclusive",
+        "benches": [
+          "connector/file-cites-verify",
+          "connector/code-sync"
+        ]
+      }
+    ],
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "cli/file-cites-check"
+    ],
+    "comparisons": [
+      {
+        "name": "cli/file-cites-verify",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          702.7930000000015,
+          612.8970000000008,
+          659.581000000002
+        ],
+        "current": [
+          644.4530000000013,
+          676.737000000001,
+          767.362000000001
+        ],
+        "after": [
+          672.9400000000005,
+          669.8690000000006,
+          650.0640000000003
+        ],
+        "reference": 664.7250000000013,
+        "now": 676.737000000001
+      },
+      {
+        "name": "cli/file-cites-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          426.3050000000003,
+          406.21999999999935,
+          441.0729999999967
+        ],
+        "current": [
+          531.6540000000023,
+          519.7409999999982,
+          576.7039999999979
+        ],
+        "after": [
+          373.11099999999897,
+          413.30899999999747,
+          445.4379999999983
+        ],
+        "reference": 419.8069999999989,
+        "now": 531.6540000000023
+      },
+      {
+        "name": "connector/file-cites-verify",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+        "before": [
+          54.18199999999888,
+          52.46399999999812,
+          52.69100000000253
+        ],
+        "current": [
+          69.91499999999905,
+          56.40799999999945,
+          55.352999999999156
+        ],
+        "after": [
+          64.78000000000065,
+          62.73099999999977,
+          72.25400000000081
+        ],
+        "reference": 58.45649999999932,
+        "now": 56.40799999999945
+      },
+      {
+        "name": "connector/code-sync",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+        "before": [
+          55.40799999999945,
+          67.01399999999921,
+          68.15499999999884
+        ],
+        "current": [
+          86.34399999999914,
+          64.74399999999878,
+          64.5560000000005
+        ],
+        "after": [
+          62.80799999999908,
+          60.8070000000007,
+          55.01199999999881
+        ],
+        "reference": 61.80749999999989,
+        "now": 64.74399999999878
+      }
+    ],
+    "evidence": "bench/operation-checkout.rebank.results.json"
   }
 ]
