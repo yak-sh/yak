@@ -241,10 +241,10 @@ transactions are retained as counts.
 deno task bench relay-admission -- /path/to/checkout 200
 ```
 
-It takes three samples at each entity count. A checkout argument compares the
-same fixture across revisions. The Store relay admission timings are retired;
-the five relay behavior tests remain. The retirement names, old medians and
-reference commits are retained in
+Each collection takes one sample at each entity count; paired rounds repeat the
+observations. A checkout argument compares the same fixture across revisions.
+The Store relay admission timings are retired; the five relay behavior tests
+remain. The retirement names, old medians and reference commits are retained in
 [baseline provenance](baseline-references.json).
 
 ## Samples and comparison

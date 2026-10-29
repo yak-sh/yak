@@ -1,6 +1,6 @@
 // Full graph admission checks at 10 values per second per entity.
 import { RELAY_ENTITIES, relayFixture } from './relay-fixture.ts'
-import type { Sample, Samples } from '@yaks/benchmark'
+import type { Samples } from '@yaks/benchmark'
 import { standaloneMain } from './standalone-main.ts'
 import { selected } from './selected.ts'
 
@@ -19,24 +19,19 @@ export async function measure(
       variant: 'graph-full-check',
     })
     try {
-      const samples: (Sample & { cpu: number })[] = []
-      for (let round = 0; round < 3; round++) {
-        fixture.reset()
-        samples.push(await fixture.run(N))
-      }
+      fixture.reset()
+      const sample = await fixture.run(N)
       const count = fixture.counts(), values = N * entities
-      results[name] = samples.map(
-        (sample) => ({
-          value: sample.value / 1000 / values,
-          cpu: sample.cpu / 1000 / values,
-          source: 'batch',
-          counts: { values, entities, simulatedSeconds: N / 10, ...count },
-          details: {
-            note:
-              'ordinary graph.apply(check) on durable SQLite + member/schema; rolled back',
-          },
-        }),
-      )
+      results[name] = [{
+        value: sample.value / 1000 / values,
+        cpu: sample.cpu / 1000 / values,
+        source: 'batch',
+        counts: { values, entities, simulatedSeconds: N / 10, ...count },
+        details: {
+          note:
+            'ordinary graph.apply(check) on durable SQLite + member/schema; rolled back',
+        },
+      }]
     } finally {
       await fixture.close()
     }
