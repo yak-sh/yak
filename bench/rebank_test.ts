@@ -58,6 +58,20 @@ test('CPU rebanking cannot convert an unmeasured reference', async () => {
   )
 })
 
+test('CPU rebanking preserves observations when comparison is inconclusive', () => {
+  let baseline = bank({
+    verdict: 'inconclusive',
+    slower: [],
+    comparisons: [],
+    reference: 'banked-revision',
+    before: reading(100),
+    current: reading(500),
+    after: reading(120),
+  })
+  equal(baseline.benches[0].median, 100)
+  equal(baseline.benches[0].reference, 'banked-revision')
+})
+
 test('CPU rebanking retains each workload reference in a mixed bank', () => {
   let group = (reference: string, name: string, cpu: number) => ({
     verdict: 'same' as const,

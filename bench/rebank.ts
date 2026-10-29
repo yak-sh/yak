@@ -5,7 +5,10 @@ import { type Baseline, baseline } from '@yaks/benchmark'
 import { collect, type Judgement, registered } from './paired.ts'
 
 let bankGroup = (evidence: Judgement): Baseline => {
-  if (!['same', 'slower'].includes(evidence.verdict)) {
+  if (
+    !['same', 'slower', 'inconclusive'].includes(evidence.verdict) ||
+    evidence.error
+  ) {
     throw Error(evidence.error ?? `Comparison was ${evidence.verdict}`)
   }
   if (!evidence.before || !evidence.after || !evidence.reference) {
@@ -54,7 +57,11 @@ type Provenance = {
   }[]
 }
 
-export let rebank = async (suite: string, root: string) => {
+export let rebank = async (
+  suite: string,
+  root: string,
+  recorded?: Judgement,
+) => {
   let path = registered(suite).baseline
   let output = `${root}/bench/${suite}.rebank.results.json`
   let provenance = (JSON.parse(
@@ -69,7 +76,7 @@ export let rebank = async (suite: string, root: string) => {
     ['person-commands', 'terminal-interactions', 'hook-waits'].includes(suite)
   let evidence: Judgement
   try {
-    evidence = await collect(
+    evidence = recorded ?? await collect(
       suite,
       root,
       { references, ...(process ? { rounds: 3 } : {}) },
@@ -101,12 +108,17 @@ export let rebank = async (suite: string, root: string) => {
     revision: evidence.revision,
     rounds: evidence.current?.rounds,
     verdict: evidence.verdict,
-    status: limited && evidence.verdict == 'slower'
+    status: evidence.verdict == 'inconclusive'
+      ? 'inconclusive; default monitor confirmation pending'
+      : limited && evidence.verdict == 'slower'
       ? 'slower candidate awaiting default monitor confirmation'
       : limited && evidence.verdict == 'same'
       ? 'same in limited rounds'
       : evidence.verdict,
     confidence: limited ? 'limited rounds' : 'default monitor round count',
+    reason: evidence.verdict == 'inconclusive'
+      ? 'Reference CPU ranges did not overlap in the measured rounds'
+      : undefined,
     slower: evidence.slower,
     error: evidence.error,
     comparisons: evidence.comparisons,
