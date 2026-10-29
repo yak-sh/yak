@@ -68,10 +68,14 @@ export let suite = (
         cwd: root,
         env: { BENCH_NAMES: JSON.stringify(selected) },
         stdout: 'piped',
-        stderr: 'inherit',
+        stderr: 'piped',
       }).output()
       if (!child.success) {
-        throw new Error(`platform-waits probe failed (${child.code})`)
+        throw new Error(
+          `platform-waits probe failed (${child.code})\n${
+            new TextDecoder().decode(child.stderr).trim()
+          }`,
+        )
       }
       let output = new TextDecoder().decode(child.stdout)
       let line = output.split('\n').findLast((line) =>
@@ -93,7 +97,11 @@ export let suite = (
 export let content = async (response: Response, wanted: string) => {
   let text = await response.text()
   if (response.status != 200 || !text.includes(wanted)) {
-    throw new Error(`platform page ${response.status}: missing ${wanted}`)
+    throw new Error(
+      `platform page ${response.status}: missing ${wanted}\n${
+        text.slice(-3000)
+      }`,
+    )
   }
   return text
 }

@@ -6,6 +6,7 @@ import { management, VIEWS } from './platform-management.ts'
 import { d1 } from '../packages/d1/testing.ts'
 import type { D1Like } from '@yaks/d1'
 import { content, NAMES } from './platform-waits.ts'
+import { rows } from './platform-analytics.ts'
 
 // The probe's standard binding already stands in for mail and Cloudflare. Its
 // Stripe binding must stay disabled even when the caller is a test runner.
@@ -39,14 +40,9 @@ globalThis.fetch = async (input, init) => {
   }
   if (analytics && u.pathname == '/accounts/local/analytics_engine/sql') {
     const sql = await req.text()
-    const row = sql.includes(' AS day')
-      ? { day: new Date().toISOString().slice(0, 10), views: 42 }
-      : sql.includes(' AS path')
-      ? { path: '/notes/', views: 42 }
-      : sql.includes(' AS site')
-      ? { site: 'benchmark.invalid', views: 42 }
-      : { country: 'US', views: 42 }
-    return Response.json({ data: [row] })
+    return Response.json({
+      data: rows(sql, new Date().toISOString().slice(0, 10)),
+    })
   }
   denied.push(req.url)
   throw new Error(
