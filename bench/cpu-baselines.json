@@ -4581,5 +4581,105 @@
       }
     ],
     "evidence": "bench/session-status.rebank.results.json"
+  },
+  {
+    "suite": "relay-admission",
+    "revision": "b36d24f7d14f3adc462243c53381095eb459b2ad",
+    "verdict": "inconclusive",
+    "error": "the code at 77ebf5d38 cannot run today's bench: Error: Relay finished without staging a value\n    at file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:230:19\n    at async send (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:227:9)\n    at async next (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:316:7)\n    at async run (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:337:7)\n    at async relayFixture (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:348:3)\n    at async Module.measure (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-admission.ts:16:23)\n    at async serve (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "harness-steps",
+    "baseline": "packages/harness/steps.baseline.json",
+    "reference": "01f3ab27db00022cafadc271e18db1d894c6727e",
+    "references": {
+      "no-tools": "01f3ab27db00022cafadc271e18db1d894c6727e",
+      "tool-step": "01f3ab27db00022cafadc271e18db1d894c6727e"
+    },
+    "provenance": [
+      {
+        "reference": "01f3ab27db00022cafadc271e18db1d894c6727e",
+        "kind": "derived",
+        "source": "git history of packages/harness/steps.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "no-tools",
+          "tool-step"
+        ]
+      }
+    ],
+    "revision": "e52f8f531d0434474b654a2e1078761fda547bbe",
+    "rounds": 6,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "no-tools",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "01f3ab27db00022cafadc271e18db1d894c6727e",
+        "before": [
+          86.27399999999943,
+          57.378999999998996,
+          56.79599999999846,
+          102.87899999999718,
+          69.63899999999921,
+          90.02800000000207
+        ],
+        "current": [
+          77.96799999999985,
+          73.05000000000018,
+          64.3869999999988,
+          90.6840000000011,
+          56.48899999999958,
+          90.57400000000052
+        ],
+        "after": [
+          88.81700000000001,
+          74.89199999999983,
+          51.24300000000039,
+          90.5619999999999,
+          49.495999999999185,
+          95.92599999999948
+        ],
+        "reference": 80.58299999999963,
+        "now": 75.50900000000001
+      },
+      {
+        "name": "tool-step",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "01f3ab27db00022cafadc271e18db1d894c6727e",
+        "before": [
+          75.3594166666666,
+          54.17633333333333,
+          58.85699999999997,
+          65.57583333333332,
+          57.39466666666673,
+          74.29133333333327
+        ],
+        "current": [
+          44.53400000000003,
+          43.84983333333336,
+          42.445333333333416,
+          47.228166666666766,
+          34.13591666666647,
+          46.255666666666606
+        ],
+        "after": [
+          63.89933333333337,
+          68.67316666666663,
+          59.02649999999994,
+          65.9027500000002,
+          63.3145000000001,
+          69.10824999999993
+        ],
+        "reference": 64.73758333333335,
+        "now": 44.19191666666669
+      }
+    ],
+    "evidence": "bench/harness-steps.rebank.results.json"
   }
 ]
