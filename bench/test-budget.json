@@ -1,4 +1,6 @@
 {
+  "unit": "cpu-ms",
+  "records": "legacy-wall-ceilings",
   "budget": 1,
   "leave": 0.5,
   "slack": {

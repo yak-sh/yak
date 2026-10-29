@@ -1,9 +1,10 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import {
   type Budget,
   judge,
   listed,
   measure,
+  own,
   shrunk,
   type Times,
 } from './test-budget.ts'
@@ -27,6 +28,7 @@ let deno = (
     file,
     name,
     ms: Math.abs(ms),
+    cpu: Math.abs(ms),
     ok: ms >= 0,
   })),
 })
@@ -34,28 +36,33 @@ let ran = (took: Record<string, number>, wall = 1000) =>
   judge(list, { deno: deno(took, wall) })
 let names = (rows: { key: string }[]) => rows.map((r) => r.key)
 
-test('a test is timed by its own time, not what it waited for a CPU', () => {
+test('CPU observations ignore wall time and waiting', () => {
   let waits = (took: Record<string, [number, number]>): Times => ({
     wall: 1000,
-    tests: Object.entries(took).map(([name, [ms, waited]]) => ({
+    tests: Object.entries(took).map(([name, [ms, cpu]]) => ({
       file: 'a_test.ts',
       name,
       ms,
-      waited,
+      cpu,
       ok: true,
     })),
   })
   let j = judge(list, {
     deno: waits({
-      bare: [4, 3.5],
+      bare: [4, 0.5],
       over: [4, 2],
-      slow: [400, 300],
-      quick: [9, 0],
+      slow: [400, 100],
+      quick: [9, 9],
     }),
   })
   equal([names(j.over), names(j.slower)], [['over', 'quick'], []])
   let slowed = judge(list, { deno: waits({ slow: [400, 200] }) })
   equal(names(slowed.slower), ['slow'])
+})
+
+test('old artifacts cannot substitute wall time for missing CPU time', () => {
+  let old = { file: 'a', name: 'x', ms: 9, waited: 8, ok: true }
+  throws(() => own(old as unknown as Parameters<typeof own>[0]))
 })
 
 test('listed and unlisted regressions are said by the same run', () => {
@@ -143,7 +150,7 @@ test('a fenced listing survives blocks inserted or removed above it', async () =
   let b = { ...list, tests: { [page]: { [original[1]]: 17 } } }
   let name = await fenceName(page, fences(block('new()') + block('views()'))[1])
   let j = judge(b, {
-    deno: { wall: 1, tests: [{ file: page, name, ms: 17, ok: true }] },
+    deno: { wall: 1, tests: [{ file: page, name, ms: 17, cpu: 17, ok: true }] },
   })
   equal([j.over, j.slower, j.gone], [[], [], []])
 })

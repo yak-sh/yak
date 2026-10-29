@@ -263,11 +263,15 @@ accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
 planning and loading, each file's load, each test that ran with its file, name,
-time, whether it passed and how much of its time it, or a process it started,
-`waited` for a CPU another process held (Linux's run-queue wait; 0 elsewhere),
-each file the run remembered as passed, with its proof in the pass record
-(`forget` from `@yaks/testing/deps` takes one back), and how many tests it
-skipped and files it left out as unchanged.
+wall time (`ms`), CPU time (`cpu`) and whether it passed. CPU time includes
+every thread's user and system time and reaped child processes, from the shared
+benchmark clock. Waiting for timers, I/O or a CPU contributes no CPU time. The
+per-test performance budget uses `cpu`; wall time remains diagnostic. Existing
+budget records are marked `legacy-wall-ceilings`: retained upper bounds that
+`--write` lowers using CPU samples. The report also records each file the run
+remembered as passed, with its proof in the pass record (`forget` from
+`@yaks/testing/deps` takes one back), and how many tests it skipped and files it
+left out as unchanged.
 
 A file whose tests all passed is skipped while its dependencies are unchanged.
 Its **key** holds what it depends on before it runs: its module dependencies

@@ -17,9 +17,10 @@
 // alone can be well within it in the whole suite. A test that got slower is
 // over in every run, and every run says so.
 //
-// A test is timed by its own time: its wall clock less what its runtime's
-// thread, and the processes it started, waited for a CPU another process held
-// (`own`, packages/testing run.ts `waited`).
+// A test is timed in CPU milliseconds: every thread's user and system time,
+// including completed children, from the same clock benchmarks use. Waiting
+// for a timer, I/O or a CPU contributes no CPU time. Wall time is diagnostic
+// only; the runner's separate timeout still detects a hung test.
 //
 // A platform's wall clock is said, never compared: it adds every wait among
 // the run's processes and the host's other users.
@@ -42,13 +43,18 @@ export let OWN = /^--(write|from=.*)$/
 
 /** The committed list and its rules. */
 export type Budget = {
-  /** What a test may take, in milliseconds. */
+  /** Unit for thresholds and records. */
+  unit?: 'cpu-ms'
+  /** Old wall-minus-scheduler records retained as upper bounds; `--write`
+   * lowers them using CPU samples. They are not CPU baseline measurements. */
+  records?: 'legacy-wall-ceilings'
+  /** What a test may take, in CPU milliseconds. */
   budget: number
-  /** What a listed test runs within to leave the list, in milliseconds. */
+  /** What a listed test runs within to leave the list, in CPU milliseconds. */
   leave: number
   /** How far past its record a listed test may run. */
   slack: Slack
-  /** The offenders: by file, each test's record in milliseconds. */
+  /** The offenders: by file, each test's record in CPU milliseconds. */
   tests: Record<string, Record<string, number>>
 }
 
@@ -56,7 +62,7 @@ export type Budget = {
 export type Slack = { times: number; ms: number }
 
 /** What a platform's runner wrote (packages/testing `--times`): its wall
- * clock, each test's time and what of it the test waited for a CPU, each
+ * clock, each test's CPU time, each
  * file it remembered as passed, by key, and how many tests it skipped and
  * files it left out as unchanged. */
 export type Times = {
@@ -71,19 +77,24 @@ export let LIST = new URL('../bench/test-budget.json', import.meta.url)
 
 let KEPT = new URL('../bench/test-times/', import.meta.url).pathname
 
-/** A test as a runner timed it; a runner before `waited` said none. */
+/** A test as a runner timed it, in wall and CPU milliseconds. */
 export type Timed = {
   file: string
   name: string
   ms: number
-  waited?: number
+  cpu: number
   ok: boolean
 }
 
-/// own({ file: 'a', name: 'x', ms: 9, waited: 6, ok: true }) -> 3
-/// own({ file: 'a', name: 'x', ms: 9, ok: true }) -> 9
-/** What a test took of its own: its time, less what it waited for a CPU. */
-export let own = (t: Timed) => t.ms - (t.waited ?? 0)
+/// own({ file: 'a', name: 'x', ms: 9, cpu: 3, ok: true }) -> 3
+/** CPU milliseconds. Reject old wall-only artifacts rather than judge them
+ * against a CPU budget. */
+export let own = (t: Timed) => {
+  if (!Number.isFinite(t.cpu) || t.cpu < 0) {
+    throw new Error(`Missing or invalid CPU time: ${t.file} › ${t.name}`)
+  }
+  return t.cpu
+}
 
 /** The committed list. */
 export let budget = async (): Promise<Budget> =>
