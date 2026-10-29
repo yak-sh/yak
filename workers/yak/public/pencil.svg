@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- The pencil every drawn line goes through (tokens.css, Pencil and
+       paper): a slow, slight wander, so a straight line reads as drawn
+       against a ruler rather than set by a machine, then the paper's tooth
+       as an alpha mask, so the graphite breaks where the paper is rough. A
+       browser that cannot load this draws the same lines clean. -->
+  <filter id="line">
+    <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="1"
+      seed="2" result="wander" />
+    <feDisplacementMap in="SourceGraphic" in2="wander" scale="3"
+      xChannelSelector="R" yChannelSelector="G" result="drawn" />
+    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"
+      seed="9" result="tooth" />
+    <feColorMatrix in="tooth" type="matrix" result="grain"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 2.5 -.3" />
+    <feComposite in="drawn" in2="grain" operator="in" />
+  </filter>
+</svg>

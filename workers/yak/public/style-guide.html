@@ -117,7 +117,7 @@
             <b>Implement variants with custom properties.</b>
             <code class="Pill Pill-code">.Pill-quiet</code> sets
             <code class="Pill Pill-code">--pill-fill</code> instead of
-            repeating the component's padding, radius, and border.
+            repeating the component's padding and border.
           </li>
           <li>
             <b>Keep page-specific layout in the sections layer.</b> Reusable
@@ -135,14 +135,17 @@
         <h2 id="voice" class="Title">Layout and voice</h2>
         <ul class="Guide_Rules">
           <li>
-            <b>Give controls a physical shape, and keep surfaces flat.</b>
-            Raised buttons invite a press; inset fields invite typing. A card
-            is a surface: a hairline draws it, and it casts no shadow, so
-            depth always means something can be pressed or typed in.
+            <b>Draw in pencil on paper, and keep surfaces flat.</b> A card,
+            a button, a window and a linked chip are drawn: four straight
+            graphite lines that run a little past each corner, the way an
+            architect sketches a box. A field is a plain ruled box. What can
+            be pressed sits on a hatch, so a hatch always means a press.
+            Nothing is rounded but what is round, and one grain of paper
+            lies over every page.
           </li>
           <li>
             <b>Make selection visible in the shape.</b> A selected tab joins
-            its panel, a pressed button sinks, and the current sidebar tab
+            its panel, a pressed button slides onto its hatch, and the current sidebar tab
             joins the page along its right edge. Keep these cues in shared components so they
             work consistently in light and dark themes.
           </li>
@@ -474,29 +477,33 @@
           <code class="Pill Pill-code">body</code>, and the header, the page
           and the footer are framed by the sum.
         </p>
+        <p class="Note Note-small">
+          Shape is pencil and paper: the colour and weight of a drawn line,
+          how far it runs past its corner, and how far a button sits off its
+          hatch.
+        </p>
         <ul class="Guide_Swatches">
-          <li class="Guide_Swatch" data-token="--small-radius">
-            <span class="Guide_Chip"
-              style="--swatch: var(--paper); border-radius: var(--small-radius)"></span>
-            <code class="Guide_Name">--small-radius</code>
+          <li class="Guide_Swatch" data-token="--graphite">
+            <span class="Guide_Chip" style="--swatch: var(--graphite)"></span>
+            <code class="Guide_Name">--graphite</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--radius">
+          <li class="Guide_Swatch" data-token="--stroke">
             <span class="Guide_Chip"
-              style="--swatch: var(--paper); border-radius: var(--radius)"></span>
-            <code class="Guide_Name">--radius</code>
+              style="--swatch: var(--paper); border: var(--stroke) solid var(--graphite)"></span>
+            <code class="Guide_Name">--stroke</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--big-radius">
-            <span class="Guide_Chip"
-              style="--swatch: var(--paper); border-radius: var(--big-radius)"></span>
-            <code class="Guide_Name">--big-radius</code>
+          <li class="Guide_Swatch" data-token="--over">
+            <span class="Guide_Chip Card"
+              style="--swatch: var(--paper); border-color: transparent"></span>
+            <code class="Guide_Name">--over</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--pill">
-            <span class="Guide_Chip"
-              style="--swatch: var(--paper); border-radius: var(--pill)"></span>
-            <code class="Guide_Name">--pill</code>
+          <li class="Guide_Swatch" data-token="--lift">
+            <span class="Guide_Chip Button"
+              style="--swatch: var(--accent); border-color: transparent"></span>
+            <code class="Guide_Name">--lift</code>
             <span class="Guide_Value"></span>
           </li>
         </ul>
@@ -534,7 +541,7 @@
           </ul>
           <p><a class="Pill" href="#components">Recipe box<span class="Pill_Tag">Public</span></a></p>
           <p
-            class="Note Note-small">Linked pills have an underlined label and a raised edge. Plain pills label content.</p>
+            class="Note Note-small">Linked pills have an underlined label and are drawn in pencil. Plain pills label content.</p>
           <p><span class="Pill Pill-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/recipes</span></span></p>
           <p><code class="Pill Pill-code">https://yaks.app/mcp</code></p>
         </div>
@@ -576,7 +583,7 @@
             </select>
           </p>
           <p
-            class="Note Note-small">Select menus have a raised edge and their native arrow; text fields are inset.</p>
+            class="Note Note-small">Fields and select menus are plain ruled boxes; a select keeps its native arrow.</p>
           <p>
             <button class="Button" type="button" aria-pressed="true">
               Pin app
@@ -784,7 +791,7 @@
             <p class="Note">Related content grouped in a card.</p>
           </div>
           <p class="Note Note-small">
-            Flat, drawn by its hairline. What it holds stacks .75rem apart.
+            Flat, drawn in pencil. What it holds stacks .75rem apart.
           </p>
         </div>
 

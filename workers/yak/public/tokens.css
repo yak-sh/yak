@@ -37,14 +37,27 @@
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
 
-    /* Materials, for controls only: light on a rim, shade under a pressed
-       edge, and depth in a field. A surface is flat. */
-    --highlight: white;
-    --shadow: black;
+    /* Pencil and paper. A part worth outlining is drawn: four straight lines
+       in graphite that run a little past each corner, the way an architect
+       sketches a box, given the paper's tooth by pencil.svg. What can be
+       pressed sits on a hatch it slides onto. A surface is flat, and nothing
+       is rounded but what is round. */
+    --graphite: color-mix(in srgb, var(--ink) 88%, transparent);
+    --stroke: 1.5px; /* the weight of a drawn line */
+    --over: 3px; /* how far a drawn line runs past its corner */
+    --lift: 4px; /* how far what can be pressed sits off its hatch */
+    --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
+      transparent 1px 3px);
+    /* A drawn box, laid on a pseudo-element `--over` outside the part, in
+       its currentColor. */
+    --drawn: linear-gradient(currentColor 0 0) 0 var(--over) / 100%
+      var(--stroke) no-repeat, linear-gradient(currentColor 0 0) 0
+      calc(100% - var(--over)) / 100% var(--stroke) no-repeat,
+      linear-gradient(currentColor 0 0) var(--over) 0 / var(--stroke) 100%
+      no-repeat, linear-gradient(currentColor 0 0) calc(100% - var(--over)) 0
+      / var(--stroke) 100% no-repeat;
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
-    --shade: color-mix(in srgb, var(--ink) 16%, transparent);
-    --inset: inset 0 2px 4px var(--shade), 0 1px var(--rim);
 
     /* Type. */
     --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -69,10 +82,6 @@
     --quarter-gap: calc(var(--gap) / 4);
     --half-gap: calc(var(--gap) / 2);
     --wide-gap: calc(var(--gap) * 1.5);
-    --radius: 1.25rem;
-    --small-radius: calc(var(--radius) * 0.6);
-    --big-radius: calc(var(--radius) * 1.4);
-    --pill: 999px;
   }
 
   /* A theme re-points roles. The paints above stay exactly where they are. */
@@ -85,7 +94,6 @@
       --soft-ink: var(--taupe);
       --line: var(--bark);
       --rim: color-mix(in srgb, var(--paper), var(--soft-ink) 18%);
-      --shade: #0005;
       --accent: var(--moss);
       --warn: var(--rose);
       --mine: var(--ember);
@@ -101,7 +109,6 @@
     --soft-ink: var(--taupe);
     --line: var(--bark);
     --rim: color-mix(in srgb, var(--paper), var(--soft-ink) 18%);
-    --shade: #0005;
     --accent: var(--moss);
     --warn: var(--rose);
     --mine: var(--ember);

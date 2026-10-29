@@ -7,6 +7,23 @@
   [hidden] {
     display: none !important;
   }
+
+  /* The paper: one grain tile, speckled in ink and cream, laid over the
+     whole page so cards, buttons and pictures share its tooth. It covers the
+     document, not the window, so it scrolls with what is drawn on it. */
+  html {
+    position: relative;
+    min-height: 100%;
+  }
+  html::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2147483647;
+    background: url(paper.webp) 0 0 / 256px;
+    opacity: .07;
+    pointer-events: none;
+  }
 }
 
 @layer components {
@@ -19,39 +36,62 @@
     line-height: 1.25;
     vertical-align: middle;
   }
+  /* What is drawn (tokens.css, Pencil and paper) wears its outline on
+     ::after, in --pencil where a part asks for another colour. */
+  .Button::after,
+  .Card::after,
+  a.Pill::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1px - var(--over));
+    color: var(--pencil, var(--graphite));
+    background: var(--drawn);
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
+
+  /* A button is a flat fill on a hatch: the hatch is what an offset copy of
+     it would show past its right and bottom edges, and a press slides the
+     button onto it. */
   .Button {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: .35rem;
-    border: 1px solid color-mix(in srgb, var(--button-fill, var(--accent)),
-      var(--shadow) 30%);
-    border-radius: var(--button-radius, .45rem);
-    background: linear-gradient(to bottom, var(--button-fill, var(--accent)),
-      color-mix(in srgb, var(--button-fill, var(--accent)), var(--shadow) 8%));
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: var(--button-fill, var(--accent));
     color: var(--button-ink, var(--on-accent));
-    box-shadow: inset 0 1px color-mix(in srgb, var(--highlight) 35%,
-      transparent), 0
-      2px 0 color-mix(in srgb, var(--button-fill, var(--accent)), var(--shadow)
-      40%), 0 3px 5px var(--shade);
     font-weight: 800;
     text-align: center;
     text-decoration: none;
     cursor: pointer;
   }
+  .Button::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
+      calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+    background: var(--hatch);
+    clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+      0 calc(100% - var(--lift)), calc(100% - var(--lift))
+      calc(100% - var(--lift)));
+    pointer-events: none;
+  }
   .Button:hover {
-    filter: brightness(.95);
+    background: color-mix(in srgb, var(--button-fill, var(--accent)),
+      var(--ink) 12%);
   }
   .Button:active:not(:disabled),
   .Button[aria-pressed='true'] {
-    transform: translateY(1px);
-    box-shadow: var(--inset);
+    --lift: 1.5px;
+    transform: translate(2.5px, 2.5px);
   }
   .Button:disabled {
+    --lift: 0px;
     opacity: .55;
     cursor: not-allowed;
-    box-shadow: none;
-    filter: none;
   }
   .Button-quiet {
     --button-fill: var(--paper);
@@ -60,15 +100,12 @@
   .Field {
     min-width: 0;
     max-width: 100%;
-    border: 1px solid var(--edge);
-    border-radius: .45rem;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: 0;
     background: var(--paper);
     color: var(--ink);
-    box-shadow: var(--inset);
   }
   select.Field {
-    background: linear-gradient(var(--paper), var(--ground));
-    box-shadow: inset 0 1px var(--rim), 0 1px 2px var(--shade);
     cursor: pointer;
   }
   select.Field:not(:disabled):hover {
@@ -83,9 +120,8 @@
   .Field:disabled {
     opacity: .55;
     cursor: not-allowed;
-    box-shadow: none;
   }
-  /* Pills: a soft chip, and a row of them that wraps like a handful of
+  /* Pills: a chip, and a row of them that wraps like a handful of
      notes. The list is the same shape whether the chips are words (the home
      page) or links (the help page's questions). */
   .Pills {
@@ -98,7 +134,6 @@
     display: inline-block;
     padding: var(--pill-pad, .3rem .75rem);
     border: var(--pill-edge, 1px solid var(--line));
-    border-radius: var(--pill-radius, var(--pill));
     background: var(--pill-fill, var(--paper));
     color: var(--pill-ink, var(--ink));
     font-family: var(--pill-font, inherit);
@@ -111,24 +146,22 @@
 
   a.Pill {
     --pill-ink: var(--accent);
-    --pill-edge: 1px solid var(--edge);
+    --pill-edge: 1px solid transparent;
     --pill-weight: 700;
-    box-shadow: inset 0 1px var(--rim), 0 1px 2px var(--shade);
+    position: relative;
     text-decoration: underline;
     text-underline-offset: .18em;
   }
   a.Pill:hover {
-    --pill-edge: 1px solid var(--accent);
+    --pencil: var(--accent);
     --pill-fill: color-mix(in srgb, var(--accent) 7%, var(--paper));
   }
   a.Pill:active {
-    transform: translateY(1px);
-    box-shadow: var(--inset);
+    transform: translate(1px, 1px);
   }
   a.Pill:focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
-    border-radius: var(--pill-radius, var(--pill));
   }
   .Pill_Tag {
     margin-left: .5rem;
@@ -150,7 +183,6 @@
   /* A URL somebody has to copy. */
   .Pill-code {
     --pill-pad: .2rem .5rem;
-    --pill-radius: .35rem;
     --pill-fill: var(--ground);
     --pill-edge: 0;
     --pill-font: var(--mono);
@@ -167,20 +199,20 @@
   }
 
   /* A card: one surface holding related things, flat on the page. Depth
-     belongs to what is pressed or typed in, so a card casts no shadow; its
-     hairline is what draws it. What it holds stacks a gap apart, never by
-     margins of its own, and its head, when it has one, runs edge to edge
-     across the top: what it is on the left, its actions on the right. */
+     belongs to what is pressed, so a card casts no shadow; its pencil box is
+     what draws it. What it holds stacks a gap apart, never by margins of its
+     own, and its head, when it has one, runs edge to edge across the top,
+     ruled off under it: what it is on the left, its actions on the right. */
   .Card {
     --pad-block: 1rem;
     --pad-inline: 1.25rem;
+    position: relative;
     display: grid;
     align-content: start;
     gap: .75rem;
     min-width: 0;
     padding: var(--pad-block) var(--pad-inline);
-    border: 1px solid var(--edge);
-    border-radius: var(--card-radius, .75rem);
+    border: 1px solid transparent;
     background: var(--paper);
     overflow-wrap: break-word;
   }
@@ -200,17 +232,24 @@
     align-items: center;
     gap: .5rem .75rem;
     min-height: 3rem;
+    position: relative;
     margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline)) 0;
     padding: .5rem var(--pad-inline);
-    border-bottom: 1px solid var(--line);
-    border-radius: calc(var(--card-radius, .75rem) - 1px)
-      calc(var(--card-radius, .75rem) - 1px) 0 0;
-    background: color-mix(in srgb, var(--ground), var(--paper) 55%);
+  }
+  /* The rule under it crosses the card's sides, as they cross each other. */
+  .Card_Head::after {
+    content: '';
+    position: absolute;
+    inset: auto calc(-1px - var(--over)) 0;
+    height: var(--stroke);
+    background: var(--graphite);
+    filter: url(pencil.svg#line);
   }
   .Card_Head:last-child {
     margin-bottom: calc(-1 * var(--pad-block));
-    border-bottom: 0;
-    border-radius: inherit;
+  }
+  .Card_Head:last-child::after {
+    content: none;
   }
   .Card_Title {
     margin: 0;
@@ -231,7 +270,6 @@
     flex: none;
     width: 1.5rem;
     height: 1.5rem;
-    border-radius: .35rem;
   }
   .Card_Actions {
     display: flex;
@@ -484,7 +522,6 @@
     min-width: 0;
     min-height: var(--control-height);
     padding: .4rem .75rem;
-    border-radius: .45rem;
     background: var(--ground);
     color: var(--ink);
     overflow-wrap: anywhere;
@@ -504,7 +541,6 @@
     gap: .5rem;
     padding: 2rem 1.25rem;
     border: 1px dashed var(--edge);
-    border-radius: var(--card-radius, .75rem);
     color: var(--soft-ink);
     text-align: center;
   }
@@ -644,7 +680,6 @@
     margin: .35rem 0 -1px;
     padding: .55rem .45rem;
     border: 1px solid var(--edge);
-    border-radius: .65rem .65rem 0 0;
     background: linear-gradient(var(--ground), color-mix(in srgb, var(--ground),
       var(--line) 60%));
     box-shadow: inset 0 1px var(--rim);
@@ -666,7 +701,6 @@
     color: var(--ink);
   }
   .Tabs_Panel {
-    --card-radius: 0 0 .75rem .75rem;
     order: 1;
     flex: 1 1 100%;
     min-width: 0;
@@ -733,7 +767,6 @@
     margin: 0 -1px 0 .35rem;
     padding: .6rem .8rem;
     border: 1px solid var(--edge);
-    border-radius: .6rem 0 0 .6rem;
     background: linear-gradient(to right, var(--ground), color-mix(in srgb,
       var(--ground), var(--line) 35%));
     color: var(--soft-ink);
@@ -776,7 +809,6 @@
     .SideNav a {
       margin: 0;
       border-color: transparent;
-      border-radius: .3rem;
       background: none;
     }
     .SideNav a[aria-current='page'] {
@@ -806,10 +838,8 @@
     height: 1.125rem;
     flex: none;
     margin: 0;
-    border: 1px solid var(--edge);
-    border-radius: .25rem;
+    border: var(--stroke) solid var(--graphite);
     background: var(--paper);
-    box-shadow: var(--inset);
     cursor: inherit;
   }
   .Choice input[type='radio'] {
@@ -836,7 +866,6 @@
   .Choice input:checked {
     background: var(--accent);
     border-color: var(--accent);
-    box-shadow: inset 0 1px var(--shade);
   }
   .Choice input:checked::before {
     transform: scale(1);

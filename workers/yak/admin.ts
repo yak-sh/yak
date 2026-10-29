@@ -419,14 +419,14 @@ let css = `
 .Directory_Find { display: flex; gap: .5rem; flex: 1 1 20rem; max-width: 30rem; margin: 0 }
 .Directory_Find .Field { flex: 1 }
 .Directory_Bar > a { font-size: .9rem }
-.Directory { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--edge); border-radius: .75rem; background: var(--paper); overflow: hidden }
+.Directory { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--edge); background: var(--paper); overflow: hidden }
 .Directory_Row { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); align-items: center; gap: .5rem 1.5rem; padding: .85rem 1.25rem; border-top: 1px solid var(--line) }
 .Directory_Row:first-child { border-top: 0 }
 .Directory_Row:hover { background: color-mix(in srgb, var(--ground), var(--paper) 55%) }
 .Directory_Who { display: grid; gap: .1rem; min-width: 0 }
 .Directory_Who .Apps_Tags { margin: .25rem 0 0; padding: 0 }
 .Directory_Open { color: var(--ink); text-decoration: none; overflow-wrap: anywhere }
-.Directory_Open::after { content: ''; position: absolute; inset: 0; border-radius: inherit }
+.Directory_Open::after { content: ''; position: absolute; inset: 0 }
 .Directory_Open:focus-visible { outline: 0 }
 .Directory_Open:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 3px }
 .Directory_Sub { color: var(--soft-ink); font-size: .85rem; overflow-wrap: anywhere }

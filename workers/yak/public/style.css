@@ -47,7 +47,6 @@
   :focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
-    border-radius: 0.5rem;
   }
 }
 
@@ -125,7 +124,6 @@
     gap: 0.75rem;
     padding: 1.125rem;
     border: 1px solid var(--line);
-    border-radius: var(--big-radius);
     background: var(--paper);
   }
 
@@ -147,7 +145,6 @@
     max-width: 88%;
     padding: 0.875rem 1.125rem;
     background: var(--fill);
-    border-radius: var(--radius);
     text-wrap: pretty;
   }
 
@@ -158,14 +155,12 @@
     width: 1rem;
     height: 1rem;
     background: var(--fill);
-    border-radius: 0.2rem;
     transform: rotate(45deg);
   }
 
   .Chat_Bubble-you {
     --fill: var(--mine);
     margin-inline-start: auto;
-    border-end-end-radius: 0.4rem;
   }
 
   .Chat_Bubble-you::after {
@@ -174,7 +169,6 @@
 
   .Chat_Bubble-them {
     --fill: var(--theirs);
-    border-end-start-radius: 0.4rem;
   }
 
   .Chat_Bubble-them::after {
@@ -190,7 +184,6 @@
      come back and the sentence still reads. */
   .Said {
     padding: 0.1rem 0.4rem;
-    border-radius: var(--small-radius);
     background: var(--mine);
     color: var(--ink);
     -webkit-box-decoration-break: clone;
@@ -202,19 +195,38 @@
     content: none;
   }
 
-  /* A little window: something finished, at its own address. */
+  /* A little window: something finished, at its own address, drawn like a
+     card, with its bar ruled off the way a card's head is. */
   .Window {
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
+    position: relative;
+    border: 1px solid transparent;
     background: var(--paper);
   }
 
+  .Window::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1px - var(--over));
+    color: var(--graphite);
+    background: var(--drawn);
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
+
   .Window_Bar {
+    position: relative;
     display: flex;
     justify-content: center;
     padding: 0.625rem 1rem;
-    border-bottom: 1px solid var(--line);
+  }
+
+  .Window_Bar::after {
+    content: '';
+    position: absolute;
+    inset: auto calc(-1px - var(--over)) 0;
+    height: var(--stroke);
+    background: var(--graphite);
+    filter: url(pencil.svg#line);
   }
 
   .Window_Body {
@@ -235,7 +247,6 @@
 
   .Window_List li {
     padding: 0.5rem 0.875rem;
-    border-radius: var(--small-radius);
     background: var(--ground);
   }
 
@@ -324,7 +335,6 @@
 
   .Prose code {
     padding: 0.1rem 0.4rem;
-    border-radius: 0.4rem;
     background: var(--paper);
     font-family: var(--mono);
     font-size: var(--small);
@@ -543,11 +553,25 @@
     max-width: 36rem;
   }
 
+  /* The kicker is underlined twice by hand. */
   .Hello_Kicker {
+    position: relative;
+    width: fit-content;
+    padding-bottom: 0.4rem;
     color: var(--accent);
     font-size: var(--small);
     font-weight: 800;
     letter-spacing: 0.04em;
+  }
+
+  .Hello_Kicker::after {
+    content: '';
+    position: absolute;
+    inset: auto -0.4rem 0 -0.15rem;
+    height: 0.55rem;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 10' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round'%3E%3Cpath d='M2 5.5C40 3.6 95 3.2 198 4.2' stroke-width='2' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M14 8.2C70 6.4 130 6.2 188 6.9' stroke-width='1.2' stroke-opacity='.7' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E")
+      0 0 / 100% 100% no-repeat;
   }
 
   .Hello_Yak {
@@ -593,15 +617,10 @@
     object-position: center top;
   }
 
+  /* A button laid on the picture's corner. */
   .Demo_Play {
     position: absolute;
     inset: auto auto 1rem 1rem;
-    padding: 0.55rem 0.9rem;
-    border-radius: var(--pill);
-    background: var(--accent);
-    color: var(--on-accent);
-    font-weight: 800;
-    box-shadow: 0 0.2rem 0.8rem #0004;
   }
 
   .Demo_Shot:hover .Demo_Play {
@@ -654,12 +673,14 @@
   }
 
   .Steps li {
+    position: relative;
     display: grid;
     grid-template-columns: 2rem 1fr;
     gap: var(--quarter-gap) 0.875rem;
     counter-increment: step;
   }
 
+  /* Each step's number, circled by hand. */
   .Steps li::before {
     content: counter(step);
     grid-row: span 2;
@@ -667,11 +688,20 @@
     place-items: center;
     width: 2rem;
     height: 2rem;
-    border-radius: var(--pill);
-    background: var(--accent);
-    color: var(--on-accent);
-    font-size: var(--small);
+    color: var(--accent);
+    font-size: var(--lead);
     font-weight: 800;
+  }
+
+  .Steps li::after {
+    content: '';
+    position: absolute;
+    inset: -0.35rem auto auto -0.4rem;
+    width: 2.8rem;
+    height: 2.7rem;
+    background: var(--accent);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 42'%3E%3Cpath d='M29.5 6.5C20 3 7.5 7.5 5.2 19.5 3.2 30 11.5 37.5 22 37 32.5 36.4 39.5 28.5 38.6 18.8 37.8 10.5 30 4.8 20.5 5.2 16.5 5.4 13.2 6.6 10.8 8.6' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E")
+      0 0 / 100% 100% no-repeat;
   }
 
   /* The plans, on the home page and the pricing page: narrower than the
@@ -708,7 +738,6 @@
     display: block;
     aspect-ratio: 1200 / 630;
     overflow: hidden;
-    border-radius: calc(var(--radius) / 2);
     background: var(--ground);
   }
 
@@ -747,11 +776,26 @@
     list-style: none;
   }
 
+  /* Ruled off above and below in pencil. */
   .Yours {
+    position: relative;
     display: grid;
     gap: 1.5rem;
     padding-block: 2rem;
-    border-block: 1px solid var(--line);
+  }
+
+  .Yours::before,
+  .Yours::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: var(--stroke);
+    background: var(--graphite);
+    filter: url(pencil.svg#line);
+  }
+
+  .Yours::after {
+    inset: auto 0 0;
   }
 
   .Yours_List {
@@ -812,7 +856,7 @@
     align-items: start;
   }
 
-  /* The paid one wears the accent hairline. It is a variant of a section,
+  /* The paid one is drawn in the accent. It is a variant of a section,
      not of the Card component: what is emphasised on this page is this
      page's business. */
   .Plan {
@@ -820,7 +864,7 @@
   }
 
   .Plan-plus {
-    border-color: var(--accent);
+    --pencil: var(--accent);
   }
 
   .Plan_Price {
@@ -842,7 +886,7 @@
     margin: 0;
     padding-inline-start: 1.25rem;
     color: var(--soft-ink);
-    list-style: disc;
+    list-style: '–  ';
     text-wrap: pretty;
   }
 
@@ -962,7 +1006,6 @@
   .Docs pre {
     margin: 0;
     padding: var(--half-gap) 0.75rem;
-    border-radius: var(--small-radius);
     background: var(--paper);
     overflow-x: auto;
   }
@@ -984,7 +1027,6 @@
     display: grid;
     gap: 0.75rem;
     padding: var(--gap);
-    border-radius: var(--radius);
     background: var(--paper);
   }
 
@@ -1043,7 +1085,6 @@
     margin: .75rem 0;
     padding: .75rem;
     border: 1px solid var(--edge);
-    border-radius: .45rem;
   }
   @media (max-width: 700px) {
     .Guide_SideNav {
@@ -1056,7 +1097,6 @@
     gap: 0.75rem;
     padding: 1.25rem;
     border: 1px dashed var(--line);
-    border-radius: var(--radius);
   }
 
   .Guide_Name {
@@ -1084,7 +1124,6 @@
     width: 2.5rem;
     height: 2.5rem;
     border: 1px solid var(--line);
-    border-radius: var(--small-radius);
     background: var(--swatch);
   }
 
@@ -1110,7 +1149,6 @@
   .Guide_Bar {
     height: 0.75rem;
     width: var(--size);
-    border-radius: var(--pill);
     background: var(--accent);
   }
 }
