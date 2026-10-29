@@ -17,10 +17,7 @@ export const applyBenchmarkNames = (recording = false) =>
     )
   )
 export const RELAY_ENTITIES = [1, 10, 100] as const
-export const RELAY_TICKS = 10
-export const relayBenchmarkName = (n: number) => `relay/store/entities-${n}`
-export const relayBenchmarkNames = () => RELAY_ENTITIES.map(relayBenchmarkName)
 export const benchmarkNames =
-  () => [...storageNames(), ...applyBenchmarkNames(), ...relayBenchmarkNames()]
+  () => [...storageNames(), ...applyBenchmarkNames()]
 export const bundlesPerOp = (name: string) =>
   name.startsWith('apply/') ? Number(name.split('/')[2].split('-').at(-1)) : 1

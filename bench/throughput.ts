@@ -1,4 +1,4 @@
-/** Storage, apply and relay throughput, with separately collected SQL counts. */
+/** Storage and apply throughput, with separately collected SQL counts. */
 import {
   type CollectedSuite,
   type Host,
@@ -17,7 +17,6 @@ import {
   benchmarkNames,
   bundlesPerOp,
   RECORDING_BATCHES,
-  relayBenchmarkNames,
 } from './names.ts'
 
 let files = [
@@ -26,16 +25,10 @@ let files = [
   'packages/sql/throughput_bench.ts',
   'packages/query/throughput_bench.ts',
 ]
-export let countNames = () => [
-  ...applyBenchmarkNames().flatMap((name) =>
+export let countNames = () =>
+  applyBenchmarkNames().flatMap((name) =>
     ['sqlPerApply', 'sqlPerBundle'].map((field) => `${name}/${field}`)
-  ),
-  ...relayBenchmarkNames().flatMap((name) =>
-    ['sql', 'reads', 'writes', 'transactions'].map((field) =>
-      `${name}/${field}`
-    )
-  ),
-]
+  )
 type Input = {
   names?: readonly string[]
   recording?: boolean
@@ -74,11 +67,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           name,
         ) => ({
           name,
-          unit: name.startsWith('apply/')
-            ? 'ns/bundle'
-            : name.startsWith('relay/')
-            ? 'ns/value'
-            : 'ns/op',
+          unit: name.startsWith('apply/') ? 'ns/bundle' : 'ns/op',
         })),
     ],
     collect: async (round) => {
@@ -94,7 +83,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
             name.endsWith('/subscribed') == (mode == 'recording-subscribed')
           )
           : mode == 'pipeline'
-          ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
+          ? applyBenchmarkNames()
           : storageNames().filter((name) => name.split('/')[1] == mode)
         names = names.filter((name) =>
           !input.names || input.names.includes(name)
@@ -150,10 +139,8 @@ let measure = (
   if (Deno.build.os == 'linux') {
     env.DENO_SQLITE_PATH = Deno.env.get('DENO_SQLITE_PATH') ?? 'libsqlite3.so.0'
   }
-  let paths = mode.startsWith('recording-')
+  let paths = mode.startsWith('recording-') || mode == 'pipeline'
     ? ['bench/apply_bench.ts']
-    : mode == 'pipeline'
-    ? ['bench/apply_bench.ts', 'bench/relay_bench.ts']
     : files
   paths = paths.filter((path) =>
     !names || names.some((name) => {
@@ -161,9 +148,7 @@ let measure = (
         ? 'archetype'
         : path.startsWith('packages/')
         ? path.split('/')[1]
-        : path.includes('apply_bench')
-        ? 'apply'
-        : 'relay'
+        : 'apply'
       return name.startsWith(`${prefix}/`)
     })
   )
@@ -175,23 +160,21 @@ let measure = (
 }
 let measureCounts = async (root?: string, names?: readonly string[]) => {
   let out: Record<string, Sample> = {}
-  for (let file of ['bench/apply-fixture.ts', 'bench/relay-fixture.ts']) {
-    let prefix = file.includes('apply-fixture') ? 'apply/' : 'relay/'
-    if (names && !names.some((name) => name.startsWith(prefix))) continue
-    let child = await new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', file, '--counts'],
-      cwd: root,
-      stdout: 'piped',
-      stderr: 'inherit',
-    }).output()
-    if (!child.success) throw new Error(`Statement counts failed: ${file}`)
-    let by: Record<string, Record<string, number>> = JSON.parse(
-      new TextDecoder().decode(child.stdout),
-    )
-    for (let [name, fields] of Object.entries(by)) {
-      for (let [field, value] of Object.entries(fields)) {
-        out[`${name}/${field}`] = { value, source: 'statement-count' }
-      }
+  if (names && !names.some((name) => name.startsWith('apply/'))) return out
+  let file = 'bench/apply-fixture.ts'
+  let child = await new Deno.Command(Deno.execPath(), {
+    args: ['run', '-A', file, '--counts'],
+    cwd: root,
+    stdout: 'piped',
+    stderr: 'inherit',
+  }).output()
+  if (!child.success) throw new Error(`Statement counts failed: ${file}`)
+  let by: Record<string, Record<string, number>> = JSON.parse(
+    new TextDecoder().decode(child.stdout),
+  )
+  for (let [name, fields] of Object.entries(by)) {
+    for (let [field, value] of Object.entries(fields)) {
+      out[`${name}/${field}`] = { value, source: 'statement-count' }
     }
   }
   return out

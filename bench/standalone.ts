@@ -205,11 +205,7 @@ export let standalone: Registration[] = [
   measured(
     'relay-admission',
     'bench/relay-admission.ts',
-    RELAY_ENTITIES.flatMap((entities) =>
-      ['store-relay', 'graph-full-check'].map((variant) =>
-        `${variant}/${entities}-entities`
-      )
-    ),
+    RELAY_ENTITIES.map((entities) => `graph-full-check/${entities}-entities`),
     'us/value',
   ),
 ]

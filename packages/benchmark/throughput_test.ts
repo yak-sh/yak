@@ -7,7 +7,6 @@ import {
   applyBenchmarkNames,
   bundlesPerOp,
   RECORDING_BATCHES,
-  relayBenchmarkNames,
 } from '../../bench/names.ts'
 
 let context: Host = {
@@ -57,13 +56,12 @@ test('throughput refuses synthetic 30% CPU regressions without banking them', as
     equal(await regressed([names[0]]), [names[0]])
     equal(await regressed(names), names)
     equal(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
-    equal(bundlesPerOp('relay/store/entities-100'), 1)
   } finally {
     await Deno.remove(directory, { recursive: true })
   }
 })
 
-test('throughput collects each storage report separately from normalized apply and relay reports', async () => {
+test('throughput collects each storage report separately from normalized apply reports', async () => {
   let { benchmarkNames: storageNames } = await import(
     '../sqlite/fixtures/fleet.ts'
   )
@@ -76,7 +74,7 @@ test('throughput collects each storage report separately from normalized apply a
         runtime: context.runtime,
         cpu: context.cpu,
         benches: (mode == 'pipeline'
-          ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
+          ? applyBenchmarkNames()
           : storageNames().filter((n) => n.split('/')[1] == mode)).map(
             (name) => ({ name, results: [{ ok: { avg: 100, cpu: 50 } }] }),
           ),
@@ -97,10 +95,6 @@ test('throughput collects each storage report separately from normalized apply a
     equal(
       (collected['apply/file/edit-alone-1000'] as { value: number }).value,
       .1,
-    )
-    equal(
-      (collected['relay/store/entities-100'] as { value: number }).value,
-      100,
     )
     equal((collected['sqlite/file/point'] as { value: number }).value, 100)
     equal((collected['apply/file/edit-alone-1000'] as { cpu: number }).cpu, .05)

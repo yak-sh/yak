@@ -1,5 +1,4 @@
-// Ordinary admission at 10 values per second per entity, on a warmed Store.
-// Supply a checkout path to compare the same fixture across revisions.
+// Full graph admission checks at 10 values per second per entity.
 import { RELAY_ENTITIES, relayFixture } from './relay-fixture.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
 import { standaloneMain } from './standalone-main.ts'
@@ -13,33 +12,33 @@ export async function measure(
   const root = args[0] ?? new URL('..', import.meta.url).pathname
   const N = Number(args[1] ?? 200)
   for (const entities of RELAY_ENTITIES) {
-    for (const variant of ['store-relay', 'graph-full-check']) {
-      let name = variant + '/' + entities + '-entities'
-      if (!selected(name)) continue
-      const fixture = await relayFixture(entities, { root, variant })
-      try {
-        const samples: (Sample & { cpu: number })[] = []
-        for (let round = 0; round < 3; round++) {
-          fixture.reset()
-          samples.push(await fixture.run(N))
-        }
-        const count = fixture.counts(), values = N * entities
-        results[name] = samples.map(
-          (sample) => ({
-            value: sample.value / 1000 / values,
-            cpu: sample.cpu / 1000 / values,
-            source: 'batch',
-            counts: { values, entities, simulatedSeconds: N / 10, ...count },
-            details: {
-              note: variant == 'store-relay'
-                ? 'submission through admission/staging on simulated clock; fanout and delivery verification excluded'
-                : 'ordinary graph.apply(check) on durable SQLite + member/schema; rolled back',
-            },
-          }),
-        )
-      } finally {
-        await fixture.close()
+    let name = 'graph-full-check/' + entities + '-entities'
+    if (!selected(name)) continue
+    const fixture = await relayFixture(entities, {
+      root,
+      variant: 'graph-full-check',
+    })
+    try {
+      const samples: (Sample & { cpu: number })[] = []
+      for (let round = 0; round < 3; round++) {
+        fixture.reset()
+        samples.push(await fixture.run(N))
       }
+      const count = fixture.counts(), values = N * entities
+      results[name] = samples.map(
+        (sample) => ({
+          value: sample.value / 1000 / values,
+          cpu: sample.cpu / 1000 / values,
+          source: 'batch',
+          counts: { values, entities, simulatedSeconds: N / 10, ...count },
+          details: {
+            note:
+              'ordinary graph.apply(check) on durable SQLite + member/schema; rolled back',
+          },
+        }),
+      )
+    } finally {
+      await fixture.close()
     }
   }
   return results

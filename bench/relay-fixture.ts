@@ -8,13 +8,7 @@ import { type Sample, stopwatch } from '@yaks/benchmark'
 import { stamps } from './vocabulary.ts'
 import type { durable } from '../packages/durable-object/testing.ts'
 
-import { RELAY_ENTITIES, RELAY_TICKS, relayBenchmarkName } from './names.ts'
-export {
-  RELAY_ENTITIES,
-  RELAY_TICKS,
-  relayBenchmarkName,
-  relayBenchmarkNames,
-} from './names.ts'
+export { RELAY_ENTITIES } from './names.ts'
 
 const APP = 'a0000000-0000-4000-8000-000000000001'
 const ADA = 'b0000000-0000-4000-8000-000000000002'
@@ -348,28 +342,4 @@ export async function relayFixture(
   await run(2)
   m.reset()
   return { run, next, reset: m.reset, counts: m.counts, close }
-}
-
-export async function measureRelayCounts(ticks = RELAY_TICKS) {
-  const result: Record<string, RelayCounts> = {}
-  for (const entities of RELAY_ENTITIES) {
-    const fixture = await relayFixture(entities)
-    try {
-      await fixture.run(ticks)
-      result[relayBenchmarkName(entities)] = Object.fromEntries(
-        Object.entries(fixture.counts()).map(([key, n]) => [
-          key,
-          n / (ticks * entities),
-        ]),
-      ) as RelayCounts
-    } finally {
-      await fixture.close()
-    }
-  }
-  return result
-}
-
-if (import.meta.main) {
-  if (Deno.args[0] != '--counts') throw new Error('Expected --counts')
-  console.log(JSON.stringify(await measureRelayCounts()))
 }
