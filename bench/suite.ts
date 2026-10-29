@@ -70,10 +70,14 @@ export let record = async (
       rounds: 1,
       mode: accept ? 'accept' : base && !sample.code ? 'check' : 'run',
       tolerance: accept ? .25 : undefined,
+      // The sample was timed beside its own concurrent control, which already
+      // carries the load it ran under; the box after the command says nothing
+      // about it.
       host: async () => ({
         ...await host(),
         runtime: 'control-v1',
         cpu: 'load-normalized',
+        busy: undefined,
       }),
     })
   } catch (e) {
