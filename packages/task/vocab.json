@@ -106,39 +106,39 @@
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
-      "description": "Create one task or an atomic tasks batch. Batch rows inherit top-level filing; id ($name), parent and requires connect a tree or dependencies. check previews without saving. Returns applied bundles.",
+      "description": "Create one task or atomic batch. Rows inherit filing; id ($name), parent and requires connect trees/dependencies. check previews without saving. Returns applied bundles.",
       "input": {
         "title": {
           "type": "string",
-          "description": "what to do, in one line"
+          "description": "One-line task title."
         },
         "body": {
           "type": "string",
-          "description": "what is being asked for, plus pointers to the details, as markdown",
+          "description": "Request and detail links, as Markdown.",
           "short": "b"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name",
+          "description": "Project id or name.",
           "short": "p"
         },
         "priority": {
           "type": "number",
-          "description": "queue order; lower is more urgent"
+          "description": "Queue order; lower is more urgent."
         },
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "id or registered name of the person or agent whose queue it goes in"
+          "description": "Assignee id or name."
         },
         "domain": {
           "type": "string",
-          "description": "the area of work"
+          "description": "Area of work."
         },
         "check": {
           "type": "boolean",
-          "description": "rehearse the write and roll it back, returning the resolved task without saving it"
+          "description": "Preview without saving."
         },
         "accept": {
           "type": [
@@ -240,11 +240,11 @@
       "input": {
         "query": {
           "type": "string",
-          "description": "query parameters, joined onto `.task`"
+          "description": "Query narrowed by .task."
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many",
+          "description": "Maximum results.",
           "short": "n"
         }
       },
@@ -263,7 +263,7 @@
         "task": {
           "type": "string",
           "ref": "task",
-          "description": "the task to change; pass its id or registered name"
+          "description": "Task id or name."
         },
         "status": {
           "type": "string",
@@ -272,7 +272,7 @@
             "done",
             "cancelled"
           ],
-          "description": "the new status: open, done or cancelled",
+          "description": "Resulting status.",
           "short": "s"
         },
         "title": {
@@ -280,21 +280,21 @@
             "string",
             "null"
           ],
-          "description": "a new title"
+          "description": "Replacement title."
         },
         "body": {
           "type": [
             "string",
             "null"
           ],
-          "description": "a new body"
+          "description": "Replacement body."
         },
         "was": {
           "type": [
             "string",
             "null"
           ],
-          "description": "the SHA-256 at $was.doc.body returned by task_list or graph_show (was: in yak graph show); when supplied with body, refuse if the body moved since that read"
+          "description": "Read token from task_list or graph_show at $was.doc.body; body refuses if changed since that read."
         },
         "project": {
           "type": [
@@ -302,7 +302,7 @@
             "null"
           ],
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name",
+          "description": "Project id or name.",
           "short": "p"
         },
         "priority": {
@@ -310,7 +310,7 @@
             "number",
             "null"
           ],
-          "description": "queue order; lower is more urgent"
+          "description": "Queue order; lower is more urgent."
         },
         "assignee": {
           "type": [
@@ -318,14 +318,14 @@
             "null"
           ],
           "ref": "entity",
-          "description": "id or registered name of the person or agent whose queue it goes in"
+          "description": "Assignee id or name."
         },
         "domain": {
           "type": [
             "string",
             "null"
           ],
-          "description": "the area of work"
+          "description": "Area of work."
         },
         "accept": {
           "type": [
@@ -571,7 +571,7 @@
             ],
             "additionalProperties": false
           },
-          "description": "Two to four choices, each a label and a line saying what it means."
+          "description": "Each choice has a label and explanation."
         },
         "recommended": {
           "type": "string"
@@ -579,20 +579,20 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name"
+          "description": "Project id or name."
         },
         "priority": {
           "type": "number",
-          "description": "queue order; lower is more urgent"
+          "description": "Queue order; lower is more urgent."
         },
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "id or registered name of the person or agent whose queue it goes in"
+          "description": "Assignee id or name."
         },
         "domain": {
           "type": "string",
-          "description": "the area of work"
+          "description": "Area of work."
         }
       },
       "required": [
@@ -614,7 +614,7 @@
         "decision": {
           "type": "string",
           "ref": "decision",
-          "description": "The decision task to answer; its id or registered name."
+          "description": "Decision task id or name."
         },
         "choice": {
           "type": "string",

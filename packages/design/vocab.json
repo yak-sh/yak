@@ -27,21 +27,21 @@
       "noun": "design",
       "verb": "new",
       "title": "Propose a design",
-      "description": "Create a proposal with design{}, doc{title, body} and proposed{}, stamped as the caller. Returns applied bundles.",
+      "description": "File a proposal, stamped as caller. Returns applied bundles.",
       "input": {
         "title": {
           "type": "string",
-          "description": "what the design proposes, in one line"
+          "description": "One-line proposal title."
         },
         "body": {
           "type": "string",
-          "description": "the proposal itself, as markdown",
+          "description": "Proposal as Markdown.",
           "short": "b"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name",
+          "description": "Project id or name.",
           "short": "p"
         }
       },
@@ -63,7 +63,7 @@
         "design": {
           "type": "string",
           "ref": "design",
-          "description": "id or registered name of the design proposal to decide"
+          "description": "Design id or name."
         },
         "verdict": {
           "type": "string",
@@ -72,7 +72,7 @@
             "declined"
           ],
           "default": "approved",
-          "description": "decision to record: approved (default) or declined"
+          "description": "Decision (default approved)."
         },
         "by": {
           "type": "string",

@@ -10,11 +10,11 @@
       "noun": "graph",
       "verb": "apply",
       "title": "Apply atomic changes",
-      "description": "Create, edit, link or delete entities atomically. Use edits/links, q, or bundles. id/text replaces a text property (path defaults to doc.body); yak --text @file reads a file. edits set dotted component.property fields or whole components; null clears a property or removes a component. Text edits replace literal text (find must match once unless all), then prepend/append; path names the text property. Text reads are guarded automatically; was optionally checks an earlier read token. links add a relation between from/to; drop removes it. Ids accept eids, human ids and registered names; $name creates an entity and links within the same call can reference it. q writes one entity using query syntax: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. bundles accepts [{entity:{eid},component:{fields}}], $was guards read values, and $delete deletes. Omitted fields stay unchanged. Returns applied bundles with resolved ids, $alias and stamps. check rehearses and rolls back; reuse $names when writing, since checked ids are temporary. graph_schema lists components/properties. Documentation: https://yaks.app/docs/store.",
+      "description": "Create, edit, link or delete entities atomically via edits/links, q, bundles, or id/text (path defaults to doc.body). Ids accept eids, human ids and names; $name creates an entity reusable within this call. Omitted fields stay; null clears properties/components. Text edits replace literal find (one match unless all), then prepend/append; reads are guarded automatically, with optional was tokens. links add relations; drop removes them. q patches one entity: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. bundles use [{entity:{eid},component:{fields}}], $was guards and $delete deletes. Returns applied bundles with resolved ids, $alias and stamps. check previews then rolls back; reuse $names, since preview ids are temporary. graph_schema lists fields. https://yaks.app/docs/store",
       "input": {
         "q": {
           "type": "string",
-          "description": "one entity patch: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'; quote a value with spaces, .doc.title=\"two words\"; schema-typed values, null clears (also quoted null), !component removes; $name or a fresh UUID creates an entity"
+          "description": "One entity patch; quote spaced values: T-12 .doc.title=\"two words\". Values follow schema types; null clears (even quoted), !component removes. $name or fresh UUID creates."
         },
         "bundles": {
           "type": "array",
@@ -31,11 +31,11 @@
               }
             }
           },
-          "description": "bundles to apply together: each needs entity: {eid}, '$name' for a new entity or the eid or name of an existing one (an edge needs none: its ends make its eid), and the component fields to write; omitted fields stay unchanged"
+          "description": "Atomic bundles: entity:{eid} plus components. eid accepts existing id/name or new $name; edges derive theirs from ends."
         },
         "check": {
           "type": "boolean",
-          "description": "true to validate without keeping the proposed changes and return what would have been written; default false"
+          "description": "Preview without saving (default false)."
         },
         "edits": {
           "type": "array",
@@ -143,11 +143,11 @@
         },
         "id": {
           "type": "string",
-          "description": "Replace text on this entity; accepts a $name for creation."
+          "description": "Entity to replace text on; $name creates."
         },
         "text": {
           "type": "string",
-          "description": "Replacement text; yak --text @path reads a file."
+          "description": "Replacement text."
         },
         "path": {
           "type": "string",
@@ -171,22 +171,22 @@
       "noun": "graph",
       "verb": "query",
       "title": "Query entities",
-      "description": "Query entities with .component.property=value, & (and), | (or), bare search words, or presence .component / !component. ?component includes without filtering. A property always names its component. Comparisons: != ~= < >; lists a,b and ranges 1..9. Directives: .order=-created.at, .limit=20, .fields=doc.title, .refs=T-12. filters narrow the whole q. Results carry only named components; * includes all. A query naming no component answers whole entities. Bare search returns the best 20 unless limited, with compact hit lines; graph_show reads one whole. doc.body includes its $was read token. graph_schema lists vocabulary. Documentation: https://yaks.app/docs/querying.",
+      "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component, or ?component to include without filtering. Always qualify properties. Operators: != ~= < >, lists a,b, ranges 1..9. Directives: .order=-created.at .limit=20 .fields=doc.title .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities; graph_schema lists vocabulary. https://yaks.app/docs/querying",
       "input": {
         "q": {
           "type": "string",
-          "description": "query filters, e.g. .task.status=open&.filed.priority<3; graph_schema lists the valid components and properties"
+          "description": "Query, e.g. .task.status=open&.filed.priority<3."
         },
         "filters": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "extra filters, each narrowing the whole of q"
+          "description": "Filters narrowing all of q."
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many entities",
+          "description": "Maximum results.",
           "short": "n"
         }
       },
@@ -203,7 +203,7 @@
       "noun": "graph",
       "verb": "show",
       "title": "Show entities",
-      "description": "Read the named entities whole, once each, by eid, human id or registered name. doc.body includes its SHA-256 at $was.doc.body for guarded writes. Missing ids are reported beside found entities; all missing refuses. For backlinks use graph_query .refs=<id>; for search use search.",
+      "description": "Read whole entities by eid, human id or name, once each. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
       "input": {
         "ids": {
           "type": "array",
@@ -211,7 +211,7 @@
             "type": "string"
           },
           "ref": "entity",
-          "description": "the eids or names of the entities to read"
+          "description": "Entity ids or names."
         }
       },
       "required": [
@@ -227,7 +227,7 @@
       "noun": "graph",
       "verb": "schema",
       "title": "Read the schema",
-      "description": "Read the vocabulary. No arguments returns the component/property index. component (one name or several) returns full declarations, types, references and write examples. kind returns a display kind plus associated components; kind wins if both supplied. Structured output is a vocabulary JSON Schema document. Documentation: https://yaks.app/docs/components.",
+      "description": "Read vocabulary JSON Schema. No arguments returns a component/property index; component returns full declarations, types, refs and write examples. kind returns its definition and associated components, taking precedence over component. https://yaks.app/docs/components",
       "input": {
         "component": {
           "anyOf": [
@@ -241,11 +241,11 @@
               }
             }
           ],
-          "description": "a component name, to read it in full; several at once as an array of names, such as [\"task\", \"doc\"]"
+          "description": "Component name or names, e.g. [\"task\",\"doc\"]."
         },
         "kind": {
           "type": "string",
-          "description": "a display category declared by the schema, such as task; returns its definition and associated components"
+          "description": "Display kind, e.g. task."
         }
       },
       "readOnly": true,
@@ -257,16 +257,16 @@
       "tool": true,
       "verb": "search",
       "title": "Search text",
-      "description": "Search indexed text by words and, where an embedding index is configured, by meaning. Results are ranked compact bundles: entity gives the eid; query-only hit gives the id to name it by (its human id, such as T-12, where it has one), the title, kind, excerpt and source (text, meaning or both). In a text excerpt, \\u0001 and \\u0002 mark the start and end of matched words. Use graph_show to read an entity whole. Documentation: https://yaks.app/docs/querying.",
+      "description": "Search indexed words and, with vectors, meaning. Ranked compact bundles contain entity.eid and hit:{id,title,kind,excerpt,source}; source is text, meaning or both. In excerpts, \\u0001/\\u0002 delimit matches. graph_show reads whole entities. https://yaks.app/docs/querying",
       "input": {
         "words": {
           "type": "string",
           "search": true,
-          "description": "the text to search for"
+          "description": "Search text."
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many entities",
+          "description": "Maximum results.",
           "short": "n"
         }
       },

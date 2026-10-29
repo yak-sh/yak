@@ -103,49 +103,49 @@
       "noun": "memory",
       "verb": "save",
       "title": "Save a memory",
-      "description": "Save verbatim words or mark their existing entity with on. said with feedback marks the earliest matching words that person wrote; otherwise absent words get a new doc. id patches a memory; omitted fields stay unchanged. Replacing a standalone memory's words requires was from memory_recall's $was.doc.body; marked comments and entries retain their text. feedback records the correcting person. Returns applied bundles.",
+      "description": "Save verbatim words or mark their entity with on. said+feedback marks that person's earliest matching words; otherwise creates a doc for absent words. id patches; omitted fields stay. Replacing standalone words requires memory_recall's $was.doc.body as was; marked comments/entries retain text. feedback names the correcting person. Returns applied bundles.",
       "input": {
         "said": {
           "type": "string",
-          "description": "the words the person used, as they used them"
+          "description": "Verbatim words."
         },
         "on": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity already holding the words, to mark instead of copying them: a session entry, a comment, a doc; said, if passed too, must be in its text"
+          "description": "Entity holding the words: entry, comment or doc. If supplied, said must occur in its text."
         },
         "title": {
           "type": "string",
-          "description": "the index line a recall shows first, for a new memory; a mark leaves the entity's own text alone"
+          "description": "Recall index line for a new memory; marking preserves existing text."
         },
         "context": {
           "type": "string",
-          "description": "what was being discussed, in two lines; never a restatement of what was said",
+          "description": "Discussion context in two lines; do not restate said.",
           "short": "c"
         },
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "project id or name; omit on creation for a memory that applies everywhere, or on a patch to keep the current scope",
+          "description": "Project id/name. Omit to create a global memory or preserve existing scope.",
           "short": "s"
         },
         "feedback": {
           "type": "string",
           "ref": "person",
-          "description": "the correcting person’s id or name, or an empty string if unknown; either marks the memory as feedback"
+          "description": "Correcting person id/name; empty string means unknown. Either marks feedback."
         },
         "about": {
           "type": "string",
-          "description": "the app the words were said about, by slug"
+          "description": "App slug the words concern."
         },
         "id": {
           "type": "string",
           "ref": "memory",
-          "description": "existing memory’s id or registered name to patch; omit to create a memory"
+          "description": "Memory id/name to patch; omit to create."
         },
         "was": {
           "type": "string",
-          "description": "the string at $was.doc.body on the memory returned by memory_recall; required when replacing existing words"
+          "description": "memory_recall $was.doc.body token; required to replace existing words."
         }
       },
       "positional": [
@@ -157,16 +157,16 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
-      "description": "Return whole memories with context and $was.doc.body for memory_save.was. said ranks by meaning with vectors, otherwise matches all words newest first. near ranks by the named entity's meaning; said then filters text. Without either, returns newest. ids, scope and feedback narrow results.",
+      "description": "Read whole memories with context and $was.doc.body for memory_save.was. said ranks meaning with vectors, otherwise matches all words newest first. near ranks meaning; said then filters text. Without either, newest first. ids/scope/feedback filter.",
       "input": {
         "said": {
           "type": "string",
-          "description": "what the memory is about, in a few words: ranked by meaning where this server has a vector index, otherwise matched as text terms the memory must all contain"
+          "description": "Search words; vectors rank meaning, otherwise every word must match."
         },
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "entity id or name whose meaning ranks the results, when this server has a vector index; said then selects by its words"
+          "description": "Entity id/name to rank by meaning with vectors; said then filters text."
         },
         "ids": {
           "type": "array",
@@ -174,21 +174,21 @@
             "type": "string",
             "ref": "entity"
           },
-          "description": "particular memories, by id"
+          "description": "Memory ids."
         },
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "project id or registered name; return only memories filed under it",
+          "description": "Only this project id/name.",
           "short": "s"
         },
         "feedback": {
           "type": "boolean",
-          "description": "only memories recording a correction somebody gave"
+          "description": "Only corrections."
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many (default 8)",
+          "description": "Maximum results (default 8).",
           "short": "n"
         }
       },
@@ -206,12 +206,12 @@
       "input": {
         "said": {
           "type": "string",
-          "description": "the words, exactly as they were written; line breaks and runs of spaces do not count"
+          "description": "Verbatim words; whitespace differences ignored."
         },
         "by": {
           "type": "string",
           "ref": "entity",
-          "description": "who said them: their id or registered name"
+          "description": "Speaker id or name."
         }
       },
       "required": [
@@ -233,16 +233,16 @@
         "id": {
           "type": "string",
           "ref": "entity",
-          "description": "the memory, or any entity, to read around: its id or registered name"
+          "description": "Entry id or name."
         },
         "before": {
           "type": "number",
-          "description": "how many entries ahead of it (default 3)",
+          "description": "Entries before (default 3).",
           "short": "B"
         },
         "after": {
           "type": "number",
-          "description": "how many entries behind it (default 3)",
+          "description": "Entries after (default 3).",
           "short": "A"
         }
       },
@@ -264,7 +264,7 @@
         "id": {
           "type": "string",
           "ref": "entity",
-          "description": "the memory, or any entity, to read around: its id or registered name"
+          "description": "Entity id or name."
         }
       },
       "required": [
@@ -285,7 +285,7 @@
         "id": {
           "type": "string",
           "ref": "entity",
-          "description": "the memory, or any entity, to read around: its id or registered name"
+          "description": "Entity id or name."
         }
       },
       "required": [
@@ -306,7 +306,7 @@
         "id": {
           "type": "string",
           "ref": "entity",
-          "description": "the memory, or any entity, to read around: its id or registered name"
+          "description": "Entity id or name."
         }
       },
       "required": [

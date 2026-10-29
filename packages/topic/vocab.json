@@ -47,7 +47,7 @@
         "topic": {
           "type": "string",
           "ref": "topic",
-          "description": "the topic's id (Q-12) or eid"
+          "description": "Topic id (Q-12) or eid."
         }
       },
       "required": [
@@ -63,15 +63,15 @@
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
-      "description": "Create a subject with a short cover where no topic fits. Duplicate or overlapping names refuse with the existing topic. A project is already its own topic; topic_add places subtopics under it. Returns applied bundles.",
+      "description": "Create a topic with a short cover; overlapping names return the existing topic in a refusal. Projects are topics; topic_add nests subtopics. Returns applied bundles.",
       "input": {
         "name": {
           "type": "string",
-          "description": "what the topic is called, a few plain words"
+          "description": "Topic name, in plain words."
         },
         "body": {
           "type": "string",
-          "description": "a line or two saying what belongs under it"
+          "description": "One or two lines defining its scope."
         }
       },
       "required": [
@@ -87,20 +87,20 @@
       "noun": "topic",
       "verb": "find",
       "title": "Find topics",
-      "description": "Find whole topics by stemmed or prefix words in name, title or cover. near ranks by meaning with vectors; otherwise name order. Use before topic_new or topic_add to reuse an existing subject.",
+      "description": "Find whole topics by name/title/cover stems or prefixes. near ranks meaning with vectors; otherwise name order. Use before topic_new/topic_add to reuse topics.",
       "input": {
         "said": {
           "type": "string",
-          "description": "words the topic's name, title or cover holds, as the start of a word or by its stem"
+          "description": "Name, title or cover words; stems/prefixes match."
         },
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "an entity id or name whose meaning ranks the topics"
+          "description": "Entity id/name to rank by meaning."
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many (default 12)",
+          "description": "Maximum results (default 12).",
           "short": "n"
         }
       },
@@ -114,12 +114,12 @@
       "noun": "topic",
       "verb": "add",
       "title": "Add to a topic",
-      "description": "Add contains edges from a topic or project to entities; drop removes them. Repeated additions are idempotent; entities may belong to several topics. Returns applied bundles.",
+      "description": "Add contains edges from a topic/project to entities; drop removes them. Idempotent; entities may have several topics. Returns applied bundles.",
       "input": {
         "topic": {
           "type": "string",
           "ref": "topic",
-          "description": "the topic's id or title, or a project's"
+          "description": "Topic or project id/title."
         },
         "ids": {
           "type": "array",
@@ -127,11 +127,11 @@
             "type": "string"
           },
           "ref": "entity",
-          "description": "the entities to put under it, by id"
+          "description": "Entity ids to include."
         },
         "drop": {
           "type": "boolean",
-          "description": "take them out of the topic instead"
+          "description": "Remove instead of adding."
         }
       },
       "required": [

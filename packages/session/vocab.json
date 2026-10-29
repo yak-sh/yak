@@ -592,17 +592,17 @@
       "noun": "claim",
       "verb": "take",
       "title": "Claim an entity",
-      "description": "Reserve a stored record (entity) for an agent work session so another session cannot claim it. This reservation is a claim or lease: writing one over another session\u2019s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Claim any entity for a session. Another session\u2019s claim fails the batch; release it first. Reclaiming by the same session is a no-op refresh. Returns applied bundles.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to claim; any entity at all; pass its id or registered name"
+          "description": "Entity id or name."
         },
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session that holds the claim (default: the caller\u2019s session); pass its id or registered name"
+          "description": "Holder session id/name (default caller)."
         }
       },
       "required": [
@@ -618,12 +618,12 @@
       "noun": "claim",
       "verb": "release",
       "title": "Release a claim",
-      "description": "Remove the reservation (claim) held by an agent work session on a stored record (entity). Deliberately unguarded: releasing is how a claim is handed over, and a dead session\u2019s claims are released by whichever process notices first. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Release any entity\u2019s claim, unguarded to permit handover and recovery of dead sessions. Returns applied bundles.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity whose claim to release; pass its id or registered name"
+          "description": "Entity id or name."
         }
       },
       "required": [
@@ -639,20 +639,20 @@
       "noun": "session",
       "verb": "context",
       "title": "Read a session\u2019s context",
-      "description": "At the start of an agent work session, find or create its stored session record. Pass the id assigned by the harness (the program hosting the agent), or a hook containing session_id. When the hook also gives cwd and the session wears no persona, records the persona of the checkout holding that directory as the one it wears. Returns the session record changes and text in content.body naming the session and records it holds claims (work reservations) on, for the harness to inject. For a UserPromptSubmit hook, instead returns one short timing line from its local transcript_path, without changing the session or claims; an unreadable transcript returns no context. No sent-time field is supplied by the hook: a matching queued submission supplies its timestamp, otherwise the line labels hook time as observed. An explicit session argument takes precedence over the hook for other events. With no session id, including a malformed hook without an explicit id, returns nothing and makes no changes.",
+      "description": "Find/create a session and return its changes plus content.body identifying it and its claims for context injection. A hook cwd supplies the checkout persona when none is set. UserPromptSubmit instead returns timing from transcript_path, without writes: queued submissions supply sent time, otherwise hook time is labeled observed; unreadable transcripts return nothing. Explicit session overrides hook except for UserPromptSubmit. No session id means no writes or output.",
       "input": {
         "session": {
           "type": "string",
-          "description": "session id assigned by the harness (the program hosting the agent), or an existing session\u2019s human-readable id or unique entity id; takes precedence over hook"
+          "description": "Harness session id, human id or eid; overrides hook."
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing hook_event_name and session_id (UserPromptSubmit also supplies transcript_path, prompt and optionally prompt_id), and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "JSON lifecycle event: hook_event_name, session_id, optional cwd. UserPromptSubmit adds transcript_path, prompt, optional prompt_id. CLI accepts stdin with -; MCP passes JSON text."
         },
         "actor": {
           "type": "string",
           "ref": "entity",
-          "description": "id or name of the persistent identity this session acts as, retained when the agent clears its conversation"
+          "description": "Persistent actor id or name."
         }
       },
       "idempotent": true,
@@ -665,19 +665,19 @@
       "noun": "session",
       "verb": "wrap",
       "title": "Wrap up a session",
-      "description": "At the end of an agent work session, save the optional brief (its own account of what it did) and release every claim, or work reservation, it still holds, except a task a managed run is parked on (one still waiting on a dependency, which wakes the run when it finishes). Pass a session id or a hook containing session_id. Returns bundles (JSON objects with entity ids and field groups) for the brief and claim removals. If the session does not exist or no id is supplied, returns nothing and makes no changes.",
+      "description": "Save an optional brief and release session claims, except tasks parked on dependencies in managed runs. Returns applied bundles. An absent/unknown session makes no changes.",
       "input": {
         "session": {
           "type": "string",
-          "description": "session id assigned by the harness (the program hosting the agent), or an existing session\u2019s human-readable id or unique entity id; takes precedence over hook"
+          "description": "Harness session id, human id or eid; overrides hook."
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing hook_event_name and session_id (UserPromptSubmit also supplies transcript_path, prompt and optionally prompt_id), and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "JSON lifecycle event with session_id; CLI accepts stdin with -."
         },
         "brief": {
           "type": "string",
-          "description": "what this session did, in its own words",
+          "description": "Session\u2019s account of its work.",
           "short": "b"
         }
       },
@@ -716,19 +716,19 @@
       "noun": "session",
       "verb": "brief",
       "title": "Record a session\u2019s brief",
-      "description": "Save an agent work session\u2019s brief: its own account of what it did. Replaces any previous brief; creates a session record if a named transcript does not exist. Pass text; session takes precedence over a hook containing session_id, then defaults to the caller\u2019s session. Returns the session id and written fields as a JSON bundle. This stores the brief but does not itself inject it into another session.",
+      "description": "Replace a session brief, creating a missing named transcript. session overrides hook.session_id, then defaults to caller. Returns the written bundle; does not inject context elsewhere.",
       "input": {
         "session": {
           "type": "string",
-          "description": "session id assigned by the harness (the program hosting the agent), or an existing session\u2019s human-readable id or unique entity id; takes precedence over hook"
+          "description": "Harness session id, human id or eid; overrides hook."
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing hook_event_name and session_id (UserPromptSubmit also supplies transcript_path, prompt and optionally prompt_id), and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "JSON lifecycle event with session_id; CLI accepts stdin with -."
         },
         "text": {
           "type": "string",
-          "description": "the brief"
+          "description": "Session brief."
         }
       },
       "required": [
@@ -744,23 +744,23 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Write SessionStart, SubagentStart, UserPromptSubmit and SessionEnd hooks (commands run when an agent session or subagent starts, receives a prompt or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap), each prompt receives a short timing line from its local transcript, a PreToolUse HTTP hook that posts each MCP tool call to the server's hook door before it runs, so the MCP door writes as the session or subagent making it, and a PostToolUse HTTP hook that posts each tool call to the same door, where the session hears what it is owed and its subagents hear nothing. The turns in between are read from the harness's own transcript file by the package's duty. Replaces an earlier install, including the turn hooks an older one wrote, and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Writes on this machine; returns the settings path. remove uninstalls these hooks.",
       "input": {
         "path": {
           "type": "string",
-          "description": "the settings file (default $HOME/.claude/settings.json)"
+          "description": "Settings path (default $HOME/.claude/settings.json)."
         },
         "yak": {
           "type": "string",
-          "description": "the path to the yak command on this machine"
+          "description": "Local yak executable path."
         },
         "server": {
           "type": "string",
-          "description": "the yak serve whose hook door the PostToolUse hook posts to (default http://localhost:5173)"
+          "description": "Hook server (default http://localhost:5173)."
         },
         "remove": {
           "type": "boolean",
-          "description": "remove the entries instead of writing them"
+          "description": "Uninstall instead."
         }
       },
       "idempotent": true,
@@ -773,7 +773,7 @@
       "noun": "claim",
       "verb": "check",
       "title": "Check for stale claims",
-      "description": "Check for work reservations (claims) on records (entities) whose agent session is over: a holder this graph has no session entity for, or one whose session stopped or failed. Otherwise the board reports somebody working on what nobody is working on. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
+      "description": "Report claims held by missing, stopped or failed sessions in content.body, including warning/failure findings. Does not repair.",
       "input": {},
       "readOnly": true
     },
@@ -812,13 +812,15 @@
       "noun": "session",
       "verb": "check",
       "title": "Check for stalled sessions",
-      "description": "Reconcile sessions whose process exited or whose fully imported outside transcript ended, then report sessions still waiting on a turn or answer past the server\u2019s stall threshold (two hours by default). An uncertain ending stays a warning. Takes no arguments. Returns the report in content.body.",
+      "description": "Reconcile exited processes and fully imported ended transcripts; report sessions waiting beyond the stall threshold (default two hours) in content.body. Uncertain endings remain warnings.",
       "input": {},
       "readOnly": false
     },
     "session_input": {
       "effect": true,
-      "created": ["content"],
+      "created": [
+        "content"
+      ],
       "target": ".entry !lines !using !output !notice",
       "tries": 8,
       "description": "an input line inherits its transcript's selected model and owes one turn; an entry selecting a model is already owed by session_run"
