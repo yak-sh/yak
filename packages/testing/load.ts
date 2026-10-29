@@ -90,12 +90,11 @@ let load = async (
   tag: string,
   code: string,
   lang?: string,
-  pass = '',
 ) => {
   let path = beside(page, tag, lang)
   await Deno.writeTextFile(path, code)
   try {
-    await import(url(path) + pass)
+    await import(url(path))
   } catch (error) {
     test(`${page}:${tag} loads`, () => {
       throw error
@@ -109,10 +108,8 @@ let load = async (
 let exported = async (page: string): Promise<string[]> =>
   Object.keys(await import(url(page)))
 
-/** Loads a page's examples, each declaring its test. A `pass` (a URL query,
- * such as `?load=1`) loads them as modules of their own a further time, beside
- * the ones already loaded. */
-export let examples = async (page: string, pass = '') => {
+/** Loads a page's examples, each declaring its test. */
+export let examples = async (page: string) => {
   let { fenced, lines } = runs(await Deno.readTextFile(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
@@ -122,7 +119,6 @@ export let examples = async (page: string, pass = '') => {
       `${f.line}`,
       compileFence(name, page, f, exports),
       f.lang,
-      pass,
     )
   }
   if (lines.length) {
@@ -130,8 +126,6 @@ export let examples = async (page: string, pass = '') => {
       page,
       'doctests',
       compileDoctests(page, lines, exports),
-      undefined,
-      pass,
     )
   }
 }

@@ -1,63 +1,30 @@
-// The suite held to its budget (M-39441): no test case takes more than 1 ms,
-// but the offenders bench/test-budget.json lists, and that list only ever
-// shrinks. `deno task test` (bin/test.ts) runs its tests through `measure`,
-// which has each platform's runner say what every test took, and holds that
-// to the list (`hold`):
+// The suite's times, said beside its budget (M-39441): no test case should
+// take more than 1 ms, but the offenders bench/test-budget.json lists, and
+// that list only ever shrinks. `deno task test` (bin/test.ts) runs its tests
+// through `measure`, which has each platform's runner say what every test
+// took, and `say` tells how that stands against the list:
 //
-//   deno task test [--all] [--write] [--report] [--from=dir] [path...]
+//   deno task test [--all] [--write] [--from=dir] [path...]
 //
-// - a test the list does not name fails when it takes over the budget, on
-//   every run;
-// - a listed test fails when it takes longer than its record allows (the
-//   record times `slack.times`, plus `slack.ms`) on every run, including a
-//   no-path run chosen by the dependency graph. CI and local runs hold the
-//   same records, and a path or tag changes only which tests run.
+// - a test the list does not name is said when it takes over the budget;
+// - a listed test is said when it takes longer than its record allows (the
+//   record times `slack.times`, plus `slack.ms`).
 //
-// A test is held to its own time: its wall clock less what its runtime's
+// What a test took is telemetry, never a verdict: a run's exit code is its
+// tests' own, and each test is timed once, as it ran. A busy box stretches
+// every test, and V8 runs a function in its interpreter until it has run
+// enough times to be compiled, so a test over the line in a run of its file
+// alone can be well within it in the whole suite. A test that got slower is
+// over in every run, and every run says so.
+//
+// A test is timed by its own time: its wall clock less what its runtime's
 // thread, and the processes it started, waited for a CPU another process held
-// (`own`, packages/testing run.ts `waited`). The shared runner's host, or a
-// busy box, stretches every test's wall clock by that wait; a test that got
-// slower takes longer on the CPU or waits longer on what it awaits, and that
-// it still owns.
+// (`own`, packages/testing run.ts `waited`).
 //
-// What runs beside a test still adds to its own time: the gate's runner
-// shares its CPU's cache and memory with the box, and a process busy on
-// another core makes a test take longer on its own. It never takes time
-// away, so each test is held to the fastest time it ran in: one time within
-// the line proves a pass, and a test fails only when it is over every time.
-//
-// A test is held to what it takes with the code it calls warm. V8 runs a
-// function in its interpreter until the function has run enough times to be
-// compiled, so a test takes less each time the code under it has run before:
-// in a run of the whole suite the files before it ran that code, and in a run
-// of one file nothing did. `a status filter on a ladder binds as a lookup on
-// the archetype index` (packages/sql/archetype_test.ts) took 2 to 3 ms in a
-// runtime of its own, 1.4 to 2 ms on its third load and 0.6 ms by its 25th,
-// and 0.85 to 0.94 ms in whole runs. So a time over the line is measured
-// again before it counts: the files holding such tests run in a runtime of
-// their own, one platform at a time, and each loads again while one of them
-// is over every time, until the code under it is warm
-// (packages/testing/main.ts `--loads` and `--until`, `LOADS`). A narrowed run
-// and the whole suite hold a test to the same time, a run with nothing over
-// the line pays for none, and a test near its line is measured most.
-//
-// A test gets slower when its code does, or the code it runs: its file's key
-// (packages/testing/deps.ts). A file that ran with the key it had already
-// passed under, before the run began, is spared: the same code passed the
-// budget, so a time over the line now is the run's, not its tests'. Only a
-// run given `--all` runs such a file, as the gate's whole run does on every
-// commit; it holds each file the first time its code runs there, and each
-// file it failed until that file passes.
-//
-// The runner remembers a file whose tests all passed, and a later run leaves
-// it out (packages/testing/deps.ts). A file holding a test the budget failed
-// did not pass, so `measure` takes that back: the same paths, run again, run
-// it again, and fail until it is fast.
-//
-// A platform's wall clock is said, never held: it adds every wait among the
-// run's processes and the host's other users, and grows with each test, so no
-// run of it is a floor. Workerd's tests each cross into the run's kernel, and
-// are not held one by one: their times, and their wall, are said.
+// A platform's wall clock is said, never compared: it adds every wait among
+// the run's processes and the host's other users. Workerd's tests each cross
+// into the run's kernel, and are not compared one by one: their times, and
+// their wall, are said.
 //
 // Nothing ever joins the list, and a test renamed is a test not listed; an
 // example is listed by its code, not its line or block position (`listed`).
@@ -65,19 +32,15 @@
 // exists, and lowers each record a run beat by more than the slack: a record
 // follows a test that got faster, not one run's luck. A test leaves well
 // under the budget, not at it: one that left at 0.9 ms would be over on the
-// next loaded run, and could not come back on. Without `--write`, the run
-// says what it would change. The times a whole run judged are kept in
-// bench/test-times/, which the gate keeps as an artifact, and `--from=<dir>`
-// judges a kept set instead of running: a gate's, downloaded, shrinks the
-// list by what the gate measured. The exit code is the run's own when it
-// failed, and 1 when anything went over; `--report` says what went over and
-// holds the run to nothing but its own tests.
+// next loaded run. Without `--write`, the run says what it would change. The
+// times a whole run took are kept in bench/test-times/, which the gate keeps
+// as an artifact, and `--from=<dir>` says a kept set instead of running: a
+// gate's, downloaded, shrinks the list by what the gate measured.
 
-import { forget, passed } from '@yaks/testing/deps'
 import type { Result } from './phases.ts'
 
 /** The flags the budget takes; the others are the runner's. */
-export let OWN = /^--(write|report|from=.*)$/
+export let OWN = /^--(write|from=.*)$/
 
 /** The committed list and its rules. */
 export type Budget = {
@@ -108,12 +71,6 @@ export type Times = {
 
 export let LIST = new URL('../bench/test-budget.json', import.meta.url)
 
-/** How measuring tests again loads a file holding a test over the line: again
- * while one of them has been over every time (packages/testing `--until`), up
- * to `loads` times, and while its loads after the first, cold one have taken
- * less than `spend` milliseconds in all. A file of tests near 1 ms warms in
- * tens of loads; one that loads for seconds has two or three warm ones. */
-export let LOADS = { loads: 40, spend: 10_000 }
 let KEPT = new URL('../bench/test-times/', import.meta.url).pathname
 
 /** A test as a runner timed it; a runner before `waited` said none. */
@@ -151,7 +108,6 @@ type Seen = {
 export type Judged = {
   over: Seen[]
   slower: Seen[]
-  spared: Seen[]
   within: Seen[]
   faster: Seen[]
   gone: { file: string; key: string }[]
@@ -169,28 +125,10 @@ export let listed = (tests: { file: string; name: string }[]): string[] =>
     return at && at[2] != null ? `${file}: ${at[2]}` : name
   })
 
-/// unchanged({ deno: { wall: 1, tests: [], remembered: { 'a.ts': 'k1', 'b.ts': 'k2' } } }, { k1: 5 })
-///   -> ['a.ts']
-/** The files `runs` remembered under a key `before` already held: each ran
- * the code it had passed with. */
-export let unchanged = (
-  runs: Record<string, Times>,
-  before: Record<string, number>,
-): string[] =>
-  Object.values(runs).flatMap((r) =>
-    Object.entries(r.remembered ?? {}).filter(([, key]) => key in before)
-      .map(([file]) => file)
-  )
-
-/** What a run's times say against the list: the tests over the line, those of
- * them spared for running in a file `same` names, the listed ones now within
- * `leave` or faster than their record by more than its slack, the listed ones
- * that did not run, and each platform's wall. */
-export let judge = (
-  b: Budget,
-  runs: Record<string, Times>,
-  same: string[] = [],
-): Judged => {
+/** What a run's times say against the list: the tests over the line, the
+ * listed ones now within `leave` or faster than their record by more than its
+ * slack, the listed ones that did not run, and each platform's wall. */
+export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
   let seen = new Map<string, Seen>()
   let ran = new Set<string>()
   for (let [platform, run] of Object.entries(runs)) {
@@ -203,22 +141,20 @@ export let judge = (
       if (!t.ok) return
       let was = seen.get(at)
       let ms = own(t)
-      // Two tests of one name in one file are held as one: the slower.
+      // Two tests of one name in one file are timed as one: the slower.
       if (!was || ms > was.ms) {
         seen.set(at, { platform, file: t.file, name: t.name, key: keys[i], ms })
       }
     })
   }
   let record = (s: Seen) => b.tests[s.file]?.[s.key]
-  let spare = new Set(same)
-  let over: Seen[] = [], slower: Seen[] = [], spared: Seen[] = []
+  let over: Seen[] = [], slower: Seen[] = []
   let within: Seen[] = [], faster: Seen[] = []
   for (let s of seen.values()) {
     let r = record(s)
-    let held = spare.has(s.file) ? spared : r == null ? over : slower
     if (r == null) {
-      if (s.ms > b.budget) held.push(s)
-    } else if (s.ms > limit(b.slack, r)) held.push(s)
+      if (s.ms > b.budget) over.push(s)
+    } else if (s.ms > limit(b.slack, r)) slower.push(s)
     else if (s.ms <= b.leave) within.push(s)
     else if (limit(b.slack, s.ms) < r) faster.push(s)
   }
@@ -230,7 +166,7 @@ export let judge = (
     platform,
     ms: run.wall,
   }))
-  return { over, slower, spared, within, faster, gone, walls }
+  return { over, slower, within, faster, gone, walls }
 }
 
 /** The list as `--write` leaves it: tests within `leave` or gone taken out,
@@ -246,77 +182,6 @@ export let shrunk = (b: Budget, j: Judged): Budget => {
   return { ...b, tests }
 }
 
-/** The runs as measured again: each test held to the fastest of its own time
- * and the own times it passed with in `again`, which may run it many times. */
-export let fastest = (
-  runs: Record<string, Times>,
-  again: Record<string, Times>,
-): Record<string, Times> => {
-  let best = new Map<string, Timed>()
-  for (let t of Object.values(again).flatMap((r) => r.tests)) {
-    let at = JSON.stringify([t.file, t.name])
-    let was = best.get(at)
-    if (t.ok && (was == null || own(t) < own(was))) best.set(at, t)
-  }
-  return Object.fromEntries(
-    Object.entries(runs).map(([platform, run]) => [platform, {
-      ...run,
-      tests: run.tests.map((t) => {
-        let b = best.get(JSON.stringify([t.file, t.name]))
-        return b == null || own(b) >= own(t)
-          ? t
-          : { ...t, ms: b.ms, waited: b.waited }
-      }),
-    }]),
-  )
-}
-
-/// let list = { budget: 1, leave: 0.5, slack: { times: 2, ms: 1 }, tests: { 'a_test.ts': { y: 3 } } }
-/// let seen = (name: string, key = name) => ({ platform: 'deno', file: 'a_test.ts', name, key, ms: 9 })
-/// lines(list, [seen('x'), seen('a_test.ts:4 y', 'y')]) -> { 'a_test.ts': { x: 1, 'a_test.ts:4 y': 7 } }
-/** A time for each of some tests, by file and by the name its runner said it
- * by, in milliseconds (packages/testing `--until`). */
-export type Lines = Record<string, Record<string, number>>
-
-/** The line each of `rows` is held to, by file and by the name its runner
- * said it by: the budget, or what its record allows. */
-export let lines = (b: Budget, rows: Seen[]): Lines => {
-  let by: Lines = {}
-  for (let s of rows) {
-    let r = b.tests[s.file]?.[s.key]
-    ;(by[s.file] ??= {})[s.name] = r == null ? b.budget : limit(b.slack, r)
-  }
-  return by
-}
-
-/** The tests a run fails: each over the budget, and each listed one slower
- * than its record allows. Every run holds the same lines. */
-export let failing = (j: Judged): Seen[] => [...j.over, ...j.slower]
-
-/// let b = { budget: 1, leave: 0.5, slack: { times: 2, ms: 0 }, tests: { 'a_test.ts': { y: 3 } } }
-/// let run = (x: number, y: number) => ({ wall: 9e9, tests: [{ file: 'a_test.ts', name: 'x', ms: x, ok: true }, { file: 'a_test.ts', name: 'y', ms: y, ok: true }] })
-/// failed(b, { runs: { deno: run(2, 7) } }) -> ['a_test.ts: x', 'a_test.ts: y']
-/// failed(b, { runs: { deno: run(0.4, 5) } }) -> []
-/** What a measured run fails the budget on, each test said in a line by its
- * file and name. The same tests over on two runs say the same lines
- * (bench/ci.ts holds a red run to that). */
-export let failed = (b: Budget, m: Pick<Measured, 'runs' | 'same'>): string[] =>
-  failing(judge(b, m.runs, m.same))
-    .map((s) => `${s.file}: ${s.key}`)
-
-/** The passes the runs remembered that the budget takes back: the keys of the
- * files holding a test it fails. */
-export let retracted = (
-  runs: Record<string, Times>,
-  failed: Seen[],
-): string[] => {
-  let files = new Set(failed.map((s) => s.file))
-  return Object.values(runs).flatMap((r) =>
-    Object.entries(r.remembered ?? {}).filter(([file]) => files.has(file))
-      .map(([, key]) => key)
-  )
-}
-
 // A record, to a tenth of a millisecond and never below what was measured.
 let ceil = (ms: number) => Math.ceil(ms * 10) / 10
 
@@ -329,15 +194,13 @@ let said = (rows: Seen[], b: Budget) =>
   })
 
 /** What a run of the suite measured: each platform's times, the run's exit
- * code, what kind of run it was, the files it ran unchanged since they passed
- * (`unchanged`), what it took in milliseconds, and how many files it left out
- * as unchanged since they passed, where it chose them before any platform
- * ran. */
+ * code, what kind of run it was, what it took in milliseconds, and how many
+ * files it left out as unchanged since they passed, where it chose them
+ * before any platform ran. */
 export type Measured = {
   code: number
   runs: Record<string, Times>
   whole: boolean
-  same?: string[]
   ms?: number
   left?: number
 }
@@ -357,95 +220,40 @@ export let read = async (dir: string): Promise<Measured> => {
 }
 
 /** A run of the suite (bin/test.ts): each platform's runner given `flags`
- * beside the command's own, over `files`, or over every file it names. */
-export type Suite = (flags: string[], files?: string[]) => Promise<Result>
+ * beside the command's own. */
+export type Suite = (flags: string[]) => Promise<Result>
 
-// A run of `suite` with its times taken, and its exit code; with `until`,
-// each file it names loaded again while a test it names there is over its
-// line (packages/testing `--until`).
-let timed = async (
-  suite: Suite,
-  flags: string[],
-  files?: string[],
-  until?: Lines,
-) => {
-  let dir = await Deno.makeTempDir({ prefix: 'test-budget-' })
-  let held = until && await Deno.makeTempFile({ prefix: 'test-budget-' })
-  try {
-    if (held) await Deno.writeTextFile(held, JSON.stringify(until))
-    let more = held ? [`--until=${held}`] : []
-    let result = await suite([...flags, ...more, `--times=${dir}`], files)
-    let code = result.code ?? (result.signal == 'SIGINT' ? 130 : 143)
-    return { ...await read(dir), code, stopped: !!result.signal }
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-    if (held) await Deno.remove(held)
-  }
-}
-
-/** Runs `suite` with its times taken. The files holding tests it would fail
- * run again, each loaded while one of them is still over (`LOADS`), each test
- * is held to the fastest of its times, and the files it still fails have
- * their passes taken back. A file that ran unchanged since it passed is
- * spared. A run a signal stopped says nothing. */
+/** Runs `suite` with its times taken, once, and keeps a whole run's in
+ * bench/test-times/. A run a signal stopped says nothing. */
 export let measure = async (
-  b: Budget,
   suite: Suite,
   whole: boolean,
-  verbose = false,
 ): Promise<Measured> => {
   let start = performance.now()
-  // Before the run: each runtime remembers what it passed as it ends.
-  let before = passed()
-  let { code, stopped, runs } = await timed(suite, [])
-  if (stopped) return { code, runs: {}, whole }
-  let same = unchanged(runs, before)
-  let slow = failing(judge(b, runs, same))
-  let stop: number | undefined
-  if (slow.length) {
-    if (verbose) {
-      let files = new Set(slow.map((s) => s.file)).size
-      console.log(
-        `\n─── measuring ${files} file(s) again, up to ${LOADS.loads} times ───`,
-      )
-    }
-    // One platform at a time: the first pass runs them all at once, so a test
-    // measured again beside another platform's runtime meets the same load
-    // that put it over. Each of them passed, so the runner remembered it:
-    // `--all`.
-    let again: Record<string, Times> = {}
-    for (let platform of new Set(slow.map((s) => s.platform))) {
-      let held = slow.filter((s) => s.platform == platform)
-      let files = [...new Set(held.map((s) => s.file))]
-      let one = await timed(
-        suite,
-        ['--all', `--loads=${LOADS.loads}`, `--spend=${LOADS.spend}`],
-        files,
-        lines(b, held),
-      )
-      Object.assign(again, one.runs)
-      if (one.stopped) {
-        stop = one.code
-        break
+  let dir = await Deno.makeTempDir({ prefix: 'test-budget-' })
+  try {
+    let result = await suite([`--times=${dir}`])
+    let code = result.code ?? (result.signal == 'SIGINT' ? 130 : 143)
+    if (result.signal) return { code, runs: {}, whole }
+    let { runs } = await read(dir)
+    if (whole) {
+      await Deno.remove(KEPT, { recursive: true }).catch(() => {})
+      await Deno.mkdir(KEPT, { recursive: true })
+      for (let [platform, times] of Object.entries(runs)) {
+        await Deno.writeTextFile(
+          `${KEPT}${platform}.json`,
+          JSON.stringify(times),
+        )
       }
+      await Deno.writeTextFile(
+        `${KEPT}run.json`,
+        JSON.stringify({ whole, code }),
+      )
     }
-    runs = fastest(runs, again)
-    slow = failing(judge(b, runs, same))
+    return { code, runs, whole, ms: performance.now() - start }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
   }
-  forget(retracted(runs, slow))
-  if (stop != null) return { code: stop, runs: {}, whole }
-  if (whole) {
-    await Deno.remove(KEPT, { recursive: true }).catch(() => {})
-    await Deno.mkdir(KEPT, { recursive: true })
-    for (let [platform, times] of Object.entries(runs)) {
-      await Deno.writeTextFile(`${KEPT}${platform}.json`, JSON.stringify(times))
-    }
-    await Deno.writeTextFile(
-      `${KEPT}run.json`,
-      JSON.stringify({ whole, code, same }),
-    )
-  }
-  return { code, runs, whole, same, ms: performance.now() - start }
 }
 
 // A test on one line: what it took, its record, its name and file.
@@ -502,27 +310,23 @@ export let closing = (
 }
 
 /** Says what a measured run comes to against the list, writes the list shrunk
- * on `--write`, and returns the command's exit code. Each finding is a line
+ * on `--write`, and returns the run's own exit code. Each finding is a line
  * naming the slowest few, then the run's closing line; `--verbose` says each
  * finding whole, each platform's wall clock on a whole run, and how the list
  * would shrink. */
-export let hold = async (
+export let say = async (
   b: Budget,
-  { code, runs, whole, same, ms, left }: Measured,
+  { code, runs, whole, ms, left }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
-  let report = args.includes('--report')
   let verbose = args.includes('--verbose')
-  let j = judge(b, runs, same)
+  let j = judge(b, runs)
   // Only a whole run knows which tests are gone, and only one that passed: a
   // runtime that died wrote no times, and every test it held would read as
   // gone.
   if (!whole || code) j.gone = []
-  let slower = j.slower
   let shrinking = j.within.length + j.gone.length + j.faster.length
-  let spared =
-    'test(s) over the line in files unchanged since they passed, spared'
   let lines: string[] = []
   let section = (title: string, rows: string[]) => {
     if (rows.length) lines.push(`\n─── ${title} ───`, ...rows)
@@ -530,25 +334,11 @@ export let hold = async (
   if (verbose) {
     section(
       `${j.over.length} test(s) over the ${b.budget}ms budget, not listed`,
-      j.over.length
-        ? [
-          ...said(j.over, b),
-          '  Each was over every time it ran, and the list takes no test on: make it faster.',
-        ]
-        : [],
+      said(j.over, b),
     )
     section(
       `${j.slower.length} listed test(s) slower than their record allows`,
-      said(slower, b),
-    )
-    section(
-      `${j.spared.length} ${spared}`,
-      j.spared.length
-        ? [
-          ...said(j.spared, b),
-          "  Each file passed the budget before with the same code: the time is the run's.",
-        ]
-        : [],
+      said(j.slower, b),
     )
     section(
       'platform wall clocks',
@@ -570,15 +360,12 @@ export let hold = async (
         }`,
       )
     }
-    if (slower.length) {
+    if (j.slower.length) {
       lines.push(
-        `${slower.length} listed test(s) slower than their record allows: ${
-          worst(slower, b)
+        `${j.slower.length} listed test(s) slower than their record allows: ${
+          worst(j.slower, b)
         }`,
       )
-    }
-    if (j.spared.length) {
-      lines.push(`${j.spared.length} ${spared}: ${worst(j.spared, b)}`)
     }
     if (write && shrinking) {
       lines.push(
@@ -590,12 +377,11 @@ export let hold = async (
     let next = shrunk(b, j)
     await Deno.writeTextFile(LIST, JSON.stringify(next, null, 2) + '\n')
   }
-  let exit = code || (!report && failing(j).length ? 1 : 0)
   // A run a signal stopped measured nothing to sum.
   if (!code || Object.keys(runs).length) {
-    let line = closing(exit, runs, j.over.length + slower.length, ms, left)
+    let line = closing(code, runs, j.over.length + j.slower.length, ms, left)
     lines.push(verbose ? `\n${line}` : line)
   }
   if (lines.length) console.log(lines.join('\n'))
-  return exit
+  return code
 }

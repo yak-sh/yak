@@ -74,10 +74,8 @@ jobs:
           SUITE_STEP: deno task check
         run: deno task check --verbose
 
-      # Every platform's tests (bin/test.ts), workerd's included, held to the
-      # budget (bin/test-budget.ts): a test over 1 ms that
-      # bench/test-budget.json does not list fails the step, as on any run;
-      # and so does a listed test slower than its record, on every run.
+      # Every platform's tests (bin/test.ts), workerd's included, each test's
+      # time said beside the budget (bin/test-budget.ts), which fails nothing.
       # The run keeps its scratch
       # where the box's runs do, in memory under /dev/shm (bin/scratch.ts).
       # The money paths reach Stripe's sandbox, so the runner's environment

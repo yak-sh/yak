@@ -2,9 +2,8 @@
 // The runner: every test module and example page it is given, loaded into
 // this one runtime a file at a time, each file's tests run as it loads.
 //
-//   main.ts [--tag=t]... [--platform=p] [--all] [--loads=n] [--until=file]
-//     [--spend=ms] [--also=path]... [--keys=file] [--timeout=ms] [--times=dir]
-//     [--verbose] path...
+//   main.ts [--tag=t]... [--platform=p] [--all] [--also=path]... [--keys=file]
+//     [--timeout=ms] [--times=dir] [--verbose] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
 // or a Markdown page), or a directory holding them. `--tag` keeps the tests
@@ -21,16 +20,6 @@
 // run goes on (./run.ts `one`).
 // `--times` writes what each test and each file's load took, and the proof
 // of each file the run remembered as passed, to `<dir>/<platform>.json`.
-// `--loads=n` loads every file up to n times, each time once all have
-// loaded the time before, as modules of their own: for measuring
-// (bin/test-budget.ts), since a test that cannot run twice in one runtime
-// fails a later load. The code a file calls warms as it runs again, as it
-// does in a run of the whole suite, where the files before it ran it. A file
-// loads again only while its loads after the first have taken less than
-// `--spend` in all, and, with `--until` naming a JSON file of times by file
-// and test (`{ "a_test.ts": { "adds": 1 } }`), while one of the tests it
-// names there has neither run within its time, less what it waited for a
-// CPU, nor failed (./run.ts `owed`).
 //
 // Each test is said as it runs, a failure's error right after it, and the
 // closing report says every failure again; each error is cut short (./run.ts
@@ -40,14 +29,13 @@ import { note, proof, remember, survey } from './deps.ts'
 import { find, tested } from './find.ts'
 import { examples } from './load.ts'
 import { audit, audited, mark } from './reads.ts'
-import { file, type Lines, type Outcome, owed, summary, timed } from './run.ts'
+import { file, type Outcome, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
 // Before anything a test could start inherits it.
 let log = audit()
 
-let FLAGS =
-  /^--(tag|platform|also|keys|timeout|times|loads|until|spend)=(.*)$|^--(all|verbose)$/
+let FLAGS = /^--(tag|platform|also|keys|timeout|times)=(.*)$|^--(all|verbose)$/
 let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -62,9 +50,6 @@ let tags = flag('tag').flatMap((t) => t.split(','))
   .filter((t) => t && t != platform)
 let timeout = Number(flag('timeout').at(-1) ?? 50_000)
 let all = Deno.args.includes('--all')
-let rounds = Math.max(1, Number(flag('loads').at(-1)) || 1)
-let until = flag('until').at(-1)
-let spend = Number(flag('spend').at(-1) ?? Infinity)
 let verbose = Deno.args.includes('--verbose')
 let paths = Deno.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
@@ -106,10 +91,6 @@ let loads: Record<string, number> = {}
 let collected = collect()
 let picked = (t: Test) => tags.every((tag) => t.tags.includes(tag))
 let outcomes: Outcome[] = []
-// What each file's loads and tests have taken so far, after its first load:
-// that one pays for loading what it imports, and what is measured again is
-// the code warm.
-let spent = new Map<string, number>()
 let run = async (path: string, load: () => Promise<unknown>) => {
   let at = collected.length
   let begun = performance.now()
@@ -129,25 +110,12 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   // Executed bodies own fixtures; retain only report metadata after the file.
   let tests = collected.splice(at).filter(picked)
   outcomes.push(...await file(path, tests, timeout, loaded, verbose))
-  let took = performance.now() - begun
-  spent.set(path, spent.has(path) ? spent.get(path)! + took : 0)
 }
-// `--until`'s times, and the files holding one of those tests that has
-// neither run within its time nor failed: each loads again.
-let lines: Lines = until ? JSON.parse(await Deno.readTextFile(until)) : {}
-let behind = new Set(Object.keys(lines))
-let again = (path: string) =>
-  (!until || behind.has(path)) && (spent.get(path) ?? 0) < spend
 // Pages first: Deno's dynamic import costs more the larger the graph already
 // loaded, and every example is a module of its own. After the test modules'
 // graphs, the examples took 33 s to load; before them, 8 s.
-for (let round = 0; round < rounds; round++) {
-  let pass = round ? `?load=${round}` : ''
-  let due = (path: string) => !round || again(path)
-  for (let p of pages.filter(due)) await run(p, () => examples(p, pass))
-  for (let m of modules.filter(due)) await run(m, () => import(here(m) + pass))
-  behind = new Set(owed(lines, outcomes))
-}
+for (let p of pages) await run(p, () => examples(p))
+for (let m of modules) await run(m, () => import(here(m)))
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some. Its pass is kept by its proof: its key, and

@@ -148,7 +148,7 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
  * handed past its own task. A run narrowed to a path or a platform times less
  * than the whole suite, so it is a suite of its own, and never banks its time
  * as the whole suite's floor nor is judged against it. What the budget does
- * with a run's times (`--write`, `--report`, bin/test-budget.ts) and how much
+ * with a run's times (`--write`, bin/test-budget.ts) and how much
  * a run says (`--verbose`) change nothing it runs.
  *
  * ```ts
@@ -178,7 +178,7 @@ export let suiteOf = (name: string, command: string, args: string[]) => {
 }
 
 // The flags a suite is the same suite without.
-let SAME = ['--write', '--report', '--verbose']
+let SAME = ['--write', '--verbose']
 
 export let command = async (args: string[]) => {
   let [name, cmd, ...rest] = args

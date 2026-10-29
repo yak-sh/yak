@@ -66,7 +66,7 @@ ran, which is not an assertion.
 - A small example beside the code is often the whole test: a `///` doctest
   line in the module, or a fenced `ts` block in a README or doc comment. Both
   run on the deno platform; a block marked `ts ignore` does not. An example's
-  setup is timed and held to the budget like a test: keep it small, and put
+  setup is timed against the budget like a test: keep it small, and put
   costly fixtures in test files.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
@@ -179,42 +179,22 @@ stronger.
   of its files) the landing run is the suite, about nine minutes on the box;
   once every landing runs it, the record holds main's head and a run costs
   what the change reaches.
-- Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
-  fails it unless bench/test-budget.json lists it. What is held is the test's
-  own time: its wall clock less what its runtime's thread, and the main
-  thread of each process it started, waited for a CPU another process held
-  (Linux's schedstat, the processes looked at about each millisecond the
-  test awaits, the wait capped so own time never falls below the thread's
-  time on the CPU). A test's own work, and anything it awaits, still counts,
-  and so does load: the gate's runner
-  shares this box's CPU cache and memory, and a core busy beside a test makes
-  it slower. Load only ever adds, so a test is held to the fastest time it
-  ran in. It is held with the code under it warm: V8 interprets a function
-  until it has run enough times to be compiled, so a test that took 0.9 ms in
-  the whole suite, where the files before it ran that code, takes 2 to 3 ms
-  in a run of its file alone, and comes down only after tens of loads. So a
-  time over the line is measured again first, in a fresh runtime, one
-  platform at a time, each such file loaded again while one of its tests is
-  over every time, up to 40 loads or 10 s after the first (packages/testing `--loads`,
-  `--until` and `--spend`); a test fails only when it is over every time, and
-  a narrowed run holds it to what the whole suite does. A run with nothing
-  over pays for no second pass, and a test that can't run twice in one
-  runtime fails there. A file failed this way stays unpassed, so the next
-  run runs it again. A file that runs unchanged since it passed (only `--all`
-  runs one, as the gate does) is spared: the same code passed the budget, so
-  a time over the line is the run's. A test gets slower when its code or
-  what it imports changes, which changes the file's key, so the gate holds
-  each file the first time its code runs there. Every run holds listed tests
-  to their records (times the list's slack), including a no-path run chosen
-  by the dependency graph and a run narrowed by a path or tag. Local runs
-  and main's gate use the same verdict, re-measure a listed regression
-  before failing it, and take back its file's cached pass. A run here keeps
-  its temporary files in memory as the gate's does, so a test that writes
-  files takes the same time on both. A platform's wall clock is said, never
-  held: it adds every wait among the run's processes, so no run of it is a
-  floor, and workerd's tests, not held one by one, have no time held.
-  Nothing joins the list: a new or renamed test is held to 1 ms from its
-  first run. Getting a kernel test under it pulls you to drop the checks
+- Every run says each test's time beside the budget (bin/test-budget.ts): a
+  test case over 1 ms that bench/test-budget.json doesn't list, and a listed
+  one slower than its record (times the list's slack), are named in a line.
+  That's telemetry and fails nothing: the run's exit code is its tests'. A
+  test is timed once, as it ran, by its own time: its wall clock less what
+  its runtime's thread, and the main thread of each process it started,
+  waited for a CPU another process held (Linux's schedstat). Load still adds
+  to it, and so does code that isn't warm yet: V8 interprets a function until
+  it has run enough times to be compiled, so a test that takes 0.9 ms in the
+  whole suite can take 2 to 3 ms in a run of its file alone. A test you just
+  wrote that's named over the line in every run is slow: make it faster. A
+  run here keeps its temporary files in memory as the gate's does, so a test
+  that writes files takes the same time on both. A platform's wall clock is
+  said, never compared, and workerd's tests aren't compared one by one.
+  Nothing joins the list: a new or renamed test is measured against 1 ms
+  from its first run. Getting a kernel test under it pulls you to drop the checks
   that "only exist across the door". Nearly every one is a decision some
   function makes (who may see or delete what, which version serves): move it
   there, extracting the function if it's inline, and drop nothing. `--write`

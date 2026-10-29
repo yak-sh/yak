@@ -10,15 +10,15 @@
 //   workers/yak/probe-suite.ts starts for the run.
 //
 // `deno task test [--tag=t]... [--all] [--verbose] [path...]` runs what lies
-// under the paths given, or all of it, its platforms at once, and holds what
-// each test took to the budget (./test-budget.ts): a test over 1 ms that
-// bench/test-budget.json does not list fails the run, measured again first.
+// under the paths given, or all of it, its platforms at once, and says what
+// each test took beside the budget (./test-budget.ts): a test over 1 ms that
+// bench/test-budget.json does not list is said, and fails nothing.
 // A platform's name is a tag every test on it carries, so `--tag=workerd`
 // runs that platform alone. A file whose tests all passed, with nothing it
 // depends on changed since, is left out unless `--all` is given
 // (packages/testing/deps.ts), and that is chosen before anything starts: a
 // platform, the run's kernel and what the Worker's tests need start only for
-// a file that runs. `--write`, `--report` and `--from=dir` are the budget's.
+// a file that runs. `--write` and `--from=dir` are the budget's.
 //
 // A run says its failures, each error cut short, a line for what the budget
 // flags, and one closing line; an agent reads all of it on every later turn.
@@ -50,7 +50,7 @@ let { find, tested } = await import('@yaks/testing/find')
 let { own } = await import('@yaks/testing/own')
 let { AUDIT } = await import('@yaks/testing/reads')
 let { runTestCommands } = await import('./phases.ts')
-let { budget, hold, measure, OWN, read } = await import('./test-budget.ts')
+let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
 let { library } = await import('./sqlite.ts')
 let { tools } = await import('./test-tools.ts')
@@ -396,17 +396,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let children: Deno.ChildProcess[] = []
   let host = runtime()
   // Each runtime audits into a file of its own, so the runner sees what each
-  // test file reads (@yaks/testing/reads). Not one that measures (`--loads`,
-  // the budget's): an audited check costs a microsecond or more, and a test
-  // making thousands of FFI calls would be timed with them. Its files' passes
-  // were kept as they ran the first time.
-  let audit = (p: string) =>
-    flags.some((f) => f.startsWith('--loads=')) ? {} : {
-      [AUDIT]: Deno.makeTempFileSync({
-        prefix: `test-${p}-`,
-        suffix: '.jsonl',
-      }),
-    }
+  // test file reads (@yaks/testing/reads).
+  let audit = (p: string) => ({
+    [AUDIT]: Deno.makeTempFileSync({ prefix: `test-${p}-`, suffix: '.jsonl' }),
+  })
   let spawn = (
     p: string,
     files: readonly string[],
@@ -595,7 +588,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   Deno.env.set('DENO_SQLITE_PATH', sqlite)
   let b = await budget()
   let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
-  if (from) Deno.exit(await hold(b, await read(from), Deno.args))
+  if (from) Deno.exit(await say(b, await read(from), Deno.args))
   let flags = Deno.args.filter((a) => a.startsWith('--') && !OWN.test(a))
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
   let tags = flags.filter((a) => a.startsWith('--tag='))
@@ -642,8 +635,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       Deno.env.set('STRIPE_PRICE', price)
     }
   }
-  let suite: Suite = async (more, over = run) => {
-    if (!over.length) return { code: 0 }
+  let suite: Suite = async (more) => {
+    if (!run.length) return { code: 0 }
     let bulk: TestCommand = {
       command: Deno.execPath(),
       args: [
@@ -658,7 +651,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
         ...flags,
         `--keys=${keyed}`,
         ...more,
-        ...over,
+        ...run,
       ],
       env: { DENO_DIR: denoDir(), ...GIT },
     }
@@ -666,6 +659,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   }
   let whole = !paths.length && !tags.length && flags.includes('--all')
   let left = files.length - run.length
-  let measured = await measure(b, suite, whole, verbose)
-  Deno.exit(await hold(b, { ...measured, left }, Deno.args))
+  let measured = await measure(suite, whole)
+  Deno.exit(await say(b, { ...measured, left }, Deno.args))
 }
