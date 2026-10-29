@@ -1,6 +1,7 @@
 // Profile graph.apply on the box's plugin composition or the apply-benchmark
 // fixture. Optional wrappers observe the public driver, storage and tracker
 // interfaces; spans-only modes use the ordinary recording.
+import { stopwatch } from '@yaks/benchmark'
 import { compose, facet } from '@yaks/cli/host'
 import { configPath, read } from '@yaks/cli'
 import { type Bundle, type Graph, signed, type Storage } from '@yaks/graph'
@@ -273,6 +274,7 @@ try {
       await apply(held)
       const reports: {
         wall: number
+        cpu: number
         phases: ReturnType<typeof summary>
         sql: ReturnType<typeof summary>
         presence_statements_per_apply?: number
@@ -288,27 +290,34 @@ try {
         scans = { calls: 0, visits: 0 }
         presence = 0
         active = true
-        const start = performance.now()
+        const took = stopwatch()
         await apply(bundles)
-        const wall = (performance.now() - start) * 1000 / n
+        const sample = took()
+        const wall = sample.value * 1000 / n
+        const cpu = sample.cpu * 1000 / n
         active = false
         reports.push({
           wall,
+          cpu,
           phases: summary(costs, n),
           sql: summary(sql, n),
           presence_statements_per_apply: traceOnly ? undefined : presence,
           trace: attribution,
         })
       }
-      const middle = median(reports.map((r) => r.wall))
+      const middle = median(reports.map((r) => r.cpu))
       console.log(JSON.stringify({
         kind: 'sample',
         work,
         n,
         rounds,
-        wall_us_per_bundle: middle,
-        samples_us_per_bundle: reports.map((r) => r.wall),
-        ...reports.find((r) => r.wall == middle),
+        timing: 'cpu',
+        unit: 'us/bundle',
+        cpu_us_per_bundle: middle,
+        wall_us_per_bundle: median(reports.map((r) => r.wall)),
+        samples_us_per_bundle: reports.map((r) => r.cpu),
+        wall_samples_us_per_bundle: reports.map((r) => r.wall),
+        ...reports.find((r) => r.cpu == middle),
         ...(countScans ? { effects_bundle_scans: scans } : {}),
         load: Deno.readTextFileSync('/proc/loadavg').trim(),
       }))
