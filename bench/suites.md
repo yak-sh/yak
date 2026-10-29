@@ -1,107 +1,97 @@
-# Suite and CI wall clocks
+# Suite CPU timing
 
-CI times every step of the gate: its shell is
-`deno run -A bench/run.ts command --ci …` (below), and each step is a suite in
-[@yaks/benchmark](../packages/benchmark/README.md). Timing is **report-only**:
-the `benchmark:` line closing a step says its verdict (`REGRESSED` for a
-regression), and never turns it into a failing test or a deployment veto.
-`deno task test` and `deno task check` time nothing themselves: a test run
-starts no other process (M-132169).
+Repository benchmark suites judge CPU time through
+[@yaks/benchmark](../packages/benchmark/README.md#cpu-time). Every timed sample
+keeps CPU usage alongside its wall duration. The runner selects `figure: 'cpu'`
+and the monitor's paired comparison requires CPU in every round; neither falls
+back to wall time. SQL statement and row counts remain separate measurements.
+
+`bench/deno-worker.ts` collects existing `Deno.bench` declarations with the
+shared CPU clock. It warms each workload, measures batches, and reports CPU and
+wall averages in ns/op. Explicit `start()` and `end()` boundaries exclude
+fixture setup and teardown. The workload files need no separate CPU
+instrumentation.
+
+## Process accounting
+
+The shared `stopwatch()` reads `cputime()`: getrusage(2) user and system time
+for every thread in the process, plus children that have exited and been waited
+for. Waiting for a timer, I/O or a CPU adds no CPU time. A subprocess that exits
+inside the measured interval contributes its work through its parent's child
+usage.
+
+A process that stays alive across samples needs its own counter. A server can
+report its own CPU at the measured boundaries; a collector can pass synchronous
+counters to `stopwatch(...sources)`. Linux `processCpu(pid)` reads an external
+process tree's live threads and reaped children. Keep an observed process alive
+across both readings, and avoid adding a counter for CPU already included by
+another counter.
+
+App deployment observations (`app-deploy`) measure network and deployment waits
+without server CPU accounting. They remain diagnostic observations in `run`
+mode, with no baseline comparison. Timer-lag observations likewise describe
+waiting rather than CPU work.
+
+## Baseline conversion
+
+A CPU baseline measures the product revision named by the existing baseline,
+using the current driver. Run the conversion for selected registered suites:
+
+```sh
+deno run -A bench/rebank.ts throughput relay-admission
+```
+
+The conversion holds `/tmp/yaks-throughput-bench.lock` and uses the same paired
+collector as the monitor: warm both revisions, then alternate reference,
+current, reference measurements. Both revisions use identical benchmark files
+and the shared CPU clock over their own product code. Each probe owns its
+fixture; no live graph is copied.
+
+Only the reference readings are banked. Their spread supplies the baseline's
+slack, and `reference` retains the measured product commit. A slower current
+reading stays visible in the comparison rather than becoming the CPU baseline.
+An inconclusive comparison or failed workload banks nothing.
+`bench/<suite>.rebank.results.json` retains the evidence and
+`bench/cpu-baselines.json` records each suite's reference, current revision,
+verdict and figures. Commit the baseline changes and retained evidence together.
+
+## Command timing
+
+`deno run -A bench/run.ts command NAME COMMAND [ARGS...]` measures a whole
+command through exit and child reaping. Timing is report-only: the command's
+exit code remains authoritative. The result keeps wall seconds, CPU seconds,
+timestamp and exit code, while the baseline judges CPU seconds. No control
+worker or wall/control ratio participates.
 
 A suite named `NAME` writes `bench/suite-<URL-encoded-name>.results.json` and
-checks a committed `bench/suite-<URL-encoded-name>.baseline.json` when there is
-one. A result keeps the raw wall seconds, mean control seconds, control sample
-count, timestamp, command exit code and ratio alongside the runner's metadata.
-The committed baseline supplies the 25% tolerance. Recording and checking never
-change it; `SUITE_ACCEPT=1` banks a reviewed measurement. Failed commands and
-loaded runs cannot be accepted. A command without a baseline writes its
-measurement without comparing it.
+checks `bench/suite-<URL-encoded-name>.baseline.json` when present. Long names
+use a shortened filename with a digest; the JSON keeps the complete name. The
+committed baseline supplies its tolerance. `SUITE_ACCEPT=1` banks a measurement
+with a 25% tolerance; failed commands cannot be accepted. A command without a
+baseline records without comparing. `command --ci` takes its suite name from
+`SUITE_STEP`, prefixed with `ci/`, and appends its report to the GitHub job
+summary when available.
 
-## Load compensation
+## Per-test budget
 
-A separate worker warms a fixed 8-million-step dependent LCG, then samples it
-once per second throughout the command. The ratio is wall seconds divided by
-mean control seconds. Thus a suite and control both taking twice as long have
-the same ratio. The worker consumes roughly 40 ms of one CPU per second at idle;
-this is part of the measurement protocol, not a benchmark of the application. No
-control sample is taken from application code. Short commands use at least one
-sample.
+The test runner records both wall milliseconds (`ms`) and CPU milliseconds
+(`cpu`). Its per-test performance budget uses CPU time from the same shared
+clock, including asynchronous work and cleanup. Timer and I/O waits add no CPU
+usage; the runner's hang timeout is separate from this budget.
 
-A control above 1.5x its baseline's stored control floor marks a loaded run.
-Regressions still report, but acceptance refuses. Failed commands retain their
-observations and exit status and never establish a floor. Changing the control
-or sampling protocol must bump `VERSION` in `bench/suite.ts`, so an incompatible
-measurement cannot silently compare against a banked workload.
+Existing exceptions in `bench/test-budget.json` carry
+`records: 'legacy-wall-ceilings'`: they remain upper bounds rather than claims
+that old wall measurements were CPU measurements. `deno task test --write`
+lowers those records with CPU samples under the budget's existing ratchet. See
+[test runner reports](../packages/testing/README.md#running) for the report
+format.
 
-This cancels approximately uniform CPU contention, not network delays, cold
-caches, I/O contention, or changes in a parallel suite's CPU saturation. The 25%
-band is a starting noise allowance, not a claim that a CPU reference perfectly
-models every suite. Investigate repeated regressions before accepting them. Keep
-cold CI suites separate from local suites; do not compare seconds across the two
-environments.
+## Relay admission boundary
 
-For a per-step investigation and a repeated-body write regression fixed without
-changing the timing threshold, see [check regression T-37417](check-37417.md).
-For the fleet suite’s per-file profile, fixture fixes and independent-process
-runner, see [fleet suite T-37421](test-37421.md).
-
-## CI
-
-The command boundary is
-`deno run -A bench/run.ts command NAME COMMAND [ARGS...]`. The CI shell uses
-`command --ci`, with `SUITE_STEP` supplying its step name.
-
-The gate's custom shell times every executed **run step**, `deno task check` and
-the tests. Each has a stable `ci/<step name>` suite. Skipped steps produce no
-new measurement. The checkout and artifact-upload Actions are not shell commands
-and are not timed by this wrapper; their wall clocks remain in GitHub's job
-timeline. The job summary receives each timing report, and an `always()`
-artifact step retains results even after a failure. No extra paid runner, API
-credential, or deployment dependency is added. A `command` run inside a CI step
-is prefixed `ci/suite/`. The artifact includes the per-suite result files. Bank
-reviewed CI floors with `SUITE_ACCEPT=1`; until a CI step has a committed
-baseline, it records without comparison.
-
-Long command names use a shortened filename with a digest; the JSON keeps the
-complete suite name, so distinct narrowed commands retain distinct results.
-
-## Relay admission boundary (T-125978)
-
-`relay/store/entities-*` measures **one value**, from WebSocket submission
-through admission and staging, on a warmed Store. The simulated clock stays
-fixed through that work. A controlled 16 ms timer registration queues the
-endpoint microtask: admission has completed and the registering call stack has
-filled the pending batch. Only afterward does the fixture flush fanout and
-verify the observer got exactly that value. A skipped or refused value fails
-instead of becoming a cheap sample. SQL counts cover the same interval. The
-benchmark runs in isolation and restores its clock and timer overrides even on
-failure.
-
-The former synchronous loop stopped at `await #ensureStarted()`, before
-admission. `24ef8e577e7d` moved decoding before that await for clock probes,
-exposing the wrong boundary rather than making admission three times slower.
-Workload `1/relay-staging-2` replaces only the relay timing and transaction
-references with measurements of the corrected fixture on that commit's parent,
-`77ebf5d382`. It is not acceptance of slower current-main observations:
-tolerances and unrelated references stay unchanged. `relay-admission` uses the
-same boundary (workload 2); its direct graph-check references remain unchanged.
-
-`relay-staging.results.json` preserves the alternating seven-run parent/main
-comparison and four repeated standalone comparisons. To reproduce the throughput
-comparison, copy `bench/relay-fixture.ts` and `bench/relay_bench.ts` unchanged
-into a detached worktree at `24ef8e577^`, then alternate this command between it
-and main (hold the shared lock; never remove its file):
-
-```sh
-flock /tmp/yaks-throughput-bench.lock deno bench -A --no-check --json \
-  --filter '/^relay\/store\/entities-(1|10|100)$/' bench/relay_bench.ts
-```
-
-Each report's average is already ns/value (one value/op); take each name's
-median across seven invocations. Standalone comparisons use the current fixture
-against either checkout root:
-
-```sh
-flock /tmp/yaks-throughput-bench.lock deno run -A bench/standalone-worker.ts \
-  bench/relay-admission.ts /absolute/path/to/checkout
-```
+`relay/store/entities-*` measures one value from WebSocket submission through
+admission and staging on a warmed Store. Its controlled clock stays fixed
+through that work. The fixture flushes fanout and verifies delivery after the
+timed interval. A skipped or refused value fails instead of becoming a cheap
+sample. SQL counts cover the same interval. Both throughput and
+`relay-admission` use this boundary; see
+[relay admission](README.md#relay-admission).

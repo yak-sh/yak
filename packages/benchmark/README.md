@@ -96,7 +96,9 @@ A `CollectedSuite` supplies `collect(round)` and workload names and units. Its
 collector returns a map of samples for exactly those names, allowing one child
 process to measure several benches. Missing, extra and duplicate names fail.
 
-`@yaks/benchmark/deno` imports `deno bench --json` reports:
+`@yaks/benchmark/deno` imports reports from a CPU-aware Deno workload collector.
+Each result supplies its wall average (`avg`) and CPU average (`cpu`), both in
+ns/op:
 
 ```ts
 import { extract } from '@yaks/benchmark/deno'
@@ -106,28 +108,32 @@ let imported = extract({
   version: 1,
   runtime: 'test-runtime',
   cpu: 'test-cpu',
-  benches: [{ name: 'read', results: [{ ok: { avg: 42, min: 20, n: 100 } }] }],
+  benches: [{ name: 'read', results: [{ ok: { avg: 42, cpu: 30, n: 100 } }] }],
 }, ['read'])
 equal(imported.read.value, 42)
-equal(imported.read.source, 'deno-average')
-equal(imported.read.details, { avg: 42, min: 20, n: 100 })
+equal(imported.read.cpu, 30)
+equal(imported.read.source, 'deno-cpu-average')
+equal(imported.read.details, { avg: 42, cpu: 30, n: 100 })
 ```
 
-Deno supplies averages and statistics, not individual invocation timings. These
-samples retain that provenance and their statistics; they cannot reconstruct the
-distribution of operation times. Native timed benches keep every invocation
-sample. All samples must be finite and nonnegative; Deno averages must be
-positive.
+The collector supplies batch averages and statistics, not individual invocation
+timings. These samples retain that provenance and their statistics; they cannot
+reconstruct the distribution of operation times. Native timed benches keep every
+invocation sample. All samples must be finite and nonnegative; imported wall
+averages must be positive and imported CPU averages are required. Native
+`deno bench --json` output lacks the CPU average and cannot be imported.
 
 ## CPU time
 
-A sample may carry `cpu`: the CPU time its step took, in the bench's unit, as
-this process and its finished children used it, every thread, user and system
-(`cputime()`, getrusage(2) on Linux). Other work on a busy box barely moves it,
-where it stretches the step's wall time. `bench()` records it for every timed
-invocation; an externally measured bench takes it with `stopwatch()`, whose
-reading spreads into the sample. A round keeps the median of its samples' CPU
-times as `cpu` when every sample has one.
+`cpu` is the CPU time a step took, in the bench's unit: this process and its
+finished children, every thread, user and system (`cputime()`, getrusage(2) on
+Linux). `bench()` records it automatically; external collectors spread a
+`stopwatch()` reading into each sample. `run(suite, { figure: 'cpu', ... })`
+requires CPU in every sample and judges its median. Raw `value` retains wall
+time for diagnostics; the result's metric gains a `/cpu` suffix so it cannot
+compare against a baseline of wall values. Missing CPU never falls back to wall
+time. CPU accounting must be available on the host. CPU runs record load
+averages without waiting to sample host pressure.
 
 ```ts
 import { type Sample, stopwatch } from '@yaks/benchmark'
@@ -140,10 +146,12 @@ let sample: Sample = { ...took(), source: 'end-to-end' }
 ok(x > 0 && sample.value >= 0 && (sample.cpu ?? 0) >= 0)
 ```
 
-A child counts once it has exited and been waited for, so a step whose work runs
-in a process that outlives it (a server, a browser, a terminal kept open across
-samples) cannot be measured this way, and keeps only its wall time. So does a
-step that waits on I/O, where the wait is what a person feels.
+A child counts once it has exited and been waited for. A long-lived server
+reports its own CPU at the measured boundaries. `stopwatch(...sources)` adds
+synchronous CPU counters for other processes or cgroups to the caller's CPU;
+`processCpu(pid)` reads a Linux process tree, including every live thread and
+reaped children. Keep the observed process alive across both readings. Pure
+waiting remains diagnostic rather than a CPU benchmark.
 
 ## Runner and ratchet
 
@@ -173,21 +181,21 @@ named benches only, and every other bench stays as banked. A baseline banked on
 another runtime, CPU or workload version is no reference, and an exact
 acceptance banks the suite as measured.
 
-A run is **loaded** when other work used more than `BUSY` (a quarter) of the
-box's CPUs (`loaded()`). Before each round of a check or an acceptance, inside
-the lock, the runner samples a second of the box while the bench rests
-(`busy()`, from the cgroup's CPU use, a container's own) and keeps the most as
-the run's `busy`, so the bench's own work, and what it asks of a server, never
-counts against it; where the box does not say, it is null and nothing is loaded.
-It is use, not CPU pressure: a busy hyperthread slows the work on its sibling
-without making anything wait for a CPU. A loaded run banks nothing, and a loaded
-check past its limit is `loaded`, not `regressed`: it can tell nothing either
-way. A box's load average says less: a container's often reads its host's.
+When judging `value`, a run is **loaded** when other work used more than `BUSY`
+(a quarter) of the box's CPUs (`loaded()`). Before each round of a check or an
+acceptance, inside the lock, the runner samples a second of the box while the
+bench rests (`busy()`, from the cgroup's CPU use, a container's own) and keeps
+the most as the run's `busy`, so the bench's own work, and what it asks of a
+server, never counts against it; where the box does not say, it is null and
+nothing is loaded. It is use, not CPU pressure: a busy hyperthread slows the
+work on its sibling without making anything wait for a CPU. A loaded run banks
+nothing, and a loaded check past its limit is `loaded`, not `regressed`: it can
+tell nothing either way. A box's load average says less: a container's often
+reads its host's.
 
-A live observer cannot rest the box first, so it judges what load does not move
-instead: `waited()` is how long the calling thread has waited for a CPU (Linux's
-run delay), and wall time less what two readings add is what the work between
-them would have taken on an idle box.
+CPU runs skip that host-pressure sampling and use CPU measurements directly.
+`waited()` exposes the calling thread's Linux scheduling delay as a separate
+diagnostic; it does not measure CPU usage.
 
 ```ts
 import { type Files, type Host, Regressed, run } from '@yaks/benchmark'
@@ -410,7 +418,7 @@ try {
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `stopwatch`, `run`, `Regressed`                                                                                                                                                                                                        | Timed callbacks and JSON runner.                   |
 | `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
-| `.`      | `busy`, `cputime`, `waited`, `configure`, `host`                                                                                                                                                                                                | Process reporter factory and current host context. |
+| `.`      | `busy`, `cputime`, `processCpu`, `waited`, `configure`, `host`                                                                                                                                                                                  | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
 

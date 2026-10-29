@@ -4,8 +4,8 @@ The repository's benchmarks run through
 [@yaks/benchmark](../packages/benchmark/README.md), with one committed baseline
 file per suite. `deno task bench` measures the throughput suite's storage reads
 and patches, `graph.apply`, and warmed relay admission. `deno task bench:check`
-takes fresh measurements and refuses any metric past its slack over
-`bench/throughput.baseline.json`, including statement counts.
+takes fresh CPU measurements and refuses any figure past its slack over
+`bench/throughput.baseline.json`. Statement counts are retained separately.
 `deno task bench:ratchet` banks a baseline; review and commit its diff. Runs
 retain raw samples, round medians, commit, runtime, CPU and load average in
 `bench/throughput.results.json`.
@@ -24,13 +24,18 @@ tightens it. Banking a slower one is a separate explicit operation (`--slower`),
 not monitoring; `--slower=close,open` banks only the named benches as measured,
 a cost chosen for one workload without accepting the others' figures.
 
-Nothing banks on a loaded box: one where other work used more than a quarter of
-its CPUs in a second sampled before a round while the bench rested (the
-container's own CPU use; the load average in `/proc/loadavg` is the Proxmox
-host's and says little about this box). On these four hyperthreads, one CPU of
-other work costs a CPU-bound bench a few percent and two about a tenth, through
-shared cores, before anything waits for a CPU. `bench:ratchet` refuses to bank
-such a run, and a check there past its limit says `loaded`, not `regressed`.
+Every timed sample records CPU through the shared `stopwatch()`, and repository
+runs select `figure: 'cpu'`. Raw wall durations remain diagnostic. CPU includes
+all user and system work in every thread and reaped child; collectors add an
+external process counter or server-reported CPU for work in a process that stays
+alive across samples. Missing CPU fails the measurement. CPU runs record load
+averages without waiting for a quiet box or running a load-control worker.
+
+To convert an existing suite's baseline to CPU, use
+`deno run -A bench/rebank.ts <suite>`. It measures the baseline's product
+revision beside current code under the same driver and banks only the reference
+CPU readings, retaining any current regression in the evidence. See
+[baseline conversion](suites.md#baseline-conversion).
 
 ## The monitor
 
@@ -42,15 +47,15 @@ code now, at the same moment ([side by side](#side-by-side-on-a-shared-box)),
 and reports only the benches that comparison finds slower, with the commits
 between the two. A busy box slows both alike, so it files nothing. Every suite
 is judged this way and none opts in, except those that measure the live box
-(`LIVE`: worker-health, app-deploy), which have no older code to run beside them
-and so never report a slowdown.
+(`LIVE`: worker-health), which has no older code to run beside it and so never
+reports a slowdown.
 
 A check that can tell nothing reports nothing and is owed to a later tick: a
-busy box (other work over a quarter of its CPUs), a busy benchmark lock, a
-measurement past its time cap, older code that cannot run today's bench. A suite
-that fails (no baseline, a crash, a page that never paints) is checked again at
-once and reported only when it fails again, so a bug says the bench is broken.
-@yaks/heal sends a regression or a failure to an agent like any other bug.
+busy benchmark lock, a measurement past its time cap, older code that cannot run
+today's bench. A suite that fails (no baseline, a crash, a page that never
+paints) is checked again at once and reported only when it fails again, so a bug
+says the bench is broken. @yaks/heal sends a regression or a failure to an agent
+like any other bug.
 
 Cron runs it from the main checkout through bin/bench-monitor: every suite at
 02:23, and user-facing suites every 30 minutes (`--hourly`). The user-facing
@@ -59,11 +64,10 @@ another. The hourly lane holds a persistent queue in
 `~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
 checking and saving it. Each tick stops admitting work after 25 minutes; an
 admitted screen keeps its ten-minute limit, and a comparison its half hour. A
-busy box lock or a loaded box leaves the owed suite at the head of the queue and
-ends the tick; a suite checked in the last hour is not owed again. It never
-starts parallel collectors, extends measurement limits or interrupts another
-lock holder. The monitor banks nothing: a baseline moves only by
-`bench:ratchet`.
+busy box lock leaves the owed suite at the head of the queue and ends the tick;
+a suite checked in the last hour is not owed again. It never starts parallel
+collectors, extends measurement limits or interrupts another lock holder. The
+monitor banks nothing: a baseline moves only by `bench:ratchet`.
 
 ## Page behavior
 
@@ -74,9 +78,10 @@ a browser or server.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
-[command wall clocks](suites.md) and [app deploy](app-deploys.md) use the same
-runner and ratchet with their own baselines. yaks.app's own
-[deploy timing](deploys.md) is the deploy catch-up's, outside the benches.
+[command CPU timing](suites.md#command-timing) uses the same runner and ratchet.
+[App deploy observations](app-deploys.md) remain diagnostic waits without a CPU
+baseline comparison. yaks.app's own [deploy timing](deploys.md) is the deploy
+catch-up's, outside the benches.
 
 ## Waiting paths
 
@@ -105,12 +110,12 @@ The suites are `client-frame`, `client-rules`, `harness-startup`,
 `bench/<suite>.baseline.json` (`harness-steps` shares its reference at
 `packages/harness/steps.baseline.json` with the live overhead observer). A suite
 without a banked baseline can run; a check refuses until its baseline has been
-explicitly accepted, which takes a quiet box; review and commit its baseline.
+explicitly accepted; review and commit its baseline.
 
 `harness-steps` measures native session overhead with an instantly answered
 scripted model on an isolated in-memory harness graph. `no-tools` is one
 input-to-final-reply turn in milliseconds; `tool-step` is input-to-final-reply
-wall time divided by 12 completed sequential tool steps, in milliseconds per
+CPU time divided by 12 completed sequential tool steps, in milliseconds per
 step. The latter includes all model turns (13 result-driven turns and at most
 one pending-progress turn per tool), async `session_tool` effect dispatch,
 tool-result persistence, fixed-reference overhead observation and the
@@ -244,17 +249,20 @@ socket round trip or fanout to observers.
 
 ## Samples and comparison
 
-The runner takes seven independent Deno process averages per case, sequentially,
-and records their median, raw samples, runtime, CPU, source revision, units and
-Linux load-average samples. Deno's JSON exposes an average; the metric is
-`median-of-7-deno-avg-ns`, not the per-iteration median. The storage modes run
-in separate processes, followed by the graph/relay cases. Allow several minutes.
+The runner takes seven independent collector process averages per case,
+sequentially, and records their median, raw samples, runtime, CPU, source
+revision, units and Linux load averages. The shared Deno collector measures CPU
+for batches of registered workloads, honoring their explicit timing boundaries;
+it retains wall averages alongside CPU averages. These are batch averages, not
+per-invocation medians. The result metric carries `/cpu`. Storage modes run in
+separate processes, followed by the graph/relay cases.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
 boundary need an explicit fresh baseline. `commit` records HEAD; uncommitted
 source changes are included, so retain the diff when comparing revisions.
-Inspect the raw samples and the run's `busy` when investigating a noisy result.
+Inspect raw CPU samples, round spread and paired reference measurements when
+investigating a noisy result.
 
 ## Box bench
 
@@ -291,9 +299,8 @@ effect. The suite's sections, each one selectable with `--only`:
 A round runs every section; `--rounds` (3) and `--runs` (7 per command a round)
 set the sample counts. The table it prints gives each bench's p50 and p95.
 Results go to `bench/box.results.json`, and `bench:ratchet box` banks
-`bench/box.baseline.json` for `bench:check box`. Wall times on a loaded box
-follow its page cache: compare CPU time and load averages before trusting a
-change in wall time.
+`bench/box.baseline.json` for `bench:check box`. CPU determines the timing
+comparison; wall durations and load averages remain diagnostic.
 
 To measure the explicit HTTP door alone, give it an unused scratch port:
 
@@ -361,8 +368,9 @@ the lock when its process exits. Never delete the lock file: waiters retain its
 inode.
 
 Direct `deno bench` commands and tests bypass the lock. Profile/probe commands
-should acquire the same lock. Serialization cannot guarantee that other programs
-leave the CPU idle; inspect the run's load averages before accepting a baseline.
+should acquire the same lock. Serialization prevents benchmark fixtures from
+measuring each other. CPU samples and paired measurements provide the evidence
+for baseline changes.
 
 [Apply profiling](apply-profile.md) records the box composition's transaction
 residual and create-scaling investigation.
@@ -379,13 +387,12 @@ within-round sign comparison); each probe owns its seeded graph and no live
 database is copied. A bench is slower when every round's current figure is past
 both references beside it (or every current figure past every reference one) and
 its median is past the reference's by more than the slack its baseline banked.
-The figure is CPU time where every sample carries it (@yaks/benchmark
-`stopwatch`), since a busy box barely moves it, and wall time where a step waits
-on I/O or works in a process that outlives it. Other work on the box during the
-bracket is recorded, not refused, since it slows both revisions alike; reference
-rounds that drift apart make the whole comparison inconclusive. So does older
-code that cannot run today's driver; a failure of the current code's bench is a
-failure. The comparison banks nothing.
+The figure is CPU time in every suite (@yaks/benchmark `stopwatch`); missing CPU
+never falls back to wall time. Collectors include CPU from long-lived processes
+through external counters or server reports. Other work on the box during the
+bracket is recorded; reference rounds that drift apart make the whole comparison
+inconclusive. So does older code that cannot run today's driver; a failure of
+the current code's bench is a failure. The comparison banks nothing.
 
 To inspect one directly while holding the shared measurement lock:
 
