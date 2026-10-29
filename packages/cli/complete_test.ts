@@ -36,6 +36,33 @@ let look: Lookup = {
 
 let said = (line: string, l: Lookup = {}) => complete(tools, line, l)
 
+test('clear completion offers nullable fields and retains declared clear values', async () => {
+  let nullable = {
+    name: 'edit',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        body: { type: ['string', 'null'] },
+        title: { type: 'string' },
+      },
+    },
+  }
+  assertEquals(await complete([nullable], 'edit --cl'), ['--clear'])
+  assertEquals(await complete([nullable], 'edit --clear '), ['body'])
+  assertEquals(await complete([nullable], 'edit --clear=bo'), ['--clear=body'])
+  let declared = {
+    ...nullable,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...nullable.inputSchema.properties,
+        clear: { type: 'string', enum: ['all'] },
+      },
+    },
+  }
+  assertEquals(await complete([declared], 'edit --clear '), ['all'])
+})
+
 test('the first word is every word a tool answers to, either half', async () => {
   assertEquals(await said(''), ['apply', 'list', 'session', 'show'])
   assertEquals(await said('s'), ['session', 'show'])

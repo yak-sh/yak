@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { safe, toolHelp, toolLines } from './show.ts'
 import type { Listed as Tool } from './tool.ts'
 
@@ -14,6 +14,20 @@ let tools: Tool[] = [
   { name: 'app_list', title: 'Your apps' },
   { name: 'graph_query', description: 'Read this store. Filters and all.' },
 ]
+
+test('help describes schema-derived field clearing', () => {
+  let help = toolHelp({
+    name: 'edit',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        body: { type: ['string', 'null'] },
+      },
+    },
+  })
+  assertStringIncludes(help, '[--clear <field>]')
+  assertStringIncludes(help, 'Clear body; repeat for more.')
+})
 
 test('a listing is a name and the one word that says what it is', () => {
   assertEquals(

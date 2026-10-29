@@ -41,9 +41,19 @@ yak design decide <proposal-id> approved
   `approved`; the other decision value is `declined`. This is distinct from the
   three review verdicts above. It does not automatically add `architecture`.
 
-Neither tool writes who decided or when: those properties are stamped from the
-caller, so a decision an agent made is recorded as the agent's, and as an
-owner's only when the owner is the one calling.
+The caller is the decider by default. Pass `by` when recording a person's
+explicit decision; the caller remains the writer used for authorization and the
+journal, and `decided.via` keeps the calling session:
+
+```sh
+yak design decide <proposal-id> approved --by Jeff
+```
+
+The MCP call takes the same arguments:
+
+```json
+{ "design": "D-12", "verdict": "approved", "by": "Jeff" }
+```
 
 ## Compatibility
 

@@ -106,7 +106,7 @@
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
-      "description": "Create a task: a stored record with task{} and doc{title, body} field groups. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} group holding those filing fields too. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Create one task or an atomic tasks batch. Batch rows inherit top-level filing; id ($name), parent and requires connect a tree or dependencies. check previews without saving. Returns applied bundles.",
       "input": {
         "title": {
           "type": "string",
@@ -139,11 +139,93 @@
         "check": {
           "type": "boolean",
           "description": "rehearse the write and roll it back, returning the resolved task without saving it"
+        },
+        "accept": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Completion conditions; null clears."
+        },
+        "blocked": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "External obstacle; null clears."
+        },
+        "parent": {
+          "type": "string",
+          "description": "Containing entity id, or $id in tasks."
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Prerequisite ids, including $ids in tasks."
+        },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^\\$",
+                "description": "Local $name for sibling links; optional."
+              },
+              "title": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              },
+              "project": {
+                "type": "string",
+                "ref": "project"
+              },
+              "priority": {
+                "type": "number"
+              },
+              "assignee": {
+                "type": "string",
+                "ref": "entity"
+              },
+              "domain": {
+                "type": "string"
+              },
+              "accept": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blocked": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parent": {
+                "type": "string"
+              },
+              "requires": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Tasks to create together; shared top-level fields are defaults."
         }
       },
-      "required": [
-        "title"
-      ],
       "positional": [
         "title",
         "body"
@@ -154,7 +236,7 @@
       "noun": "task",
       "verb": "list",
       "title": "List tasks",
-      "description": "List the tasks a query selects, as bundles: JSON objects with entity ids and component fields. `.task` is always part of the query and narrows the whole of yours; with no query, `.task.status=open` is used. Use filters of the form .component.property=value joined with &: `.task.status=done`, `.filed.project=P-19`, `.filed.priority<3`, or a bare word to match text.",
+      "description": "Return whole tasks matching query, always narrowed by .task. Without a query, selects .task.status=open. Filters use .component.property=value; bare words search text.",
       "input": {
         "query": {
           "type": "string",
@@ -176,7 +258,7 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
-      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. With body, pass was from $was.doc.body on task_list or graph_show to refuse a concurrent body change; without was the replacement is blind. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes completion/cancellation marks. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
       "input": {
         "task": {
           "type": "string",
@@ -194,40 +276,222 @@
           "short": "s"
         },
         "title": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "a new title"
         },
         "body": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "a new body"
         },
         "was": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "the SHA-256 at $was.doc.body returned by task_list or graph_show (was: in yak graph show); when supplied with body, refuse if the body moved since that read"
         },
         "project": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "ref": "project",
           "description": "the project to file it under; pass its id or registered name",
           "short": "p"
         },
         "priority": {
-          "type": "number",
+          "type": [
+            "number",
+            "null"
+          ],
           "description": "queue order; lower is more urgent"
         },
         "assignee": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "ref": "entity",
           "description": "id or registered name of the person or agent whose queue it goes in"
         },
         "domain": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "the area of work"
+        },
+        "accept": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Completion conditions; null clears."
+        },
+        "blocked": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "External obstacle; null clears."
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Cancellation reason."
+        },
+        "edit": {
+          "type": "object",
+          "properties": {
+            "find": {
+              "type": "string"
+            },
+            "replace": {
+              "type": "string"
+            },
+            "append": {
+              "type": "string"
+            },
+            "prepend": {
+              "type": "string"
+            },
+            "all": {
+              "type": "boolean"
+            },
+            "was": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "Edit doc.body; find must match once unless all. Append/prepend are literal."
+        },
+        "updates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "string",
+                "ref": "task"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "done",
+                  "cancelled"
+                ]
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "was": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "project": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "ref": "project"
+              },
+              "priority": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "assignee": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "ref": "entity"
+              },
+              "domain": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "accept": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blocked": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "edit": {
+                "type": "object",
+                "properties": {
+                  "find": {
+                    "type": "string"
+                  },
+                  "replace": {
+                    "type": "string"
+                  },
+                  "append": {
+                    "type": "string"
+                  },
+                  "prepend": {
+                    "type": "string"
+                  },
+                  "all": {
+                    "type": "boolean"
+                  },
+                  "was": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "task"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Per-task patches; top-level fields supply defaults."
         }
       },
-      "required": [
-        "task"
-      ],
       "idempotent": true,
       "positional": [
         "task",
@@ -279,7 +543,7 @@
       "noun": "decision",
       "verb": "new",
       "title": "Ask a decision",
-      "description": "Ask a question as a task wearing decision{question, choices, recommended}. Give two to four labelled choices with descriptions and recommend one by label. Assign it to the person being asked. Work that requires it waits until it is answered; otherwise it is eventual. Returns applied bundles.",
+      "description": "Ask a task question with 2–4 choices and a recommended label. Assign the person being asked. Requiring work waits for its answer. Returns applied bundles.",
       "input": {
         "question": {
           "type": "string",
@@ -356,6 +620,11 @@
           "type": "string",
           "minLength": 1,
           "description": "A listed label or a custom answer."
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "description": "Person whose explicit answer is recorded."
         }
       },
       "required": [

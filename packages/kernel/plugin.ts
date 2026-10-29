@@ -1,13 +1,13 @@
-// The package as a graph plugin: the kernel's words, plus the hook that keeps
-// who finished a piece of work on its `completed` mark.
+// The kernel's words, completion authors, and explicitly attributed decisions.
 
 import { hook, type Plugin } from '@yaks/graph/plugin'
 import { completing } from './completion.ts'
+import { deciding } from './decision.ts'
 import { kernelDoc } from './vocab.ts'
 
 /**
  * The kernel plugin: every component ./vocab.json declares, and a
- * `precondition` hook that records who completed something.
+ * `precondition` hook that records completion and decision attribution.
  */
 /// let { loadVocab, pick } = await import('@yaks/vocab')
 /// let { graph } = await import('@yaks/graph')
@@ -21,5 +21,11 @@ import { kernelDoc } from './vocab.ts'
 export let kernel = (): Plugin => ({
   name: '@yaks/kernel',
   vocab: [kernelDoc],
-  hooks: { precondition: hook(['completed'], completing) },
+  requests: ['$decider'],
+  hooks: {
+    precondition: hook(
+      ['completed', '$decider'],
+      (bundles, tx) => completing(deciding(bundles), tx),
+    ),
+  },
 })

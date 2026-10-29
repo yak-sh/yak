@@ -42,9 +42,75 @@ other. What comes back is the applied batch (one composed patch per entity, with
 whatever plugins and reference handling added), not a snapshot, so a cache that
 keeps its own copy casts it in or keeps ghosts.
 
+## Task and document tools
+
+The tasks MCP tools accept the work directly. Their `yak` commands take the
+same arguments; arrays and objects are JSON arguments, and `@path` reads a
+whole argument from a file. `--clear blocked --clear priority` supplies JSON
+`null` for nullable fields; `--body null` keeps the literal text `null`.
+The package READMEs hold the full examples:
+packages/task/README.md ("Create a task plan", "Edit tasks") and
+packages/graph/README.md ("Field and relationship edits").
+
+- `task_new` takes `tasks` to file a plan in one transaction, with shared
+  filing defaults, local `$ids`, `parent` and `requires`. The CLI is `yak task
+  new --project P-19 --tasks @tasks.json`.
+- `task_update` changes several fields in one call and takes `updates` for
+  several tasks. `accept`, `blocked` and cancellation `reason` are ordinary
+  arguments too. `edit` changes only the body text you name:
+
+```json
+{"task":"T-12","priority":1,"edit":{"find":"old wording","replace":"revised wording"}}
+```
+
+```sh
+yak task update T-12 --priority 1 --edit '{"find":"old wording","replace":"revised wording"}'
+yak task update --status done --updates '[{"task":"T-12"},{"task":"T-13"}]'
+```
+
+`graph_apply` serves other entities and relationships with the same text
+operations. `edits[].set` assigns dotted fields or removes a component with
+`null`; `edits[].text` targets text properties, including a topic's
+`content.body`. `links` adds or removes edges without calculating their ids.
+Both arrays can be sent together atomically:
+
+```json
+{
+  "edits":[{"id":"Q-12","text":[{"path":"content.body","append":"\nA further detail."}]}],
+  "links":[{"from":"T-12","relation":"requires","to":"T-13"}]
+}
+```
+
+```sh
+yak graph apply --links '[{"from":"T-12","relation":"requires","to":"T-13"}]'
+yak graph apply --links '[{"from":"T-12","relation":"requires","to":"T-13","drop":true}]'
+yak graph apply --id D-12 --text @body.md --was <read-token>
+```
+
+`find` matches once unless `all: true`; `prepend` and `append` add text. Text
+edits automatically guard the stored version, and accept `was` when based on an
+earlier read. `graph_apply`'s `id` and `text` replace a whole `doc.body`; `path`
+selects another text property. A comment's body is `doc.body` too.
+
+A commit attaches through its existing entity, whose id is its SHA. One
+`graph_apply` edit can set `commit.target` to the task and `commit.message`
+to the full commit message:
+
+```json
+{"edits":[{"id":"<sha>","set":{"commit.target":"T-12","commit.message":"The full commit message."}}]}
+```
+
+`comment_new` files words on a `target`; `memory_save` saves or marks the
+words and accepts an `id` to revise a memory; `topic_add` files `ids` under a
+`topic`, with `drop` to take them out; `decision_answer` records a choice. Each
+has its matching CLI command, such as `yak comment new T-12 @comment.md` and
+`yak topic add Q-12 M-12 D-12`.
+
+## Bundle patches
+
 - `graph_apply` with `check: true` runs every phase and rolls
-  back: the cheapest way to see what a write will do. A large check prints every
-  bundle; parse the JSON to count rather than reading it.
+  back, answering what a write would do. `check` also works with `edits` and
+  `links`.
 - An argument that starts with `@` is read as a file path on every `yak`
   command (`inflate` in packages/cli/args.ts), so a title like "@yaks/fp on jsr"
   fails with "No such file". Phrase it so it doesn't start with `@`.
@@ -170,7 +236,9 @@ write never owes the effect again. Writing them is `effects-and-rules`.
 
 ## Looking at it
 
-`graph_show` with `<id>`, `graph_query` with q `<q>`, `graph_schema` with `<comp>`, `history` with entity `<id>` (the journal), and `yak inspect` (the map, an id or a
-query) in a terminal, or https://tasks.yak.sh/?page=map in a browser.
+`graph_show` with ids `["<id>"]`, `graph_query` with q `<q>`,
+`graph_schema` with component `<comp>`, `history` with entity `<id>` (the
+journal), and `yak inspect` (the map, an id or a query) in a terminal, or
+https://tasks.yak.sh/?page=map in a browser.
 
 When this skill is wrong or missing something, fix it in the same change.

@@ -89,6 +89,7 @@ test('edits: operators and hunk refusals retain addressed messages', () => {
     patchText('aa aa', [{ old: 'aa', new: 'x', all: true }], 'body'),
     'x x',
   )
+  assertEquals(patchText('old', [{ old: 'old', new: '$&' }], 'body'), '$&')
   assertThrows(
     () => patchText('aa', [{ old: 'aa', new: 'aa' }], 'body'),
     Error,

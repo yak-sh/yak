@@ -11,12 +11,8 @@
 // another package's component costs no import, and a server that composes
 // neither package refuses the write, naming the component it does not know.
 //
-// The decider is the caller. Neither implementation writes `by` or `at`: those
-// are stamped properties, filled in from the actor of the write (@yaks/graph's
-// `marks`), which the tool runner sets to whoever made the call. So a decision
-// records the agent that made it rather than the person it believed it was
-// acting for, and an owner's approval is recorded as the owner's only when the
-// owner is the one calling.
+// A named decider records that person's explicit decision through the kernel's
+// request. The caller remains the writer used for authorization and journaling.
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
@@ -51,6 +47,7 @@ export let runs = (): Runs => ({
     return [{
       entity: { eid: String(args.design) },
       decided: { verdict: String(args.verdict) },
+      ...(args.by ? { $decider: String(args.by) } : {}),
     }]
   },
 })

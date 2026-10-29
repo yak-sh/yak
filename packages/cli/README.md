@@ -649,9 +649,17 @@ page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 | `--help`, `-h`    | Print general or command-specific help.                                  |
 
 An argument value written as `@path` is read from that file; `-` reads from
-stdin. `yak apply` accepts a JSON array or newline-delimited JSON. For streamed
-input, it groups bundles into batches of 50; `--dry-run` validates and reports
-the result while rolling back the transaction.
+stdin. Strings stay literal: `--body null` writes the word `null`, as does a
+file containing that word. For a nullable input, `--clear <field>` supplies JSON
+`null`; repeat it to clear several fields:
+
+```sh
+yak task update T-42 --clear blocked --clear priority
+```
+
+`yak apply` accepts a JSON array or newline-delimited JSON. For streamed input,
+it groups bundles into batches of 50; `--dry-run` validates and reports the
+result while rolling back the transaction.
 
 `yak graph apply --restore` accepts supplied server-owned values, including
 historical `at`, `by` and `via`, in the local graph a config names. Admission,

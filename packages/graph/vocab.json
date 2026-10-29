@@ -9,8 +9,8 @@
       "tool": true,
       "noun": "graph",
       "verb": "apply",
-      "title": "Apply a query patch or a batch of bundles",
-      "description": "Create, patch or delete stored records (entities) and their named groups of fields (components) in one atomic transaction: the whole batch is accepted or refused. `bundles` is an array of bundles, each one entity as {entity: {eid}, <component>: {<properties>}}, the shape a client's apply() takes. An omitted property is unchanged, a null property is cleared, a null component is removed, and $delete: true deletes the entity. Every bundle names its entity but an edge: a new entity's eid is '$name', a name of your own, one per entity (the same '$name' twice in a batch is one entity, and a reference to it anywhere in the batch points at it); the graph makes the eid, and the result gives it beside the '$alias' you used. An edge's eid is made from its ends, so an edge bundle needs no entity: {edge: {from, to}, <relation>: {}}. An existing entity is its eid (an entity's unique string id) or name. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write idempotent: the same name again patches the entity holding it, and a name works wherever an eid does. $was: {doc: {body: \"<hash>\"}} states what a read-modify-write was based on: per component and property, the SHA-256 of the value you read (null for none); if one has changed since, the whole batch is refused, naming the property and its current value. That is compare-and-set: of two callers spending the same balance, only one succeeds. The result is the transaction as applied, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps added (created, updated) and the '$alias' you used; each deleted entity, consequences included, is {entity, tombstone: {}} alone. graph_schema reads the components and properties this store declares; the server refuses one nobody declared. check: true is a dry run: every check is made and the transaction rolled back, answering what a kept write would (each '$name' resolved) or its exact refusal, which is how a plan of several entities and their edges is proven before any of it is written. A check's answer ends 'Checked: nothing was written', and its eids are the check's alone: the write makes its own, so send the same '$name's again rather than the eids a check showed. With secret{name, value}, an optional doc{title, body} in the same bundle can say what the secret is for and who uses it; never put a credential or vault handle there. Documentation: https://yaks.app/docs/store. Alternatively, q writes one entity using the shared query grammar: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'. Values follow the property's schema: numbers and booleans become those types; text, references and enum values stay strings. The scalar null clears a property (quoted null also clears); .component adds it and !component removes it. The target is an existing eid, human id or name; '$name' or a fresh UUID creates an entity. Exactly one target is required; unsupported predicates are refused, not ignored. For several entities use bundles. Pass q or bundles, never both.",
+      "title": "Apply atomic changes",
+      "description": "Create, edit, link or delete entities atomically. Use edits/links, q, or bundles. id/text replaces a text property (path defaults to doc.body); yak --text @file reads a file. edits set dotted component.property fields or whole components; null clears a property or removes a component. Text edits replace literal text (find must match once unless all), then prepend/append; path names the text property. Text reads are guarded automatically; was optionally checks an earlier read token. links add a relation between from/to; drop removes it. Ids accept eids, human ids and registered names; $name creates an entity and links within the same call can reference it. q writes one entity using query syntax: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. bundles accepts [{entity:{eid},component:{fields}}], $was guards read values, and $delete deletes. Omitted fields stay unchanged. Returns applied bundles with resolved ids, $alias and stamps. check rehearses and rolls back; reuse $names when writing, since checked ids are temporary. graph_schema lists components/properties. Documentation: https://yaks.app/docs/store.",
       "input": {
         "q": {
           "type": "string",
@@ -23,7 +23,11 @@
             "properties": {
               "entity": {
                 "type": "object",
-                "properties": { "eid": { "type": "string" } }
+                "properties": {
+                  "eid": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
@@ -32,6 +36,129 @@
         "check": {
           "type": "boolean",
           "description": "true to validate without keeping the proposed changes and return what would have been written; default false"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "set": {
+                "type": "object",
+                "description": "Dotted fields or whole components, e.g. {\"doc.title\":\"New\",\"blocked\":null}."
+              },
+              "text": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Text property, e.g. doc.body or content.body."
+                    },
+                    "find": {
+                      "type": "string"
+                    },
+                    "replace": {
+                      "type": "string"
+                    },
+                    "append": {
+                      "type": "string"
+                    },
+                    "prepend": {
+                      "type": "string"
+                    },
+                    "all": {
+                      "type": "boolean"
+                    },
+                    "was": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "delete": {
+                "type": "boolean"
+              },
+              "was": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "description": "Read tokens keyed by dotted field path."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Changes to any entities, applied together."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "relation": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "drop": {
+                "type": "boolean"
+              },
+              "ord": {
+                "type": "number"
+              },
+              "props": {
+                "type": "object",
+                "description": "Relation fields."
+              }
+            },
+            "required": [
+              "from",
+              "relation",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Add/remove relationships, e.g. {from:\"T-1\",relation:\"requires\",to:\"T-2\"}."
+        },
+        "id": {
+          "type": "string",
+          "description": "Replace text on this entity; accepts a $name for creation."
+        },
+        "text": {
+          "type": "string",
+          "description": "Replacement text; yak --text @path reads a file."
+        },
+        "path": {
+          "type": "string",
+          "description": "Text property for id/text; default doc.body."
+        },
+        "was": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional read token for id/text."
         }
       },
       "destructive": true,
@@ -44,7 +171,7 @@
       "noun": "graph",
       "verb": "query",
       "title": "Query entities",
-      "description": "Find stored records (entities) by filtering on their named groups of fields (components) and their properties. Returns bundles: JSON objects with entity: {eid} and the record’s component objects. A bundle carries the components the query names, by a filter on one ('.recipe', '.doc.title~=cake') or by asking for one without filtering on it ('?doc'), and no other: name each component you will read, or add * for all of them. A query that names no component ('.entity.eid=T-12', a bare search word) answers whole. Bare words search the text, best match first (a record whose title is exactly the words before all), and answer the best 20 unless .limit says how many; naming no component, each record also carries a query-only hit (its id, the human id such as T-12 where it has one, then kind, title, and a snippet with \\u0001 and \\u0002 around the matched words), and the answer's text says each as that one line. graph_show returns one entity whole. Answers showing doc.body carry its SHA-256 at $was.doc.body, ready to pass back with a body replacement through graph_apply. A query string selects the records: '.task.status=open&.filed.priority<3'. It is made of filters written as .component.property=value, joined with &, with lists (a,b), ranges (1..9), != for not equal, ~= for text containing a value, < or > comparisons, '.component' for present and '!component' for absent ('?component' filters nothing: it rides beside a filter, as in '.recipe&?doc'), and no spaces around an operator. A property is always named with its component, and only a property holds a value: '.topic.name~=moss', never '.topic~=moss'. A bare word searches all indexed text. Directives go in the same string: .order= names a property ('.order=-created.at', where - sorts descending) or a ranking (hot), .limit=20 caps the answer, and .refs=<id> selects everything that references an entity. filters, if passed, each narrow the whole of q. Documentation: https://yaks.app/docs/querying.",
+      "description": "Query entities with .component.property=value, & (and), | (or), bare search words, or presence .component / !component. ?component includes without filtering. A property always names its component. Comparisons: != ~= < >; lists a,b and ranges 1..9. Directives: .order=-created.at, .limit=20, .fields=doc.title, .refs=T-12. filters narrow the whole q. Results carry only named components; * includes all. A query naming no component answers whole entities. Bare search returns the best 20 unless limited, with compact hit lines; graph_show reads one whole. doc.body includes its $was read token. graph_schema lists vocabulary. Documentation: https://yaks.app/docs/querying.",
       "input": {
         "q": {
           "type": "string",
@@ -76,7 +203,7 @@
       "noun": "graph",
       "verb": "show",
       "title": "Show entities",
-      "description": "Read one or more stored records (entities) by their unique string id (eid), each returned whole as its own bundle: a JSON object with entity: {eid} and every named group of fields (component) it has. When a bundle shows doc.body, $was.doc.body carries its SHA-256 read token; pass it back on a graph_apply bundle to refuse a concurrent body change (yak graph show prints was:). Only the entities asked for come back, and an id that names nothing is said after them by a line naming it (a call whose ids all name nothing is refused); what references one is a query of its own, graph_query with .refs=<id>, and a relationship is an edge entity found the same way. This is lookup by identity, not search: pass eids, or the names entities are addressed by where this store keeps names (an eid wins over a name spelled the same way).",
+      "description": "Read the named entities whole, once each, by eid, human id or registered name. doc.body includes its SHA-256 at $was.doc.body for guarded writes. Missing ids are reported beside found entities; all missing refuses. For backlinks use graph_query .refs=<id>; for search use search.",
       "input": {
         "ids": {
           "type": "array",
@@ -100,7 +227,7 @@
       "noun": "graph",
       "verb": "schema",
       "title": "Read the schema",
-      "description": "Read this store’s vocabulary (schema): each component is a named group of fields attached to an entity, a stored record; its properties are those fields. Returns markdown to read and, as structured content, one JSON Schema document with each component’s entry under $defs, the same shape as a vocab.json. It answers at one of three levels of detail. With no arguments: the index, every component with its meaning and each property’s type. With component (one name or several): that component in full, as declared, with each property’s type and meaning, which properties are server-owned or unique, what it references, and an example value; the markdown adds what references it and an example bundle that writes it. With kind: the definition of a display category such as task, plus index entries for the components it is displayed with. If both kind and component are passed, kind selects the answer. The index says what exists; a component in full is enough to write it. Documentation: https://yaks.app/docs/components.",
+      "description": "Read the vocabulary. No arguments returns the component/property index. component (one name or several) returns full declarations, types, references and write examples. kind returns a display kind plus associated components; kind wins if both supplied. Structured output is a vocabulary JSON Schema document. Documentation: https://yaks.app/docs/components.",
       "input": {
         "component": {
           "anyOf": [

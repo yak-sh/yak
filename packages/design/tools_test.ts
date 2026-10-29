@@ -46,8 +46,7 @@ test('a proposal nobody filed wears no filing', async () => {
   ])
 })
 
-// The mark carries the verdict and nothing else: `by`, `via` and `at` are
-// stamped from the caller, so the line cannot name somebody else as decider.
+// An answer with no named decider keeps the original caller attribution.
 test('a decision is the verdict on the design it names', async () => {
   let [said] = await tools.design_decide!(
     ...asked({ design: 'd1', verdict: 'declined' }),

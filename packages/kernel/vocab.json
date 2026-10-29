@@ -455,7 +455,7 @@
       "noun": "comment",
       "verb": "new",
       "title": "Comment on an entity",
-      "description": "Create a comment on an entity: doc{body} holds the markdown and comment{target, reply_to} links to its thread and, optionally, the comment it answers. Attributed to the caller. Omit reply_to to start a branch. Returns the applied bundles.",
+      "description": "Comment on any entity, attributed to the caller. reply_to answers a comment on that target; omitted starts a branch. Returns applied bundles.",
       "input": {
         "target": {
           "type": "string",

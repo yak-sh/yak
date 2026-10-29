@@ -1,0 +1,84 @@
+{
+  "cutoff": "2026-10-29T13:48:00Z",
+  "invocations": 651,
+  "acts": {
+    "tree": 80,
+    "requires": 181,
+    "body_part": 239,
+    "create": 18,
+    "fields": 70,
+    "delete": 25,
+    "attach": 22,
+    "body_replace": 75,
+    "memory": 43,
+    "bulk": 44,
+    "batch_create": 32,
+    "decision": 14,
+    "comment": 33,
+    "contains": 49,
+    "topic": 16,
+    "other_edge": 52
+  },
+  "mechanisms": {
+    "JSON heredoc": 35,
+    "bundle": 563,
+    "python": 363,
+    "sed": 45,
+    "jq": 11
+  },
+  "stages": {
+    "preparation+apply": 251,
+    "check": 31,
+    "apply": 182,
+    "prepare_apply": 83,
+    "prepare": 20,
+    "preparation+check": 13,
+    "preparation": 57,
+    "prepare_check": 8,
+    "prepare_apply_check": 2,
+    "check_apply": 1,
+    "prepare_check_apply": 1,
+    "preparation+check+apply": 1,
+    "check+apply": 1
+  },
+  "gap": {
+    "true": 523,
+    "mixed": 53,
+    "false": 75
+  },
+  "fallback_reports": 20,
+  "fallback_sessions": 16,
+  "scan": {
+    "files": 969,
+    "lines": 945543,
+    "historical_tool_records": 195447,
+    "broad_candidates": 51486
+  },
+  "verification": {
+    "command": "python3 artifacts/task-tools/audit.py",
+    "verified_invocations": 651,
+    "exit_code": 0,
+    "elapsed_seconds": 77.237735309
+  },
+  "measured_commands": {
+    "count": 47,
+    "total_seconds": 354.666568543,
+    "slowest": [
+      {
+        "command": "python3 artifacts/task-tools/audit.py (earlier replay; evidence updated while running)",
+        "elapsed_seconds": 90.595714902,
+        "exit_code": 1
+      },
+      {
+        "command": "python3 /tmp/task-audit-wide-thinking.py",
+        "elapsed_seconds": 87.218795566,
+        "exit_code": 0
+      },
+      {
+        "command": "python3 artifacts/task-tools/audit.py (final optimized replay)",
+        "elapsed_seconds": 77.237735309,
+        "exit_code": 0
+      }
+    ]
+  }
+}

@@ -5,10 +5,8 @@
 // `link()` derives it, and a write containing the same link twice writes one
 // entity.
 //
-// Removing a link does not delete its entity. The link no longer exists, but
-// the same link may be created again tomorrow, so its components are cleared
-// and the entity id stays. An entity with no components is invisible to every
-// reader, and `link()` fills it back in.
+// Removing a link deletes its entity, including any facts attached to it.
+// Saying the same link again recreates it at the same derived identity.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from './eid.ts'
@@ -37,6 +35,5 @@ export let link = (
  */
 export let unlink = (from: Eid, relation: string, to: Eid): Bundle => ({
   entity: { eid: edgeEid(from, relation, to) },
-  [EDGE]: null,
-  [relation]: null,
+  $delete: true,
 })

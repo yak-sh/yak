@@ -42,7 +42,7 @@
       "noun": "topic",
       "verb": "read",
       "title": "Read a topic as a session's context",
-      "description": "Read a topic as the context a session opened on it is given (session_new with topic): one markdown document with the topics that contain it, its cover, its contents and their $was token, everything it holds in full (a long body cut, with the id to read the rest), the topics below it as an outline, and what to understand first, what is related and its sources, one line each. Returns text in content.body.",
+      "description": "Compile session context as content.body: ancestors, cover, contents with $was, held entities, subtopic outline, prerequisites, related entities and sources. Long bodies are shortened with ids to read the rest.",
       "input": {
         "topic": {
           "type": "string",
@@ -63,7 +63,7 @@
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
-      "description": "Make a topic, where no existing topic fits; a project is already its own topic. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. It belongs to whatever contains it, so its name and cover never say the project: put one about a project under the project with topic_add. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "description": "Create a subject with a short cover where no topic fits. Duplicate or overlapping names refuse with the existing topic. A project is already its own topic; topic_add places subtopics under it. Returns applied bundles.",
       "input": {
         "name": {
           "type": "string",
@@ -87,7 +87,7 @@
       "noun": "topic",
       "verb": "find",
       "title": "Find topics",
-      "description": "Find existing topics: those whose name, title or cover holds each word in said, as the start of a word or by its stem (\"data modeling\" finds \"data model\", \"tests\" finds \"testing\"), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it to find what is known about a subject (graph_show on a topic lists what it holds), before putting something you wrote under its topic (topic_add), and before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "description": "Find whole topics by stemmed or prefix words in name, title or cover. near ranks by meaning with vectors; otherwise name order. Use before topic_new or topic_add to reuse an existing subject.",
       "input": {
         "said": {
           "type": "string",
@@ -114,7 +114,7 @@
       "noun": "topic",
       "verb": "add",
       "title": "Add to a topic",
-      "description": "Put entities under a topic, where whoever reads the topic finds them: a memory, a design, a skill, a package, somebody's words, or a subtopic. Each gets a contains edge from the topic; adding one already there changes nothing, and drop takes them out instead. One entity may sit under several topics. Find the topic first with topic_find, or make one with topic_new; a project is its own topic, so its id or name places things under it. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Add contains edges from a topic or project to entities; drop removes them. Repeated additions are idempotent; entities may belong to several topics. Returns applied bundles.",
       "input": {
         "topic": {
           "type": "string",

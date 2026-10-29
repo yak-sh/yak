@@ -84,22 +84,47 @@ history; provenance lives in the commits and the quotes.
 
 ## Filing it
 
-Bodies are long, so give the whole body to the tool:
+`design_new` files the title, body and project together:
 
-```
-design_new with title "<what it proposes, in one line>", project P-19, body "<the proposal>"
+```json
+{"title":"<what it proposes, in one line>","project":"P-19","body":"<the proposal>"}
 ```
 
-One proposal is one design, so a revision patches its body rather than minting
-a second:
+Bodies are long, so the CLI mirror also reads a drafted body from a scratch
+file:
 
+```sh
+yak design new "<what it proposes, in one line>" @/path/to/body.md --project P-19
 ```
-graph_apply with bundles [{"entity": {"eid": "D-…"}, "doc": {"body": "<the revised proposal>"}}]
+
+Any argument starting with `@` is read as a file path (the @file door), so
+`yak task new "@yaks/ui …"` fails with "No such file or directory". Phrase such
+a title so it doesn't start with `@` ("The @yaks/ui style guide …").
+
+One proposal is one design, so `graph_apply` revises its body rather than
+minting a second. A full replacement takes `id`, `text`, and the `was` token
+from `graph_show`:
+
+```json
+{"id":"D-…","text":"<the revised proposal>","was":"<read-token>"}
 ```
+
+```sh
+yak graph apply --id D-… --text @body.md --was <read-token>
+```
+
+For a small revision, send only the changed words through `graph_apply`:
+
+```json
+{"edits":[{"id":"D-…","text":[{"path":"doc.body","find":"The old wording.","replace":"The revised wording."}]}]}
+```
+
+The tool reads the body and guards that version itself. `prepend` and
+`append` add text without replacing what is there (`graph-reads-and-writes`).
 
 When he comments, record his words verbatim on the design
-(`comment_new` with target `D-…` and body '<his words>'), fold the answers into a "Decided"
-section of the body, and drop what he rejected.
+(`comment_new` with target `D-…` and body '<his words>'),
+fold the answers into a "Decided" section of the body, and drop what he rejected.
 
 When his comment reshapes the design, the body changes in the same sitting as
 your reply. The design tells every other agent the old shape until it does, and
@@ -107,42 +132,52 @@ the new one lives only in a chat reply that goes when your context does.
 
 ## Deciding it
 
-When a design looks good, `design_decide` it yourself (design `D-…`; the verdict is approved unless you pass declined) and
-build: the tool stamps the caller as the decider, which is the agent's decision
+When a design looks good, `design_decide` it yourself with design `D-…`
+(verdict defaults to `approved`; pass `declined` to decline) and build:
+the tool stamps the caller as the decider, which is the agent's decision
 recorded as the agent's (M-31958). When he approves in conversation, put his
-approval verbatim in a comment beside it. The task tree and follow-ups are yours
-too.
+approval verbatim in a comment beside it. `design_decide` accepts `by` to record
+his explicit verdict on that design (`yak design decide D-… approved --by
+U-3709`); the session stays in `via`. The task tree and follow-ups are yours too.
 
 A design's verdict and the owner's comments on it outrank its body. A body is
 what was proposed; it reads as settled whether or not he agreed, and his later
 words often reverse parts of it. So before you tell anyone what a design plans,
-or edit it, read `decided` and every comment (`graph_show` with `D-…` lists both).
+or edit it, read `decided` with `graph_show` (ids `["D-…"]`) and every comment
+with `memory_thread` (id `D-…`).
 A declined design is a record, not the plan.
 
 ## The task tree
 
 One task per thing (M-4492). A body is the irreducible ask plus pointers, not a
 restatement of the design (M-14370): "D-…, task tree item 4." is often enough.
-File the tree as one batch, with `$alias` eids and `requires` edges from a task
-to what it needs, and look at the dry run first:
+`task_new` files the tree in one call. Shared fields are defaults for its
+`tasks` rows; local `$ids` let `parent` and `requires` name tasks created in
+the same call:
 
 ```json
-[
-  {"entity": {"eid": "$t1"}, "doc": {"title": "…", "body": "D-…, task tree item 1."}, "task": {}, "filed": {"project": "P-19"}},
-  {"entity": {"eid": "$t2"}, "doc": {"title": "…", "body": "D-…, task tree item 2."}, "task": {}, "filed": {"project": "P-19"}},
-  {"entity": {"eid": "$e1"}, "edge": {"from": "$t2", "to": "$t1"}, "requires": {}}
-]
+{
+  "project": "P-19",
+  "tasks": [
+    {"id":"$plan","title":"…","body":"D-…, task tree."},
+    {"id":"$t1","parent":"$plan","title":"…","body":"D-…, task tree item 1."},
+    {"parent":"$plan","requires":["$t1"],"title":"…","body":"D-…, task tree item 2."}
+  ]
+}
 ```
 
-```
-graph_apply with bundles <the tree>, check true   # see what it would do
-graph_apply with bundles <the tree>
-task_list with query '.task .order=-created.at', limit 20   # read back the ids
+`parent` makes a `contains` link from the parent; `requires` makes a link from
+the task to what it needs. Either can name an existing id, which is how two
+designs' trees depend on each other. `check: true` previews the whole plan.
+The CLI takes the same task rows as an array argument, from a file if useful:
+
+```sh
+yak task new --project P-19 --tasks @tasks.json --check
+yak task new --project P-19 --tasks @tasks.json
 ```
 
-An edge can point at an existing task by id (`"to": "T-…"`), which is how two
-designs' trees depend on each other. A question only the owner can answer is
-its own task with `--assignee U-3709`.
+The result names each filed task beside its local alias. A question only the
+owner can answer is its own task with `assignee: "U-3709"`.
 
 ## When an agent drafts it
 

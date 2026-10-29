@@ -2,7 +2,8 @@
 
 Task components and operations for [@yaks/graph](../graph). The package defines
 open, completed and cancelled tasks, counts unfinished dependencies, and
-supplies create, list, update, decision and answer tools.
+supplies tools to create task plans, list and edit tasks, and ask and answer
+decisions.
 
 A task is an entity with a `task` component. It can also carry a title from
 [@yaks/doc](../doc), filing information from [@yaks/project](../project), or
@@ -142,7 +143,7 @@ A dry run returns the proposed bundles with resolved ids, then rolls back the
 transaction. It runs admission, preconditions and rules, but keeps no entity or
 journal writes and runs no post-commit effects. Invalid batches still fail. Ids
 generated during a preview are not reserved for a later write. The HTTP form is
-`POST /apply?check=1`; the CLI form is `yak apply --dry-run`.
+`POST /apply?check=1`; the CLI form is `yak graph apply --check`.
 
 ## The status rule is written once
 
@@ -217,15 +218,91 @@ yak task list '.filed.project=P-19&.filed.priority<3'
 yak task update T-42 done
 ```
 
-| MCP name      | Behavior                                                            |
-| ------------- | ------------------------------------------------------------------- |
-| `task_new`    | Returns a new task, its supplied title/body, and any filing fields. |
-| `task_list`   | Reads matching task bundles; it does not write them.                |
-| `task_update` | Returns patches for supplied status, text and filing fields.        |
+| MCP name      | Behavior                                                             |
+| ------------- | -------------------------------------------------------------------- |
+| `task_new`    | Creates one task or an atomic plan with parent and dependency links. |
+| `task_list`   | Reads matching task bundles; it does not write them.                 |
+| `task_update` | Updates one task or a batch, including body edits and filing fields. |
 
 The tool runner commits results from the write tools. `done` adds `completed`
 and removes `cancelled`; `cancelled` does the reverse; `open` removes both.
 Omitted arguments leave existing values unchanged.
+
+### Create a task plan
+
+Pass `tasks` to `task_new` to create related tasks in one transaction. Each row
+has a title and can name a local `$id`. `parent` puts a `contains` link from the
+parent to the task; `requires` puts links from the task to its prerequisites.
+Both accept existing ids and local ids from the same call. Top-level fields
+provide defaults that each row can override:
+
+```json
+{
+  "project": "P-19",
+  "tasks": [
+    { "id": "$event", "title": "Organize the event" },
+    { "id": "$date", "title": "Choose the date", "parent": "$event" },
+    { "title": "Send invitations", "parent": "$event", "requires": ["$date"] }
+  ]
+}
+```
+
+The CLI takes the same array with
+`yak task new --project P-19 --tasks
+@tasks.json`. `check: true` (CLI `--check`)
+previews the whole plan. The result includes resolved ids beside the local
+aliases, ready for later calls.
+
+### Edit tasks
+
+One `task_update` call can change `title`, `body`, `status`, filing fields,
+`accept` (completion conditions), `blocked` (an external obstacle), and `reason`
+(the cancellation reason). Text, filing fields and `reason` accept `null` to
+clear the supplied field; `accept: null` and `blocked: null` remove their
+components.
+
+`edit` changes part of `doc.body` without sending the rest of the body back:
+
+```json
+{
+  "task": "T-42",
+  "priority": 1,
+  "accept": "Invitations include the agreed date.",
+  "edit": { "find": "Friday", "replace": "Saturday" }
+}
+```
+
+`find` is literal and must match once unless `all: true` is supplied. Omit
+`find` to replace the whole body with `replace`; `prepend` and `append` add text
+before and after the result. The edit reads the stored body and adds a
+compare-and-set guard automatically. A caller can pass `edit.was` from an
+earlier read to require that version. A full `body` replacement accepts `was`
+from `$was.doc.body` on `task_list` or `graph_show`.
+
+```sh
+yak task update T-42 --edit '{"append":"\nInclude the venue address."}' --priority 1
+yak task update T-42 --body @body.md --was <read-token>
+yak task update T-42 cancelled --reason 'The event was called off.'
+yak task update T-42 --clear blocked --clear priority
+```
+
+`--clear` supplies JSON `null` for a nullable field. `--body null` and a body
+file containing `null` preserve that literal text.
+
+`updates` applies several task updates atomically. Its rows inherit shared
+top-level fields, so this `task_update` call closes both tasks:
+
+```json
+{ "status": "done", "updates": [{ "task": "T-42" }, { "task": "T-43" }] }
+```
+
+The CLI form is
+`yak task update --status done --updates
+'[{"task":"T-42"},{"task":"T-43"}]'`.
+For text or arrays kept in a file, the CLI reads `@path` as that argument's
+contents.
+
+### Listing and lookup
 
 `task_list` always includes `.task`, combines it with the caller's query using
 `&`, and defaults to `.task.status=open`. Every store reads that computed status
@@ -237,8 +314,9 @@ components: graph admission refuses a component the graph does not declare, and
 an unknown property on a declared one, naming it.
 
 Showing a complete entity uses the generic `graph_show` tool. Ranked search uses
-`search` when the server supplies a search implementation. Applying a plan uses
-`graph_apply`, whose `check` option previews it. This package supplies no
+`search` when the server supplies a search implementation. `task_new` files task
+plans; [`graph_apply`](../graph/README.md#field-and-relationship-edits) edits
+arbitrary components and adds or removes relationships. This package supplies no
 separate show, search or tree tool.
 
 ## Decisions
@@ -253,13 +331,16 @@ requiring work proceeds. Ordinary approval verdicts do not complete tasks.
 yak decision new 'Which route?' --choices '[{"label":"Train","description":"Arrive earlier"},{"label":"Bus","description":"Spend less"}]' --recommended Train --assignee <person>
 yak decision answer T-42 Bus
 yak decision answer T-42 'Walk together'
+yak decision answer T-42 Bus --by Jeff
 ```
 
 Every door validates the ask and answer, including partial graph edits. Empty
 answers, invalid recommendations, duplicate labels, and answers to cancelled or
-already answered decisions refuse the transaction. Server stamps reject client
-attribution. `answer(eid, choice)` gives interfaces the answer patch, leaving
-stamps and lifecycle to the graph.
+already answered decisions refuse the transaction. Pass `by` to record a
+person's explicit answer. The caller remains the writer for authorization and
+the journal, while `decided.by` names that person and `decided.via` keeps the
+calling session. `answer(eid, choice, by?)` gives interfaces the answer patch,
+leaving stamps and lifecycle to the graph.
 
 Blocking is derived only from incoming `requires` edges from unfinished work;
 without one, a decision is eventual. `contains` never makes a decision blocking.

@@ -103,7 +103,7 @@
       "noun": "memory",
       "verb": "save",
       "title": "Save a memory",
-      "description": "Save what somebody said, in their own words, as a memory. Words the graph already holds are marked where they are, never copied: pass on to name the entity holding them (a session entry, a comment, a doc), or pass said with feedback naming who said them, and the earliest entity that person wrote holding those words verbatim is marked. Words it cannot place become a new entity, the sentence itself and never your summary of it. A mark never edits the words, and nothing needs approving. context is a line or two somebody will need to read it weeks later. scope names the project it belongs to; leave it out when creating a principle that applies everywhere (when patching, omission keeps the existing scope). feedback names who gave the correction, when the words are one. Pass id to patch an existing memory instead: anything left out is unchanged, and replacing the words requires was, the string at $was.doc.body that memory_recall returns beside them, so a memory another writer changed since you read it is refused whole rather than overwritten; the words of a comment, an entry or anything else a memory marks are what happened there and are never replaced. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed; a mark's is the entity it marked. Creating a memory requires said or on; omit id to create one.",
+      "description": "Save verbatim words or mark their existing entity with on. said with feedback marks the earliest matching words that person wrote; otherwise absent words get a new doc. id patches a memory; omitted fields stay unchanged. Replacing a standalone memory's words requires was from memory_recall's $was.doc.body; marked comments and entries retain their text. feedback records the correcting person. Returns applied bundles.",
       "input": {
         "said": {
           "type": "string",
@@ -157,7 +157,7 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
-      "description": "Find saved memories by what they are about. Where the server has a vector index, said ranks them by meaning, closest first, whether or not they share its words; without one, said selects the memories containing all its words, newest first. near is an entity id or name whose meaning ranks the results instead, and said then selects by its words. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), each whole: the words wherever the memory marks them (a doc's body, a session entry's content) and its context, never snippets. Each carries $was.doc.body, the string to pass as memory_save’s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
+      "description": "Return whole memories with context and $was.doc.body for memory_save.was. said ranks by meaning with vectors, otherwise matches all words newest first. near ranks by the named entity's meaning; said then filters text. Without either, returns newest. ids, scope and feedback narrow results.",
       "input": {
         "said": {
           "type": "string",
@@ -202,7 +202,7 @@
       "noun": "memory",
       "verb": "source",
       "title": "Where somebody said these words",
-      "description": "Where a person said these words: the earliest entity they wrote whose text holds them verbatim (the session entry they typed, a comment, a doc), whole. The same words in anybody else's text are a quote of them and never count. Use it on words quoted from somebody to find where they said them, then mark that entity with memory_save's on. Returns bundles (JSON objects with entity ids and component fields). Refuses where nothing that person wrote holds the words.",
+      "description": "Find the earliest entity the named person wrote containing these words verbatim. Other authors' quotes do not count. Returns whole bundles; refuses when no source exists. Use its id with memory_save.on.",
       "input": {
         "said": {
           "type": "string",
@@ -228,7 +228,7 @@
       "noun": "memory",
       "verb": "around",
       "title": "Read the transcript around an entry",
-      "description": "The transcript around a session entry, like grep -C: up to before entries ahead of it, the entry itself, and up to after entries behind it, in transcript order. Use it on a memory marked on an entry to see what was being said when the words were said. Entries of every kind count: what a person typed, the model's replies, tool calls and their results. Returns bundles (JSON objects with entity ids and component fields), each whole. Refuses an entity that is no transcript entry.",
+      "description": "Return whole transcript entries around an entry, in order, including tool calls and results. before and after count entries. Refuses a non-entry id.",
       "input": {
         "id": {
           "type": "string",
@@ -259,7 +259,7 @@
       "noun": "memory",
       "verb": "target",
       "title": "What an entity is aimed at",
-      "description": "What an entity is aimed at: the entity each of its components' target names (a comment's target, or any other component that has one), whole, so you see what it is: a task, a doc, a component's definition (_comp), the comment it replies to. Use it on a memory marked on a comment to see what the comment was about. Returns bundles (JSON objects with entity ids and component fields). Refuses an entity aimed at nothing.",
+      "description": "Read whole entities named by its components' target fields; for a comment, what it comments on. Refuses an entity with no target.",
       "input": {
         "id": {
           "type": "string",
@@ -280,7 +280,7 @@
       "noun": "memory",
       "verb": "thread",
       "title": "Read the discussion an entity is in",
-      "description": "The discussion an entity is part of: what its comments are ultimately about (a comment's target, followed up past every comment it replies to), then every comment on that and every reply below them, oldest first. Given something no comment is aimed at, it answers that entity alone. Returns bundles (JSON objects with entity ids and component fields), each whole.",
+      "description": "Return the root target and all its comments and replies as whole bundles, oldest first. A target without comments answers alone.",
       "input": {
         "id": {
           "type": "string",
@@ -301,7 +301,7 @@
       "noun": "memory",
       "verb": "session",
       "title": "Where something happened",
-      "description": "Where something happened: the session it was written in (a transcript entry's session, or the session anything else was written through), then what that session worked on or holds a claim on, its tasks. Returns bundles (JSON objects with entity ids and component fields), each whole. Refuses an entity no session wrote.",
+      "description": "Return the session that wrote an entity, then its worked-on or claimed tasks, as whole bundles. Refuses an entity with no session.",
       "input": {
         "id": {
           "type": "string",

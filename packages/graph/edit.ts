@@ -32,7 +32,9 @@ export let patchText = (
           `include surrounding text to make the match unique`,
       )
     }
-    out = all ? out.split(old).join(replacement) : out.replace(old, replacement)
+    out = all
+      ? out.split(old).join(replacement)
+      : out.replace(old, () => replacement)
   }
   if (out == value) {
     throw new Error('edit: the replacement leaves the value unchanged')

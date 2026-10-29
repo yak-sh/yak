@@ -12,10 +12,11 @@ export type Decision = {
   recommended: string
 }
 
-/** The answer a door writes. Attribution is filled by the server, never here. */
-export let answer = (eid: string, choice: string): Bundle[] => [{
+/** The answer a door writes, optionally recording another person's words. */
+export let answer = (eid: string, choice: string, by?: string): Bundle[] => [{
   entity: { eid },
   decided: { choice: choice.trim() },
+  ...(by ? { $decider: by } : {}),
 }]
 
 let check = (b: Bundle): void => {

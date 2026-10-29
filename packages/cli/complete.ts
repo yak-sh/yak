@@ -18,7 +18,13 @@
 // function.
 
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
-import { commandFor, type Grammar, scanned, tokensIn } from './args.ts'
+import {
+  clearable,
+  commandFor,
+  type Grammar,
+  scanned,
+  tokensIn,
+} from './args.ts'
 
 /** The two answers only a graph can give. Left out, a `ref` or a full-text
  * argument simply offers nothing, which is all a client with no connection
@@ -109,6 +115,8 @@ export let complete = async (
   }
   let t = found.verb
   let names = Object.keys(props(t))
+  let clearing = clearable(t)
+  if (clearing.length) names.push('clear')
   let state
   try {
     state = scanned(t, found.args, true)
@@ -123,7 +131,9 @@ export let complete = async (
     // `--name=` introduces a value, in the one form that accepts a value
     // beginning with a dash.
     if (rest.length) {
-      let said = await values(props(t)[name], rest.join('='), look)
+      let said = name == 'clear' && clearing.length
+        ? clearing
+        : await values(props(t)[name], rest.join('='), look)
       return emit(kept(said.map((v) => `--${name}=${v}`), partial))
     }
     return kept(
@@ -132,6 +142,11 @@ export let complete = async (
     )
   }
   return emit(
-    kept(await values(props(t)[state.awaiting ?? ''], partial, look), partial),
+    kept(
+      state.awaiting == 'clear' && clearing.length
+        ? clearing
+        : await values(props(t)[state.awaiting ?? ''], partial, look),
+      partial,
+    ),
   )
 }

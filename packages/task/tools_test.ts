@@ -142,3 +142,18 @@ test('a task body without was keeps the blind replacement behavior', async () =>
     body: 'second',
   })
 })
+
+test('a partial task edit guards the body read while preparing its patch', async () => {
+  let { g } = teamGraph()
+  await g.apply([{ entity: { eid: 't' }, task: {}, doc: { body: 'before' } }])
+  let patch = await tools.task_update!(
+    {
+      entity: { eid: 'call' },
+      call: { args: { task: 't', edit: { append: ' after' } } },
+    },
+    g,
+  ) as Bundle[]
+  await g.apply([{ entity: { eid: 't' }, doc: { body: 'concurrent' } }])
+  await assertRejects(async () => await g.apply(patch), Stale)
+  assertEquals(comp((await g.get(['t']))[0], 'doc').body, 'concurrent')
+})

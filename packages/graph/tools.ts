@@ -56,6 +56,10 @@ import { formed } from './admit.ts'
 import { deriving } from './identity.ts'
 import { Refused } from './errors.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
+import { type Edit, edited } from './changes.ts'
+import { type Link, linked } from './links.ts'
+export { type Edit, edited, type TextEdit, textEdited } from './changes.ts'
+export { type Link, linked } from './links.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's
  * own `name`, or by the name derived from its noun and verb for a module that
@@ -156,7 +160,33 @@ export let runs = (seams: Seams = {}): Runs => {
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
     graph_apply: (call, graph) => {
-      let { q, bundles } = argsOf(call)
+      let { q, bundles, edits, links, id, text, path, was } = argsOf(call)
+      if (id !== undefined && text === undefined) {
+        throw new Refused('id needs text')
+      }
+      if (text !== undefined && id === undefined) {
+        throw new Refused('text needs id')
+      }
+      if (edits !== undefined || links !== undefined || id !== undefined) {
+        if (q !== undefined || bundles !== undefined) {
+          throw new Refused('use edits/links, q, or bundles')
+        }
+        let changes = (edits ?? []) as Edit[]
+        if (id !== undefined) {
+          changes = [...changes, {
+            id: String(id),
+            text: [{
+              path: String(path ?? 'doc.body'),
+              replace: String(text),
+              ...(was === undefined ? {} : { was: was as string | null }),
+            }],
+          }]
+        }
+        return Promise.all([
+          edited(graph, changes),
+          linked(graph, (links ?? []) as Link[]),
+        ]).then(([patches, edges]) => [...patches, ...edges])
+      }
       if (q === undefined) {
         if (bundles === undefined) {
           throw new Refused('graph_apply needs q or bundles')

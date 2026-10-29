@@ -15,7 +15,7 @@
 // schema is kept fresh (store.ts), so an undeclared `--nmae` is a typo worth
 // an error message here rather than a rejection one round trip away.
 
-import { validateToolInput } from '@yaks/vocab/tools'
+import { toolCheck, validateToolInput } from '@yaks/vocab/tools'
 import { CallError } from '@yaks/tools/errors'
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
@@ -170,6 +170,17 @@ let restOf = (tool: Grammar): string | undefined => {
   return last?.endsWith('...') ? last.slice(0, -3) : undefined
 }
 
+/** Nullable fields the CLI can clear. A declared clear argument keeps its own
+ * meaning; the CLI adds no option that would hide it. */
+export let clearable = (tool: Grammar): string[] => {
+  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
+  return Object.hasOwn(props, 'clear')
+    ? []
+    : Object.keys(props).filter((name) =>
+      !toolCheck(lone(props, name))({ [name]: null }).length
+    )
+}
+
 /**
  * The arguments a tool was given, parsed through its own input schema — the
  * one grammar there is. The bare words fill `positional` in order; a final
@@ -193,8 +204,8 @@ export let argsFor = async (
   let { pairs, spare } = scanned(tool, argv)
   let out: Record<string, unknown> = {}
   for (let [name, raw] of pairs) {
-    let value = raw === true
-      ? true
+    let value = raw === true || raw === null
+      ? raw
       : valueOf(name, await inflate(raw, reads), props[name])
     let had = out[name]
     out[name] = Array.isArray(had) && Array.isArray(value)
@@ -296,7 +307,7 @@ export let scanned = (
   argv: readonly string[],
   partial = false,
 ): {
-  pairs: [string, string | true][]
+  pairs: [string, string | true | null][]
   spare: string[]
   given: Set<string>
   literal: boolean
@@ -304,6 +315,7 @@ export let scanned = (
   awaiting: string | undefined
 } => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
+  let clearing = clearable(tool)
   let rest = restOf(tool)
   let forward = tool.forward
   let positional = (tool.positional ?? []).filter((n) => !n.endsWith('...'))
@@ -312,15 +324,16 @@ export let scanned = (
       p.short ? [[p.short, name]] : []
     ),
   )
-  let pairs: [string, string | true][] = [], spare: string[] = []
+  let pairs: [string, string | true | null][] = [], spare: string[] = []
   let given = new Set<string>(),
     at = 0,
     literal = false,
     awaiting: string | undefined,
     pending: string | undefined
-  let put = (name: string, raw: string | true) => {
+  let put = (name: string, raw: string | true | null) => {
     if (
-      partial && name != rest && raw !== true && !raw.startsWith('@') &&
+      partial && name != rest && raw !== true && raw !== null &&
+      !raw.startsWith('@') &&
       raw != '-'
     ) {
       let value = valueOf(name, raw, props[name])
@@ -343,6 +356,24 @@ export let scanned = (
     let eq = word.indexOf('=')
     let flag = eq > 0 ? word.slice(0, eq) : word
     let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
+    if (!literal && flag == '--clear' && clearing.length) {
+      let field = eq > 0 ? word.slice(eq + 1) : argv[i + 1]
+      if (field == undefined || field.startsWith('--')) {
+        if (!partial || field != undefined) {
+          throw new Usage('--clear needs a field')
+        }
+        awaiting = pending = 'clear'
+      } else {
+        if (!clearing.includes(field)) {
+          throw new Usage(
+            `--clear expects ${clearing.join(', ')}, not ${field}`,
+          )
+        }
+        put(field, null)
+        if (eq < 0) i++
+      }
+      continue
+    }
     if (!literal && (flag.startsWith('--') || flag.startsWith('-') && name)) {
       let p = forward &&
           (name == forward || positional.includes(name) && given.has(name))

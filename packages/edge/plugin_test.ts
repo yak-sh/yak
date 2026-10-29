@@ -88,14 +88,23 @@ test('a link that names no entity is written under the eid its ends make', () =>
   assertEquals((e as Error).message, 'edge $bundle 2 has no `to` end')
 })
 
-test('unlinking drops the sentence and keeps the identity', () => {
-  let g = posts(blogGraph())
-  sync(g.apply([link('p1', 'cites', 'p2')]))
-  sync(g.apply([unlink('p1', 'cites', 'p2')]))
-  assertEquals(read(g, '.cites'), [])
-  // and it can be said again — the id was never tombstoned
-  sync(g.apply([link('p1', 'cites', 'p2')]))
-  assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
+let unlinked = () =>
+  posts(graph({ storage: ram(blog), vocab: blog, plugins: [edges(blog)] }))
+let removing = unlinked()
+sync(removing.apply([{ ...link('p1', 'cites', 'p2'), pinned: {} }]))
+test('unlinking removes the sentence and its attached facts', () => {
+  sync(removing.apply([unlink('p1', 'cites', 'p2')]))
+  assertEquals(read(removing, '.cites|.pinned'), [])
+})
+
+let relinking = unlinked()
+sync(relinking.apply([{ ...link('p1', 'cites', 'p2'), pinned: {} }]))
+sync(relinking.apply([unlink('p1', 'cites', 'p2')]))
+test('a later link recreates the identity without old attached facts', () => {
+  sync(relinking.apply([link('p1', 'cites', 'p2')]))
+  let [back] = relinking.get([edgeEid('p1', 'cites', 'p2')]) as Bundle[]
+  assertEquals(back.cites, {})
+  assertEquals(back.pinned, undefined)
 })
 
 test('a link dies with either end', () => {

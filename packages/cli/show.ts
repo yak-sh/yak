@@ -7,7 +7,7 @@
 // chosen here rather than cursor movement chosen by the terminal, and only
 // `\n` survives. A tool's output is content, never an escape sequence.
 
-import { type Grammar } from './args.ts'
+import { clearable, type Grammar } from './args.ts'
 import { commandOf, type Prop, type Schema, titleOf, typeOf } from './tool.ts'
 
 // deno-lint-ignore no-control-regex -- control characters are the subject
@@ -68,6 +68,7 @@ export let sketch = (
     ...positional.map((n, i) => need.has(names[i]) ? `<${n}>` : `[${n}]`),
     ...(forward ? ['[arguments ...]'] : []),
     ...named.map((n) => slot(n, props[n], need.has(n), reserved.includes(n))),
+    ...(clearable(t).length ? ['[--clear <field>]'] : []),
   ].join(' ')
 }
 
@@ -109,6 +110,11 @@ export let toolHelp = (
     head,
     ...(t.description ? ['', wrap(t.description, 76, '  ')] : []),
     ...(rows.length ? ['', ...rows] : ['', '  (no arguments)']),
+    ...(clearable(t).length
+      ? [
+        `  --clear <field>  Clear ${clearable(t).join(', ')}; repeat for more.`,
+      ]
+      : []),
   ].join('\n')
 }
 

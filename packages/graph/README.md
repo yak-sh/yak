@@ -135,7 +135,7 @@ across processes and does not implement every SQL query feature.
 | `@yaks/graph/guard`      | `guard`, the precondition phase, and its `Stale` and `token` bindings                                                                                                                              |
 | `@yaks/graph/schema`     | `admitSchema`, full checks for opted-in property schemas and numeric constraints                                                                                                                   |
 | `@yaks/graph/vocab`      | `graphDoc`, `docs`, `description`: built-in tool declarations                                                                                                                                      |
-| `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, and their implementation types                                                                                                                             |
+| `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, `edited`, `linked`, and their implementation types                                                                                                         |
 | `@yaks/graph/hit`        | `hit`, `called`, `snippet`, `titleOf`: the one line a search row says itself as, naming it by its human id where it has one                                                                        |
 
 ### Read-only graphs
@@ -999,6 +999,56 @@ missing implementation. Its lazy form fetches implementations on first call.
 `runs(seams)` implements built-in operations; `tier(seams)` pairs them with
 `graphDoc`. The `graph_apply` implementation returns proposed bundles for the
 runner to apply. `search` is included only when `seams.search` is supplied.
+
+### Field and relationship edits
+
+`graph_apply` accepts `edits` and `links` together as one atomic write. An edit
+names an `id`; its `set` maps `component.property` paths to values, or a
+component name to an object or `null`. Omitted fields stay unchanged. The same
+shape edits tasks, comments, memories, topics and decisions:
+
+```json
+{
+  "edits": [{
+    "id": "T-42",
+    "set": { "filed.priority": 1, "blocked": null },
+    "text": [{ "path": "doc.body", "find": "Friday", "replace": "Saturday" }]
+  }],
+  "links": [{ "from": "T-42", "relation": "requires", "to": "T-43" }]
+}
+```
+
+A text change operates on the current stored value, automatically guarded
+against a concurrent edit. `find` matches literal text once; `all: true`
+replaces every match. `replace` without `find` replaces the whole value.
+`prepend` and `append` add text before and after the result. Multiple text
+changes run in order. Pass `was` on a text change to require the read token from
+an earlier read. The `path` can name any text property, including a topic's
+`content.body`.
+
+For a whole text replacement, the shorthand `id`, `text`, `path` and `was`
+compiles to the same edit. `path` defaults to `doc.body`, so a drafted body can
+be passed straight from a file:
+
+```sh
+yak graph apply --id D-42 --text @body.md --was <read-token>
+yak graph apply --id Q-42 --path content.body --text @topic.md
+```
+
+A link's `from` and `to` accept ids or registered names. `drop: true` removes
+the relationship; `ord` supplies its position and `props` supplies fields on the
+relation component. Repeating a link addresses the same derived edge. An edit
+with `delete: true` deletes its entity.
+
+```sh
+yak graph apply --edits '[{"id":"M-42","text":[{"path":"doc.body","append":"\nA further detail."}]}]'
+yak graph apply --links '[{"from":"T-42","relation":"requires","to":"T-43"}]'
+yak graph apply --links '[{"from":"T-42","relation":"requires","to":"T-43","drop":true}]'
+```
+
+`check: true` (CLI `--check`) previews the entire write. `q` still writes one
+entity using query syntax, and `bundles` accepts component patches directly.
+Choose `edits`/`links`, `q`, or `bundles` for a call.
 
 ## Rules
 

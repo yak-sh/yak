@@ -64,8 +64,77 @@ test('a value is what its property says it is', () => {
   assertEquals(valueOf('a', '.doc', { type: 'array' }), ['.doc'])
   // A union with null reads by the type that is not null.
   assertEquals(valueOf('a', '7', { type: ['number', 'null'] }), 7)
+  assertThrows(() => valueOf('a', 'null', { type: ['number', 'null'] }), Usage)
+  assertEquals(valueOf('a', 'null', { type: ['string', 'null'] }), 'null')
+  assertEquals(valueOf('a', 'null', { type: 'string' }), 'null')
   assertThrows(() => valueOf('a', 'lots', { type: 'number' }), Usage)
   assertThrows(() => valueOf('a', 'nope', { type: 'object' }), Usage)
+})
+
+let nullable = {
+  name: 'change',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      body: { type: ['string', 'null'] },
+      priority: { type: ['number', 'null'] },
+      title: { type: 'string' },
+      choice: { type: ['string', 'null'], enum: ['one'] },
+      note: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+  },
+}
+
+test('nullable text keeps literal null, including file contents', async () => {
+  for (let body of ['null', '@body']) {
+    assertEquals(
+      await argsFor(nullable, ['--body', body], {
+        file: () => 'null',
+        stdin: () => '',
+      }),
+      { body: 'null' },
+    )
+  }
+})
+
+test('clear writes null to nullable fields in argument order', async () => {
+  assertEquals(
+    await argsFor(nullable, [
+      '--body',
+      'earlier',
+      '--clear',
+      'body',
+      '--clear=priority',
+      '--clear',
+      'note',
+    ]),
+    { body: null, priority: null, note: null },
+  )
+  assertEquals(await argsFor(nullable, ['--clear', 'body', '--body', 'null']), {
+    body: 'null',
+  })
+})
+
+test('clear checks its field and preserves a declared clear argument', async () => {
+  for (
+    let words of [['--clear'], ['--clear', 'title'], ['--clear', 'choice'], [
+      '--clear',
+      'missing',
+    ]]
+  ) {
+    await assertRejects(() => argsFor(nullable, words), Usage)
+  }
+  let declared = {
+    ...nullable,
+    inputSchema: {
+      ...nullable.inputSchema,
+      properties: {
+        ...nullable.inputSchema.properties,
+        clear: { type: 'string' },
+      },
+    },
+  }
+  assertEquals(await argsFor(declared, ['--clear', 'body']), { clear: 'body' })
 })
 
 test('@file inflates, - is stdin, and both happen before the type', async () => {
