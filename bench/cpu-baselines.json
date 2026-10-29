@@ -4496,12 +4496,6 @@
     "evidence": "bench/session-status.rebank.results.json"
   },
   {
-    "suite": "relay-admission",
-    "revision": "b36d24f7d14f3adc462243c53381095eb459b2ad",
-    "verdict": "inconclusive",
-    "error": "the code at 77ebf5d38 cannot run today's bench: Error: Relay finished without staging a value\n    at file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:230:19\n    at async send (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:227:9)\n    at async next (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:316:7)\n    at async run (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:337:7)\n    at async relayFixture (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-fixture.ts:348:3)\n    at async Module.measure (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/relay-admission.ts:16:23)\n    at async serve (file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-4198a9dc3229cd82/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "harness-steps",
     "baseline": "packages/harness/steps.baseline.json",
     "reference": "01f3ab27db00022cafadc271e18db1d894c6727e",
@@ -5683,5 +5677,12 @@
       }
     ],
     "evidence": "bench/operation-checkout.rebank.results.json"
+  },
+  {
+    "suite": "relay-admission",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "9db0ebb99e4a16edf3b3ffdf1b718d5cb270a158",
+    "verdict": "inconclusive",
+    "error": "the code at 5758d5ce6 cannot run today's bench: TypeError: opts.clock is not a function\n    at moment (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:681:55)\n    at Object.Now (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:544:29)\n    at hold (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:515:61)\n    at firing (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:573:51)\n    at each (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/fp/mod.ts:148:11)\n    at fire (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:605:5)\n    at runPhase (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:634:17)\n    at file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:758:15\n    at timed (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:698:22)\n    at file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:756:14"
   }
 ]
