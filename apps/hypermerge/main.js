@@ -17,7 +17,7 @@ import { editor } from './editor.js'
 import { lanes, shuffled } from './feed.js'
 import { forget, keep, kept, mint } from './keys.js'
 import { fresh, look } from './names.js'
-import { at, needs } from './time.js'
+import { at, moment, needs } from './time.js'
 import { ago } from './when.js'
 import { moved, splice } from './text.js'
 import { heads, logs } from './view.js'
@@ -472,10 +472,15 @@ let open = async () => {
     return running
   }
 
+  // Clicking a block rewinds the doc to the moment it was applied and opens
+  // it; clicking elsewhere closes it, and the doc stays where it is.
   let pick = (ev) => {
     let g = ev.target.closest('[data-eid]')
-    selected = g && g.dataset.eid != selected ? g.dataset.eid : null
-    draw()
+    selected = g?.dataset.eid ?? null
+    let k = selected && moment(order(), selected)
+    if (k == null) return draw()
+    stop()
+    go(k)
   }
   $('.Logs_view').addEventListener('click', pick)
   $('.Logs_view').addEventListener('keydown', (ev) => {

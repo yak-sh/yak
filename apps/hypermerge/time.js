@@ -45,3 +45,33 @@ export let needs = (c, clock) => [
     : []),
   ...Object.entries(c.deps ?? {}).filter(([a, s]) => (clock[a] ?? 0) < s),
 ]
+
+/// let one = (actor, seq, deps = {}) => ({ eid: actor + seq, change: { actor, seq, deps } })
+/// let order = [one('b', 1, { a: 1 }), one('a', 2), one('a', 1), one('c', 1)]
+/// [moment(order, 'b1'), moment(order, 'a2'), moment(order, 'a1'), moment(order, 'c1')] -> [3, 3, 3, 4]
+/// moment(order, 'x') -> null
+/**
+ * How many blocks of `order` must be delivered for the block `eid` to be
+ * applied: through the last of it and everything it depends on, its own
+ * earlier changes included. Null for a block not in the order.
+ */
+export let moment = (order, eid) => {
+  let start = order.find((b) => b.eid == eid)
+  if (!start) return null
+  let at = new Map(order.map((b, i) => [key(b.change), i]))
+  let by = new Map(order.map((b) => [key(b.change), b.change]))
+  let seen = new Set(), todo = [start.change], last = 0
+  while (todo.length) {
+    let c = todo.pop()
+    if (!c || seen.has(key(c))) continue
+    seen.add(key(c))
+    last = Math.max(last, at.get(key(c)) + 1)
+    todo.push(
+      by.get(key({ actor: c.actor, seq: c.seq - 1 })),
+      ...Object.entries(c.deps ?? {}).map(([a, s]) =>
+        by.get(key({ actor: a, seq: s }))
+      ),
+    )
+  }
+  return last
+}

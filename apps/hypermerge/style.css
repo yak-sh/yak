@@ -663,7 +663,7 @@ button {
   top: 0;
   z-index: 2;
   display: flex;
-  gap: 44px;
+  gap: 72px;
   width: max-content;
   min-width: 100%;
   padding: 16px 28px 12px;
@@ -743,12 +743,6 @@ button {
   width: 16px;
   height: 0;
   border-top: 1.6px solid var(--muted);
-}
-.Key_tree {
-  width: 7px;
-  height: 7px;
-  border: 1.2px solid var(--muted);
-  border-radius: 50%;
 }
 .Key_seal {
   width: 16px;
@@ -849,32 +843,6 @@ button {
   fill: var(--muted);
   fill: context-stroke;
 }
-.Trees {
-  opacity: .55;
-  transition: opacity .4s;
-}
-.Tree_edge {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1;
-  opacity: .6;
-}
-.Tree_root {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-}
-.Tree_node {
-  fill: var(--surface);
-  stroke: var(--muted);
-  stroke-width: 1.2;
-}
-.Tree_node-root {
-  fill: var(--c);
-  stroke: var(--surface);
-  stroke-width: 1.5;
-}
 .Seal rect {
   fill: color-mix(in oklab, var(--ok) 10%, var(--surface));
   stroke: color-mix(in oklab, var(--ok) 45%, transparent);
@@ -898,12 +866,6 @@ button {
 .Stage[data-focus='blocks'] .Dep {
   opacity: .12;
 }
-.Stage[data-focus='logs'] .Trees,
-.Stage[data-focus='blocks'] .Trees,
-.Stage[data-focus='deps'] .Trees,
-.Stage[data-focus='replay'] .Trees {
-  opacity: .1;
-}
 .Stage[data-focus='blocks'] .Block rect:first-child {
   stroke: var(--c);
 }
@@ -922,19 +884,13 @@ button {
 .Stage[data-focus='deps'] .Block_in {
   opacity: .8;
 }
-.Stage[data-focus='tree'] .Trees {
-  opacity: 1;
-}
-.Stage[data-focus='tree'] .Tree_edge {
-  stroke: var(--ink-2);
-  opacity: .8;
-}
-.Stage[data-focus='tree'] .Dep {
+.Stage[data-focus='seal'] .Dep {
   opacity: .1;
 }
-.Stage[data-focus='tree'] .Seal rect {
+.Stage[data-focus='seal'] .Seal rect {
   stroke: var(--ok);
-  stroke-width: 1.6;
+  stroke-width: 1.8;
+  fill: color-mix(in oklab, var(--ok) 18%, var(--surface));
 }
 .Stage[data-focus='replay'] .Dep {
   opacity: .3;

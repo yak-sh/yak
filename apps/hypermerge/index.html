@@ -133,7 +133,9 @@
             The change is appended to your log as one <dfn>block</dfn>. Block 0
             holds your change 1, block 1 your change 2, and so on, with no gaps.
           </p>
-          <p class="Try">Click any block to open the change inside it.</p>
+          <p class="Try">
+            Click any block to rewind the doc to it and open the change inside.
+          </p>
         </section>
 
         <section class="Chapter" data-focus="deps">
@@ -145,28 +147,30 @@
             themselves never mention each other.
           </p>
           <p>
-            The curved lines are deps, drawn from a change up to what it had seen.
-            A change also depends on the block before it in its own log; that dep
-            is implied, so it is never written down.
+            The arrows are deps, drawn from a change to what it had seen. A change
+            also depends on the block above it in its own log; that dep is
+            implied, so it is never written down.
           </p>
           <p>
-            Each block sits just below everything it depends on, so time runs
-            down the page, and changes nobody had seen from each other share a row.
+            Each log holds only its own changes, back to back by index, so the
+            arrows are all that ties one log to another.
           </p>
         </section>
 
-        <section class="Chapter" data-focus="tree">
+        <section class="Chapter" data-focus="seal">
           <span class="Chapter_n">04</span>
           <h2>Each log is signed</h2>
           <p>
-            A hypercore hashes its blocks into a <dfn>Merkle tree</dfn>. Each block
-            is a leaf, and each pair of hashes is hashed again into a parent, as
-            drawn beside every column.
+            A hypercore hashes its blocks into a <dfn>Merkle tree</dfn>: each
+            block is a leaf, and each pair of hashes is hashed again into a
+            parent, up to a few roots.
           </p>
           <p>
-            On every append, the actor signs the hash of the tree's roots with
-            its secret key. Anyone holding the public key can check that every
-            block is the actor's own and in its place, and refuse one that isn't.
+            On every append, the actor signs the hash of those roots with its
+            secret key. That signature is the seal under each column, checked
+            here with the actor's public key. Anyone holding the key can tell
+            that every block is the actor's own and in its place, and refuse one
+            that isn't.
           </p>
           <p>
             Your secret key stays in this browser. The app only ever sees public
@@ -206,7 +210,8 @@
             way it merges two writers working at once.
           </p>
           <p
-            class="Try">Drag the slider back, type, then press “Back to now”.</p>
+            class="Try">Click an earlier block or drag the slider back, type, then
+            press “Back to now”.</p>
         </section>
 
         <section class="Chapter" data-focus="merge">
@@ -290,7 +295,6 @@
           <p class="Logs_key">
             <span><i class="Key_block"></i>block</span>
             <span><i class="Key_dep"></i>dep</span>
-            <span><i class="Key_tree"></i>Merkle tree</span>
             <span><i class="Key_seal"></i>signature</span>
           </p>
         </section>
