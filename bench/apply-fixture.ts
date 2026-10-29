@@ -21,6 +21,7 @@ import { ram } from '@yaks/ram'
 import { eid, workload } from '../packages/sqlite/fixtures/fleet.ts'
 
 import { sqlStatements } from './sql-counts.ts'
+import { fixture } from './fixture.ts'
 import { APPLY_MODES, APPLY_SHAPES, APPLY_SIZES, APPLY_WORK } from './names.ts'
 export const applyVocab = loadVocab([
   kernelDoc,
@@ -59,43 +60,63 @@ let plugins = () => [
   effects(applyVocab),
 ]
 
-export function applyFixture(mode: 'file' | 'ram') {
-  let dir = mode == 'file'
-    ? Deno.makeTempDirSync({ prefix: 'yaks-apply-bench-' })
-    : undefined
-  let db = mode == 'file' ? open(`${dir}/graph.sqlite`) : undefined
+let prepared = (db?: ReturnType<typeof open>) => {
   let store = db
     ? storage(db, applyVocab, {
       number: true,
       extend: [traverse(applyVocab)],
     })
     : ram(applyVocab, { number: true })
-  let g = graph({
-    storage: store,
-    vocab: applyVocab,
-    plugins: plugins(),
-  })
+  let g = graph({ storage: store, vocab: applyVocab, plugins: plugins() })
   g.install()
   if (db) {
     for (let stmt of ddl()) db.query(stmt)
     g.use(journal(log({ rows: (stmt) => db.query(stmt) }), applyVocab))
   }
-  store.tx((tx) => tx.patch(seeded()))
-  // Warm the graph pipeline and both edited stamp shapes before sampling.
-  // Setup leaves the WAL near SQLite's 1000-page autocheckpoint, so how many
-  // pages it wrote would decide whether a checkpoint of them lands inside the
-  // timed batch. Checkpoint before the last warm write, which restarts the WAL
-  // (a header and its fsync), so every sample starts on a fresh one.
-  for (let i = 0; i < 20; i++) {
-    if (i == 19) db?.query({ t: 'pragma', name: 'wal_checkpoint' })
-    g.apply([{ entity: { eid: eid(1) }, doc: { title: `Warm ${i}` } }])
+  return { g, store }
+}
+
+let fileSeed = fixture(async (path: string) => {
+  let db = open(path)
+  try {
+    let { store } = prepared(db)
+    store.tx((tx) => tx.patch(seeded()))
+  } finally {
+    db.close()
   }
-  return {
-    g,
-    close: () => {
-      db?.close()
-      if (dir) Deno.removeSync(dir, { recursive: true })
-    },
+})
+
+export async function applyFixture(mode: 'file' | 'ram') {
+  let dir = mode == 'file'
+    ? await Deno.makeTempDir({ prefix: 'yaks-apply-bench-' })
+    : undefined
+  let db: ReturnType<typeof open> | undefined
+  let close = () => {
+    db?.close()
+    if (dir) Deno.removeSync(dir, { recursive: true })
+  }
+  try {
+    if (dir) {
+      let path = `${dir}/graph.sqlite`
+      await fileSeed(path)
+      db = open(path)
+    }
+    let { g, store } = prepared(db)
+    if (db) {
+      // The original seed populated this connection's page cache. Read the
+      // copied corpus too, so copying the file does not make timed work cold.
+      assertEquals((g.read('.entity *') as Bundle[]).length, seeded().length)
+    } else store.tx((tx) => tx.patch(seeded()))
+    // Warm the same graph pipeline and stamp shapes on every private copy.
+    // The checkpoint and final write leave the WAL in the original state.
+    for (let i = 0; i < 20; i++) {
+      if (i == 19) db?.query({ t: 'pragma', name: 'wal_checkpoint' })
+      g.apply([{ entity: { eid: eid(1) }, doc: { title: `Warm ${i}` } }])
+    }
+    return { g, close }
+  } catch (error) {
+    close()
+    throw error
   }
 }
 
@@ -108,7 +129,7 @@ export function applyBundles(work: 'edit' | 'create', n: number): Bundle[] {
   }))
 }
 export function runApplies(
-  f: ReturnType<typeof applyFixture>,
+  f: Awaited<ReturnType<typeof applyFixture>>,
   bundles: Bundle[],
   shape: 'alone' | 'batch',
 ) {
@@ -116,7 +137,7 @@ export function runApplies(
   return bundles.flatMap((b) => f.g.apply([b]) as Bundle[])
 }
 export function verifyApplies(
-  f: ReturnType<typeof applyFixture>,
+  f: Awaited<ReturnType<typeof applyFixture>>,
   bundles: Bundle[],
 ) {
   let rows = f.g.get(bundles.map((b) => b.entity.eid)) as Bundle[]
@@ -126,16 +147,16 @@ export function verifyApplies(
   )
   assertEquals(rows.every((b) => !!b.created && !!b.entity.archetype), true)
 }
-export function measureApplyCounts() {
+export async function measureApplyCounts() {
   let counts: Record<string, { sqlPerApply: number; sqlPerBundle: number }> = {}
   for (let mode of APPLY_MODES) {
     for (let work of APPLY_WORK) {
       for (let n of APPLY_SIZES) {
         for (let shape of APPLY_SHAPES) {
           let counter = sqlStatements()
-          let f: ReturnType<typeof applyFixture> | undefined
+          let f: Awaited<ReturnType<typeof applyFixture>> | undefined
           try {
-            f = applyFixture(mode)
+            f = await applyFixture(mode)
             let bundles = applyBundles(work, n)
             counter.reset()
             runApplies(f, bundles, shape)
@@ -154,4 +175,4 @@ export function measureApplyCounts() {
   }
   return counts
 }
-if (import.meta.main) console.log(JSON.stringify(measureApplyCounts()))
+if (import.meta.main) console.log(JSON.stringify(await measureApplyCounts()))

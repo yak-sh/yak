@@ -86,7 +86,7 @@ const summary = (map: Map<string, Cost>, n: number) =>
   }]))
 
 try {
-  const fixture = traceBench ? applyFixture('file') : undefined
+  const fixture = traceBench ? await applyFixture('file') : undefined
   const host = fixture
     ? { graph: fixture.g, close: fixture.close, storage: undefined }
     : await compose(

@@ -27,14 +27,16 @@ for (let mode of APPLY_MODES) {
           }`,
           n: grouped ? 2 : 10,
           warmup: grouped ? 1 : 5,
-          fn: (b) => {
-            let fixtures = Array.from({
-              length: grouped ? RECORDING_BATCHES : 1,
-            }, () => applyFixture(mode))
-            let recorder = active
-              ? applyRecording(fixtures.map((f) => f.g))
-              : undefined
+          fn: async (b) => {
+            let fixtures: Awaited<ReturnType<typeof applyFixture>>[] = []
+            let recorder: ReturnType<typeof applyRecording> | undefined
             try {
+              for (let i = 0; i < (grouped ? RECORDING_BATCHES : 1); i++) {
+                fixtures.push(await applyFixture(mode))
+              }
+              recorder = active
+                ? applyRecording(fixtures.map((f) => f.g))
+                : undefined
               let bundles = applyBundles(work, n)
               b.start()
               for (let f of fixtures) runApplies(f, bundles, shape)
