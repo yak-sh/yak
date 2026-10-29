@@ -96,7 +96,16 @@ export let queueRestart = async (
   return 'Restart queued in yak-restart.service; handover and failure reporting continue in the background'
 }
 
-let ready = async (path: string) => {
+/** Where an instance of a unit template says it is ready: the file its
+ * `--ready` names, `<runtime>/<template>-<instance>.ready`. */
+export let readyFile = (
+  runtimeDir: string,
+  template: string,
+  instance: string,
+): string => `${runtimeDir.replace(/\/$/, '')}/${template}-${instance}.ready`
+
+/** Whether a ready file is there. */
+export let ready = async (path: string): Promise<boolean> => {
   try {
     return (await Deno.stat(path)).isFile
   } catch (error) {
@@ -188,9 +197,7 @@ let handover = async (options: RestartOptions): Promise<string> => {
     for (let role of replacing) {
       let instance = crypto.randomUUID()
       let candidate = { unit: `${role.unit}@${instance}.service`, ready: false }
-      let file = `${
-        options.runtimeDir.replace(/\/$/, '')
-      }/${role.unit}-${instance}.ready`
+      let file = readyFile(options.runtimeDir, role.unit, instance)
       candidates.push(candidate)
       let began = now()
       await call('--no-block', 'start', candidate.unit)

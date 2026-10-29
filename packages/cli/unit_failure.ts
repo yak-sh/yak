@@ -1,9 +1,16 @@
 // A systemd ExecStopPost reports outside the failed process, so a timeout or
 // SIGKILL cannot silence it. Exit metadata and bounded output from that
 // invocation go to the ordinary spool; the environment is never copied.
+//
+// A clean stop is a failure too when it leaves its template with no instance
+// ready: an in-place `systemctl restart` of the only web refuses every
+// connection until the new one listens, and an MCP client that retries for
+// seconds gives up for good. `yak restart` stops old units only once their
+// replacements are ready (./restart.ts), so a handover reports nothing.
 import type { Command } from './run.ts'
 import { read } from './config.ts'
 import { reporter } from './report.ts'
+import { ready, readyFile } from './restart.ts'
 
 export type UnitExit = {
   unit: string
@@ -11,9 +18,23 @@ export type UnitExit = {
   code?: string
   status?: string
   invocation?: string
+  /** how many other instances of the unit's template are ready, when asked
+   * (`others`) */
+  others?: number
 }
 
 export let unitFailure = (exit: UnitExit): Error | undefined => {
+  if (exit.result == 'success' && exit.others === 0) {
+    return Object.assign(
+      new Error(
+        `systemd unit ${exit.unit} stopped with no other ${
+          instanceOf(exit.unit)?.[0]
+        }@ ready, so nothing serves it until one starts; ` +
+          '`yak restart` hands over ready-first',
+      ),
+      { name: 'SystemdUnitAlone' },
+    )
+  }
   if (!exit.result || exit.result == 'success') return
   return Object.assign(
     new Error(
@@ -25,12 +46,52 @@ export let unitFailure = (exit: UnitExit): Error | undefined => {
   )
 }
 
-export type JournalRun = (
+/** The template and instance of a unit such as `yak-web@<id>.service`. */
+let instanceOf = (unit: string): [string, string] | undefined => {
+  let found = unit.match(/^(.+)@(.+)\.service$/)
+  return found ? [found[1], found[2]] : undefined
+}
+
+export type Run = (
   command: string,
   args: string[],
 ) => Promise<{ code: number; stdout: string }>
 
-let journalRun: JournalRun = async (command, args) => {
+/** How many other active instances of `unit`'s template are ready, by user
+ * systemd and the ready files in `runtimeDir`. Undefined when that is no
+ * question: a unit that is no template instance, or a manager that is
+ * stopping, when every unit stops at once. */
+export let others = async (
+  unit: string,
+  runtimeDir: string,
+  run: Run = execute,
+  exists: (path: string) => Promise<boolean> = ready,
+): Promise<number | undefined> => {
+  let template = instanceOf(unit)?.[0]
+  if (!template) return
+  let state = await run('systemctl', ['--user', 'is-system-running'])
+  if (state.stdout.trim() == 'stopping') return
+  let listed = await run('systemctl', [
+    '--user',
+    'list-units',
+    '--state=active',
+    '--plain',
+    '--no-legend',
+    '--no-pager',
+    `${template}@*.service`,
+  ])
+  if (listed.code) throw new Error(`systemctl could not list ${template}@`)
+  let instances = listed.stdout.split('\n')
+    .map((line) => line.trim().split(/\s+/)[0])
+    .filter((peer) => peer != unit)
+    .flatMap((peer) => instanceOf(peer)?.slice(1) ?? [])
+  let found = await Promise.all(
+    instances.map((i) => exists(readyFile(runtimeDir, template, i))),
+  )
+  return found.filter(Boolean).length
+}
+
+let execute: Run = async (command, args) => {
   let output = await new Deno.Command(command, {
     args,
     stdout: 'piped',
@@ -45,7 +106,7 @@ let journalRun: JournalRun = async (command, args) => {
  * runtime journal is root-only may allow a noninteractive privileged read. */
 export let unitOutput = async (
   exit: UnitExit,
-  run: JournalRun = journalRun,
+  run: Run = execute,
 ): Promise<string> => {
   if (!exit.invocation || !/^[a-f0-9]{32}$/i.test(exit.invocation)) return ''
   let args = [
@@ -88,9 +149,8 @@ export let reportUnit = async (
     error,
     {
       ...Object.fromEntries(
-        Object.entries(exit).filter((pair): pair is [string, string] =>
-          typeof pair[1] == 'string'
-        ),
+        Object.entries(exit).filter(([, value]) => value != null)
+          .map(([key, value]) => [key, String(value)]),
       ),
       ...stderr ? { stderr } : {},
     },
@@ -102,7 +162,7 @@ export let unitFailureCommand: Command = {
   noun: 'unit',
   verb: 'failure',
   description:
-    'Report a failed systemd unit from ExecStopPost to the configured tracker spool',
+    'Report a systemd unit that failed, or stopped with no other instance of its template ready, from ExecStopPost to the configured tracker spool',
   positional: ['unit'],
   inputSchema: {
     type: 'object',
@@ -119,6 +179,10 @@ export let unitFailureCommand: Command = {
       code: Deno.env.get('EXIT_CODE'),
       status: Deno.env.get('EXIT_STATUS'),
       invocation: Deno.env.get('INVOCATION_ID'),
+    }
+    let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
+    if (exit.result == 'success' && runtimeDir) {
+      exit.others = await others(exit.unit, runtimeDir)
     }
     if (!unitFailure(exit)) return 0
     if (!context.config) throw new Error('unit failure needs --config')

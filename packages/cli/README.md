@@ -858,13 +858,21 @@ places list.
 `yak unit failure <unit> --config <config>` is an `ExecStopPost` command. It
 reads systemd's `SERVICE_RESULT`, `EXIT_CODE`, `EXIT_STATUS` and `INVOCATION_ID`
 and writes a failed unit to the config's tracker spool without opening its
-graph. Successful stops produce no report. This includes failures that the
-unit's main process cannot report itself, such as a stop timeout or SIGKILL.
+graph. This includes failures that the unit's main process cannot report itself,
+such as a stop timeout or SIGKILL. A successful stop reports only when it leaves
+its template with no other active instance ready (its
+`$XDG_RUNTIME_DIR/<template>-<instance>.ready` file). Restarting or stopping the
+only web in place with `systemctl` is that: every connection is refused until
+another listens. A `yak restart` handover stops old units only once their
+replacements are ready, and a user manager that is stopping stops everything, so
+neither reports.
 
 Install `yak-unit-failure.conf` as `tracker.conf` in each user unit template's
 drop-in directory (`yak-web@.service.d`, `yak-work@.service.d`,
-`yak-tracker@.service.d`, and `yak-tracker-web@.service.d`). The config must
-name the spool consumed by tracker intake. Reload the user manager after
+`yak-tracker@.service.d`, and `yak-tracker-web@.service.d`). The report runs
+after the template's own `ExecStopPost` lines, and systemd skips it when one of
+them fails, so each carries `-` (`ExecStopPost=-/usr/bin/rm -f …`). The config
+must name the spool consumed by tracker intake. Reload the user manager after
 installing the drop-ins; use `yak restart` for a ready-first handover.
 
 ```sh

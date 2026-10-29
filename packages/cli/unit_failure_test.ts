@@ -1,5 +1,77 @@
 import { equal, test } from '@yaks/testing'
-import { reportUnit, unitFailure } from './unit_failure.ts'
+import { others, reportUnit, unitFailure } from './unit_failure.ts'
+
+// What `yak-web@a.service` stopping cleanly leaves: user systemd lists the
+// `active` units, of which `ready` hold their ready file, while the manager
+// says `state`. Answers the report's name, or null for none.
+let stop = async (
+  unit: string,
+  active: string[],
+  ready: string[] = [],
+  state = 'running',
+) => {
+  let count = await others(
+    unit,
+    '/run/user/1000/',
+    (_, args) =>
+      Promise.resolve({
+        code: 0,
+        stdout: args.includes('is-system-running')
+          ? `${state}\n`
+          : active.map((u) => `yak-web@${u}.service loaded active running\n`)
+            .join(''),
+      }),
+    (path) =>
+      Promise.resolve(
+        ready.some((i) => path == `/run/user/1000/yak-web-${i}.ready`),
+      ),
+  )
+  return unitFailure({ unit, result: 'success', others: count })?.name ?? null
+}
+
+for (
+  let [name, active, ready, state, expected] of [
+    [
+      'an in-place restart of the only web',
+      [],
+      [],
+      'running',
+      'SystemdUnitAlone',
+    ],
+    [
+      'a stop listed beside its own ready file',
+      ['a'],
+      ['a'],
+      'running',
+      'SystemdUnitAlone',
+    ],
+    [
+      'a replacement started but not ready',
+      ['b'],
+      [],
+      'running',
+      'SystemdUnitAlone',
+    ],
+    ['a ready-first handover', ['b'], ['b'], 'running', null],
+    ['a manager shutting down', [], [], 'stopping', null],
+  ] as const
+) {
+  test(`a clean stop reports ${expected ?? 'nothing'} for ${name}`, async () => {
+    equal(
+      await stop('yak-web@a.service', [...active], [...ready], state),
+      expected,
+    )
+  })
+}
+
+test('a unit that is no template instance is never asked about others', async () => {
+  equal(
+    await others('yak-restart.service', '/run', () => {
+      throw new Error('not called')
+    }),
+    undefined,
+  )
+})
 
 for (
   let result of [

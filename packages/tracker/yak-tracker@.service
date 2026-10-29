@@ -9,7 +9,9 @@ Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
 Environment=DENO_DIR=%h/.cache/deno
 ExecStartPre=/usr/bin/rm -f %t/yak-tracker-%i.ready
 ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker,@yaks/mail --ready %t/yak-tracker-%i.ready
-ExecStopPost=/usr/bin/rm -f %t/yak-tracker-%i.ready
+# `-`: a cleanup that fails or is killed must not skip the failure report the
+# tracker.conf drop-in adds after it (packages/cli/yak-unit-failure.conf).
+ExecStopPost=-/usr/bin/rm -f %t/yak-tracker-%i.ready
 Restart=on-failure
 RestartSec=2
 KillMode=process
