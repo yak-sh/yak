@@ -339,7 +339,9 @@ let open = async () => {
   let step = () => {
     let all = order(), n = all.length, range = $('.Time_range')
     range.max = n
-    $('.Time_now').hidden = !rewound()
+    // The button keeps its place while hidden, so the slider never moves
+    // under a drag as the doc leaves the present or returns to it.
+    $('.Time_now').disabled = !rewound()
     stage.classList.toggle('Stage-past', rewound())
     if (!rewound()) {
       time.past = null
