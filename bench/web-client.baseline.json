@@ -11,33 +11,33 @@
       "name": "rows: 2k-task snapshot",
       "unit": "ns/op",
       "better": "lower",
-      "median": 819684.2105263075,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 566800.0000000007,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "query: filter 2k rows (a board render)",
       "unit": "ns/op",
       "better": "lower",
-      "median": 1089249.9999999928,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 660383.3333333341,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "applyLocal: fold a working-set seed into the cache",
       "unit": "ns/op",
       "better": "lower",
-      "median": 5105833.33333337,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 7173499.99999999,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "resetSignals: rebuild every index from the cache",
       "unit": "ns/op",
       "better": "lower",
-      "median": 224870.0000000008,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 183431.2499999996,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"

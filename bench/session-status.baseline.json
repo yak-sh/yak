@@ -11,17 +11,17 @@
       "name": "status by identity beside 2,700 other calls",
       "unit": "ns/op",
       "better": "lower",
-      "median": 66409.83974358792,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 63086.093750000175,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "status by query beside 2,700 other calls",
       "unit": "ns/op",
       "better": "lower",
-      "median": 113805.33185840343,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 100419.99999999764,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
