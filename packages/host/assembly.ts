@@ -1,5 +1,5 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
-import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import type { graph } from '@yaks/graph'
 import type { Clock } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
