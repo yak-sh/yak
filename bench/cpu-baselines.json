@@ -1,0 +1,905 @@
+[
+  {
+    "suite": "throughput",
+    "reference": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204",
+    "revision": "458aec0cd98e1a66bc8f8048a295681000230f50",
+    "verdict": "inconclusive",
+    "error": "the code at 4eb03bcf6 cannot run today's bench: Error: Relay finished without staging a value\n    at file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:230:19\n    at async send (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:227:9)\n    at async next (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:316:7)\n    at async run (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:337:7)\n    at async relayFixture (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:348:3)\n    at async file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay_bench.ts?collection=0:9:19"
+  },
+  {
+    "suite": "client-rules",
+    "baseline": "bench/client-rules.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "458aec0cd98e1a66bc8f8048a295681000230f50",
+    "rounds": 6,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "keystroke, no rules",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          73697.40634005856,
+          45415.27446300607,
+          91792.38754325344,
+          52141.975308642686,
+          35091.89189189291,
+          53753.78787879058
+        ],
+        "current": [
+          46237.333333333176,
+          45873.31536388202,
+          46141.11922141105,
+          48961.86440678089,
+          39139.73799126523,
+          35455.12820513079
+        ],
+        "after": [
+          49618.64406779548,
+          63461.5384615392,
+          51251.87969924741,
+          108303.64372469719,
+          37036.842105264535,
+          44106.42570281154
+        ],
+        "reference": 51696.927503945044,
+        "now": 46007.217292646535
+      },
+      {
+        "name": "keystroke, four rules",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          144439.99999999962,
+          103465.5737704941,
+          88545.83333333419,
+          90046.6101694924,
+          71514.92537313382,
+          85317.99163179757
+        ],
+        "current": [
+          89382.07547170059,
+          139996.44128113857,
+          73046.87499999929,
+          64521.53110047255,
+          70439.99999999869,
+          68614.99999999978
+        ],
+        "after": [
+          138330.64516128864,
+          105557.14285714028,
+          136710.38251366137,
+          113246.63677130411,
+          50664.99999998996,
+          89471.42857143003
+        ],
+        "reference": 96756.09196999326,
+        "now": 71743.43749999898
+      }
+    ],
+    "evidence": "bench/client-rules.rebank.results.json",
+    "references": {
+      "keystroke, no rules": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "keystroke, four rules": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "keystroke, no rules",
+          "keystroke, four rules"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "web-client",
+    "baseline": "bench/web-client.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "6499040a7b83071a76192fbd7157839abb1c601b",
+    "rounds": 7,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "rows: 2k-task snapshot",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          523675.0000000029,
+          555950.0000000071,
+          1019650.0000000015,
+          512325.0000000098,
+          1003499.9999999854,
+          1015333.3333333388,
+          1030500.0000000291
+        ],
+        "current": [
+          877949.9999999985,
+          561624.9999999923,
+          937074.9999999816,
+          543650.0000000023,
+          578861.1111111095,
+          954449.999999997,
+          1046142.8571429029
+        ],
+        "after": [
+          998900.0000000033,
+          819684.2105263075,
+          515875.0000000055,
+          558600.0000000013,
+          648749.9999999955,
+          1007619.0476190407,
+          1150250.0000000119
+        ],
+        "reference": 909292.1052631554,
+        "now": 877949.9999999985
+      },
+      {
+        "name": "query: filter 2k rows (a board render)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          610281.2499999999,
+          1089249.9999999928,
+          1170199.9999999772,
+          623125.0000000045,
+          910225.000000014,
+          1278999.9999999963,
+          1198649.9999999977
+        ],
+        "current": [
+          637850.000000003,
+          630515.1515151451,
+          630529.4117647088,
+          639924.9999999938,
+          675549.9999999984,
+          1077950.0000000554,
+          1185599.9999999767
+        ],
+        "after": [
+          586222.2222222297,
+          1306499.9999999958,
+          648350.0000000049,
+          683350.0000000185,
+          1198523.8095238034,
+          1189266.6666666628,
+          1426133.3333333216
+        ],
+        "reference": 1129724.999999985,
+        "now": 639924.9999999938
+      },
+      {
+        "name": "applyLocal: fold a working-set seed into the cache",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          8856000.000000041,
+          3857200.000000012,
+          4191500.000000019,
+          3829749.99999999,
+          5105833.33333337,
+          5722199.999999793,
+          6100666.666666863
+        ],
+        "current": [
+          4927199.9999999935,
+          3281833.333333338,
+          4894222.222222198,
+          3448888.888888885,
+          4853749.999999991,
+          5217200.00000023,
+          5705400.000000009
+        ],
+        "after": [
+          9608666.666666673,
+          4807999.999999993,
+          3295285.7142857155,
+          4060000.0000000107,
+          5862200.000000121,
+          5782800.000000134,
+          7409749.9999998035
+        ],
+        "reference": 5414016.666666582,
+        "now": 4894222.222222198
+      },
+      {
+        "name": "resetSignals: rebuild every index from the cache",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          148237.49999999904,
+          286580.0000000005,
+          144420.0000000001,
+          166735.00000000332,
+          251130.00000001193,
+          271566.66666665435,
+          282777.77777778584
+        ],
+        "current": [
+          156872.22222222266,
+          178924.99999999924,
+          276993.50649350754,
+          170868.13186813163,
+          165573.42657342434,
+          280862.500000012,
+          274812.4999999845
+        ],
+        "after": [
+          171412.49999999956,
+          157199.9999999991,
+          224870.0000000008,
+          165895.1048951046,
+          277862.5000000034,
+          270524.1379310259,
+          297992.85714285105
+        ],
+        "reference": 238000.00000000634,
+        "now": 178924.99999999924
+      }
+    ],
+    "evidence": "bench/web-client.rebank.results.json",
+    "references": {
+      "rows: 2k-task snapshot": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "query: filter 2k rows (a board render)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "applyLocal: fold a working-set seed into the cache": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "resetSignals: rebuild every index from the cache": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/web-client.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "rows: 2k-task snapshot",
+          "query: filter 2k rows (a board render)",
+          "applyLocal: fold a working-set seed into the cache",
+          "resetSignals: rebuild every index from the cache"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "session-status",
+    "baseline": "bench/session-status.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "6499040a7b83071a76192fbd7157839abb1c601b",
+    "rounds": 6,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "status by identity beside 2,700 other calls",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          116880.00000000102,
+          89325.00000000042,
+          106954.54545453716,
+          63755.00000000102,
+          95469.04761905136,
+          97232.00000000361
+        ],
+        "current": [
+          13655.999999999949,
+          17217.090069283895,
+          8130.833333333006,
+          12633.680555556683,
+          10854.51595456988,
+          11671.92784667528
+        ],
+        "after": [
+          72752.49999999687,
+          68353.33333333135,
+          71247.39583333432,
+          55677.77777777742,
+          54445.83333333715,
+          64466.34615384447
+        ],
+        "reference": 71999.9479166656,
+        "now": 12152.804201115981
+      },
+      {
+        "name": "status by query beside 2,700 other calls",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          171655.55555556138,
+          122809.99999999949,
+          101210.00000001004,
+          83552.49999999614,
+          142055.0000000003,
+          143630.00000001193
+        ],
+        "current": [
+          28299.70760233914,
+          34666.66666666848,
+          20636.666666666013,
+          34876.66666666579,
+          35365.0000000016,
+          20774.166666666737
+        ],
+        "after": [
+          114384.99999999294,
+          116075.00000000073,
+          113225.6637168139,
+          122719.99999999632,
+          80163.33333333023,
+          89023.3333333284
+        ],
+        "reference": 115229.99999999683,
+        "now": 31483.18713450381
+      }
+    ],
+    "evidence": "bench/session-status.rebank.results.json",
+    "references": {
+      "status by identity beside 2,700 other calls": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "status by query beside 2,700 other calls": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/session-status.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "status by identity beside 2,700 other calls",
+          "status by query beside 2,700 other calls"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "graph-activity",
+    "baseline": "bench/graph-activity.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
+    "rounds": 7,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "absent/apply",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          43203.66666666693,
+          38095.66666666676,
+          51654.66666666665,
+          43571.333333333314,
+          49094.33333333315,
+          43463.33333333314,
+          36590.66666666695
+        ],
+        "current": [
+          30482.66666666677,
+          32408.000000000055,
+          33935.0000000001,
+          34099.66666666696,
+          28138.99999999982,
+          31477.999999999156,
+          18816.333333333507
+        ],
+        "after": [
+          51113.33333333338,
+          51158.00000000005,
+          47019.66666666643,
+          44964.666666666744,
+          42165.33333333306,
+          40904.66666666665,
+          35195.99999999991
+        ],
+        "reference": 43517.33333333323,
+        "now": 31477.999999999156
+      },
+      {
+        "name": "absent/query",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          2685.9999999999977,
+          2850.9999999999613,
+          3138.3333333336245,
+          2954.0000000003297,
+          2870.3333333335954,
+          2721.3333333335568,
+          1969.3333333331489
+        ],
+        "current": [
+          3094.666666666702,
+          3321.999999999813,
+          3229.3333333333676,
+          3325.000000000121,
+          2942.999999999908,
+          3546.666666666473,
+          2011.666666667831
+        ],
+        "after": [
+          3198.9999999999172,
+          3150.6666666664387,
+          3145.6666666666324,
+          2893.000000000029,
+          2796.333333333071,
+          2647.3333333330324,
+          1700.333333332916
+        ],
+        "reference": 2860.6666666667784,
+        "now": 3229.3333333333676
+      },
+      {
+        "name": "uncreated/apply",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          41668.333333333365,
+          43422.33333333327,
+          50482.33333333337,
+          43750.3333333334,
+          41878.9999999996,
+          40709.00000000013,
+          37033.00000000066
+        ],
+        "current": [
+          30172.333333333427,
+          32425.333333333278,
+          34976.666666666766,
+          32875.3333333334,
+          28374.333333333198,
+          28400.33333333243,
+          18289.999999999658
+        ],
+        "after": [
+          48405.33333333345,
+          50942.99999999991,
+          48336.66666666613,
+          47158.333333334056,
+          42790.33333333306,
+          40993.666666666584,
+          32375.666666666802
+        ],
+        "reference": 43106.33333333317,
+        "now": 30172.333333333427
+      },
+      {
+        "name": "uncreated/query",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          2551.9999999999827,
+          2839.6666666667443,
+          2881.666666666812,
+          2861.0000000007863,
+          2395.0000000004366,
+          2737.333333333178,
+          1761.6666666666183
+        ],
+        "current": [
+          3126.333333333453,
+          3253.6666666668075,
+          3498.666666667001,
+          3265.666666666827,
+          2941.3333333335077,
+          3025.3333333336436,
+          1658.666666667462
+        ],
+        "after": [
+          3378.666666666504,
+          3115.999999999986,
+          3178.333333333285,
+          3019.666666665823,
+          2819.6666666663077,
+          2792.3333333334695,
+          1721.0000000001553
+        ],
+        "reference": 2829.666666666526,
+        "now": 3126.333333333453
+      },
+      {
+        "name": "inactive/apply",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          41289.000000000065,
+          46758.66666666662,
+          51233.666666666366,
+          43429.33333333349,
+          49965.33333333354,
+          45444.99999999971,
+          31211.999999999534
+        ],
+        "current": [
+          31059.666666666697,
+          31855.999999999767,
+          35201.33333333373,
+          32353.666666666562,
+          29151.666666666642,
+          28561.99999999929,
+          18137.00000000002
+        ],
+        "after": [
+          51456.66666666693,
+          52309.66666666669,
+          47434.66666666669,
+          45809.66666666669,
+          43930.66666666709,
+          41229.66666666738,
+          30552.666666666482
+        ],
+        "reference": 45627.3333333332,
+        "now": 31059.666666666697
+      },
+      {
+        "name": "inactive/query",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "before": [
+          2725.666666666863,
+          3097.9999999999563,
+          3090.3333333335468,
+          2986.0000000001796,
+          2956.999999999728,
+          2916.3333333332657,
+          1639.3333333338283
+        ],
+        "current": [
+          3121.666666666897,
+          3482.3333333333717,
+          3454.6666666665255,
+          3088.999999999942,
+          3063.9999999996994,
+          3018.000000000029,
+          1722.0000000003588
+        ],
+        "after": [
+          3239.6666666666833,
+          3233.6666666663705,
+          3101.6666666667634,
+          3029.0000000010573,
+          2760.6666666664146,
+          2618.9999999999905,
+          1598.0000000005625
+        ],
+        "reference": 2971.4999999999536,
+        "now": 3088.999999999942
+      }
+    ],
+    "evidence": "bench/graph-activity.rebank.results.json",
+    "references": {
+      "absent/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "absent/query": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "uncreated/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "uncreated/query": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "inactive/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "inactive/query": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/graph-activity.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "absent/apply",
+          "absent/query",
+          "uncreated/apply",
+          "uncreated/query",
+          "inactive/apply",
+          "inactive/query"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-streaming",
+    "baseline": "bench/harness-streaming.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
+    "rounds": 6,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "apply",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          248.48200000000008,
+          302.7370000000001,
+          243.4090000000001,
+          227.38300000000027,
+          304.0859999999998,
+          238.26199999999972
+        ],
+        "current": [
+          249.08000000000004,
+          274.869,
+          265.6669999999999,
+          233.98800000000006,
+          264.64300000000003,
+          220.9659999999999
+        ],
+        "after": [
+          222.38700000000006,
+          271.37299999999993,
+          213.83800000000008,
+          220.317,
+          246.54100000000017,
+          243.35500000000002
+        ],
+        "reference": 243.38200000000006,
+        "now": 256.86150000000004
+      },
+      {
+        "name": "transient",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          9.16599999999994,
+          9.153000000000247,
+          4.189000000000078,
+          12.760999999999967,
+          7.681999999999789,
+          3.2789999999999964
+        ],
+        "current": [
+          8.587999999999965,
+          4.079999999999927,
+          5.962999999999738,
+          12.298999999999978,
+          4.164999999999964,
+          3.382999999999811
+        ],
+        "after": [
+          10.379000000000019,
+          9.40300000000002,
+          3.9260000000001583,
+          9.605999999999767,
+          5.413000000000011,
+          3.0830000000000837
+        ],
+        "reference": 8.417500000000018,
+        "now": 5.063999999999851
+      }
+    ],
+    "evidence": "bench/harness-streaming.rebank.results.json",
+    "references": {
+      "apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "transient": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-streaming.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "apply",
+          "transient"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-worker",
+    "baseline": "bench/harness-worker.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
+    "rounds": 7,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "inline/startup",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          76.20600000000013,
+          92.88799999999992,
+          42.629000000000815,
+          65.64000000000124,
+          52.75799999999799,
+          58.443999999999505,
+          47.57600000000093
+        ],
+        "current": [
+          60.297999999999774,
+          61.073999999999614,
+          46.64500000000044,
+          49.97699999999895,
+          67.3109999999997,
+          37.38299999999981,
+          41.03299999999945
+        ],
+        "after": [
+          69.07899999999972,
+          79.95800000000054,
+          44.10400000000027,
+          53.677999999999884,
+          53.227999999999156,
+          62.59700000000157,
+          59.51000000000022
+        ],
+        "reference": 58.97699999999986,
+        "now": 49.97699999999895
+      },
+      {
+        "name": "inline/work",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          366.39699999999993,
+          369.35099999999966,
+          340.8809999999994,
+          339.005000000001,
+          376.9519999999993,
+          467.6720000000005,
+          292.27400000000125
+        ],
+        "current": [
+          253.71199999999862,
+          299.54499999999916,
+          243.16599999999926,
+          261.15400000000045,
+          247.58499999999913,
+          186.04299999999967,
+          206.80199999999968
+        ],
+        "after": [
+          335.44600000000037,
+          328.98199999999997,
+          315.66300000000047,
+          332.08899999999994,
+          435.3269999999993,
+          328.41400000000067,
+          263.8899999999994
+        ],
+        "reference": 337.2255000000007,
+        "now": 247.58499999999913
+      },
+      {
+        "name": "worker/startup",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          523.9779999999992,
+          446.875,
+          405.85100000000057,
+          464.366,
+          481.6730000000007,
+          465.16499999999905,
+          474.16100000000006
+        ],
+        "current": [
+          393.3279999999995,
+          459.20600000000013,
+          466.46100000000115,
+          397.09699999999975,
+          568.9980000000014,
+          411.70900000000074,
+          464.04399999999987
+        ],
+        "after": [
+          464.3029999999999,
+          485.058,
+          548.469,
+          545.3299999999999,
+          520.0489999999991,
+          530.75,
+          457.603000000001
+        ],
+        "reference": 477.91700000000037,
+        "now": 459.20600000000013
+      },
+      {
+        "name": "worker/work",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          1085.6329999999998,
+          1200.849000000001,
+          1079.6000000000004,
+          1126.8720000000012,
+          1193.369999999999,
+          1033.0130000000008,
+          1032.4840000000004
+        ],
+        "current": [
+          757.3540000000012,
+          753.1490000000003,
+          802.7379999999994,
+          892.1240000000016,
+          1071.3310000000001,
+          1063.902,
+          836.1590000000015
+        ],
+        "after": [
+          1019.5099999999998,
+          1020.8040000000001,
+          1074.911000000001,
+          1240.7849999999999,
+          1247.437,
+          1047.5439999999999,
+          997.4889999999996
+        ],
+        "reference": 1077.2555000000007,
+        "now": 836.1590000000015
+      }
+    ],
+    "evidence": "bench/harness-worker.rebank.results.json",
+    "references": {
+      "inline/startup": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "inline/work": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "worker/startup": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "worker/work": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-worker.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "inline/startup",
+          "inline/work",
+          "worker/startup",
+          "worker/work"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-switch",
+    "baseline": "bench/harness-switch.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
+    "rounds": 6,
+    "verdict": "same",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "switch",
+        "unit": "ms",
+        "figure": "cpu",
+        "before": [
+          180.52399999999943,
+          173.05299999999988,
+          245.02600000000166,
+          203.85249999999905,
+          177.81750000000102,
+          168.23099999999977
+        ],
+        "current": [
+          25.800500000000284,
+          25.681000000000495,
+          32.64749999999913,
+          23.699000000002343,
+          30.92399999999907,
+          27.087500000001455
+        ],
+        "after": [
+          171.21299999999974,
+          238.09799999999996,
+          167.58449999999903,
+          152.6265000000003,
+          218.10299999999916,
+          178.0610000000015
+        ],
+        "reference": 177.93925000000127,
+        "now": 26.44400000000087
+      }
+    ],
+    "evidence": "bench/harness-switch.rebank.results.json",
+    "references": {
+      "switch": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "switch"
+        ]
+      }
+    ]
+  }
+]

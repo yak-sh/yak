@@ -1,25 +1,28 @@
 {
   "version": 1,
   "suite": "harness-streaming",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
-  "tolerance": 0.1,
+  "tolerance": 0,
   "benches": [
     {
       "name": "apply",
       "unit": "ms",
       "better": "lower",
-      "median": 164.761945,
-      "tolerance": 0.64
+      "median": 232.87100000000004,
+      "tolerance": 0.845,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     },
     {
       "name": "transient",
       "unit": "ms",
       "better": "lower",
-      "median": 11.841431999999998,
-      "tolerance": 0.213
+      "median": 7.4080000000000155,
+      "tolerance": 0.95,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     }
-  ]
+  ],
+  "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
 }

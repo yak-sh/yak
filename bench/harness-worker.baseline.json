@@ -1,53 +1,44 @@
 {
   "version": 1,
   "suite": "harness-worker",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
-  "tolerance": 0.1,
+  "tolerance": 0,
   "benches": [
     {
       "name": "inline/startup",
       "unit": "ms",
       "better": "lower",
-      "median": 219.777184,
-      "tolerance": 0.174
+      "median": 58.443999999999505,
+      "tolerance": 0.95,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     },
     {
       "name": "inline/work",
       "unit": "ms",
       "better": "lower",
-      "median": 340.29782200000005,
-      "tolerance": 0.1
-    },
-    {
-      "name": "inline/timer-delay",
-      "unit": "ms",
-      "better": "lower",
-      "median": 337.1259069999999,
-      "tolerance": 0.1
+      "median": 328.98199999999997,
+      "tolerance": 0.95,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     },
     {
       "name": "worker/startup",
       "unit": "ms",
       "better": "lower",
-      "median": 391.52009899999996,
-      "tolerance": 0.1
+      "median": 465.16499999999905,
+      "tolerance": 0.703,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     },
     {
       "name": "worker/work",
       "unit": "ms",
       "better": "lower",
-      "median": 732.6726779999999,
-      "tolerance": 0.1
-    },
-    {
-      "name": "worker/timer-delay",
-      "unit": "ms",
-      "better": "lower",
-      "median": 6.137707000000091,
-      "tolerance": 0.717
+      "median": 1047.5439999999999,
+      "tolerance": 0.502,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
     }
-  ]
+  ],
+  "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
 }
