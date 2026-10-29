@@ -1,12 +1,5 @@
 [
   {
-    "suite": "throughput",
-    "reference": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204",
-    "revision": "458aec0cd98e1a66bc8f8048a295681000230f50",
-    "verdict": "inconclusive",
-    "error": "the code at 4eb03bcf6 cannot run today's bench: Error: Relay finished without staging a value\n    at file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:230:19\n    at async send (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:227:9)\n    at async next (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:316:7)\n    at async run (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:337:7)\n    at async relayFixture (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:348:3)\n    at async file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay_bench.ts?collection=0:9:19"
-  },
-  {
     "suite": "graph-activity",
     "baseline": "bench/graph-activity.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
@@ -3822,12 +3815,6 @@
     "evidence": "bench/operation-diagnostics.rebank.results.json"
   },
   {
-    "suite": "terminal-interactions",
-    "revision": "d0a0489cb571212445ce35bcc9331f40ccd3d663",
-    "verdict": "inconclusive",
-    "error": "the code at f68531abe cannot run today's bench: Error: paint comment… never completed:\n╭──────────────────────╮Search\n│Tasks                 │query count\n│                      │.task .count\n│Search                │\n│/                     │2,000\n│                      │\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\ndrafts: [{\"entity\":{\"eid\":\"8040df04-e5ba-8873-b14a-247c5f1a41ad\",\"num\":2002},\"draft\":{\"by\":\"1d55ab2c-76da-4b66-9c37-e871a427f200\",\"place\":\"search\",\"text\":\"\",\"rev\":2}}]\n    at until (file:///tmp/bench-paired-47993deaf221e44b/0/bench/terminal-interactions.ts:70:11)\n    at async Module.measure (file:///tmp/bench-paired-47993deaf221e44b/0/bench/terminal-interactions.ts:228:7)\n    at async serve (file:///tmp/bench-paired-47993deaf221e44b/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-47993deaf221e44b/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "client-frame",
     "baseline": "bench/client-frame.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
@@ -6301,5 +6288,180 @@
       }
     ],
     "evidence": "bench/harness-startup.rebank.results.json"
+  },
+  {
+    "suite": "throughput",
+    "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+    "verdict": "slower",
+    "error": "the code at 680bfaf86 cannot run today's bench: Benchmark collector exited (1): bench/deno-worker.ts,packages/sqlite/throughput_bench.ts,packages/sql/throughput_bench.ts,packages/query/throughput_bench.ts"
+  },
+  {
+    "suite": "terminal-interactions",
+    "baseline": "bench/terminal-interactions.baseline.json",
+    "references": {
+      "tui/comment-keystroke-paint": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+      "tui/comment-submit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+      "tui/query-to-answer": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+      "tui/comment-draft-save": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
+    },
+    "provenance": [
+      {
+        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "kind": "derived",
+        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "tui/comment-keystroke-paint",
+          "tui/comment-submit",
+          "tui/query-to-answer"
+        ]
+      },
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "tui/comment-draft-save"
+        ]
+      }
+    ],
+    "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "groups": [
+      {
+        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "tui/comment-keystroke-paint",
+          "tui/comment-submit",
+          "tui/query-to-answer"
+        ],
+        "collection": {
+          "suite": "terminal-interactions",
+          "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+          "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+          "names": [
+            "tui/comment-keystroke-paint",
+            "tui/comment-submit",
+            "tui/query-to-answer"
+          ],
+          "rounds": 3,
+          "driver": "77dfcaf0e58c33763d8922cb02823491d438142243a12379283820b67a849e88",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      },
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "revision": "214b9dd46df210059fe61ee2361497a7114de01d",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "tui/comment-draft-save"
+        ]
+      }
+    ],
+    "verdict": "same",
+    "status": "same in limited rounds; default monitor confirmation pending",
+    "confidence": "limited rounds",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "tui/comment-keystroke-paint",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "before": [
+          42.78276199999891,
+          42.95081100000061,
+          44.56631800000105
+        ],
+        "current": [
+          49.39152099999956,
+          48.10049299999628,
+          55.448458000002574
+        ],
+        "after": [
+          57.11753400000089,
+          39.09334499999932,
+          38.956114999999045
+        ],
+        "reference": 42.86678649999976,
+        "now": 49.39152099999956
+      },
+      {
+        "name": "tui/comment-draft-save",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          115.06111199999941,
+          198.09690200000114,
+          198.24028400000316
+        ],
+        "current": [
+          179.5564599999998,
+          248.27557200000047,
+          217.7501310000007
+        ],
+        "after": [
+          192.72084099999938,
+          120.91901700000017,
+          191.40516200000093
+        ],
+        "reference": 192.06300150000015,
+        "now": 217.7501310000007
+      },
+      {
+        "name": "tui/comment-submit",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "before": [
+          48.674057000000175,
+          36.87670699999762,
+          45.68467099999725
+        ],
+        "current": [
+          29.83782600000086,
+          24.488435999999638,
+          27.117350000000442
+        ],
+        "after": [
+          53.129031000000396,
+          38.7641360000016,
+          38.948506999999154
+        ],
+        "reference": 42.3165889999982,
+        "now": 27.117350000000442
+      },
+      {
+        "name": "tui/query-to-answer",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "before": [
+          205.90731199999937,
+          204.30725500000153,
+          275.397887000001
+        ],
+        "current": [
+          350.81254699999954,
+          302.7851159999991,
+          302.33458999999857
+        ],
+        "after": [
+          329.84738500000094,
+          316.2378599999993,
+          179.78261200000088
+        ],
+        "reference": 240.65259950000018,
+        "now": 302.7851159999991
+      }
+    ],
+    "evidence": "bench/terminal-interactions.rebank.results.json"
   }
 ]
