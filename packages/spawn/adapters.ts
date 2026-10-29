@@ -55,6 +55,7 @@ export let claude: Adapter = {
     'stream-json',
     '--verbose', // stream-json in print mode requires it
     ...(j.model ? ['--model', j.model] : []),
+    ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
     '--permission-mode',
     'bypassPermissions', // it owns its worktree; nobody is at the prompt

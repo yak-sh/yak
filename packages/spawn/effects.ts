@@ -14,11 +14,9 @@
 // Picking up the agents a restart left running is not a commit's business: it
 // is the duty at `@yaks/spawn/service`, held by the process that stays up.
 //
-// No handler stays open while the work runs. Launching waits on systemd and
-// tailing a log runs for as long as the agent does, so a handler that awaited
-// either would make a commit wait on an agent. Each one reads what it needs,
-// starts the work, and returns; failures go to `report` and never back into the
-// transaction, which is what @yaks/effects guarantees for every handler.
+// The start effect waits until the process is recorded, so the durable pool
+// owns launch failures and retries. Following the log outlives that effect;
+// no handler stays open while the agent works.
 //
 // Config sets the checkout agents work from, the directory each run's own
 // checkout is cut under, and how often its log is read:
@@ -35,6 +33,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
 import { down, type Opts, requestOf, start } from './run.ts'
+import { complete } from './completion.ts'
 
 /** What these handlers are given: the open graph. */
 export type Host = { graph: Graph; stopping?: AbortSignal }
@@ -79,6 +78,11 @@ export let spawning =
     let opts: Opts = { ...options, ...o, signal: host.stopping }
     let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
     return {
+      spawn_complete: async (e) => {
+        let entry = await one(host.graph, e.entity.eid)
+        let session = comp(entry, 'entry')?.session
+        if (session) await complete(host.graph, String(session))
+      },
       // The request. A `using` recorded on an `ask` row says what was
       // served, not what is wanted. A session whose run is going is told when
       // that run ends (./run.ts); one whose run is over carries on its thread.
@@ -89,7 +93,7 @@ export let spawning =
         if (!session) return
         let row = await one(host.graph, session)
         if (!row || row[PROCESS] && row[EXIT] == null) return
-        start(host.graph, session, opts).catch(report)
+        await start(host.graph, session, opts)
       },
       // Kill. A `stop` on an entry only marks the end of a transcript; only
       // a `stop` on the entity that is running a process means kill it.

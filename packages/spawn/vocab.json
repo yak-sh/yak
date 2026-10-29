@@ -36,7 +36,7 @@
         },
         "instruction": {
           "type": "string",
-          "description": "what to tell the agent (default: the task’s id and title; it holds the claim and reads the rest itself)"
+          "description": "additional instructions beside the task body, which is the agent’s spec"
         },
         "wait": {
           "type": "boolean",
@@ -128,6 +128,12 @@
       "positional": [
         "session"
       ]
+    },
+    "spawn_complete": {
+      "effect": true,
+      "target": ".entry .ask.through !lines",
+      "created": ["stop"],
+      "description": "publish the final report on the task and deliver it to the spawning session after a managed run’s final log import"
     },
     "spawn_start": {
       "effect": true,

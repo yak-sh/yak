@@ -80,7 +80,11 @@ let M = identityEid('model', ['fake-1'])
 let shelf = [
   { entity: { eid: P }, provider: { name: 'fake', transport: 'process' } },
   { entity: { eid: M }, model: { name: 'fake-1' } },
-  { entity: { eid: 'the-task' }, task: {}, doc: { title: 'ship it' } },
+  {
+    entity: { eid: 'the-task' },
+    task: {},
+    doc: { title: 'ship it', body: 'Keep the owner’s exact requirement.' },
+  },
   { ...link(P, 'serves', M), serves: { name: 'fake-1' } },
 ]
 
@@ -146,10 +150,29 @@ test('a spawn lands the session, the request and the lease', async () => {
   let [request] = await g.get([source])
   assertEquals(comp(request, 'call')?.to, toolEid('session_spawn'))
   assertStringIncludes(String(comp(entry, 'content')?.body), 'ship it')
+  assertStringIncludes(
+    String(comp(entry, 'content')?.body),
+    'Keep the owner’s exact requirement.',
+  )
   // And the lease: the board says who is doing it.
   let [held] = await g.read('.claim&*')
   assertEquals(held.entity.eid, 'the-task')
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
+})
+
+let extra = host()
+await extra.g.apply(shelf)
+test('an added instruction keeps the task body as the spec', async () => {
+  let g = extra.g
+  await tools.session_spawn!(...asked(g, {
+    task: 'the-task',
+    provider: P,
+    instruction: 'Check the edge case too.',
+  }))
+  let [entry] = await g.read('.using&*')
+  let instruction = String(comp(entry, 'content')?.body)
+  assertStringIncludes(instruction, 'Keep the owner’s exact requirement.')
+  assertStringIncludes(instruction, 'Check the edge case too.')
 })
 
 test('a spawn records the chosen persona on its session', async () => {

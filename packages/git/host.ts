@@ -14,6 +14,7 @@ import { token } from '@yaks/graph/sha256'
 import { and, distinct, eq, fields, list, present } from '@yaks/query'
 import { refEid } from './comp.ts'
 import { localFilesystem } from './placement.ts'
+import { checkoutBase } from './checkout.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
@@ -329,6 +330,8 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   return (await row(g, eid))!
 }
 
+/** Repeating the same base request uses its original commit, even after a
+ * branch moves. A different base must still name that pinned commit. */
 export type CheckoutRequest = { path: string; base?: string; branch?: string }
 let resolve = async (source: string, base: string): Promise<string> =>
   (await git(source, [
@@ -349,14 +352,9 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   let eid = worktreeEid(repository, path)
   let old = await row(g, eid)
   let intent = old?.checkout as Comp | undefined
-  let resolved: string | undefined
-  if (intent && request.base != null) {
-    resolved = await resolve(source, request.base)
-    let pinned = intent.base ?? await resolve(source, String(intent.requested))
-    if (pinned != resolved) {
-      throw new Error('checkout request conflicts with pinned base intent')
-    }
-  }
+  let resolved = intent
+    ? await checkoutBase(intent, request.base, (name) => resolve(source, name))
+    : undefined
   if (intent && (intent.branch ?? null) !== (request.branch ?? null)) {
     throw new Error('checkout request conflicts with existing branch intent')
   }
@@ -366,6 +364,7 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
     )
   }
   if (old?.worktree && intent?.state == 'ready') {
+    await replace(g, path, old.worktree as Comp)
     let current = await discover(g, path)
     if ((current.worktree as Comp).repository != repository) {
       throw new Error('worktree repository mismatch')
@@ -393,9 +392,7 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   }])
   let base: string
   try {
-    base = intent?.base
-      ? String(intent.base)
-      : resolved ?? await resolve(source, request.base ?? 'HEAD')
+    base = resolved ?? await resolve(source, request.base ?? 'HEAD')
     await g.apply([{ entity: { eid }, checkout: { base } }])
   } catch (error) {
     await g.apply([{
@@ -752,6 +749,7 @@ let committed = async (path: string, branch: string, head: string) => {
 let holding = async (
   path: string,
   landed?: string,
+  base?: string,
 ): Promise<{ held?: Held; branch?: string }> => {
   let at = await standing(path)
   if (at?.dirty) return { held: 'dirty' }
@@ -759,7 +757,8 @@ let holding = async (
   let own = at.branch && `refs/heads/${at.branch}`
   if (landed) {
     let merged = !!own && own != landed &&
-      await committed(path, own, at.head) && await quiet(path, [
+      (at.head == base || await committed(path, own, at.head)) &&
+      await quiet(path, [
           'merge-base',
           '--is-ancestor',
           at.head,
@@ -784,11 +783,13 @@ let holding = async (
  * `unlanded` — kept, never guessed at. With `landed`, only that full local
  * branch ref counts as a landing (for example `refs/heads/main`), and the
  * branch reflog must prove it committed work still contained in HEAD. A fresh
- * branch or missing reflog evidence is kept. */
+ * branch or missing reflog evidence is kept. A caller supplying the checkout's
+ * pinned `base` can also take back a clean checkout still at that commit. */
 export let holds = async (
   path: string,
   landed?: string,
-): Promise<Held | undefined> => (await holding(path, landed)).held
+  base?: string,
+): Promise<Held | undefined> => (await holding(path, landed, base)).held
 
 /** Remove one worktree — the directory and the branch it was created on —
  * unless it still holds something. Returns what kept it, or nothing. A worktree
@@ -797,6 +798,7 @@ export let holds = async (
 export let reclaim = async (
   path: string,
   landed?: string,
+  base?: string,
 ): Promise<Held | undefined> => {
   if (await lost(path)) {
     // Without Git's index and HEAD, cleanliness and landing cannot be proved.
@@ -804,7 +806,7 @@ export let reclaim = async (
     return await Deno.remove(path, { recursive: true })
       .then(() => undefined, () => 'failed' as Held)
   }
-  let { held, branch } = await holding(path, landed)
+  let { held, branch } = await holding(path, landed, base)
   if (held) return held
   let common = await quiet(path, [
     'rev-parse',
@@ -843,35 +845,40 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
     throw new Error('Repository is not on the local filesystem')
   }
   let common = repo.common
-  let head = w.head
   if (typeof common != 'string') {
     if (await Deno.stat(path).then(() => true, () => false)) return path
     throw new Error('nothing recorded to cut ' + path + ' again from')
   }
-  return locked(common, path, async () => {
-    // A peer may have restored it while this request waited for the lock.
-    if (await Deno.stat(path).then(() => true, () => false)) return path
-    if (typeof head != 'string') {
-      throw new Error('nothing recorded to cut ' + path + ' again from')
-    }
-    let name = w.branch
-      ? String(
-        ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
-      )
-      : ''
-    let branch = name.replace(/^refs\/heads\//, '')
-    // Removing a worktree deletes its branch too, but a branch somebody else
-    // kept is where that work actually is, not a stale copy of it.
-    let standing = !!branch &&
-      await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
-    await git(common, [
-      'worktree',
-      'add',
-      ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
-      path,
-      standing ? branch : head,
-    ])
-    await discover(g, path)
-    return path
-  })
+  return locked(common, path, () => replace(g, path, w))
+}
+
+// Called with the checkout path locked by create or restore. A peer may have
+// restored it while this request waited; an existing path is never replaced.
+let replace = async (g: Graph, path: string, w: Comp): Promise<string> => {
+  if (await Deno.stat(path).then(() => true, () => false)) return path
+  let common = ((await row(g, String(w.repository)))?.repository as Comp)
+    ?.common
+  let head = w.head
+  if (typeof head != 'string' || typeof common != 'string') {
+    throw new Error('nothing recorded to cut ' + path + ' again from')
+  }
+  let name = w.branch
+    ? String(
+      ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
+    )
+    : ''
+  let branch = name.replace(/^refs\/heads\//, '')
+  // Removing a worktree deletes its branch too, but a branch somebody else
+  // kept is where that work actually is, not a stale copy of it.
+  let standing = !!branch &&
+    await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
+  await git(common, [
+    'worktree',
+    'add',
+    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
+    path,
+    standing ? branch : head,
+  ])
+  await discover(g, path)
+  return path
 }

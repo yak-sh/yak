@@ -14,6 +14,21 @@ document declares the `session spawn`, `session wait`, and `session peek` tools.
 
 ## Starting an agent
 
+The task body is the agent's spec. Create it, optionally edit it, and spawn:
+
+```sh
+yak task new "Fix the parser" --body @brief.md
+yak task update T-123 --body @revised-brief.md
+yak session spawn T-123 --provider codex --model gpt-6.1-sol --effort high
+```
+
+`--provider claude` uses Claude Code through the same lifecycle. Spawn takes the
+claim atomically and includes the task body in the request. With `worktrees`
+configured, each run has its own branch off main. Its final report becomes a
+comment on the task and a knock to the spawning session, delivered through the
+session bus that `yak session listen` reads. Dirty or unlanded work is kept;
+landed checkouts and their branches are removed after the run ends.
+
 Write a session and its first input in one transaction. A **bundle** is one
 entity's components as a JSON object, and a **batch** is a list of bundles
 applied in one transaction.
@@ -78,10 +93,10 @@ when that one ends. A run that ends cleanly while the task it holds waits on a
 dependency is **parked**: it keeps its claim, its checkout and its log, and the
 dependency finishing asks for its next run through `@yaks/session`'s
 `session_wake`; a dependency that finished while it ran is told as it ends.
-Every other run's checkout and files are taken back when it ends. Writing `stop`
-on the session entity requests termination: SIGTERM to the process group, then
-SIGKILL after the configured grace period. A `stop` on an entry only ends the
-transcript.
+Every other run's files are taken back when it ends, and its checkout once its
+work is landed. Writing `stop` on the session entity requests termination:
+SIGTERM to the process group, then SIGKILL after the configured grace period. A
+`stop` on an entry only ends the transcript.
 
 <a id="stopping-a-run"></a>
 
@@ -119,13 +134,14 @@ yak session peek S-4211 -n 20
 The MCP names are `session_spawn`, `session_stop`, `session_wait`, and
 `session_peek`. `spawn` creates the session, first entry, and claim on the task.
 It calls `graph.apply()` itself because the post-commit effect must start the
-process before `--wait` can monitor it. `wait` polls the graph. A session with a
-`process` ends when that process exits, even if its transcript already has a
-`stop`; a session without a process ends when its transcript reaches `stopped`
-or `failed`. It reports the brief and exit code, and reaching its timeout leaves
-the run active. `stop` writes a stop entry for a native transcript, or a stop
-request on a managed session entity; the process receives SIGTERM, then SIGKILL
-if it stays up. `peek` renders recent entries from the graph.
+process before `--wait` can monitor it. `wait` polls the graph. A requested
+managed run ends after both process exit and final log import, even if its
+provider already printed a `stop`; a session without a process ends when its
+transcript reaches `stopped` or `failed`. It reports the brief and exit code,
+and reaching its timeout leaves the run active. `stop` writes a stop entry for a
+native transcript, or a stop request on a managed session entity; the process
+receives SIGTERM, then SIGKILL if it stays up. `peek` renders recent entries
+from the graph.
 
 ## Configuration
 

@@ -35,13 +35,13 @@ import {
   sessionFor,
   sessionViews,
   statusOf,
-  textOf,
   usingBefore,
 } from '@yaks/session'
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
-import { spelling } from './run.ts'
+import { requestOf, spelling } from './run.ts'
+import { reportOf } from './completion.ts'
 
 /** What config can set for these tools. */
 export type Options = {
@@ -129,18 +129,39 @@ let said = (call: Bundle, body: string): Bundle => ({
 
 /** A session's own account of itself: the brief it wrote if there is one,
  * otherwise the last thing it said. */
-export let briefOf = (row: Bundle | undefined, entries: Bundle[]): string => {
-  let wrote = str(comp(row, 'brief')?.text)
-  if (wrote) return wrote
-  let last = entries.filter((b) => b[OUTPUT] && b[CONTENT]).at(-1)
-  return last ? textOf(last) : ''
-}
+export let briefOf = reportOf
 
 // A run is over when whatever is behind it is over. A provider that prints its
 // final event and then lingers has a `stop` entry and is still running, so a
-// session with a `process` is judged by the process exiting and nothing else.
-let over = (row: Bundle | undefined, entries: Bundle[]): boolean =>
-  row?.[PROCESS] ? comp(row, EXIT) != null : ENDED.has(statusOf(entries))
+// managed request also waits for the final import receipt.
+let over = (row: Bundle | undefined, entries: Bundle[]): boolean => {
+  if (!row?.[PROCESS]) return ENDED.has(statusOf(entries))
+  if (comp(row, EXIT) == null) return false
+  let request = entries.filter(requestOf).at(-1)
+  return !request || entries.some((b) =>
+    b.stop && !b.lines &&
+    comp(b, 'ask')?.through == request.entity.eid &&
+    Number(comp(b, ENTRY)?.seq) > Number(comp(request, ENTRY)?.seq)
+  )
+}
+
+// Before final import receipts existed, an ended run's log was removed only
+// after import. Those historical transcripts remain waitable after cleanup.
+let cleaned = async (graph: Graph, row: Bundle, entries: Bundle[]) => {
+  if (!row.process || !row.exit || !ENDED.has(statusOf(entries))) return false
+  let file = comp(row, SESSION)?.transcript
+  if (!file) return false
+  let [source] = await graph.get([String(file)], ['file'])
+  let path = comp(source, 'file')?.path
+  if (typeof path != 'string' || !path.endsWith('.out')) return false
+  try {
+    await Deno.stat(path)
+    return false
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return true
+    throw error
+  }
+}
 
 export let runs = (host: Host, options: Options = {}): Runs => {
   let beat = Number(options.poll ?? 1000)
@@ -181,7 +202,9 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     ) {
       let row = (await one(graph, session))!
       let entries = await entriesOf(graph, session)
-      if (over(row, entries)) return ending(graph, row, entries)
+      if (over(row, entries) || await cleaned(graph, row, entries)) {
+        return ending(graph, row, entries)
+      }
       let still = `${human(graph.vocab)(row)} — ${
         statusOf(entries)
       }, still running`
@@ -215,11 +238,16 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       }
       let effort = str(args.effort)
       let session = uuid()
-      // The instruction names the work and no more: the session holds the
-      // claim, and every session here starts by reading what it holds.
-      let instruction = str(args.instruction) ||
-        [human(graph.vocab)(on), str(comp(on, 'doc')?.title)]
-          .filter(Boolean).join(' — ')
+      let name = human(graph.vocab)(on)
+      // Snapshot the task body into the request: the task is the brief, even
+      // for a provider that has no graph tools in its own context.
+      let instruction = [
+        `Work ${name} in your own checkout. You already hold its claim under this session.`,
+        `The task is your spec; read \`yak graph show ${name}\` for its current body and comments.`,
+        str(comp(on, 'doc')?.title),
+        str(comp(on, 'doc')?.body),
+        str(args.instruction),
+      ].filter(Boolean).join('\n\n')
       // The request, plus the lease recording who is doing the work. The
       // lease is guarded, so handing an agent work somebody else already holds
       // rejects the whole transaction rather than starting a second run on
@@ -248,7 +276,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         ], who(call)),
       )
       let row = (await one(graph, session))!
-      let name = human(graph.vocab)(row)
+      name = human(graph.vocab)(row)
       return [said(
         call,
         args.wait

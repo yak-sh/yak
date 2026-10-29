@@ -43,10 +43,10 @@ good looks like, and it makes the calls neither of you foresaw.
 So write a brief the way you'd hand work to a sharp colleague over a desk:
 here's what should be true when you're done, here's why it matters to him,
 here's where things are, here's how you'll know it works, here's what I need
-back. Say how the result should feel (instant, calm, obvious to a stranger),
-not only what it must pass. Commands, ids and syntax stay exact; the judgment
-around them rides on the why, and a "never" in your brief usually has a reason
-under it that would serve the agent better.
+back. Say how the result should feel (instant, calm, obvious to a stranger), not
+only what it must pass. Commands, ids and syntax stay exact; the judgment around
+them rides on the why, and a "never" in your brief usually has a reason under it
+that would serve the agent better.
 
 ## Which agent
 
@@ -56,22 +56,24 @@ under it that would serve the agent better.
   long coding job carrying all of it hits its turn limit (M-33551).
 - **A fresh agent** starts from the persona alone and needs the whole brief.
 - **A native session** (`yak session new`, our own harness, on a GPT model)
-  takes the whole brief plus what `native-sessions` adds. Pass `--work T-…`
-  (or a project id) so its common persona and repository skill scope come from
-  graph context. Its graph catalogue matches skill descriptions to the work
-  and `skill_read` loads a body, so the skills find their own way in: a pasted
-  body is a copy that goes stale, and naming
-  SKILL.md files points it at what you guessed it needs rather than what the
-  work turns out to need.
+  takes the whole brief plus what `native-sessions` adds. Pass `--work T-…` (or
+  a project id) so its common persona and repository skill scope come from graph
+  context. Its graph catalogue matches skill descriptions to the work and
+  `skill_read` loads a body, so the skills find their own way in: a pasted body
+  is a copy that goes stale, and naming SKILL.md files points it at what you
+  guessed it needs rather than what the work turns out to need.
 - **None of them**, for the knowing and the recording (M-33551). Read the code,
   file the task, save the memory yourself; then hand off the work.
 
 ## What a brief carries
 
 **The task as the spec.** File it first: the outcome and the pointers, short
-(M-14370), with the owner's words verbatim in it. The brief then says
-"`graph_show` with `T-…` is the spec". The task outlives your context, and it's
-where the next agent, and the owner, look (M-3715).
+(M-14370), with the owner's words verbatim in it. The task body is the brief.
+Edit it there, then start the run with `session_spawn` with
+`{task: "T-…", provider: "codex"}` (or `provider: "claude"`). The request
+carries the body and asks the agent to read `graph_show` with `ids: ["T-…"]` for
+updates. The task outlives your context, and it's where the next agent, and the
+owner, look (M-3715).
 
 **His words, as he said them**, wherever they set the direction. A paraphrase
 can only hold less than what he said, and each relay drifts it further
@@ -99,34 +101,39 @@ persona and the skills carry the rest, and repeating them buries what matters.
 **Pointers, not copies**: the task, the design, shas, files, memory ids. A
 pointer stays true; a pasted excerpt goes stale.
 
-**How it will know it works.** `deno task gate` before it lands: main's
-checks, then the tests its change can reach, which the runner chooses from the
-dependency graph (`testing`); after a yaks.app deploy, `app_errors`. Never
-name the tests for it: a path picked by judgment misses the consumer that
-breaks, and that is how main's gate went red. Whatever it runs to check starts
-no other process: no probe server, no Chrome, no benchmark driving a server
-("tests and benchmarks should be starting zero other processes", M-132169; "we
-need to stop all this chrome testing locally", 18bc9a78). An end-to-end check
-runs in its own process (`end-to-end-checks`).
+**How it will know it works.** `deno task gate` before it lands: main's checks,
+then the tests its change can reach, which the runner chooses from the
+dependency graph (`testing`); after a yaks.app deploy, `app_errors`. Never name
+the tests for it: a path picked by judgment misses the consumer that breaks, and
+that is how main's gate went red. Whatever it runs to check starts no other
+process: no probe server, no Chrome, no benchmark driving a server ("tests and
+benchmarks should be starting zero other processes", M-132169; "we need to stop
+all this chrome testing locally", 18bc9a78). An end-to-end check runs in its own
+process (`end-to-end-checks`).
 
 **Tests worth having.** The behavior a new test must catch, or no new test at
 all. "Add a test" alone gets one that restates the code (M-39441).
 
-**The loop**: claim the task under its session, `deno task gate`, land with
-`yak land` (run the gate again when land rebased you onto newer work), one line
-with the sha on the task, close it, release the claim, and `yak restart` when it
-changed the server. A task has one writer at a time. A second agent in the same
-task finds the first one's process and kills it as a stray writer, which is how
-five Codex runs on T-63462 died of SIGTERM beside a native session already
-working it. So `graph_show` the task for a live claim before starting
-anyone on it, and give a running session's task to that session.
+**The loop**: `session spawn` creates the session and claims the task, starts
+the CLI in a checkout of its own off main, and imports its transcript. The agent
+runs `deno task gate`, lands with `yak land` (run the gate again when land
+rebased you onto newer work), closes the task and runs `yak restart` when it
+changed the server. The system puts its final report on the task, releases the
+claim when it ends, and tells the spawning session through the delivery
+`yak session listen` reads. A run parked on a dependency keeps its claim. Landed
+worktrees are removed; dirty or unlanded work stays available. A task has one
+writer at a time. A second agent in the same task finds the first one's process
+and kills it as a stray writer, which is how five Codex runs on T-63462 died of
+SIGTERM beside a native session already working it. Give a running session’s
+task to that session; `session spawn` takes the claim atomically, so an occupied
+task refuses before a second run starts.
 
 **What comes back**: "report in a few lines", plus whatever you need for the
 owner: numbers, decisions only he can make, follow-ups it filed.
 
 **Money.** A run that spends money or a subscription starts as a pilot small
-enough for the owner to look at, with a stated cap, and stops there until he
-has looked. He gets to see what it buys before it buys a lot.
+enough for the owner to look at, with a stated cap, and stops there until he has
+looked. He gets to see what it buys before it buys a lot.
 
 **Switching something on.** Turning on a delivery (mail, a notice, a webhook, a
 scheduled job) also delivers everything already owed: a store that has been
@@ -135,31 +142,45 @@ sees a configuration change; the owner sees his inbox fill. So the brief says
 what happens to the backlog (marked as seen, or sent) and what the recipient
 gets in the first minute.
 
-A skeleton for a fresh agent, to fill in your own words:
+Write a fresh agent’s brief in the task body:
 
 ```text
-Work T-123 in /home/yaks/code/tasks: `graph_show` with `T-123` is the spec, with
-the owner's words. Claim it under your session and release it when done.
+Work T-123: `graph_show` with `ids: ["T-123"]` is the spec, with the owner’s words.
 
 <what should be true when you're done, and why it matters to him; how it should
 feel; the constraints that bite; pointers>
 
 You'll know it works when <how, checked in your own process>. Run `deno task
 gate` before landing, and start no servers and no Chrome. Land with `yak land`,
-put a one-line sha comment on T-123 and close it. Report in a few lines: <what
+close T-123. Report in a few lines, including the landed sha: <what
 you need back>.
 ```
+
+Start it through the same tool for either CLI provider:
+
+```text
+task_new({title: "<outcome>", project: "Task Graph", body: "<brief>"})
+task_update({task: "T-123", body: "<revised brief>"})
+session_spawn({task: "T-123", provider: "codex", model: "gpt-6.1-sol", effort: "high"})
+```
+
+The edit is optional. `provider: "claude"` selects Claude Code; `model` and
+`effort` select how it runs. The CLI equivalents are `yak task new`,
+`yak task update` and `yak session spawn T-123 --provider codex`. `session_peek`
+reads progress and `session_wait` reads its ending; no reply file, shell
+background job or manual checkout is needed. The brief belongs on the task even
+when supplied from a file.
 
 ## A bug the owner hits while playing
 
 He's in the app, finds something broken, and wants it gone before he's done
 playing: "i'm expecting instant fixes and deploys while i'm playing" (M-63541).
 What fights that is the pull to batch. Hand a new bug to a session already at
-work and it queues behind everything that session holds, which is how a
-one-line fix comes to take hours. So each bug he reports gets its own session
-at once, `--effort medium`, with a brief of a few lines: the task as the spec,
-ship now, the tests it could break, land, deploy, check errors. Two bugs share
-a session only when they're one change in one place.
+work and it queues behind everything that session holds, which is how a one-line
+fix comes to take hours. So each bug he reports gets its own session at once,
+`--effort medium`, with a brief of a few lines: the task as the spec, ship now,
+the tests it could break, land, deploy, check errors. Two bugs share a session
+only when they're one change in one place.
 
 ## A running agent
 
@@ -193,14 +214,14 @@ pointer, not the truth (M-37958).
   ran into before passing it on. A brief tells an agent to stop and ask rather
   than guess, so it asks about anything that reads like policy, including
   numbers we wrote ourselves. A threshold a design marked as a guess, a default
-  we picked, a trade between two of our own recommendations is yours to
-  decide: decide it, write the decision and the reason on the design, and send
-  the answer back. His words, spending, irreversible acts and his preferences
-  are what go to him; a question that is ours, passed up to him, costs him the
+  we picked, a trade between two of our own recommendations is yours to decide:
+  decide it, write the decision and the reason on the design, and send the
+  answer back. His words, spending, irreversible acts and his preferences are
+  what go to him; a question that is ours, passed up to him, costs him the
   decision and the context to make it.
 - File what it found as tasks, one thing each, and send follow-ups to the agent
   that holds the context rather than a new one.
-- Tell the owner what changed for him, in plain words, and only what he needs
-  to act on.
+- Tell the owner what changed for him, in plain words, and only what he needs to
+  act on.
 
 When this skill is wrong or missing something, fix it in the same change.

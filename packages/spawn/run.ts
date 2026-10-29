@@ -46,6 +46,7 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { edgeEid } from '@yaks/edge'
 import {
@@ -78,6 +79,7 @@ import { createWorktree, discover, reclaim } from '@yaks/git/host'
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
+import { complete } from './completion.ts'
 
 /** How a spawn runs, all optional. */
 export type Opts = {
@@ -87,7 +89,7 @@ export type Opts = {
    * `worktrees`, the checkout each run's own is cut from */
   cwd?: string
   /** where each run gets a checkout of its own: `<worktrees>/<session>` on
-   * branch `session-<session>`, cut from `cwd`'s HEAD and taken back when the
+   * branch `session-<session>`, cut from main and taken back when the
    * run ends unless it holds work, so two runs never write in one worktree
    * and no run writes in its launcher's */
   worktrees?: string
@@ -117,7 +119,6 @@ export type Opts = {
   signal?: AbortSignal
 }
 
-let uuid = () => crypto.randomUUID() as string
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let told = (o: Opts) => o.report ?? ((err: unknown) => console.error(err))
 
@@ -307,13 +308,14 @@ export type Attempt = {
 export let checkoutOf = (session: string, worktrees: string): string =>
   `${worktrees}/${session}`
 
-// A run's own checkout, cut from the source checkout's HEAD on a branch named
+// A run's own checkout, cut from main on a branch named
 // after the session. Committed work only: what is uncommitted in the source
 // stays there.
 let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
   let tree = await createWorktree(g, o.cwd ?? Deno.cwd(), {
     path: checkoutOf(session, o.worktrees!),
     branch: `session-${session}`,
+    base: 'refs/heads/main',
   })
   return String(comp(tree, 'workspace')?.root)
 }
@@ -480,6 +482,7 @@ export let finish = async (
   try {
     let well = cleanEnd(await ran(g, session))
     if (well) await rouse(g, session)
+    await complete(g, session)
     return well
   } catch (e) {
     told(o)(e)
@@ -544,9 +547,25 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     counts('.using&!ask'),
     counts('.stop'),
   ])
+  // A provider can print its stop before the process exits. Logs remain
+  // until final import and completion succeed, so those left on disk also
+  // need a final pass. Cleaned historical runs owe no new notification.
+  let logs = new Set<string>()
+  let dir = paths('', o).out.replace(/\/[^/]*$/, '')
+  try {
+    for await (let file of Deno.readDir(dir)) {
+      if (file.isFile && file.name.endsWith('.out')) {
+        logs.add(file.name.slice(0, -4))
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
   let unread = (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}`))
     .map((b) => b.entity.eid)
-    .filter((eid) => (asks.get(eid) ?? 0) > (over.get(eid) ?? 0))
+    .filter((eid) =>
+      (asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid)
+    )
   for (let eid of [...runs.map((r) => r.eid), ...unread]) {
     let job = await asked(g, eid).catch(() => null)
     let adapter = job && (o.adapters ?? known)[job.provider]
@@ -582,15 +601,19 @@ let ended = async (
       `.entry.session=${session}&${q}&.order=-entry.seq&.limit=1`,
     ))[0]
   let [stop, request] = await Promise.all([
-    newest('.stop'),
+    newest('.stop !lines .ask.through'),
     through ? one(g, through) : newest('.using&!ask'),
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
   if (stop && seq(stop) > seq(request)) return
   let code = comp(await ran(g, session), EXIT)?.code
   await g.apply([{
-    entity: { eid: (o.mint ?? uuid)() },
+    entity: {
+      eid: (o.mint ?? (() =>
+        derivedEid(`spawn ending ${session} ${request?.entity.eid ?? ''}`)))(),
+    },
     entry: { session },
+    ...request ? { ask: { through: request.entity.eid } } : {},
     stop: {},
     ...(code === 0 ? {} : {
       failed: {
@@ -619,7 +642,12 @@ let taken = async (g: Graph, path: string): Promise<void> => {
   }
   let tree = await discover(g, path)
   if (comp(tree, 'worktree')?.managed && !await retained(g, tree.entity.eid)) {
-    await reclaim(path)
+    let base = comp(tree, 'checkout')?.base
+    await reclaim(
+      path,
+      'refs/heads/main',
+      base == null ? undefined : String(base),
+    )
   }
 }
 

@@ -18,8 +18,8 @@ session=$1
 model=$2
 said=$3
 
-echo "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"$session\",\"model\":\"$model\"}"
-echo "{\"type\":\"assistant\",\"message\":{\"id\":\"msg_1\",\"model\":\"$model\",\"content\":[{\"type\":\"text\",\"text\":\"working: $said\"}],\"usage\":{\"output_tokens\":34}}}"
+printf '%s\n' "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"$session\",\"model\":\"$model\"}"
+printf '%s\n' "{\"type\":\"assistant\",\"message\":{\"id\":\"msg_1\",\"model\":\"$model\",\"content\":[{\"type\":\"text\",\"text\":\"working: $said\"}],\"usage\":{\"output_tokens\":34}}}"
 echo 'not json, and never a transcript'
 case "$said" in
 *quiet*) ;;

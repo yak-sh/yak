@@ -82,7 +82,7 @@ export let fake: Adapter = {
     new URL('./fake.sh', import.meta.url).pathname,
     j.session,
     j.model ?? '',
-    j.instruction,
+    JSON.stringify(j.instruction).slice(1, -1),
   ],
 }
 
