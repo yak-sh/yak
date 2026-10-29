@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
-import { once } from 'node:events'
 import { test } from 'node:test'
 import { createClient, resultUrl } from '../src/client'
 import { MCPClient } from '../src/transport'
 
-// A private protocol probe, never tasks.yak.sh. The integration fixture in
-// box-probe.ts separately runs these commands through the actual box packages.
 test('all commands share authenticated tools/call and preserve words/project', async () => {
   const calls: Array<{ name: string; arguments: Record<string, unknown> }> = []
   const wrap = (value: unknown) => [
@@ -63,49 +59,39 @@ test('all commands share authenticated tools/call and preserve words/project', a
       },
     ],
   }
-  const server = createServer(async (request, response) => {
-    assert.equal(request.headers.authorization, 'Bearer probe-only')
-    let body = ''
-    for await (const part of request) body += part
-    const rpc = JSON.parse(body)
-    response.setHeader('content-type', 'application/json')
+  const request = (async (input, init) => {
+    const request = new Request(input, init)
+    assert.equal(request.headers.get('authorization'), 'Bearer probe-only')
+    const rpc = await request.json()
     if (rpc.method === 'initialize') {
-      response.end(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: rpc.id,
-          result: {
-            protocolVersion: '2025-03-26',
-            capabilities: {},
-            serverInfo: { name: 'private-probe', version: '1' },
-          },
-        }),
-      )
+      return Response.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        result: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          serverInfo: { name: 'private-probe', version: '1' },
+        },
+      })
     } else if (rpc.method === 'notifications/initialized') {
-      response.writeHead(202).end()
+      return new Response(null, { status: 202 })
     } else {
       assert.equal(rpc.method, 'tools/call')
       calls.push(rpc.params)
       const value = answers[rpc.params.name]
       assert.ok(value, rpc.params.name)
-      response.end(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: rpc.id,
-          result: { content: [{ type: 'text', text: JSON.stringify(value) }] },
-        }),
-      )
+      return Response.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        result: { content: [{ type: 'text', text: JSON.stringify(value) }] },
+      })
     }
-  })
-  server.listen(0, '127.0.0.1')
-  await once(server, 'listening')
-  try {
-    const address = server.address()
-    assert.ok(address && typeof address !== 'string')
+  }) as typeof fetch
+  {
     const transport = new MCPClient({
-      endpoint: `http://127.0.0.1:${address.port}/mcp`,
+      endpoint: 'https://probe.invalid/mcp',
       request: (url, options) =>
-        fetch(url, {
+        request(url, {
           ...options,
           headers: {
             ...Object.fromEntries(new Headers(options?.headers)),
@@ -153,11 +139,6 @@ test('all commands share authenticated tools/call and preserve words/project', a
       /Say something/,
     )
     assert.deepEqual(await client.search(''), [])
-  } finally {
-    server.closeAllConnections()
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve()))
-    )
   }
 })
 

@@ -85,8 +85,8 @@ npm run lint
 The `test/ui.test.ts` Node probe checks remembered-project fallback, duplicate
 submission protection, polling cleanup/recovery, and transcript rendering
 without Raycast or a live backend. The native Raycast window, focus, hotkey,
-form keyboard behavior, browser login, and end-to-end conversation need a macOS
-Raycast check. `npm run dev` launches Raycast and cannot run its native UI on
+form keyboard behavior, browser login, and native window behavior are platform
+boundaries. `npm run dev` launches Raycast and cannot run its native UI on
 Linux. No test writes to the live graph.
 
 The UI imports the small function interface in `src/client.ts`; authentication
@@ -99,29 +99,3 @@ The repository uses Apache-2.0. Raycast Store manifest validation currently
 accepts only MIT, so `npm run lint` reports that metadata restriction.
 `npm run lint -- --relaxed` skips store metadata validation without changing the
 license. This does not prevent local development builds.
-
-### Actual box-package probe
-
-`packages/harness/conversations_probe.ts` serves the actual MCP handler over
-loopback, composing an in-memory graph and fake native model. It never opens the
-owner's config or calls a model provider. Run from the repository root:
-
-```sh
-scratch=$(mktemp -d /tmp/yak-raycast-probe.XXXXXX)
-HARNESS_HOME="$scratch/harness" TASKS_HOME="$scratch/tasks" \
-  PROCESS_DIR="$scratch/process" YAK_CONFIG="$scratch/yak.json" \
-  deno run -A packages/harness/conversations_probe.ts
-```
-
-Use the printed ephemeral port in a second terminal:
-
-```sh
-cd raycast
-YAK_PROBE_PORT=<printed-port> node --import tsx test/box-probe.ts
-```
-
-This drives the same client functions as every command: start, read a native
-reply, follow-up, recent/reopen, search/open URL, and inbox. Stop the server
-with Ctrl-C and remove the scratch directory afterward. It is deliberately not
-pointable at a remote host. These checks do not substitute for testing native
-Raycast focus, hotkeys and browser login on a Mac.

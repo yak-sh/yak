@@ -1,9 +1,4 @@
 import { strict as assert } from 'node:assert'
-import {
-  createServer,
-  type IncomingMessage,
-  type ServerResponse,
-} from 'node:http'
 import { test } from 'node:test'
 import {
   type AuthOptions,
@@ -13,53 +8,33 @@ import {
 } from '../src/auth'
 import { MCPClient } from '../src/transport'
 
-async function probe(
-  handler: (
-    req: IncomingMessage,
-    res: ServerResponse,
-    body: string,
-  ) => void | Promise<void>,
-) {
-  const server = createServer(async (req, res) => {
-    let body = ''
-    for await (const chunk of req) body += chunk
-    try {
-      await handler(req, res, body)
-    } catch (error) {
-      res.writeHead(500)
-      res.end()
-      throw error
-    }
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const address = server.address()
-  assert.ok(address && typeof address === 'object')
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve()))
-      ),
-  }
-}
-const reply = (res: ServerResponse, value: unknown, status = 200) => {
-  res.writeHead(status, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(value))
-}
+const probe = (
+  handler: (req: Request, body: string) => Response | Promise<Response>,
+) => ({
+  url: 'https://probe.invalid',
+  request: (async (input, init) => {
+    const req = new Request(input, init)
+    return handler(req, await req.text())
+  }) as typeof fetch,
+})
+const reply = (value: unknown, status = 200, headers?: HeadersInit) =>
+  Response.json(value, { status, headers })
 
 test('public PKCE DCR, resource indicators, secure token save and refresh rotation', async () => {
   let url = ''
   const grants: URLSearchParams[] = []
-  const server = await probe((req, res, body) => {
-    if (req.url === '/.well-known/oauth-authorization-server') {
-      return reply(res, {
+  const server = await probe((req, body) => {
+    if (
+      new URL(req.url).pathname === '/.well-known/oauth-authorization-server'
+    ) {
+      return reply({
         issuer: url,
         authorization_endpoint: `${url}/authorize`,
         token_endpoint: `${url}/token`,
         registration_endpoint: `${url}/register`,
       })
     }
-    if (req.url === '/register') {
+    if (new URL(req.url).pathname === '/register') {
       assert.deepEqual(JSON.parse(body), {
         client_name: 'Yak Raycast',
         redirect_uris: [REDIRECT_URI],
@@ -67,15 +42,14 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
       })
-      return reply(res, { client_id: 'probe-client' })
+      return reply({ client_id: 'probe-client' })
     }
     const params = new URLSearchParams(body)
     assert.equal(params.get('resource'), RESOURCE)
     assert.equal(params.get('client_id'), 'probe-client')
-    assert.equal(req.headers.authorization, undefined)
+    assert.equal(req.headers.get('authorization'), null)
     grants.push(params)
-    reply(
-      res,
+    return reply(
       params.get('grant_type') === 'refresh_token'
         ? { access_token: 'refreshed-probe', expires_in: 900 }
         : {
@@ -92,6 +66,7 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
   let authorizations = 0
   const auth = createAuthenticator({
     issuer: url,
+    request: server.request,
     registration: {
       get: () => Promise.resolve(registration),
       set: (id: string) => {
@@ -131,7 +106,7 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
       },
     } as unknown as AuthOptions['client'],
   })
-  try {
+  {
     assert.deepEqual(await Promise.all([auth(), auth()]), [
       'access-probe',
       'access-probe',
@@ -144,8 +119,6 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
     assert.equal(grants[0].get('code_verifier'), 'probe-verifier')
     assert.equal(grants[0].get('redirect_uri'), REDIRECT_URI)
     assert.equal(grants[1].get('refresh_token'), 'refresh-probe')
-  } finally {
-    await server.close()
   }
 })
 
@@ -160,18 +133,17 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
     let url = ''
     let removed = false
     let authorized = false
-    const server = await probe((req, res, body) => {
+    const server = await probe((req, body) => {
       if (req.url?.includes('well-known')) {
-        return reply(res, {
+        return reply({
           issuer: mode === 'foreign-issuer' ? 'https://evil.invalid' : url,
           authorization_endpoint: `${url}/authorize`,
           token_endpoint: `${url}/token`,
           registration_endpoint: `${url}/register`,
         })
       }
-      if (req.url === '/register') {
+      if (new URL(req.url).pathname === '/register') {
         return reply(
-          res,
           {
             error: 'invalid_client_metadata',
             error_description: 'secret-provider-text',
@@ -181,16 +153,16 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
       }
       if (new URLSearchParams(body).get('grant_type') === 'refresh_token') {
         return reply(
-          res,
           { error: 'invalid_grant', refresh_token: 'secret-provider-text' },
           400,
         )
       }
-      reply(res, { access_token: 'new-probe', expires_in: 900 })
+      return reply({ access_token: 'new-probe', expires_in: 900 })
     })
     url = server.url
     const auth = createAuthenticator({
       issuer: url,
+      request: server.request,
       registration: {
         get: () =>
           Promise.resolve(mode === 'dcr-denied' ? undefined : 'client'),
@@ -215,7 +187,7 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
         },
       } as unknown as AuthOptions['client'],
     })
-    try {
+    {
       if (mode === 'invalid-grant') {
         assert.equal(await auth(), 'new-probe')
         assert.ok(removed && authorized)
@@ -229,8 +201,6 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
             ),
         )
       }
-    } finally {
-      await server.close()
     }
   }
 })
@@ -238,36 +208,35 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
 test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and decoded graph bundles', async () => {
   const calls: string[] = []
   const bundles = [{ entity: { eid: 'probe' }, doc: { title: 'Probe' } }]
-  const server = await probe((req, res, body) => {
-    assert.equal(req.headers.authorization, 'Bearer probe-auth')
+  const server = await probe((req, body) => {
+    assert.equal(req.headers.get('authorization'), 'Bearer probe-auth')
     const rpc = JSON.parse(body)
     calls.push(rpc.method)
     if (rpc.method === 'initialize') {
-      res.setHeader('Mcp-Session-Id', 'session-probe')
-      return reply(res, {
-        jsonrpc: '2.0',
-        id: rpc.id,
-        result: { protocolVersion: '2025-03-26' },
-      })
+      return reply(
+        {
+          jsonrpc: '2.0',
+          id: rpc.id,
+          result: { protocolVersion: '2025-03-26' },
+        },
+        200,
+        { 'Mcp-Session-Id': 'session-probe' },
+      )
     }
-    assert.equal(req.headers['mcp-session-id'], 'session-probe')
-    assert.equal(req.headers['mcp-protocol-version'], '2025-03-26')
+    assert.equal(req.headers.get('mcp-session-id'), 'session-probe')
+    assert.equal(req.headers.get('mcp-protocol-version'), '2025-03-26')
     if (rpc.method === 'notifications/initialized') {
-      res.writeHead(202)
-      res.end()
-      return
+      return new Response(null, { status: 202 })
     }
     if (rpc.params.name === 'json') {
-      return reply(res, {
+      return reply({
         jsonrpc: '2.0',
         id: rpc.id,
         result: { content: [{ type: 'text', text: JSON.stringify(bundles) }] },
       })
     }
-    res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-    res.write(
-      ': heartbeat\r\ndata: {"jsonrpc":"2.0","method":"notifications/message"}\r\n\r\n',
-    )
+    const heartbeat =
+      ': heartbeat\r\ndata: {"jsonrpc":"2.0","method":"notifications/message"}\r\n\r\n'
     const event = `event: message\r\ndata: ${
       JSON.stringify({
         jsonrpc: '2.0',
@@ -275,13 +244,23 @@ test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and dec
         result: { structuredContent: { result: bundles } },
       })
     }\r\n\r\n`
-    for (let i = 0; i < event.length; i += 7) res.write(event.slice(i, i + 7))
-    res.end()
+    return new Response(
+      new ReadableStream({
+        start(stream) {
+          stream.enqueue(new TextEncoder().encode(heartbeat))
+          for (let i = 0; i < event.length; i += 7) {
+            stream.enqueue(new TextEncoder().encode(event.slice(i, i + 7)))
+          }
+          stream.close()
+        },
+      }),
+      { headers: { 'Content-Type': 'text/event-stream' } },
+    )
   })
   const client = new MCPClient({
     endpoint: `${server.url}/mcp`,
     request: (input, init) =>
-      fetch(input, {
+      server.request(input, {
         ...init,
         headers: {
           ...Object.fromEntries(new Headers(init?.headers)),
@@ -289,7 +268,7 @@ test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and dec
         },
       }),
   })
-  try {
+  {
     assert.deepEqual(await client.call('sse'), bundles)
     assert.deepEqual(await client.call('json'), bundles)
     assert.deepEqual(calls, [
@@ -298,8 +277,6 @@ test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and dec
       'tools/call',
       'tools/call',
     ])
-  } finally {
-    await server.close()
   }
 })
 
@@ -315,26 +292,24 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
     ] as const
   ) {
     let mutations = 0
-    const server = await probe((_req, res, body) => {
+    const server = await probe((_req, body) => {
       const rpc = JSON.parse(body)
       if (rpc.method === 'initialize') {
-        return reply(res, {
+        return reply({
           jsonrpc: '2.0',
           id: rpc.id,
           result: { protocolVersion: '2025-06-18' },
         })
       }
       if (rpc.method === 'notifications/initialized') {
-        res.writeHead(202)
-        res.end()
-        return
+        return new Response(null, { status: 202 })
       }
       mutations++
       if (mode === '401' || mode === '500') {
-        return reply(res, { access_token: 'secret-never-show' }, Number(mode))
+        return reply({ access_token: 'secret-never-show' }, Number(mode))
       }
       if (mode === 'tool') {
-        return reply(res, {
+        return reply({
           jsonrpc: '2.0',
           id: rpc.id,
           result: {
@@ -346,7 +321,7 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
         })
       }
       if (mode === 'rpc') {
-        return reply(res, {
+        return reply({
           jsonrpc: '2.0',
           id: rpc.id,
           error: {
@@ -356,13 +331,17 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
         })
       }
       if (mode === 'wrong-id') {
-        return reply(res, { jsonrpc: '2.0', id: rpc.id + 1, result: {} })
+        return reply({ jsonrpc: '2.0', id: rpc.id + 1, result: {} })
       }
-      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      res.end(': heartbeat\n\n')
+      return new Response(': heartbeat\n\n', {
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
     })
-    try {
-      const client = new MCPClient({ endpoint: server.url, request: fetch })
+    {
+      const client = new MCPClient({
+        endpoint: server.url,
+        request: server.request,
+      })
       await assert.rejects(
         client.call('graph_apply', { bundles: [] }),
         (error: Error) =>
@@ -370,8 +349,6 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
           /MCP|Yak/.test(error.message),
       )
       assert.equal(mutations, 1)
-    } finally {
-      await server.close()
     }
   }
 })
