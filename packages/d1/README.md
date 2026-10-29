@@ -123,7 +123,7 @@ that make a read, a change and its write back one step across isolates. It meets
 import { d1Vault } from '@yaks/d1'
 
 // let vault = d1Vault(env.DB, key) // a CryptoKey for AES-GCM
-// graph({ storage, vocab, plugins: [secrets(vault)] }) // @yaks/secrets
+// graph({ storage, vocab, plugins: [secrets(vault, write, vocab)] }) // @yaks/secrets
 ```
 
 The database, its Time Travel history and its exports hold only ciphertext; the

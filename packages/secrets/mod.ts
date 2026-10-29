@@ -22,7 +22,7 @@
  * let vocab = loadVocab([secretsDoc, effectDoc])
  * let vault = ramVault()
  * let write = (b: Bundle[]) => g.apply(b, { trusted: true })
- * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault, write)] })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault, write, vocab)] })
  * await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
  * // g.read('.secret') → value: 'yak_secret_…', the handle
  * // await reveal(vault, 'MAIL_TOKEN') → 'cf-token'

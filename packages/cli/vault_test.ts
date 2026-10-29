@@ -27,7 +27,7 @@ test('the file vault is private files, one per secret, and follows no symlink', 
     let g = graph({
       storage: ram(vocab),
       vocab,
-      plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+      plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), vocab)],
     })
     await g.apply([sealed('A', 'one')])
     let eid = secretEid('A')

@@ -97,7 +97,7 @@ let g = graph({
   vocab,
   provenance: false,
   plugins: [
-    secrets(vault, (b) => g.apply(b, { trusted: true })),
+    secrets(vault, (b) => g.apply(b, { trusted: true }), vocab),
     edges(vocab),
     counting(),
   ],

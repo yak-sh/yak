@@ -30,6 +30,13 @@
 // the secret: `provisional{note}` while a seal is being retried,
 // `failed{reason}` when sealing was given up on.
 //
+// A secret a batch deletes, itself or by a cascade, or takes the component
+// from, is dropped from the vault after the commit too, and nothing else is:
+// which of those entities hold a secret is read inside the transaction while
+// their rows still stand (`noting`), since after it a deleted entity is only a
+// tombstone. Every other delete (an effect row the pool finished, a page, a
+// person) asks the vault nothing.
+//
 // Nothing touches the vault inside the transaction. A vault may answer later
 // (D1 on yaks.app) and a transaction may not wait for it (a Durable Object's
 // commits the moment its body returns). A value a refused batch took, or one a
@@ -39,7 +46,10 @@
 import { PROVISIONAL, type Write } from '@yaks/effects'
 import type { Bundle, Eid, Hook, Plugin, Tx } from '@yaks/graph'
 import { after, type Clock, each, isPromise, sleep, system } from '@yaks/fp'
-import { dead } from '@yaks/graph/bundle'
+import { dead, TOMBSTONE } from '@yaks/graph/bundle'
+import { hook, type HookContext } from '@yaks/graph/plugin'
+import { doomed } from '@yaks/graph/read'
+import type { Vocab } from '@yaks/vocab'
 import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'
@@ -124,22 +134,64 @@ let holding = (vault: Vault): Holding => {
   return h
 }
 
-/** The plugin, over the vault its secrets are kept in and the door what it
- * says about a seal is written through: the graph's own `apply()`, trusted,
- * since `provisional` coming off is the host's word, never a client's. The
- * clock says when a value held too long is let go, and waits out a seal's
- * retry (default the runtime's). */
+let eidOf = (b: Bundle) => b.entity.eid
+
+// The entities a batch deletes, and those it takes only the secret from.
+let leaving = (bundles: Bundle[]) => ({
+  killed: [...new Set(bundles.filter(dead).map(eidOf))],
+  cleared: bundles.filter((b) => b[SECRET] === null).map(eidOf),
+})
+
+// The secrets each transaction takes out of the graph, by its attempt: noted
+// inside it, while their rows stand, and dropped once it commits.
+type Going = WeakMap<object, Set<Eid>>
+
+// Note which of the entities a batch removes a secret from hold one now:
+// those it deletes, everything a cascade deletes with them, and those it
+// clears the component on.
+let noting = (vocab: Vocab, going: Going) =>
+  hook(
+    [SECRET, '$delete', TOMBSTONE],
+    (bundles, tx, _err, context?: HookContext) => {
+      let at = context?.transaction
+      let { killed, cleared } = leaving(bundles)
+      if (!at || !killed.length && !cleared.length) return bundles
+      return after(
+        killed.length ? doomed(tx, vocab, killed) : [],
+        (gone) =>
+          after(
+            tx.get([...new Set([...gone, ...cleared])], [SECRET]),
+            (found) => {
+              let held = found.filter((b) => b[SECRET] != null)
+              if (held.length) going.set(at, new Set(held.map(eidOf)))
+              return bundles
+            },
+          ),
+      )
+    },
+  )
+
+/** The plugin, over the vault its secrets are kept in, the door what it says
+ * about a seal is written through — the graph's own `apply()`, trusted, since
+ * `provisional` coming off is the host's word, never a client's — and the
+ * graph's vocabulary, which says what a delete takes with it. The clock says
+ * when a value held too long is let go, and waits out a vault's retry
+ * (default the runtime's). */
 export let secrets = (
   vault: Vault,
   write: Write,
+  vocab: Vocab,
   clock: Clock = system,
 ): Plugin => {
   let { waiting, minted } = holding(vault)
+  let going: Going = new WeakMap()
 
   // The handle for a secret being written: the one the vault keeps for it, the
-  // one this process gave it moments ago, or a new one.
+  // one this process gave it moments ago, or a new one. The vault is asked
+  // before anything commits, so a read it calls retryable is tried again
+  // rather than refusing the write that carries the value.
   let handleOf = (eid?: Eid): string | Promise<string> =>
-    !eid ? handle() : after(vault.read(eid), (kept) => {
+    !eid ? handle() : after(tried(() => vault.read(eid), clock), (kept) => {
       let h = kept?.handle ?? minted.get(eid)?.handle ?? handle()
       if (!kept) minted.set(eid, { handle: h, until: clock.now() + HOLD_MS })
       return h
@@ -188,8 +240,25 @@ export let secrets = (
 
   return {
     name: '@yaks/secrets',
+    // What `noting` reads: whether the entities a batch removes a secret from
+    // hold one, and what points at those it deletes, read with the batch.
+    wants: (bundles) => {
+      let { killed, cleared } = leaving(bundles)
+      return [
+        ...killed.length || cleared.length
+          ? [{ eids: [...killed, ...cleared], select: [SECRET] }]
+          : [],
+        ...killed.length
+          ? [{
+            about: killed,
+            comps: [...new Set(vocab.deaths('cascade').map(([c]) => c))],
+          }]
+          : [],
+      ]
+    },
     hooks: {
-      effect: sealing(vault, write, clock),
+      precondition: noting(vocab, going),
+      effect: sealing(vault, write, clock, going),
       normalize: (bundles) => {
         let now = clock.now()
         for (let [h, w] of waiting) if (w.until < now) waiting.delete(h)
@@ -206,14 +275,14 @@ export let secrets = (
 }
 
 // Run `step`, then `ok` or `no`, staying synchronous for a vault that is.
-let settle = <T>(
-  step: () => unknown,
-  ok: () => T | Promise<T>,
+let settle = <S, T>(
+  step: () => S | Promise<S>,
+  ok: (done: S) => T | Promise<T>,
   no: (e: unknown) => T | Promise<T>,
 ): T | Promise<T> => {
   try {
     let r = step()
-    return isPromise(r) ? r.then(ok, no) : ok()
+    return isPromise(r) ? r.then(ok, no) : ok(r)
   } catch (e) {
     return no(e)
   }
@@ -226,8 +295,8 @@ export let retryable = (e: unknown): boolean =>
   !!e && typeof e == 'object' &&
   (e as { retryable?: unknown }).retryable === true
 
-// How often a seal is tried, and how long it waits between tries: exponential
-// backoff with jitter, as Cloudflare advises for D1 writes
+// How often a seal or a drop is tried, and how long it waits between tries:
+// exponential backoff with jitter, as Cloudflare advises for D1 writes
 // (https://developers.cloudflare.com/d1/best-practices/retry-queries/).
 let TRIES = 5
 let pause = (n: number, clock: Clock) =>
@@ -239,11 +308,29 @@ let pause = (n: number, clock: Clock) =>
 
 let told = (e: unknown) => e instanceof Error ? e.message : String(e)
 
+// What `step` answers once it succeeds, tried again after a pause while it
+// fails in a way the vault calls retryable, up to `TRIES` times in all;
+// `again` hears each failure that will be tried again. The last failure is
+// thrown.
+let tried = <T>(
+  step: () => T | Promise<T>,
+  clock: Clock,
+  again: (err: unknown) => unknown = () => {},
+): T | Promise<T> => {
+  let attempt = (n: number): T | Promise<T> =>
+    settle(step, (done) => done, (err) => {
+      if (!retryable(err) || n >= TRIES) throw err
+      return after(again(err), () => pause(n, clock).then(() => attempt(n + 1)))
+    })
+  return attempt(1)
+}
+
 /**
  * The half that finishes a secret's write, over the vault the plugin holds its
  * values for: after the commit, each waiting value sealed under the secret's
  * entity id and the mark removed. A secret that goes — its entity, or its
- * component — is dropped from the vault.
+ * component — is dropped from the vault, tried again the same way while the
+ * vault calls the failure retryable; a drop that never lands is reported.
  *
  * A seal can fail two ways. One the vault calls {@link retryable} is expected:
  * the provisional mark says it is trying again, and the seal is tried
@@ -254,7 +341,12 @@ let told = (e: unknown) => e instanceof Error ? e.message : String(e)
  * why sealing was given up on, and the original failure is rethrown for the
  * graph to report. Either way the value is gone, and the person gives it again.
  */
-let sealing = (vault: Vault, write: Write, clock: Clock): Hook => {
+let sealing = (
+  vault: Vault,
+  write: Write,
+  clock: Clock,
+  going: Going,
+): Hook => {
   let { waiting, minted } = holding(vault)
   let seal = (eid: Eid, comp: Record<string, unknown>, tx: Tx) => {
     let h = comp.value
@@ -284,42 +376,45 @@ let sealing = (vault: Vault, write: Write, clock: Clock): Hook => {
           ...b?.failed ? { failed: null } : {},
           ...b?.content ? { content: null } : {},
         }))
-    let attempt = (n: number): unknown =>
-      settle(put, sealed, (err) =>
-        retryable(err) && n < TRIES
-          ? after(
-            mark({
-              entity: { eid },
-              [PROVISIONAL]: { note: 'Saving the key, trying again' },
-              content: { body: `saving the key, trying again: ${told(err)}` },
-            }),
-            () => pause(n, clock).then(() => attempt(n + 1)),
-          )
-          : after(
-            mark({
-              entity: { eid },
-              [PROVISIONAL]: null,
-              failed: { reason: `the key could not be saved: ${told(err)}` },
-              content: null,
-            }),
-            () => {
-              throw err
-            },
-          ))
-    return attempt(1)
+    return settle(
+      () =>
+        tried(put, clock, (err) =>
+          mark({
+            entity: { eid },
+            [PROVISIONAL]: { note: 'Saving the key, trying again' },
+            content: { body: `saving the key, trying again: ${told(err)}` },
+          })),
+      sealed,
+      (err) =>
+        after(
+          mark({
+            entity: { eid },
+            [PROVISIONAL]: null,
+            failed: { reason: `the key could not be saved: ${told(err)}` },
+            content: null,
+          }),
+          () => {
+            throw err
+          },
+        ),
+    )
   }
   let drop = (eid: Eid) => {
     minted.delete(eid)
-    return vault.drop(eid)
+    return tried(() => vault.drop(eid), clock)
   }
-  return (bundles, tx) =>
-    after(
+  return (bundles, tx, _err, context) => {
+    let held = context?.transaction && going.get(context.transaction)
+    return after(
       each(bundles, null as unknown, (_, b) => {
         let eid = b.entity.eid
-        if (dead(b) || b[SECRET] === null) return drop(eid)
+        if (dead(b) || b[SECRET] === null) {
+          return held && held.has(eid) ? drop(eid) : null
+        }
         let comp = obj(b[SECRET])
         return comp ? seal(eid, comp, tx) : null
       }),
       () => bundles,
     )
+  }
 }

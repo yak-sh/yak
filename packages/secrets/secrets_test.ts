@@ -36,7 +36,28 @@ import {
 // about a seal back through the graph, and reporting where the graph does. `call` is @yaks/tools', a component whose
 // text carries a whole batch as JSON. `failed` records a terminal seal outcome;
 // the original failure reaches the graph's reporter.
-let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc, kernelDoc])
+// `owned` takes what it is on with its owner, the way a connection goes with
+// its space.
+let ownedDoc = {
+  title: 'owned',
+  $defs: {
+    owned: {
+      component: true,
+      type: 'object',
+      properties: {
+        owner: { type: 'string', ref: 'entity', death: 'cascade' },
+      },
+    },
+  },
+}
+let vocab = loadVocab([
+  secretsDoc,
+  provisionalDoc,
+  toolsDoc,
+  docDoc,
+  kernelDoc,
+  ownedDoc,
+])
 let setup = <V extends Vault = Local>(
   vault: V = ramVault() as V,
   time?: Clock,
@@ -45,7 +66,9 @@ let setup = <V extends Vault = Local>(
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), time)],
+    plugins: [
+      secrets(vault, (b) => g.apply(b, { trusted: true }), vocab, time),
+    ],
     report: (e) => void reported.push(e),
   })
   return { g, vault, reported }
@@ -96,7 +119,7 @@ test('every secret in a batch seals with only secret and provisional vocabulary'
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), vocab)],
     report: (e) => void reported.push(e),
   })
   await g.apply([sealed('A', 'one'), sealed('B', 'two')])
@@ -213,6 +236,83 @@ test('deleting a secret, or its component, drops it from the vault', async () =>
   assertEquals(await sentinelOf(vault, 'A'), undefined)
   assertEquals(await sentinelOf(vault, 'B'), undefined)
   assertEquals(await reveal(vault, 'A', none), undefined)
+})
+
+// A vault in memory that notes every drop it is asked for, failing one with
+// each error it is handed, in turn.
+let dropping = (...errors: Error[]) => {
+  let vault = ramVault()
+  let asked: string[] = []
+  return {
+    ...vault,
+    asked,
+    drop: (eid: string) => {
+      asked.push(eid)
+      let e = errors.shift()
+      return e ? Promise.reject(e) : vault.drop(eid)
+    },
+  }
+}
+
+// A secret A, a page and a note that hold none, and a secret B that goes with
+// the page.
+let holding = async (vault = dropping(), time?: Clock) => {
+  let at = setup(vault, time)
+  await at.g.apply([
+    sealed('A', 'one'),
+    { entity: { eid: 'page' }, doc: { title: 'Page' } },
+    { entity: { eid: 'note' }, doc: { title: 'Note' } },
+    { ...sealed('B', 'two'), owned: { owner: 'page' } },
+  ])
+  return at
+}
+
+let noting = await holding()
+test('deleting what holds no secret asks the vault nothing', async () => {
+  let { g, vault } = noting
+  await g.apply([{ entity: { eid: 'note' }, $delete: true }])
+  await g.apply([{ entity: { eid: 'page' }, doc: null }])
+  assertEquals(vault.asked, [])
+})
+
+let cascading = await holding()
+test('a secret a delete takes with it is dropped from the vault', async () => {
+  let { g, vault } = cascading
+  await g.apply([{ entity: { eid: 'page' }, $delete: true }])
+  assertEquals(vault.asked, [secretEid('B')])
+  assertEquals(vault.all().map(([eid]) => eid), [secretEid('A')])
+})
+
+let dropTime = clock()
+let redropping = await holding(dropping(transient()), dropTime)
+test('a drop the vault calls retryable is tried again until it lands', async () => {
+  let { g, vault, reported } = redropping
+  let deleting = g.apply([unsealed('A')])
+  await until(dropTime.pending)
+  await dropTime.advance(2_000)
+  await deleting
+  assertEquals(vault.asked, [secretEid('A'), secretEid('A')])
+  assertEquals(await reveal(vault, 'A', none), undefined)
+  assertEquals(reported, [])
+})
+
+test('a vault read a write waits on is tried again when it fails retryably', async () => {
+  let time = clock()
+  let base = ramVault()
+  let errors = [transient()]
+  let { g, reported } = setup({
+    ...base,
+    read: (eid: string) => {
+      let e = errors.shift()
+      return e ? Promise.reject(e) : Promise.resolve(base.read(eid))
+    },
+  }, time)
+  let writing = g.apply([sealed('A', 'one')])
+  await until(time.pending)
+  await time.advance(2_000)
+  await writing
+  assertEquals(await reveal(base, 'A'), 'one')
+  assertEquals(reported, [])
 })
 
 let rehearsed = setup()

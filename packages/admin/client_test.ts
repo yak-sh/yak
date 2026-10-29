@@ -29,7 +29,7 @@ let vault = ramVault()
 let g = graph({
   storage: ram(vocab),
   vocab,
-  plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+  plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), vocab)],
 })
 let host = { graph: g, vault, config: { person: 'owner' } } as Host
 await host.graph.apply([

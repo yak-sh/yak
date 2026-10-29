@@ -28,7 +28,7 @@ let g = graph({
   storage: ram(vocab),
   vocab,
   plugins: [
-    secrets(vault, (batch) => g.apply(batch, { trusted: true })),
+    secrets(vault, (batch) => g.apply(batch, { trusted: true }), vocab),
   ],
 })
 let host = { graph: g, vocab, vault, config: { person: owner } }

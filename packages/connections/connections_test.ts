@@ -116,7 +116,7 @@ let setup = async (...replies: [number, unknown][]) => {
     storage: ram(vocab),
     vocab,
     plugins: [
-      secrets(vault, (b) => g.apply(b, { trusted: true })),
+      secrets(vault, (b) => g.apply(b, { trusted: true }), vocab),
       edges(vocab),
     ],
   })

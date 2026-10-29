@@ -15,9 +15,10 @@
 // deleted by its holder. Callers in this isolate wait in a queue first, so the
 // lease row only ever arbitrates between isolates.
 //
-// A failure D1 documents as transient is thrown with `retryable: true`, the
-// flag the Workers runtime puts on its own and @yaks/secrets tries a seal again
-// for. Every statement here is safe to run twice: an upsert, a delete, a read.
+// A failure D1 documents as transient, or the runtime's own internal error that
+// names no cause, is thrown with `retryable: true`, the flag the Workers
+// runtime puts on its own and @yaks/secrets tries a seal or a drop again for.
+// Every statement here is safe to run twice: an upsert, a delete, a read.
 
 import {
   and,
@@ -126,9 +127,18 @@ let TRANSIENT = [
   "Can't read from request stream because client disconnected",
 ]
 
-/** Whether D1 said this failure is one to try again. */
+// The runtime failing inside itself, naming only a reference for Cloudflare
+// to look up (`D1_ERROR: internal error; reference = …`). D1's list does not
+// name it, and nothing in the query can be fixed for it; the statements here
+// are safe to run twice, so it is tried again like the ones the list names,
+// and one that persists through every try is still reported.
+let OPAQUE = /\binternal error; reference = [a-z0-9]+$/i
+
+/** Whether this failure is one to try again: one D1 says to retry, or the
+ * runtime's own internal error. */
 export let transient = (e: unknown): boolean =>
-  TRANSIENT.some((said) => String(e).includes(said))
+  TRANSIENT.some((said) => String(e).includes(said)) ||
+  (e instanceof Error && OPAQUE.test(e.message))
 
 // The failure, with the runtime's own flag set where D1 says to retry.
 let flagged = (e: unknown) =>
@@ -162,7 +172,7 @@ let queue = () => {
  * import { d1Vault } from '@yaks/d1'
  *
  * // let vault = d1Vault(env.DB, key)
- * // graph({ storage, vocab, plugins: [secrets(vault)] }) // @yaks/secrets
+ * // graph({ storage, vocab, plugins: [secrets(vault, write, vocab)] }) // @yaks/secrets
  * ```
  */
 export let d1Vault = <S extends Prepared<S>>(

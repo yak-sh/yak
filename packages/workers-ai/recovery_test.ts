@@ -17,7 +17,7 @@ let setup = () => {
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), vocab)],
   })
   let store = () =>
     mediaReceipts(records<Partial<MediaReceipt>>(

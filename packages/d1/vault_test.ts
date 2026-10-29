@@ -37,7 +37,7 @@ let setup = (db = d1()) => {
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }), vocab)],
   })
   return { db, g, vault }
 }
@@ -105,7 +105,7 @@ test('a lease held by another isolate is waited for', async () => {
 let failureDb = d1()
 let failureKey = await key()
 
-test('what D1 says to retry is flagged retryable, and nothing else is', async () => {
+test('what D1 says to retry, and its opaque internal error, is flagged retryable, and nothing else is', async () => {
   let failing = (message: string) => {
     return d1Vault({
       ...failureDb,
@@ -116,6 +116,11 @@ test('what D1 says to retry is flagged retryable, and nothing else is', async ()
   }
   let lost = await failing('Network connection lost.').drop('x').catch((e) => e)
   assert(retryable(lost) && transient(lost))
+  let opaque = await failing(
+    'internal error; reference = ilt4dmolho870r7remnb3hgl',
+  )
+    .drop('x').catch((e) => e)
+  assert(retryable(opaque))
   let typo = await failing('no such table: yak_vault').drop('x').catch((e) => e)
   assert(!retryable(typo))
 })

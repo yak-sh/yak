@@ -5,10 +5,17 @@
 // vault once the write commits (./plugin.ts).
 
 import type { Graph, Plugin } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { secrets } from './plugin.ts'
 import type { Vault } from './vault.ts'
 
 /** Secrets sealed out of every write, into the host's vault. */
-export let plugins = (host: { vault: Vault; graph: Graph }): Plugin[] => [
-  secrets(host.vault, (b) => host.graph.apply(b, { trusted: true })),
+export let plugins = (
+  host: { vault: Vault; graph: Graph; vocab: Vocab },
+): Plugin[] => [
+  secrets(
+    host.vault,
+    (b) => host.graph.apply(b, { trusted: true }),
+    host.vocab,
+  ),
 ]
