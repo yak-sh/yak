@@ -108,6 +108,47 @@ let occurrence = (row: Bundle, request: string): Bundle[] => [{
   },
 }]
 
+for (let regressed of [false, true]) {
+  for (let thrown of [false, true]) {
+    check(
+      `${regressed ? 'a regression' : 'an opening'} leads with its newest ${
+        thrown ? 'exception' : 'message'
+      } and commit, keeping the bug title`,
+      async (g) => {
+        let row = bug()
+        let first = 'First failure: https://example.test/runs/1'
+        let latest = 'Latest failure: https://example.test/runs/2'
+        row.doc = { title: first }
+        if (regressed) row.regressed = { at: '2026-10-02T00:02:00Z' }
+        let sample = (message: string, at: string, commit: string): Bundle => ({
+          entity: { eid: crypto.randomUUID() },
+          error: {
+            bug: row.entity.eid,
+            at,
+            commit,
+            ...thrown ? {} : { message },
+          },
+          ...thrown ? { exception: { type: 'Error', value: message } } : {},
+        })
+        await put(g, [
+          row,
+          sample(latest, '2026-10-02T00:02:00Z', 'b'.repeat(40)),
+          sample(first, at, 'a'.repeat(40)),
+        ])
+        await replay(g, row)
+        let [letter] = await letters(g)
+        let { title, body } = comp(letter, 'doc') as Record<string, string>
+        equal(title, `[yaks.app] ${first}`)
+        ok(body.startsWith(thrown ? `Error: ${latest}\n` : `${latest}\n`), body)
+        ok(body.includes('**Commit:** bbbbbbb'), body)
+        ok(!body.includes(first), body)
+        ok(!body.includes('aaaaaaa'), body)
+        equal(comp((await g.get([row.entity.eid]))[0], 'doc').title, first)
+      },
+    )
+  }
+}
+
 check(
   'a letter says where it ran, whom it reached and the request that failed',
   async (g) => {

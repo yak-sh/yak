@@ -238,8 +238,9 @@ export let subject = (bug: Bundle, errors: Bundle[]): string =>
     ].filter(Boolean).join(' ')
   }] ${headline(said(bug))}`
 
-/** The whole letter for a bug's opening or regression. `errors` are its
- * retained occurrences, newest first; `request` is the newest one's. */
+/** The whole letter for a bug's opening or regression. Its subject keeps the
+ * bug's name; its message and commit come from the newest occurrence.
+ * `errors` are newest first; `request` is the newest one's. */
 export let letter = (
   bug: Bundle,
   errors: Bundle[],
@@ -248,7 +249,7 @@ export let letter = (
 ): { title: string; body: string } => {
   let newest = errors[0]
   let back = comp(bug, 'regressed')
-  let call = asked(request), commit = built(errors)
+  let call = asked(request), commit = built(newest ? [newest] : [])
   let facts = [
     back.at
       ? `**Regressed:** ${when(str(back.at))}, after it was resolved`
@@ -263,7 +264,7 @@ export let letter = (
   return {
     title: subject(bug, errors),
     body: [
-      said(bug).trim(),
+      ((newest && said(newest)) || said(bug)).trim(),
       '',
       ...facts.map((f) => `- ${f}`),
       '',
