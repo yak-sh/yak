@@ -214,12 +214,37 @@ let command = async (cwd: string, cmd: string, args: string[]) => {
   return out.stdout
 }
 
+let archive = async (root: string, target: string, revision: string) => {
+  let source = new Deno.Command('git', {
+    args: ['archive', revision],
+    cwd: root,
+    stdout: 'piped',
+    stderr: 'piped',
+  }).spawn()
+  let unpack = new Deno.Command('tar', {
+    args: ['-xf', '-', '-C', target],
+    stdin: 'piped',
+    stdout: 'null',
+    stderr: 'piped',
+  }).spawn()
+  let [, from, into, sourceError, unpackError] = await Promise.all([
+    source.stdout.pipeTo(unpack.stdin),
+    source.status,
+    unpack.status,
+    new Response(source.stderr).text(),
+    new Response(unpack.stderr).text(),
+  ])
+  if (!from.success || !into.success) {
+    throw Error(`Cannot extract ${revision}: ${sourceError}${unpackError}`)
+  }
+}
+
 /** Both revisions run the identical present-day driver and fixture. No live
  * database is opened or copied; each probe owns and cleans its seeded graph. */
 export let collect = async (
   suite: string,
   root: string,
-  revisions: { reference?: string; current?: string } = {},
+  revisions: { reference?: string; current?: string; rounds?: number } = {},
 ): Promise<Judgement> => {
   let { baseline: path, collector } = registered(suite)
   let git = async (...args: string[]) =>
@@ -231,6 +256,11 @@ export let collect = async (
       await git('log', '-1', '--format=%H', '--', path),
   )
   let revision = await git('rev-parse', revisions.current ?? 'HEAD')
+  let common = await git(
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  )
   let context = await host()
   let scratch = await Deno.makeTempDir({ prefix: 'bench-paired-' })
   try {
@@ -238,10 +268,7 @@ export let collect = async (
     for (let [i, commit] of [reference, revision].entries()) {
       let target = `${scratch}/${i}`
       await Deno.mkdir(target)
-      let tar = `${scratch}/${i}.tar`
-      await Deno.writeFile(tar, await command(root, 'git', ['archive', commit]))
-      await command(root, 'tar', ['-xf', tar, '-C', target])
-      await Deno.remove(tar)
+      await archive(root, target, commit)
       // The driver is this checkout's: its bench files and the library they
       // measure with. The product under them is the revision's own.
       await command(root, 'cp', ['-R', 'bench/.', `${target}/bench/`])
@@ -268,7 +295,11 @@ export let collect = async (
       // Generators enumerate tracked sources. A private index makes this
       // archive self-contained without a managed worktree or a live checkout.
       await command(target, 'git', ['init', '-q'])
-      await command(target, 'git', ['add', '-A'])
+      await Deno.writeTextFile(
+        `${target}/.git/objects/info/alternates`,
+        `${common}/objects\n`,
+      )
+      await command(target, 'git', ['read-tree', commit])
       roots.push(target)
     }
     let observations: Record<string, Samples>[][] = [[], [], []]
@@ -293,11 +324,15 @@ export let collect = async (
     // Each tree runs once unmeasured, so no round times one tree's cold
     // compile caches against the other's warm ones.
     for (let at of [0, 1]) await measure(at, 0)
-    let rounds = Math.max(
+    let rounds = revisions.rounds ?? Math.max(
       6,
       Math.ceil(Math.log2(20 * collector(roots[1]).benches.length)),
     )
+    if (!Number.isInteger(rounds) || rounds < 3) {
+      throw Error('A paired comparison needs at least three rounds')
+    }
     for (let round = 0; round < rounds; round++) {
+      console.error(`${suite}: paired round ${round + 1}/${rounds}`)
       let pair = await bracket(
         (revision) => measure(revision == 'current' ? 1 : 0, round),
         async () => {},
