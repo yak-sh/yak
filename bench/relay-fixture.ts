@@ -273,7 +273,11 @@ export async function relayFixture(
     const g = graph({
       storage: storage(m.db, vocab),
       vocab,
-      clock: { ...system, now: () => now },
+      // Older graphs take an ISO-producing function; current graphs take Clock.
+      clock: Object.assign(() => new Date(now).toISOString(), {
+        ...system,
+        now: () => now,
+      }),
     })
     await g.install()
     await g.apply([{ entity: { eid: APP }, access: { mode: 'private' } }, {
