@@ -118,25 +118,25 @@ equal(imported.read.source, 'deno-cpu-average')
 equal(imported.read.details, { avg: 42, cpu: 30, n: 100 })
 ```
 
-The collector supplies aggregates of batch averages and statistics, not
-individual invocation timings. These samples retain that provenance and their
-statistics; they cannot reconstruct the distribution of operation times. Native
-timed benches keep every invocation sample. All samples must be finite and
-nonnegative; imported wall averages must be positive and imported CPU averages
-are required. Native `deno bench --json` output lacks the CPU average and cannot
-be imported.
+The collector supplies batch averages and statistics, not individual invocation
+timings. These samples retain that provenance and their statistics; they cannot
+reconstruct the distribution of operation times. Native timed benches keep every
+invocation sample. All samples must be finite and nonnegative; imported wall
+averages must be positive and imported CPU averages are required. Native
+`deno bench --json` output lacks the CPU average and cannot be imported.
 
 ## CPU time
 
 `cpu` is the CPU time a step took, in the bench's unit: this process and its
 finished children, every thread, user and system (`cputime()`, getrusage(2) on
-Linux). `bench()` records it automatically; external collectors spread a
-`stopwatch()` reading into each sample. `run(suite, { figure: 'cpu', ... })`
+Linux and macOS). `bench()` records it automatically; external collectors spread
+a `stopwatch()` reading into each sample. `run(suite, { figure: 'cpu', ... })`
 requires CPU in every sample and judges its median. Raw `value` retains wall
 time for diagnostics; the result's metric gains a `/cpu` suffix so it cannot
 compare against a baseline of wall values. Missing CPU never falls back to wall
-time. CPU accounting must be available on the host. CPU runs record load
-averages without waiting to sample host pressure.
+time. CPU accounting requires getrusage(2) on Linux or macOS; other platforms,
+including Windows, fail explicitly. CPU runs record load averages without
+waiting to sample host pressure.
 
 ```ts
 import { type Sample, stopwatch } from '@yaks/benchmark'

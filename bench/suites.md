@@ -7,13 +7,14 @@ and the monitor's paired comparison requires CPU in every round; neither falls
 back to wall time. SQL statement and row counts remain separate measurements.
 
 `bench/deno-worker.ts` collects existing `Deno.bench` declarations with the
-shared CPU clock. It calibrates a batch count, discards calibration, and warms
-whole invocations, including fixture setup and teardown, for a bounded CPU
-interval (100 ms by default, at most 20 batches). It then reports the median of
-five batch CPU averages in ns/op, retaining all five in `details.cpuSamples` and
-the matching wall average. Explicit `start()` and `end()` boundaries exclude
-fixture setup and teardown from measured work. Workload files need no separate
-CPU instrumentation.
+shared CPU clock. An authored `n` and `warmup` set the measured and discarded
+invocation counts exactly. Without `n`, adaptive calibration is bounded by CPU
+usage of the whole invocation, including fixture creation and teardown, so a
+tiny timed act cannot multiply costly setup indefinitely. Each collection then
+reports one measured batch's CPU and wall averages in ns/op, retaining the CPU
+average in `details.cpuSamples`. Paired rounds provide repeated observations.
+Explicit `start()` and `end()` boundaries exclude fixture setup and teardown
+from measured work. Workload files need no separate CPU instrumentation.
 
 Collectors retain their process and product imports across rounds. Deno workload
 modules load afresh for each collection, with fixture disposal awaited before
@@ -23,11 +24,11 @@ after measurement, including on failure.
 
 ## Process accounting
 
-The shared `stopwatch()` reads `cputime()`: getrusage(2) user and system time
-for every thread in the process, plus children that have exited and been waited
-for. Waiting for a timer, I/O or a CPU adds no CPU time. A subprocess that exits
-inside the measured interval contributes its work through its parent's child
-usage.
+The shared `stopwatch()` reads `cputime()`: getrusage(2) user and system time on
+Linux and macOS for every thread in the process, plus children that have exited
+and been waited for. Unsupported platforms fail explicitly. Waiting for a timer,
+I/O or a CPU adds no CPU time. A subprocess that exits inside the measured
+interval contributes its work through its parent's child usage.
 
 A process that stays alive across samples needs its own counter. A server can
 report its own CPU at the measured boundaries; a collector can pass synchronous
