@@ -366,9 +366,6 @@ leave the CPU idle; inspect the run's load averages before accepting a baseline.
 
 [Apply profiling](apply-profile.md) records the box composition's transaction
 residual and create-scaling investigation.
-[Workerd socket microtasks](workerd-microtasks.md) records a standalone
-hibernation probe. These are separate from the fixed ratchet composition and
-from the test suite.
 
 ### Side by side on a shared box
 

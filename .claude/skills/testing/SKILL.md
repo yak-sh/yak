@@ -143,8 +143,7 @@ into a test or adding a timing assertion beside it.
 Tests run in Deno, in process. The deno and terminal document environments
 keep page globals separate from the terminal document. There is no browser,
 workerd or slow platform tier, locally or in CI. Page behavior mounts on a
-linkedom document; terminal
-behavior uses @yaks/tui's `lay`, without a tty. A test starts no server or child
+linkedom document; terminal behavior uses @yaks/tui's `lay`, without a tty. A test starts no server or child
 process and makes no network call. Files it creates stay in a temporary
 directory. Platform behavior belongs at the small generic effect boundary;
 check our decisions by handing that boundary controlled inputs.
