@@ -11,6 +11,7 @@ import { read } from '../packages/cli/config.ts'
 import { settled } from './settled.ts'
 import { selected } from './selected.ts'
 import { starter } from '../packages/cli/init.ts'
+import { searchAt } from '../packages/browse/url.ts'
 
 export let TERMINAL_INTERACTIONS = [
   'tui/comment-keystroke-paint',
@@ -195,7 +196,7 @@ export async function measure(
     if (selected('tui/query-to-answer')) {
       await timed('tui/query-to-answer', async () => {
         let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
-        if (state.entries[state.at].path == '/?.task%20.count') {
+        if (searchAt(state.entries[state.at].path) == '.task .count') {
           await keys('H')
           await paint('comment…')
         }
@@ -218,7 +219,7 @@ export async function measure(
             } catch {
               return false
             }
-            return state.entries[state.at].path == '/?.task%20.count' &&
+            return searchAt(state.entries[state.at].path) == '.task .count' &&
               /^│[^│]*│2,000\s*$/m.test(await capture())
           })
         }
