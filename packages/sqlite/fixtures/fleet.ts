@@ -144,21 +144,3 @@ export function workload() {
   )
   return { bundles, queries, batches }
 }
-export const OPERATIONS = [
-  'point',
-  'status-open',
-  'fts',
-  'walk-16',
-  'walk-unbounded',
-  'apply-100',
-]
-export const LAYERS = ['sqlite', 'sql', 'query'] as const
-export const MODES = ['memory', 'file'] as const
-export const benchmarkNames = () => [
-  ...LAYERS.flatMap((layer) =>
-    MODES.flatMap((mode) => OPERATIONS.map((op) => `${layer}/${mode}/${op}`))
-  ),
-  ...MODES.flatMap((mode) =>
-    ['backfill', 'move-100'].map((op) => `archetype/${mode}/${op}`)
-  ),
-]

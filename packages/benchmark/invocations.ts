@@ -1,6 +1,7 @@
 /** Deno workload declarations, measured with one CPU clock for the whole
  * batch. Explicit start/end boundaries exclude fixture setup and teardown. */
 import { stopwatch } from './bench.ts'
+import type { Sampling } from './result.ts'
 
 export type Invocation = Pick<
   Deno.BenchDefinition,
@@ -12,8 +13,14 @@ type Timer = () => () => Reading
 export let invocation = async (
   entry: Invocation,
   timer: Timer = stopwatch,
-  minimum = 20,
-): Promise<{ avg: number; cpu: number; n: number; cpuSamples: number[] }> => {
+  minimum = 200,
+): Promise<{
+  avg: number
+  cpu: number
+  n: number
+  cpuSamples: number[]
+  sampling?: Sampling
+}> => {
   let batch = async (n: number): Promise<Reading & { outer: number }> => {
     let explicit = false, running = false
     let sum = { value: 0, cpu: 0 }
@@ -43,28 +50,55 @@ export let invocation = async (
     let total = elapsed()
     return { ...(explicit ? sum : total), outer: total.cpu }
   }
-  let warm = await batch(entry.warmup ?? 5)
+  await batch(entry.warmup ?? 5)
   let n = Math.max(1, entry.n ?? 1)
+  let reading: Reading & { outer: number }
+  let sampling: Sampling | undefined
   if (entry.n === undefined) {
-    let warmed = warm.outer
-    for (let turn = 0; turn < 20; turn++) {
-      let reading = await batch(n)
-      warmed += reading.outer
-      // An explicit timed act can be tiny beside its fixture. Growing by
-      // timed CPU alone would repeat that fixture thousands of times.
-      if (reading.cpu >= minimum || reading.outer >= minimum) {
-        if (warmed >= minimum * 5) break
-      } else {
-        let scale = Math.ceil(minimum / (reading.outer || .001))
-        n = Math.min(10_000_000, n * Math.max(2, Math.min(10, scale)))
+    let outer = 0, calibrated = false
+    let budget = minimum * 5
+    while (true) {
+      reading = await batch(n)
+      outer += reading.outer
+      sampling = {
+        status: 'insufficient',
+        minimum,
+        measured: reading.cpu,
+        outer,
       }
+      if (reading.cpu >= minimum) {
+        // Discard calibration, then verify the retained batch itself. A GC
+        // outlier during calibration cannot leave a tiny final batch valid.
+        if (calibrated) {
+          sampling = undefined
+          break
+        }
+        calibrated = true
+        continue
+      }
+      // Setup CPU limits growth but cannot stand in for measured work.
+      let scale = Math.max(
+        2,
+        Math.min(10, Math.ceil(minimum * 1.25 / (reading.cpu || .001))),
+      )
+      let allowed = Math.floor(
+        Math.max(0, budget - outer) * n / (reading.outer || .001),
+      )
+      let next = Math.min(10_000_000, n * scale, allowed)
+      if (next <= n) break
+      n = next
     }
-  }
+  } else reading = await batch(n)
   // A declared n is the total measured invocation count. Paired rounds own
   // repeated observations; this collector never multiplies that contract.
-  let reading = await batch(n)
-  let cpu = reading.cpu * 1e6 / n
-  return { avg: reading.value * 1e6 / n, cpu, n, cpuSamples: [cpu] }
+  let cpu = reading!.cpu * 1e6 / n
+  return {
+    avg: reading!.value * 1e6 / n,
+    cpu,
+    n,
+    cpuSamples: [cpu],
+    ...sampling ? { sampling } : {},
+  }
 }
 
 /** Install only at the isolated collector's process boundary. Workload files

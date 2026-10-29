@@ -1,4 +1,4 @@
-/** Storage and apply throughput, with separately collected SQL counts. */
+/** Durable apply throughput, with separately collected SQL counts. */
 import {
   type CollectedSuite,
   type Host,
@@ -7,24 +7,13 @@ import {
 } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { collector } from './collector.ts'
-import {
-  benchmarkNames as storageNames,
-  MODES,
-  WORKLOAD_VERSION,
-} from '../packages/sqlite/fixtures/fleet.ts'
+import { WORKLOAD_VERSION } from '../packages/sqlite/fixtures/fleet.ts'
 import {
   applyBenchmarkNames,
-  benchmarkNames,
   bundlesPerOp,
   RECORDING_BATCHES,
 } from './names.ts'
 
-let files = [
-  'packages/sqlite/throughput_bench.ts',
-  'packages/sqlite/archetype_bench.ts',
-  'packages/sql/throughput_bench.ts',
-  'packages/query/throughput_bench.ts',
-]
 export let countNames = () =>
   applyBenchmarkNames().flatMap((name) =>
     ['sqlPerApply', 'sqlPerBundle'].map((field) => `${name}/${field}`)
@@ -62,7 +51,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
     metric: 'median-of-7-deno-avg-ns',
     workload: `${WORKLOAD_VERSION}/relay-staging-2`,
     benches: [
-      ...(recording ? applyNames : benchmarkNames())
+      ...applyNames
         .filter((name) => !input.names || input.names.includes(name)).map((
           name,
         ) => ({
@@ -75,16 +64,14 @@ export let throughput = (input: Input = {}): CollectedSuite => {
       let out: Record<string, Sample> = {}
       let modes = recording
         ? ['recording-unsubscribed', 'recording-subscribed']
-        : [...MODES, 'pipeline']
+        : ['pipeline']
       if (recording && round % 2) modes.reverse()
       for (let mode of modes) {
         let names = mode.startsWith('recording-')
           ? applyNames.filter((name) =>
             name.endsWith('/subscribed') == (mode == 'recording-subscribed')
           )
-          : mode == 'pipeline'
-          ? applyBenchmarkNames()
-          : storageNames().filter((name) => name.split('/')[1] == mode)
+          : applyNames
         names = names.filter((name) =>
           !input.names || input.names.includes(name)
         )
@@ -139,21 +126,8 @@ let measure = (
   if (Deno.build.os == 'linux') {
     env.DENO_SQLITE_PATH = Deno.env.get('DENO_SQLITE_PATH') ?? 'libsqlite3.so.0'
   }
-  let paths = mode.startsWith('recording-') || mode == 'pipeline'
-    ? ['bench/apply_bench.ts']
-    : files
-  paths = paths.filter((path) =>
-    !names || names.some((name) => {
-      let prefix = path.includes('archetype_bench')
-        ? 'archetype'
-        : path.startsWith('packages/')
-        ? path.split('/')[1]
-        : 'apply'
-      return name.startsWith(`${prefix}/`)
-    })
-  )
   return collector(
-    ['bench/deno-worker.ts', ...paths],
+    ['bench/deno-worker.ts', 'bench/apply_bench.ts'],
     root,
     env,
   )

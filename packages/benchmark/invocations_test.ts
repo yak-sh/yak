@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { invocation } from './invocations.ts'
 
 let clock = () => {
@@ -92,7 +92,7 @@ test('a declared invocation count does not multiply expensive fixture setup', as
   equal(measured.n, 2)
 })
 
-test('adaptive calibration counts fixture CPU when bounding the batch size', async () => {
+test('fixture CPU bounds growth without making insufficient timed work sufficient', async () => {
   let time = clock(), calls = 0
   let measured = await invocation({
     name: 'expensive adaptive fixture',
@@ -105,6 +105,26 @@ test('adaptive calibration counts fixture CPU when bounding the batch size', asy
       b.end()
     },
   }, time.timer)
-  equal(measured.n, 1)
-  equal(calls, 2)
+  ok(calls <= 10)
+  equal(measured.sampling?.status, 'insufficient')
+  equal(measured.sampling?.minimum, 200)
+  ok(measured.sampling!.outer <= 1000)
+  equal(Math.round(measured.cpu), 1000)
+})
+
+test('a GC-heavy calibration cannot leave an undersized final CPU batch', async () => {
+  let time = clock(), calls = 0
+  let measured = await invocation(
+    {
+      name: 'calibration outlier',
+      warmup: 5,
+      fn: () => time.work(++calls <= 6 ? 20 : 2),
+    },
+    time.timer,
+    10,
+  )
+  ok(measured.n >= 5)
+  equal(calls, 7 + measured.n)
+  equal(measured.cpu, 2e6)
+  equal(measured.sampling, undefined)
 })

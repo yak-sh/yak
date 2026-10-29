@@ -69,23 +69,18 @@ test('throughput refuses CPU regressions past each banked limit without banking 
   }
 })
 
-test('throughput collects each storage report separately from normalized apply reports', async () => {
-  let { benchmarkNames: storageNames } = await import(
-    '../sqlite/fixtures/fleet.ts'
-  )
+test('throughput keeps SQL counts beside normalized apply CPU', async () => {
   let counts = 0
   let suite = throughput({
     host: () => Promise.resolve(context),
-    measure: (mode) =>
+    measure: () =>
       Promise.resolve({
         version: 1,
         runtime: context.runtime,
         cpu: context.cpu,
-        benches: (mode == 'pipeline'
-          ? applyBenchmarkNames()
-          : storageNames().filter((n) => n.split('/')[1] == mode)).map(
-            (name) => ({ name, results: [{ ok: { avg: 100, cpu: 50 } }] }),
-          ),
+        benches: applyBenchmarkNames().map(
+          (name) => ({ name, results: [{ ok: { avg: 100, cpu: 50 } }] }),
+        ),
       }),
     counts: () => {
       counts++
@@ -104,7 +99,6 @@ test('throughput collects each storage report separately from normalized apply r
       (collected['apply/file/edit-alone-1000'] as { value: number }).value,
       .1,
     )
-    equal((collected['sqlite/file/point'] as { value: number }).value, 100)
     equal((collected['apply/file/edit-alone-1000'] as { cpu: number }).cpu, .05)
     equal(
       (collected['apply/file/edit-alone-1000'] as { counts: unknown }).counts,
@@ -118,7 +112,7 @@ test('throughput collects each storage report separately from normalized apply r
 test('recording comparison normalizes both modes per bundle without a statement observer', async () => {
   let suite = throughput({
     recording: true,
-    filter: '-200|batch-1000',
+    filter: '-200|edit-alone-1000',
     host: () => Promise.resolve(context),
     measure: (mode) =>
       Promise.resolve({
@@ -126,7 +120,7 @@ test('recording comparison normalizes both modes per bundle without a statement 
         runtime: context.runtime,
         cpu: context.cpu,
         benches: applyBenchmarkNames(true).filter((name) =>
-          /-200|batch-1000/.test(name)
+          /-200|edit-alone-1000/.test(name)
         ).filter((name) =>
           name.endsWith('/subscribed') == (mode == 'recording-subscribed')
         ).map((name) => ({
@@ -148,9 +142,9 @@ test('recording comparison normalizes both modes per bundle without a statement 
     Object.keys(collected).sort(),
     suite.benches.map((b) => b.name).sort(),
   )
-  ok(!Object.hasOwn(collected, 'apply/file/edit-alone-1000'))
-  for (let n of [200, 1000]) {
-    let name = `apply/file/edit-batch-${n}`
+  ok(!Object.hasOwn(collected, 'apply/file/create-alone-1000'))
+  for (let [work, n] of [['create', 200], ['edit', 1000]] as const) {
+    let name = `apply/file/${work}-alone-${n}`
     equal(
       (collected[name] as { value: number }).value,
       100 / (n * RECORDING_BATCHES),

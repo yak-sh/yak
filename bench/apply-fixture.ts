@@ -22,7 +22,7 @@ import { eid, workload } from '../packages/sqlite/fixtures/fleet.ts'
 
 import { sqlStatements } from './sql-counts.ts'
 import { fixture } from './fixture.ts'
-import { APPLY_MODES, APPLY_SHAPES, APPLY_SIZES, APPLY_WORK } from './names.ts'
+import { APPLY_CASES } from './names.ts'
 export const applyVocab = loadVocab([
   kernelDoc,
   ...await stamps([kernelDoc]),
@@ -149,28 +149,22 @@ export function verifyApplies(
 }
 export async function measureApplyCounts() {
   let counts: Record<string, { sqlPerApply: number; sqlPerBundle: number }> = {}
-  for (let mode of APPLY_MODES) {
-    for (let work of APPLY_WORK) {
-      for (let n of APPLY_SIZES) {
-        for (let shape of APPLY_SHAPES) {
-          let counter = sqlStatements()
-          let f: Awaited<ReturnType<typeof applyFixture>> | undefined
-          try {
-            f = await applyFixture(mode)
-            let bundles = applyBundles(work, n)
-            counter.reset()
-            runApplies(f, bundles, shape)
-            counts[`apply/${mode}/${work}-${shape}-${n}`] = {
-              sqlPerApply: counter.count() / (shape == 'alone' ? n : 1),
-              sqlPerBundle: counter.count() / n,
-            }
-            verifyApplies(f, bundles)
-          } finally {
-            f?.close()
-            counter.close()
-          }
-        }
+  for (let { mode, work, n, shape } of APPLY_CASES) {
+    let counter = sqlStatements()
+    let f: Awaited<ReturnType<typeof applyFixture>> | undefined
+    try {
+      f = await applyFixture(mode)
+      let bundles = applyBundles(work, n)
+      counter.reset()
+      runApplies(f, bundles, shape)
+      counts[`apply/${mode}/${work}-${shape}-${n}`] = {
+        sqlPerApply: counter.count() / (shape == 'alone' ? n : 1),
+        sqlPerBundle: counter.count() / n,
       }
+      verifyApplies(f, bundles)
+    } finally {
+      f?.close()
+      counter.close()
     }
   }
   return counts
