@@ -5,7 +5,7 @@
  * body and component edits are deliberately browser-only (inspectIo.edits),
  * so this fixture does not pretend to exercise those unavailable controls.
  */
-import type { Samples } from '@yaks/benchmark'
+import { processCpu, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -45,6 +45,7 @@ export async function measure(
   let host: Awaited<ReturnType<typeof compose>> | undefined
   let server: Deno.HttpServer<Deno.NetAddr> | undefined
   let started = false
+  let terminal = 0
   let tmux = async (...args: string[]) => {
     let out = await new Deno.Command('tmux', {
       args: ['-f', '/dev/null', '-S', socket, ...args],
@@ -84,10 +85,10 @@ export async function measure(
     let samples = []
     for (let i = 0; i < n; i++) {
       let run = await setup()
-      let start = performance.now()
+      let took = stopwatch(() => processCpu(terminal))
       await run()
       samples.push({
-        value: performance.now() - start,
+        ...took(),
         source: 'end-to-end',
         counts: { tasks: 2000 },
         details: {
@@ -181,6 +182,10 @@ export async function measure(
       `${launch} 2>${quote(dir + '/terminal.log')}`,
     )
     started = true
+    terminal = Number(await tmux('display-message', '-p', '#{pid}'))
+    if (!Number.isSafeInteger(terminal) || terminal < 1) {
+      throw new Error('missing terminal server pid')
+    }
     await paint('comment…')
     // Each sample reopens the actual palette and types into its freshly
     // mounted input. Neither a target title nor the query heading is an answer.

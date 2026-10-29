@@ -3,7 +3,7 @@
  * native turns; these figures are local lifecycle waits, not remote model
  * latency. Managed CLI agents and provider authentication are not exercised. */
 import type { Model } from '@yaks/model'
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -317,7 +317,7 @@ export async function measure(
           console.error(
             `session fixture ${door}/${family} sample ${i + 1}/${n}`,
           )
-          let start = performance.now()
+          let took = stopwatch()
           let answer = call(door, family, input)
           // A wait races real local completion beginning at command launch;
           // no synthetic provider delay is added to the timing. CLI startup
@@ -328,7 +328,7 @@ export async function measure(
             pending!.released.resolve()
             await bounded(runner!.idle(session), 'session completion')
           }
-          let elapsed = performance.now() - start
+          let elapsed = took()
           if (family == 'new' || family == 'spawn') {
             let made = (await graph.read('.session')).filter((row) =>
               !before.has(row.entity.eid)
@@ -355,7 +355,7 @@ export async function measure(
             let [row] = await graph.get([task], ['claim'])
             check(JSON.stringify(row), session)
           }
-          samples.push({ value: elapsed, counts: { samples: 1 } })
+          samples.push({ ...elapsed, counts: { samples: 1 } })
         }
         results[`${door}/session-${family}`] = samples
       }

@@ -3,7 +3,7 @@
  * HTTP readiness. Ready-first restart uses the production restart() door with
  * explicit private roles; it never selects the box's installed units. No model,
  * managed run, live graph, provider or outside network is involved. */
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { restart } from '../packages/cli/restart.ts'
@@ -63,6 +63,16 @@ export let measure = async (
   let dir = await Deno.makeTempDir({ prefix: 'T-127678-lifecycle-' })
   let prefix = `T-127678-${crypto.randomUUID()}`
   let web = `${prefix}-web`, work = `${prefix}-work`
+  let slice = `${prefix.replaceAll('-', '')}.slice`
+  let accounting = `${runtime}/systemd/user/${slice}`
+  let group = ''
+  let accountingStarted = false
+  let used = () => {
+    let value = Deno.readTextFileSync(`/sys/fs/cgroup${group}/cpu.stat`)
+      .match(/^usage_usec (\d+)$/m)
+    if (!value) throw new Error('missing lifecycle CPU accounting')
+    return Number(value[1]) / 1000
+  }
   let templates = [
     `${runtime}/systemd/user/${web}@.service`,
     `${runtime}/systemd/user/${work}@.service`,
@@ -117,11 +127,11 @@ export let measure = async (
   let stop = () => systemctl('stop', `${web}@*.service`, `${work}@*.service`)
   let record = (
     name: string,
-    value: number,
+    sample: { value: number; cpu: number },
     counts: Record<string, number> = {},
   ) => {
     results[name].push({
-      value,
+      ...sample,
       source: 'end-to-end',
       counts,
       details: {
@@ -160,6 +170,17 @@ export let measure = async (
       await host.close()
     }
     await Deno.mkdir(`${runtime}/systemd/user`, { recursive: true })
+    // Keep the slice active across service handovers so exited units' work
+    // remains in its cumulative counter. systemd starts these outside our tree.
+    await Deno.writeTextFile(
+      accounting,
+      '[Unit]\nDescription=Isolated lifecycle CPU accounting\n[Slice]\nCPUAccounting=yes\n',
+    )
+    await systemctl('start', slice)
+    accountingStarted = true
+    group = (await systemctl('show', slice, '-p', 'ControlGroup', '--value'))
+      .trim()
+    if (!group) throw new Error('missing lifecycle CPU cgroup')
     for (let [i, role] of [web, work].entries()) {
       let ready = `${dir}/${role}-%i.ready`
       let cli = [
@@ -189,7 +210,7 @@ export let measure = async (
         templates[i],
         `[Unit]\nDescription=Isolated T-127678 ${
           i == 0 ? 'web' : 'work'
-        } benchmark\n[Service]\nType=simple\nWorkingDirectory=${root}\n${
+        } benchmark\n[Service]\nType=simple\nSlice=${slice}\nWorkingDirectory=${root}\n${
           Object.entries(env).map(([k, v]) =>
             `Environment=${quote(`${k}=${v}`)}`
           ).join('\n')
@@ -207,27 +228,27 @@ export let measure = async (
           'lifecycle/work-ready',
         ]]
       ) {
-        let began = performance.now()
+        let took = stopwatch(used)
         await systemctl('--no-block', 'start', `${role}@initial.service`)
         await wait(
           () => present(`${dir}/${role}-initial.ready`),
           `${role} ready`,
         )
         if (role == web) await ask()
-        record(name, performance.now() - began)
+        record(name, took())
       }
       let polling = true,
         requests = 0,
         failed = 0,
-        gap = 0,
-        last = performance.now()
+        gap = { value: 0, cpu: 0 },
+        interval = stopwatch(used)
       let poll = (async () => {
         while (polling) {
           try {
             await ask()
-            let now = performance.now()
-            gap = Math.max(gap, now - last)
-            last = now
+            let sample = interval()
+            if (sample.cpu > gap.cpu) gap = sample
+            interval = stopwatch(used)
             requests++
           } catch {
             failed++
@@ -235,14 +256,14 @@ export let measure = async (
           await pause(5)
         }
       })()
-      let began = performance.now()
+      let took = stopwatch(used)
       try {
         let said = await restart({ runtimeDir: dir, roles })
         if (!said.includes(`${web}@`) || !said.includes(`${work}@`)) {
           throw new Error(`incomplete handover: ${said}`)
         }
         await ask()
-        record('lifecycle/restart-ready', performance.now() - began)
+        record('lifecycle/restart-ready', took())
         await wait(async () => {
           let units = await active()
           return !units.includes('@initial.service')
@@ -272,7 +293,8 @@ export let measure = async (
       async () => !await active(),
       `cleanup: owned units still active (${prefix})`,
     )
-    for (let template of templates) {
+    if (accountingStarted) await systemctl('stop', slice)
+    for (let template of [...templates, accounting]) {
       await Deno.remove(template).catch((error) => {
         if (!(error instanceof Deno.errors.NotFound)) throw error
       })
