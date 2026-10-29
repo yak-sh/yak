@@ -2107,13 +2107,6 @@
     "evidence": "bench/operation-sessions.rebank.results.json"
   },
   {
-    "suite": "hook-waits",
-    "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-    "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
-    "verdict": "inconclusive",
-    "error": "the code at 8603ad4f3 cannot run today's bench: Error: missing held context: {\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"knock #ad68b69401 at #683730322d from #f11fb41351: Hook delivery ad68b694-0133-499d-8779-942a2f8e75ef\"}}\n    at file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:176:21\n    at async timed (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:43:7)\n    at async Module.measure (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:151:7)\n    at async serve (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "person-commands",
     "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
     "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
@@ -4685,5 +4678,434 @@
       }
     ],
     "evidence": "bench/harness-switch.rebank.results.json"
+  },
+  {
+    "suite": "operation-scale",
+    "baseline": "bench/operation-scale.baseline.json",
+    "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+    "references": {
+      "cli/task-list": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/filtered-query": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/history": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/transcript-query": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/task-list": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/filtered-query": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/history": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/transcript-query": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
+    },
+    "provenance": [
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/operation-scale.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/task-list",
+          "cli/filtered-query",
+          "cli/history",
+          "cli/transcript-query",
+          "connector/task-list",
+          "connector/filtered-query",
+          "connector/history",
+          "connector/transcript-query"
+        ]
+      }
+    ],
+    "revision": "7e3b9423507f857554f9481a4c1ad37c4542b321",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "inconclusive",
+    "status": "inconclusive; default monitor confirmation pending",
+    "confidence": "limited rounds",
+    "reason": "Reference CPU ranges did not overlap in the measured rounds",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "cli/task-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          419.80899999999383,
+          364.2720000000045,
+          357.74200000000565
+        ],
+        "current": [
+          493.50099999999657,
+          382.86599999999453,
+          508.9890000000014
+        ],
+        "after": [
+          530.0869999999995,
+          461.62399999999616,
+          408.122000000003
+        ],
+        "reference": 413.9654999999984,
+        "now": 493.50099999999657
+      },
+      {
+        "name": "cli/filtered-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          329.9510000000082,
+          416.71800000000076,
+          327.8580000000002
+        ],
+        "current": [
+          353.4189999999944,
+          351.66300000000047,
+          403.34799999999814
+        ],
+        "after": [
+          424.8500000000058,
+          412.7560000000012,
+          390.13700000000244
+        ],
+        "reference": 401.44650000000183,
+        "now": 353.4189999999944
+      },
+      {
+        "name": "cli/history",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          340.4389999999912,
+          340.5480000000025,
+          319.2259999999951
+        ],
+        "current": [
+          368.70100000000093,
+          450.63200000000506,
+          402.61299999999756
+        ],
+        "after": [
+          383.89599999999336,
+          437.86499999999796,
+          347.7910000000047
+        ],
+        "reference": 344.1695000000036,
+        "now": 402.61299999999756
+      },
+      {
+        "name": "cli/transcript-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          289.25800000000163,
+          288.0659999999989,
+          270.5610000000088
+        ],
+        "current": [
+          459.3790000000008,
+          335.05600000000413,
+          309.5310000000027
+        ],
+        "after": [
+          348.25999999999476,
+          267.5550000000003,
+          377.0729999999967
+        ],
+        "reference": 288.66200000000026,
+        "now": 335.05600000000413
+      },
+      {
+        "name": "connector/task-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          98.86800000000221,
+          103.30200000000332,
+          88.18999999999505
+        ],
+        "current": [
+          79.50999999999476,
+          64.9780000000028,
+          78.03699999999662
+        ],
+        "after": [
+          156.38099999999395,
+          92.71800000000076,
+          145.3770000000004
+        ],
+        "reference": 101.08500000000276,
+        "now": 78.03699999999662
+      },
+      {
+        "name": "connector/filtered-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          90.87699999999313,
+          79.625,
+          54.19499999999971
+        ],
+        "current": [
+          64.45400000000518,
+          70.77299999999377,
+          80.2980000000025
+        ],
+        "after": [
+          97.92799999999988,
+          92.65200000000186,
+          97.66799999999785
+        ],
+        "reference": 91.7644999999975,
+        "now": 70.77299999999377
+      },
+      {
+        "name": "connector/history",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          52.745999999999185,
+          36.01299999999901,
+          45.14400000000023
+        ],
+        "current": [
+          54.300999999999476,
+          45.582000000002154,
+          48.663000000000466
+        ],
+        "after": [
+          55.51800000000367,
+          35.04200000000128,
+          57.79899999999907
+        ],
+        "reference": 48.94499999999971,
+        "now": 48.663000000000466
+      },
+      {
+        "name": "connector/transcript-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          7.298000000002503,
+          10.555999999996857,
+          11.843000000008033
+        ],
+        "current": [
+          13.067999999999302,
+          5.5899999999965075,
+          8.002999999996973
+        ],
+        "after": [
+          10.093999999997322,
+          6.629000000000815,
+          10.751999999993131
+        ],
+        "reference": 10.32499999999709,
+        "now": 8.002999999996973
+      }
+    ],
+    "evidence": "bench/operation-scale.rebank.results.json"
+  },
+  {
+    "suite": "hook-waits",
+    "baseline": "bench/hook-waits.baseline.json",
+    "references": {
+      "hook/SessionStart": "04b25fc039042d19f556445882b2dceb0d0950e6",
+      "hook/SubagentStart": "04b25fc039042d19f556445882b2dceb0d0950e6",
+      "hook/SessionEnd": "04b25fc039042d19f556445882b2dceb0d0950e6",
+      "hook/PostToolUse-delivery": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "hook/PostToolUse-subagent": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
+    },
+    "provenance": [
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/hook-waits.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "hook/PostToolUse-delivery",
+          "hook/PostToolUse-subagent"
+        ]
+      },
+      {
+        "reference": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "kind": "derived",
+        "source": "Earliest matching HTTP lifecycle hook implementation: 04b25fc03 dispatches session_context and session_wrap through the HTTP route. The previous HTTP route only delivered bus knocks and did not execute the measured lifecycle work.",
+        "correction": {
+          "previousReference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+          "workloadChange": "04b25fc039042d19f556445882b2dceb0d0950e6",
+          "reason": "The old baseline measured local lifecycle commands; today's HTTP lifecycle workload requires a route that executes session_context or session_wrap, rather than returning bus delivery context.",
+          "previousMedians": [
+            {
+              "name": "hook/SessionStart",
+              "unit": "ms",
+              "median": 570.6915650000001
+            },
+            {
+              "name": "hook/SubagentStart",
+              "unit": "ms",
+              "median": 403.46523700000034
+            },
+            {
+              "name": "hook/SessionEnd",
+              "unit": "ms",
+              "median": 404.031876
+            }
+          ]
+        },
+        "benches": [
+          "hook/SessionStart",
+          "hook/SubagentStart",
+          "hook/SessionEnd"
+        ]
+      }
+    ],
+    "revision": "f91b7fa2abc5d47c7206e49d663183c6ca78ddbd",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "groups": [
+      {
+        "reference": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "revision": "f91b7fa2abc5d47c7206e49d663183c6ca78ddbd",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "hook/SessionStart",
+          "hook/SubagentStart",
+          "hook/SessionEnd"
+        ]
+      },
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "revision": "f91b7fa2abc5d47c7206e49d663183c6ca78ddbd",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "hook/PostToolUse-delivery",
+          "hook/PostToolUse-subagent"
+        ]
+      }
+    ],
+    "verdict": "same",
+    "status": "same in limited rounds",
+    "confidence": "limited rounds",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "hook/SessionStart",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "before": [
+          19.804000000000087,
+          22.0300000000002,
+          19.069000000000415
+        ],
+        "current": [
+          16.45600000000013,
+          17.054000000000087,
+          10.079999999999927
+        ],
+        "after": [
+          20.241999999999734,
+          21.259000000000015,
+          20.182999999999993
+        ],
+        "reference": 20.212499999999864,
+        "now": 16.45600000000013
+      },
+      {
+        "name": "hook/SubagentStart",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "before": [
+          14.156999999999698,
+          28.827999999999975,
+          22.375
+        ],
+        "current": [
+          9.933999999999742,
+          22.223999999999705,
+          18.458999999998923
+        ],
+        "after": [
+          17.989000000000487,
+          30.875,
+          21.503999999999905
+        ],
+        "reference": 21.939499999999953,
+        "now": 18.458999999998923
+      },
+      {
+        "name": "hook/SessionEnd",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "before": [
+          12.188000000000102,
+          19.634000000000015,
+          14.108000000000175
+        ],
+        "current": [
+          17.782000000000153,
+          9.860999999999876,
+          11.527000000000044
+        ],
+        "after": [
+          23.496999999999844,
+          12.780999999999949,
+          11.265000000000327
+        ],
+        "reference": 13.444500000000062,
+        "now": 11.527000000000044
+      },
+      {
+        "name": "hook/PostToolUse-delivery",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          13.822000000000116,
+          12.121999999999844,
+          14.253999999999905
+        ],
+        "current": [
+          13.558999999999742,
+          10.338999999999942,
+          10.394999999999527
+        ],
+        "after": [
+          12.84699999999998,
+          9.587999999999965,
+          12.692000000000007
+        ],
+        "reference": 12.769499999999994,
+        "now": 10.394999999999527
+      },
+      {
+        "name": "hook/PostToolUse-subagent",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          4.68300000000022,
+          4.425000000000182,
+          3.6169999999997344
+        ],
+        "current": [
+          6.721999999999753,
+          3.6660000000001673,
+          4.036999999999807
+        ],
+        "after": [
+          7.963999999999942,
+          4.773999999999887,
+          3.0860000000000127
+        ],
+        "reference": 4.554000000000201,
+        "now": 4.036999999999807
+      }
+    ],
+    "evidence": "bench/hook-waits.rebank.results.json"
   }
 ]
