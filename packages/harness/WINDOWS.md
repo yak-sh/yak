@@ -30,11 +30,17 @@ support a future reveal action without requiring every transcript ID locally.
 
 ## Measured comparison
 
-Run `deno run -A packages/harness/window_bench.ts 2000 1000 3` to create a
-private SQLite fixture and compare the existing full-transcript call with the
-windowed call. The worker is initialized before the timed read. No live database
-or provider is used. The measurements below are three runs on a shared host, not
-production guarantees or complete launch-to-paint timings.
+Run `deno task bench harness-window` to compare full-transcript and windowed
+calls over a private SQLite fixture with 10,000 entries and 1,000-character
+bodies. Each collection takes one first read and one warm read in each mode:
+`full/first`, `full/warm`, `window/first` and `window/warm`. Paired rounds
+provide repeated CPU observations. Fixture creation, worker opening and cleanup
+have separate CPU diagnostics outside the transfer samples. No live database or
+provider is used.
+
+The table describes a separate 2,000-entry observation: three runs measuring
+wall time on a shared host, not production guarantees or complete
+launch-to-paint timings.
 
 | Measurement                  | Full transcript | 64-entry window |
 | ---------------------------- | --------------- | --------------- |

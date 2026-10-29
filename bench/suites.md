@@ -16,10 +16,11 @@ average in `details.cpuSamples`. Paired rounds provide repeated observations.
 Explicit `start()` and `end()` boundaries exclude fixture setup and teardown
 from measured work. Workload files need no separate CPU instrumentation.
 
-Apply declarations share one warmup and one measured invocation across all three
-paired collectors. Each callback retains its full 200 or 1,000 writes, private
-corpus, and 20 fixture warm writes. Paired rounds repeat the measured CPU
-observations; their callbacks already run long enough to measure directly.
+Each paired collector uses the shared apply declaration: one warmup and one
+measured invocation per case. Each callback retains its full 200 or 1,000
+writes, private corpus, and 20 fixture warm writes. Paired rounds repeat the
+measured CPU observations; their callbacks already run long enough to measure
+directly.
 
 Collectors retain their process and product imports across rounds. Deno workload
 modules load afresh for each collection, with fixture disposal awaited before
