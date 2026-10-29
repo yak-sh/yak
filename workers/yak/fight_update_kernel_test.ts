@@ -1,13 +1,10 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
-import { workerd } from './probe.ts'
-import type { fightUpdate } from './fight_update_fixture.ts'
+import { state } from './testing.ts'
+import { fightUpdate } from './fight_update_fixture.ts'
 
 test('legacy fight text moves losslessly through the guarded owner cutover', async () => {
-  let k = workerd()
-  let response = await fetch(`${k.base}/__store_cost/?kind=fight-update`)
-  assertEquals(response.status, 200, await response.clone().text())
-  let r = await response.json() as Awaited<ReturnType<typeof fightUpdate>>
+  let r = await fightUpdate(state('probe/fight-update').storage)
   assertEquals(r.status, 400)
   assertStringIncludes(r.refusal.message, 'fight.dealt is already text')
   assertEquals(r.afterCheck, r.original)

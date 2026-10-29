@@ -34,23 +34,13 @@ export let writeStorageFailure = async (db: State['storage']) => {
   }
   let eid = crypto.randomUUID()
   let body = [{ entity: { eid }, doc: { title: 'poisoned-storage' } }]
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let response: { status: number; body: unknown } | undefined
+  let response: { status: number; body: unknown }
   try {
-    response = await Promise.race([
-      store.fetch(request('/apply', body)).then(async (r) => ({
-        status: r.status,
-        body: await r.json(),
-      })),
-      new Promise<undefined>((yes) =>
-        timer = setTimeout(() => yes(undefined), 300)
-      ),
-    ])
+    let r = await store.fetch(request('/apply', body))
+    response = { status: r.status, body: await r.json() }
   } finally {
-    clearTimeout(timer)
     db.sql.exec = exec
   }
-  if (!response) return { settled: false }
   store = new Store(context)
   let read = async (path: string) => {
     let r = await store.fetch(request(path))

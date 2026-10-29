@@ -1,12 +1,11 @@
-// A hosted Store in workerd accepts one stable build per query binding. The
-// old-index migration is exercised through the Store's persisted DO adapter.
+// A hosted builder keeps a separate stable build for each query binding.
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { connector, seed, workerd } from './probe.ts'
+import { connector, kernel, seed } from './probe.ts'
 
 test('a hosted builder keeps independent builds for 50 bindings', async () => {
-  let k = workerd()
+  let k = await kernel()
   let space = `buildidx${crypto.randomUUID().slice(0, 6)}`
   let { cookie } = await seed(k, [{ slug: space, apps: ['index'] }])
   let agent = connector(k, cookie)

@@ -1,4 +1,4 @@
-// Cold incarnations driven by workerd storage, not a live app.
+// Cold Store incarnations share in-memory storage and an accepted socket.
 import { Store } from './graph.ts'
 import type { State } from './graph.ts'
 import type { Namespace } from './door.ts'

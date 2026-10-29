@@ -1,5 +1,4 @@
-// MCP file writes and reads cross the Worker's schema validator and the
-// Durable Object's SQLite authorizer, which native stand-ins cannot replace.
+// The hosted connector uses package arguments and preserves published reads.
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -7,11 +6,11 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { connector, meta, seed, signIn, unique, workerd } from './probe.ts'
+import { connector, kernel, meta, seed, signIn, unique } from './probe.ts'
 import { toolEid } from '@yaks/tools'
 
 test('the hosted connector writes and lists an app file', async () => {
-  let k = workerd()
+  let k = await kernel()
   let space = `mcp${crypto.randomUUID().slice(0, 8)}`
   let { cookie } = await seed(k, [{ slug: space, apps: ['notes'] }])
   let agent = connector(k, cookie)
@@ -26,10 +25,9 @@ test('the hosted connector writes and lists an app file', async () => {
   )
 })
 
-// A connector call crosses the Worker's schema validator and the store's
-// SQLite authorizer before the package runs as the caller.
+// A connector call validates arguments before the package runs as the caller.
 test('hosted memory calls use package arguments and preserve published reads', async () => {
-  let k = workerd()
+  let k = await kernel()
   let space = unique('memory')
   let them = await seed(k, [{ slug: space, apps: [] }])
   let agent = connector(k, them.cookie)

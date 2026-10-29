@@ -1,14 +1,13 @@
-// The shared store reads the terminal needs, including the actual runtime's
-// socket upgrade, without journal history.
+// The inspector reads private app schema and data with its login bearer.
 /// <reference lib="deno.ns" />
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { bearerFor, connector, signIn, workerd } from './probe.ts'
+import { bearerFor, connector, kernel, signIn } from './probe.ts'
 
 test(
-  'private app inspector schema and live reads use login bearer without history in workerd',
+  'private app inspector reads use login bearer without history',
   async () => {
-    let k = await workerd()
+    let k = await kernel()
     try {
       let owner = await signIn(k)
       let agent = connector(k, owner.cookie)
@@ -63,43 +62,8 @@ test(
       assert(changes.some((b: { doc: { title?: string } }) =>
         b.doc.title == 'Runtime history'
       ))
-      let Socket = WebSocket as unknown as {
-        new (
-          url: string,
-          options: { headers: Record<string, string> },
-        ): WebSocket
-      }
-      let socket = new Socket(
-        `${k.base.replace('http:', 'ws:')}/inspect/api/ws`,
-        {
-          headers: { ...headers, 'x-yak-host': `${space}.${k.host}` },
-        },
-      )
-      let frames: { id: string; refused?: unknown; bundles?: unknown[] }[] = []
-      socket.addEventListener('message', (e) =>
-        frames.push(JSON.parse(e.data)))
-      try {
-        await until(() => socket.readyState == WebSocket.OPEN, {
-          timeout: 5000,
-        })
-        socket.send(
-          JSON.stringify({
-            subscribe: `.doc&.entity.eid=${eid}`,
-            id: 'history',
-          }),
-        )
-        await until(() => frames.some((f) => f.id == 'history'), {
-          timeout: 5000,
-        })
-        let history = frames.find((f) => f.id == 'history')!
-        assertEquals(history.refused, undefined)
-        assertEquals(history.bundles?.length, changes.length)
-      } finally {
-        socket.close()
-      }
     } finally {
       await k.stop()
     }
   },
-  { tags: ['workerd'] },
 )

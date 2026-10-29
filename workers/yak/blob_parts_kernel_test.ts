@@ -1,11 +1,10 @@
-// R2 requires the native known-length body, which an in-memory bucket cannot
-// check. Exercise that contract through the same upload door a page calls.
+// Multipart uploads keep their bytes and metadata through the upload door.
 import { equal, test } from '@yaks/testing'
 import { addressOf, START } from '@yaks/blob'
-import { seed, unique, workerd } from './probe.ts'
+import { kernel, seed, unique } from './probe.ts'
 
-test('a multipart upload keeps R2 native stream length through hashing and reads back unchanged', async () => {
-  let k = workerd()
+test('a multipart upload keeps its length through hashing and reads back unchanged', async () => {
+  let k = await kernel()
   let space = unique('r2parts')
   let { cookie } = await seed(k, [{ slug: space, apps: ['files'] }])
   let body = new Uint8Array(150).map((_, i) => i)

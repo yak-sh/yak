@@ -2,12 +2,13 @@
 // Its writer is answered, and its input stays available for explicit retry.
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { workerd } from './probe.ts'
+import { state } from './testing.ts'
+import { writeStorageFailure } from './write_storage_failure_fixture.ts'
 
 test('a storage failure answers its writer and retains input for reviewed recovery', async () => {
-  let r = await fetch(`${workerd().base}/__play_cost/?write-storage-failure`)
-  assertEquals(r.status, 200, await r.clone().text())
-  let facts = await r.json()
+  let facts = await writeStorageFailure(
+    state('probe/write-storage-failure').storage,
+  )
   assertEquals(facts.settled, true)
   assertEquals(facts.response.status, 202)
   assertEquals(facts.response.body.error, 'Pending')

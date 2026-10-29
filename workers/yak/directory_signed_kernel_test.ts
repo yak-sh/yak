@@ -1,10 +1,9 @@
-// Signed directory admission must survive an overtaken first read without
-// reusing revoked standing or resetting an already accepted revision.
+// Connector initialization and app seed use the directory authority.
 import { equal, ok, test } from '@yaks/testing'
-import { connector, seed, workerd } from './probe.ts'
+import { connector, kernel, seed } from './probe.ts'
 
 test('signed MCP initialization and app seed use current directory authority', async () => {
-  let k = workerd()
+  let k = await kernel()
   try {
     let space = 'signeddirectory'
     let { cookie, eids } = await seed(k, [{ slug: space, apps: ['page'] }])

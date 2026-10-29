@@ -1,5 +1,5 @@
 // Rehearse the exact guarded clear/declaration/restore sequence on synthetic
-// legacy rows in workerd. Nothing here addresses an account or deployed app.
+// legacy rows in memory. Nothing here addresses an account or deployed app.
 import { type State, Store } from './graph.ts'
 import { cleared, restored } from '../../apps/vale/fight-update.ts'
 import type { Bundle } from '@yaks/graph'
