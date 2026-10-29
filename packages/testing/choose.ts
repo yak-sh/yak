@@ -18,8 +18,13 @@ import { plan, sweep } from './load.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 
-/** What a run chose: the key of each file it was given, and those it runs. */
-export type Chosen = { keys: Map<string, string>; run: string[] }
+/** What a run chose: the key of each file it was given, those it runs, and
+ * whether those import any of `paths` (true when the graph could not say). */
+export type Chosen = {
+  keys: Map<string, string>
+  run: string[]
+  reaches: (paths: string[]) => boolean
+}
 
 /**
  * Chooses among `files`. A file runs in a runtime of some `kind`, whose files
@@ -49,7 +54,9 @@ export let choose = async (
     changed?: string[]
   } = {},
 ): Promise<Chosen> => {
-  if (changed && !changed.length) return { keys: new Map(), run: [] }
+  if (changed && !changed.length) {
+    return { keys: new Map(), run: [], reaches: () => false }
+  }
   let pages = files.filter((f) => !tested(f))
   await sweep(pages)
   let plans = new Map(await plan(pages))
@@ -67,7 +74,7 @@ export let choose = async (
           'Cannot select relevant tests: dependency graph unavailable',
         )
       }
-      return { keys: new Map(), run: files }
+      return { keys: new Map(), run: files, reaches: () => true }
     }
     let common = new Map(
       await Promise.all(
@@ -108,7 +115,12 @@ export let choose = async (
       ) continue
       if (!(t && await proof(t, keys.get(f)!, reads(f)) in before)) run.push(f)
     }
-    return { keys, run }
+    let roots = run.map((f) => plans.get(f) ?? f)
+    return {
+      keys,
+      run,
+      reaches: (paths) => s.reaches(roots, paths),
+    }
   } finally {
     await Promise.all(
       [...plans.values()].map((p) => Deno.remove(p).catch(() => {})),

@@ -2,7 +2,8 @@
 // behavior runs in process on linkedom. With no paths, the dependency graph
 // selects only tests reached by branch and working changes; cached passes
 // leave out tests already passed unchanged. Paths narrow an explicit run.
-// There are no browser or workerd tests and no platform setup before a run.
+// There are no browser or workerd tests. A run whose files reach the Worker's
+// generated files and npm tree makes them current first (`READIES`).
 
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
@@ -297,6 +298,16 @@ export let RUNS = [
   rel(new URL('./scratch.ts', import.meta.url)),
 ]
 
+/** What the Worker's `ready` makes (workers/yak/wrangler.ts) is read by these:
+ * the OAuth provider out of its npm tree, and the in-memory platform's static
+ * assets over the generated public/ files (testing.ts `assets`). Both are
+ * gitignored, so a fresh worktree has neither until a run that reaches them
+ * makes them. */
+export let READIES = [
+  'workers/yak/oauth-provider.ts',
+  'workers/yak/testing.ts',
+]
+
 /** Relevant files, leaving out sources and observed dependencies already passed. */
 export let chosen = async (
   files: string[],
@@ -524,7 +535,11 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // Choose files before starting runtimes; hand each its dependency keys.
   let all = flags.includes('--all')
   let changed = !paths.length && !all ? await changes() : undefined
-  let { keys, run } = await chosen(files, all, [sqlite], changed)
+  let { keys, run, reaches } = await chosen(files, all, [sqlite], changed)
+  if (run.length && reaches(READIES)) {
+    let { ready } = await import('../workers/yak/wrangler.ts')
+    await ready(!flags.includes('--verbose'))
+  }
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   let suite: Suite = async (more) => {
