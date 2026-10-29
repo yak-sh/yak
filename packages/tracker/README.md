@@ -121,7 +121,7 @@ forwards to the platform tracker sends one letter, the box's. Each bug opening
 and each regression gets its own letter immediately. `side` names the side of
 the tracker web a store's bugs open on when they are not in its own graph: the
 platform tracker's letters (`side: 'yaks.app'`) name a bug by global eid and
-link to `/?.bug&@side=yaks.app&@bug=<eid>`, where the box's tracker web reads it
+link to `/?.bug&side=yaks.app&bug=<eid>`, where the box's tracker web reads it
 through `/tracker/bugs` and draws it with the same pages. Its identity derives
 from the store, recipient, bug eid, opening or regression mark, and full
 `created.at` or `regressed.at`, so a replayed effect keeps the same letter. A

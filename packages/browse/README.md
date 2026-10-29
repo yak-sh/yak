@@ -40,7 +40,7 @@ is also a draggable link for keeping or sharing a query.
 
 ## New
 
-The sidebar's **New** line, the `n` key and `/?@page=new` open a form to make an
+The sidebar's **New** line, the `n` key and `/?page=new` open a form to make an
 entity: Debug on an empty one. Search the vocabulary to add a component (each
 answer reads `comp{prop, …}` and what it is); each property gets a field for its
 type, a closed set its choices, and a reference a search of the graph. Below
@@ -49,8 +49,8 @@ puts it in the one above (`contains`), Enter keeps the indent and Tab and
 Shift+Tab move a line in and out. When the form names an entity (a title, or
 what identifies it) the outline goes inside it.
 
-Any entity's menu offers **new like this** (`/?@page=new&@like=T-9`: the same
-components, blank) and **add child** (`/?@page=new&@in=T-9`: made inside it,
+Any entity's menu offers **new like this** (`/?page=new&like=T-9`: the same
+components, blank) and **add child** (`/?page=new&in=T-9`: made inside it,
 like it); the command line says them as `:like` and `:child`, which is how a
 terminal reaches them.
 
@@ -244,7 +244,7 @@ The sidebar is a short fixed list of places: search, then home (named for the
 offered home page, or Home), Favorites, Recent, each package's destinations,
 Sessions, and the Schema when the host serves its packages. Each is a plain
 link, and the one you are on is lit. Narrower than a tablet, it folds behind the
-bar's menu. A destination is a page at `/?@page=<key>` listing what its query
+bar's menu. A destination is a page at `/?page=<key>` listing what its query
 finds, under a page part its `view` draws, or that part alone where it names no
 query (the topics' shelves, @yaks/topic). A package offers its own from its
 `./views` facet beside its renderers, so Browse lists a tracker's bugs without

@@ -261,7 +261,7 @@ specialists, each saying its home's common persona beside the checkout's
 writer's desk: every persona and skill on one side, the one being written in the
 middle, and what an agent gets on the other.
 
-The sidebar offers it as **Context** (`destinations`), at `/?@page=context`:
+The sidebar offers it as **Context** (`destinations`), at `/?page=context`:
 every persona with the project it works for and every skill with its description
 (`Context.Page`). A field over them finds one by the words of its title and
 description; Enter opens the first, and Escape clears it. What is typed there is

@@ -659,20 +659,28 @@ A query page carries its query directly in the URL's query string:
 `/?.result&.result.call.call.to.tool.name=Bash&.created.at=2026-10-27`. A bare
 ISO date names that whole local day, just as `today` does.
 
-`querySearch` writes the search string and `queryAt` reads it. Page state uses
-`@` keys (`/?.bug&@side=yaks.app&@bug=<eid>`), so it cannot collide with a
-component or property clause. Literal ampersands inside quoted values, percent
-signs, fragments and whitespace are escaped at the URL boundary; query
+`querySearch` writes the search string and `queryAt` reads it. Parameters
+starting with a grammar sigil (`.`, `!`, `?`, `+`, `-`, `*`, `$`, `#`, or a
+parenthesized group) carry the query. Other parameters belong to the page:
+`/?.bug&side=yaks.app&bug=<eid>`. `@` is reserved for the query language;
+parameters such as `@side` carry no page state.
+
+Bare words are full-text terms in the grammar, but standalone unsigiled URL
+parameters are page state and are ignored by the query.
+`querySearch('two words')` uses a grammar group: `?(two%20words)`. Text
+following a clause stays inside that parameter: `.task&cake` is written
+`?.task%26cake`. Literal ampersands inside quoted values or groups, percent
+signs, fragments and whitespace are escaped at the URL boundary; clause
 separators and comparison operators stay readable. A plus stays literal. Kept
-`?q=` page links redirect to this form, carrying their page state along. The
-API's `GET /query?q=…` remains its transport format.
+`?q=` page links redirect to this form, carrying plain page state and dropping
+`@` state. The API's `GET /query?q=…` remains its transport format.
 
 ```ts
 import { equal } from '@yaks/testing'
 import { queryAt, querySearch } from '@yaks/query'
 
 let search = querySearch('.bug&.created.at=2026-10-27', { side: 'yaks.app' })
-equal(search, '?.bug&.created.at=2026-10-27&@side=yaks.app')
+equal(search, '?.bug&.created.at=2026-10-27&side=yaks.app')
 equal(queryAt(search).query, '.bug&.created.at=2026-10-27')
 equal(queryAt(search).state.get('side'), 'yaks.app')
 ```

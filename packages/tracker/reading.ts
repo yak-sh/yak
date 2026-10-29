@@ -30,7 +30,7 @@ export let occurring = (eid: string): And =>
  * import { assertEquals } from '@std/assert'
  * assertEquals(
  *   remoteBug('yaks.app', 'b', 'e'),
- *   '/?.bug&@side=yaks.app&@bug=b&@error=e',
+ *   '/?.bug&side=yaks.app&bug=b&error=e',
  * )
  * ```
  */

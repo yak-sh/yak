@@ -54,7 +54,7 @@ let route = useRoute((frame) => {
   }
 })
 try {
-  for (let at of ['/D-7?v=Inspect.Page', '/?@page=recent']) {
+  for (let at of ['/D-7?v=Inspect.Page', '/?page=recent']) {
     let mounted = mount(h(Page, { at }))
     try {
       while (effects.length) effects.shift()!()

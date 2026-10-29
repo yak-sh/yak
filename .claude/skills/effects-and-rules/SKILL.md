@@ -217,7 +217,7 @@ explicitly authorized.
 `platform-visualize` traces what ran after a write. The runs themselves:
 
 - `effect_check`: failed and overdue runs.
-- Browse's Effects page (`/?@page=effects`): the workers up, how busy each is and
+- Browse's Effects page (`/?page=effects`): the workers up, how busy each is and
   what each is running, runs a second, and the runs owed by handler. Each
   worker says itself once a second in a `worker` row on its process entity
   (packages/effects/worker.ts); `graph_query` with q `.worker&?process` reads

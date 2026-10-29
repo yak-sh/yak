@@ -1,5 +1,5 @@
 // The places the sidebar offers, as data: home, the destinations, and the
-// schema. A destination is a page at `/?@page=<key>`: a list of what a query
+// schema. A destination is a page at `/?page=<key>`: a list of what a query
 // finds, a package's page part above it, or that part alone.
 // Browse offers the ones that read its own words (favorites, recent edits,
 // sessions); a package offers its own from its `./views` facet as
@@ -10,10 +10,10 @@ import { queryAt, querySearch } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Change, Ent } from './types.ts'
 
-/** A page the sidebar lists, at `/?@page=<key>`: what `query` finds, under the
+/** A page the sidebar lists, at `/?page=<key>`: what `query` finds, under the
  * page part `view` draws, or that part alone. */
 export type Destination = {
-  /** its address, `/?@page=<key>` */
+  /** its address, `/?page=<key>` */
   key: string
   /** what the sidebar and the page's bar call it */
   name: string
@@ -78,7 +78,7 @@ export let destinations = (
   ].filter((d) => !seen.has(d.key) && !!seen.add(d.key))
 }
 
-/** The destination an address is: `/?@page=<key>` and nothing else. */
+/** The destination an address is: `/?page=<key>` and nothing else. */
 export let destinationAt = (
   at: string,
   all: Destination[],
@@ -87,8 +87,8 @@ export let destinationAt = (
   return page ? all.find((d) => d.key == page.get('page')) : undefined
 }
 
-// Page selectors share the state namespace, so words such as map and new
-// still search as words. Entity-page view parameters remain on their path.
+// Page selectors are plain parameters; query clauses carry a sigil.
+// Entity-page view parameters remain on their path.
 let pageAt = (at: string): URLSearchParams | undefined => {
   let url = new URL(at, 'http://x')
   let { query, state } = queryAt(url.search)
@@ -105,9 +105,9 @@ export let configAt = (at: string): boolean =>
 export let schemaAt = (at: string): boolean => pageAt(at)?.get('page') == 'map'
 
 /** New entities, made in an entity or like one, each named by human id or eid. */
-/// newAt('/?@page=new') -> {}
-/// newAt('/?@page=new&@in=T-1&@like=T-2') -> {in: 'T-1', like: 'T-2'}
-/// newAt('/?@page=map') -> undefined
+/// newAt('/?page=new') -> {}
+/// newAt('/?page=new&in=T-1&like=T-2') -> {in: 'T-1', like: 'T-2'}
+/// newAt('/?page=map') -> undefined
 export let newAt = (at: string): { in?: string; like?: string } | undefined => {
   let state = pageAt(at)
   if (state?.get('page') != 'new') return undefined
@@ -115,7 +115,7 @@ export let newAt = (at: string): { in?: string; like?: string } | undefined => {
     ['in', 'like'].flatMap((k) => state.get(k) ? [[k, state.get(k)!]] : []),
   )
 }
-/// newPath({in: 'T-1', like: undefined}) -> '/?@page=new&@in=T-1'
+/// newPath({in: 'T-1', like: undefined}) -> '/?page=new&in=T-1'
 export let newPath = (at: { in?: string; like?: string } = {}): string =>
   `/${
     querySearch('', {

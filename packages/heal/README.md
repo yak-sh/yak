@@ -51,7 +51,7 @@ work. The platform's bugs reach people, so each pass takes them first, and after
 a restart no other tracker's bug takes a fixer slot until the platform's first
 poll settles (answered or failed, within a minute). The Worker has no page, so
 their tasks link the bug's page on the first configured tracker web
-(`/?.bug&@side=yaks.app&@bug=<eid>`), or with none name
+(`/?.bug&side=yaks.app&bug=<eid>`), or with none name
 `yak bug show <eid> --source yaks.app`. Its marks carry no precondition. The
 tracker web role serves that query independently of intake. One process holds
 the `@yaks/heal` service lease: the subscription and the serial fixer decisions

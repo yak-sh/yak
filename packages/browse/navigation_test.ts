@@ -63,15 +63,26 @@ test('recent lists actual edits, independent of who opened a page', () => {
 test('a package’s destination is listed once, has an address, and lights its line', () => {
   let all = destinations(vocab, actor, '.session', [bugs, { ...bugs }])
   assertEquals(all.filter((d) => d.key == 'bugs').length, 1)
-  assertEquals(destinationAt('/?@page=bugs', all), bugs)
+  assertEquals(destinationAt('/?page=bugs', all), bugs)
+  assertEquals(destinationAt('/?@page=bugs', all), undefined)
+  assertEquals(destinationAt('/?.bug&page=bugs', all), undefined)
   assertEquals(destinationAt('/?bugs=1', all), undefined)
   assertEquals(destinationAt('/T-1?bugs', all), undefined)
   let lines = places({ name: 'Desk', icon: 'lamp', path: '/' }, all, true)
-  assertEquals(placeAt('/?@page=bugs', lines)?.name, 'Bugs')
+  assertEquals(placeAt('/?page=bugs', lines)?.name, 'Bugs')
   assertEquals(placeAt('/', lines)?.name, 'Desk')
-  assertEquals(placeAt('/?@page=map', lines)?.name, 'Schema')
+  assertEquals(placeAt('/?page=map', lines)?.name, 'Schema')
   assertEquals(placeAt('/?q=bugs', lines), undefined)
   assertEquals(placeAt('/T-1', lines), undefined)
+})
+
+test('new entity pages read only plain page state', () => {
+  assertEquals(newAt('/?page=new&in=T-1&like=T-2'), {
+    in: 'T-1',
+    like: 'T-2',
+  })
+  assertEquals(newAt('/?page=new&@in=T-1&@like=T-2'), {})
+  assertEquals(newAt('/?@page=new'), undefined)
 })
 
 for (let word of ['new', 'map', 'config', 'favorites', 'bugs', 'sessions']) {

@@ -1,6 +1,11 @@
-// A query is the URL's search itself. Page state has @-prefixed keys, outside
-// the query's property grammar. Quotes keep literal ampersands inside values;
+// Query parameters start with grammar sigils; other parameters are page state.
+// Quotes keep literal ampersands inside values;
 // percent, hash and whitespace are escaped once at the URL boundary.
+
+import { tokens } from './parse.ts'
+
+let clause = (s: string) => /^[.!?+*#$(-]/.test(s.trimStart())
+let page = (key: string) => !clause(key) && !key.startsWith('@')
 
 let decode = (s: string) =>
   new URLSearchParams('value=' + s.replace(/[&+]/g, encodeURIComponent)).get(
@@ -14,17 +19,29 @@ export let querySearch = (
   line: string,
   state: Record<string, string> = {},
 ): string => {
-  let quote = '', escaped = false
+  line = line.trim()
+  // Bare full-text terms have no sigil. A grammar group gives a text-only
+  // query an opening marker without introducing a second text syntax.
+  if (line && !clause(line)) line = `(${line})`
+  let quote = '', escaped = false, depth = 0
   let query = Array.from(line.trim(), (c) => {
     let literal = !!quote
     if (escaped) escaped = false
     else if (quote && c == '\\') escaped = true
     else if (c == quote) quote = ''
     else if (!quote && (c == '"' || c == "'")) quote = c
-    return c == '&' && literal ? '%26' : encode(c)
+    if (!literal && c == '(') depth++
+    if (!literal && c == ')') depth--
+    return c == '&' && (literal || depth) ? '%26' : encode(c)
   }).join('')
-  let params = Object.entries(state).map(([k, v]) =>
-    `@${encodeURIComponent(k)}=${encodeURIComponent(v)}`
+  // Keep any full-text terms after & inside the preceding query parameter.
+  query = query.split('&').reduce(
+    (out, part) =>
+      out + (out ? (clause(decode(part)) ? '&' : '%26') : '') + part,
+    '',
+  )
+  let params = Object.entries(state).filter(([k]) => page(k)).map(([k, v]) =>
+    `${encodeURIComponent(k)}=${encodeURIComponent(v)}`
   )
   return '?' + [query, ...params].filter(Boolean).join('&')
 }
@@ -41,16 +58,28 @@ export let queryAt = (search: string): {
   if (params.has('q')) {
     let query = params.get('q')!
     params.delete('q')
-    return { query, state: params, legacy: true }
+    let state = new URLSearchParams([...params].filter(([k]) => page(k)))
+    return { query, state, legacy: true }
   }
   let clauses: string[] = [], state = new URLSearchParams()
   for (let part of search.replace(/^\?/, '').split('&')) {
-    let match = part.match(/^@([^=]+)=(.*)$/s)
-    if (match) state.append(decode(match[1]), decode(match[2]))
-    else if (part) clauses.push(part)
+    if (!part) continue
+    let decoded = decode(part)
+    if (clause(decoded)) clauses.push(decoded)
+    else {
+      let [key, ...value] = part.split('=')
+      if (page(decode(key))) state.append(decode(key), decode(value.join('=')))
+    }
+  }
+  let query = clauses.join('&')
+  // A single outer group is equivalent to its contents.
+  if (
+    query.startsWith('(') && query.endsWith(')') && tokens(query).length == 1
+  ) {
+    query = query.slice(1, -1)
   }
   return {
-    query: clauses.length ? decode(clauses.join('&')) : null,
+    query: query || null,
     state,
     legacy: false,
   }

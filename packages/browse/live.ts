@@ -1014,11 +1014,9 @@ export let config: {
   store: false,
 }
 export let agreementProbe = (search: string) =>
-  (queryAt(search).state.get('probe') ??
-    new URLSearchParams(search).get('probe')) == 'subscriptions'
+  queryAt(search).state.get('probe') == 'subscriptions'
 export let storeProbe = (search: string) =>
-  (queryAt(search).state.get('store') ??
-    new URLSearchParams(search).get('store')) == 'idb'
+  queryAt(search).state.get('store') == 'idb'
 // THE server address — every socket and fetch in this module goes through it,
 // and there is no host to guess. Refuse, so a process that never named a
 // server says so instead of reaching one it was never pointed at.

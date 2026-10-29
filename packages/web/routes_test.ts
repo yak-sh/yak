@@ -284,10 +284,10 @@ test('web and terminal writes are attributed to the configured owner through API
 })
 
 // Follow the same HTTP door as a kept letter, without starting a server.
-test('kept query pages redirect to clauses with isolated page state', async () => {
+test('kept query pages redirect to clauses with plain page state', async () => {
   let response = await get('/?q=.bug&side=yaks.app&bug=b')
   assertEquals(response.status, 308)
-  assertEquals(response.headers.get('location'), '/?.bug&@side=yaks.app&@bug=b')
+  assertEquals(response.headers.get('location'), '/?.bug&side=yaks.app&bug=b')
   let direct = await get(response.headers.get('location')!)
   assertEquals(direct.status, 200)
   assertEquals((await direct.text()).includes('<html'), true)
@@ -296,4 +296,14 @@ test('kept query pages redirect to clauses with isolated page state', async () =
     inspect.headers.get('location'),
     '/?.task&.created.at>2026-10-27',
   )
+})
+
+test('recent @ page state loses only the state when a query page opens', async () => {
+  let old = '/?q=.bug&@side=yaks.app&@bug=b#e'
+  let response = await get(old)
+  assertEquals(response.status, 308)
+  assertEquals(response.headers.get('location'), '/?.bug#e')
+  let direct = await get('/?.bug&@side=yaks.app&@bug=b')
+  assertEquals(direct.status, 200)
+  assertEquals((await direct.text()).includes('<html'), true)
 })

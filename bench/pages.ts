@@ -328,7 +328,7 @@ export let contentPages = (): Page[] => {
     patience: 45_000,
   }, {
     name: 'sessions',
-    path: '/?@page=sessions',
+    path: '/?page=sessions',
     painted: rows,
   }, {
     name: 'project',
@@ -345,7 +345,7 @@ export let contentPages = (): Page[] => {
       `!!document.querySelector('.Map_Node[data-node]:not([data-node^="phase:"])')`,
   }, {
     name: 'schema',
-    path: '/?@page=map',
+    path: '/?page=map',
     painted: `!!document.querySelector('.Shell_Body .Head_Title')
       ?.textContent.includes('Schema') && ${table}`,
   }, {

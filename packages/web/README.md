@@ -43,7 +43,7 @@ read-only: `/web/owner` answers no owner and `/web/apply` refuses. The generic
 `/apply`, `/query` and `/ws` doors stay with @yaks/api.
 
 With secrets and connections configured, Browse's sidebar opens Configuration at
-`/?@page=config`: replace a secret with a masked value, or sign in to an
+`/?page=config`: replace a secret with a masked value, or sign in to an
 integration. Credential writes go directly to `/web/apply`, never through an
 offline outbox. `POST /web/authorize` uses @yaks/connections' authorization and
 keeps return URLs outside the graph.

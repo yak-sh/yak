@@ -75,10 +75,15 @@ filter. A malformed clause throws rather than becoming a search term.
   entities of every kind, naming the line it meant (`.topic&.limit=3`).
 
 The query page uses the query string itself: `/?.task&.created.at=2026-10-27`.
-`querySearch` and `queryAt` in @yaks/query own this URL boundary. Page state has
-`@` keys (`/?.bug&@side=yaks.app&@bug=<eid>`, `/?@page=spend`); query words
-remain query words. Kept `?q=` page links redirect to this form. The API's
-`/query?q=` remains its transport format.
+`querySearch` and `queryAt` in @yaks/query own this URL boundary. Grammar
+sigils select the query parameters; plain `side`, `bug` and `page` keys belong
+to the page (`/?.bug&side=yaks.app&bug=<eid>`, `/?page=spend`). `@` belongs to
+the query language, never to page state. Standalone bare words in URL
+parameters are ignored; the writer groups text-only queries as
+`/?(two%20words)` and keeps text after a clause inside its parameter
+(`.task&cake` becomes `/?.task%26cake`). Kept `?q=` page links redirect to this
+form, retaining plain state and dropping `@` state. The API's `/query?q=`
+remains its transport format.
 
 ## What comes back
 

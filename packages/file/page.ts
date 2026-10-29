@@ -138,7 +138,7 @@ let freePages = (volume: string, path: string, kept?: Kept) => {
   let free = pagesFree(kept, volume, path)
   return free == null
     ? []
-    : [' · ', h('a', { href: '/?@page=history' }, `${size(free)} free pages`)]
+    : [' · ', h('a', { href: '/?page=history' }, `${size(free)} free pages`)]
 }
 
 // Leading room a level deep in the tree, kept by both hosts.

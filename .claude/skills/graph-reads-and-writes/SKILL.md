@@ -177,6 +177,6 @@ write never owes the effect again. Writing them is `effects-and-rules`.
 ## Looking at it
 
 `graph_show` with `<id>`, `graph_query` with q `<q>`, `graph_schema` with `<comp>`, `history` with entity `<id>` (the journal), and `yak inspect` (the map, an id or a
-query) in a terminal, or https://tasks.yak.sh/?@page=map in a browser.
+query) in a terminal, or https://tasks.yak.sh/?page=map in a browser.
 
 When this skill is wrong or missing something, fix it in the same change.

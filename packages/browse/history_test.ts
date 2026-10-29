@@ -72,9 +72,9 @@ test('a kept query address is replaced in the history door as it opens', () => {
   })
   bindHistory(port)
   equal(port.read(), {
-    path: '/?.bug&@side=yaks.app&@bug=b#e',
+    path: '/?.bug&side=yaks.app&bug=b#e',
     state: { scroll: 12 },
   })
-  equal(route.value, '/?.bug&@side=yaks.app&@bug=b#e')
+  equal(route.value, '/?.bug&side=yaks.app&bug=b#e')
   equal(left.value, 12)
 })
