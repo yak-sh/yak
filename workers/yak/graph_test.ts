@@ -21,7 +21,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import type { Frame } from '@yaks/api'
+import { faults, type Frame } from '@yaks/api'
 import { type Bundle, type Comp, graph, type Rule, sha256 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { draftEid } from '@yaks/draft'
@@ -799,22 +799,26 @@ for (let aggregate of [false, true]) {
         throw error
       },
     )
-    using logged = stub(console, 'error')
-    let response = await get(
-      store,
-      `/query?q=${aggregate ? '.count' : '.recipe'}`,
-      owner,
-    )
-    assertEquals(response.status, 500)
-    assertEquals(await response.json(), {
-      error: 'Error',
-      message: error.message,
-    })
-    let id = response.headers.get('x-request-id')
-    assertEquals(logged.calls.map((c) => c.args), [[
-      `GET /query (request ${id}) failed —`,
-      error,
-    ]])
+    // The newest reporter installed is the one told, whatever else this
+    // runtime loaded before (defects-runtime.ts installs the Worker's).
+    let told: [unknown, string][] = []
+    let unfault = faults((e, where) => told.push([e, where]))
+    try {
+      let response = await get(
+        store,
+        `/query?q=${aggregate ? '.count' : '.recipe'}`,
+        owner,
+      )
+      assertEquals(response.status, 500)
+      assertEquals(await response.json(), {
+        error: 'Error',
+        message: error.message,
+      })
+      let id = response.headers.get('x-request-id')
+      assertEquals(told, [[error, `GET /query (request ${id})`]])
+    } finally {
+      unfault()
+    }
   })
 }
 
