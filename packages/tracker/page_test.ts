@@ -32,6 +32,7 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
+  let shown: { textContent: string }[] = []
   let time = clock()
   let server = (url: string, init?: RequestInit) => {
     if (url.endsWith('/api/report')) {
@@ -62,7 +63,18 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
       baseURI: at,
       scripts: scripts.map((src) => ({ src })),
       readyState: 'complete',
-      body: { innerText: 'A cookbook with plenty on the page. '.repeat(4) },
+      body: {
+        innerText: 'A cookbook with plenty on the page. '.repeat(4),
+        append: (el: { textContent: string }) => shown.push(el),
+      },
+      createElement: () => ({
+        style: {},
+        textContent: '',
+        setAttribute() {},
+        remove() {
+          shown.splice(shown.indexOf(this), 1)
+        },
+      }),
     },
     location: new URL(at),
     navigator: {},
@@ -81,7 +93,8 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
   let bodies = () =>
     Promise.all(sent.map(async (b) => JSON.parse(await b.text())))
   let said = async () => (await bodies()).map((b) => b.message)
-  return { win, heard, asked, said, bodies }
+  let lines = () => shown.map((el) => el.textContent)
+  return { win, heard, asked, said, bodies, lines }
 }
 
 // Fire `el`'s failed load. The listener answers with its handling, settled
@@ -238,6 +251,22 @@ test('a fetch with no answer the page reports itself is not filed', async () => 
   let error = await p.win.fetch(release).then(() => null, (e) => e)
   p.heard.get('error')!({ target: p.win, error, filename: at, lineno: 90 })
   equal(await p.said(), [])
+})
+
+test('a fetch with no answer the page logs is not filed', async () => {
+  let p = page({})
+  let error = await p.win.fetch(release).then(() => null, (e) => e)
+  p.win.console.error(error)
+  equal(await p.said(), [])
+})
+
+test('the page says it is reconnecting while the client waits', () => {
+  let p = page({})
+  let reconnecting = p.heard.get('yak-reconnecting')!
+  reconnecting({ detail: true })
+  let waiting = p.lines()
+  reconnecting({ detail: false })
+  equal([waiting, p.lines()], [['Reconnecting…'], []])
 })
 
 test('any other uncaught rejection is filed', async () => {

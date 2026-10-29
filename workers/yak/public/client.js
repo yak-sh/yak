@@ -56,6 +56,11 @@ export { draftEid }
 // upload's retries, the socket's reconnects) on `clock` (@yaks/fp `Clock`),
 // which a test moves itself; unset, the runtime's.
 //
+// A read (`query`, `search`, `me`) whose connection drops is asked again once
+// it is back, while the page says it is reconnecting, and a write waits for
+// it in the outbox: catch a read's rejection to show a refusal, never an
+// empty page for an outage.
+//
 // Errors need no wiring here: the kernel injects a reporter into every page
 // it serves (public/report.js), so a throw, an uncaught rejection, or a
 // refusal from these doors is already on its way to the app's store and the
@@ -375,21 +380,50 @@ let LANES = 4
 let busy = (e) =>
   e.status == null || e.status >= 500 || e.status == 408 || e.status == 429
 
-// Sent again while the way there failed, which waits for the browser to say it
-// is back online. A refusal is thrown at once. Each wait doubles, to fifteen
-// seconds.
-let again = async (clock, call, tries = 0) => {
-  try {
-    return await call()
-  } catch (e) {
-    if (!busy(e) || tries >= 7) throw e
-    if (globalThis.navigator?.onLine === false) {
-      await new Promise((on) => addEventListener('online', on, { once: true }))
-    }
-    await new Promise((on) =>
-      clock.after(Math.min(1000 * 2 ** tries, 15000), on)
+// Whether the request never had an answer: the connection, not the platform.
+let unanswered = (e) => e.status == null
+
+// How many calls are waiting out a dropped connection. The page hears the
+// first one start and the last one end (`yak-reconnecting`), and the reporter
+// woven into it (@yaks/tracker/page) says it is reconnecting meanwhile.
+let waiting = 0
+let wait = (by) => {
+  waiting += by
+  if (waiting == (by > 0 ? 1 : 0)) {
+    globalThis.dispatchEvent?.(
+      new CustomEvent('yak-reconnecting', { detail: waiting > 0 }),
     )
-    return again(clock, call, tries + 1)
+  }
+}
+
+// A read: asked again only while it has no answer, since a refusal or a
+// platform failure answers the same the next time.
+let READ = { when: unanswered }
+
+// Sent again while the way there failed (`when`, by default `busy`), which
+// waits for the browser to say it is back online. A refusal is thrown at once.
+// Each wait doubles, to fifteen seconds, `tries` times.
+let again = async (clock, call, { when = busy, tries = 7 } = {}) => {
+  let waited = false
+  try {
+    for (let n = 0;; n++) {
+      try {
+        return await call()
+      } catch (e) {
+        if (!when(e) || n >= tries) throw e
+        if (!waited) wait(+(waited = true))
+        if (globalThis.navigator?.onLine === false) {
+          await new Promise((on) =>
+            addEventListener('online', on, { once: true })
+          )
+        }
+        await new Promise((on) =>
+          clock.after(Math.min(1000 * 2 ** n, 15000), on)
+        )
+      }
+    }
+  } finally {
+    if (waited) wait(-1)
   }
 }
 
@@ -413,7 +447,11 @@ let lanes = async (items, go) => {
 
 export let store = (base, { clock = system } = {}) => {
   base = based(base)
-  let rawAsk = door(base)
+  let once = door(base)
+  // A read is asked again while it has no answer, so a page that loads as
+  // the connection drops gets its rows once it is back, not an empty page.
+  let rawAsk = (path, init, read = READ) =>
+    init ? once(path, init) : again(clock, () => once(path), read)
   let vocabulary
   let readWire = async (value, payload) => {
     // No extra request for a page whose answers contain no byte tags. Only
@@ -437,7 +475,7 @@ export let store = (base, { clock = system } = {}) => {
     })
     return decode(await vocabulary, value, payload)
   }
-  let ask = async (path, init) => readWire(await rawAsk(path, init))
+  let ask = async (path, init, read) => readWire(await rawAsk(path, init, read))
   // One bundle or many, in; `{ok, aliases, bundles}` back, where `aliases`
   // maps each `$alias` to the eid it minted and `bundles` is the batch as
   // applied.
@@ -448,37 +486,44 @@ export let store = (base, { clock = system } = {}) => {
   let notify = () => {
     for (let fn of listeners) fn()
   }
+  // Who is writing is waited for as long as the connection is away, since a
+  // write is held until it is known; anything else is asked again by the
+  // next call, never remembered as the outbox's answer.
   let boot = () =>
-    starting ??= ask('me').then(async ({ person }) => {
-      if (closed) throw new Error('Write outbox is closed')
-      queue = durableOutbox({
-        scope: `${base}:${person ?? 'anonymous'}`,
-        timer: (fn, ms) => clock.after(ms, fn),
-        cancelTimer: (cancel) => cancel(),
-        send: async (key, payload) => {
-          let current = await ask('me')
-          // Closing while identity is in flight must not start another write
-          // after the page (or its transport) has gone away.
-          if (closed) throw new Error('Write outbox is closed')
-          if (current.person !== person) {
-            throw new Error(
-              'Write is unsaved: the signed-in person has changed',
-            )
-          }
-          return ask('apply', {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'idempotency-key': key,
-            },
-            body: stringify(payload),
-          })
-        },
+    starting ??= ask('me', undefined, { when: unanswered, tries: Infinity })
+      .catch((error) => {
+        starting = undefined
+        throw error
+      }).then(async ({ person }) => {
+        if (closed) throw new Error('Write outbox is closed')
+        queue = durableOutbox({
+          scope: `${base}:${person ?? 'anonymous'}`,
+          timer: (fn, ms) => clock.after(ms, fn),
+          cancelTimer: (cancel) => cancel(),
+          send: async (key, payload) => {
+            let current = await ask('me')
+            // Closing while identity is in flight must not start another write
+            // after the page (or its transport) has gone away.
+            if (closed) throw new Error('Write outbox is closed')
+            if (current.person !== person) {
+              throw new Error(
+                'Write is unsaved: the signed-in person has changed',
+              )
+            }
+            return ask('apply', {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'idempotency-key': key,
+              },
+              body: stringify(payload),
+            })
+          },
+        })
+        queue.onPending(notify)
+        await queue.ready
+        notify()
       })
-      queue.onPending(notify)
-      await queue.ready
-      notify()
-    })
   let outbox = {
     get ready() {
       return boot()

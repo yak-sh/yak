@@ -222,6 +222,9 @@
       let message = said(args[0]).slice(0, 2000)
       let error = args.find((a) => a instanceof Error)
       crumb('console', message)
+      // A fetch with no answer the page logs is the same fetch, judged where
+      // it rejected: a page losing its server is not a break.
+      if (decided(error)) return consoleError.apply(console, args)
       let cause = error && causes(error)
       send({
         message,
@@ -352,4 +355,34 @@
       } catch { /* a reporter that throws is worse than one that misses */ }
     })
   }
+
+  // While ./api/client.js waits out a connection that dropped, before asking
+  // again (its `again`), the page says so, and stops saying so once it is
+  // answered: the person's work is held, not lost, and the page is not empty
+  // because there is nothing.
+  let RECONNECTING = 'Reconnecting…'
+  let line = null
+  addEventListener('yak-reconnecting', (e) => {
+    try {
+      if (!e.detail) {
+        line?.remove()
+        line = null
+        return
+      }
+      if (line) return
+      line = document.createElement('div')
+      line.id = 'yak-reconnecting'
+      line.setAttribute('role', 'status')
+      line.textContent = RECONNECTING
+      line.style.cssText = 'position:fixed;left:50%;bottom:1rem;' +
+        'transform:translateX(-50%);z-index:2147483647;' +
+        'padding:.4rem .9rem;border-radius:999px;' +
+        "font:600 .9rem/1.4 'Nunito',system-ui,-apple-system,'Segoe UI'," +
+        'Roboto,sans-serif;' +
+        (dark()
+          ? 'background:#2b231f;color:#f1e6d8'
+          : 'background:#fdf7ee;color:#523828;box-shadow:0 1px 4px #5238283d')
+      ;(document.body || document.documentElement).append(line)
+    } catch { /* a reporter that throws is worse than one that misses */ }
+  })
 })()
