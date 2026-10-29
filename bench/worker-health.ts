@@ -1,6 +1,10 @@
 /** CPU consumed by managed workers while people wait for them. Reads systemd
  * and cgroup accounting only; owns no managed process and sends no signals. */
-import type { CollectedSuite } from '@yaks/benchmark'
+import {
+  type CollectedSuite,
+  type Options,
+  run as benchmark,
+} from '@yaks/benchmark'
 
 let command = async (...args: string[]) => {
   let out = await new Deno.Command('systemctl', {
@@ -58,8 +62,19 @@ export let suite = (args: string[] = []): CollectedSuite => {
       }
       let rate = (after - before) * 1000 / elapsed
       return {
-        'workers/cpu': { value: rate, cpu: rate, source: 'cgroup-cpu-rate' },
+        'workers/cpu': { value: rate, source: 'cgroup-cpu-rate' },
       }
     },
   }
 }
+
+/** Live occupation depends on the work people gave these workers. Report it
+ * without comparing a baseline for another workload or worker population. */
+export let run = (options: Options, work = suite()) =>
+  benchmark(work, {
+    ...options,
+    figure: undefined,
+    mode: 'run',
+    rounds: 1,
+    runs: 1,
+  })

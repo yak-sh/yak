@@ -53,6 +53,18 @@ export let main = async (args = Deno.args): Promise<number> => {
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
+  if (name == 'worker-health') {
+    let observation = await import('./worker-health.ts')
+    let current = await observation.run({
+      ...options(name, action, 1),
+      output: output ?? `bench/${name}.results.json`,
+    }, observation.suite(rest))
+    for (let b of current.benches) {
+      console.log(`${b.name}: ${b.median} ${b.unit}`)
+    }
+    console.log(`${name}: live observation`)
+    return 0
+  }
   // The monitor already owns the box-wide flock before starting its timeout.
   let locked = rest.includes('--lock-held')
   rest = rest.filter((a) => a != '--lock-held')
@@ -88,6 +100,7 @@ export let main = async (args = Deno.args): Promise<number> => {
         [
           'throughput',
           'app-deploy',
+          'worker-health',
           'box',
           ...standalone.map((b) => b.suite().name),
         ].join('\n'),

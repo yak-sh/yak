@@ -45,7 +45,6 @@ export let SUITES = [
   'terminal-interactions',
   'operation-scale',
   'platform-waits',
-  'worker-health',
   'web-client',
   'client-frame',
   'client-rules',
@@ -75,12 +74,11 @@ export let HOURLY = [
   'terminal-interactions',
   'operation-scale',
   'platform-waits',
-  'worker-health',
 ]
 
 /** Suites that measure the live box (its server, its workers, its deploys),
  * so no older code can run beside them: they report only failures. */
-export let LIVE = ['worker-health']
+export let LIVE: string[] = []
 
 /** Deploy checks need fresh observations before comparison. */
 export let MEASURE: Record<string, string[]> = {

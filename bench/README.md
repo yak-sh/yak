@@ -45,10 +45,8 @@ run against its committed baseline. A screen past its limit is never evidence by
 itself: the monitor then measures the code the baseline was banked at beside the
 code now, at the same moment ([side by side](#side-by-side-on-a-shared-box)),
 and reports only the benches that comparison finds slower, with the commits
-between the two. A busy box slows both alike, so it files nothing. Every suite
-is judged this way and none opts in, except those that measure the live box
-(`LIVE`: worker-health), which has no older code to run beside it and so never
-reports a slowdown.
+between the two. A busy box slows both alike, so it files nothing. Every controlled suite
+is judged this way and none opts in.
 
 A check that can tell nothing reports nothing and is owed to a later tick: a
 busy benchmark lock, a measurement past its time cap, older code that cannot run
@@ -92,6 +90,9 @@ isolated 2,000-task SQLite graph. `platform-waits` measures management HTML, app
 HTML, and connector tools over an isolated production kernel. `worker-health`
 reads CPU of active worker cgroups, including all threads and children, without
 signalling them.
+Its population and active work are uncontrolled, so the monitor excludes it
+from regression comparisons. `deno task bench worker-health` reports one live
+CPU-rate observation; `check` and `ratchet` also only report it.
 
 ## Other suites
 
