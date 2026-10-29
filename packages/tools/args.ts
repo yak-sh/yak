@@ -113,6 +113,9 @@ export let resolved = async (
   args: Args,
   graph: Graph,
 ): Promise<Args> => {
+  if (tool.scope?.some((key) => args[key] != null && args[key] !== '')) {
+    return args
+  }
   let resolve = async (
     schema: Prop | undefined,
     value: unknown,

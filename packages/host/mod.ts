@@ -119,6 +119,14 @@ export interface Host {
   tools: NamedTool[]
   /** Runtime provider catalogs shared by discovery and the runner. */
   registry: Registry
+  /** Authenticated calls to another graph, supplied by a host with accounts. */
+  remote?: (
+    name: string,
+    args: Record<string, unknown>,
+    options?: { as?: string; via?: string; url?: string },
+  ) => Promise<Bundle[]>
+  /** Read authenticated JSON from another origin without exposing credentials. */
+  readJson?: (url: string | URL, options?: { via?: string }) => Promise<unknown>
   /** ranked text search over this graph, where its vocabulary marks a property
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */

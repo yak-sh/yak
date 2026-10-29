@@ -46,7 +46,7 @@ test('the harness composes as a plugin, and its words reach a command line and M
     let cli = h.tools.filter(offered('cli')).map((t) => t.name)
     let mcp = h.tools.filter(offered('mcp')).map((t) => t.name)
     assertEquals(cli.includes('session_new'), true)
-    assertEquals(mcp.includes('session_new'), false)
+    assertEquals(mcp.includes('session_new'), true)
     assertEquals(mcp.includes('model_list'), false)
     assertEquals(mcp.includes('session_list'), true)
     unique(h.tools)

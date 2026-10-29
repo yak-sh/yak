@@ -86,6 +86,7 @@ export { runtimeSource } from './runtime.ts'
 export { fileVault, vaultOf } from './vault.ts'
 export { listed, printed, rosterOf } from './platform.ts'
 export { appStray, appTools, toolCall } from './commands.ts'
+export { readJson } from './remote.ts'
 
 export {
   accountHost,

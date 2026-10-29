@@ -301,20 +301,20 @@
       "input": {
         "builder": {
           "type": "string",
-          "ref": "builder",
-          "description": "id of the builder to build"
+          "description": "id of the builder to build",
+          "ref": "builder"
         },
         "provider": {
           "type": "string",
-          "ref": "provider",
           "description": "the provider to ask instead of the configured one",
-          "short": "p"
+          "short": "p",
+          "ref": "provider"
         },
         "model": {
           "type": "string",
-          "ref": "model",
           "description": "the model to build with instead of the configured one",
-          "short": "m"
+          "short": "m",
+          "ref": "model"
         },
         "template": {
           "type": "string",
@@ -344,6 +344,18 @@
         "outdated": {
           "type": "boolean",
           "description": "redo selected bindings only when their definition is older; otherwise build only missing or changed inputs"
+        },
+        "space": {
+          "type": "string",
+          "description": "hosted space"
+        },
+        "app": {
+          "type": "string",
+          "description": "hosted app; omitted builds locally"
+        },
+        "as": {
+          "type": "string",
+          "description": "hosted account email or name"
         }
       },
       "required": [
@@ -353,7 +365,13 @@
       "positional": [
         "builder",
         "only..."
-      ]
+      ],
+      "scope": [
+        "space",
+        "app",
+        "as"
+      ],
+      "applied": true
     },
     "builder_open": {
       "effect": true,

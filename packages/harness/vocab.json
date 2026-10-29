@@ -33,15 +33,16 @@
     },
     "session_new": {
       "tool": true,
-      "surfaces": [
-        "cli"
-      ],
       "noun": "session",
       "verb": "new",
       "applied": true,
       "title": "Start a session here",
-      "description": "Start an agent work session on this machine with an instruction, and run it until it settles. With --tui, an instruction is optional: an empty session opens in the terminal, ready for a message.",
+      "description": "Start a native session. Set wait:false to return immediately; the runner works independently.",
       "input": {
+        "wait": {
+          "type": "boolean",
+          "description": "wait for the reply (default true)"
+        },
         "prompt": {
           "type": "string",
           "description": "what to do"
@@ -93,15 +94,16 @@
     },
     "session_send": {
       "tool": true,
-      "surfaces": [
-        "cli"
-      ],
       "noun": "session",
       "verb": "send",
       "applied": true,
       "title": "Say more to a session here",
-      "description": "Add an instruction to an agent work session and run it on this machine until it settles. Returns the session; under `--tui` the terminal holds it as the harness.",
+      "description": "Send a native session more input. Set wait:false to return immediately.",
       "input": {
+        "wait": {
+          "type": "boolean",
+          "description": "wait for the reply (default true)"
+        },
         "session": {
           "type": "string",
           "ref": "session",

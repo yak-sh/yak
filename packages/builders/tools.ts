@@ -6,6 +6,7 @@
 
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
+import type { Host } from '@yaks/host'
 import { sha256 } from '@yaks/graph/sha256'
 import { signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
@@ -34,6 +35,9 @@ export type Ask = {
   limit?: number
   rebuild?: boolean
   outdated?: boolean
+  space?: string
+  app?: string
+  as?: string
 }
 
 /** Reconcile one builder now, writing as `actor`, and answer the builds it
@@ -134,7 +138,7 @@ export let build = async (
 }
 
 export let runs = (
-  host: { vocab: Vocab },
+  host: { vocab: Vocab; remote?: Host['remote'] },
   options: Omit<Options, 'vocab'> & { desk?: Desk } = {},
 ): Runs => ({
   builder_model: modelTool(options.desk).run,
@@ -156,6 +160,16 @@ export let runs = (
   },
   builder_build: async (call, graph): Promise<Bundle[]> => {
     let ask = argsOf(call) as Ask
+    if (ask.app || ask.space || ask.as) {
+      if (!host.remote) {
+        throw new CallError('config', 'This host has no remote door')
+      }
+      let { as, ...input } = ask
+      return await host.remote('builder_build', input, {
+        as,
+        via: who(call)?.via,
+      })
+    }
     let builds = await build(graph, host.vocab, ask, who(call), options)
     return [said(
       call,

@@ -17,6 +17,30 @@ import { aliasDoc, aliases } from '@yaks/alias'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { CallError, resolved, validated } from './args.ts'
 
+test('a selected graph resolves its own tool references', async () => {
+  let vocab = loadVocab([kernelDoc, docDoc])
+  let g = graph({ storage: ram(vocab), vocab })
+  let tool: NamedTool = {
+    name: 'scoped_edit',
+    description: '',
+    scope: ['space'],
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', ref: 'doc' },
+        space: { type: 'string' },
+      },
+    },
+    run: () => [],
+  }
+  let ask = { target: 'remote document', space: 'elsewhere' }
+  equal(await resolved(tool, ask, g), ask)
+  await assertRejects(
+    () => resolved(tool, { target: ask.target }, g),
+    CallError,
+  )
+})
+
 test('argument validation refuses bad input and preserves declaration and parser defects', async () => {
   let tool: NamedTool = {
     name: 'count',

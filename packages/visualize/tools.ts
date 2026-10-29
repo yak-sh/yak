@@ -4,6 +4,9 @@
 import type { Anatomy } from '@yaks/code/anatomy'
 import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
+import { who } from '@yaks/graph/call'
+import type { Host as Hosting } from '@yaks/host'
+import { CallError } from '@yaks/tools/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { capture } from './capture.ts'
 import { select, type SelectOptions, snapshot } from './snapshot.ts'
@@ -12,6 +15,7 @@ import { select, type SelectOptions, snapshot } from './snapshot.ts'
 export type Host = {
   graph: object
   anatomy?: () => Anatomy
+  readJson?: Hosting['readJson']
 }
 
 let selection = (args: Record<string, unknown>): SelectOptions => ({
@@ -28,10 +32,24 @@ let answer = (eid: string, value: unknown): Bundle[] => [{
 
 /** The implementations declared by ./vocab.json, loaded only on a call. */
 export let runs = (host: Host): Runs => ({
-  visualize_anatomy: (call) =>
-    answer('$anatomy', select(snapshot(host), selection(argsOf(call)))),
+  visualize_anatomy: async (call) => {
+    let args = argsOf(call)
+    if (args.url) {
+      return answer(
+        '$anatomy',
+        await onward(host, 'anatomy', args, who(call)?.via),
+      )
+    }
+    return answer('$anatomy', select(snapshot(host), selection(args)))
+  },
   visualize_activity: async (call) => {
     let args = argsOf(call)
+    if (args.url) {
+      return answer(
+        '$activity',
+        await onward(host, 'activity', args, who(call)?.via),
+      )
+    }
     let value = await capture(host.graph, {
       limit: typeof args.limit == 'number' ? args.limit : undefined,
       wait: typeof args.wait == 'number' ? args.wait : undefined,
@@ -39,3 +57,23 @@ export let runs = (host: Host): Runs => ({
     return answer('$activity', value)
   },
 })
+
+let onward = (
+  host: Host,
+  name: string,
+  args: Record<string, unknown>,
+  via?: string,
+) => {
+  if (!host.readJson) {
+    throw new CallError('config', 'This host has no remote door')
+  }
+  let url = new URL(`/visualize/${name}`, String(args.url))
+  for (
+    let key of name == 'anatomy'
+      ? ['group', 'search', 'id', 'limit']
+      : ['wait', 'limit']
+  ) {
+    if (args[key] != null) url.searchParams.set(key, String(args[key]))
+  }
+  return host.readJson(url, { via })
+}

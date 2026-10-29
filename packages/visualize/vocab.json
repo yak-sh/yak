@@ -9,7 +9,7 @@
       "noun": "visualize",
       "verb": "anatomy",
       "title": "Read the platform's anatomy",
-      "description": "Read this host's composed platform anatomy: packages, roles, facets, vocabulary, tools, commands, rules, effects, routes, views, kits, themes, skills and secret names. Declaration, loading and binding are separate facts; an unobserved category is not globally absent. Returns the same filtered JSON snapshot as /visualize/anatomy, with coverage and node-only selection counts. Edges are kept only between included nodes. This reads no entity data or secret values and does not force lazy facets to load.",
+      "description": "Read composed anatomy with coverage and filtered node counts. No entity data or secret values.",
       "input": {
         "group": {
           "type": "string",
@@ -48,6 +48,14 @@
           "maximum": 5000,
           "default": 1000,
           "description": "maximum nodes shown; selection reports total, matching and shown counts with a truncation flag"
+        },
+        "url": {
+          "type": "string",
+          "description": "HTTP(S) origin to observe; omitted uses this host"
+        },
+        "json": {
+          "type": "boolean",
+          "description": "return JSON (already the default)"
         }
       }
     },
@@ -56,7 +64,7 @@
       "noun": "visualize",
       "verb": "activity",
       "title": "Capture causal platform activity",
-      "description": "Capture bounded causal activity from this tool host's process-local trace channel: apply phases, rules, queries, gets, effects, requests and fanout. Returns the same JSON capture DTO as /visualize/activity: epoch, events with sequence and causal span ids, a known omitted record count (gap) and explicit process-local coverage. Recording is subscriber-only; no earlier idle work is reconstructed and another process using the same store is not covered. Uses the existing trace stream, never a second measurement stream. Events carry fixed operation names, durations and counts, never query text, entity contents, payloads or secret values. A zero duration is valid.",
+      "description": "Capture bounded process-local causal activity with coverage and omitted counts. Recording is subscriber-only.",
       "input": {
         "limit": {
           "type": "integer",
@@ -71,6 +79,14 @@
           "maximum": 2000,
           "default": 0,
           "description": "milliseconds to keep this capture subscribed; zero reads only available history"
+        },
+        "url": {
+          "type": "string",
+          "description": "HTTP(S) origin to observe; omitted uses this host"
+        },
+        "json": {
+          "type": "boolean",
+          "description": "return JSON (already the default)"
         }
       }
     }

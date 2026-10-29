@@ -55,7 +55,7 @@ export type Composition = {
   declarations: (docs: VocabDoc[], vocab: Vocab) => void
   graph: (owner: string, plugins: Plugin[]) => void
   graphed: () => void
-  tier: (tools: NamedTool[]) => void
+  tier: (tools: NamedTool[], owner?: string) => void
   runs: (owner: string, names: string[], joined: string[]) => void
   effects: (handlers: Map<string, string>, serving: boolean) => void
   due: (names: string[]) => void
@@ -380,12 +380,14 @@ export let compositionAnatomy = (
       for (let owner of vocabulary) binding(owner, 'vocab')
       for (let owner of registered) binding(owner, 'graph')
     }),
-    tier: later((tools: NamedTool[]) => {
-      ownerOf('@yaks/graph')
-      binding('@yaks/graph', 'tools')
+    tier: later((tools: NamedTool[], owner = '@yaks/graph') => {
+      ownerOf(owner)
+      binding(owner, 'tools')
       source.tools = [
         ...source.tools ?? [],
-        ...tools.map((t) => tool('@yaks/graph', t, 'graph')),
+        ...tools.map((t) =>
+          tool(owner, t, owner == '@yaks/graph' ? 'graph' : 'tools')
+        ),
       ]
     }),
     runs: later((owner: string, names: string[], joined: string[]) => {

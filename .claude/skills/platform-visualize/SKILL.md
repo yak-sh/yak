@@ -44,7 +44,9 @@ gathers a native host's evidence for it.
   the apply pipeline's spine, a timeline and a causal drill-down. It's a way to
   explore a host, not a replacement for the inspector.
 - **The agent tools** are `visualize_anatomy` and `visualize_activity`, on their
-  own tool host. Their advertised inputs carry the current bounds, and the
+  own tool host, or another HTTP(S) origin selected with `url`. Both return
+  JSON snapshots; `json: true` is accepted too. Anatomy accepts `search`,
+  `group` and `id`. Their advertised inputs carry the current bounds, and the
   activity tool's wait only watches: it runs no query and makes no write.
 - **The terminal** reads the serving process over HTTP rather than composing a
   graph of its own:

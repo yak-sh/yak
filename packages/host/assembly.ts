@@ -77,6 +77,8 @@ export type Binding = {
   /** Combine the host's text index with its meaning index, where it has one
    * ({@link Host.meaning}). */
   search?: (host: Host) => Search | undefined
+  /** Operations supplied by the concrete host beside graph and plugin tools. */
+  tools?: { package: string; offer: (host: Host) => NamedTool[] }
   actor?: Actor | null
   process?: Comp
   readOnly?: boolean
@@ -559,6 +561,11 @@ export let assemble = (
         let generic = tier({ search: ranked, keywords: vocab.keywords })
         observed.tier(generic)
         let sources = new Map([['@yaks/graph', generic]])
+        if (binding.tools) {
+          let own = binding.tools.offer(host)
+          observed.tier(own, binding.tools.package)
+          sources.set(binding.tools.package, own)
+        }
         for (let { docs, options, plugin, facets } of contributions) {
           if (facets !== undefined && !facets.includes('tools')) continue
           let tools = loadTools(docs, async () => {

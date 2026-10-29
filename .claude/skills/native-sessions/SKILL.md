@@ -71,6 +71,12 @@ A native session, harness session or graph-native session is `yak session new`.
 
 ## Starting one
 
+The MCP door is `session_new` with `prompt`, `work`, optional model selection
+and `wait: false`. It returns the session immediately. `session_send` with
+`session`, `text` and `wait: false` adds another input without waiting. A graph
+opening names `workspace` explicitly when it needs one; only the local CLI
+selects a checkout from its current directory.
+
 The task is the spec (`agent-briefs`). Write the brief to a file in your
 scratchpad, outside code you expect the session to commit. Pass it with
 `--prompt @<scratchpad>/brief.md`; `@path` reads any argument's value from a file,

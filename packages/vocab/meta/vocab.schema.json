@@ -468,6 +468,12 @@
         "openWorld": {
           "type": "boolean"
         },
+        "scope": {
+          "description": "Arguments selecting another graph, which resolves its own references.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
         "surfaces": {
           "description": "Where the tool is offered: cli, the yak command line; mcp, an MCP server's listing. Every surface when absent, and none when empty: a tool only code calls.",
           "type": "array",

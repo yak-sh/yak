@@ -104,6 +104,8 @@ import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
 import { persist } from '@yaks/tools/persist'
+import { operations } from './operations.ts'
+import { delivery } from './remote.ts'
 import { type Clock, system } from '@yaks/fp'
 import { files } from '@yaks/tracker/file'
 import type { Traces } from './traces.ts'
@@ -600,6 +602,7 @@ let composed = async (
     // so the schema below finds it made.
     if (!opts.readOnly && !mode) await printing(vocab, derived, !!sql.file)
     let built = plan.bind({
+      tools: { package: '@yaks/cli', offer: operations },
       host: {
         vault,
         blobs: sqliteBlobs(sql),
@@ -751,6 +754,7 @@ let composed = async (
       ready: (built) => {
         host = built
         g = built.graph
+        Object.assign(built, delivery(built))
         // Read workers return their recorded trees to their caller rather than
         // duplicating delivery. A passing CLI and every duty/web process observe
         // their graph, without composing tracker tables into the watched store.

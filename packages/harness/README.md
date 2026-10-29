@@ -992,8 +992,12 @@ worker composes the graph its command's config names, for the graph role, and
 lends it the runner itself. Importing the facets does not run a session, open a
 database, or start a server.
 
-`session_new`, `session_send` and `model_list` are offered on a command line
-only (`surfaces`), because they run on the machine that typed them.
+`session_new` and `session_send` are offered through MCP and the command line.
+Pass `wait: false` to either tool to return the session immediately; the runner
+continues independently. For example, `session_new` with
+`{ "prompt": "Reply with ok", "wait": false }` returns the new session id.
+`model_list` is offered on a command line only (`surfaces`), because it reads
+that machine's model credentials.
 `session_list` is offered everywhere. Both word orders (`session list`,
 `list
 session`) derive from the same noun and verb, without alias declarations.

@@ -182,31 +182,8 @@ export let command = ({ fetch = globalThis.fetch, env }: {
           url.searchParams.set(key, String(value))
         }
       }
-      // A selected origin's credential, never the unrelated default MCP host's.
-      // x-via is provenance only. Redirects cannot forward either header.
-      let { tokenFor, doorUrl } = await import('@yaks/cli')
-      let key = new URL(doorUrl(context.host)).origin == origin.origin
-        ? context.host
-        : origin.host
-      let token = await tokenFor(key, context.state, {
-        config: context.config,
-        as: context.as,
-        env,
-      })
-      let headers = new Headers({ accept: 'application/json' })
-      if (token) headers.set('authorization', `Bearer ${token}`)
-      if (context.via) headers.set('x-via', context.via)
-      let response = await fetch(url, {
-        method: 'GET',
-        headers,
-        redirect: 'error',
-        cache: 'no-store',
-      })
-      if (!response.ok) {
-        await response.body?.cancel()
-        throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
-      }
-      let value = await response.json()
+      let { readJson } = await import('@yaks/cli')
+      let value = await readJson(url, { ...context, env, fetch })
       context.out(
         context.json || args.json
           ? JSON.stringify(value)

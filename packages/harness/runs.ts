@@ -186,7 +186,7 @@ export let runs = (host?: Host): Runs => ({
       via: who(call)?.via,
       using: { ...using, ...effort ? { effort } : {} },
     })
-    return prompt
+    return prompt && args.wait !== false
       ? await settled(graph, s, host?.stopping)
       : await graph.get([s])
   },
@@ -222,7 +222,9 @@ export let runs = (host?: Host): Runs => ({
       ...using ? { using } : {},
       $actor: through(s, caller(call)),
     }])
-    return await settled(graph, s, host?.stopping)
+    return args.wait === false
+      ? await graph.get([s])
+      : await settled(graph, s, host?.stopping)
   },
   model_list: async (call, graph) => {
     if (!host) throw new Error('model list needs a host')

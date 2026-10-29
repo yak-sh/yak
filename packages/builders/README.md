@@ -226,6 +226,12 @@ unchanged ones. Both combine with `--only` and `--limit`:
     yak builder build <builder> --outdated --limit 3
     yak builder build <builder> --rebuild --only <id>
 
+`builder_build` also accepts `space`, `app` and `as` for a hosted app. It sends
+the same arguments to that account's yaks.app connector, where the selected
+store resolves the builder and binding references. For example, pass
+`{ "builder": "recipe-notes", "space": "cookbook", "app": "recipes", "limit": 3 }`.
+The CLI mirror is `yak builder build recipe-notes --space cookbook --app recipes --limit 3`.
+
 An alternate model, provider, template or native input creates a shadow variant.
 Unchanged inputs create no call unless a redo flag selects them.
 `--input @input.json` merges the object into `sending.input` for that shadow

@@ -383,6 +383,8 @@ export type ToolDefinition = {
    * needs more than the graph every tool runs over — `serve`, which answers
    * HTTP, serves `web` */
   roles?: Role[]
+  /** Arguments selecting another graph, which resolves its own references. */
+  scope?: string[]
 }
 
 /** A role a process serves over a graph (@yaks/cli `ROLES`). */
@@ -442,6 +444,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     openWorld: { type: 'boolean' },
     surfaces: SURFACES,
     roles: ROLES,
+    scope: { type: 'array', uniqueItems: true, items: { type: 'string' } },
   },
 }
 
@@ -576,6 +579,7 @@ let HINTS = [
   'outputSchema',
   'surfaces',
   'roles',
+  'scope',
 ] as const
 
 /**

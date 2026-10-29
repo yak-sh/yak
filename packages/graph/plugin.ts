@@ -218,6 +218,7 @@ export type Tool<R = Bundle[]> = {
    * from the schema. */
   positional?: ToolDefinition['positional']
   forward?: ToolDefinition['forward']
+  scope?: ToolDefinition['scope']
   /** a short human-readable title */
   title?: string
   /** what it does and when to use it — the agent reads this */

@@ -190,8 +190,11 @@ the package's contract is the connector's `store_builder_build` tool.
 The published `builder_build` contract is translated in `published.ts`. It takes what the box's tool does (`only`, `limit`, `rebuild`,
 `outdated`, `template`, `provider`, `model`, `input`) and reaches the store's
 `/call` runner as the caller, after checking they may edit the app; `builder_choose`
-and `builder_supply` sit beside it. From the box:
-`yak command builder_build --as <account> --space <space> --app <app> --builder <id> …` (`builder_build` is the box's own builder tool; `yak command` reaches an app's store).
+and `builder_supply` sit beside it. The box's `builder_build` accepts `space`,
+`app` and `as` to reach the same hosted tool. For example, call `builder_build`
+with `builder`, `space`, `app`, `as` and `limit: 3`; omitting hosted selection
+builds locally. Its CLI mirror is
+`yak builder build <id> --as <account> --space <space> --app <app> --limit 3`.
 
 ## Chaining
 

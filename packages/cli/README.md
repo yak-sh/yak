@@ -29,6 +29,11 @@ queried at run time. `yak serve` is a tool rather than a command of this
 package: [@yaks/api](../api/README.md) declares and implements it, so a config
 listing that package is a config whose graph can be served.
 
+A composed CLI host also offers `help` and `restart` through MCP. `help` with
+`{ "words": ["task", "update"] }` returns that tool's arguments; no words
+lists names. `restart` with `{}` uses the same ready-first systemd handover as
+`yak restart`, with the host's configured processes.
+
 The package has two main responsibilities:
 
 - [`host.ts`](./host.ts) opens the graph a config names for the roles a process

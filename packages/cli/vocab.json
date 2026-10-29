@@ -1,0 +1,26 @@
+{
+  "title": "cli",
+  "$defs": {
+    "help": {
+      "tool": true,
+      "description": "List tools, or show one tool’s arguments.",
+      "readOnly": true,
+      "input": {
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "positional": [
+        "words..."
+      ]
+    },
+    "restart": {
+      "tool": true,
+      "description": "Hand this box’s processes to ready replacements.",
+      "input": {}
+    }
+  }
+}
