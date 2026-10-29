@@ -161,3 +161,10 @@ test('instant: an ISO stamp resolves to itself', () => {
 })
 test('instant: nonsense is null, never a guess', () =>
   assertEquals(timeInstant('whenever', THEN), null))
+
+test('ISO day equality selects its midnight-to-midnight span', () => {
+  assertEquals(timeEdges('=', '2026-10-27'), [[[
+    '>=',
+    +new Date(2026, 9, 27),
+  ], ['<', +new Date(2026, 9, 28)]]])
+})

@@ -35,7 +35,7 @@ export let sessionFields = [
 
 // The Sessions destination (navigation.ts): a view of the store, not a saved
 // board or a new entity. A history list, newest first.
-export let allSessionsPath = '/?sessions'
+export let allSessionsPath = '/?@page=sessions'
 export let allSessionsQuery = '.session&.order=-created.at&.fields=' +
   sessionFields.join(',')
 

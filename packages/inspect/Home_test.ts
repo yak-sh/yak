@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 /** The schema map: a slice at a time, the packages a tree, every count from
  * the census, painted from the vocabulary before the census answers. */
 import { equal, ok, test } from '@yaks/testing'
@@ -104,7 +105,7 @@ let page = async (
     apply: () => {},
     get: () => undefined,
     link: (eid) => `/${eid}`,
-    find: (query) => `/?q=${encodeURIComponent(query)}`,
+    find: (query) => `/${querySearch(query)}`,
     go: () => {},
     id: (b) => b.entity.eid,
     kind: () => 'entity',
@@ -270,9 +271,7 @@ test('the relations slice says each relation from the far end and its edges', ()
 test('the archetypes slice lists each set, its count listing its entities', () => {
   equal(archetypes.rows.map((r) => r.at(-1)), ['4', '3', '2'])
   ok(
-    archetypes.links.some((l) =>
-      l.href == `/?q=${encodeURIComponent('.entity.archetype=a3')}`
-    ),
+    archetypes.links.some((l) => l.href == '/?.entity.archetype=a3'),
   )
 })
 

@@ -22,6 +22,7 @@ import { type Application, application } from './app.ts'
 // which reads the body as yaks.app's door does (@yaks/tracker/report
 // `broken`) and hands each break to the host's own telemetry.
 
+import { queryRedirect } from '@yaks/query'
 import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
@@ -137,7 +138,19 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       graph: host.graph,
       config: host.config ?? { db: ':memory:', plugins: [] },
     })
-  let page = async (request: Request) => preload(await cached(request))
+  let page = async (request: Request) => {
+    let url = new URL(request.url)
+    let redirect = url.pathname == '/' || url.pathname == '/inspect'
+      ? queryRedirect(url)
+      : undefined
+    if (redirect) {
+      return new Response(null, {
+        status: 308,
+        headers: { location: redirect },
+      })
+    }
+    return preload(await cached(request))
+  }
   let app = () => application(host.config?.plugins ?? [], options.app)
   let named = async (request: Request) => {
     let person = (await host.who?.(request))?.by ?? null
@@ -153,6 +166,20 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       : [],
     { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
+    {
+      method: 'GET',
+      path: '/inspect',
+      handle: (request) => {
+        let url = new URL(request.url)
+        url.pathname = '/'
+        return new Response(null, {
+          status: 308,
+          headers: {
+            location: queryRedirect(url) ?? '/' + url.search + url.hash,
+          },
+        })
+      },
+    },
     {
       method: 'POST',
       path: '/web/apply',

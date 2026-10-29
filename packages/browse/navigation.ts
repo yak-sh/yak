@@ -1,19 +1,19 @@
 // The places the sidebar offers, as data: home, the destinations, and the
-// schema. A destination is a page at `/?<key>`: a list of what a query
+// schema. A destination is a page at `/?@page=<key>`: a list of what a query
 // finds, a package's page part above it, or that part alone.
 // Browse offers the ones that read its own words (favorites, recent edits,
 // sessions); a package offers its own from its `./views` facet as
 // `destinations`, so a tracker lists its bugs without Browse knowing a bug.
 // A favorite is a facet, so marking a task never changes its kind, id, or
 // renderer.
+import { queryAt, querySearch } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Change, Ent } from './types.ts'
-import { searchAt } from './url.ts'
 
-/** A page the sidebar lists, at `/?<key>`: what `query` finds, under the
+/** A page the sidebar lists, at `/?@page=<key>`: what `query` finds, under the
  * page part `view` draws, or that part alone. */
 export type Destination = {
-  /** its address, `/?<key>` */
+  /** its address, `/?@page=<key>` */
   key: string
   /** what the sidebar and the page's bar call it */
   name: string
@@ -78,49 +78,51 @@ export let destinations = (
   ].filter((d) => !seen.has(d.key) && !!seen.add(d.key))
 }
 
-/** The destination an address is: `/?<key>` and nothing else. */
+/** The destination an address is: `/?@page=<key>` and nothing else. */
 export let destinationAt = (
   at: string,
   all: Destination[],
 ): Destination | undefined => {
-  let url = new URL(at, 'http://x')
-  let keys = [...url.searchParams.keys()]
-  return url.pathname == '/' && keys.length == 1 &&
-      !url.searchParams.get(keys[0])
-    ? all.find((d) => d.key == keys[0])
-    : undefined
+  let page = pageAt(at)
+  return page ? all.find((d) => d.key == page.get('page')) : undefined
 }
+
+// Page selectors share the state namespace, so words such as map and new
+// still search as words. Entity-page view parameters remain on their path.
+let pageAt = (at: string): URLSearchParams | undefined => {
+  let url = new URL(at, 'http://x')
+  let { query, state } = queryAt(url.search)
+  return url.pathname == '/' && query == null ? state : undefined
+}
+export let destinationPath = (key: string) =>
+  `/${querySearch('', { page: key })}`
 
 /** The schema: the inspector's map of how the data is made. */
-export let schemaPath = '/?map'
-export let configPath = '/?config'
+export let schemaPath = destinationPath('map')
+export let configPath = destinationPath('config')
 export let configAt = (at: string): boolean =>
-  new URL(at, 'http://x').pathname == '/' &&
-  new URL(at, 'http://x').search == '?config'
-export let schemaAt = (at: string): boolean => {
-  let url = new URL(at, 'http://x')
-  return url.pathname == '/' && url.searchParams.has('map')
-}
+  pageAt(at)?.get('page') == 'config'
+export let schemaAt = (at: string): boolean => pageAt(at)?.get('page') == 'map'
 
-/** New entities: `/?new`, made in an entity (`&in=`) or like one
- * (`&like=`), each named as the address writes it, a human id or an eid. */
-/// newAt('/?new') -> {}
-/// newAt('/?new&in=T-1&like=T-2') -> {in: 'T-1', like: 'T-2'}
-/// newAt('/?map') -> undefined
+/** New entities, made in an entity or like one, each named by human id or eid. */
+/// newAt('/?@page=new') -> {}
+/// newAt('/?@page=new&@in=T-1&@like=T-2') -> {in: 'T-1', like: 'T-2'}
+/// newAt('/?@page=map') -> undefined
 export let newAt = (at: string): { in?: string; like?: string } | undefined => {
-  let url = new URL(at, 'http://x')
-  if (url.pathname != '/' || !url.searchParams.has('new')) return undefined
-  let named = (k: string) => url.searchParams.get(k) || undefined
+  let state = pageAt(at)
+  if (state?.get('page') != 'new') return undefined
   return Object.fromEntries(
-    ['in', 'like'].flatMap((k) => named(k) ? [[k, named(k)]] : []),
+    ['in', 'like'].flatMap((k) => state.get(k) ? [[k, state.get(k)!]] : []),
   )
 }
-/// newPath({in: 'T-1', like: undefined}) -> '/?new&in=T-1'
+/// newPath({in: 'T-1', like: undefined}) -> '/?@page=new&@in=T-1'
 export let newPath = (at: { in?: string; like?: string } = {}): string =>
-  `/?${new URLSearchParams([
-    ['new', ''],
-    ...Object.entries(at).filter(([, v]) => v) as [string, string][],
-  ])}`.replace('new=', 'new')
+  `/${
+    querySearch('', {
+      page: 'new',
+      ...Object.fromEntries(Object.entries(at).filter(([, v]) => v)),
+    })
+  }`
 
 /** Every line in the sidebar: home, new, the destinations, the schema. */
 export let places = (
@@ -131,7 +133,11 @@ export let places = (
 ): Place[] => [
   home,
   { name: 'New', icon: 'plus', path: newPath() },
-  ...all.map((d) => ({ name: d.name, icon: d.icon, path: `/?${d.key}` })),
+  ...all.map((d) => ({
+    name: d.name,
+    icon: d.icon,
+    path: destinationPath(d.key),
+  })),
   ...schema ? [{ name: 'Schema', icon: 'database', path: schemaPath }] : [],
   ...configuration
     ? [{ name: 'Configuration', icon: 'settings', path: configPath }]
@@ -140,7 +146,6 @@ export let places = (
 
 /** The sidebar line an address lights: its own, or none for a search. */
 export let placeAt = (at: string, all: Place[]): Place | undefined => {
-  if (searchAt(at) != null) return undefined
   let url = new URL(at, 'http://x')
   let path = url.pathname + (url.search == '?' ? '' : url.search)
   return all.find((p) => p.path == path)

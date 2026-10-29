@@ -839,7 +839,7 @@ not a `yak work` PID.
 The separate tracker config must compose `@yaks/timing` beside `@yaks/tracker`
 and its browser/inspect plugins. Both the watched config's `tracker.spool` and
 the tracker service's `with.spool` name the same spool directory. Browse
-`/?q=.trace` on the tracker for grouped traces and each trace's flamegraph and
+`/?.trace` on the tracker for grouped traces and each trace's flamegraph and
 places list.
 
 ### Reporting systemd unit failures

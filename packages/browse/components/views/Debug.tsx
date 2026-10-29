@@ -1,3 +1,4 @@
+import { searchPath } from '../../url.ts'
 import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { formatProp, isRef, propAt } from '../../props.ts'
@@ -370,7 +371,7 @@ let groups = (links: { from: string; via: string }[]) => {
 
 // The window holds the newest referrers; the inspector reads every one.
 let Census = ({ e }: { e: Ent }) => {
-  let href = `/inspect?q=${encodeURIComponent(`.refs=${idOf(e)}`)}`
+  let href = searchPath(`.refs=${idOf(e)}`)
   return (
     <Linked href={href} onClick={follow(href)}>
       <Via>← refs</Via>
@@ -390,7 +391,7 @@ let ProjectIncoming = (
         let shown = group.ids.slice(0, CAP)
         let rest = group.ids.length - shown.length
         let query = `.${group.via}=${idOf(e)}`
-        let href = `/inspect?q=${encodeURIComponent(query)}`
+        let href = searchPath(query)
         return [
           ...shown.map((eid) => (
             <Linked key={group.via + eid}>

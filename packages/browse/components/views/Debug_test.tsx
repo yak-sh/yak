@@ -273,9 +273,9 @@ test('project backlinks omit attribution and cap associations', () => {
       more.map((node) => [node.getAttribute('href'), node.textContent])
         .sort(([a], [b]) => a!.localeCompare(b!)),
       [
-        ['/inspect?q=.filed.project%3DP-19', '← filed.project+2 more tasks'],
+        ['/?.filed.project=P-19', '← filed.project+2 more tasks'],
         [
-          '/inspect?q=.session.actor%3DP-19',
+          '/?.session.actor=P-19',
           '← session.actor+1 more sessions',
         ],
       ],
@@ -321,7 +321,7 @@ test('a full window of referrers links every reference in the inspector', () => 
     )
     let links = [...root.querySelectorAll('.Debug_Linked[href]')]
       .map((node) => node.getAttribute('href'))
-    assertEquals(links.includes('/inspect?q=.refs%3DP-19'), true)
+    assertEquals(links.includes('/?.refs=P-19'), true)
   } finally {
     act(() => render(null, root))
     useRoute(priorRoute)

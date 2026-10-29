@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 import { mount as terminalMount } from '../tui/testing.ts'
 import { TElement } from '@yaks/tui'
 import { everforest, kits, sheet as uiSheet } from '@yaks/ui'
@@ -144,7 +145,7 @@ let host = (answers: Answers = {}, edits = true) => {
       ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid] ?? held.get(eid),
     link: pagePath,
     past: (eid, tx) => `${pagePath(eid)}?at=${tx}`,
-    find: (q) => `/?q=${encodeURIComponent(q)}`,
+    find: (q) => `/${querySearch(q)}`,
     go: (_href) => {},
     id: (b) => b.entity.eid.toUpperCase(),
     kind: (b) => b.task ? 'task' : 'entity',
@@ -506,7 +507,7 @@ test("an effect's page says what owes it a run, each name linked to its page", (
       '3 tries',
       `href="/${compEid('task')}"`,
       `href="/${propEid('task', 'status')}"`,
-      `href="/?q=.task"`,
+      `href="/?.task"`,
     ]
   ) assert(page.includes(said), said)
 })

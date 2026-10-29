@@ -383,7 +383,7 @@ check(
     let eid = row.entity.eid
     ok(
       body.includes(
-        `[View ${eid}](https://bugs.example.test/?q=.bug&side=yaks.app&bug=${eid})`,
+        `[View ${eid}](https://bugs.example.test/?.bug&@side=yaks.app&@bug=${eid})`,
       ),
       body,
     )

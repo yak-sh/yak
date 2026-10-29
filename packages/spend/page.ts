@@ -10,7 +10,7 @@
  * @module
  */
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
-import { and, ge, lt, parse, stringify } from '@yaks/query'
+import { and, eq, ge, lt, parse, stringify } from '@yaks/query'
 import { partQuery } from '@yaks/session/parts'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
@@ -228,7 +228,12 @@ let part = (io: Props['io'], [from, to]: [string, string]) => (k: string) => {
     ? h('a', {
       href: io.find(
         stringify(
-          and(q, ge('created.at', from), lt('created.at', after(to))),
+          and(
+            q,
+            ...(from == to
+              ? [eq('created.at', from)]
+              : [ge('created.at', from), lt('created.at', after(to))]),
+          ),
         ),
       ),
     }, k)

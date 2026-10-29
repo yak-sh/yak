@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 // The desk and the body of a persona's and a skill's Full page over a small
 // graph, mounted through the inspector contract browse uses: every persona and
 // skill on the desk, found by what is typed; a persona opened beside it, its
@@ -158,7 +159,7 @@ let host = (front: Page, wrote: Bundle[][] = []): Io => {
     },
     edits: true,
     link: (id) => `/${id}`,
-    find: (q) => `/find?q=${encodeURIComponent(q)}`,
+    find: (q) => `/${querySearch(q)}`,
     go: () => {},
     id: (e) => e.entity.eid,
     kind: () => 'persona',

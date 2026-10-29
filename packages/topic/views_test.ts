@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 // A topic's page and tree over a small graph, mounted through the inspector
 // contract browse uses: cover, contents, what it holds and cites, where it
 // sits, the beliefs about it, the comments on it, the tree with its cycle cut,
@@ -153,7 +154,7 @@ let host = (state: Bundle[] = [], ready = true, views = registry): Io => {
     apply: () => {},
     edits: false,
     link: (id) => `/${id}`,
-    find: (q) => `/find?q=${encodeURIComponent(q)}`,
+    find: (q) => `/${querySearch(q)}`,
     go: () => {},
     id: (e) => e.entity.eid,
     kind: () => 'topic',

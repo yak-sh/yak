@@ -13,7 +13,7 @@ import { act } from 'preact/test-utils'
 import { useLayoutEffect } from 'preact/hooks'
 import { parseHTML } from 'linkedom'
 import { until } from '@yaks/testing'
-import { and, parse } from '@yaks/query'
+import { and, parse, querySearch } from '@yaks/query'
 import { define } from '@yaks/render'
 import { client } from '@yaks/client'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -201,7 +201,7 @@ export let host = (
     },
     get: (eid) => store.value.get(eid),
     link: (eid) => `/${eid}`,
-    find: (q) => `/?q=${q}`,
+    find: (q) => `/${querySearch(q)}`,
     go: () => {},
     id: (b) => `#${b.entity.num ?? b.entity.eid}`,
     kind: () => 'entity',

@@ -695,6 +695,8 @@ test('a board naming the lazy partition lists its entries', () => {
 })
 
 test('agreement diagnostics opt in through the named browser probe', () => {
+  assertEquals(agreementProbe('?.task&@probe=subscriptions'), true)
+  assertEquals(agreementProbe('?q=.task&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=subscriptions'), true)
   assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=other'), false)

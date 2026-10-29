@@ -129,7 +129,7 @@ is JSON. Runs on **Deno**, **Node**, and in the **browser**.
 
 ## Search-link drops
 
-`searchBoard(url, origin)` recognizes a local `/?q=<encoded query>` link and
-returns the document and live-board specification for a canvas drop. A foreign
-URL or a non-search page is not a board. The search chip carries the ordinary
-URL; only a canvas-enabled drop consumer creates this board.
+`searchBoard(url, origin)` recognizes a local `/?<query>` link and returns the
+document and live-board specification for a canvas drop. A foreign URL or a
+non-search page is not a board. The search chip carries the ordinary URL; only a
+canvas-enabled drop consumer creates this board.

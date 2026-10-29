@@ -186,7 +186,7 @@ export async function measure(
     // mounted input. Neither a target title nor the query heading is an answer.
     await timed('tui/query-to-answer', async () => {
       let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
-      if (state.entries[state.at].path == '/?q=.task%20.count') {
+      if (state.entries[state.at].path == '/?.task%20.count') {
         await keys('H')
         await paint('comment…')
       }
@@ -209,7 +209,7 @@ export async function measure(
           } catch {
             return false
           }
-          return state.entries[state.at].path == '/?q=.task%20.count' &&
+          return state.entries[state.at].path == '/?.task%20.count' &&
             /^│[^│]*│2,000\s*$/m.test(await capture())
         })
       }

@@ -289,7 +289,7 @@ export async function measure(
       quote(TARGET),
     ].join(' ')
     let history = JSON.stringify({
-      entries: [{ path: '/?q=.task%20.count', state: null }, {
+      entries: [{ path: '/?.task%20.count', state: null }, {
         path: '/' + TARGET + '?v=Debug',
         state: null,
       }],

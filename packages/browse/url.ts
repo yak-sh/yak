@@ -4,6 +4,7 @@ import { localPath, pagePath, webOrigin } from './hosting.ts'
 
 import { addressId, SHORT } from '@yaks/id'
 import { EID } from './types.ts'
+import { queryAt, querySearch } from '@yaks/query'
 
 let origin = webOrigin
 
@@ -79,8 +80,8 @@ export let normalize = (raw: string) => {
 }
 
 // A search is a view of the store, not a saved entity.
-export let searchPath = (q: string) => `/?q=${encodeURIComponent(q.trim())}`
+export let searchPath = (q: string) => `/${querySearch(q)}`
 export let searchAt = (at: string): string | null => {
   let url = new URL(at, 'http://x')
-  return url.pathname == '/' ? url.searchParams.get('q') : null
+  return url.pathname == '/' ? queryAt(url.search).query : null
 }

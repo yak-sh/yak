@@ -652,3 +652,27 @@ validating directive paths and rankings. See
 multi-entity matches require a rule engine such as
 [@yaks/graph](../graph/README.md#rules). Completion uses the loaded vocabulary
 and the source supplied by its caller; it does not read stored entities itself.
+
+## Query URLs
+
+A query page carries its query directly in the URL's query string:
+`/?.result&.result.call.call.to.tool.name=Bash&.created.at=2026-10-27`. A bare
+ISO date names that whole local day, just as `today` does.
+
+`querySearch` writes the search string and `queryAt` reads it. Page state uses
+`@` keys (`/?.bug&@side=yaks.app&@bug=<eid>`), so it cannot collide with a
+component or property clause. Literal ampersands inside quoted values, percent
+signs, fragments and whitespace are escaped at the URL boundary; query
+separators and comparison operators stay readable. A plus stays literal. Kept
+`?q=` page links redirect to this form, carrying their page state along. The
+API's `GET /query?q=…` remains its transport format.
+
+```ts
+import { equal } from '@yaks/testing'
+import { queryAt, querySearch } from '@yaks/query'
+
+let search = querySearch('.bug&.created.at=2026-10-27', { side: 'yaks.app' })
+equal(search, '?.bug&.created.at=2026-10-27&@side=yaks.app')
+equal(queryAt(search).query, '.bug&.created.at=2026-10-27')
+equal(queryAt(search).state.get('side'), 'yaks.app')
+```

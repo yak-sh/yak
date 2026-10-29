@@ -1,7 +1,7 @@
 // How a bug and an error read, whatever draws them: the whole message, where
 // it happened, whether it is still broken, and the queries a page asks.
 import type { Bundle } from '@yaks/graph'
-import { type And, and, eq, every, order } from '@yaks/query'
+import { type And, and, eq, every, order, querySearch } from '@yaks/query'
 import { comp, type Frame, str, title } from './model.ts'
 import { place, spot } from './brief.ts'
 
@@ -30,17 +30,18 @@ export let occurring = (eid: string): And =>
  * import { assertEquals } from '@std/assert'
  * assertEquals(
  *   remoteBug('yaks.app', 'b', 'e'),
- *   '/?q=.bug&side=yaks.app&bug=b&error=e',
+ *   '/?.bug&@side=yaks.app&@bug=b&@error=e',
  * )
  * ```
  */
 export let remoteBug = (side: string, bug: string, error?: string): string =>
-  `/?${new URLSearchParams({
-    q: '.bug',
-    side,
-    bug,
-    ...error ? { error } : {},
-  })}`
+  `/${
+    querySearch('.bug', {
+      side,
+      bug,
+      ...error ? { error } : {},
+    })
+  }`
 
 /** The whole message a bug or an error says. */
 export let said = (e: Bundle): string =>

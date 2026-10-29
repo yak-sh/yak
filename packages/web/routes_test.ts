@@ -282,3 +282,18 @@ test('web and terminal writes are attributed to the configured owner through API
     '/apply takes a JSON array of bundles',
   )
 })
+
+// Follow the same HTTP door as a kept letter, without starting a server.
+test('kept query pages redirect to clauses with isolated page state', async () => {
+  let response = await get('/?q=.bug&side=yaks.app&bug=b')
+  assertEquals(response.status, 308)
+  assertEquals(response.headers.get('location'), '/?.bug&@side=yaks.app&@bug=b')
+  let direct = await get(response.headers.get('location')!)
+  assertEquals(direct.status, 200)
+  assertEquals((await direct.text()).includes('<html'), true)
+  let inspect = await get('/inspect?q=.task%26.created.at%3E2026-10-27')
+  assertEquals(
+    inspect.headers.get('location'),
+    '/?.task&.created.at>2026-10-27',
+  )
+})

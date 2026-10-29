@@ -4,7 +4,7 @@
 import { h } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { matcher } from '@yaks/match'
-import { and, type Clause, parse } from '@yaks/query'
+import { and, type Clause, parse, querySearch } from '@yaks/query'
 import type { Answer, Asks, Bundle, Io } from '@yaks/inspect'
 import { Button, Field, Tabs } from '@yaks/ui'
 
@@ -114,18 +114,19 @@ export let remoteAnswers = (
 
 /** Each side stays an explicit address, including its global space scope. */
 export let address = (scope: string, eid?: string, after?: string) =>
-  `/?${new URLSearchParams({
-    q: '.trace',
-    side: 'yaks.app',
-    scope,
-    ...eid ? { trace: eid } : {},
-    ...after ? { after } : {},
-  })}`
+  `/${
+    querySearch('.trace', {
+      side: 'yaks.app',
+      scope,
+      ...eid ? { trace: eid } : {},
+      ...after ? { after } : {},
+    })
+  }`
 export let Side = ({ remote = false }: { remote?: boolean }) =>
   h(
     Tabs,
     {},
-    h(Tabs.Tab, { href: '/?q=.trace', mod: !remote && 'on' }, 'box'),
+    h(Tabs.Tab, { href: '/?.trace', mod: !remote && 'on' }, 'box'),
     h(Tabs.Tab, { href: address('platform'), mod: remote && 'on' }, 'yaks.app'),
   )
 /** A global space eid is supplied explicitly; the independent Worker has no
@@ -134,8 +135,11 @@ export let Scope = ({ scope }: { scope: string }) =>
   h(
     'form',
     {
-      method: 'GET',
-      action: '/',
+      onSubmit: (event: Event) => {
+        event.preventDefault()
+        let form = event.currentTarget as HTMLFormElement
+        location.assign(address(String(new FormData(form).get('scope') ?? '')))
+      },
       style: {
         display: 'flex',
         gap: '0.5rem',
@@ -143,8 +147,6 @@ export let Scope = ({ scope }: { scope: string }) =>
         flexWrap: 'wrap',
       },
     },
-    h('input', { type: 'hidden', name: 'q', value: '.trace' }),
-    h('input', { type: 'hidden', name: 'side', value: 'yaks.app' }),
     h(Field, {
       name: 'scope',
       value: scope,

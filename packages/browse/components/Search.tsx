@@ -1,3 +1,4 @@
+import { pagePath } from '../hosting.ts'
 import { entityPath, searchPath } from '../url.ts'
 import {
   useEffect,
@@ -199,7 +200,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
                 if (ev.defaultPrevented) close()
               }}
               onDragStart={(ev: DragEvent) => {
-                let url = new URL(searchPath(q), location.href).href
+                let url = location.origin + pagePath(searchPath(q))
                 ev.dataTransfer?.setData('text/uri-list', url)
                 ev.dataTransfer?.setData('text/plain', url)
                 setDrag(true)

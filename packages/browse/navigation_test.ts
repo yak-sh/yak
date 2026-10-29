@@ -1,15 +1,19 @@
+import { searchAt, searchPath } from './url.ts'
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { reader } from './host_testing.ts'
 import { vocab } from './types.ts'
 import {
+  configAt,
   destinationAt,
   destinations,
   favoriteChange,
   favoriteLabel,
+  newAt,
   placeAt,
   places,
+  schemaAt,
 } from './navigation.ts'
 import type { Ent } from './types.ts'
 
@@ -59,13 +63,24 @@ test('recent lists actual edits, independent of who opened a page', () => {
 test('a package’s destination is listed once, has an address, and lights its line', () => {
   let all = destinations(vocab, actor, '.session', [bugs, { ...bugs }])
   assertEquals(all.filter((d) => d.key == 'bugs').length, 1)
-  assertEquals(destinationAt('/?bugs', all), bugs)
+  assertEquals(destinationAt('/?@page=bugs', all), bugs)
   assertEquals(destinationAt('/?bugs=1', all), undefined)
   assertEquals(destinationAt('/T-1?bugs', all), undefined)
   let lines = places({ name: 'Desk', icon: 'lamp', path: '/' }, all, true)
-  assertEquals(placeAt('/?bugs', lines)?.name, 'Bugs')
+  assertEquals(placeAt('/?@page=bugs', lines)?.name, 'Bugs')
   assertEquals(placeAt('/', lines)?.name, 'Desk')
-  assertEquals(placeAt('/?map', lines)?.name, 'Schema')
+  assertEquals(placeAt('/?@page=map', lines)?.name, 'Schema')
   assertEquals(placeAt('/?q=bugs', lines), undefined)
   assertEquals(placeAt('/T-1', lines), undefined)
 })
+
+for (let word of ['new', 'map', 'config', 'favorites', 'bugs', 'sessions']) {
+  test(`a query word ${word} cannot select a navigation page`, () => {
+    let path = searchPath(word)
+    assertEquals(searchAt(path), word)
+    assertEquals(newAt(path), undefined)
+    assertEquals(schemaAt(path), false)
+    assertEquals(configAt(path), false)
+    assertEquals(destinationAt(path, [bugs]), undefined)
+  })
+}

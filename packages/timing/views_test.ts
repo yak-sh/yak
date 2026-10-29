@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -188,7 +189,7 @@ let draw = (
   let io = {
     vocab,
     link: (eid: string) => `/${eid}`,
-    find: (q: string) => `/?q=${q}`,
+    find: (q: string) => `/${querySearch(q)}`,
     id: (b: Bundle) => b.entity.eid.toUpperCase(),
     name: (eid: string) => eid,
     when: (s: string) => `at ${s}`,

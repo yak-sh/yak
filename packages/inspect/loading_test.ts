@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 import { type ComponentChildren, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
@@ -40,7 +41,7 @@ let io = (answers: Record<string, Partial<Answer>> = {}): Io => ({
   can: () => false,
   edits: false,
   link: (eid) => `/${eid}`,
-  find: (q) => `/?q=${encodeURIComponent(q)}`,
+  find: (q) => `/${querySearch(q)}`,
   go: () => {},
   id: (b) => b.entity.eid,
   kind: () => 'entity',

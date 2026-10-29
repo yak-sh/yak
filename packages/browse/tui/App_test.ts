@@ -29,10 +29,10 @@ import { pane } from './testing.ts'
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 test('terminal CLI routes ids, map and queries to Browse pages', () => {
-  equal(start('', true), '/?map')
+  equal(start('', true), '/?@page=map')
   equal(start('T-3', true), '/T-3?v=Debug')
-  equal(start('.task .count', true), '/?q=.task%20.count')
-  equal(start('.doc.title~=Hello', true), '/?q=.doc.title~%3DHello')
+  equal(start('.task .count', true), '/?.task%20.count')
+  equal(start('.doc.title~=Hello', true), '/?.doc.title~=Hello')
 })
 test('the shared Browse App paints its sidebar and home; its search field goes to a query page', async () => {
   let root = new TElement('root')
@@ -69,7 +69,7 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
     await act(() => {
       keys.press({ name: 'enter' })
     })
-    equal(port.read().path, '/?q=.task%20.count')
+    equal(port.read().path, '/?.task%20.count')
     equal(searchOpen.value, false)
     port.back()
     equal(port.read().path, '/')

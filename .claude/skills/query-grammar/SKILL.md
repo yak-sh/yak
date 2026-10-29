@@ -74,6 +74,12 @@ filter. A malformed clause throws rather than becoming a search term.
   line that only asks (`?topic .limit=3`) too, since that answers the newest
   entities of every kind, naming the line it meant (`.topic&.limit=3`).
 
+The query page uses the query string itself: `/?.task&.created.at=2026-10-27`.
+`querySearch` and `queryAt` in @yaks/query own this URL boundary. Page state has
+`@` keys (`/?.bug&@side=yaks.app&@bug=<eid>`, `/?@page=spend`); query words
+remain query words. Kept `?q=` page links redirect to this form. The API's
+`/query?q=` remains its transport format.
+
 ## What comes back
 
 A row carries only the components the query names, by filtering on them
@@ -106,8 +112,8 @@ comes first.
 
 The parser emits plain scalars; the compiler reads them by the property's type.
 
-- **Times:** `today`, `yesterday`, `'1 hour ago'`, `'in 5m'`, or an ISO
-  instant. `.task .created.at=today` is today's tasks; `>` and `<` compare
+- **Times:** `YYYY-MM-DD`, `today`, `yesterday`, `'1 hour ago'`, `'in 5m'`, or an ISO
+  instant. A bare ISO day spans that local day. `.task .created.at=today` is today's tasks; `>` and `<` compare
   against the span (packages/query/time.ts).
 - **References:** a human id or eid, `.filed.project=P-19`.
 - **Computed properties** filter like stored ones: `.task.status=wip`, from the

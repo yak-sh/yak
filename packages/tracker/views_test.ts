@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 import { type Bundle } from '@yaks/render'
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
@@ -54,7 +55,7 @@ let page = (b: Bundle, answers: Record<string, Bundle[]>, open = '') => {
   let io = {
     ...host,
     vocab,
-    find: (q: string) => `/?q=${q}`,
+    find: (q: string) => `/${querySearch(q)}`,
     kind: () => 'entity',
     edits: false,
     go: () => {},

@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 /** How long tasks.yak.sh takes to paint, as a person gets it: browse's home
  * `/` and a task's page, each opened cold (a new browser profile: no cache and
  * no stored rows) and then warm (the same profile, reopened once the first
@@ -327,7 +328,7 @@ export let contentPages = (): Page[] => {
     patience: 45_000,
   }, {
     name: 'sessions',
-    path: '/?sessions',
+    path: '/?@page=sessions',
     painted: rows,
   }, {
     name: 'project',
@@ -335,7 +336,7 @@ export let contentPages = (): Page[] => {
     painted: rows,
   }, {
     name: 'query',
-    path: '/?q=' + encodeURIComponent('.task&.limit=20'),
+    path: '/' + querySearch('.task&.limit=20'),
     painted: `!!document.querySelector('.Shell_Body [data-query]') && ${table}`,
   }, {
     name: 'visualize',
@@ -344,7 +345,7 @@ export let contentPages = (): Page[] => {
       `!!document.querySelector('.Map_Node[data-node]:not([data-node^="phase:"])')`,
   }, {
     name: 'schema',
-    path: '/?map',
+    path: '/?@page=map',
     painted: `!!document.querySelector('.Shell_Body .Head_Title')
       ?.textContent.includes('Schema') && ${table}`,
   }, {

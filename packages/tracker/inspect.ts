@@ -8,7 +8,7 @@
  */
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
-import { parse } from '@yaks/query'
+import { parse, queryAt } from '@yaks/query'
 import {
   all as baseViews,
   type Bundle,
@@ -662,14 +662,13 @@ export let inspectViews: View[] = [
   },
   {
     // A bug query's page, where a letter about a bug on another side opens it
-    // (`?q=.bug&side=yaks.app&bug=…`). Its second clause outranks timing's
+    // (`?.bug&@side=yaks.app&@bug=…`). Its second clause outranks timing's
     // query page, which draws no bug query differently.
     view: 'Inspect.Query',
     match: parse(".entity.eid~='browse-query:' .entity.eid~='.bug'"),
     Render: (props) => {
-      let params = new URLSearchParams(
-        typeof location == 'undefined' ? '' : location.search,
-      )
+      let params =
+        queryAt(typeof location == 'undefined' ? '' : location.search).state
       let side = params.get('side') ?? 'box', bug = params.get('bug')
       return side != 'box' && bug
         ? h(RemoteBug, {

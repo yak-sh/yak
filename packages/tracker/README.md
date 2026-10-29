@@ -121,7 +121,7 @@ forwards to the platform tracker sends one letter, the box's. Each bug opening
 and each regression gets its own letter immediately. `side` names the side of
 the tracker web a store's bugs open on when they are not in its own graph: the
 platform tracker's letters (`side: 'yaks.app'`) name a bug by global eid and
-link to `/?q=.bug&side=yaks.app&bug=<eid>`, where the box's tracker web reads it
+link to `/?.bug&@side=yaks.app&@bug=<eid>`, where the box's tracker web reads it
 through `/tracker/bugs` and draws it with the same pages. Its identity derives
 from the store, recipient, bug eid, opening or regression mark, and full
 `created.at` or `regressed.at`, so a replayed effect keeps the same letter. A
@@ -400,8 +400,8 @@ application and use this home query:
 .bug.status=open * .order=-bug.hits
 ```
 
-The trace list is at `/?q=.trace`. Missing affected context or missing traces
-are stated; they are not inferred from a stack's text.
+The trace list is at `/?.trace`. Missing affected context or missing traces are
+stated; they are not inferred from a stack's text.
 
 ## Reading remote bugs and traces on the box
 
@@ -431,7 +431,7 @@ each time it is read; never put its value in a config. The secret must match the
 Worker's `TRACKER_SECRET`. `./ticket` signs the ticket shared by the box and
 Worker authorization.
 
-With `@yaks/timing` composed, open `/?q=.trace`, choose `yaks.app`, and read
+With `@yaks/timing` composed, open `/?.trace`, choose `yaks.app`, and read
 `platform` or supply a space's global eid in **Tracker scope**. The independent
 Worker has no directory binding and cannot enumerate spaces. Each list page
 contains up to 100 traces; **Older traces** follows the Worker's cursor. Opening

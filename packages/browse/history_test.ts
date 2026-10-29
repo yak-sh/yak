@@ -43,7 +43,7 @@ test('going adds an entry, a view replaces it, and back and forward return', () 
   go('/T-2?v=Board', true)
   go('/?q=.task')
   go('/?q=.task')
-  equal(port.paths(), ['/T-1', '/T-2?v=Board', '/?q=.task'])
+  equal(port.paths(), ['/T-1', '/T-2?v=Board', '/?.task'])
   port.back()
   equal(route.value, '/T-2?v=Board')
   port.back()
@@ -63,4 +63,18 @@ test('going back starts a page where it was left; a page gone to starts at its t
   equal(left.value, 0)
   port.back()
   equal([route.value, left.value], ['/T-1', 87])
+})
+
+test('a kept query address is replaced in the history door as it opens', () => {
+  let port = door({
+    path: '/?q=.bug&side=yaks.app&bug=b#e',
+    state: { scroll: 12 },
+  })
+  bindHistory(port)
+  equal(port.read(), {
+    path: '/?.bug&@side=yaks.app&@bug=b#e',
+    state: { scroll: 12 },
+  })
+  equal(route.value, '/?.bug&@side=yaks.app&@bug=b#e')
+  equal(left.value, 12)
 })

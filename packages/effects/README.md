@@ -842,14 +842,14 @@ equal((await g.get(['p1']))[0].provisional, undefined)
 ## The Effects page
 
 `@yaks/effects/views` offers a browsing app (@yaks/browse) the page its sidebar
-lists as Effects, at `/?effects`: how many workers are up, the runs going every
-second over the last minute, what is waiting and what failed; a row for each
-worker with how busy it is, its loop delay, its runs a second and how long it
-has been up, or how long it has been silent; every run going, the longest first;
-and every declared effect with the runs it is owed, running, waiting, retrying
-and failed, each count a link to those runs. The workers' numbers are their
-`worker` rows; the runs owed are the `effect` rows, tallied by handler. Both are
-subscriptions, so the page moves as they do.
+lists as Effects, at `/?@page=effects`: how many workers are up, the runs going
+every second over the last minute, what is waiting and what failed; a row for
+each worker with how busy it is, its loop delay, its runs a second and how long
+it has been up, or how long it has been silent; every run going, the longest
+first; and every declared effect with the runs it is owed, running, waiting,
+retrying and failed, each count a link to those runs. The workers' numbers are
+their `worker` rows; the runs owed are the `effect` rows, tallied by handler.
+Both are subscriptions, so the page moves as they do.
 
 ## Check recorded runs
 

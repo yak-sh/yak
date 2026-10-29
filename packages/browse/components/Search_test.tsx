@@ -11,6 +11,7 @@ import { host, reader } from '../host_testing.ts'
 import { mount } from './mount.ts'
 import { fields } from './fields.tsx'
 import { route } from './nav.tsx'
+import { searchAt } from '../url.ts'
 import { contributedViews } from './inspect.tsx'
 import * as facet from '@yaks/inspect/views'
 import { views } from '@yaks/inspect'
@@ -141,17 +142,21 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     configurable: true,
   })
   Object.defineProperty(globalThis, 'location', {
-    value: { href: 'https://tasks.test/T-1' },
+    value: new URL('https://tasks.test/T-1'),
     configurable: true,
   })
   let root = document.querySelector('main')!
   let oldRoute = route.value
   try {
-    fields.set('search', 'fleet .task')
+    let query = 'fleet .task&.created.at>2026-10-27&.created.at<2026-10-28'
+    fields.set('search', query)
     searchOpen.value = true
     render(h(Search, { open: () => {} }), root)
     let link = root.querySelector('a.Palette_Page')!
-    assertEquals(link.getAttribute('href'), '/?q=fleet%20.task')
+    assertEquals(
+      link.getAttribute('href'),
+      '/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
+    )
     assertEquals(link.hasAttribute('draggable'), true)
     let payload: Record<string, string> = {}
     let drag = new window.Event('dragstart', { bubbles: true })
@@ -160,8 +165,10 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     })
     link.dispatchEvent(drag)
     assertEquals(payload, {
-      'text/uri-list': 'https://tasks.test/?q=fleet%20.task',
-      'text/plain': 'https://tasks.test/?q=fleet%20.task',
+      'text/uri-list':
+        'https://tasks.test/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
+      'text/plain':
+        'https://tasks.test/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
     })
     for (
       let props of [
@@ -180,7 +187,10 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     Object.assign(ev, { button: 0 })
     link.dispatchEvent(ev)
     assertEquals(ev.defaultPrevented, true)
-    assertEquals(route.value, '/?q=fleet%20.task')
+    assertEquals(
+      searchAt(route.value),
+      query,
+    )
     assertEquals(searchOpen.value, false)
   } finally {
     render(null, root)

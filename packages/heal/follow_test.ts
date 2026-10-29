@@ -1076,7 +1076,7 @@ let platform = async (trackers: string[]) => {
 
 let withWeb = await platform([url])
 test("a platform bug's task links its page on the tracker web", async () => {
-  ok((await withWeb()).includes(`(${url}/?q=.bug&side=yaks.app&bug=${bug})`))
+  ok((await withWeb()).includes(`(${url}/?.bug&@side=yaks.app&@bug=${bug})`))
 })
 
 let noWeb = await platform([])

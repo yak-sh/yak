@@ -243,7 +243,7 @@ export let linkProps = (e: Ent) => ({
 // nothing.
 export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
-  // `/?q=`, `/?map` and `/?<destination>` are pages of their own, not home.
+  // `/?.task` and `/?@page=<destination>` are pages of their own, not home.
   if (
     url.pathname == '/' &&
     [...url.searchParams.keys()].some((k) => k != 'v' && k != 'task')

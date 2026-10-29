@@ -1,3 +1,4 @@
+import { querySearch } from '@yaks/query'
 // The Effects page drawn through the inspector contract browse uses, over
 // two workers, one silent and one long gone, and the runs owed by handler:
 // the numbers up top, a row for each worker, what is running, and what each
@@ -107,7 +108,7 @@ let drawn = (answers: Record<string, Answer>) => {
       ),
     get: () => undefined,
     link: (id: string) => `/${id}`,
-    find: (q: string) => `/?q=${q}`,
+    find: (q: string) => `/${querySearch(q)}`,
     name: (id: string) => names[id] ?? id,
   } as unknown as Io
   let [page] = inspectViews
@@ -186,7 +187,7 @@ test('each declared effect, the busiest first, its counts opening the runs they 
     all(rows[2], 'a').map((a) => a.getAttribute('href')),
     [
       `/${effectEid('builder_answer')}`,
-      '/?q=.effect.handler=builder_answer&.effect.state=failed&?effect',
+      '/?.effect.handler=builder_answer&.effect.state=failed&?effect',
     ],
   )
   equal(rows[3].className, 'Table_Row Table_Row-quiet')

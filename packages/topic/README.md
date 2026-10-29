@@ -168,11 +168,11 @@ topics it finds under the topics holding them; Enter opens the first, and Escape
 clears it. What is typed there is the person's draft, through the UX host's
 `drafts` (@yaks/ux).
 
-The sidebar offers them as **Topics** (`destinations`), at `/?topics`: every
-topic with its cover (`Topics.Page`). A topic opens on its page, the `Topic`
-tab, beside the shelves, titles only, the topic lit and the shelves holding it
-open; stacked, as on a phone, the page comes first. The page alone is its
-`Inspect.Page`, and a card's face (`Card.Topic`):
+The sidebar offers them as **Topics** (`destinations`), at `/?@page=topics`:
+every topic with its cover (`Topics.Page`). A topic opens on its page, the
+`Topic` tab, beside the shelves, titles only, the topic lit and the shelves
+holding it open; stacked, as on a phone, the page comes first. The page alone is
+its `Inspect.Page`, and a card's face (`Card.Topic`):
 
 - the head: its title and what contains it, each named from the answer that
   brought it;

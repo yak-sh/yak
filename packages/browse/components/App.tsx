@@ -93,8 +93,8 @@ let Resolving = ({ at }: { at: string }) => {
 
 // The one page the address names, under its bar: `/` is home (the owner, in
 // the home page a package offers, or the host's own list where none does),
-// `/T-123` that entity with `?v=` picking its view, `/?q=` a search,
-// `/?map` the schema and `/?<key>` a destination's list. The bar says what
+// `/T-123` that entity with `?v=` picking its view, `/?.task` a search,
+// `/?@page=map` the schema and `/?@page=<key>` a destination's list. The bar says what
 // the page is and holds what it offers: a filter, its views, its menu.
 export let Page = ({ at }: { at: string }) => {
   // Hold a route sub for the entity while it's the page — under a partial

@@ -6,7 +6,7 @@
  * @module
  */
 import { type ComponentChildren, h, type JSX } from 'preact'
-import { parse } from '@yaks/query'
+import { parse, queryAt } from '@yaks/query'
 import {
   type Bundle,
   type Io,
@@ -665,9 +665,8 @@ export let inspectViews: View[] = [
     match: parse(".entity.eid~='browse-query:'"),
     Render: (props) => {
       let query = str(props.ctx.query)
-      let params = typeof location == 'undefined'
-        ? new URLSearchParams()
-        : new URLSearchParams(location.search)
+      let params =
+        queryAt(typeof location == 'undefined' ? '' : location.search).state
       if (params.get('side') == 'yaks.app') {
         return h(Remote, { io: props.io, params })
       }

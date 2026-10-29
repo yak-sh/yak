@@ -19,3 +19,16 @@ test('canvas turns a local search link into a live board, not foreign pages', ()
   )
   equal(searchBoard('https://tasks.test/?q=', 'https://tasks.test'), null)
 })
+
+test('direct query links become canvas boards without page state', () => {
+  equal(
+    searchBoard(
+      'https://tasks.test/?.task&.created.at=2026-10-27&@side=box',
+      'https://tasks.test',
+    ),
+    {
+      doc: { title: '.task&.created.at=2026-10-27', body: '' },
+      board: { query: '.task&.created.at=2026-10-27' },
+    },
+  )
+})

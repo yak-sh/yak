@@ -57,7 +57,7 @@ let pressed = (fine: boolean, ...eids: string[]) => {
     configurable: true,
   })
   try {
-    route.value = '/?recent'
+    route.value = '/?@page=recent'
     return eids.map((eid) => {
       openAt(eid, {} as MouseEvent)
       return [route.value, peeked.value?.eid]
@@ -71,8 +71,8 @@ let pressed = (fine: boolean, ...eids: string[]) => {
 
 test('a fine pointer peeks a link over the page, one at a time', () => {
   assertEquals(pressed(true, 'task', 'other'), [
-    ['/?recent', 'task'],
-    ['/?recent', 'other'],
+    ['/?@page=recent', 'task'],
+    ['/?@page=recent', 'other'],
   ])
 })
 

@@ -294,11 +294,11 @@ so rather than drawing time. Missing parents and cycles remain visible as
 fragments. Storage has no delivery-completion marker, so the page cannot
 guarantee a trace arrived in full.
 
-The trace list answers a query for traces, `/?q=.trace` or a narrower one such
-as `.trace .trace.name="POST apply"`. It reads the latest 200 matching traces
-and says so when more match. Traces of one request kind in one store stand
-together, ordered by the measure, the kind with the most first; the five with
-the most show, and the rest of a kind are a press away.
+The trace list answers a query for traces, `/?.trace` or a narrower one such as
+`.trace .trace.name="POST apply"`. It reads the latest 200 matching traces and
+says so when more match. Traces of one request kind in one store stand together,
+ordered by the measure, the kind with the most first; the five with the most
+show, and the rest of a kind are a press away.
 
 ```ts
 import { inspectViews } from '@yaks/timing/views'

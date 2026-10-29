@@ -3,6 +3,7 @@
 // forward (the browser's, or Ctrl-O and Ctrl-F in a terminal, and H and L in
 // either) are the way back. An entry keeps how far its page was scrolled when it was left, so the
 // way back finds the place too.
+import { queryRedirect } from '@yaks/query'
 import { signal } from '@preact/signals'
 import {
   type HistoryEntry,
@@ -22,12 +23,18 @@ let offset = 0
 
 let pathOf = (entry: HistoryEntry) => {
   let url = new URL(entry.path, 'http://x')
-  return localPath(url.pathname) + url.search + url.hash
+  url.pathname = localPath(url.pathname)
+  return (url.pathname == '/' ? queryRedirect(url) : undefined) ??
+    url.pathname + url.search + url.hash
 }
 let arrive = (entry: HistoryEntry) => {
   offset = Number((entry.state as { scroll?: number } | null)?.scroll) || 0
   left.value = offset
-  route.value = pathOf(entry)
+  let path = pathOf(entry)
+  route.value = path
+  if (pagePath(path) != entry.path) {
+    port?.write({ ...entry, path: pagePath(path) }, true)
+  }
 }
 
 /** Read and write a door's history: the one it installed, or a test's. */
@@ -45,6 +52,8 @@ export let scrolledTo = (top: number): void => {
 
 /** Go to `to` in a new entry, or in place of this one. */
 export let go = (to: string, replace = false): void => {
+  let url = new URL(to, 'http://x')
+  if (url.pathname == '/') to = queryRedirect(url) ?? to
   let from = route.peek()
   if (to == from && !replace) return
   if (!replace) {

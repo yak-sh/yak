@@ -47,22 +47,22 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
   try {
     assertEquals(lines(), [
       ['Home', '/'],
-      ['New', '/?new'],
-      ['Favorites', '/?favorites'],
-      ['Recent', '/?recent'],
-      ['Bugs', '/?bugs'],
-      ['Sessions', '/?sessions'],
-      ['Schema', '/?map'],
-      ['Configuration', '/?config'],
+      ['New', '/?@page=new'],
+      ['Favorites', '/?@page=favorites'],
+      ['Recent', '/?@page=recent'],
+      ['Bugs', '/?@page=bugs'],
+      ['Sessions', '/?@page=sessions'],
+      ['Schema', '/?@page=map'],
+      ['Configuration', '/?@page=config'],
     ])
     assertEquals(lit(), 'Home')
     await send(line('Bugs'), 'click')
-    assertEquals([route.value, lit()], ['/?bugs', 'Bugs'])
+    assertEquals([route.value, lit()], ['/?@page=bugs', 'Bugs'])
     await send(line('Configuration'), 'click')
-    assertEquals([route.value, lit()], ['/?config', 'Configuration'])
+    assertEquals([route.value, lit()], ['/?@page=config', 'Configuration'])
     await send(root.querySelector('[aria-label="Search (/)"]')!, 'click')
     assertEquals(searchOpen.value, true)
-    assertEquals(route.value, '/?config')
+    assertEquals(route.value, '/?@page=config')
     searchOpen.value = false
   } finally {
     free()

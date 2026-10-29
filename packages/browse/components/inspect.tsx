@@ -25,7 +25,7 @@ import {
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
 import { EID, idOf, kindOf, vocab } from '../types.ts'
-import { entityPath } from '../url.ts'
+import { entityPath, searchPath } from '../url.ts'
 import { called } from '@yaks/inspect'
 import { bundle, type Entry, extend, registry, renderView } from './registry.ts'
 import { front } from './fields.tsx'
@@ -138,7 +138,7 @@ export let inspectIo: Io = {
   link: (eid) => pathOf(eid),
   // An old version is its entity's page as of a transaction (App.tsx `?at=`).
   past: (eid, tx) => `${pathOf(eid)}?at=${tx}`,
-  find: (q) => `/?q=${encodeURIComponent(q)}`,
+  find: searchPath,
   go: (href) => navigate(href),
   id: (b) =>
     idOf({ eid: b.entity.eid, num: Number(b.entity.num), kind: kindOf(b) }),
