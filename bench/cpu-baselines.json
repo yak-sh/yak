@@ -6463,5 +6463,201 @@
       }
     ],
     "evidence": "bench/terminal-interactions.rebank.results.json"
+  },
+  {
+    "suite": "harness-window",
+    "baseline": "bench/harness-window.baseline.json",
+    "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+    "references": {
+      "full/first": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "full/warm": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "window/first": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "window/warm": "eb5d3964803c4fcda5d07380ac59f67732d3ae01"
+    },
+    "provenance": [
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "kind": "derived",
+        "source": "git history of bench/harness-window.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "full/first",
+          "full/warm",
+          "window/first",
+          "window/warm"
+        ]
+      }
+    ],
+    "revision": "54b2b15dd35631dda13cc9b38d7b67ad4a1b8447",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "collection": {
+      "suite": "harness-window",
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "revision": "54b2b15dd35631dda13cc9b38d7b67ad4a1b8447",
+      "names": [
+        "full/first",
+        "full/warm",
+        "window/first",
+        "window/warm"
+      ],
+      "rounds": 3,
+      "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "protocol": "paired-cpu-1"
+    },
+    "plan": [
+      {
+        "suite": "harness-window",
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "revision": "54b2b15dd35631dda13cc9b38d7b67ad4a1b8447",
+        "names": [
+          "full/first",
+          "full/warm",
+          "window/first",
+          "window/warm"
+        ],
+        "rounds": 3,
+        "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+        "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+        "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+        "protocol": "paired-cpu-1"
+      }
+    ],
+    "complete": true,
+    "groups": [
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "revision": "54b2b15dd35631dda13cc9b38d7b67ad4a1b8447",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "full/first",
+          "full/warm",
+          "window/first",
+          "window/warm"
+        ],
+        "collection": {
+          "suite": "harness-window",
+          "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+          "revision": "54b2b15dd35631dda13cc9b38d7b67ad4a1b8447",
+          "names": [
+            "full/first",
+            "full/warm",
+            "window/first",
+            "window/warm"
+          ],
+          "rounds": 3,
+          "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      }
+    ],
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "full/first",
+      "full/warm",
+      "window/first",
+      "window/warm"
+    ],
+    "comparisons": [
+      {
+        "name": "full/first",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          2341.9339999999993,
+          1898.3400000000001,
+          1921.9930000000022
+        ],
+        "current": [
+          8304.044999999998,
+          6900.6759999999995,
+          8256.993000000002
+        ],
+        "after": [
+          2109.432999999999,
+          2145.2080000000005,
+          1964.4359999999979
+        ],
+        "reference": 2036.9344999999985,
+        "now": 8256.993000000002
+      },
+      {
+        "name": "full/warm",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          18.07600000000093,
+          12.45600000000195,
+          9.234999999996944
+        ],
+        "current": [
+          29.622999999999593,
+          53.917999999997846,
+          34.41899999999441
+        ],
+        "after": [
+          16.38800000000083,
+          8.8849999999984,
+          11.621000000002823
+        ],
+        "reference": 12.038500000002387,
+        "now": 34.41899999999441
+      },
+      {
+        "name": "window/first",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          659.1899999999987,
+          489.08899999999994,
+          610.2559999999976
+        ],
+        "current": [
+          6265.5669999999955,
+          9041.171999999991,
+          8479.535000000003
+        ],
+        "after": [
+          502.71800000000076,
+          627.9910000000018,
+          615.8909999999996
+        ],
+        "reference": 613.0734999999986,
+        "now": 8479.535000000003
+      },
+      {
+        "name": "window/warm",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          251.8140000000003,
+          163.80300000000352,
+          184.5659999999989
+        ],
+        "current": [
+          2933.786,
+          1405.7090000000026,
+          1357.0820000000094
+        ],
+        "after": [
+          171.71600000000035,
+          134.59300000000076,
+          211.1889999999985
+        ],
+        "reference": 178.14099999999962,
+        "now": 1405.7090000000026
+      }
+    ],
+    "evidence": "bench/harness-window.rebank.results.json"
   }
 ]
