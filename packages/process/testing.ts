@@ -18,10 +18,6 @@ import { processes } from './plugin.ts'
  * uses. */
 export let host: Vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 
-/** The launchers this machine can run: its own, and the macOS one, which
- * needs only sh and perl. */
-export let launchers: string[] = [...new Set([Deno.build.os, 'darwin'])]
-
 /** A graph over an empty store, with the process plugin on it. */
 export let tracked = (): Graph =>
   graph({ storage: ram(host), vocab: host, plugins: [processes()] })
@@ -40,18 +36,4 @@ export let until = async <T>(
     if (Date.now() >= deadline) throw new Error(`until: timed out on ${label}`)
     await new Promise((go) => setTimeout(go, 5))
   }
-}
-
-/** A pid that certainly is not running: a child started, waited on, and
- * exited. The number is free again, so this is the closest a test gets to a
- * dead process. */
-export let reaped = async (): Promise<number> => {
-  let child = new Deno.Command('sh', {
-    args: ['-c', 'exit 0'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  let pid = child.pid
-  await child.status
-  return pid
 }

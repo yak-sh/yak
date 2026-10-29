@@ -1,7 +1,6 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // graph carrying this package's components beside @yaks/edge's and @yaks/key's,
-// a byte store that is nothing but a Map, and repositories on disk that are
-// built once and copied.
+// a byte store that is nothing but a Map.
 //
 // The byte store is a Map rather than @yaks/blob's SQLite backend because a
 // tree body is binary — raw ids, not text — and that backend stores text. A
@@ -85,77 +84,6 @@ export let fixture = (
   })
   let bytes = store()
   return { g, bytes, git: index(g, bytes) }
-}
-
-// ---------------------------------------------------------------------------
-// Repositories on disk.
-//
-// Every git command is a process of its own, so a repository that each test in
-// a file would build the same way is built once, the first time a test asks,
-// and every test gets a copy of its own. Copying is plain file system calls, no
-// git, so whatever `build` links by path it names relative to the repository —
-// a linked worktree made with `--relative-paths`, a remote as `../origin.git`
-// — or the copy's would still name the original's.
-
-let dec = new TextDecoder()
-
-/** Runs git in `cwd`: its trimmed stdout, or an error carrying what it said. */
-export let git = async (cwd: string, ...args: string[]): Promise<string> => {
-  let r = await new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  let out = dec.decode(r.stdout).trim()
-  if (!r.success) {
-    throw new Error(
-      `git ${args.join(' ')}: ${dec.decode(r.stderr).trim() || out}`,
-    )
-  }
-  return out
-}
-
-/** A fresh scratch directory, by its canonical path. */
-let scratch = (): string =>
-  Deno.realPathSync(Deno.makeTempDirSync({ prefix: 'yaks-git-' }))
-
-let copy = (from: string, to: string) => {
-  for (let e of Deno.readDirSync(from)) {
-    let a = `${from}/${e.name}`, b = `${to}/${e.name}`
-    if (e.isSymlink) Deno.symlinkSync(Deno.readLinkSync(a), b)
-    else if (e.isDirectory) {
-      Deno.mkdirSync(b)
-      copy(a, b)
-    } else Deno.copyFileSync(a, b)
-  }
-}
-
-/** What `build` leaves in an empty directory, made once per process and
- * removed when it ends: each call answers a new scratch directory holding a
- * copy of it, the caller's to change and remove. */
-export let template = (
-  build: (dir: string) => Promise<unknown>,
-): () => Promise<string> => {
-  let made: Promise<string> | undefined
-  let make = async () => {
-    let dir = scratch()
-    addEventListener('unload', () => {
-      try {
-        Deno.removeSync(dir, { recursive: true })
-      } catch {
-        // Already gone with the run's scratch directory.
-      }
-    })
-    await build(dir)
-    return dir
-  }
-  return async () => {
-    let from = await (made ??= make())
-    let dir = scratch()
-    copy(from, dir)
-    return dir
-  }
 }
 
 /** Puts a file in the byte store and returns its address, which is how a
