@@ -7,15 +7,11 @@
 // every one of these tools in its own process, which is what an ordinary `yak`
 // command does.
 //
-// The generic tier is shaped twice on purpose. A host holds it as the
-// vocabulary declares it (@yaks/graph `tier`), which is the JSON Schema a
-// command line parses; this transport restates the same tools in the form it
-// accepts (`core: true`), which is what gives `graph_apply` the bundle schema
-// this graph's own vocabulary describes. The host's copies are dropped from
-// the list rather than registered a second time under the same names.
+// A composed host lends its runner and registry. A caller that lends only a
+// tool list gets the transport's generic tier beside those plugin tools.
 
 import type { Graph, NamedTool } from '@yaks/graph'
-import type { Reply } from '@yaks/tools'
+import type { Reply, Runner } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
@@ -36,6 +32,7 @@ export type Hosting = {
   graph: Graph
   who: Authenticate
   tools: NamedTool[]
+  runner?: Runner
   search?: Search
   reply?: Reply
 }
@@ -45,6 +42,7 @@ export let routes = (host: Hosting): Route[] => {
   let tier = new Set(generic)
   let handle = mcp({
     graph: host.graph,
+    runner: host.runner,
     sessions: host.graph.vocab.comp(SESSION) ? host.graph : undefined,
     authenticate: host.who,
     tools: host.tools.filter((t) => !tier.has(t.name)),

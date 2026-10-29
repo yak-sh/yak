@@ -1,10 +1,11 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
-import type { Actor, Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import type { graph } from '@yaks/graph'
 import type { Clock } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
 import { loadTools, type Search, tier } from '@yaks/graph/tools'
 import type { Reply, Runner, runner } from '@yaks/tools'
+import { type Registry, registry } from '@yaks/tools/registry'
 import { CallError } from '@yaks/tools/errors'
 import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
@@ -47,6 +48,7 @@ type Built =
   | 'routes'
   | 'filters'
   | 'tools'
+  | 'registry'
   | 'search'
   | 'reply'
   | 'runner'
@@ -350,12 +352,12 @@ export let assemble = (
       let answering: Handler | undefined
       let paths: Route[] = []
       let filters: Filter[] = []
-      let made: NamedTool[] | undefined
+      let made: Registry | undefined
       let ranked: Search | undefined
       let meant: Meaning | undefined = lent.meaning
       let replying: Reply | undefined
       let calls: Runner | undefined
-      let makeTools: (() => NamedTool[]) | undefined
+      let makeTools: (() => Registry) | undefined
       let makeRunner: (() => Runner) | undefined
       let toolPart = part
       let host: Host = {
@@ -396,6 +398,9 @@ export let assemble = (
           return watching
         },
         get tools() {
+          return host.registry.list()
+        },
+        get registry() {
           if (!makeTools) throw new Error('the tools are not built yet')
           return made ??= makeTools()
         },
@@ -553,31 +558,30 @@ export let assemble = (
         toolPart?.('tools')
         let generic = tier({ search: ranked, keywords: vocab.keywords })
         observed.tier(generic)
-        return [
-          ...generic,
-          ...contributions.filter(({ facets }) =>
-            facets === undefined || facets.includes('tools')
-          ).flatMap(({ docs, options, plugin }) =>
-            loadTools(docs, async () => {
-              let code = await observedLoad(plugin, 'tools')
-              let runs = code?.runs?.(host, optionsOf(plugin, options)) ?? {}
-              let declarations = toolsIn(docs)
-              let names = declarations.map((d) => d.name ?? toolName(d))
-              let joined = declarations.filter((d) =>
-                typeof (runs[d.name ?? toolName(d)] ??
-                  runs[[d.noun, d.verb].filter(Boolean).join('_')]) ==
-                  'function'
-              ).map((d) => d.name ?? toolName(d))
-              // loadTools joins the whole module; a missing run rejects that join.
-              observed.runs(
-                plugin,
-                joined,
-                joined.length == names.length ? joined : [],
-              )
-              return runs
-            })
-          ),
-        ]
+        let sources = new Map([['@yaks/graph', generic]])
+        for (let { docs, options, plugin, facets } of contributions) {
+          if (facets !== undefined && !facets.includes('tools')) continue
+          let tools = loadTools(docs, async () => {
+            let code = await observedLoad(plugin, 'tools')
+            let runs = code?.runs?.(host, optionsOf(plugin, options)) ?? {}
+            let declarations = toolsIn(docs)
+            let names = declarations.map((d) => d.name ?? toolName(d))
+            let joined = declarations.filter((d) =>
+              typeof (runs[d.name ?? toolName(d)] ??
+                runs[[d.noun, d.verb].filter(Boolean).join('_')]) ==
+                'function'
+            ).map((d) => d.name ?? toolName(d))
+            // loadTools joins the whole module; a missing run rejects that join.
+            observed.runs(
+              plugin,
+              joined,
+              joined.length == names.length ? joined : [],
+            )
+            return runs
+          })
+          sources.set(plugin, [...sources.get(plugin) ?? [], ...tools])
+        }
+        return registry([...sources].map(([name, tools]) => ({ name, tools })))
       }
       let replies = graphs.flatMap(([r, options]) =>
         r.reply ? [r.reply(host, options)] : []
@@ -596,7 +600,7 @@ export let assemble = (
       // one-shot command opens a host to ask one question and should not write
       // just to say hello.
       makeRunner = () => {
-        let tools = host.tools
+        let tools = host.registry
         toolPart?.('runner')
         return prepared.factories.runner(g!, {
           tools,

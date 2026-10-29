@@ -290,7 +290,8 @@ grouped approximately by function, **not** by dependency order.
   changes into writes, old read views, queries, and rows still to move; the
   graph plugin translates at generic read and write boundaries.
 
-- **[@yaks/tools](./tools)** — Run functions that accept and return bundles,
+- **[@yaks/tools](./tools)** — Share provider catalogs, discovery and schemas
+  through one tool registry. Run functions that accept and return bundles,
   recording the tool declaration, `call`, claimed `execution`, and `result`.
   Direct callers invoke the runner; configured effects execute queued or
   recoverable calls. The graph stores both the operation and its outcome,

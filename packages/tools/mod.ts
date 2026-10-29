@@ -42,6 +42,7 @@ export {
   WORDS,
 } from './result.ts'
 export {
+  type Invocation,
   keeps,
   type Opts,
   reconcile,
@@ -60,3 +61,10 @@ export {
   executionState,
   Interrupted,
 } from './state.ts'
+
+export {
+  type Description,
+  type Provider,
+  type Registry,
+  registry,
+} from './registry.ts'

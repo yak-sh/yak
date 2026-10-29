@@ -151,6 +151,12 @@ equal(asked, 1)
 | `@yaks/mcp/skills` | `attachSkills`: scoped prompts, resources and complete Skills manifests                                                                             |
 | `@yaks/mcp/stdio`  | `stdio`: connect the server to process stdin and stdout                                                                                             |
 
+The schema helpers are owned by `@yaks/tools/schema`; MCP re-exports them for
+callers using these imports. `Options.registry` supplies a shared provider
+catalog, or `Options.runner` supplies its runner and catalog together. Listings
+and calls follow provider replacement. An admitted call retains its tool while
+its registration and execution are awaited.
+
 `annotated(tool)` produces MCP behavior hints and includes `annotations.title`
 when the tool declares a nonempty title. It does not invent a title for tools
 without one.
@@ -222,14 +228,14 @@ Successful calls return the same answer in two forms:
 - `structuredContent: { result: Bundle[] }`: the result bundles themselves.
 
 There is no separate `{ bundles: … }` wrapper for `graph_show`. Every tool
-advertises the same `outputSchema` for that answer (`answerSchema`): an object
-with `result`, an array of bundles, each carrying `entity.eid` and any component
-beside it. It is generic rather than derived from the vocabulary, because a
-typed bundle repeated per tool would be most of a `tools/list`. A tool whose
-answer is not entities declares its own `outputSchema` and answers one bundle:
-its text in `content.body`, and the value in that shape in `output.value`, which
-is what `structuredContent` carries. `graph_schema` is that tool, and its output
-schema is the vocab meta-schema.
+advertises the same `outputSchema` for that answer (`answerSchema` from
+`@yaks/tools/schema`): an object with `result`, an array of bundles, each
+carrying `entity.eid` and any component beside it. It is generic rather than
+derived from the vocabulary, because a typed bundle repeated per tool would be
+most of a `tools/list`. A tool whose answer is not entities declares its own
+`outputSchema` and answers one bundle: its text in `content.body`, and the value
+in that shape in `output.value`, which is what `structuredContent` carries.
+`graph_schema` is that tool, and its output schema is the vocab meta-schema.
 
 A recorded failure carries a `refusal` or `exception` component and sets
 `isError`. Errors caught before a recorded answer is available can return only

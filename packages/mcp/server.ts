@@ -1,6 +1,6 @@
 import type { NamedTool } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
-import { namedTool, offered, toolName } from '@yaks/graph/call'
+import { offered, toolName } from '@yaks/graph/call'
 import { legacyOptions } from '@yaks/vocab/tools'
 import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // The server: a graph, its tools, and the MCP protocol implementation that
@@ -35,7 +35,8 @@ import {
   worded,
 } from '@yaks/tools/result'
 import { CallError } from '@yaks/tools/errors'
-import { runner } from '@yaks/tools'
+import { type Registry, registry, runner } from '@yaks/tools'
+import { answerSchema } from '@yaks/tools/schema'
 import {
   core,
   type CoreOpts,
@@ -71,6 +72,8 @@ export type Options = {
    * is built once and a `tool` row is written once for the process rather than
    * once per request. Otherwise a runner is built here over `calls`. */
   runner?: Runner
+  /** A shared catalog when this server constructs its own runner. */
+  registry?: Registry
   /** the graph a call and its result are recorded in (default: `graph`). A
    * server whose graph should not hold them — one composed over somebody
    * else's stores, or a connector that will not write a stranger's question
@@ -205,48 +208,7 @@ export let instructed = async (
   return typeof said == 'function' ? await said() : said
 }
 
-/**
- * What a tool on this server answers, as JSON Schema: the bundles it returned,
- * under `result` — which is what {@link said} sends as `structuredContent`,
- * and MCP wants an object there rather than an array.
- *
- * Every tool whose answer is entities answers this one shape, so it is written
- * once and listed on all of them, a plugin's tool included without declaring
- * anything; a tool whose answer is not entities declares its own
- * `outputSchema` (`graph_schema`, a vocabulary document). It says what a
- * bundle is and not what any component holds: a fully typed bundle is tens of
- * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
- * the agent has asked its first question. What a component holds is
- * `graph_schema`'s answer, asked for when it is wanted. It carries no prose
- * for the same reason: it rides on every tool, and `graph_apply`'s
- * description says what a bundle is once.
- */
-export let answerSchema: { type: 'object'; [key: string]: unknown } = {
-  type: 'object',
-  properties: {
-    result: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          entity: {
-            type: 'object',
-            properties: { eid: { type: 'string' } },
-            required: ['eid'],
-          },
-        },
-        required: ['entity'],
-        // The `$` sugars a bundle may wear beside its components — `$alias`,
-        // the name a minted entity was asked for by, and the rest of
-        // @yaks/graph's — are not components and are not objects, so they are
-        // matched first and left open.
-        patternProperties: { '^\\$': {} },
-        additionalProperties: { type: ['object', 'null'] },
-      },
-    },
-  },
-  required: ['result'],
-}
+export { answerSchema } from '@yaks/tools/schema'
 
 // The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
@@ -368,7 +330,7 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
  * ```
  */
 export let listing = (opts: Options): Tool[] =>
-  [
+  (opts.runner?.registry.list() ?? opts.registry?.list() ?? [
     ...(opts.core === false ? [] : core({
       vocab: opts.graph.vocab,
       guide: opts.guide,
@@ -380,7 +342,7 @@ export let listing = (opts: Options): Tool[] =>
     })),
     ...toolsOf(opts.graph.plugins),
     ...(opts.tools ?? []),
-  ].filter(offered('mcp'))
+  ]).filter(offered('mcp'))
 
 /** The roster this server serves: the tool names it lists, in listing order.
  * This is what a client caches when it connects, and what
@@ -454,7 +416,9 @@ export let server = (
     jsonSchemaValidator: validator,
   })
 
-  let tools = opts.runner?.tools ?? listing(opts).map(namedTool)
+  let catalog = opts.runner?.registry ?? opts.registry ??
+    registry([{ name: 'local', tools: listing(opts) }])
+  let tools = () => catalog.list().filter(offered('mcp'))
   // Where a call and its result are recorded, which is this graph unless the
   // caller passed a separate one (a server over a composition of stores, or a
   // connector that will not write a row into somebody else's store just
@@ -462,18 +426,45 @@ export let server = (
   let calls = opts.calls ?? graph
   let report = opts.report ?? logged
   let run = opts.runner ?? runner(calls, {
-    tools,
+    tools: catalog,
     host: graph,
     report,
     ...opts.reply ? { reply: opts.reply } : {},
   })
-  let names = tools.map((t) => t.name)
+  let call = async (name: string, args: Record<string, unknown>) => {
+    let names = tools().map((t) => t.name)
 
-  let callbacks = new Map<
-    string,
-    (args: Record<string, unknown>) => Promise<CallToolResult>
-  >()
-  for (let t of tools) {
+    let out: CallToolResult
+    let id = mint()
+    let asked: Bundle = {
+      entity: { eid: id },
+      call: { to: toolEid(name), args: translated(name, args ?? {}) },
+      ...(actor ? { $actor: { ...actor } } : {}),
+    }
+    let admitted = run.admit(asked)
+    let t = admitted?.tool
+    if (!admitted || !t || t.name != name || !offered('mcp')(t)) {
+      throw new ProtocolError(-32602, `Tool ${name} not found`)
+    }
+    try {
+      if (!t.readOnly) await admitted.ensure()
+      let landed = await (t.readOnly ? admitted.read() : admitted.call())
+      out = said(t, answerOf(landed, id), faulted(landed, id))
+    } catch (err) {
+      // The runner answers a tool's own throw as a fault above; a throw that
+      // reaches here is the runner's (a call it could not record), reported
+      // the same way unless it was the caller's refusal.
+      if (!(err instanceof CallError) && status(err) >= 500) {
+        await report(err, asked, t.name)
+      }
+      out = failed(err)
+    }
+    // A refusal carries the roster sentence too: an agent holding a stale
+    // tool list is likelier to be refused than served, so that is exactly
+    // the reply worth attaching it to.
+    return noting(out, await opts.roster?.(names))
+  }
+  for (let t of tools()) {
     let meta = metaOf(t, opts.security)
     let config = {
       ...(t.title ? { title: t.title } : {}),
@@ -483,38 +474,11 @@ export let server = (
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
-    let call = async (args: Record<string, unknown>) => {
-      let out: CallToolResult
-      let id = mint()
-      let asked: Bundle = {
-        entity: { eid: id },
-        call: { to: toolEid(t.name), args: translated(t.name, args ?? {}) },
-        ...(actor ? { $actor: { ...actor } } : {}),
-      }
-      try {
-        if (!t.readOnly) await run.ensure([t.name])
-        let landed = await (t.readOnly ? run.read(asked) : run.call(asked))
-        out = said(t, answerOf(landed, id), faulted(landed, id))
-      } catch (err) {
-        // The runner answers a tool's own throw as a fault above; a throw that
-        // reaches here is the runner's (a call it could not record), reported
-        // the same way unless it was the caller's refusal.
-        if (!(err instanceof CallError) && status(err) >= 500) {
-          await report(err, asked, t.name)
-        }
-        out = failed(err)
-      }
-      // A refusal carries the roster sentence too: an agent holding a stale
-      // tool list is likelier to be refused than served, so that is exactly
-      // the reply worth attaching it to.
-      return noting(out, await opts.roster?.(names))
-    }
     mcp.registerTool(
       t.name,
       config,
-      (args) => call(args as Record<string, unknown>),
+      (args) => call(t.name, args as Record<string, unknown>),
     )
-    callbacks.set(t.name, call)
   }
   // The listing is this server's own, not the SDK's: a tool that declared its
   // input as JSON Schema is sent that declaration unchanged. The direct
@@ -522,7 +486,7 @@ export let server = (
   // every tool is listed with the one
   // answer schema, since every tool answers bundles, unless it declared its own.
   mcp.server.setRequestHandler('tools/list', () => ({
-    tools: tools.map((t) => ({
+    tools: tools().map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
@@ -535,11 +499,7 @@ export let server = (
   // Exact authoring schemas provide header metadata, not domain validation.
   // The runner owns malformed-argument refusals and records every graph call.
   mcp.server.setRequestHandler('tools/call', async (request) => {
-    let call = callbacks.get(request.params.name)
-    if (!call) {
-      throw new ProtocolError(-32602, `Tool ${request.params.name} not found`)
-    }
-    return await call(request.params.arguments ?? {})
+    return await call(request.params.name, request.params.arguments ?? {})
   })
   return mcp
 }

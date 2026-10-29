@@ -22,7 +22,7 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // is written in the agent's name and not the runner's, and the transcript's own
 // record of the call is the same entity @yaks/tools' runner answered.
 //
-// The conversion is not written here. `inputSchemaOf` (@yaks/mcp/tools) is
+// The conversion is not written here. `inputSchemaOf` (@yaks/tools/schema) is
 // what an MCP `tools/list` sends, with references inlined: a provider reads a
 // tool's parameters on its own, without a document to resolve `$ref` against.
 // That subpath loads no MCP SDK, so a session that serves nothing never pays
@@ -30,7 +30,8 @@ import { type Blobs, valueTools } from '@yaks/blob'
 
 import { machines, type SessionMachines } from './session_machines.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
-import { core, inputSchemaOf } from '@yaks/mcp/tools'
+import { core } from '@yaks/mcp/tools'
+import { inputSchemaOf } from '@yaks/tools/schema'
 import { workspaceTools } from '@yaks/machine/tools'
 import { sessionHome, type Workspaces } from '@yaks/machine/targets'
 import {
@@ -67,7 +68,7 @@ export let graphTools = (
     host: g,
     ...opts.reply ? { reply: opts.reply } : {},
   })
-  return tier.map((t) => ({
+  return r.registry.list().map((t) => ({
     name: toolName(t),
     description: t.description,
     parameters: inputSchemaOf(t),

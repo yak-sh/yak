@@ -1111,7 +1111,7 @@ export let react = async (
     }
     const { runner } = await import('@yaks/tools')
     const run = runner(g, {
-      tools: [...toolEntities.values()].map(served),
+      tools: [...new Set(toolEntities.values())].map(served),
       otherwise: unserved,
       owner: deps.owner ?? session,
       report: (error) => deps.report?.(error, session, 'tool'),

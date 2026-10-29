@@ -37,7 +37,6 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/server'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
-import { namedTool } from '@yaks/graph/call'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
 import { type Clock, system } from '@yaks/fp'
@@ -229,7 +228,7 @@ export let mcp = (opts: MountOptions): Handler => {
   let runs = opts.runner
   let running = () =>
     runs ??= runner(opts.calls ?? opts.graph, {
-      tools: listing(opts).map(namedTool),
+      tools: opts.registry ?? listing(opts),
       host: opts.graph,
       report: opts.report ?? logged,
       ...opts.reply ? { reply: opts.reply } : {},

@@ -10,7 +10,7 @@ import type { Contributions } from '@yaks/ui'
 import type { Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
 import type { Vault } from '@yaks/secrets'
-import type { Finding, Reply, Runner } from '@yaks/tools'
+import type { Finding, Registry, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
 import type { Meaning } from './facets.ts'
@@ -117,6 +117,8 @@ export interface Host {
    * command line runs it, and a transport that lists tools lists it. Built on
    * first access, including an anatomy read that describes the tools. */
   tools: NamedTool[]
+  /** Runtime provider catalogs shared by discovery and the runner. */
+  registry: Registry
   /** ranked text search over this graph, where its vocabulary marks a property
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */

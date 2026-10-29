@@ -77,6 +77,7 @@ import { persist } from './persist.ts'
 import { invoke } from './invoke.ts'
 import { answerOf, measuring, results, toolEid, toolRow } from './result.ts'
 import type { Clock } from '@yaks/fp'
+import { type Registry, registryOf } from './registry.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -87,7 +88,7 @@ let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 /** What a runner is built with. */
 export type Opts = {
   /** what it can run */
-  tools: Tool[]
+  tools: Tool[] | Registry
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
@@ -148,12 +149,24 @@ export type Reply = (
   wrote: Bundle[],
 ) => Promise<Bundle[]>
 
+/** One admitted call, retaining its tool through execution while registration
+ * advertises the provider's current declaration at the stable tool identity. */
+export type Invocation = {
+  tool: NamedTool
+  ensure: () => Promise<Bundle[]>
+  call: () => Promise<Bundle[]>
+  read: () => Promise<Bundle[]>
+}
+
 /** A live runner: the rules a sweep queries, and the functions a caller
  * invokes. */
 export type Runner = {
   /** the queries a deferred call is found by — the two declared effects, by
    * name */
   rules: Ready[]
+  /** The shared discovery and lookup catalog. */
+  registry: Registry
+  admit: (asked: Bundle) => Invocation | undefined
   /** the tools it runs, named */
   tools: NamedTool[]
   /** write the `tool` rows that calls point at: the named tools', or every
@@ -230,8 +243,7 @@ export let keeps = (
  * `reconcile()` is explicit recovery for calls without a recorded effect.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
-  let tools = opts.tools.map(namedTool)
-  let by = new Map(tools.map((t) => [toolEid(t.name), t]))
+  let catalog = registryOf(opts.tools)
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
   let clock = opts.clock ?? measuring
   let now = () => clock.now()
@@ -264,7 +276,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
   // Each tool's row, as the batch that stood it up (`ensure`): one entry per
   // tool name, several names sharing the batch they were written in.
-  let stood = new Map<string, Promise<Bundle[]>>()
+  let stood = new WeakMap<NamedTool, Promise<Bundle[]>>()
+  let registering = Promise.resolve<Bundle[]>([])
   // The rows of these tools that are missing or say something else, written.
   let standing = (some: NamedTool[]): Promise<Bundle[]> =>
     Promise.resolve(g.get(some.map((t) => toolEid(t.name)), ['tool'])).then(
@@ -301,7 +314,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let toolOf = (call: Bundle): NamedTool | undefined =>
     opts.takes && !opts.takes(call)
       ? undefined
-      : by.get(String((call.call as Comp).to)) ?? otherwise
+      : catalog.get(String((call.call as Comp).to)) ?? otherwise
   // One promise per call in flight in this process, in the map before the
   // work starts, so nothing the work sets off finds the call untaken.
   let tracked = (id: Eid, go: () => Promise<Bundle[]>): Promise<Bundle[]> => {
@@ -315,10 +328,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // own bundle: the call is the caller's, the claim is the runner's
   // bookkeeping and carries no identity. A call somebody claimed first (only
   // a named one can be) reads the way `run` reads it.
-  let born = (asked: Bundle): Promise<Bundle[]> => {
+  let born = (asked: Bundle, admitted?: NamedTool): Promise<Bundle[]> => {
     let id = asked.entity.eid.startsWith('$') ? mint() : asked.entity.eid
     let call = { ...asked, entity: { ...asked.entity, eid: id } }
-    let tool = toolOf(call)
+    let tool = admitted ?? toolOf(call)
     return tracked(id, async () => {
       if (!tool) {
         await g.apply([call])
@@ -509,7 +522,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         if (opts.report) {
           let [call] = await g.get([id])
           let to = String((call?.call as Comp | undefined)?.to)
-          await opts.report(error, call, by.get(to)?.name)
+          await opts.report(error, call, catalog.get(to)?.name)
         }
       }
     }
@@ -557,33 +570,55 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
   }
 
+  let ensure = (asked: NamedTool[]) => {
+    let fresh = asked.filter((t) => !stood.has(t))
+    if (fresh.length) {
+      let bundles = registering.catch(() => []).then(() =>
+        standing(fresh.map((t) => catalog.get(t.name) ?? t))
+      ).catch((error) => {
+        for (let t of fresh) {
+          if (stood.get(t) === bundles) stood.delete(t)
+        }
+        throw error
+      })
+      registering = bundles
+      for (let t of fresh) stood.set(t, bundles)
+    }
+    let batches = new Set(asked.map((t) => stood.get(t)!))
+    return Promise.all(batches).then((all) => all.flat())
+  }
+  let read = async (asked: Bundle, tool = toolOf(asked)) => {
+    if (!tool?.readOnly) {
+      throw new CallError('read', 'a read needs a read-only tool')
+    }
+    return await execute(asked, tool, false, true)
+  }
+
   return {
     rules: plans,
-    tools,
+    registry: catalog,
+    admit: (asked) => {
+      let tool = toolOf(asked)
+      return tool && {
+        tool,
+        ensure: () => ensure([catalog.get(tool.name) ?? tool]),
+        call: () => born(asked, tool),
+        read: () => read(asked, tool),
+      }
+    },
+    get tools() {
+      return catalog.list()
+    },
     // Once per tool per runner, however many callers ask, and only the rows
     // that are missing or say something else: a tool row is the same row
     // every time (its id is derived from the name), and writing it again would
     // move an `updated` stamp for nothing — on every process that opens the
     // graph. A caller that names the tool a call points at stands up that one
     // row, which is what a server building a runner per request needs.
-    ensure: (names) => {
-      let asked = names ? tools.filter((t) => names.includes(t.name)) : tools
-      let fresh = asked.filter((t) => !stood.has(t.name))
-      if (fresh.length) {
-        let bundles = standing(fresh)
-        for (let t of fresh) stood.set(t.name, bundles)
-      }
-      let batches = new Set(asked.map((t) => stood.get(t.name)!))
-      return Promise.all(batches).then((all) => all.flat())
-    },
+    ensure: (names) =>
+      ensure(catalog.list().filter((t) => !names || names.includes(t.name))),
     // A direct read has no stored lifecycle and owes no write reply.
-    read: async (asked) => {
-      let tool = toolOf(asked)
-      if (!tool?.readOnly) {
-        throw new CallError('read', 'a read needs a read-only tool')
-      }
-      return await execute(asked, tool, false, true)
-    },
+    read,
     // Recorded work is written claimed before the tool runs.
     call: async (asked) => {
       if (!asked.call) throw new CallError('call', 'a call needs a call')

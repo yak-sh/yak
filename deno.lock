@@ -2631,7 +2631,9 @@
       },
       "packages/tools": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:zod-to-json-schema@^3.25.1",
+          "npm:zod@^3.24.0"
         ]
       },
       "packages/topic": {
