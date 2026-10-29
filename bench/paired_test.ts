@@ -1,6 +1,12 @@
 import { equal, test, throws } from '@yaks/testing'
 import type { Baseline, Run } from '@yaks/benchmark'
-import { bracket, compare } from './paired.ts'
+import {
+  bracket,
+  collectGroups,
+  type Collection,
+  compare,
+  type Judgement,
+} from './paired.ts'
 
 // One sitting's round medians (wall), and their CPU times where given.
 let run = (
@@ -165,4 +171,96 @@ test('missing CPU readings are inconclusive without a wall-clock fallback', () =
   let missing = run(shared)
   for (let round of missing.benches[0].rounds) delete round.cpu
   equal(verdict(run(shared), missing), 'inconclusive')
+})
+
+let collection = (name: string): Collection => ({
+  suite: 'fixture',
+  reference: 'older',
+  revision: 'current',
+  names: [name],
+  rounds: 3,
+  driver: 'source-digest',
+  runtime: 'test',
+  cpu: 'test',
+  protocol: 'paired-cpu-1',
+})
+let observed = (at: Collection): Judgement => {
+  let reading = (commit: string) => ({
+    ...run([100, 110, 105]),
+    metric: 'round-medians/cpu',
+    commit,
+    benches: run([100, 110, 105]).benches.map((b) => ({
+      ...b,
+      name: at.names[0],
+      samples: b.samples.map((s) => ({ ...s, cpu: s.value })),
+    })),
+  })
+  return {
+    verdict: 'same',
+    comparisons: [],
+    slower: [],
+    reference: at.reference,
+    revision: at.revision,
+    before: reading(at.reference),
+    current: reading(at.revision),
+    after: reading(at.reference),
+  }
+}
+
+test('a later group failure checkpoints completed CPU observations and resumes only unfinished work', async () => {
+  let plan = [collection('read'), collection('write')]
+  let checkpoints: Judgement[] = []
+  let failed = await collectGroups(plan, async (at) => {
+    if (at.names[0] == 'write') throw Error('current probe failed')
+    return observed(at)
+  }, {
+    checkpoint: async (evidence) => {
+      checkpoints.push(structuredClone(evidence))
+    },
+  })
+  equal(failed.verdict, 'failed')
+  equal(failed.complete, false)
+  equal(checkpoints.map((c) => c.groups?.length), [1, 1])
+  equal(failed.groups?.[0].collection, plan[0])
+  equal(failed.groups?.[0].before?.benches[0].samples.map((s) => s.cpu), [
+    100,
+    110,
+    105,
+  ])
+  let measured: string[] = []
+  let completed = await collectGroups(plan, async (at) => {
+    measured.push(at.names[0])
+    return observed(at)
+  }, { resume: failed })
+  equal(measured, ['write'])
+  equal(completed.complete, true)
+  equal(completed.error, undefined)
+  equal(completed.current?.benches.map((b) => b.name), ['read', 'write'])
+})
+
+test('resuming refuses changed sources, product revisions, sampling, or incomplete CPU groups', async () => {
+  let at = collection('read')
+  let saved = await collectGroups([at], async (at) => observed(at))
+  for (
+    let changed of [
+      { ...at, driver: 'different-source' },
+      { ...at, revision: 'different-product' },
+      { ...at, reference: 'different-reference' },
+      { ...at, rounds: 4 },
+    ]
+  ) {
+    let called = 0
+    await collectGroups([changed], async (at) => {
+      called++
+      return observed(at)
+    }, { resume: saved })
+    equal(called, 1)
+  }
+  delete saved.groups![0].after
+  let called = 0
+  await collectGroups([at], async (at) => {
+    called++
+    return observed(at)
+  }, { resume: saved })
+  equal(called, 1)
 })

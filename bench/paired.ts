@@ -96,6 +96,99 @@ export type Judgement = Evidence & Partial<Pair> & {
   revision?: string
   references?: Record<string, string>
   groups?: Judgement[]
+  collection?: Collection
+  plan?: Collection[]
+  complete?: boolean
+}
+
+/** The source and sampling contract that produced one reference group. */
+export type Collection = {
+  suite: string
+  reference: string
+  revision: string
+  names: string[]
+  rounds: number
+  driver: string
+  runtime: string
+  cpu: string
+  protocol: 'paired-cpu-1'
+}
+export type Checkpoint = {
+  resume?: Judgement
+  checkpoint?: (evidence: Judgement) => Promise<void>
+}
+let completeGroup = (group: Judgement, at: Collection) =>
+  !group.error && group.verdict != 'failed' &&
+  (Object.keys(at) as (keyof Collection)[]).every((field) =>
+    JSON.stringify(group.collection?.[field]) == JSON.stringify(at[field])
+  ) &&
+  [group.before, group.current, group.after].every((run, slot) =>
+    run?.rounds == at.rounds && run.metric.endsWith('/cpu') &&
+    run.commit == (slot == 1 ? at.revision : at.reference) &&
+    run.runtime == at.runtime && run.cpu == at.cpu &&
+    JSON.stringify(run.benches.map((b) => b.name)) ==
+      JSON.stringify(at.names) &&
+    run.benches.every((b) =>
+      b.rounds.length == at.rounds && b.samples.length > 0 &&
+      b.rounds.every((r) => Number.isFinite(r.cpu)) &&
+      b.samples.every((s) => Number.isFinite(s.cpu))
+    )
+  )
+
+/** Persist observations before advancing to another reference. Resume only
+ * complete groups from exactly the same code and sampling contract. */
+export let collectGroups = async (
+  plan: Collection[],
+  measure: (collection: Collection) => Promise<Judgement>,
+  options: Checkpoint = {},
+): Promise<Judgement> => {
+  let groups: Judgement[] = []
+  let names = plan.flatMap((group) => group.names)
+  let previous = options.resume?.groups ??
+    (options.resume ? [options.resume] : [])
+  let result = (error?: unknown): Judgement => {
+    let complete = groups.length == plan.length &&
+      groups.every((group, index) => completeGroup(group, plan[index]))
+    let evidence = groups.length
+      ? combined(groups, names)
+      : { verdict: 'inconclusive' as const, slower: [], comparisons: [] }
+    return {
+      ...evidence,
+      groups: [...groups],
+      plan,
+      complete,
+      ...!complete ? { error: evidence.error ?? 'Collection incomplete' } : {},
+      ...error
+        ? {
+          verdict: 'failed',
+          error: error instanceof Error
+            ? error.stack ?? error.message
+            : `${error}`,
+        }
+        : {},
+    }
+  }
+  for (let at of plan) {
+    let retained = previous.find((group) => completeGroup(group, at))
+    let group: Judgement
+    try {
+      group = retained ?? {
+        ...await measure(at),
+        collection: at,
+        references: Object.fromEntries(at.names.map((name) => [
+          name,
+          at.reference,
+        ])),
+      }
+    } catch (error) {
+      let evidence = result(error)
+      await options.checkpoint?.(evidence)
+      return evidence
+    }
+    groups.push(group)
+    await options.checkpoint?.(result())
+  }
+  return result()
 }
 
 /** Judge one bracketed comparison against the slack `base` banked.
@@ -257,7 +350,7 @@ let archive = async (root: string, target: string, revision: string) => {
 
 /** Both revisions run the identical present-day driver and fixture. No live
  * database is opened or copied; each probe owns and cleans its seeded graph. */
-export type Revisions = {
+export type Revisions = Checkpoint & {
   reference?: string
   current?: string
   rounds?: number
@@ -282,35 +375,115 @@ export let collect = async (
     ? Object.fromEntries(names.map((name) => [name, revisions.reference!]))
     : revisions.references
   let source = references(base, names, fallback, overrides)
-  let groups: Judgement[] = []
   let rounds = revisions.rounds ??
     Math.max(6, Math.ceil(Math.log2(20 * names.length)))
-  for (let [reference, selected] of grouped(source)) {
-    let judgement = await collectAt(suite, root, {
-      ...revisions,
-      reference,
-      names: selected,
-      rounds,
-    })
-    judgement.references = Object.fromEntries(selected.map((name) => [
-      name,
-      judgement.reference ?? reference,
-    ]))
-    groups.push(judgement)
+  let git = async (...args: string[]) =>
+    text.decode(await command(root, 'git', args)).trim()
+  let revision = await git('rev-parse', revisions.current ?? 'HEAD')
+  let driver = await captureDriver(root)
+  try {
+    let context = await host()
+    let plan: Collection[] = []
+    for (let [reference, selected] of grouped(source)) {
+      plan.push({
+        suite,
+        reference: await git('rev-parse', reference),
+        revision,
+        names: selected,
+        rounds,
+        driver: driver.identity,
+        runtime: context.runtime,
+        cpu: context.cpu,
+        protocol: 'paired-cpu-1',
+      })
+    }
+    return await collectGroups(plan, (at) =>
+      collectAt(suite, root, driver, {
+        reference: at.reference,
+        current: at.revision,
+        names: at.names,
+        rounds,
+      }), revisions)
+  } finally {
+    await Deno.remove(driver.root, { recursive: true })
   }
-  return combined(groups, names)
+}
+
+type Driver = { root: string; files: string[]; identity: string }
+let captureDriver = async (root: string): Promise<Driver> => {
+  let target = await Deno.makeTempDir({ prefix: 'bench-driver-' })
+  try {
+    await command(root, 'cp', ['-R', 'bench', target + '/bench'])
+    await Deno.mkdir(target + '/packages')
+    await command(root, 'cp', [
+      '-R',
+      'packages/benchmark',
+      target + '/packages/benchmark',
+    ])
+    let files = text.decode(
+      await command(root, 'git', [
+        'ls-files',
+        '*_bench.ts',
+      ]),
+    ).trim().split('\n').filter(Boolean)
+    for (let file of files) {
+      await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
+        recursive: true,
+      })
+      await Deno.copyFile(`${root}/${file}`, `${target}/${file}`)
+    }
+    return { root: target, files, identity: await driverIdentity(root, target) }
+  } catch (error) {
+    await Deno.remove(target, { recursive: true })
+    throw error
+  }
+}
+
+let driverIdentity = async (root: string, snapshot: string) => {
+  let files = text.decode(
+    await command(root, 'git', [
+      'ls-files',
+      '-z',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '--',
+      'bench',
+      'packages/benchmark',
+      '*_bench.ts',
+    ]),
+  ).split('\0').filter((file) =>
+    (/\.tsx?$/.test(file) && !/_test\.tsx?$/.test(file)) ||
+    file == 'packages/benchmark/deno.json'
+  ).sort()
+  let sources = await Promise.all(files.map(async (file) => {
+    try {
+      return [file, await Deno.readTextFile(`${snapshot}/${file}`)]
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+      return [file, null]
+    }
+  }))
+  let bytes = new TextEncoder().encode(JSON.stringify(sources))
+  return Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+  )
+    .map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 let collectAt = async (
   suite: string,
   root: string,
+  driver: Driver,
   revisions: Revisions = {},
 ): Promise<Judgement> => {
   let { baseline: path, collector: registeredCollector } = registered(suite)
   let collector = (root: string) => registeredCollector(root, revisions.names)
   let git = async (...args: string[]) =>
     text.decode(await command(root, 'git', args)).trim()
-  let base: Baseline = JSON.parse(await Deno.readTextFile(`${root}/${path}`))
+  let base: Baseline = JSON.parse(
+    await Deno.readTextFile(`${driver.root}/${path}`),
+  )
   let reference = await git(
     'rev-parse',
     revisions.reference ?? base.reference ??
@@ -333,21 +506,17 @@ let collectAt = async (
       await archive(root, target, commit)
       // The driver is this checkout's: its bench files and the library they
       // measure with. The product under them is the revision's own.
-      await command(root, 'cp', ['-R', 'bench/.', `${target}/bench/`])
-      await command(root, 'cp', [
+      await command(driver.root, 'cp', ['-R', 'bench/.', `${target}/bench/`])
+      await command(driver.root, 'cp', [
         '-R',
         'packages/benchmark/.',
         `${target}/packages/benchmark/`,
       ])
-      let driver = (await git('ls-files', '*_bench.ts')).split('\n').filter(
-        Boolean,
-      )
-      for (let file of driver) {
-        await command(root, 'mkdir', [
-          '-p',
-          `${target}/${file.slice(0, file.lastIndexOf('/'))}`,
-        ])
-        await command(root, 'cp', [file, `${target}/${file}`])
+      for (let file of driver.files) {
+        await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
+          recursive: true,
+        })
+        await Deno.copyFile(`${driver.root}/${file}`, `${target}/${file}`)
       }
       // Reuse dependencies, not generated product assets or a graph.
       await Deno.symlink(`${root}/node_modules`, `${target}/node_modules`)
