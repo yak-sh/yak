@@ -12,6 +12,7 @@ import { starter } from '../packages/cli/init.ts'
 import { lifecycle } from '../packages/session/hooks.ts'
 import { sessionEid } from '../packages/session/who.ts'
 import { PATH } from '../packages/session/routes.ts'
+import { selected } from './selected.ts'
 
 export let HOOK_WAITS = [
   'hook/SessionStart',
@@ -36,6 +37,7 @@ export async function measure(
     name: string,
     setup: () => Promise<() => Promise<void>>,
   ) => {
+    if (!selected(name)) return
     let samples: Sample[] = []
     for (let i = 0; i < n; i++) {
       let run = await setup()
@@ -139,6 +141,7 @@ export async function measure(
       })
     // Warm each handler before its samples, as on the long-running server.
     for (let event of ['SessionStart', 'SubagentStart', 'SessionEnd']) {
+      if (!selected(`hook/${event}`)) continue
       for (let i = 0; i < 5; i++) {
         let f = await fixture()
         await post({
@@ -196,8 +199,8 @@ export async function measure(
     // they are spent before timing.
     for (let i = 0; i < 5; i++) {
       let f = await fixture()
-      await send(f.runner)
-      await send(f.runner, true)
+      if (selected('hook/PostToolUse-delivery')) await send(f.runner)
+      if (selected('hook/PostToolUse-subagent')) await send(f.runner, true)
     }
     await timed('hook/PostToolUse-delivery', async () => {
       let f = await fixture()
