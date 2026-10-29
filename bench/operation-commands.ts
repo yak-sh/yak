@@ -15,12 +15,19 @@ import type { Config } from '../packages/cli/config.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { settled } from './settled.ts'
 import { selected } from './selected.ts'
+import { fixture } from './fixture.ts'
+import {
+  PERSON,
+  PERSONA,
+  populate,
+  PROJECT,
+  SESSION,
+  TARGET,
+} from './operation-corpus.ts'
 
 let root = new URL('../', import.meta.url).pathname
 let decode = new TextDecoder()
 let id = (n: number) => `b66dbec0-632c-4fe8-a5ed-${String(n).padStart(12, '0')}`
-let PERSON = id(1), PROJECT = id(2), TARGET = id(3), SESSION = id(4)
-let PERSONA = id(5), BOARD = id(6)
 export let OPERATION_TASKS = 2000
 
 /** Names are deliberately separate across process and HTTP boundaries. */
@@ -168,6 +175,34 @@ let includes = (text: string, mark: string) => {
   }
 }
 
+export let scaleFixture = fixture(async (
+  path: string,
+  tasks: number,
+  entries: number,
+) => {
+  let directory = path.slice(0, path.lastIndexOf('/'))
+  await Deno.mkdir(`${directory}/transcripts`)
+  let config = starter(PERSON)
+  config.db = path
+  config.duties = false
+  config.plugins!.push('@yaks/sqlite')
+  config.plugins = config.plugins?.map((plugin) =>
+    plugin == '@yaks/session'
+      ? {
+        use: '@yaks/session',
+        with: { transcripts: `${directory}/transcripts` },
+      }
+      : plugin
+  )
+  let host = await compose(config, ['graph', 'web'])
+  try {
+    await settled(host)
+    await populate(host.graph, tasks, entries)
+  } finally {
+    await host.close()
+  }
+}, 'operation-scale')
+
 async function collect(
   args: string[] = [],
   scale = false,
@@ -233,74 +268,11 @@ async function collect(
       )
     }
     await Deno.writeTextFile(configPath, JSON.stringify(config))
+    if (scale) await scaleFixture(config.db!, tasks, SCALE_ENTRIES)
     host = await compose(read(configPath), ['graph', 'web'])
     await settled(host)
     let graph = host.graph
-    await graph.apply([
-      {
-        entity: { eid: PERSON },
-        person: {},
-        doc: { title: 'Operation person' },
-      },
-      {
-        entity: { eid: PROJECT },
-        project: {},
-        doc: { title: 'Operation portfolio' },
-      },
-      {
-        entity: { eid: SESSION },
-        session: {
-          id: 'benchmark-operation-session',
-          ...(remaining ? { actor: PERSON } : {}),
-        },
-      },
-      {
-        entity: { eid: PERSONA },
-        persona: {},
-        doc: {
-          title: 'Operation persona',
-          body: 'operation persona instructions',
-        },
-      },
-      {
-        entity: { eid: BOARD },
-        board: { query: '.task !completed' },
-        doc: { title: 'Operation board' },
-      },
-      ...Array.from({ length: tasks }, (_, i) => ({
-        entity: { eid: i == 0 ? TARGET : crypto.randomUUID() },
-        task: {},
-        doc: {
-          title: i == 0 ? 'Operation target' : `Operation task ${i}`,
-          body: 'A populated independent-operation fixture.',
-        },
-        filed: { project: PROJECT },
-      })),
-    ])
-    if (scale) {
-      // A real long session in the same graph, not a phantom transcript count.
-      for (let from = 0; from < SCALE_ENTRIES; from += 100) {
-        await graph.apply(
-          Array.from(
-            { length: Math.min(100, SCALE_ENTRIES - from) },
-            (_, i) => ({
-              entity: { eid: crypto.randomUUID() },
-              entry: { session: SESSION },
-              content: {
-                body: `Scale transcript turn ${from + i}: ${'x'.repeat(2048)}`,
-              },
-            }),
-          ),
-        )
-      }
-    }
-    // The history read is populated, not the fast empty-log path.
-    for (let i = 0; i < 40; i++) {
-      await graph.apply([{
-        entity: { eid: TARGET },
-        doc: { body: `History revision ${i}` },
-      }])
-    }
+    if (!scale) await populate(graph, tasks, 0, remaining)
     let cli = async (operation: Operation, input: Record<string, unknown>) => {
       let flags = Object.entries(input).flatMap(([key, value]) => [
         `--${key.replaceAll('_', '-')}`,
