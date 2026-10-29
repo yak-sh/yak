@@ -273,6 +273,7 @@ test('an MCP connection writes through its own graph session', async () => {
   assert(id)
   let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
   assertEquals(comp(session, 'session').id, id)
+  assertEquals(comp(session, 'session').fallback, undefined)
 
   let apply = () =>
     call('graph_apply', {
@@ -382,12 +383,17 @@ let unknownVia = await (async () => {
   await response.text()
   let id = response.headers.get('mcp-session-id')
   let made = comp((await g.get(['b1']))[0], 'created')
-  return { id, made }
+  let [opened] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  return { id, made, opened: comp(opened, 'session') }
 })()
 test('an unknown x-via still gets a connection instead of the serving process', () => {
   assert(unknownVia.id)
   assertEquals(unknownVia.made.by, undefined)
   assert(unknownVia.made.via != 'process')
+})
+test('a connection the host fallback opened says so, and speaks for nobody', () => {
+  assertEquals(unknownVia.opened.fallback, true)
+  assertEquals(unknownVia.opened.actor, undefined)
 })
 
 // Calls a harness's hook announced to the hook door before making them: one

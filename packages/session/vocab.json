@@ -500,6 +500,11 @@
           "type": "boolean",
           "description": "true for a transcript opened and driven by a person; false for an agent or automated opening, even if a person later replies"
         },
+        "fallback": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "true for an MCP connection opened by the host's own process fallback, a request that named no caller; it speaks for nobody, and a door that trusts the host's perimeter may read it as the host's person (@yaks/harness conversations)"
+        },
         "ended": {
           "type": "boolean",
           "description": "the caller observed the outside harness end this session; equivalent to a stop entry and cleared if that harness resumes it"

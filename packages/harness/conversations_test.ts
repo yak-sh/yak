@@ -121,10 +121,13 @@ let isolation = await (async () => {
     }])
     let denied = []
     for (
-      let actor of [{}, { by: agent, via: agent }, { by: owner, via: agent }, {
-        by: 'foreign-process',
-        via: 'foreign-process',
-      }]
+      let actor of [
+        {},
+        { via: agent },
+        { by: agent, via: agent },
+        { by: owner, via: agent },
+        { by: 'foreign-process', via: 'foreign-process' },
+      ]
     ) {
       denied.push(
         await rejection(() =>
@@ -151,7 +154,7 @@ test('conversation ownership cannot be supplied, borrowed from an agent, or cros
   assert(isolation.otherOwner.rejected)
   assert(isolation.otherOwner.error)
   assert(isolation.otherOwner.message.includes('not found'))
-  assertEquals(isolation.denied.length, 4)
+  assertEquals(isolation.denied.length, 5)
   for (let denied of isolation.denied) {
     assert(denied.rejected)
     assert(denied.error)

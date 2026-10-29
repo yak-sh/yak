@@ -81,10 +81,15 @@ let refusing = (err: unknown, request: Request): Response => {
 }
 
 let ID = 'mcp-session-id'
+
+// The host's own process fallback: a request that named no caller, which the
+// host signs as its process acting for itself through itself.
+let fallback = (login: Actor | null) => !!login?.by && login.by == login.via
+
 /** The connection's own actor wins over its login. An authenticated identity
  * outside the graph remains a fallback when the connection names no actor. */
 export let writer = (session: Actor, login: Actor | null): Actor =>
-  !session.by && login?.by && login.by != login.via
+  !session.by && login?.by && !fallback(login)
     ? { ...session, by: login.by }
     : session
 
@@ -109,7 +114,7 @@ let connected = async (
     return { session, id }
   }
   let fresh = crypto.randomUUID()
-  let owner = actor?.by && actor.by != actor.via
+  let owner = actor?.by && !fallback(actor)
     ? (await graph.get([actor.by]))[0]?.entity.eid
     : undefined
   let [session] = await graph.apply([{
@@ -117,12 +122,15 @@ let connected = async (
     [SESSION]: {
       id: fresh,
       // A person authenticated by the host remains the actor. The host's
-      // process fallback speaks only for itself and is not this connection.
-      // session.actor is a reference, so an external identity stays on this
-      // request's attribution without making session creation fail.
+      // process fallback speaks only for itself and is not this connection,
+      // which says only that the fallback opened it, for a door that trusts
+      // the host's perimeter. session.actor is a reference, so an external
+      // identity stays on this request's attribution without making session
+      // creation fail.
       ...(owner ? { actor: owner } : {}),
+      ...(fallback(actor) ? { fallback: true } : {}),
     },
-  }])
+  }], { trusted: true })
   return { session, id: fresh }
 }
 

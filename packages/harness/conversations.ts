@@ -1,6 +1,6 @@
 // Human conversation tools over the native transcript. Identity is resolved at
 // the server door; inputs never choose an actor, machine, persona or model.
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
@@ -30,6 +30,14 @@ let limit = (args: Record<string, unknown>, fallback = 40) => {
   return n
 }
 
+// The host's own process fallback: called directly, or through the MCP
+// connection it opened, which speaks for nobody and says so (@yaks/mcp).
+let fallback = async (g: Graph, actor: Actor | null, me: string) => {
+  if (actor?.by) return actor.by == me && actor.via == me
+  let [conn] = actor?.via ? await g.get([actor.via], ['session']) : []
+  return part(conn, 'session').fallback === true
+}
+
 /** Only the exact host process fallback may use config.person. This assumes
  * an owner-only authenticated network perimeter; config.person is not OAuth
  * subject mapping. No anonymous caller or agent transcript gets this fallback. */
@@ -39,19 +47,16 @@ export let conversationOwner = async (
   host?: Pick<Host, 'me' | 'config'>,
 ): Promise<string> => {
   let actor = who(call)
-  if (!actor?.by) {
+  let owner: string
+  if (host && await fallback(g, actor, host.me)) {
+    let said = host.config.person
+    if (!said) throw new Refused('Configure the trusted owner for this door')
+    owner = (await g.address([said])).get(said) ?? said
+  } else if (!actor?.by) {
     throw new Refused('A human conversation needs an authenticated owner')
-  }
-  let owner = actor.by
-  if (host && actor.by == host.me && actor.via == host.me) {
-    if (!host.config.person) {
-      throw new Refused('Configure the trusted owner for this door')
-    }
-    owner = (await g.address([host.config.person])).get(host.config.person) ??
-      host.config.person
   } else if (!await humanCaller(g, actor)) {
     throw new Refused('Agents cannot impersonate a conversation owner')
-  }
+  } else owner = actor.by
   if (!(await g.get([owner], ['person']))[0]?.person) {
     throw new Refused('A human conversation needs an authenticated person')
   }

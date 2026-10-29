@@ -105,11 +105,15 @@ MCP reads what one at the command line reads.
 The HTTP handler shares one runner across requests and constructs an MCP server
 with the authenticated actor for each request. Pass `sessions: graph` when that
 graph owns connection transcripts and declares the session vocabulary. A legacy
-request without `x-via` then gets an `Mcp-Session-Id` response header; the
-caller sends it on later requests, and the graph preserves attribution across
-restarts. A caller supplying `x-via` continues to speak for the session it
-named. The `@yaks/mcp/routes` host route supplies its graph when that host
-loaded the session vocabulary.
+request that names no session the graph knows, in `x-via` or by an announced
+harness call, then gets an `Mcp-Session-Id` response header; the caller sends it
+on later requests, and the graph preserves attribution across restarts. A caller
+naming a known session continues to speak for it. A connection opened by the
+host's own process fallback speaks for nobody, so no write through it carries
+the process in `by`; it records `session{fallback}` instead, for a door that
+trusts the host's perimeter (@yaks/harness conversations). The
+`@yaks/mcp/routes` host route supplies its graph when that host loaded the
+session vocabulary.
 
 A calling application that owns its own MCP session protocol can leave
 `sessions` unset. The yaks.app connector does this today: it uses
