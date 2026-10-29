@@ -2107,13 +2107,6 @@
     "evidence": "bench/operation-sessions.rebank.results.json"
   },
   {
-    "suite": "person-commands",
-    "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-    "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
-    "verdict": "inconclusive",
-    "error": "the code at bc927bbb4 cannot run today's bench: Error: terminal never painted 2,000: ╭──────────────────────╮T-2Person benchmark target                                          ◇ ◇ ◇ ◇\n│Tasks                 │T-2 task Person benchmark target P0 open\n│                      │eid 1d55ab2c-76da-4b66-9c37-e871a427f101 num 2 created.by #90ad854db3  90ad854d-b328-4874-85c9-847e68c01168 created.at\n│Search                │2026-10-29T16:15:05.827Z created.via #90ad854db3  90ad854d-b328-4874-85c9-847e68c01168 doc.title Person benchmark target doc.body\n│/                     │Connector edit 2 updated.by #c4267f9129  c4267f91-292a-42e6-970a-d98c434d07a2 updated.at 2026-10-29T16:15:17.334Z updated.via\n│                      │#c4267f9129  c4267f91-292a-42e6-970a-d98c434d07a2 task.status open\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\n    at painted (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:48:9)\n    at async file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:343:7\n    at async timed (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:107:7)\n    at async Module.measure (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:341:5)\n    at async serve (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "operation-lifecycle",
     "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
     "revision": "7e971086d86c487f189f3ad477aed748424aea61",
@@ -5107,5 +5100,293 @@
       }
     ],
     "evidence": "bench/hook-waits.rebank.results.json"
+  },
+  {
+    "suite": "person-commands",
+    "baseline": "bench/person-commands.baseline.json",
+    "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+    "references": {
+      "cli/help": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "cli/task-list": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "cli/graph-show": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "cli/graph-query": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "cli/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "hook/UserPromptSubmit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/graph-query": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "connector/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "tui/startup": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+      "tui/query-navigation": "bc927bbb49a4cf12e948214b8e78626c710a5aab"
+    },
+    "provenance": [
+      {
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "kind": "derived",
+        "source": "git history of bench/person-commands.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/help",
+          "cli/task-list",
+          "cli/graph-show",
+          "cli/graph-query",
+          "cli/graph-apply",
+          "hook/UserPromptSubmit",
+          "connector/graph-query",
+          "connector/graph-apply",
+          "tui/startup",
+          "tui/query-navigation"
+        ],
+        "boundaryCorrection": {
+          "name": "tui/startup",
+          "driverChange": "49fddf13a6170e3ebae7466cfc140066b01ece8d",
+          "reason": "The original startup sample included graceful shutdown. Startup now measures launch through usable paint; child CPU is read while the terminal is alive and shutdown occurs after the sample. Both historical and current product code use that same corrected boundary, retaining the original product reference.",
+          "previousMedian": {
+            "unit": "ms",
+            "median": 980.026926999999
+          }
+        }
+      }
+    ],
+    "revision": "f91b7fa2abc5d47c7206e49d663183c6ca78ddbd",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "cli/graph-apply",
+      "tui/query-navigation"
+    ],
+    "comparisons": [
+      {
+        "name": "cli/help",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          67.82799999999952,
+          99.16100000000006,
+          92.02500000000146
+        ],
+        "current": [
+          88.63400000000001,
+          95.3640000000014,
+          70.47499999999854
+        ],
+        "after": [
+          91.36899999999969,
+          91.60000000000036,
+          71.90699999999924
+        ],
+        "reference": 91.48450000000003,
+        "now": 88.63400000000001
+      },
+      {
+        "name": "cli/task-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          451.6860000000015,
+          557.512999999999,
+          614.0529999999999
+        ],
+        "current": [
+          638.1020000000008,
+          571.5,
+          488.3839999999982
+        ],
+        "after": [
+          442.6899999999987,
+          639.5990000000002,
+          541.1010000000024
+        ],
+        "reference": 549.3070000000007,
+        "now": 571.5
+      },
+      {
+        "name": "cli/graph-show",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          298.7589999999982,
+          328.53199999999924,
+          393.4060000000027
+        ],
+        "current": [
+          440.9459999999999,
+          367.7039999999979,
+          356.53499999999985
+        ],
+        "after": [
+          326.7709999999988,
+          439.96999999999935,
+          299.3689999999988
+        ],
+        "reference": 327.65149999999903,
+        "now": 367.7039999999979
+      },
+      {
+        "name": "cli/graph-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          255.1839999999993,
+          288.5529999999999,
+          321.150999999998
+        ],
+        "current": [
+          398.34799999999996,
+          390.71800000000076,
+          318.60099999999875
+        ],
+        "after": [
+          239.41899999999987,
+          258.47100000000137,
+          271.52100000000064
+        ],
+        "reference": 264.996000000001,
+        "now": 390.71800000000076
+      },
+      {
+        "name": "cli/graph-apply",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          457.0550000000003,
+          438.58100000000195,
+          501.6899999999987
+        ],
+        "current": [
+          624.7279999999992,
+          717.9530000000013,
+          557.7639999999992
+        ],
+        "after": [
+          456.22999999999956,
+          460.4190000000017,
+          408.2920000000013
+        ],
+        "reference": 456.6424999999999,
+        "now": 624.7279999999992
+      },
+      {
+        "name": "hook/UserPromptSubmit",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          80.07600000000093,
+          97.02600000000166,
+          104.64300000000003
+        ],
+        "current": [
+          101.42699999999968,
+          89.72599999999875,
+          74.60299999999916
+        ],
+        "after": [
+          103.41300000000047,
+          106.59999999999854,
+          92.54200000000128
+        ],
+        "reference": 100.21950000000106,
+        "now": 89.72599999999875
+      },
+      {
+        "name": "connector/graph-query",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          18.151999999998225,
+          5.5090000000018335,
+          7.096999999997934
+        ],
+        "current": [
+          7.80199999999968,
+          9.407999999999447,
+          7.891999999999825
+        ],
+        "after": [
+          26.284999999999854,
+          8.203999999999724,
+          8.438999999998487
+        ],
+        "reference": 8.321499999999105,
+        "now": 7.891999999999825
+      },
+      {
+        "name": "connector/graph-apply",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          76.24099999999817,
+          33.53099999999904,
+          44.703999999997905
+        ],
+        "current": [
+          36.70399999999972,
+          56.552999999999884,
+          31.139999999999418
+        ],
+        "after": [
+          79.2489999999998,
+          32.47599999999875,
+          53.95600000000195
+        ],
+        "reference": 49.32999999999993,
+        "now": 36.70399999999972
+      },
+      {
+        "name": "tui/startup",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          1122.4957999999988,
+          1092.0507140000009,
+          1348.5537739999963
+        ],
+        "current": [
+          1259.5321980000026,
+          1910.7037210000017,
+          1247.6523159999997
+        ],
+        "after": [
+          1297.3367100000014,
+          1355.1175909999984,
+          1201.185016000003
+        ],
+        "reference": 1249.2608630000022,
+        "now": 1259.5321980000026
+      },
+      {
+        "name": "tui/query-navigation",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "before": [
+          73.08600800000204,
+          71.09766899999886,
+          65.97515500000009
+        ],
+        "current": [
+          120.88471100000243,
+          104.41983699999764,
+          128.92456099999617
+        ],
+        "after": [
+          63.93902199999684,
+          70.84643400000277,
+          60.22358600000007
+        ],
+        "reference": 68.41079450000143,
+        "now": 120.88471100000243
+      }
+    ],
+    "evidence": "bench/person-commands.rebank.results.json"
   }
 ]
