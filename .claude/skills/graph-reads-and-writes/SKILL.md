@@ -218,10 +218,8 @@ How a query is written is `query-grammar`. How one is answered:
 - A key seek says where a read starts, not how often it repeats. Reading each
   property in its own scalar lookup can keep every key plan and still bill the
   same component row many times. `EXPLAIN QUERY PLAN` under small statistics
-  shows the plan, and workerd's cursor counters show the rows billed
-  (`workers/yak/query_cost_workerd_test.ts` and
-  `workers/yak/entry_page_cost_workerd_test.ts` read them for page reads and
-  gathers, the other `*_cost_workerd_test.ts` files for their consumers).
+  shows the plan. Check operation counts through the storage interface in
+  process; billed rows are observed from the live platform after deployment.
   Returned-row counts and a live smoke check say nothing about billed rows.
 - Computed properties (`task.status`, a component's `status` keyword,
   `build.cost`) are derived at read, never stored, and a filter on a status

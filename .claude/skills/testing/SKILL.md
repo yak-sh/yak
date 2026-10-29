@@ -4,54 +4,52 @@ description: >
   Use whenever writing, changing, running, narrowing or debugging tests,
   doctests, examples or benchmarks, investigating failed/slow runs, or
   choosing checks before landing. Covers @yaks/testing and deno task
-  test/gate across platforms. Manual proof is end-to-end-checks; observation
+  test with dependency selection. Manual proof is end-to-end-checks; observation
   is platform-visualize.
 ---
 
 # Testing
 
 A test is how a change earns trust in seconds instead of in review. It checks
-what the code does through an interface: it calls a function, a tool or an
-HTTP door with inputs and checks what comes back or what it wrote (M-39441).
-So it fails only when the code is wrong, or when an interface changed on
-purpose.
+what the code does through an interface: it calls a function, a tool or an HTTP
+door with inputs and checks what comes back or what it wrote (M-39441). So it
+fails only when the code is wrong, or when an interface changed on purpose.
 
-The pull is always to check more than that. A test that pins which tools a
-list shows, a constant, generated SQL text or a sentence of prose restates a
-decision the code already states, and goes red every time someone makes a
-better one. A test that polices how agents work is, in the owner's words, "a
-persona prompt wearing test's clothes" (M-37840): a rule for agents belongs in
-the persona, and a test checks what the product does for a person. His warning,
-verbatim: "y'all would test/gate/lint yourselves into a straitjacket if i left
-you alone". What earns a place is behavior someone depends on, checked where it
-shows.
+The pull is always to check more than that. A test that pins which tools a list
+shows, a constant, generated SQL text or a sentence of prose restates a decision
+the code already states, and goes red every time someone makes a better one. A
+test that polices how agents work is, in the owner's words, "a persona prompt
+wearing test's clothes" (M-37840): a rule for agents belongs in the persona, and
+a test checks what the product does for a person. His warning, verbatim: "y'all
+would test/gate/lint yourselves into a straitjacket if i left you alone". What
+earns a place is behavior someone depends on, checked where it shows.
 
-The posture is a quick, light suite you run without thinking: most tests near
-1 ms, each package checked where it lives, a red test treated as news. And a
-test runs in the process that asked for it. The box's four cores are shared by
-every agent working; when about eight of them each ran gates, tests, probe
-servers and Chrome, the load reached 11.7 and the owner stopped them all. His
-words, 2026-10-23 (M-132169, 18bc9a78): "tests and benchmarks should be
-starting zero other processes", and of a benchmark driving a separate server,
-"that's the heavyness i'm talking about. never do that!"
+The posture is a quick, light suite you run without thinking: most tests near 1
+ms, each package checked where it lives, a red test treated as news. And a test
+runs in the process that asked for it. The box's four cores are shared by every
+agent working; when about eight of them each ran gates, tests, probe servers and
+Chrome, the load reached 11.7 and the owner stopped them all. His words,
+2026-10-23 (M-132169, 18bc9a78): "tests and benchmarks should be starting zero
+other processes", and of a benchmark driving a separate server, "that's the
+heavyness i'm talking about. never do that!"
 
 The cure for a test that keeps catching one kind of breakage is not another
-check but code that can't break that way: "if we have problems with our code
-not running on certain platforms, the systematic fix is to *remove the code's
-ability to see the platform*" (15ce9bf9). He would rather recover than gate
-(M-37965): every commit on main runs the whole suite
-(.github/workflows/gate.yml), the tracker reports what breaks live, and a
-failure is fixed forward.
+check but code that can't break that way: "if we have problems with our code not
+running on certain platforms, the systematic fix is to _remove the code's
+ability to see the platform_" (15ce9bf9). He would rather recover than gate
+(M-37965): main's CI reports failures after the push, the tracker reports what
+breaks live, and a failure is fixed forward.
 
-Before you land, see what main's gate will say about your change: `deno task
-gate` runs main's checks, then the tests your change can reach. Which tests is
-the dependency graph's choice, not yours: a path you pick misses the consumer
-that breaks. Over two weeks main's gate went red in 695 runs: 382 had a check
-the landing agent never ran, 140 a test outside the paths it named (or a hang
-one caused), 223 a time or a SQLite step count that came out differently on the
-runner than on the box, and 41 Cloudflare's deploy timing (T-132935). Jeff,
-2026-10-28, verbatim, when the bug for it was resolved once more while main
-kept going red: "Stop resolving it and fix it!"
+Run only the tests your change could break, in seconds, then land with
+`yak land`. There is no pre-land gate. A check or landing wait must take less
+than ten seconds; a multi-minute command is a problem to remove, not a ritual to
+repeat. Main's CI runs after the push and files a bug when it goes red. Nobody
+waits for CI or a deploy before calling the work done.
+
+There is no Chrome or Chromium on this box and there are no browser tests. Check
+page behavior in process with a linkedom document in Deno, and terminal behavior
+with @yaks/tui's `lay`. A behavior that requires Chrome has no place in this
+test runner or CI.
 
 This is the automated half of finishing a change; `end-to-end-checks` is the
 half done by hand, in your own process, and `platform-visualize` observes what
@@ -72,236 +70,99 @@ ran, which is not an assertion.
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).
 - A test starts no process: no `deno` or `yak` child, no `git`, no server, no
-  browser. Code that starts one takes it at a small generic boundary
-  (M-39503), and the test hands it one in memory, the way
-  packages/cli/restart_test.ts hands `restart()` a `run` that never reaches
-  systemd. Many existing tests still start processes; T-132170 is moving
-  them, so don't copy one.
-- A case times only the act it checks. Build and seed its graph, store or
-  field when the file loads (top-level `await`), one fixture per case that
-  writes to it, and give each behavior a case of its own. A case that builds
-  a graph, seeds it, then writes three times to check three things sits near
-  1 ms, and a loaded runner pushes it over.
+  browser. Code that starts one takes it at a small generic boundary (M-39503),
+  and the test hands it one in memory, the way packages/cli/restart_test.ts
+  hands `restart()` a `run` that never reaches systemd. Tests that need a
+  platform belong behind those boundaries; test the decisions in process, with
+  effects supplied as data or functions.
+- A case times only the act it checks. Build and seed its graph, store or field
+  when the file loads (top-level `await`), one fixture per case that writes to
+  it, and give each behavior a case of its own. A case that builds a graph,
+  seeds it, then writes three times to check three things sits near 1 ms, and a
+  loaded runner pushes it over.
 - Time is an input a test controls. Inject @yaks/testing's `clock()` at the
-  subject's timer boundary and `await time.advance(ms)` to run due callbacks;
-  no timer delay or polling is needed to check expiry, retries or windows.
-  Code that reads the time or sets a timer takes a `Clock` (@yaks/fp: `now`,
-  `after`, the runtime's `system` by default); when it lacks one, give it
-  one. Never fake the runtime's clock or timers (`FakeTime`, a `stub` of
-  `setTimeout` or `Date.now`, an assignment to either): every file in a run
-  shares one runtime, and a faked global counts, moves and swallows timers
-  other files started, so a verdict depends on what ran before it. A
-  module's exported setting a test assigns (a default wait, a pause) is
-  shared the same way; the code takes it as an argument instead, as
-  @yaks/durable-object's `retried` takes its `wait`.
-  Await asynchronous work's completion directly. `tick` and `until` belong
-  where an integration depends on the runtime itself progressing, rather
-  than to tests of time behavior. Inside workerd the clock doesn't move while
-  code runs, so bound work there by count.
-- `until`'s timeout, the runner's per-test `--timeout` and the coordinator's
-  idle limit count the test's own time (@yaks/testing `own`): the wall clock
-  less what the box kept the runtime and every process it started waiting
-  for a CPU. A CLI process a test starts takes several times as long under
-  four agents' suites, so a wall-clock timeout there failed on load, not on
-  a hang; a hang waits for no CPU and still fails on time. A timeout says
-  how long the thing waited on may take on an idle box, nothing more.
+  subject's timer boundary and `await time.advance(ms)` to run due callbacks; no
+  timer delay or polling is needed to check expiry, retries or windows. Code
+  that reads the time or sets a timer takes a `Clock` (@yaks/fp: `now`, `after`,
+  the runtime's `system` by default); when it lacks one, give it one. Never fake
+  the runtime's clock or timers (`FakeTime`, a `stub` of `setTimeout` or
+  `Date.now`, an assignment to either): every file in a run shares one runtime,
+  and a faked global counts, moves and swallows timers other files started, so a
+  verdict depends on what ran before it. A module's exported setting a test
+  assigns (a default wait, a pause) is shared the same way; the code takes it as
+  an argument instead, as @yaks/durable-object's `retried` takes its `wait`.
+  Await asynchronous work's completion directly. `tick` and `until` belong where
+  an integration depends on the runtime itself progressing, rather than to tests
+  of time behavior.
 - A helper that stands in for a door behaves like the door. One that skips a
-  header or a check the door sends lets the test pass where production fails:
-  a store called without its access-mode header once read every app as public.
+  header or a check the door sends lets the test pass where production fails: a
+  store called without its access-mode header once read every app as public.
 - An optional driver method changes which path existing helpers choose.
   @yaks/sql's `run` returns an affected count; `query` executes commands too.
   Follow counted writes and resultless batches through their consumers: fewer
   billed rows can still mean twice as many engine operations. The Store's
-  bounded-delete test and its workerd storage-failure test exercise both the
-  operation budget and the waiting writer's answer.
+  bounded-delete and storage-failure tests check the operation budget and the
+  waiting writer's answer through the storage interface.
 
 ## Seeing it fail
 
-A test that passes either way restates the code. The proof is watching it
-catch the bug: take the fix out (revert the code hunk in the worktree, or break
-it on purpose), run the test, see it fail, put the fix back, and say so in the
-report. Breaking the code several ways and seeing each caught is the same proof,
+A test that passes either way restates the code. The proof is watching it catch
+the bug: take the fix out (revert the code hunk in the worktree, or break it on
+purpose), run the test, see it fail, put the fix back, and say so in the report.
+Breaking the code several ways and seeing each caught is the same proof,
 stronger.
 
 ## Running
 
-- `deno task test [path...]` runs what lies under the paths (bin/test.ts).
-  `--tag=deno` (or `browser`, `terminal`, `workerd`, or any tag a test
-  carries) narrows it; `--all` runs files the skip would leave out.
-- Today a run still starts processes, and T-132170 is taking them away. It
-  goes through a chain of Deno processes (bin/scratch.ts, bin/test.ts, its
-  coordinator and that one's guard). It first chooses what runs, keying every
-  file with one `deno info` (@yaks/testing/choose), then starts one runtime
-  for each platform holding a file that runs. When a file under workers/ runs,
-  it first runs `ready()` (workers/yak/wrangler.ts: `npm ci` when its install
-  is stale, five asset generators as `deno run`, and Stripe's sandbox key,
-  through `op` when `STRIPE_KEY` isn't set); when a `*_workerd_test.ts` runs,
-  it also starts workerd with its kernel. Neither starts for a change that
-  reaches none of their tests. While you work, name the package you changed:
-  `deno task test --tag=deno workers/yak/<file>`. The landing run names
-  nothing (below).
-- A run says only what you act on, since its output is read again on every
-  later turn: each failure's name, file and error (its frames in the checkout,
-  cut to 30 lines), a line naming the slowest few tests the budget flags, and
-  one closing line, `ok | 394 passed | 0 failed | 0 over budget (1.8s)`.
-  `--verbose` says each test as it ran, each error whole and the budget's
-  findings in full; the gate and the Workers build pass it, since their logs
-  are read whole.
-- A file whose tests all passed is skipped while nothing it depends on has
-  changed (packages/testing/deps.ts). Its key holds its module graph as `deno
-  info` sees it (a doctest's imports, and a literal `import('…')`, included),
-  files it names beside itself with `new URL(…, import.meta.url)`, the runner
-  and what starts it (bin/test.ts `RUNS` names its unconditional delayed
-  imports too, including the budget records and tool pins, each by what loads
-  with it, so the
-  Worker's modules bin/test.ts imports only for the Worker's tests key only
-  those), the SQLite library the run opens, config, lock and Deno version, and
-  for a workerd test what the kernel is made of (workers/yak/probe-suite.ts
-  `MADE`). Each runtime also audits what each file reads as it runs
-  (`DENO_AUDIT_PERMISSIONS`, packages/testing/reads.ts): a directory it walks
-  (as packages/vocab_test.ts does), a file at a path it computes, a module it
-  imports by a computed specifier, with its graph. A pass is kept by that too.
-  "N unchanged since they passed" is that skip, not a pass you just earned.
-  What a child process reads (a `git`, `sqlite3` or `deno` child) isn't seen,
-  so a change only a child reads wants `--all`, and a test that reads through
-  Deno instead is seen. The record is `~/.cache/yak/tests-passed.json`, and
-  what each file read `tests-read.json` beside it, shared by every checkout.
-- That skip is how a run knows which tests a change can break: `deno task
-  test` with no path runs exactly the files whose key your change moved, your
-  package's own and every consumer's, and leaves the rest. It is the run
-  before landing (`deno task gate` makes it). Packages exist so a change can
-  be checked where it lives, and the graph is what says where that is: a
-  change inside one package reaches its tests and its dependents', a change
-  to how @yaks/query parses or @yaks/graph applies reaches nearly all of them.
-  A path narrows a run while you work (`deno task test packages/<name>`); it
-  is not the landing run, since the consumer outside it is what turns main
-  red. When the record holds little of main's head (on 2026-10-28 it held 424
-  of its files) the landing run is the suite, about nine minutes on the box;
-  once every landing runs it, the record holds main's head and a run costs
-  what the change reaches.
-- Every run says each test's time beside the budget (bin/test-budget.ts): a
-  test case over 1 ms that bench/test-budget.json doesn't list, and a listed
-  one slower than its record (times the list's slack), are named in a line.
-  That's telemetry and fails nothing: the run's exit code is its tests'. A
-  test is timed once, as it ran, by its own time: its wall clock less what
-  its runtime's thread, and the main thread of each process it started,
-  waited for a CPU another process held (Linux's schedstat). Load still adds
-  to it, and so does code that isn't warm yet: V8 interprets a function until
-  it has run enough times to be compiled, so a test that takes 0.9 ms in the
-  whole suite can take 2 to 3 ms in a run of its file alone. A test you just
-  wrote that's named over the line in every run is slow: make it faster. A
-  run here keeps its temporary files in memory as the gate's does, so a test
-  that writes files takes the same time on both. A platform's wall clock is
-  said, never compared, and workerd's tests aren't compared one by one.
-  Nothing joins the list: a new or renamed test is measured against 1 ms
-  from its first run. Getting a kernel test under it pulls you to drop the checks
-  that "only exist across the door". Nearly every one is a decision some
-  function makes (who may see or delete what, which version serves): move it
-  there, extracting the function if it's inline, and drop nothing. `--write`
-  takes off what got fast and lowers the records; `--from=<dir> --write`
-  does it from a gate's kept times (its `suite-timings` artifact).
-- A tool's build is part of the environment too. When backup tests run, the
-  box and gate use the same checksum-verified rclone package
-  (bin/test-tools.ts), cached beside the SQLite library. Other tests pay
-  for no tool install. The backup command respects its caller's PATH so that selection
-  reaches every process it starts.
-- A red gate's verdict closes its tests step, and `gh run view --log` cuts that
-  step short: read the job's whole log, `gh api
-  repos/yak-sh/yak/actions/jobs/<job id>/logs`.
-- CI times each of its steps (bench/suites.md); the `benchmark:` line closing
-  one is that timing, report-only, not a test result.
-- A benchmark runs in the process that asked for it, too, and measures its own
-  work. Today's suites don't yet: `deno task bench` starts Deno children
-  (bench/throughput.ts), bench/box.ts and bench/monitor.ts time the commands
-  and servers they start, and the client-frame report opens headless Chrome
-  (bench/README.md). So they aren't run on this box until T-132170 brings them
-  into one process; a question of speed is answered by timing the code in your
-  own.
-- `deno task check` (fmt, lint, bytes, types, raycast, publish, browser,
-  workers and content) is separate from tests, and `deno task gate` runs both,
-  the check first. Its nine checks start at once (bin/check.ts), each keeping
-  a cache, so after a small change it takes seconds (5.7s on the box with
-  warm caches), and the first in a new worktree, or after a rebase over much
-  new work, about two minutes. Each check says one line, and a failed one its
-  output, cut to its first and last lines; `deno task check:types` (or any
-  one) says its output whole, and `--verbose` says every check's output as it
-  comes, each line led by its check's name, every check run to its end. What
-  these caught on main
-  is what agents skipped: README prose left unformatted, slow types in a
-  public API (`check:publish`), a generated file not regenerated
-  (`check:content`), and type errors.
-- Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
-- A test run doesn't type-check (`--no-check`); `check:types` does, test files
-  included.
-- Each run lives in a directory of its own (bin/scratch.ts): `TMPDIR`,
-  `TASKS_HOME`, `PROCESS_DIR`, `HARNESS_HOME` and `HARNESS_WORKTREE_DIR` point
-  inside it, and it's removed when the run ends. Run tests with machine effects
-  (processes, worktrees, harness children) through `deno task test` so they get
-  it. The directory is in memory, under /dev/shm/yak-test on the box and on the
-  gate alike, so a test that writes files takes the same time on both; each
-  run removes what killed runs left there, and `TMPDIR=<dir>` names another
-  base. A `tasks-*` entry that appears in `/tmp` during a run is a spawn site
-  writing to a literal `/tmp`: the run says it as a warning, since every
-  worktree's run shares `/tmp`.
-- A run sets `TASKS_TEST_RUN`, and a run started inside one refuses. Git in a
-  run sees no global config and never prompts (`GIT` in bin/test.ts).
+`deno task test` with no paths uses the dependency graph to select tests the
+change reaches, including consumers. Cached passing dependencies can narrow
+that selection further. Name paths to narrow the run:
 
-## Platforms
+```sh
+deno task test packages/<name>
+deno task test workers/yak/<file>_test.ts
+```
 
-Tests divide by where they run, not by speed, and each platform's environment
-starts once per run (M-39441). Today each platform is a runtime of its own, and
-they run at once:
+Run only the tests the change could break; there is no separate landing run.
+`--tag=<tag>` narrows a selection. A test run skips type checking;
+`deno task check:types` is separate, as are formatting and other checks. Choose
+an individual check when the change needs it.
 
-- **deno**: every `*_test.ts` and every example.
-- **browser**: packages/web and packages/browse, on a linkedom document in a
-  Deno runtime, not Chrome; **terminal**: packages/browse/tui, painted by
-  @yaks/tui. Each host sets up its own kind of document as globals, and the
-  web app keeps its state in its modules, which is why they don't share a
-  runtime yet.
-- **workerd**: every `*_workerd_test.ts`, against the one kernel
-  workers/yak/probe-suite.ts starts for the run in workerd, a process of its
-  own. Only what the runtime alone has belongs here (a socket's upgrade, the
-  `send_email` binding, an uploaded script); it's rare and slow, and main runs
-  it.
+The dependency key comes from the module graph and recorded reads
+(packages/testing/deps.ts, choose.ts and reads.ts). A pass record is shared
+across checkouts under `~/.cache/yak`. "Unchanged since they passed" describes
+that cache; it is not a new pass. Keep dependencies visible through imports or
+Deno reads so selection includes the consumers a change can break.
 
-A platform exists because code can see where it runs. The way out is code
-that can't: the kernel already runs in memory in Deno because it meets
-storage, sockets and mail only through interfaces of its own (`kernel()`
-below). T-132170's design takes the rest of the way, so every platform's tests
-run in the process that asked.
+The runner reports failures and one closing result line. `--verbose` expands
+the output when diagnosing a failure. Piping a run eats its exit code: read
+`${pipestatus[1]}` before acting. Budget behavior belongs to
+bin/test-budget.ts and bench/test-budget.json; avoid copying its implementation
+into a test or adding a timing assertion beside it.
 
-In workers/yak (workers/yak/probe.ts):
+Tests run in Deno, in process. The deno and terminal document environments
+keep page globals separate from the terminal document. There is no browser,
+workerd or slow platform tier, locally or in CI. Page behavior mounts on a
+linkedom document; terminal
+behavior uses @yaks/tui's `lay`, without a tty. A test starts no server or child
+process and makes no network call. Files it creates stay in a temporary
+directory. Platform behavior belongs at the small generic effect boundary;
+check our decisions by handing that boundary controlled inputs.
 
-- `kernel()`: the kernel in memory this test process shares, started by the
-  first test that asks. Tests on it keep apart by their data: a person, space,
-  hostname or published name of their own.
-- `fresh()`: a kernel of one test's own, for a test that needs it whole (one
-  that times a store's first wake).
-- `workerd()`: the run's kernel in workerd, held by one test.
+In workers/yak, `kernel()` and `fresh()` from probe.ts compose in-memory
+kernels. Tests on a shared kernel keep apart through their own people, spaces
+and hostnames. Test payment decisions through the payment interface with
+controlled responses; tests never charge a sandbox or obtain credentials.
 
-## The money paths
-
-What proves a purchase works is Stripe taking it, so Stripe tests run against
-the sandbox. A run finds its key once, and only when it includes workers/
-tests: `STRIPE_KEY`, or the owner's through `op`, a process of its own
-(`sandboxKey()` in workers/yak/probe.ts). A key that isn't test-mode is refused; a live one would
-charge somebody.
-
-- A test whose subject is what a plan allows, not how it's bought, puts the
-  space on the Plus plan with `onPlus()`: a signed webhook carrying a
-  subscription Stripe never held, so nothing is spent or left behind.
-- `subscribed()` makes a sandbox subscription, and the kernel's `stop` cancels
-  it; `lapsed()` expires one unpaid by moving a test clock. A test that makes
-  something in the sandbox deletes it. A run killed before `stop` leaves its
-  subscription renewing, so every run that finds the key cancels the
-  probe-stamped ones older than an hour (`swept` in workers/yak/probe.ts).
+A red CI run is recovery work: read its log, fix the cause and land the fix.
+CI runs after a push; no agent waits for it or a deploy to finish work.
 
 ## A red test that isn't yours
 
 It's still a bug, and news worth having. See whether main fails the same way
 (`deno task test <path>` in a worktree at main's head), find the commit that
 broke it, and fix it or send it to the agent that landed it, with a task if
-neither happens now. A landing on top of red says so, so nobody mistakes it
-for green.
+neither happens now. A landing on top of red says so, so nobody mistakes it for
+green.
 
 When this skill is wrong or missing something, fix it in the same change.

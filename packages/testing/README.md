@@ -17,53 +17,27 @@ declares a statement shared by the module's doctests. A **page** is a Markdown
 file or a module containing examples. The **runner** is `@yaks/testing/main`: it
 loads test modules and pages and runs their tests in one runtime.
 
-## A complete run
+## A complete test module
 
-This example writes a test module and runs it with the runner. The suite's
-clauses inherit its tag; `it.skip` declares a skipped test. The temporary files
-and the runner's pass record are removed afterwards.
+A module declares behavior through `test` or `suite`. The suite's clauses
+inherit its tag; `it.skip` declares a skipped test.
 
 ```ts
-import { equal, match } from '@yaks/testing'
+import { equal, suite, test } from '@yaks/testing'
 
-let dir = await Deno.makeTempDir({ prefix: 'testing-example-' })
-try {
-  let testing = import.meta.resolve('@yaks/testing')
-  await Deno.writeTextFile(
-    `${dir}/sum_test.ts`,
-    `
-    import { test, suite, equal } from ${JSON.stringify(testing)}
-    test('two and two', () => equal(2 + 2, 4), { tags: ['math'] })
-    suite('sum', ({ it, equal }) => {
-      it('adds', () => equal([1, 2].reduce((a, b) => a + b, 0), 3))
-      it.skip('later', () => { throw new Error('skipped') })
-    }, { tags: ['math'] })
-  `,
-  )
-  let run = async (flags: string[]) => {
-    let result = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        import.meta.resolve('@yaks/testing/main'),
-        ...flags,
-        dir,
-      ],
-      env: { XDG_CACHE_HOME: `${dir}/cache` },
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    equal(result.code, 0, new TextDecoder().decode(result.stderr))
-    return new TextDecoder().decode(result.stdout)
-  }
-  match(await run(['--tag=math', '--platform=deno']), /2 passed.*1 ignored/)
-  match(await run([]), /2 passed.*1 ignored/)
-  match(await run([]), /1 unchanged since they passed/)
-  match(await run(['--all']), /2 passed.*1 ignored/)
-} finally {
-  await Deno.remove(dir, { recursive: true })
-}
+test('two and two', () => equal(2 + 2, 4), { tags: ['math'] })
+suite('sum', ({ it, equal }) => {
+  it('adds', () => equal([1, 2].reduce((a, b) => a + b, 0), 3))
+  it.skip('later', () => {
+    throw new Error('skipped')
+  })
+}, { tags: ['math'] })
 ```
+
+From this repository, `deno task test` selects tests through the dependency
+graph. A path narrows the selection to the changed package or file. Tests run in
+process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's
+`lay`. There are no browser tests or slow platform tier.
 
 ## Exports
 
@@ -318,8 +292,7 @@ holding the key of each file given, from a caller that chose them already
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that
-runs (deno, browser, terminal and workerd), each auditing into a file of its
-own.
+runs (deno, terminal and workerd), each auditing into a file of its own.
 
 ## Controlling time
 

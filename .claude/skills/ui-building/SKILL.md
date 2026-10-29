@@ -11,8 +11,8 @@ description: >
 # Building UI
 
 Everything a person sees here is drawn twice: once in a browser, once in a
-terminal, from the same Preact tree. That only works because interface is
-three kinds of component, each owning one thing (M-39550, D-58967):
+terminal, from the same Preact tree. That only works because interface is three
+kinds of component, each owning one thing (M-39550, D-58967):
 
 - **UI components** are how it looks: display-only parts in a kit. @yaks/ui
   holds the base kit.
@@ -25,44 +25,42 @@ three kinds of component, each owning one thing (M-39550, D-58967):
 Kept apart, one tree paints in both places, a theme or a skin changes the look
 without touching behavior, and the style guide can show every part on its own.
 Let them blur and each screen grows its own look and its own behavior, and the
-terminal quietly falls behind. Most of what follows is that one idea, met
-again at each layer.
+terminal quietly falls behind. Most of what follows is that one idea, met again
+at each layer.
 
 The words a domain component owns are `vocabulary`'s, and where a kit or a
-`/views` facet is wired is `packages-and-plugins`. Proving what a screen
-does, in your own process, is `end-to-end-checks`; its tests are `testing`.
+`/views` facet is wired is `packages-and-plugins`. Proving what a screen does,
+in your own process, is `end-to-end-checks`; its tests are `testing`.
 
 ## Feel
 
 We want screens that feel instant and light, the way a great native app does.
 Build with the instincts of a frontend engineer who cares how it feels in the
-hand: curious about what renders and why, quick to reach for the profiler
-rather than a guess, happy when an update touches only what it must.
-@preact/signals is there when a value moves fast.
+hand: curious about what renders and why, quick to reach for the profiler rather
+than a guess, happy when an update touches only what it must. @preact/signals is
+there when a value moves fast.
 
 ## The kit is the shelf
 
-Start by looking at what's built. `yak ui` in a terminal, or `/ui` in a
-browser, shows every part in every variant; packages/ui/kit.ts lists them by
-group (Prose, Marks, Controls, Navigation, Lists, Page). A text box is `Field`,
-a box and its send button on one line is `Say`, a set of choices is `Choices`.
-When a screen needs a part the kit lacks, the part goes into a kit, where
-every screen and both hosts get it, rather than into markup styled where it's
-used.
+Start by looking at what's built. `yak ui` in a terminal, or `/ui` in a browser,
+shows every part in every variant; packages/ui/kit.ts lists them by group
+(Prose, Marks, Controls, Navigation, Lists, Page). A text box is `Field`, a box
+and its send button on one line is `Say`, a set of choices is `Choices`. When a
+screen needs a part the kit lacks, the part goes into a kit, where every screen
+and both hosts get it, rather than into markup styled where it's used.
 
 The pull the other way comes from packages/browse. The browsing app has parts
 from before the kits: `block` parts in its components, styled in
-packages/browse/styles.css (`Search`, `Filter`, `Row`, `Tray` and more). One
-of them sits beside the screen you're changing, already imported, and reusing
-it feels like looking first. But it isn't a kit part, and two copies of one
-part give two looks and two behaviors for one thing. Where the kit has the
-part, the kit's wins and browse's goes; where it doesn't, port it. A port is a
-refactor, not a copy:
-its look into a kit, its behavior into @yaks/ux, its data access behind the
-host's interface, its meaning into the domain package, and browse moves onto
-it in the same change. packages/kernel/Comments.tsx is one that made the trip:
-its composer is a kit `Say` holding a `Field`, its words are @yaks/draft
-drafts, and it lives with the comments it draws.
+packages/browse/styles.css (`Search`, `Filter`, `Row`, `Tray` and more). One of
+them sits beside the screen you're changing, already imported, and reusing it
+feels like looking first. But it isn't a kit part, and two copies of one part
+give two looks and two behaviors for one thing. Where the kit has the part, the
+kit's wins and browse's goes; where it doesn't, port it. A port is a refactor,
+not a copy: its look into a kit, its behavior into @yaks/ux, its data access
+behind the host's interface, its meaning into the domain package, and browse
+moves onto it in the same change. packages/kernel/Comments.tsx is one that made
+the trip: its composer is a kit `Say` holding a `Field`, its words are
+@yaks/draft drafts, and it lives with the comments it draws.
 
 ## A UI part
 
@@ -82,16 +80,16 @@ themselves. That's what lets it sit anywhere and look the same. Nor does it
 scroll itself: it takes its content's height, and only a frame a page puts
 around it gets a scroll area. In Chrome a box with `overflow: auto` and
 `overscroll-behavior: contain` holds the wheel even when nothing in it
-overflows, so a page drawing that part stops scrolling under the pointer. A part made of
-other parts holds them, the way `Say` holds a `Field` and a `Button`: an
+overflows, so a page drawing that part stops scrolling under the pointer. A part
+made of other parts holds them, the way `Say` holds a `Field` and a `Button`: an
 `input` a part styles itself is a second text box beside `Field`, with its own
 look in both hosts.
 
 Colors are **roles**, not hues: `--positive`, `--negative`, `--number`,
 `--time`, `--link`, `--accent`, `--heading` and the rest of `Colors` in
 packages/ui/theme.ts. A part that says `--green` because it means "done" breaks
-under the second theme. That's why Rosé Pine sits beside Everforest: its
-palette has no green and two pinks, so a hue posing as a role shows at once.
+under the second theme. That's why Rosé Pine sits beside Everforest: its palette
+has no green and two pinks, so a hue posing as a role shows at once.
 
 - A **theme** is custom properties only: a CSS file of `--` names and the same
   colors for the terminal (packages/ui/everforest.css and .ts, rosepine.css and
@@ -104,37 +102,37 @@ palette has no green and two pinks, so a hue posing as a role shows at once.
 
 A consumer imports the parts and never learns which theme or skin paints them.
 
-The terminal draws the same tree through each part's `sheet`, keyed by its
-class names (@yaks/tui; packages/tui/theme.ts). Layout the terminal needs
-(grid, ellipsis, alignment, wrapping) belongs in the sheet, so the browser's
-elements stay free of terminal-only attributes.
+The terminal draws the same tree through each part's `sheet`, keyed by its class
+names (@yaks/tui; packages/tui/theme.ts). Layout the terminal needs (grid,
+ellipsis, alignment, wrapping) belongs in the sheet, so the browser's elements
+stay free of terminal-only attributes.
 
 ## How text reads
 
 Most of an entity's page isn't what the thing says. It's what describes it:
 keys, column headings, facts, stamps, ids, counts. When you make one of those
-step back, every lever is in reach at once (smaller, the mono face, the
-palest ink), and each looks right alone. Stacked on every describing part, a
-page goes faint: the information a person came for sits in 11px mono at 2:1,
-and only the title reads.
+step back, every lever is in reach at once (smaller, the mono face, the palest
+ink), and each looks right alone. Stacked on every describing part, a page goes
+faint: the information a person came for sits in 11px mono at 2:1, and only the
+title reads.
 
 So the kit keeps one register (packages/ui/base.css, at the top): `--text` for
-what a thing says, `--muted` for what describes it, `--size` and `--small`
-and nothing smaller. A part that steps back is muted, small or both. `--dim`
-is only for what isn't there: a nil, a ghost, a placeholder, a separator. The
-mono face is for what a person copies or types (an id, a sha, code, a raw
-value), never for a label, a time said the human way, or a count.
+what a thing says, `--muted` for what describes it, `--size` and `--small` and
+nothing smaller. A part that steps back is muted, small or both. `--dim` is only
+for what isn't there: a nil, a ghost, a placeholder, a separator. The mono face
+is for what a person copies or types (an id, a sha, code, a raw value), never
+for a label, a time said the human way, or a count.
 
-A theme holds its side of it in its palette's own colours, each one a value
-the palette publishes (Everforest's palette.md, rosepinetheme.com/palette). A
-light palette's hues are soft on its floor, and a contrast ratio to reach
-pulls you to darken a hex until it passes; the page then reads, and the theme
-is no longer the palette it is named for. So the readable inks come from the
-palette's darker greys: Everforest light's `--text` is Everforest dark's bg1
-and its `--muted` is light's fg, both 4.5:1 or better. The hues stay as the
-palette gives them. Where a part's words still don't read in light, change
-which colour the part gives its words and which its mark (an ink for the
-words, the hue on a dot, a rule or a wash), never the theme's hex.
+A theme holds its side of it in its palette's own colours, each one a value the
+palette publishes (Everforest's palette.md, rosepinetheme.com/palette). A light
+palette's hues are soft on its floor, and a contrast ratio to reach pulls you to
+darken a hex until it passes; the page then reads, and the theme is no longer
+the palette it is named for. So the readable inks come from the palette's darker
+greys: Everforest light's `--text` is Everforest dark's bg1 and its `--muted` is
+light's fg, both 4.5:1 or better. The hues stay as the palette gives them. Where
+a part's words still don't read in light, change which colour the part gives its
+words and which its mark (an ink for the words, the hue on a dot, a rule or a
+wash), never the theme's hex.
 
 ## A UX component
 
@@ -144,8 +142,8 @@ examples. The shape of it:
 - It's controlled by a bundle and emits a bundle of the same shape, like
   `<input value onChange>`. Keys and clicks are how it reaches its output, not
   its interface.
-- When it has something to say that isn't a new value, it emits an event
-  bundle: a component with `durable: "0s"`, like `Refused`.
+- When it has something to say that isn't a new value, it emits an event bundle:
+  a component with `durable: "0s"`, like `Refused`.
 - Its own state is one CamelCase component named after it (`Edit{…}`,
   `Disclosure{open}`), declared in packages/ux/vocab.json. It's page-only, and
   it sits on an eid derived from its owner and the value it changes, so a
@@ -155,16 +153,15 @@ examples. The shape of it:
 
 What a browser and a terminal do differently (a popover, focus, keys) is a
 platform primitive with one interface: the browser's in @yaks/ui
-(packages/ui/float.ts is the popover), the terminal's in @yaks/tui.
-What they do alike stays one copy: vim's keys walking a page are one keymap and
-one cursor in @yaks/ux/keys, heard in a terminal because @yaks/tui's document
-sends keydowns, measures what it painted and focuses as a browser does. The
-cursor is its own mark (`data-cursor`), never the focus; the focus is insert
-mode. Anything floating over the page (a popover, a menu, a peek) is a layer by
-its role (`dialog` or `menu`) and an `onCancel` that closes it: the keys walk
-only the front layer, and Esc sends it `cancel`. A screen that wants a key adds
-it there or listens for it beside the walk, never with a second walk of its
-own.
+(packages/ui/float.ts is the popover), the terminal's in @yaks/tui. What they do
+alike stays one copy: vim's keys walking a page are one keymap and one cursor in
+@yaks/ux/keys, heard in a terminal because @yaks/tui's document sends keydowns,
+measures what it painted and focuses as a browser does. The cursor is its own
+mark (`data-cursor`), never the focus; the focus is insert mode. Anything
+floating over the page (a popover, a menu, a peek) is a layer by its role
+(`dialog` or `menu`) and an `onCancel` that closes it: the keys walk only the
+front layer, and Esc sends it `cancel`. A screen that wants a key adds it there
+or listens for it beside the walk, never with a second walk of its own.
 
 ## Drawing an entity, anywhere
 
@@ -184,14 +181,14 @@ reason, unread dot and archive button, a board's drag handle.
 The server's live data is owned the same way: a subscription belongs to the
 component that draws its rows. In browse it is opened by `useHold`
 (packages/browse/live.ts) when that component mounts and closed when it
-unmounts; reads like `queryEids` only read what is held, so data nobody draws
-is never asked for.
+unmounts; reads like `queryEids` only read what is held, so data nobody draws is
+never asked for.
 
-The nearest thing at hand is always `e.doc?.title` in a span. It looks right
-for every kind that carries a `doc` and draws everything else as an empty row.
-A kit part that lays out an entity's title, body and status is the same move
-one layer down. When a renderer draws a kind poorly, fix the renderer, and
-every screen gets the fix.
+The nearest thing at hand is always `e.doc?.title` in a span. It looks right for
+every kind that carries a `doc` and draws everything else as an empty row. A kit
+part that lays out an entity's title, body and status is the same move one layer
+down. When a renderer draws a kind poorly, fix the renderer, and every screen
+gets the fix.
 
 Draw for a person reading:
 
@@ -211,39 +208,42 @@ synced everywhere, so it's never lost (M-59093).
 ## yaks.app's own pages
 
 The pages workers/yak serves (the dashboard at /manage, sign-in, the gallery,
-integrations, pricing) are HTML strings rather than this Preact tree, and
-their kit is yaks.app's style guide: workers/yak/public/controls.css, shown at
+integrations, pricing) are HTML strings rather than this Preact tree, and their
+kit is yaks.app's style guide: workers/yak/public/controls.css, shown at
 yaks.app/style-guide, whose "One design language" section every one of them
 follows. Jeff, 2026-10-27 (T-132742): "the style-guide should decide on one
-design language and stick to it". A card is flat with a hairline, and its
-head (`heading()` in pages.ts) names it, says how it stands and holds its
-actions at the right; like things are `.Rows`; a field sits under its label
-(`labeled()`), never at the end of a sentence; what few people change folds
-under Advanced options with its default in place. A part a page lacks goes
-into controls.css with an example in the style guide (site_test checks that
-every one has one), not into one page's stylesheet.
+design language and stick to it". A card is flat with a hairline, and its head
+(`heading()` in pages.ts) names it, says how it stands and holds its actions at
+the right; like things are `.Rows`; a field sits under its label (`labeled()`),
+never at the end of a sentence; what few people change folds under Advanced
+options with its default in place. A part a page lacks goes into controls.css
+with an example in the style guide (site_test checks that every one has one),
+not into one page's stylesheet.
 
 ## Looking at it
 
-A screen is done when it reads well to someone using it. What it does and how
-it looks are checked in different places, and neither in a Chrome on this box:
-"most things don't need chrome" (18bc9a78).
+A screen is done when it reads well to someone using it. There is no Chrome or
+Chromium on this box and there are no browser tests, locally or in CI. Jeff's
+words: "remove chrome from this box please. no more chrome tests" (453d6a63).
+Page behavior runs in process with linkedom in Deno, terminal behavior with
+@yaks/tui's `lay`; the owner reviews the live page after it lands. There is no
+slow platform tier; checks start no server, workerd or child process.
 
-- **What it does:** mount it in your own process and act on it as a person
-  would (`end-to-end-checks`): the web app on a linkedom document, the
-  terminal through @yaks/tui's `lay`. Read the text that shows and what a
-  press changes. Fill it with rows copied from the live graph, long titles
-  and old data included; a specimen's tidy sample hides what the owner's rows
-  do to a screen.
-- **How it looks:** the style guide, `/ui?theme=everforest|rosepine&scheme=light|dark`
-  (add `&skin=ledger`), and `yak ui` in a terminal (`t` cycles the theme, `s`
-  the skin, `j`/`k` walk), seen on the live box once the change lands. Both
-  themes, light and dark, phone width and the terminal: each one catches what
-  the others hide, and faint text shows in light before anywhere else.
+- **What it does:** mount it in your own process and act on it as a person would
+  (`end-to-end-checks`): the web app on a linkedom document, the terminal
+  through @yaks/tui's `lay`. Read the text that shows and what a press changes.
+  Fill it with rows copied from the live graph, long titles and old data
+  included; a specimen's tidy sample hides what the owner's rows do to a screen.
+- **How it looks:** the style guide,
+  `/ui?theme=everforest|rosepine&scheme=light|dark` (add `&skin=ledger`), and
+  `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
+  seen on the live box once the change lands. Both themes, light and dark, phone
+  width and the terminal: each one catches what the others hide, and faint text
+  shows in light before anywhere else.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`,
   `packages/inspect`) runs the part tests and the guide's checks.
-- **The task:** review of a screen arrives as comments on its task, often
-  while you work. Read them again before you land a slice; what the owner saw
-  is the measure.
+- **The task:** review of a screen arrives as comments on its task, often while
+  you work. Read them again before you land a slice; what the owner saw is the
+  measure.
 
 When this skill is wrong or missing something, fix it in the same change.

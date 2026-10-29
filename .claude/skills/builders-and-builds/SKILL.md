@@ -10,45 +10,49 @@ description: >
 
 # Builders and builds
 
-You want a model, or a piece of code, to make something for each of many
-things: a sound for each `sfx`, a creature for each `/spawn` (D-61621), a spell
-for each spellbook (D-61649). Here that's a builder: a standing instruction
-that, for every match of a query, asks a tool for named outputs and keeps them
-as entities. The graph says what exists; the builder says what should be made
-of it, and keeps that true as the graph changes. It's how this system invents
+You want a model, or a piece of code, to make something for each of many things:
+a sound for each `sfx`, a creature for each `/spawn` (D-61621), a spell for each
+spellbook (D-61649). Here that's a builder: a standing instruction that, for
+every match of a query, asks a tool for named outputs and keeps them as
+entities. The graph says what exists; the builder says what should be made of
+it, and keeps that true as the graph changes. It's how this system invents
 things at run time. The owner, verbatim, on D-61621: "builders are super
 important and we should rely on them more and more as the package stabilizes".
 
-It works like `make`, with one twist. Inputs are hashed, and a target is
-rebuilt when what it was made from changes. But editing the recipe redoes
-nothing already made: what exists is kept, and people may already be using it.
-Redoing work under a new recipe is something you ask for.
+It works like `make`, with one twist. Inputs are hashed, and a target is rebuilt
+when what it was made from changes. But editing the recipe redoes nothing
+already made: what exists is kept, and people may already be using it. Redoing
+work under a new recipe is something you ask for.
 
-packages/builders/README.md is the reference. This is the feel of using it
-well: think in standing instructions, look at three before you build fifty,
-and treat every take as something worth keeping.
+packages/builders/README.md is the reference. This is the feel of using it well:
+think in standing instructions, look at three before you build fifty, and treat
+every take as something worth keeping.
 
 ## The shape
 
 - `builder{query, to, immediate, floor, wiring}` with `content{body}`, the
   `$var` template, and `using{provider, model, effort}` and
-  `sending{input, instructions, window, tools}`. `doc.body`
-  documents the builder and is never sent. `to` is a `tool`: `modelToolEid()`
+  `sending{input, instructions, window, tools}`. `doc.body` documents the
+  builder and is never sent. `to` is a `tool`: `modelToolEid()`
   (@yaks/builders/model) asks a model through an ordinary @yaks/session
   transcript, and a registered code tool answers the same contract.
-- Each outer binding of the query is one `build{builder, match, variant, for,
-  key, call, stale}`, found by its `build_of` key (@yaks/key), which says the
-  builder, the variant and the binding's entities. A bracket gathers members
-  into the one binding (brackets and `$vars` are `query-grammar`'s):
+- Each outer binding of the query is one
+  `build{builder, match, variant, for,
+  key, call, stale}`, found by its
+  `build_of` key (@yaks/key), which says the builder, the variant and the
+  binding's entities. A bracket gathers members into the one binding (brackets
+  and `$vars` are `query-grammar`'s):
   `$region .region; [$sfx .sfx, sfx.region=$region]` is one build per region.
 - `$name` in the template is that variable's value in the binding; inside a
   bracket it renders as the README's `modelTool()` paragraph says.
-- Each answer adds `built{build, slot, key, inputs, definition, call, artifact,
-  current}` takes, keyed by build, slot and call. A replay keeps that call's
-  takes. Each slot's newest successful take is `chosen{at, by, via}` by
-  default; old takes and their sibling links stay queryable, and
-  `builder_choose` with `<output>` picks an earlier one without spending. The
-  server holds one choice per build and slot.
+- Each answer adds
+  `built{build, slot, key, inputs, definition, call, artifact,
+  current}`
+  takes, keyed by build, slot and call. A replay keeps that call's takes. Each
+  slot's newest successful take is `chosen{at, by, via}` by default; old takes
+  and their sibling links stay queryable, and `builder_choose` with `<output>`
+  picks an earlier one without spending. The server holds one choice per build
+  and slot.
 - `built.current` means chosen while the binding still exists and its inputs
   still match. A pending reroll with unchanged inputs keeps the choice playing;
   a late answer or a replay leaves it alone.
@@ -58,38 +62,38 @@ and treat every take as something worth keeping.
 
 ## One builder for the job
 
-A builder is the recipe, not the dish: one definition that builds once per
-row. The vale's sound builder is `$sfx .sfx, doc.body=$description` with the
-template `Generate one isolated game sound effect. … $description`
-(apps/vale/data/sfx/01.json): fifty sounds, one definition, and a new `sfx`
-row is built without anyone touching the builder. A builder per row, or a
-script that loops a model over rows, gives up everything below.
+A builder is the recipe, not the dish: one definition that builds once per row.
+The vale's sound builder is `$sfx .sfx, doc.body=$description` with the template
+`Generate one isolated game sound effect. … $description`
+(apps/vale/data/sfx/01.json): fifty sounds, one definition, and a new `sfx` row
+is built without anyone touching the builder. A builder per row, or a script
+that loops a model over rows, gives up everything below.
 
 ## Code answered in place
 
-When what you'd derive is a pure function of the binding (a tile from a
-chunk's grid, a sheet from its tiles, a summary from numbers), it's a code
-tool, and code is cheap: `code({name, description, revision, answer})`
+When what you'd derive is a pure function of the binding (a tile from a chunk's
+grid, a sheet from its tiles, a summary from numbers), it's a code tool, and
+code is cheap: `code({name, description, revision, answer})`
 (packages/builders/code.ts), handed to the process as `tools` in builders'
-options (`plugins(host, here)`, `watches`, `build`). Its builds are answered in the
-reconciliation that plans them, in one batch: no runner, no answer effect, no
-copy of the binding, and an immediate builder's output is current in the very
+options (`plugins(host, here)`, `watches`, `build`). Its builds are answered in
+the reconciliation that plans them, in one batch: no runner, no answer effect,
+no copy of the binding, and an immediate builder's output is current in the very
 write that moved its input. That's the answer to "builders are too heavy for
 this": reaching for an effect or a hand-rolled cache with a version counter
 instead gives up keys, citations, takes and chaining. A process that doesn't
 hold the tool writes the call as before, and `code()`'s `run` answers it the
 same way through a runner.
 
-What still costs: every input write to an immediate builder re-selects the
-whole query, so a builder over thousands of bindings pays for all of them on
-each change.
+What still costs: every input write to an immediate builder re-selects the whole
+query, so a builder over thousands of bindings pays for all of them on each
+change.
 
 ## What rebuilds, and why
 
 `build.inputs` hashes the binding's entities and variable values, including
-nested collections. A changed value the query reads starts another attempt;
-an unrelated change to a bound entity asks nothing. A fingerprint change adopts
-the last call's frozen binding without making existing builds stale or spending.
+nested collections. A changed value the query reads starts another attempt; an
+unrelated change to a bound entity asks nothing. A fingerprint change adopts the
+last call's frozen binding without making existing builds stale or spending.
 `build.key` is an opaque attempt key shared with its outputs, and an explicit
 reroll gets a fresh one. The definition has its own fingerprint:
 `builder.definition`, kept on each attempt as `build.definition` and on each
@@ -101,18 +105,18 @@ That split is the whole economy of a builder, and it pulls two ways:
   A shared catalogue's values bound into every binding make one edit there
   rebuild them all; hand reference material over through `sending.tools` when it
   should be read separately.
-- Editing the template, `using`, `sending`, wiring, the tool or its revision never
-  rebuilds current outputs, so tuning a prompt never silently spends on every
-  row or swaps out what people already have. New bindings and changed inputs
-  use the current definition.
+- Editing the template, `using`, `sending`, wiring, the tool or its revision
+  never rebuilds current outputs, so tuning a prompt never silently spends on
+  every row or swaps out what people already have. New bindings and changed
+  inputs use the current definition.
 - `.build.outdated=true` finds attempts under another definition. It's not
-  `build.stale`, which means the binding vanished. Legacy definitions whose
-  tool revision wasn't recorded count as outdated.
+  `build.stale`, which means the binding vanished. Legacy definitions whose tool
+  revision wasn't recorded count as outdated.
 - The query text, variant name, staged and archived never enter input keys.
 
-`builder_build` with builder <builder> leaves current outputs untouched. `outdated`
-redoes selected bindings under another definition; `rebuild` redoes every
-selected binding, even unchanged ones. Both combine with `only` and
+`builder_build` with builder <builder> leaves current outputs untouched.
+`outdated` redoes selected bindings under another definition; `rebuild` redoes
+every selected binding, even unchanged ones. Both combine with `only` and
 `--limit`. A new definition earns its way in as a shadow before it redoes
 existing work.
 
@@ -121,11 +125,12 @@ existing work.
 A tool answers `{"outputs": [...], "cost": 0.01}`; each output is
 `{slot, inputs, components, artifact?}`, citing only the inputs it used (each
 becomes a `cites` edge). The components an output wears are ordinary words,
-designed in `vocabulary` like any other. Every write lands as one batch, or none of it does.
+designed in `vocabulary` like any other. Every write lands as one batch, or none
+of it does.
 
 - A reference that's fixed by the design, not invented, belongs in
-  `builder.wiring` rather than the prompt: the model shouldn't have to guess
-  it. `{"kind": {"sounds.cry": "cry", "sounds.step": "step"}}` fills the kind's
+  `builder.wiring` rather than the prompt: the model shouldn't have to guess it.
+  `{"kind": {"sounds.cry": "cry", "sounds.step": "step"}}` fills the kind's
   references to its sound outputs, overriding model values and creating an
   omitted component. The call freezes wiring; a missing source or sibling slot
   fails the build. The README's "Wiring" paragraph gives its contract.
@@ -133,42 +138,43 @@ designed in `vocabulary` like any other. Every write lands as one batch, or none
   Text keeps a `$` as written; a reference naming no sibling is refused.
 - An output wearing `edge{from, to}` and one relation is a link:
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
-  "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
-  own eid (@yaks/edge) and carries an `output_of` key for its slot. One end is
-  a nonedge sibling, and a later answer leaves it linked to its take as
-  history.
-- A rejected answer, including store admission, or a model turn that failed
-  for good writes `failed{reason}` on the build and keeps its key, so automatic
+  "$tome", "to": "<item>"}, "needs": {"count": 2}}}`.
+  It lands on the link's own eid (@yaks/edge) and carries an `output_of` key for
+  its slot. One end is a nonedge sibling, and a later answer leaves it linked to
+  its take as history.
+- A rejected answer, including store admission, or a model turn that failed for
+  good writes `failed{reason}` on the build and keeps its key, so automatic
   reconciliation does not spend twice. Changed inputs or an explicit rebuild
-  starts a fresh call and clears the failure. A
-  refusal answered to the model, or a request the runner retries, doesn't.
+  starts a fresh call and clears the failure. A refusal answered to the model,
+  or a request the runner retries, doesn't.
 - The model adapter reads the reply of an ask that called no tools, once that
   ask completes; prose beside a tool call is the model working.
 - `builder_supply` with builder, for, slot and artifact answers one binding's
-  slot with an artifact you already have, spending nothing (README,
-  "Supplying an existing artifact"). It works on a staged builder.
+  slot with an artifact you already have, spending nothing (README, "Supplying
+  an existing artifact"). It works on a staged builder.
 
 ## When it runs
 
 Its automatic doors are effects (`builder_open`, `builder_edit`,
-`builder_ring`), owed, retried and swept as `effects-and-rules` describes.
-Every builder reconciles when it's created, when its definition is edited
-(query, `to`, `immediate`, template, `using`, `sending`, wiring), when `floor` is moved,
-when a wake fires on it (`wake{target}`), each time a process starts working
-the effects pool (`builder_open`'s sweep, which finds new and changed bindings
-without redoing current outputs), and on `builder_build`. The scheduled
-doors (creation, a wake, the sweep) wait until `floor` has passed; nothing
-fires just because it passed.
+`builder_ring`), owed, retried and swept as `effects-and-rules` describes. Every
+builder reconciles when it's created, when its definition is edited (query,
+`to`, `immediate`, template, `using`, `sending`, wiring), when `floor` is moved,
+when a wake fires on it (`wake{target}`), each time a process starts working the
+effects pool (`builder_open`'s sweep, which finds new and changed bindings
+without redoing current outputs), and on `builder_build`. The scheduled doors
+(creation, a wake, the sweep) wait until `floor` has passed; nothing fires just
+because it passed.
 
 - `immediate: true` also reconciles when a selected entity changes, through
   `builder_dep` rows, and when a new entity starts matching.
-- `staged{at, by, via}` holds it back from every automatic door. `archived`
-  puts it away from all of them, `builder build` included.
+- `staged{at, by, via}` holds it back from every automatic door. `archived` puts
+  it away from all of them, `builder build` included.
 
 ## Trying it on a few
 
 Every model call spends money, from the account's one budget on yaks.app, so a
-builder starts small and gets looked at. Write it with `staged: {}`, then sample:
+builder starts small and gets looked at. Write it with `staged: {}`, then
+sample:
 
     builder_build with builder <builder>, only [<id>, <id>]   # these bindings only
     builder_build with builder <builder>, limit 3             # the first three
@@ -176,14 +182,13 @@ builder starts small and gets looked at. Write it with `staged: {}`, then sample
     builder_build with builder <builder>, limit 3, model <model>
     builder_build with builder <builder>, only [<id>], input {…}
 
-`only` takes any id form, as every reference
-argument does, and refuses a name in no binding. A partial run leaves every
-other build as it is. An alternate `template`, `model`, `provider` or
-`input` builds a shadow variant (`shadow:<hash>`) whose outputs no other
-builder selects; compare them with `.build&.build.variant!=main`. Tune the
-template between runs, then remove the mark (`staged: null`): the builder
-reconciles once, and a sampled binding whose inputs are unchanged isn't asked
-again.
+`only` takes any id form, as every reference argument does, and refuses a name
+in no binding. A partial run leaves every other build as it is. An alternate
+`template`, `model`, `provider` or `input` builds a shadow variant
+(`shadow:<hash>`) whose outputs no other builder selects; compare them with
+`.build&.build.variant!=main`. Tune the template between runs, then remove the
+mark (`staged: null`): the builder reconciles once, and a sampled binding whose
+inputs are unchanged isn't asked again.
 
 In an app's store (`workers/yak/package-tools.ts`; the store itself is `yaks-app`)
 the package's contract is the connector's `store_builder_build` tool.
@@ -211,8 +216,8 @@ down by itself.
 - `.built.build.build.for=X&.built.current=true` is what X has now:
   `built.build` reaches the build, and `build.for` is read there. Add
   `.built.build.build.variant=main` to leave shadows out.
-- `.fields` brings what an output points at in the same answer. The vale's
-  sound catalogue is one subscription (apps/vale/samples.ts `SOUNDS`):
+- `.fields` brings what an output points at in the same answer. The vale's sound
+  catalogue is one subscription (apps/vale/samples.ts `SOUNDS`):
   `.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,…`.
 - `build.match` is the binding as JSON, read whole; nothing filters on it.
 
@@ -220,11 +225,11 @@ down by itself.
 
 Each call a model builder makes opens one session, reused when that call is
 replayed, and `build.cost` sums what its calls spent, computed and never stored.
-On yaks.app a builder spends the
-account's one budget (M-42105) through the store's session runner
-(workers/yak/builders.ts, models.ts), which is why only app editors may write
-one (workers/yak/public/docs/models.md, "Build from stored rows"). A sample's
-cost times the rows the query matches is what letting it loose will cost.
+On yaks.app a builder spends the account's one budget (M-42105) through the
+store's session runner (workers/yak/builders.ts, models.ts), which is why only
+app editors may write one (workers/yak/public/docs/models.md, "Build from stored
+rows"). A sample's cost times the rows the query matches is what letting it
+loose will cost.
 
 ## When something is wrong
 
@@ -232,8 +237,8 @@ cost times the rows the query matches is what letting it loose will cost.
   whether it's stale; `.call.source=<build>&*` its calls, and the session a
   model call opened.
 - Rebuilding everything: something bound changed for every build, a shared
-  entity in the binding. A definition edit alone never does it; only changed bound
-  values or an explicit redo.
+  entity in the binding. A definition edit alone never does it; only changed
+  bound values or an explicit redo.
 - Never building: a future `floor`, `staged`, `archived`, a builder that isn't
   `immediate` waiting for a door, or a missing tool.
 - `effect_check` shows failed and overdue builder effects.
@@ -246,13 +251,13 @@ Builder execution and the app compiler are different doors. A package with a
 `browser.json` enters the toolkit catalog through `bin/compiler-packages.ts`.
 List browser-only subpaths in `entries` (for example `"./controls"`); its
 `imports` map is for type checking and does not add catalog entries. List CSS
-and other runtime assets in `resources` globs (for example `"hud/*.css"`);
-its browser exports and source closure travel with each compiler job
+and other runtime assets in `resources` globs (for example `"hud/*.css"`); its
+browser exports and source closure travel with each compiler job
 (`packages/esbuild/README.md`, "Toolkit packages"). Land the package and its
-consumer together, then wait for the main Worker release containing that catalog
-to serve production (`admin_deploys` as admin@bot.yak.sh), then read
-`https://yaks.app/_compiler/packages.json` and confirm the package's generated
-`package.json` exports and `resources` contain the new subpaths and styles before pushing
-the app from a clean main checkout. The compiler container needs no separate
-rebuild for a toolkit source change. See `yaks-app` for platform rollout and
-`apps/<app>/README.md` for the app's deploy command.
+consumer together. The next main Worker release carries that catalog
+asynchronously; landing does not wait for it. An app that needs the new catalog
+can deploy once `https://yaks.app/_compiler/packages.json` contains the
+package's generated `package.json` exports and resources; record that deployment
+as follow-up work if the catalog is not live yet. The compiler container needs
+no separate rebuild for a toolkit source change. See `yaks-app` for platform
+rollout and `apps/<app>/README.md` for the app's deploy command.

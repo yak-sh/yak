@@ -173,10 +173,7 @@ yak admin apply yourname/vale @"$D/recover.json" --as admin@bot.yak.sh
 
 Use `restore-text` only while the served declaration is still text; an accepted
 array release uses `restore`. Do not resume writers until restored values and
-person input have been verified. The local workerd rehearsal is
-`workers/yak/fight_update_workerd_test.ts`: it retains two legacy rows, proves
-the array deployment refusal, checks both dry runs roll back, moves and restores
-the values, and verifies a second restoration produces no patches.
+person input have been verified.
 
 The browser input adapter keeps Vale's action names and key/gamepad bindings,
 and passes them to `@yaks/game/controls`. Its named `Controls` entity is in the

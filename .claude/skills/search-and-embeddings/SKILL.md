@@ -146,8 +146,8 @@ a caller may read. The `search` tool merges it with full-text hits.
   costs about N where materializing every hit's bm25 costs every hit. Ranking
   all matches for a 2-row window took a broad fixture search from 18,027 rows
   to 51,075; ranking each index's best N and reading only those took it to
-  2,073 (T-131858, workers/yak/fts_cost_workerd_test.ts). Measure a ranking
-  change there, before and after.
+  2,073 (T-131858). Check ranking decisions through the in-process search
+  interface; observe billing from the live platform after deployment.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

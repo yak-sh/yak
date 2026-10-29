@@ -150,7 +150,7 @@ equal-request Store RPC counts, fences, signed Apps/MCP and lost-finish
 recovery:
 
 ```sh
-deno task test --all --tag=deno \
+deno task test --tag=deno \
   workers/yak/serving-copy_test.ts workers/yak/directory-fence_test.ts \
   workers/yak/directory-signed_test.ts workers/yak/graph_test.ts
 ```

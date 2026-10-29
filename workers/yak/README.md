@@ -67,8 +67,7 @@ Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
 `zod` and the MCP SDK as files out of that directory, and it is gitignored, so a
 fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
-`import { z } from 'zod'`. The test probes (probe-suite.ts) install through the
-same door before they bundle the kernel.
+`import { z } from 'zod'`.
 
 Correct a deployed regression with `yak admin revert <sha>`: main is always
 deployed. `yak admin rollback [version]` is for a broken build path and refuses
@@ -84,9 +83,9 @@ Actions runner, or in a GitHub secret. The gate reads no Cloudflare credential
 at all.
 
 Nothing gates that push. `.github/workflows/gate.yml` runs `deno task check` and
-`deno task test`, the workerd tests included, and it reports what it finds: a
-red test is a bug to fix, not a deploy held back. T-37197 briefly promoted a
-gated `deploy` branch instead; it was reverted the same day (M-37262).
+`deno task test` in process, and it reports what it finds: a red test is a bug
+to fix, not a deploy held back. T-37197 briefly promoted a gated `deploy` branch
+instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
@@ -294,11 +293,11 @@ lifetime counts. The tracker connection in this box's config supplies the URL
 and signing key. `tail` watches live traffic, using the box's GNU `timeout` to
 stop Wrangler and its launcher together.
 
-`revert` requires main to match its remote, gates a fresh worktree, and uses the
-same primitive as `task land` to publish. It re-gates after a rebase, checks the
-push independently, and waits up to 20 minutes for an annotated version
-containing the revert to serve all traffic. A failed worktree is kept for
-inspection. Neither a rollback nor a revert undoes migrated data.
+`revert` requires main to match its remote, creates a fresh worktree, and uses
+the same primitive as `task land` to publish. It returns after the push; main's
+CI and Workers Builds run asynchronously and report failures. No pre-land gate
+or deployment wait holds the caller. A failed worktree is kept for inspection.
+Neither a rollback nor a revert undoes migrated data.
 
 The box's deploy catch-up times every deploy from push to live and reports
 deploys that got slower as their own bug; main's gate times none of it. How, and

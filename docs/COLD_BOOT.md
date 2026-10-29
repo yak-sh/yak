@@ -77,7 +77,7 @@ policy parity. Mounted hook tests exercise pending profile/instruction reads,
 shared ownership, aggregate refusal/recovery, watch→mute transitions and reopen.
 The Runs/Tasks mounted test asserts their narrow wire queries and cleanup.
 
-## Reproduction and six-open check
+## Historical six-open check
 
 Both scratch servers were freshly copied from snapshot SHA-256
 `d332205a5a9305888ab10f93c6693022ac2e33da803d7323910fb0ea2c43647a`. Before is
@@ -90,10 +90,9 @@ loopback probe targets. Fresh Chrome profiles, 1440×1000; 15 seconds settling
 plus wire quiet and browser-applied addressed readiness. The same six-target
 JSON was used by both runs:
 
-```sh
-deno run -A bin/probe-client.ts http://127.0.0.1:35931 /scratch/targets.json
-deno run -A bin/probe-client.ts http://127.0.0.1:35932 /scratch/targets.json
-```
+These measurements are retained history. Chrome and the scratch-server probe
+workflow are removed; check current page behavior in process with linkedom in
+Deno and terminal paint with @yaks/tui's `lay`.
 
 | Scenario             | Before bytes / IDs | After bytes / IDs | Before sub/unsub sends | After sub/unsub sends |
 | -------------------- | -----------------: | ----------------: | ---------------------: | --------------------: |

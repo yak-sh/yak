@@ -156,7 +156,7 @@ The package's fresh Deno tests cover snapshots, selection, leases, finite
 captures, authentication, SSE replay/backpressure and the graph-owned model:
 
 ```sh
-deno task test --tag=deno --all packages/visualize
+deno task test --tag=deno packages/visualize
 deno check --no-lock --config packages/visualize/browser.json packages/visualize/main.ts
 ```
 

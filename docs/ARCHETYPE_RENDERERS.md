@@ -88,8 +88,9 @@ replaced by the demand-driven path above.
 
 Baseline: `c856f55f`. Candidate: `08a3cc83` (subsequently rebased, without
 changes to the measured web dispatch files). Full numeric results are in
-`ARCHETYPE_RENDERER_CDP.json`; `bin/archetype-probe.ts` reproduces the
-measurement against a caller-owned scratch server.
+`ARCHETYPE_RENDERER_CDP.json`. These are historical measurements; Chrome and the
+scratch-server probe workflow are removed. Current page behavior is checked in
+process with linkedom in Deno.
 
 Both sides served from the session worktree, restoring committed files between
 runs, using the same saved snapshot copied into a disposable database. Server
