@@ -36,7 +36,11 @@ try {
     body + '\n',
   )
   console.log(
-    JSON.stringify({ label, tools: listed.tools.length, bytes: body.length }),
+    JSON.stringify({
+      label,
+      tools: listed.tools.length,
+      bytes: new TextEncoder().encode(body).length,
+    }),
   )
 } finally {
   await client.close()

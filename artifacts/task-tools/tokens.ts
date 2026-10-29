@@ -24,6 +24,8 @@ let measured = async (label: string) => {
 let before = await measured('before')
 let after = await measured('after')
 let report = {
+  baselineCommit:
+    (await Deno.readTextFile('artifacts/task-tools/roster-base.txt')).trim(),
   encoding: 'o200k_base',
   tokenizer: 'gpt-tokenizer@3.4.0',
   serialized: 'JSON.stringify(tools), no trailing newline',

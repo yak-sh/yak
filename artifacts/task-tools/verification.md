@@ -40,6 +40,16 @@ The final type check of the operational entry points reached its nine-second
 limit without reporting errors. It is incomplete; the earlier type checks of the
 recovered implementation and file-input change completed.
 
+After rebasing onto main's shared tool registry, the generic/task/decision MCP
+proofs passed again. Sixteen operational tests passed in two runs (3 and 5
+seconds), including help/restart through the host registry and visualize's
+injected fetch/environment interface. Forty-one affected MCP file, registry,
+mount and schema tests passed in one second, with type checking and lint also
+passing for that change. Replacing a tool while a file read is pending keeps the
+admitted implementation and schema for that call; the next call uses the
+replacement. The regression failed when execution fetched the tool again and
+passed with the admitted snapshot restored.
+
 `audit.py --references` verified all 651 retained invocation hashes against 96
 source files in about three seconds. The fallback audit additionally verified
 136 retained source references; see `audit-counts.json`.
@@ -47,6 +57,9 @@ source files in about three seconds. The fallback audit additionally verified
 `roster.ts after` lists the configured tools through MCP over an in-memory
 graph, with the box's file-input capability enabled. `tokens.ts` counts the
 exact compact JSON list using `gpt-tokenizer@3.4.0`, `o200k_base`: 80 tools /
-33,344 tokens before, 84 tools / 32,303 tokens after, saving 1,041 tokens. The
-shared file-input initialize instruction is separate from the tool list. The
-snapshots and per-tool measurements are retained beside this report.
+33,373 tokens before, 84 tools / 32,332 tokens after, saving 1,041 tokens. The
+baseline is main at the SHA in `roster-base.txt`; it was listed in its own
+process against the same configured plugins, without opening the live graph. The
+initial baseline and measurements remain in the earlier git commits. The shared
+file-input initialize instruction is separate from the tool list. The snapshots
+and per-tool measurements are retained beside this report.
