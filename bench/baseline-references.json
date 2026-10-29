@@ -220,10 +220,38 @@
         "source": "git history of bench/operation-checkout.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
           "cli/file-cites-verify",
-          "cli/file-cites-check",
-          "connector/code-sync-cwd-refusal",
-          "connector/land-cwd-refusal",
-          "connector/file-cites-verify-cwd-refusal"
+          "cli/file-cites-check"
+        ]
+      },
+      {
+        "reference": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+        "kind": "derived",
+        "source": "Earliest composed MCP runner carrying process.cwd: 685c2f1af passes host.runner to the MCP transport. Successful checkout operations replace obsolete missing-cwd refusals.",
+        "correction": {
+          "previousReference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+          "workloadChange": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
+          "reason": "The three previous connector workloads expected missing-cwd refusals. The composed runner now supplies cwd, so those workloads are retired; code sync and citation verification measure successful persisted work. Connector land is retired rather than invoking a mutation while expecting refusal.",
+          "retiredMedians": [
+            {
+              "name": "connector/code-sync-cwd-refusal",
+              "unit": "ms",
+              "median": 25.831763999999566
+            },
+            {
+              "name": "connector/land-cwd-refusal",
+              "unit": "ms",
+              "median": 18.71299799999997
+            },
+            {
+              "name": "connector/file-cites-verify-cwd-refusal",
+              "unit": "ms",
+              "median": 19.425269999999728
+            }
+          ]
+        },
+        "benches": [
+          "connector/code-sync",
+          "connector/file-cites-verify"
         ]
       }
     ]
