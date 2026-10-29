@@ -100,7 +100,6 @@ let names = (f: Flags): Record<string, string[]> => ({
   rows: ROWS.flatMap(([n]) => TABLES.map((t) => `rows/${n}/${t}`)),
   graph: GRAPH,
 })
-let unit = (name: string) => name.startsWith('rows/') ? 'rows' : 'ms'
 
 export let main = async (action: string, args: string[]): Promise<number> => {
   let f = flags(args)
@@ -173,7 +172,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
         f.show,
         ...(door ? ['door-v1'] : []),
       ]),
-      benches: wanted.map((name) => ({ name, unit: unit(name) })),
+      benches: wanted.map((name) => ({ name, unit: 'ms' })),
       collect: async (round) => {
         let got: Record<string, Sample[]> = {}
         let add = (name: string, s: Sample) => (got[name] ??= []).push(s)
@@ -246,8 +245,9 @@ export let main = async (action: string, args: string[]): Promise<number> => {
             )
             TABLES.forEach((table, i) =>
               add(`rows/${name}/${table}`, {
-                value: Number(after[i][0]),
+                value: command.ms,
                 cpu: command.cpu,
+                counts: { rows: Number(after[i][0]) },
                 ...(table == 'entity' ? { details: made } : {}),
               })
             )
@@ -645,6 +645,10 @@ export let table = (
         n != null
       ) as number[]
       if (cpu.length) note = `cpu p50 ${num(quantile(cpu, .5))} ms`
+      if (b.samples[0]?.counts?.rows != null) {
+        let rows = b.samples.map((s) => s.counts!.rows)
+        note = `${num(quantile(rows, .5))} rows · ${note}`
+      }
       let bundles = b.samples[0]?.counts?.bundles
       if (bundles) {
         note = `${num(quantile(values, .5) * 1000 / bundles)} µs/bundle`
