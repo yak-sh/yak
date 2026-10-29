@@ -77,6 +77,13 @@ derived origin is a reconstruction, not proof of which checkout produced the old
 measurement. The conversion retains this provenance beside its CPU results.
 Commit the baseline changes and retained evidence together.
 
+`relay-admission` retains the three `graph-full-check/{1,10,100}-entities` CPU
+workloads. Store admission timings `relay/store/entities-{1,10,100}` and
+`store-relay/{1,10,100}-entities` are retired because their historical Store
+cannot run the fixture with its own clock without shared runtime clock changes.
+The five relay behavior tests remain. Retired timing medians, references and
+reasons are retained in [baseline provenance](baseline-references.json).
+
 ## Command timing
 
 `deno run -A bench/run.ts command NAME COMMAND [ARGS...]` measures a whole
@@ -107,13 +114,3 @@ that old wall measurements were CPU measurements. `deno task test --write`
 lowers those records with CPU samples under the budget's existing ratchet. See
 [test runner reports](../packages/testing/README.md#running) for the report
 format.
-
-## Relay admission boundary
-
-`relay/store/entities-*` measures one value from WebSocket submission through
-admission and staging on a warmed Store. Its controlled clock stays fixed
-through that work. The fixture flushes fanout and verifies delivery after the
-timed interval. A skipped or refused value fails instead of becoming a cheap
-sample. SQL counts cover the same interval. Both throughput and
-`relay-admission` use this boundary; see
-[relay admission](README.md#relay-admission).

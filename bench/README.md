@@ -2,9 +2,9 @@
 
 The repository's benchmarks run through
 [@yaks/benchmark](../packages/benchmark/README.md), with one committed baseline
-file per suite. `deno task bench` measures the throughput suite's storage reads
-and patches, `graph.apply`, and warmed relay admission. `deno task bench:check`
-takes fresh CPU measurements and refuses any figure past its slack over
+file per suite. `deno task bench` measures the throughput suite's storage reads,
+storage patches and `graph.apply`. `deno task bench:check` takes fresh CPU
+measurements and refuses any figure past its slack over
 `bench/throughput.baseline.json`. Statement counts are retained separately.
 `deno task bench:ratchet` banks a baseline; review and commit its diff. Runs
 retain raw samples, round medians, commit, runtime, CPU and load average in
@@ -180,9 +180,12 @@ SQLite additionally records the journal and uses the production cached driver.
 Both adapters number entities. This fixed composition is independent of the
 operator's config; it does not include blob storage or FTS indexing.
 
-A sample owns a freshly seeded store. The seed is created once through this
-graph, then copied through storage outside timing, including its stamps and
-archetype descriptors. The graph is warmed before measuring. Every edited entity
+A sample owns a private seeded store. Each collector creates its own closed
+SQLite seed file once through this graph, then copies its bytes outside timing;
+RAM samples copy seeded bundles through storage. Stamps and archetype
+descriptors are retained. Seed images are private to each collector, so
+reference and current workers perform the same seed preparation before their
+discarded collection. The graph is warmed before measuring. Every edited entity
 already exists; every created entity is absent. Creates cannot turn into edits
 or grow the corpus across samples. Each sample verifies the saved titles, stamps
 and archetype pointers after timing. The collector takes exactly ten measured
@@ -226,28 +229,21 @@ recording run takes the same box-wide lock and seven rounds.
 
 ## Relay admission
 
-`bench/relay_bench.ts` reuses T-64601's fixture retained by T-64638:
-authenticated sockets relaying ordinary admitted presence values on a warmed
-Store backed by Durable SQLite, at 1, 10 and 100 entities. A Deno operation
-sends ten simulated 100ms turns; the ratchet divides by ten times the entity
-count to record **ns/value**, displayed as **µs/value**. Two warm values
-exercise restored sinks and the held peer overlay before timing. Setup,
-observers, timer-driven fanout and cleanup are outside timing. Message admission
-completes synchronously; its returned delivery promise represents the excluded
-fanout.
-
-`counts` reports SQL statements, reads, writes and transactions per value.
-`deno run -A bench/relay-fixture.ts --counts` verifies them independently. The
-comparative CLI remains available:
+`relay-admission` measures ordinary `graph.apply(check)` on Durable SQLite with
+member and schema validation, for 1, 10 and 100 entities. Each sample sums the
+CPU of the graph checks over simulated 100 ms turns and reports **µs/value**;
+setup, warmup and cleanup stay outside timing. SQL statements, reads, writes and
+transactions are retained as counts.
 
 ```sh
 deno task bench relay-admission -- /path/to/checkout 200
 ```
 
-It reports relay and ordinary `graph.apply(check)` costs from three rounds at
-each entity count. A checkout argument permits comparing the same fixture across
-revisions. The warmed relay ratchet covers admission/coalescing rather than a
-socket round trip or fanout to observers.
+It takes three samples at each entity count. A checkout argument compares the
+same fixture across revisions. The Store relay admission timings are retired;
+the five relay behavior tests remain. The retirement names, old medians and
+reference commits are retained in
+[baseline provenance](baseline-references.json).
 
 ## Samples and comparison
 
@@ -261,7 +257,7 @@ exactly. Without `n`, calibration uses whole-invocation CPU, including fixture
 cost. Each collection reports one measured batch average with CPU retained in
 `details.cpuSamples`; paired rounds supply the repeated observations. These are
 batch averages, not per-invocation medians. The result metric carries `/cpu`.
-Storage modes run in separate processes, followed by the graph/relay cases.
+Storage modes run in separate processes, followed by the graph apply cases.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
