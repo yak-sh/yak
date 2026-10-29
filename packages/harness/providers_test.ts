@@ -6,8 +6,7 @@ import { link } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
-import { remote } from './remote.ts'
-import { at, harness, repo, worker } from './testing.ts'
+import { harness } from './testing.ts'
 
 const P = (name: string) => identityEid('provider', [name])
 const M = (name: string) => identityEid('model', [name])
@@ -31,7 +30,6 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
         provider === 'openai' && b.openai ? 'oa' : undefined,
     })
   const a = local({
-    cwd: repo(),
     h,
     name: 'gpt-6-astra',
     provider: 'openai',
@@ -72,7 +70,6 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
 })
 test('explicit default provider seeds correctly and custom model override remains usable', async () => {
   const a = local({
-    cwd: repo(),
     h: await harness(),
     provider: 'openrouter',
     name: 'vendor/model',
@@ -95,7 +92,6 @@ test('fork and spawn selecting an existing model are served by a provider that s
   const h = await harness()
   const seen: string[] = []
   const a = local({
-    cwd: repo(),
     h,
     name: 'gpt-6-astra',
     providers: {
@@ -149,18 +145,13 @@ test('fork and spawn selecting an existing model are served by a provider that s
 })
 
 test('provider sign-ins are not MCP authorization targets', async () => {
-  const dir = await Deno.makeTempDir()
-  const path = dir + '/harness.db'
-  const h = await harness(path)
+  let h = await harness()
   await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
-  h.close()
-  const r = await remote({ worker: worker(), config: at(path), cwd: repo() })
+  let a = local({ h })
   try {
-    const list = await r.agent.authorizeMCP!('list')
-    assertEquals(list.servers, [])
+    assertEquals((await a.authorizeMCP('list')).servers, [])
   } finally {
-    await r.close()
-    await Deno.remove(dir, { recursive: true })
+    await a.close()
   }
 })
 
@@ -172,7 +163,6 @@ test('a model two providers serve is asked by the named one, by its name for it'
     return Promise.resolve({ id: 'r', model: req.model, items: [] })
   }
   const a = local({
-    cwd: repo(),
     h,
     name: 'gpt-6-astra',
     provider: 'openai',

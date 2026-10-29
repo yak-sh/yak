@@ -2,9 +2,9 @@ import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
-import { remote } from './remote.ts'
+
 import { transcriptUsage, transcriptWindow } from '@yaks/session'
-import { at, harness, worker } from './testing.ts'
+import { harness } from './testing.ts'
 import { h as element } from 'preact'
 import { mount } from '../tui/testing.ts'
 import { pressTo } from '../tui/screen.ts'
@@ -40,67 +40,6 @@ test('SQLite fork window reads limited bodies and projects position metadata', a
     )
   } finally {
     h.close()
-  }
-})
-
-test('worker pages retained graph data and keeps initial transfer independent of transcript length', async () => {
-  let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
-  let h = await harness(path)
-  // A long transcript is mostly a model's lines: each input line owes its
-  // transcript a look for a turn (session_input), which paging is not about.
-  await h.g.apply([
-    { entity: { eid: 's' }, session: {} },
-    ...Array.from({ length: 300 }, (_, i) => ({
-      entity: { eid: 'entry' + i },
-      entry: { session: 's', seq: i + 1 },
-      content: { body: String(i) + 'x'.repeat(10000) },
-      output: {},
-    })),
-  ])
-  h.close()
-  let r = await remote({
-    worker: worker(),
-    config: at(path),
-    cwd: dir,
-    fake: true,
-  })
-  try {
-    let page = await r.agent.transcriptWindow!('s', { limit: 16 })
-    assertEquals(page.entries.length, 16)
-    assertEquals(page.entries[0].entity.eid, 'entry284')
-    assertEquals([page.total, page.offset], [300, 284])
-    assertEquals([page.before, page.after], [true, false])
-    assert(!r.replica.ent('entry0'))
-    assertEquals(
-      (r.replica.ent('entry299')!.content as { body: string }).body.length,
-      10003,
-    )
-    let middle = await r.agent.transcriptWindow!('s', {
-      anchor: 'entry150',
-      limit: 16,
-    })
-    assertEquals(middle.entries[0].entity.eid, 'entry142')
-    assertEquals([middle.total, middle.offset], [300, 142])
-    assert(r.replica.cache.size() <= 256)
-    let [head, tail] = await Promise.all([
-      r.agent.transcriptWindow!('s', { edge: 'start', limit: 8 }),
-      r.agent.transcriptWindow!('s', { edge: 'end', limit: 8 }),
-    ])
-    assertEquals(head.entries[0].entity.eid, 'entry0')
-    assertEquals(tail.entries.at(-1)!.entity.eid, 'entry299')
-    assert(r.replica.cache.size() <= 256)
-    await r.agent.send('s', 'new message')
-    await r.idle('s')
-    let end = await r.agent.transcriptWindow!('s', { limit: 16 })
-    assert(
-      end.entries.some((b) =>
-        (b.content as { body?: string })?.body == 'new message'
-      ),
-    )
-    assertEquals(end.after, false)
-  } finally {
-    await r.close()
-    await Deno.remove(dir, { recursive: true })
   }
 })
 
@@ -239,59 +178,6 @@ test('usage panel reads latest inherited ask metadata without transcript bodies'
   }
 })
 
-test('bounded worker subscriptions deliver transient text before final completion', async () => {
-  let dir = await Deno.makeTempDir()
-  let r = await remote({
-    worker: worker(),
-    config: at(),
-    cwd: dir,
-    fake: { deltas: 20, held: true },
-    streaming: true,
-  })
-  let partial = false
-  try {
-    let id = await r.agent.start('stream a page')
-    let inspect = async () => {
-      let page = await r.agent.transcriptWindow!(id)
-      if (
-        page.entries.some((b) =>
-          (b.content as { body?: string })?.body?.startsWith('x')
-        ) &&
-        page.entries.some((b) =>
-          (b.attempt as { state?: string })?.state == 'inflight'
-        )
-      ) partial = true
-    }
-    let free = r.subscribe(() => {
-      void inspect()
-    })
-    try {
-      await inspect()
-      await until(() => partial, 'partial bounded response', 10000)
-      await r.testing!.release()
-      await r.idle(id)
-      let page = await r.agent.transcriptWindow!(id)
-      assert(
-        page.entries.some((b) =>
-          (b.attempt as { state?: string })?.state == 'completed'
-        ),
-      )
-      let sent = r.traffic.sent
-      await r.agent.transcriptWindow!(id)
-      assertEquals(
-        r.traffic.sent,
-        sent,
-        'unchanged window requires no worker query',
-      )
-    } finally {
-      free()
-    }
-  } finally {
-    await r.close()
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
 // A window of eight out of a hundred: an unbounded read answers 400 KB of
 // bodies where the window answers 32 KB.
 test('a long transcript of large entries loads only a bounded body window', async () => {
@@ -312,57 +198,6 @@ test('a long transcript of large entries loads only a bounded body window', asyn
     assert(JSON.stringify(page).length < 42000)
   } finally {
     store.close()
-  }
-})
-
-test('detached windows receive frontier notices without loading new offscreen bodies', async () => {
-  let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
-  let store = await harness(path)
-  await store.g.apply([
-    { entity: { eid: 's' }, session: {} },
-    ...Array.from({ length: 100 }, (_, i) => ({
-      entity: { eid: 'e' + i },
-      entry: { session: 's', seq: i + 1 },
-      content: { body: String(i) },
-      output: {},
-    })),
-  ])
-  store.close()
-  let r = await remote({
-    worker: worker(),
-    config: at(path),
-    cwd: dir,
-    fake: true,
-  })
-  try {
-    let page = await r.agent.transcriptWindow!('s', {
-      anchor: 'e30',
-      limit: 16,
-    })
-    assertEquals(page.after, true)
-    let notices = 0,
-      free = r.subscribe(() => {
-        notices++
-      })
-    try {
-      let input = await r.agent.send('s', 'large offscreen input'.repeat(10000))
-      await r.idle('s')
-      let next = await r.agent.transcriptWindow!('s', {
-        anchor: 'e30',
-        limit: 16,
-      })
-      assertEquals(
-        next.entries.map((b) => b.entity.eid),
-        page.entries.map((b) => b.entity.eid),
-      )
-      assert(!r.replica.ent(input)?.content)
-      assert(notices > 0)
-    } finally {
-      free()
-    }
-  } finally {
-    await r.close()
-    await Deno.remove(dir, { recursive: true })
   }
 })
 

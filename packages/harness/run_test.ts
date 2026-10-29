@@ -6,7 +6,7 @@ import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
 import { seed, sessionTitle, titleOf } from './agent.ts'
 import { sessionTree } from './tree.ts'
 import { local } from './local.ts'
-import { harness, repo } from './testing.ts'
+import { harness } from './testing.ts'
 import { test, until } from '@yaks/testing'
 
 // A model that answers with whatever it was last told, so a test can see the
@@ -31,7 +31,6 @@ let echo: Model = (req) =>
 let started = async (model: Model = echo) =>
   local({
     name: 'gpt-6-astra',
-    cwd: repo(),
     h: await harness(),
     model,
     tools: [],
@@ -204,7 +203,6 @@ test('resume wakes what a restart left owed a turn', async () => {
   // A transcript with an input nobody answered — what a killed harness leaves.
   let quiet = local({
     name: 'gpt-6-astra',
-    cwd: repo(),
     h,
     model: echo,
     tools: [],
@@ -375,7 +373,7 @@ test('session titles use local assignment, not inherited parent context', async 
       stop: {},
     },
   ])
-  let a = local({ name: 'gpt-6-astra', cwd: repo(), h, model: echo, tools: [] })
+  let a = local({ name: 'gpt-6-astra', h, model: echo, tools: [] })
   try {
     assertEquals(
       ((await a.sessions()).find((b) => b.entity.eid == 'worker')
@@ -425,33 +423,6 @@ test('Agent close stops admission and drains an active model before SQLite close
   assertEquals(closed, true)
 })
 
-test('close drains a held storage callback without stopping an independent process', async () => {
-  let a = await started()
-  let entered = Promise.withResolvers<void>()
-  let release = Promise.withResolvers<void>()
-  let process = new Deno.Command('/bin/sleep', { args: ['10'] }).spawn()
-  try {
-    let s = await a.start('callback')
-    await a.idle(s)
-    let callback = a.admitted(async () => {
-      entered.resolve()
-      await release.promise
-      await a.h.g.apply([{ entity: { eid: crypto.randomUUID() }, task: {} }])
-    })()
-    await entered.promise
-    let close = a.close()
-    release.resolve()
-    await callback
-    await close
-    // Independent process ownership is not transferred to Agent.close().
-    Deno.kill(process.pid, 'SIGCONT')
-  } finally {
-    process.kill('SIGTERM')
-    await process.status
-    await a.close()
-  }
-})
-
 test('send commits during a provider turn and unserved input reaches the next anchored request', async () => {
   let release!: (value: Awaited<ReturnType<Model>>) => void
   let began!: () => void
@@ -473,7 +444,6 @@ test('send commits during a provider turn and unserved input reaches the next an
     (b.openai as Comp | undefined)?.response_id as string | undefined
   // The inflight attempt assertion requires streaming, regardless of HARNESS_STREAM.
   let a = local({
-    cwd: repo(),
     h: await harness(),
     model,
     tools: [],

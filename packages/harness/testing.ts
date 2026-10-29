@@ -1,16 +1,4 @@
-/** Test fixtures: a harness graph composed as a `yak` config composes one
- * (`harness`, `at`), the runner working it as an agent works it, for a test
- * that drives the graph itself (`working`), the backend Worker a test process
- * lends each `remote()` (`worker`), and the repositories a harness starts in.
- *
- * The repositories are for code that starts in a checkout or cuts one. A
- * harness started in `Deno.cwd()` works in the repository the suite runs in:
- * it reads every ref there into the graph on each start, over a thousand of
- * them, and a child it delegates cuts its worktree and a `task-child-*` branch
- * there, which outlive the run's scratch directory — 405 worktree entries and
- * 925 branches piled up in the real repository (T-38366). So every test hands
- * `local()` a repository of its own: `repo()` when it only needs somewhere to
- * start, and `scratchRepo()` when it cuts checkouts it will look at. */
+/** Harness graphs, runners and workspace fixtures that stay in process. */
 
 import { type Runner, running } from '@yaks/session'
 import { compose, type Config } from '@yaks/cli/host'
@@ -127,110 +115,45 @@ export let working = (h: Harness, deps: Omit<Runner, 'holder'>) => {
   }
 }
 
-/** Run git in `cwd`, answering its trimmed stdout; a failure throws stderr. */
-export let git = async (cwd: string, ...args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  return new TextDecoder().decode(p.stdout).trim()
-}
-
-// One commit on `main`, made synchronously so `repo()` can answer anywhere.
-let seed = (repo: string) => {
-  let run = (...args: string[]) => {
-    let p = new Deno.Command('git', { cwd: repo, args, stderr: 'piped' })
-      .outputSync()
-    if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  }
-  run('init', '-q', '-b', 'main', '.')
-  run('config', 'user.email', 'test@example.org')
-  run('config', 'user.name', 'Test')
-  Deno.writeTextFileSync(repo + '/file', 'committed')
-  run('add', '.')
-  run('commit', '-qm', 'initial')
-}
-
-/** A throwaway directory holding a one-commit repository on `main` at
- * `repo` and an empty worktree root at `root`; `free()` removes all of it. */
-export let scratchRepo = async () => {
-  let dir = await Deno.makeTempDir()
-  let repo = dir + '/repo'
-  let root = dir + '/worktrees'
-  await Deno.mkdir(repo)
-  await Deno.mkdir(root)
-  seed(repo)
-  return {
-    dir,
-    repo,
-    root,
-    free: () => Deno.remove(dir, { recursive: true }),
-  }
-}
-
-let host: Worker | undefined
-
-/** This test process's backend Worker, started on first use and ended with
- * the process: a `remote()` lent it serves its graph there. Starting one loads
- * the backend's whole module graph into a new isolate, about a third of a
- * second each time, so a test lends it unless what it tests is the Worker's
- * own end — a stuck turn cut off, a forced exit. */
-export let worker = () =>
-  host ??= (() => {
-    let started = new Worker(
-      new URL('./backend_worker.ts', import.meta.url).href,
-      { type: 'module' },
-    )
-    addEventListener('unload', () => started.terminate())
-    return started
-  })()
-
-let made: string | undefined
-
-/** This test process's one-commit repository, made on first use and removed
- * when the process ends: where a harness starts when its test does not look
- * at the checkout. */
-export let repo = (): string => {
-  if (made) return made
-  let dir = Deno.makeTempDirSync()
-  seed(dir)
-  addEventListener('unload', () => {
-    try {
-      Deno.removeSync(dir, { recursive: true })
-    } catch {
-      // Already gone with the run's scratch directory.
-    }
-  })
-  return made = dir
-}
-
 /** A harness view on a fake terminal, dressed as the harness is. */
 export let mount = (App: ComponentType, columns?: number, rows?: number) =>
   tui(App, columns, rows, dress)
 
-/** An explicit local workspace fixture; never an implicit production default. */
+/** A workspace reading only the fixture's temporary directory, without a shell. */
 export let attachedWorkspace = async (h: Pick<Harness, 'g'>, root: string) => {
-  let { executionWorkspace } = await import('@yaks/machine/execution')
-  let { localConnector } = await import('@yaks/machine/connectors')
   let workspace = crypto.randomUUID()
   await h.g.apply([{ entity: { eid: workspace }, workspace: { root } }])
-  let transport = await localConnector().connect('local://')
-  return {
-    workspace,
-    workspaces: {
-      connect: async (id: string) => {
-        let row = (await h.g.get([id]))[0]
-          ?.workspace as import('@yaks/graph').Comp
-        if (!row?.root) throw new Error('Fixture workspace has no root')
-        return executionWorkspace(h.g, transport, {
-          workspace: id,
-          root: String(row.root),
-          receipts: (Deno.env.get('TMPDIR') ?? '/tmp') + '/fixture-receipts',
-        })
-      },
-    },
+  let inside = (path: string) => path == root || path.startsWith(root + '/')
+  let files: import('@yaks/machine').Workspace = {
+    start: () => Promise.reject(new Error('Fixture does not start commands')),
+    look: () => Promise.resolve(null),
+    tail: () => Promise.resolve([]),
+    kill: () => Promise.resolve(),
+    read: (path) =>
+      inside(path)
+        ? Deno.readTextFile(path)
+        : Promise.reject(new Error('Outside fixture workspace')),
+    write: (path, body) =>
+      inside(path)
+        ? Deno.writeTextFile(path, body)
+        : Promise.reject(new Error('Outside fixture workspace')),
+    stat: (paths) =>
+      Promise.all(paths.map(async (path) => {
+        if (!inside(path)) return { kind: 'missing' as const }
+        try {
+          let info = await Deno.stat(path)
+          return {
+            kind: info.isDirectory ? 'directory' as const : 'file' as const,
+            canonical: await Deno.realPath(path),
+          }
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) throw error
+          let link = await Deno.lstat(path).catch(() => undefined)
+          return {
+            kind: link?.isSymlink ? 'dangling' as const : 'missing' as const,
+          }
+        }
+      })),
   }
+  return { workspace, workspaces: { connect: () => Promise.resolve(files) } }
 }

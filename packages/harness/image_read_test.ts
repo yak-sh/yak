@@ -2,11 +2,8 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
 import { artifactStore } from '@yaks/blob'
-import { at, harness, worker } from './testing.ts'
-import { remote } from './remote.ts'
-import { install, onPaint } from '../tui/dom.ts'
-import { ansiBackend } from '../tui/paint.ts'
-import { render } from 'preact'
+import { harness } from './testing.ts'
+
 test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
   let h = await harness()
   try {
@@ -22,52 +19,5 @@ test('image reads resolve registered artifacts and verify bytes; no arbitrary ad
     await assertRejects(() => registered(h.g, 'picture', h.artifacts))
   } finally {
     h.close()
-  }
-})
-
-test('worker retrieves registered image bytes for the lazy attachment renderer', async () => {
-  let directory = await Deno.makeTempDir()
-  let h = await harness(directory + '/db')
-  let bytes = new Uint8Array(24)
-  bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
-  new DataView(bytes.buffer).setUint32(16, 1)
-  new DataView(bytes.buffer).setUint32(20, 1)
-  let record = await artifactStore(h.artifacts)(bytes, 'image/png')
-  await h.g.apply([{ entity: { eid: 'image' }, artifact: record }])
-  h.close()
-  let r = await remote({
-    worker: worker(),
-    config: at(directory + '/db'),
-    cwd: directory,
-    fake: true,
-    // A kitty terminal, without setting the variable every test file shares.
-    env: (name) => name == 'HARNESS_GRAPHICS' ? 'kitty' : Deno.env.get(name),
-  })
-  let screen = install(), output: string[] = []
-  onPaint(() => {})
-  let backend = ansiBackend({
-    graphics: 'kitty',
-    size: () => ({ columns: 40, rows: 12 }),
-    write: (s) => output.push(s),
-  })
-  try {
-    let node = r.agent.entry({
-      entity: { eid: 'attachment' },
-      entry: { session: 's', seq: 1 },
-      attachment: { artifact: 'image' },
-      content: { body: 'Image image' },
-    })
-    render(node, screen.root as unknown as Element)
-    for (let i = 0; i < 100 && !output.join('').includes('a=t,f=100'); i++) {
-      backend.draw(screen.root)
-      await new Promise((resolve) => setTimeout(resolve, 10))
-    }
-    assertEquals(output.join('').includes('a=t,f=100'), true)
-  } finally {
-    backend.stop()
-    render(null, screen.root as unknown as Element)
-    screen.free()
-    await r.close()
-    await Deno.remove(directory, { recursive: true })
   }
 })

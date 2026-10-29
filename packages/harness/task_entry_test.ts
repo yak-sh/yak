@@ -4,7 +4,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import { taskEntry, transcript } from '@yaks/session'
 import { local } from './local.ts'
-import { harness, scratchRepo } from './testing.ts'
+import { harness } from './testing.ts'
 
 let M = identityEid('model', ['fake'])
 
@@ -85,10 +85,8 @@ test('taskEntry rejects invalid inputs and durably accepts concurrent queued tas
 })
 
 test('Agent.taskEntry honors agent limits', async () => {
-  let r = await scratchRepo()
   let a = local({
     h: await harness(),
-    cwd: r.repo,
 
     tools: [],
     maxChildren: 0,
@@ -112,7 +110,6 @@ test('Agent.taskEntry honors agent limits', async () => {
     )
   } finally {
     await a.close()
-    await r.free()
   }
 })
 
@@ -121,10 +118,8 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
   let release!: () => void
   let waiting = new Promise<void>((resolve) => release = resolve)
   let h = await harness()
-  let r = await scratchRepo()
   let a = local({
     h,
-    cwd: r.repo,
 
     tools: [],
     model: async (req) => {
@@ -204,7 +199,6 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
   } finally {
     release()
     await a.close()
-    await r.free()
   }
 })
 

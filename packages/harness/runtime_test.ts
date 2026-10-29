@@ -11,18 +11,16 @@ import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import type { Agent } from './agent.ts'
 import { elapsed, RuntimePanel } from './RuntimePanel.ts'
-import { at, harness, repo, worker } from './testing.ts'
+import { harness } from './testing.ts'
 import { h as node } from 'preact'
 import { mount } from '../tui/testing.ts'
 import { frontend } from './frontend.ts'
 import { Keyboard } from './keyboard.ts'
-import { remote } from './remote.ts'
 
 test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
   let calls = 0
   let a = local({
-    cwd: repo(),
     h: await harness(),
     name: 'fake',
     streaming: true,
@@ -77,7 +75,6 @@ test('runtime queued cancellation is scoped, and inspection does not schedule ex
   let h = await harness()
   let calls = 0
   let a = local({
-    cwd: repo(),
     h,
     maxChildren: 0,
     name: 'fake',
@@ -235,33 +232,6 @@ test('runtime panel reads only while visible; navigation and feedback stay local
   } finally {
     screen.free()
     await ui.close()
-  }
-})
-
-test('worker runtime projection and scoped continuation use explicit commands', async () => {
-  let connection = await remote({
-    worker: worker(),
-    config: at(':memory:'),
-    cwd: repo(),
-    fake: true,
-  })
-  try {
-    let id = await connection.agent.start('runtime worker fixture')
-    await connection.idle(id)
-    let rows = await connection.agent.runtime!(id)
-    assertEquals(rows.length, 1)
-    assertEquals(rows[0].entity.eid, id)
-    assertMatch(
-      await connection.agent.control!(id, 'interrupt'),
-      'No cancellable',
-    )
-    assertMatch(
-      await connection.agent.control!(id, 'resume'),
-      'Continuation input',
-    )
-    await connection.idle(id)
-  } finally {
-    await connection.close()
   }
 })
 

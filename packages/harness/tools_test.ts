@@ -4,7 +4,7 @@ import { graphTools, harnessTools } from './tools.ts'
 import { core, inputSchemaOf } from '@yaks/mcp/tools'
 import { type Bundle, type Comp, identityEid, mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { harness, repo } from './testing.ts'
+import { harness } from './testing.ts'
 import { local } from './local.ts'
 import { agent } from './agent.ts'
 
@@ -164,7 +164,6 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
   let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
   let a = local({
     name: 'gpt-6-astra',
-    cwd: repo(),
     h: await harness(),
     tools: [],
 

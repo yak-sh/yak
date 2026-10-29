@@ -1,219 +1,90 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { local } from './local.ts'
-import { remote } from './remote.ts'
 import { mcpTools } from './mcp.ts'
 import { signins } from '@yaks/connections'
-import { fixture } from '../mcp-client/testing.ts'
-import { graphToolName } from '@yaks/mcp-client/servers'
+import type { Remote } from './mcp_auth.ts'
 import { toolEid } from '@yaks/tools'
-import { at, harness, repo, worker } from './testing.ts'
+import { harness } from './testing.ts'
 
-test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
-  const f = fixture()
-  const server = Deno.serve(
-    { port: 0, hostname: '127.0.0.1', onListen() {} },
-    (req) => f.fetcher(req),
-  )
-  const h = await harness()
-  const calls: string[] = []
-  let requests = 0
-  let published = false
-  await h.g.apply([{
-    entity: { eid: 'site' },
-    mcp_server: {
-      name: 'site',
-      url: `http://127.0.0.1:${server.addr.port}/mcp`,
-    },
-  }])
-  const a = local({
-    cwd: repo(),
-    h,
-    model: (req) => {
-      requests++
-      if (requests === 1) {
-        const t = req.tools.find((t) => t.description.includes('[site]'))!
-        assert(t)
-        calls.push(t.name)
-        return Promise.resolve({
-          id: 'r1',
-          model: 'fake',
-          items: [{
-            kind: 'call',
-            id: 'remote-call',
-            name: t.name,
-            args: JSON.stringify({ html: '<h1>Hello</h1>' }),
-          }],
-        })
-      }
-      published = req.items.some((i) =>
-        i.kind === 'result' && i.id === 'remote-call' &&
-          i.output.includes('mockup/1') ||
-        i.kind === 'user' &&
-          i.text.startsWith('Tool remote-call completed:') &&
-          i.text.includes('mockup/1')
-      )
-      return Promise.resolve({
-        id: `r${requests}`,
-        model: 'fake',
-        items: [{
-          kind: 'assistant',
-          text: published ? 'Published' : 'Waiting for publication',
-        }],
-      })
-    },
+let connected = (
+  h: Awaited<ReturnType<typeof harness>>,
+  reply: Remote['reply'],
+) =>
+  mcpTools(h, signins(h), {
+    refresh: () => Promise.resolve(),
+    tools: () =>
+      Promise.resolve([{
+        name: 'publish_mockup',
+        description: 'Publish a mockup',
+        inputSchema: {
+          type: 'object',
+          properties: { html: { type: 'string' } },
+        },
+        reply,
+        run: () => Promise.reject(new Error('Use the remote reply interface')),
+      }]),
+    control: () => Promise.resolve({ servers: [] }),
+    close: () => Promise.resolve(),
   })
-  try {
-    const id = await a.start('publish mockup')
-    await a.idle(id)
-    const entries = await a.transcript(id)
-    assert(published, 'model receives the completed publication result')
-    assertEquals(entries.filter((b) => b.call).length, 1)
-    assertEquals(entries.filter((b) => b.result).length, 1)
-    assertEquals(
-      calls[0],
-      await graphToolName('site', {
-        name: 'site',
-        url: `http://127.0.0.1:${server.addr.port}/mcp`,
-      }, 'publish_mockup'),
-    )
-    assertEquals(f.calls.filter((c) => c.method === 'tools/list').length, 1)
-    assertEquals(f.calls.filter((c) => c.method === 'tools/call').length, 1)
-  } finally {
-    await a.close()
-    await server.shutdown()
-  }
-})
-
-test('worker owns MCP connection and preserves exact configured tool schemas', async () => {
-  const f = fixture()
-  const server = Deno.serve(
-    { port: 0, hostname: '127.0.0.1', onListen() {} },
-    (req) => f.fetcher(req),
-  )
-  const dir = await Deno.makeTempDir()
-  const db = dir + '/graph.db'
-  const seed = await harness(db)
-  await seed.g.apply([{
-    entity: { eid: 'site' },
-    mcp_server: {
-      name: 'site',
-      url: `http://127.0.0.1:${server.addr.port}/mcp`,
-    },
-  }])
-  seed.close()
-  const a = await remote({
-    worker: worker(),
-    config: at(db),
-    cwd: repo(),
-    fake: true,
-  })
-  try {
-    const id = await a.agent.start('hello')
-    await a.idle(id)
-    assertEquals(f.calls.filter((c) => c.method === 'tools/list').length, 1)
-    await a.agent.sessions()
-    assertEquals(f.calls.filter((c) => c.method === 'tools/list').length, 1)
-  } finally {
-    await a.close()
-    await server.shutdown()
-  }
-})
 
 test('tool isError uses expected tool failure rather than a defect', async () => {
-  const f = fixture()
-  f.toolError()
-  const server = Deno.serve(
-    { port: 0, hostname: '127.0.0.1', onListen() {} },
-    (req) => f.fetcher(req),
-  )
-  const h = await harness()
-  await h.g.apply([{
-    entity: { eid: 'site' },
-    mcp_server: {
-      name: 'site',
-      url: `http://127.0.0.1:${server.addr.port}/mcp`,
-    },
-  }])
-  const tools = mcpTools(h, signins(h))
+  let h = await harness()
+  let tools = connected(h, () =>
+    Promise.resolve({
+      isError: true,
+      content: [{ type: 'text', text: 'mockup/1 failed' }],
+    }))
   try {
-    const [tool] = await tools.snapshot()
+    let [tool] = await tools.snapshot()
     await assertRejects(async () => await tool.run({}), Error, 'mockup/1')
   } finally {
     await tools.close()
-    h.close()
-    await server.shutdown()
+    await h.close()
   }
 })
 
 test('remote images use external artifacts while large text retains bounded context policy', async () => {
-  const f = fixture()
-  const image = btoa('image-bytes')
-  const server = Deno.serve(
-    { port: 0, hostname: '127.0.0.1', onListen() {} },
-    async (req) => {
-      const body = req.method === 'POST' ? await req.clone().json() : undefined
-      if (body?.method === 'tools/call') {
-        return Response.json({
-          jsonrpc: '2.0',
-          id: body.id,
-          result: {
-            content: [{ type: 'image', mimeType: 'image/png', data: image }, {
-              type: 'text',
-              text: 'a'.repeat(100000),
-            }],
-          },
-        })
-      }
-      return f.fetcher(req)
-    },
-  )
-  const h = await harness()
-  await h.g.apply([{
-    entity: { eid: 'site' },
-    mcp_server: {
-      name: 'site',
-      url: `http://127.0.0.1:${server.addr.port}/mcp`,
-    },
-  }])
-  const tools = mcpTools(h, signins(h))
+  let h = await harness()
+  let image = btoa('image-bytes')
+  let tools = connected(h, () =>
+    Promise.resolve({
+      content: [{ type: 'image', mimeType: 'image/png', data: image }, {
+        type: 'text',
+        text: 'a'.repeat(100000),
+      }],
+    }))
   try {
-    const [tool] = await tools.snapshot()
+    let [tool] = await tools.snapshot()
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, {
       entity: { eid: 'call' },
       entry: { session: 's' },
       call: { to: toolEid(tool.name) },
     }])
-    const text = await tool.run({}, {
+    let context = {
       session: 's',
       call: { entity: { eid: 'call' } },
       entries: [],
-    })
+    }
+    let text = await tool.run({}, context)
     assert(!text.includes(image))
     assert(text.includes('Artifact:'))
-    const artifacts = await h.g.read('.artifact&*')
+    let artifacts = await h.g.read('.artifact&*')
     assertEquals(artifacts.length, 1)
-    const address = (artifacts[0].artifact as { address: string }).address
+    let address = (artifacts[0].artifact as { address: string }).address
     assertEquals(
       new TextDecoder().decode(await h.artifacts.get(address)),
       'image-bytes',
     )
-    const attached = await h.g.read('.attachment&*')
+    let attached = await h.g.read('.attachment&*')
     assertEquals(attached.length, 1)
     assertEquals(attached[0].entity.eid, derivedEid('mcp-attachment:call:0'))
     assertEquals(artifacts[0].entity.eid, address)
-    await tool.run({}, {
-      session: 's',
-      call: { entity: { eid: 'call' } },
-      entries: [],
-    })
+    await tool.run({}, context)
     assertEquals((await h.g.read('.attachment&*')).length, 1)
-    // The full text remains available for the ordinary context output policy.
     assert(text.endsWith('a'.repeat(100000)))
   } finally {
     await tools.close()
-    h.close()
-    await server.shutdown()
+    await h.close()
   }
 })

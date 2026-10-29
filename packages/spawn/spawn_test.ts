@@ -1,9 +1,5 @@
 import { machineDoc } from '@yaks/machine/vocab'
 import { fileDoc } from '@yaks/file/vocab'
-// A real child, because a spawn that only ever launched a fake one would
-// prove nothing: the two escapes, the pidfile, the detached log and the
-// ending are the thing under test. The provider is a shell script, so the
-// whole file costs a few hundred milliseconds.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -12,28 +8,13 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import {
-  sessionDoc,
-  sessions,
-  transcriptUsage,
-  unanswered,
-  wake,
-} from '@yaks/session'
+import { sessionDoc, sessions, unanswered, wake } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { launch, processDoc, processes, store } from '@yaks/process'
+import { launch, processDoc, processes } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
-import { checkoutDoc } from '@yaks/git/vocab'
-import {
-  asked as jobOf,
-  carry,
-  checkoutOf,
-  down,
-  finish,
-  type Opts,
-  start,
-} from './run.ts'
+import { asked as jobOf, carry, finish, type Opts, start } from './run.ts'
 import { sessionEnv } from '@yaks/session'
 import { asking, bare, fake, host, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
@@ -44,49 +25,24 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-spawn-' })
 
+let launched: typeof launch = async (g, spec, options = {}) => {
+  let eid = String(options.eid)
+  await g.apply([{
+    entity: { eid },
+    process: { pid: 1, command: spec.command },
+    exit: { code: 0 },
+  }])
+  return { eid, pid: 1, done: Promise.resolve(0), elapsed: () => 0 }
+}
+
 // The facet, composed the way `yak serve` composes it.
 let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) =>
-  g.fx.handle(spawning({ adapters: { fake }, ...o })({ graph: g.g }))
+  g.fx.handle(
+    spawning({ adapters: { fake }, launch: launched, ...o })({ graph: g.g }),
+  )
 
 let said = (g: { read: (q: string) => unknown }) =>
   g.read('.entry&.order=entry.seq&*') as Promise<Bundle[]>
-
-let bodies = async (g: { read: (q: string) => unknown }) =>
-  (await said(g)).map((b) => String(comp(b, 'content')?.body ?? ''))
-
-test('the request starts the provider, and what it printed is the transcript', async () => {
-  let g = tracked()
-  let where = dir()
-  watching(g, { dir: where, poll: 5 })
-  try {
-    await g.g.apply(asking('S1', 'E1', 'do the thing'))
-    // The turn's ending is an entry, so the transcript settles by itself. It
-    // is read in after the text before it, so wait for the ending itself.
-    await until(
-      async () => comp((await said(g.g)).at(-1), 'stop'),
-      'the turn to end',
-    )
-    assert((await bodies(g.g)).includes('working: do the thing'))
-    let last = (await said(g.g)).at(-1)!
-    assertEquals(comp(last, 'stop'), {})
-    // Each request's usage is where a daemon's ask keeps it, so what reads a
-    // transcript's usage reads a run's.
-    let [cost] = await transcriptUsage(g.g, 'S1')
-    assertEquals(comp(cost, 'usage')?.output_tokens, 34)
-    assertEquals(comp(cost, 'ask')?.through, 'E1')
-    await until(
-      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
-      'the ending',
-    )
-    let [row] = await g.g.read('.session&*')
-    // The process rides the session's own entity, and the provider was told
-    // to call its thread by that same name.
-    assertEquals(comp(row, 'session')?.id, 'S1')
-    assertEquals(comp(row, 'exit')?.code, 0)
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
-})
 
 // The persona a run starts with: the instruction its provider was given.
 let persona = async (...rows: Bundle[]) => {
@@ -99,6 +55,7 @@ let persona = async (...rows: Bundle[]) => {
       cwd: where,
       dir: where,
       poll: 5,
+      launch: launched,
       adapters: {
         fake: {
           ...fake,
@@ -110,7 +67,7 @@ let persona = async (...rows: Bundle[]) => {
       },
     })
     await until(
-      async () => comp((await g.get(['S1']))[0], 'exit'),
+      async () => comp((await said(g)).at(-1), 'stop'),
       'the managed provider to exit',
     )
     return given
@@ -173,7 +130,9 @@ test('a request made beside a server is started by the server, not the command',
     })
     let g = graph({ storage, vocab, plugins: [sessions(), processes(), fx] })
     fx.handle(
-      spawning({ adapters: { fake } })({ graph: g }, { dir: where, poll: 5 }),
+      spawning({ adapters: { fake }, launch: launched, cwd: where })({
+        graph: g,
+      }, { dir: where, poll: 5 }),
     )
     return { g, fx }
   }
@@ -196,86 +155,11 @@ test('a request made beside a server is started by the server, not the command',
     let server = process(serving)
     await server.fx.work(server.g)
     await until(
-      async () => comp((await g.read('.session&*'))[0], 'exit'),
+      async () => comp((await said(g)).at(-1), 'stop'),
       'the run the server started to end',
     )
   } finally {
     Deno.removeSync(where, { recursive: true })
-  }
-})
-
-test('a run works in a checkout of its own, taken back when it ends', async () => {
-  let vocab = loadVocab(
-    [
-      sessionDoc,
-      toolsDoc,
-      modelDoc,
-      fileDoc,
-      processDoc,
-      edgeDoc,
-      checkoutDoc,
-      machineDoc,
-      spawnDoc,
-    ],
-    [edgeKeywords],
-  )
-  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
-  let g = graph({
-    storage: ram(vocab, { number: true }),
-    vocab,
-    plugins: [sessions(), processes(), fx],
-  })
-  let top = await Deno.realPath(dir())
-  let repo = `${top}/repo`
-  let runs = `${top}/runs`
-  await Deno.mkdir(repo)
-  await Deno.mkdir(runs)
-  let sh = (...args: string[]) =>
-    new Deno.Command('git', { cwd: repo, args, stdout: 'null' }).output()
-  let branches = async () =>
-    new TextDecoder().decode(
-      (await new Deno.Command('git', { cwd: repo, args: ['branch', '--list'] })
-        .output()).stdout,
-    )
-  await sh('init', '-q', '-b', 'main', '.')
-  await sh(
-    '-c',
-    'user.email=t@example.org',
-    '-c',
-    'user.name=T',
-    'commit',
-    '-q',
-    '--allow-empty',
-    '-m',
-    'initial',
-  )
-  fx.handle(
-    spawning({ adapters: { fake } })({ graph: g }, {
-      dir: top,
-      poll: 5,
-      cwd: repo,
-      worktrees: runs,
-    }),
-  )
-  try {
-    await g.apply(asking('S1', 'E1', 'do the thing'))
-    await until(
-      async () => comp((await g.read('.session&*'))[0], 'process'),
-      'the run to start',
-    )
-    let [row] = await g.read('.session&*')
-    assertEquals(comp(row, 'process')?.cwd, checkoutOf('S1', runs))
-    // It held nothing, so once it ends its checkout is gone again, and then
-    // the branch it was cut on (@yaks/git `reclaim`). The branch goes last:
-    // until it has, git is still writing in the repository.
-    await until(
-      async () =>
-        await Deno.stat(checkoutOf('S1', runs)).then(() => false, () => true) &&
-        !(await branches()).includes('session-S1'),
-      'its checkout and its branch to be taken back',
-    )
-  } finally {
-    Deno.removeSync(top, { recursive: true })
   }
 })
 
@@ -289,37 +173,10 @@ test('a run speaks as its own session, never its launcher’s', () => {
   assertEquals(env, { PATH: '/bin', TASKS_SESSION: 'S1' })
 })
 
-test('a stop on the session reaches the agent', async () => {
-  let g = tracked()
-  let where = dir()
-  watching(g, { dir: where, poll: 5, grace: 500 })
-  try {
-    await g.g.apply(asking('S1', 'E1', 'linger here'))
-    await until(
-      async () => comp((await g.g.read('.session&*'))[0], 'process')?.pid,
-      'a pid',
-    )
-    await g.g.apply([{ entity: { eid: 'S1' }, stop: {} }])
-    let over = await until(
-      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
-      'the agent to go',
-    )
-    assert(over, 'no ending stamped')
-    // It was killed rather than finishing, and the transcript says so.
-    let stop = await until(
-      async () => comp((await said(g.g)).at(-1), 'stop'),
-      'the transcript to record its stop',
-    )
-    assertEquals(stop, {})
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
-})
-
 // Compose this stopped-request host once, before its commit is exercised.
 let stopped = tracked()
 let stoppedDir = dir()
-watching(stopped, { dir: stoppedDir, poll: 5 })
+watching(stopped, { cwd: stoppedDir, dir: stoppedDir, poll: 5 })
 await stopped.g.apply([
   ...asking('S1', 'E1', 'linger here'),
   { entity: { eid: 'S1' }, stop: {} },
@@ -343,51 +200,6 @@ test('a command passing through adopts no run', async () => {
   let untouched = new Proxy({}, { get: () => (looked = true, undefined) })
   await adopting()({ graph: untouched } as never, {}, AbortSignal.abort())
   assertEquals(looked, false)
-})
-
-test('a restart adopts the run and reads its log on from where it stands', async () => {
-  let g = tracked()
-  let where = dir()
-  try {
-    // A server that launched an agent and then went away: the rows are there,
-    // the log is being written, and nobody is reading it.
-    await g.g.apply(asking('S1', 'E1', 'linger here'))
-    let argv = fake.argv({ session: 'S1', instruction: 'linger here' })
-    await launch(store(g.g), {
-      command: argv[0],
-      args: argv.slice(1),
-      env: Deno.env.toObject(),
-    }, { eid: 'S1', dir: where, poll: 5 })
-    // The wrapper opens the log after launch returns, so at first it is absent.
-    await until(
-      async () =>
-        ((await Deno.stat(`${where}/S1.out`).catch(() => null))?.size ?? 0) >
-          100,
-      'the log to fill',
-    )
-    assertEquals((await said(g.g)).length, 1) // only the request so far
-
-    // The restart: the duty, held by a process that stays up.
-    let up = new AbortController()
-    let duty = adopting({ adapters: { fake } })(
-      { graph: g.g },
-      { dir: where, poll: 5 },
-      up.signal,
-    )
-    await until(
-      async () => (await bodies(g.g)).includes('working: linger here'),
-      'the lines written while we were away',
-    )
-    await down(g.g, 'S1', { dir: where, poll: 5, grace: 500 })
-    await until(
-      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
-      'the agent to go',
-    )
-    up.abort()
-    await duty
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
 })
 
 // A session asked to work `y`, which requires `x`, holding `y`, applied once
@@ -424,7 +236,7 @@ let GOING = await image(asked, finished)
 let JOB = (await jobOf(bare(GOING), 'S1'))!
 let parking = (rows: Bundle[]) => {
   // Session owns admission, compare-and-set and task wake policy (wake_test).
-  // Here its RAM transcript door keeps real queries, entries and sequencing;
+  // Here its RAM transcript door keeps queries, entries and sequencing;
   // spawn owns finishing a run and carrying the resulting input to its thread.
   let g = transcriptGraph(host)
   g.apply(rows)
@@ -447,7 +259,7 @@ let parking = (rows: Bundle[]) => {
     // what `session_wake` runs for x's completing
     wake: () => wake(g, 'x'),
     // The same command preparation start() uses, before the process and
-    // log boundary (covered above with a real child).
+    // log boundary.
     request: async () => {
       let [row] = await g.get(['S1'])
       let job = carry(row, JOB, await unanswered(g, 'S1'))

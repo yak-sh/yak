@@ -8,7 +8,7 @@ import type { Model } from '@yaks/model'
 import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
-import { harness, mount, repo, scratchRepo } from './testing.ts'
+import { harness, mount } from './testing.ts'
 import { until } from '../process/testing.ts'
 import { ShuttingDown } from './shutdown.ts'
 
@@ -192,7 +192,6 @@ test('selected session opens alone and the browser requests one page at a time',
 test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let a = local({
-    cwd: repo(),
     h: await harness(),
     model: () => reply.promise,
     tools: [],
@@ -406,10 +405,8 @@ test('Tab preserves editing and captures message/task mode for each queued submi
 test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
   let childReply = deferred<Awaited<ReturnType<Model>>>()
   let childAsked = deferred<void>()
-  let r = await scratchRepo()
   let a = local({
     h: await harness(),
-    cwd: r.repo,
 
     tools: [],
     model: (req) => {
@@ -468,7 +465,6 @@ test('task mode paints claimed work and subagent, then its delivered result with
   } finally {
     ui.free()
     await a.close()
-    await r.free()
   }
 })
 
@@ -803,7 +799,6 @@ test('transcript publishes before slow sidebar reads and despite ongoing changes
   let dir = await Deno.makeTempDir()
   let a = local({
     h: await harness(),
-    cwd: dir,
     model: () => reply.promise,
     tools: [],
   })

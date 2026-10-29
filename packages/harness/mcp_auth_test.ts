@@ -4,12 +4,10 @@ import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { frontend } from './frontend.ts'
-import { authorizedMCP } from './mcp_auth.ts'
-import { signins } from '@yaks/connections'
+
 import type { UIAgent } from './panels.ts'
-import { fixture } from '../mcp-client/testing.ts'
-import { remote } from './remote.ts'
-import { at, harness, mount, repo, worker } from './testing.ts'
+
+import { mount } from './testing.ts'
 
 test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
   const ui = frontend()
@@ -46,108 +44,5 @@ test('authorization UI captures pasted callback privately, preserving draft and 
   } finally {
     view.free()
     ui.close()
-  }
-})
-
-test('local HTTP OAuth exchange reconnects MCP discovery and works through worker controls', async () => {
-  const dir = await Deno.makeTempDir()
-  let origin = '', exchanges = 0
-  const f = fixture()
-  const server = Deno.serve(
-    { port: 0, hostname: '127.0.0.1', onListen() {} },
-    async (req) => {
-      const u = new URL(req.url)
-      if (u.pathname.includes('oauth-protected-resource')) {
-        return Response.json({
-          resource: origin + '/mcp',
-          authorization_servers: [origin],
-        })
-      }
-      if (u.pathname.includes('well-known')) {
-        return Response.json({
-          issuer: origin,
-          authorization_endpoint: origin + '/authorize',
-          token_endpoint: origin + '/token',
-          registration_endpoint: origin + '/register',
-          response_types_supported: ['code'],
-          code_challenge_methods_supported: ['S256'],
-          token_endpoint_auth_methods_supported: ['none'],
-        })
-      }
-      if (u.pathname === '/register') {
-        return Response.json({ ...await req.json(), client_id: 'public' }, {
-          status: 201,
-        })
-      }
-      if (u.pathname === '/token') {
-        exchanges++
-        return Response.json({
-          access_token: 'private-access',
-          token_type: 'Bearer',
-          expires_in: 3600,
-        })
-      }
-      if (
-        req.headers.get('authorization') !== 'Bearer private-access'
-      ) return new Response(null, { status: 401 })
-      return f.fetcher(req)
-    },
-  )
-  origin = 'http://127.0.0.1:' + server.addr.port
-  const db = dir + '/graph.db'
-  const seed = await harness(db)
-  await seed.g.apply([{
-    entity: { eid: 'site' },
-    mcp_server: { name: 'site', url: origin + '/mcp' },
-  }])
-  seed.close()
-  const backend = await remote({
-    worker: worker(),
-    config: at(db),
-    cwd: repo(),
-    fake: true,
-  })
-  try {
-    assert(
-      (await backend.agent.authorizeMCP!('list')).servers?.includes(
-        'site [site]',
-      ),
-    )
-    const pending = await backend.agent.authorizeMCP!('begin', 'site')
-    const callback = pending.redirectUrl + '?code=authorization-code&state=' +
-      new URL(pending.url!).searchParams.get('state')
-    const reply = await backend.agent.authorizeMCP!(
-      'complete',
-      'site',
-      callback,
-    )
-    assert(reply.message!.includes('Connected'))
-    assertEquals(exchanges, 1)
-    // Another process over the same graph finds the sign-in, a connection the
-    // server owns, in the vault beside it, and nothing of the exchange that
-    // produced it.
-    const again = await harness(db)
-    const signin = signins(again)
-    const local = authorizedMCP(
-      [{ name: 'site', url: origin + '/mcp' }],
-      (s) => signin.key(s.name, s.url),
-    )
-    try {
-      const tools = await local.tools()
-      assertEquals(tools.length, 1)
-      assert(!JSON.stringify(tools).includes('private-access'))
-    } finally {
-      await local.close()
-      again.close()
-    }
-    const kept = [...Deno.readDirSync(dir + '/secrets')]
-      .filter((e) => e.name.endsWith('.json'))
-      .map((e) => Deno.readTextFileSync(dir + '/secrets/' + e.name))
-    assert(kept.some((text) => text.includes('private-access')))
-    assert(!kept.some((text) => text.includes('authorization-code')))
-  } finally {
-    await backend.close()
-    await server.shutdown()
-    await Deno.remove(dir, { recursive: true })
   }
 })

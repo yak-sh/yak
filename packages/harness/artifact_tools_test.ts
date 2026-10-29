@@ -109,7 +109,6 @@ test('tool-driven vision reaches the next model request and survives database re
   let requests: Item[][] = []
   let a = local({
     h,
-    cwd: dir,
     name: 'fake',
     model: (req) => {
       requests.push(req.items.slice())

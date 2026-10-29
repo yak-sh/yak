@@ -5,13 +5,12 @@ import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
 import { local } from './local.ts'
 import { until } from '../process/testing.ts'
-import { harness, mount, repo } from './testing.ts'
+import { harness, mount } from './testing.ts'
 
 test('mounted transcript paints partial markdown before the model returns', async () => {
   let release!: () => void
   const wait = new Promise<void>((r) => release = r)
   const a = local({
-    cwd: repo(),
     h: await harness(),
     streaming: true,
     model: async (req) => {

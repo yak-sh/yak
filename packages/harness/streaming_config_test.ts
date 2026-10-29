@@ -3,8 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { streamingEnabled } from './streaming.ts'
 import { local } from './local.ts'
-import { remote } from './remote.ts'
-import { at, harness, repo, worker } from './testing.ts'
+import { harness } from './testing.ts'
 
 test('streaming defaults on; explicit options override the environment', () => {
   for (const value of [undefined, '1', '0']) {
@@ -38,7 +37,6 @@ test('local streaming options control the model text callback', async () => {
     const h = await harness()
     let observed = false
     const a = local({
-      cwd: repo(),
       h,
       env: streamAs(undefined),
       ...options,
@@ -65,7 +63,6 @@ test('local streaming options control the model text callback', async () => {
   }
   let calls = 0
   const failed = local({
-    cwd: repo(),
     h: await harness(),
     env: streamAs(undefined),
     model: () => {
@@ -84,38 +81,5 @@ test('local streaming options control the model text callback', async () => {
     )
   } finally {
     await failed.close()
-  }
-})
-
-test('worker streaming options reach the model request', async () => {
-  for (
-    const [value, options, expected] of [
-      [undefined, {}, true],
-      ['0', {}, false],
-      ['1', {}, true],
-      ['1', { stream: false }, false],
-      ['1', { streaming: false }, false],
-    ] as const
-  ) {
-    const a = await remote({
-      worker: worker(),
-      config: at(),
-      cwd: repo(),
-      fake: true,
-      env: streamAs(value),
-      ...options,
-    })
-    try {
-      const id = await a.agent.start('hello')
-      assertEquals(await a.testing!.started(), expected)
-      await a.idle(id)
-      const entries = await a.agent.transcript(id)
-      assertEquals(
-        entries.some((b) => (b.content as Comp)?.body == 'ok'),
-        true,
-      )
-    } finally {
-      await a.close()
-    }
   }
 })

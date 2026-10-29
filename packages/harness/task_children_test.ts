@@ -5,7 +5,7 @@ import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
 import { test, until } from '@yaks/testing'
 import { harnessTools } from './tools.ts'
 import { local } from './local.ts'
-import { harness, repo, working } from './testing.ts'
+import { harness, working } from './testing.ts'
 
 let dependency = '00000000-0000-4000-8000-000000000001'
 let laterEditor = '00000000-0000-4000-8000-000000000002'
@@ -270,7 +270,6 @@ test('child marks task done through a tool before its final answer: one final re
     },
   })
   let a = local({
-    cwd: repo(),
     h,
     tools,
     model: (req) => {
@@ -558,7 +557,6 @@ test('existing fork receipts do not read inherited transcript bodies on resume',
     return read(query, ...rest as [])
   }) as typeof h.g.read
   let a = local({
-    cwd: repo(),
     h,
     name: 'fake',
     model: () => {

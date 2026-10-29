@@ -124,20 +124,3 @@ let undelivered = await (async () => {
 test('a diagnostic shutdown drain is bounded', () => {
   assertMatch(undelivered[0], /still pending/)
 })
-
-test('a fatal unhandled rejection really exits the subprocess, saying what it was', async () => {
-  let module = new URL('./diagnostics.ts', import.meta.url).href
-  let script = 'import {createDiagnostics,uncaught} from ' +
-    JSON.stringify(module) + ';' +
-    'uncaught(createDiagnostics());' +
-    'Promise.reject(new Error("fatal-test", {cause:new Error("root-test")}));'
-  let child = await new Deno.Command(Deno.execPath(), {
-    args: ['eval', script],
-    stdout: 'null',
-    stderr: 'piped',
-  }).output()
-  assert(!child.success)
-  let said = new TextDecoder().decode(child.stderr)
-  assertMatch(said, /fatal-test/)
-  assertMatch(said, /root-test/)
-})

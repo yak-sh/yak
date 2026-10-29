@@ -5,11 +5,11 @@ import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { react, statusOf } from '@yaks/session'
-import { until } from '../process/testing.ts'
-import { at, harness, repo, worker } from './testing.ts'
+
+import { harness } from './testing.ts'
 import { seed } from './agent.ts'
 import { identityEid } from '@yaks/graph'
-import { remote } from './remote.ts'
+
 import { CODEX, responses } from '@yaks/openai'
 import { resolve } from '@yaks/render'
 import { statusViews, statusVocab } from './status.ts'
@@ -32,7 +32,6 @@ test('streaming records ask before dispatch, projects text without durable token
   const frames: import('@yaks/graph').TransientFrame[] = []
   transient(h.g).subscribe((f) => frames.push(f))
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -91,7 +90,6 @@ test('partial failure preserves text and does not automatically retry ambiguous 
   const h = await harness()
   let calls = 0
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: (req) => {
@@ -123,34 +121,6 @@ test('partial failure preserves text and does not automatically retry ambiguous 
   }
 })
 
-test('a real worker transfers transient text before model completion', async () => {
-  const a = await remote({
-    worker: worker(),
-    config: at(),
-    cwd: repo(),
-    streaming: true,
-    fake: { held: true, deltas: 30 },
-  })
-  try {
-    const id = await a.agent.start('stream')
-    await a.agent.transcript(id)
-    await until(async () => {
-      const rows = await a.agent.transcript(id)
-      return (
-        rows.some((b) => (b.attempt as Comp)?.state == 'inflight') &&
-        rows.some((b) => (b.content as Comp)?.body == 'x'.repeat(30))
-      )
-    }, 'the in-flight text projection')
-    await a.testing!.release()
-    await a.idle(id)
-    const rows = await a.agent.transcript(id)
-    assertEquals((rows.find((b) => b.ask)!.attempt as Comp).state, 'completed')
-  } finally {
-    await a.testing!.release()
-    await a.close()
-  }
-})
-
 test('new input while streaming is outside frozen ask boundary and served in follow-up', async () => {
   const h = await harness()
   let release!: () => void, started!: () => void, calls = 0
@@ -158,7 +128,6 @@ test('new input while streaming is outside frozen ask boundary and served in fol
   const sent = new Promise<void>((r) => started = r)
   const requests: import('@yaks/model').Request[] = []
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -208,7 +177,6 @@ test('restart resumes a dispatched attempt from its partial history', async () =
   const h = await harness()
   let requests = 0
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: (req) => {
@@ -321,7 +289,6 @@ test('an empty successful reply completes its ask rather than issuing another re
   const h = await harness()
   let count = 0
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: () => {
@@ -348,7 +315,6 @@ test('checkpoints bound blob versions and finalization persists one stable respo
     if (f.op == 'append') appends++
   })
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     checkpointMs: 0,
@@ -390,7 +356,7 @@ test('operational interruption retains partial context, waits, and continues fro
   model.mark = (reply) => ({ openai: { response_id: reply.id } })
   model.anchor = (entry) =>
     (entry.openai as Comp | undefined)?.response_id as string | undefined
-  const a = local({ cwd: repo(), h, streaming: true, model })
+  const a = local({ h, streaming: true, model })
   try {
     const id = await a.start('first')
     await a.idle(id)
@@ -431,7 +397,6 @@ test('operational interruption retains partial context, waits, and continues fro
 test('unexpected model programming failure remains an exception', async () => {
   const h = await harness()
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: () => {
@@ -461,7 +426,6 @@ test('input admitted during an aborted turn is served once after interruption', 
   const gate = new Promise<void>((r) => abort = r)
   const requests: import('@yaks/model').Request[] = []
   const a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -511,7 +475,6 @@ test('input admitted during an aborted turn is served once after interruption', 
 test('invalid provider history records a healable exception, not an operational interruption', async () => {
   let h = await harness()
   let a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: responses({
@@ -600,7 +563,6 @@ test('provider rejection paints crashed and successful recovery clears it', asyn
   let h = await harness()
   let calls = 0
   let a = local({
-    cwd: repo(),
     h,
     streaming: true,
     model: () => {

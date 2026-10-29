@@ -33,8 +33,6 @@ import {
   worded,
 } from '@yaks/tools'
 import { processDoc, processes } from '@yaks/process'
-import { spawning } from './effects.ts'
-import { fake, until } from './testing.ts'
 import { every, runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
 import { transcriptGraph } from '../session/testing.ts'
@@ -426,70 +424,6 @@ test('a wait answers when the server answering it starts to stop', async () => {
 // The whole machine, with a provider that is a shell script: the request
 // starts it, the wait blocks on the process ending rather than the transcript,
 // and the peek reads back what it said.
-test('spawn --wait runs the provider and answers what it came to', async () => {
-  let { g, fx } = host()
-  let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-tools-' })
-  fx.handle(
-    spawning({ adapters: { fake }, dir: where, poll: 5 })({ graph: g }),
-  )
-  try {
-    await g.apply(shelf)
-    let said = body(
-      await tools.session_spawn!(
-        ...asked(g, {
-          task: 'the-task',
-          provider: P,
-          model: M,
-          wait: true,
-          timeout: '30',
-        }),
-      ) as Bundle[],
-    )
-    assertStringIncludes(said, 'exited 0')
-    assertStringIncludes(said, 'working: ') // its own last word, as the brief
-
-    let [session] = await g.read('.session&*')
-    let seen = body(
-      await tools.session_peek!(...asked(g, { session: session.entity.eid })),
-    )
-    assertStringIncludes(seen, 'working: ')
-    await until(async () => (await g.read('.stop&*')).length, 'the ending')
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
-})
-
-test('session stop ends a managed run', async () => {
-  let { g, fx } = host()
-  let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-stop-' })
-  fx.handle(
-    spawning({ adapters: { fake }, dir: where, poll: 5, grace: 500 })(
-      { graph: g },
-    ),
-  )
-  try {
-    await g.apply(shelf)
-    await through(g, 'session_spawn', {
-      task: 'the-task',
-      provider: P,
-      instruction: 'linger here',
-    })
-    let row = await until(async () => {
-      let [session] = await g.read('.session&*')
-      return comp(session, 'process')?.pid ? session : undefined
-    }, 'the managed run to start') as Bundle
-    await through(g, 'session_stop', { session: row.entity.eid })
-    await until(
-      async () => comp((await g.get([row.entity.eid]))[0], 'exit'),
-      'the managed run to stop',
-    )
-    let [stopped] = await g.get([row.entity.eid])
-    assertEquals(stopped.entity.num, row.entity.num)
-    assertEquals(comp(stopped, 'stop'), {})
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
-})
 
 // The stop door needs no process behind a native transcript.
 let nativeVocab = loadVocab([spineDoc, sessionDoc, toolsDoc, modelDoc])

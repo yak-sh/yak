@@ -12,7 +12,7 @@ import { tally } from '@yaks/sql'
 import { compose } from '@yaks/cli/host'
 import type { Facets, Load } from '@yaks/host'
 import { local } from './local.ts'
-import { harness, repo } from './testing.ts'
+import { harness } from './testing.ts'
 
 test('closing the agent stops its migration monitor', async () => {
   const time = clock()
@@ -23,7 +23,7 @@ test('closing the agent stops its migration monitor', async () => {
     reads++
     return read()
   }
-  const a = local({ cwd: repo(), h, clock: time })
+  const a = local({ h, clock: time })
   try {
     await time.advance(1000)
     assertEquals(reads, 1)
@@ -102,7 +102,6 @@ test('migration observation stops admission but drains current model before data
     close()
   }
   const a = local({
-    cwd: repo(),
     h,
     migrationPollMs: 1,
     model: async () => {

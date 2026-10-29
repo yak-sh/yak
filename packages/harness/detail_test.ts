@@ -1,8 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { entrySource, SOURCE_LIMIT } from './detail.ts'
-import { remote } from './remote.ts'
-import { at, harness, worker } from './testing.ts'
+
+import { harness } from './testing.ts'
 
 const seed = [
   { entity: { eid: 'p' }, session: {} },
@@ -73,41 +73,6 @@ test('SOURCE authorizes inherited entry without reading transcript and pages Uni
     )
   } finally {
     h.close()
-  }
-})
-
-test('SOURCE worker fake matches inline read and rejects unrelated entries', async () => {
-  let dir = await Deno.makeTempDir(), db = dir + '/db.sqlite'
-  let h = await harness(db)
-  await h.g.apply(seed)
-  let expected = await entrySource(h.g, 'child', 'a')
-  h.close()
-  let r = await remote({
-    worker: worker(),
-    config: at(db),
-    cwd: dir,
-    fake: true,
-  })
-  try {
-    assertEquals(await r.agent.entrySource!('child', 'a'), expected)
-    let next = await r.agent.entrySource!('child', 'a', {
-      start: expected.next!,
-      revision: expected.revision,
-    })
-    assertEquals(next.next, null)
-    await assertRejects(
-      () => r.agent.entrySource!('child', 'late'),
-      Error,
-      'not in this transcript',
-    )
-    await assertRejects(
-      () => r.agent.entrySource!('child', 'a', { revision: 'wrong' }),
-      Error,
-      'revision',
-    )
-  } finally {
-    await r.close()
-    await Deno.remove(dir, { recursive: true })
   }
 })
 

@@ -7,7 +7,7 @@ import { type ChildLimits, sessionTools } from '@yaks/session'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
 import type { Harness } from './store.ts'
-import { harness, repo } from './testing.ts'
+import { harness } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -49,7 +49,6 @@ test('shared FIFO pool admits IDs before preparation and never over-admits acros
     },
   })
   let a = local({
-    cwd: repo(),
     h,
     ...bound,
     model: (req) => {
@@ -103,7 +102,6 @@ test('queued intent survives a restart, and closing does not drain the durable q
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
   let a = local({
-    cwd: repo(),
     h,
     ...bound,
     model: () => {
@@ -129,7 +127,6 @@ test('queued intent survives a restart, and closing does not drain the durable q
     h = await harness(path)
     assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
     b = local({
-      cwd: repo(),
       h,
       ...limited(h, { maxChildren: 1 }),
       model: () => Promise.resolve(reply('done')),
@@ -151,7 +148,6 @@ test('cap one nested delegated wait releases and reacquires its slot', async () 
   let turns = new Map<string, number>()
   let finished = false
   let a = local({
-    cwd: repo(),
     h,
     maxChildren: 1,
     model: (req) => {
@@ -206,7 +202,6 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
   }
   let bound = limited(h, { maxChildren: 0, prepareChild: prepare })
   let a = local({
-    cwd: repo(),
     h,
     ...bound,
     model: () => Promise.resolve(reply('parent')),
@@ -238,7 +233,6 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
     await a.close()
     h = await harness(path)
     b = local({
-      cwd: repo(),
       h,
       ...limited(h, { maxChildren: 1, prepareChild: prepare }),
       model: () => Promise.resolve(reply('parent')),
@@ -270,7 +264,6 @@ test('queued submissions and fork anchors survive file reopen without duplicate 
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
   let a = local({
-    cwd: repo(),
     h,
     ...bound,
     model: () => Promise.resolve(reply('done')),
@@ -307,7 +300,6 @@ test('queued submissions and fork anchors survive file reopen without duplicate 
       },
     })
     a = local({
-      cwd: repo(),
       h,
       ...bound,
       model: () => Promise.resolve(reply('done')),

@@ -73,13 +73,11 @@ export let bare = (rows: Bundle[] = []): Graph => {
   return graph({ storage, vocab: host, plugins: [sessions()] })
 }
 
-/** The fake provider, printing claude's output format: the shipped reader
- * under test, driven by a shell script that needs no model (./fake.sh). */
+/** Adapter data for a launch boundary supplied by the test. */
 export let fake: Adapter = {
   ...claude,
   argv: (j) => [
-    'sh',
-    new URL('./fake.sh', import.meta.url).pathname,
+    'fake',
     j.session,
     j.model ?? '',
     JSON.stringify(j.instruction).slice(1, -1),

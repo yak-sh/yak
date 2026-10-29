@@ -15,7 +15,7 @@ import {
 } from '@yaks/session'
 import { seed } from './agent.ts'
 import { type Local, local } from './local.ts'
-import { attachedWorkspace, harness, repo } from './testing.ts'
+import { attachedWorkspace, harness } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -161,7 +161,7 @@ test('wait resolves while child completion waits behind the parent tool', async 
     }
     return Promise.resolve(reply('done'))
   }
-  let a = local({ cwd: repo(), h, model, tools })
+  let a = local({ h, model, tools })
   let parent = await a.start('parent')
   await childAsked.promise
   await waiting.promise
@@ -191,7 +191,6 @@ test('child capacity queues without rejection; root starts retain their separate
     return Promise.resolve(reply('done'))
   }
   let a = local({
-    cwd: repo(),
     h,
     model,
     maxChildren: 1,
@@ -209,7 +208,6 @@ test('child capacity queues without rejection; root starts retain their separate
   h = await harness()
   pending = deferred<Reply>()
   a = local({
-    cwd: repo(),
     h,
     model: () => pending.promise,
     tools: [],
@@ -343,7 +341,6 @@ test('child completion is queued behind an in-flight parent ask without collidin
   let turns = 0
   let h = await harness()
   let a = local({
-    cwd: repo(),
     h,
     tools: sessionTools(h.g),
     model: (req) => {
