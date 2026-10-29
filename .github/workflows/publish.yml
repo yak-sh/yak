@@ -28,8 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Every package, checked the way JSR will check it. Also part of the local
-  # check gate, so slow types and missing exports are caught before landing.
+  # Every package, checked the way JSR will check it, after the push. Slow
+  # types and missing exports report through CI without holding a landing.
   dry-run:
     if: startsWith(github.ref, 'refs/tags/v') == false
     runs-on: [self-hosted, yak]
