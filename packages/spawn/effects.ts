@@ -23,7 +23,8 @@
 //
 // ```json
 // { "use": "@yaks/spawn",
-//   "with": { "cwd": "/srv/repo", "worktrees": "/srv/runs", "poll": 250 } }
+//   "with": { "cwd": "/srv/repo", "worktrees": "/srv/runs", "poll": 250,
+//     "mcp": { "tasks": "http://localhost:5173/mcp" } } }
 // ```
 //
 // Providers are not in it: an adapter is a function, so a server with one of
@@ -51,6 +52,9 @@ export type Options = {
   poll?: number
   /** how long a killed agent gets after SIGTERM before SIGKILL (ms) */
   grace?: number
+  /** the MCP servers a run is connected to, by name to URL, each told the
+   * run's session in `x-via` (@yaks/spawn `Opts`) */
+  mcp?: Record<string, string>
 }
 
 let comp = (b: Bundle | undefined, name: string) =>

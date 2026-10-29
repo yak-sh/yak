@@ -159,7 +159,8 @@ from the graph.
       "with": {
         "cwd": "/srv/repo",
         "worktrees": "/srv/runs",
-        "poll": 250
+        "poll": 250,
+        "mcp": { "tasks": "http://localhost:5173/mcp" }
       }
     }
   ]
@@ -170,6 +171,14 @@ from the graph.
 `/srv/runs/<session-eid>` on branch `session-<session-eid>`, cut from the source
 repository's local `main`. Uncommitted source changes stay in the source
 checkout.
+
+`mcp` names the MCP servers each run is connected to, by name to URL. The launch
+configures each one through the provider's own flags (claude's `--mcp-config`,
+codex's `-c mcp_servers.<name>`), replacing a server of that name in the
+person's own config, and with an `x-via` header naming the run's session. The
+door resolves that header (@yaks/session `authenticate`), so what the agent
+writes is stamped `by` its actor and `via` its session from its first call, with
+nothing asked of the agent.
 
 Effects also accept process-file `dir`, polling interval `poll`, and kill
 `grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,

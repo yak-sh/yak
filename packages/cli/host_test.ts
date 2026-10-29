@@ -36,6 +36,8 @@ import { open } from '@yaks/sqlite/db'
 import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
 import { clock, test, until } from '@yaks/testing'
+import { claude, codex } from '@yaks/spawn'
+import { parse as parseToml } from '@std/toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -2067,4 +2069,79 @@ test('a store refuses a config without a plugin its data requires, naming it, un
     'kept',
   )
   assertEquals(requirement.dropped, undefined)
+})
+
+// The MCP connection a provider's launch configures for its run, as the CLI
+// reads it: claude's `--mcp-config` JSON, codex's `-c` TOML keys.
+let connection = (argv: string[], name: string) => {
+  let json = argv[argv.indexOf('--mcp-config') + 1]
+  if (argv.includes('--mcp-config')) {
+    let s = JSON.parse(json).mcpServers[name]
+    return {
+      url: s.url as string,
+      headers: s.headers as Record<string, string>,
+    }
+  }
+  let keys = argv.filter((a, i) => argv[i - 1] == '-c' && a.startsWith('mcp_'))
+  let s = (parseToml(keys.join('\n')).mcp_servers as Record<string, Comp>)[name]
+  return {
+    url: s.url as string,
+    headers: s.http_headers as Record<string, string>,
+  }
+}
+
+test('a spawned run is stamped with its actor from its first MCP call, on either provider', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', '@yaks/session', ...HTTP] },
+    only({ shop }),
+  )
+  try {
+    let persona = mint()
+    let run = mint()
+    // What session_spawn writes: a session working as its persona. The run
+    // has made no call and named itself nowhere.
+    await host.graph.apply([
+      { entity: { eid: persona }, book: { title: 'the persona' } },
+      { entity: { eid: run }, session: { id: run, persona } },
+    ])
+    let job = {
+      session: run,
+      instruction: 'go',
+      mcp: { tasks: 'http://h/mcp' },
+    }
+    for (let adapter of [claude, codex]) {
+      let { url, headers } = connection(adapter.argv(job), 'tasks')
+      let said = await serving(host)(
+        new Request(url, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+              name: 'graph_apply',
+              arguments: {
+                bundles: [{ entity: { eid: '$b' }, book: { title: 'Dune' } }],
+              },
+            },
+          }),
+        }),
+      )
+      assertEquals(said.status, 200)
+      await said.text()
+    }
+    let made = await host.graph.read('.book.title=Dune&?created')
+    assertEquals(made.length, 2)
+    for (let b of made) {
+      let { by, via } = b.created as Comp
+      assertEquals([by, via], [persona, run])
+    }
+  } finally {
+    await host.close()
+  }
 })

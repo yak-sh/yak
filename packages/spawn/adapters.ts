@@ -12,8 +12,14 @@
 // instruction flag, beside the instruction file the provider reads in its
 // checkout. Each adapter names that file, so ./run.ts can tell whether the
 // file already says the persona, and gives the persona only when it does not.
+//
+// A run also names itself to the MCP servers it is connected to: each carries
+// the session in `x-via` (@yaks/session `VIA`), through the provider's own way
+// of configuring a connection, so a door stamps what the agent writes with its
+// actor from its first call, and the agent says nothing for it.
 
 import { type Reader, readers } from '@yaks/session'
+import { VIA } from '@yaks/session/graph'
 
 /** What a run was asked for; the command line is built from it. */
 export type Job = {
@@ -32,6 +38,9 @@ export type Job = {
   /** the provider's own id for the conversation this run carries on, where
    * the session ran before; a first run has none */
   thread?: string
+  /** the MCP servers it is connected to, by name to URL, each told the
+   * session in `x-via`; a name the provider already has is replaced */
+  mcp?: Record<string, string>
 }
 
 /** A provider that is run as a command. */
@@ -43,6 +52,26 @@ export type Adapter = {
   /** the instruction file its provider reads at the root of its checkout */
   file?: string
 }
+
+let servers = (j: Job) => Object.entries(j.mcp ?? {})
+
+// Claude's `--mcp-config` takes JSON, and a server it names replaces the one
+// of that name in the person's own config.
+let connected = (j: Job): string[] =>
+  servers(j).length
+    ? [
+      '--mcp-config',
+      JSON.stringify({
+        mcpServers: Object.fromEntries(
+          servers(j).map(([name, url]) => [name, {
+            type: 'http',
+            url,
+            headers: { [VIA]: j.session },
+          }]),
+        ),
+      }),
+    ]
+    : []
 
 /** `claude -p --output-format stream-json`, carrying on its thread with
  * `--resume`. */
@@ -57,6 +86,7 @@ export let claude: Adapter = {
     ...(j.model ? ['--model', j.model] : []),
     ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
+    ...connected(j),
     '--permission-mode',
     'bypassPermissions', // it owns its worktree; nobody is at the prompt
     // -- ends the options: the instruction is a positional, so content that
@@ -78,6 +108,18 @@ let toml = (s: string): string =>
 // instruction file a person keeps comes near a mebibyte.
 let WHOLE = 1 << 20
 
+// Codex's `-c` sets a key of its TOML config, over the person's own.
+let configured = (j: Job): string[] =>
+  servers(j).flatMap(([name, url]) => {
+    let key = `mcp_servers.${toml(name)}`
+    return [
+      '-c',
+      `${key}.url=${toml(url)}`,
+      '-c',
+      `${key}.http_headers={${toml(VIA)}=${toml(j.session)}}`,
+    ]
+  })
+
 /** `codex exec --json`, carrying on its thread with `codex exec resume`. */
 export let codex: Adapter = {
   argv: (j) => [
@@ -93,6 +135,7 @@ export let codex: Adapter = {
     '-c',
     `project_doc_max_bytes=${WHOLE}`,
     ...(j.persona ? ['-c', `developer_instructions=${toml(j.persona)}`] : []),
+    ...configured(j),
     '--',
     ...(j.thread ? [j.thread] : []),
     j.instruction,

@@ -105,6 +105,10 @@ export type Opts = {
   birth?: number
   /** how long a stopped run has after TERM before KILL (ms, default 10_000) */
   grace?: number
+  /** the MCP servers each run is connected to, by name to URL, each told the
+   * run's session in `x-via` so the server stamps its writes with the
+   * session's actor (./adapters.ts `Job.mcp`) */
+  mcp?: Record<string, string>
   /** how a command is started (default @yaks/process `launch`): the one
    * place a run touches the machine's processes, so a host that starts them
    * another way, or a test that starts none, lends its own */
@@ -414,7 +418,7 @@ export let start = async (
   }
   let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
   let persona = await given(g, session, cwd ?? Deno.cwd(), adapter)
-  let argv = adapter.argv({ ...job, persona })
+  let argv = adapter.argv({ ...job, persona, mcp: o.mcp })
   // Placed before the child writes a line: a log cleaned since the last run
   // is new, and its lines are numbered on from where the transcript stands.
   let t = await tail(g, paths(session, o).out, { session })
