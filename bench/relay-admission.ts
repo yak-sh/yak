@@ -3,6 +3,7 @@
 import { RELAY_ENTITIES, relayFixture } from './relay-fixture.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
 import { standaloneMain } from './standalone-main.ts'
+import { selected } from './selected.ts'
 
 export async function measure(
   args: string[] = [],
@@ -13,6 +14,8 @@ export async function measure(
   const N = Number(args[1] ?? 200)
   for (const entities of RELAY_ENTITIES) {
     for (const variant of ['store-relay', 'graph-full-check']) {
+      let name = variant + '/' + entities + '-entities'
+      if (!selected(name)) continue
       const fixture = await relayFixture(entities, { root, variant })
       try {
         const samples: (Sample & { cpu: number })[] = []
@@ -21,7 +24,7 @@ export async function measure(
           samples.push(await fixture.run(N))
         }
         const count = fixture.counts(), values = N * entities
-        results[variant + '/' + entities + '-entities'] = samples.map(
+        results[name] = samples.map(
           (sample) => ({
             value: sample.value / 1000 / values,
             cpu: sample.cpu / 1000 / values,
