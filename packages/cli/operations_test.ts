@@ -30,7 +30,9 @@ test('host operations answer through MCP without a CLI plugin', async () => {
       })
     },
   })
-  let client = await connect({ graph: host.graph, tools })
+  host.registry.replace('@yaks/cli', tools)
+  equal(host.registry.describe('restart')?.provider, '@yaks/cli')
+  let client = await connect({ graph: host.graph, runner: host.runner })
   try {
     let listed = (await client.listTools()).tools.map((t) => t.name)
     ok(listed.includes('help') && listed.includes('restart'))
