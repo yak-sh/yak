@@ -180,7 +180,15 @@ let door = (server: Harness) =>
           res.webSocket,
           res.headers.get('sec-websocket-protocol') ?? undefined,
         )
-        : new Response(res.body, res)
+        // HEAD arrives bodyless from workerd. Deno.serve replaces the
+        // representation's Content-Length with zero for a null body; an
+        // empty stream lets this HTTP relay retain the upstream header.
+        : new Response(
+          req.method == 'HEAD' && ![204, 205, 304].includes(res.status)
+            ? new ReadableStream({ start: (c) => c.close() })
+            : res.body,
+          res,
+        )
     },
   )
 

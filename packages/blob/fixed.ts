@@ -15,9 +15,9 @@ let owned = (source: ReadableStream<Uint8Array>) => {
   }
 }
 
-// A stream R2 will take a part from: one whose length is known, which a
-// Worker's own FixedLengthStream says. Retain both ends and the pipe, so a
-// rejected upload can stop it even before the binding consumes its body.
+// R2 uploads and HTTP responses both require the Worker's native stream
+// length. Retain both ends and the pipe, so a rejected upload can stop it
+// even before the binding consumes its body.
 type Exact = (
   length: number,
 ) => TransformStream<Uint8Array, Uint8Array> | undefined

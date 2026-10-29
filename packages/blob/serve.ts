@@ -9,6 +9,7 @@
 // `Response` is the web platform's own, so this loads anywhere the package
 // does.
 import type { Opened } from './object.ts'
+import { fixed } from './fixed.ts'
 
 /** What the response needs to know about the object besides its bytes. */
 export type Served = {
@@ -95,15 +96,17 @@ export let rangedOpen = async (
   if (status == 304 || status == 416) {
     return new Response(null, { status, headers: head })
   }
-  // Deno.serve rewrites Content-Length to zero for a null HEAD body. An
-  // empty stream preserves the object's length without fetching its bytes.
+  // Worker responses derive their wire length from the stream, ignoring a
+  // hand-written Content-Length. Restore it after every storage/reporter
+  // wrapper so the cache can serve ranges from the streamed full response.
   let body = request.method == 'HEAD'
-    ? new ReadableStream({
-      start(controller) {
-        controller.close()
-      },
-    })
-    : await object.read(range)
+    // Deno.serve rewrites a null HEAD body to Content-Length: 0. The
+    // HTTP server omits this stream while preserving the declared GET length.
+    ? new ReadableStream({ start: (controller) => controller.close() })
+    : fixed(
+      await object.read(range),
+      range ? range.to - range.from + 1 : object.size,
+    ).body
   return new Response(body, { status, headers: head })
 }
 

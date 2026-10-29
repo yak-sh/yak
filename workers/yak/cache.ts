@@ -106,7 +106,7 @@ export let packageAt = (path: string) =>
 // script) is code: a change to that for addresses already answered bumps this
 // number, which moves every address to a new key and lets the old entries
 // expire unread.
-let GENERATION = 1
+let GENERATION = 2
 let generation = (address: string) =>
   `${address}${address.includes('?') ? '&' : '?'}g=${GENERATION}`
 

@@ -33,7 +33,30 @@ test('a multipart upload keeps R2 native stream length through hashing and reads
   let completed = await begin()
   equal(completed.status, 200)
   let file = await completed.json()
+  let head = await k.at(`${space}.yaks.app`, file.url, { method: 'HEAD' })
+  equal([head.status, head.headers.get('content-length'), await head.text()], [
+    200,
+    String(body.length),
+    '',
+  ])
   let read = await k.at(`${space}.yaks.app`, file.url)
-  equal(read.status, 200)
+  equal([read.status, read.headers.get('content-length')], [
+    200,
+    String(body.length),
+  ])
   equal(new Uint8Array(await read.arrayBuffer()), body)
+  let unchanged = await k.at(`${space}.yaks.app`, file.url, {
+    method: 'HEAD',
+    headers: { 'if-none-match': read.headers.get('etag')! },
+  })
+  equal([unchanged.status, await unchanged.text()], [304, ''])
+  let seek = await k.at(`${space}.yaks.app`, file.url, {
+    headers: { range: 'bytes=17-40' },
+  })
+  equal([
+    seek.status,
+    seek.headers.get('content-length'),
+    seek.headers.get('content-range'),
+    new Uint8Array(await seek.arrayBuffer()),
+  ], [206, '24', `bytes 17-40/${body.length}`, body.slice(17, 41)])
 })
