@@ -270,8 +270,7 @@ let letters = async (
   from: string,
   end: number,
   last: string,
-  out: Note,
-) => {
+): Promise<string[]> => {
   let got = (await graph.read(
     `!deliver .mail.at>=${from} ?mail ?doc ?archived .limit=1000`,
   )).filter((b) => {
@@ -287,40 +286,37 @@ let letters = async (
   )
   let title = (b: Bundle) =>
     line((b.doc as Comp | undefined)?.title).slice(0, 80)
-  out(
+  return [
     `People's letters in the last ${last}: ${got.length}, answered ${count}` +
-      (worst
-        ? `, median ${span(median!)}, worst ${span(worst.ms)} (${
-          id(worst.of)
-        } ${title(worst.of)})`
-        : ''),
-  )
-  for (
-    let { letter } of paired.filter((a) => !a.answer && !a.letter.archived)
-  ) {
-    out(
+    (worst
+      ? `, median ${span(median!)}, worst ${span(worst.ms)} (${id(worst.of)} ${
+        title(worst.of)
+      })`
+      : ''),
+    ...paired.filter((a) => !a.answer && !a.letter.archived).map((
+      { letter },
+    ) =>
       `Unanswered ${span(end - arrived(letter))}: ${id(letter)} from ${
         sender(letter)
-      }  ${title(letter)}`,
-    )
-  }
+      }  ${title(letter)}`
+    ),
+  ]
 }
 
-// The optional window matches unresolved bugs by their latest occurrence and
-// times the fixes resolved within it; without one, fixes over the last week.
-// Hits and first seen cover the whole group, including older samples. Given
-// the graph, people's letters in the same window follow.
+// The report's lines, the tool's answer on every door. The optional window
+// matches unresolved bugs by their latest occurrence and times the fixes
+// resolved within it; without one, fixes over the last week. Hits and first
+// seen cover the whole group, including older samples. Given the graph,
+// people's letters in the same window follow.
 export let errors = async (
   since: string | undefined,
   options: Options,
-  out: Note,
-  note: Note,
   { fetch = globalThis.fetch, graph, resolved = false }: {
     fetch?: typeof globalThis.fetch
     graph?: Pick<Graph, 'read' | 'vocab'>
     resolved?: boolean
   } = {},
-): Promise<void> => {
+): Promise<string[]> => {
   let window = '', seen = '', end = Date.now()
   let seconds = since == undefined ? 7 * 86_400 : duration(since)
   let from = new Date(end - seconds * 1000).toISOString()
@@ -331,14 +327,13 @@ export let errors = async (
   let door = routes({}, options, fetch).find((r) => r.path == '/tracker/bugs')!
   let rows = await pages(door, `!resolved !archived${window} .order=-bug.last`)
   let fixed = await pages(door, `.resolved .resolved.at>=${from}`)
-  note(
+  let { count, median, worst } = fixes(fixed), last = since ?? '7d'
+  let report = [
     `Tracker: ${rows.length} unresolved bugs from yaks.app and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
-  )
-  out('COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE')
-  for (let row of rows) {
-    let bug = object(row.bug)
-    out(
-      [
+    'COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE',
+    ...rows.map((row) => {
+      let bug = object(row.bug)
+      return [
         bug.hits,
         iso(time(bug.first)),
         iso(time(bug.last)),
@@ -349,22 +344,17 @@ export let errors = async (
         ),
         bug.spot || '-',
         text(object(row.doc).title),
-      ].map(line).join('  '),
-    )
-  }
-  out(
+      ].map(line).join('  ')
+    }),
     `${
       rows.reduce((n, row) => n + Number(object(row.bug).hits || 0), 0)
     } occurrences, ${rows.length} bugs`,
-  )
-  let { count, median, worst } = fixes(fixed), last = since ?? '7d'
-  out(
     worst
       ? `Time to fix, resolved in the last ${last}: ${count} bug${
         count == 1 ? '' : 's'
       }, median ${span(median!)}, worst ${span(worst.ms)} (${named(worst.of)})`
       : `Time to fix: no bug resolved in the last ${last}`,
-  )
+  ]
   // Each fix beside the bug it closed, newest first, as its resolver
   // explained it; those resolved before explanations were kept are counted.
   let resolvedAt = (b: Bundle) => text(object(b.resolved).at)
@@ -379,11 +369,13 @@ export let errors = async (
       bare++
       continue
     }
-    out(`Resolved${ms == undefined ? '' : ` in ${span(ms)}`}: ${named(row)}`)
-    for (let [label, said] of lines) out(`  ${label}: ${line(said)}`)
+    report.push(
+      `Resolved${ms == undefined ? '' : ` in ${span(ms)}`}: ${named(row)}`,
+      ...lines.map(([label, said]) => `  ${label}: ${line(said)}`),
+    )
   }
   if (bare) {
-    out(
+    report.push(
       `${bare} bug${
         bare == 1 ? '' : 's'
       } resolved with no explanation recorded`,
@@ -394,7 +386,10 @@ export let errors = async (
     undefined,
   )
   if (oldest) {
-    out(`Open longest: ${span(end - opened(oldest))} (${named(oldest)})`)
+    report.push(
+      `Open longest: ${span(end - opened(oldest))} (${named(oldest)})`,
+    )
   }
-  if (graph) await letters(graph, from, end, last, out)
+  if (graph) report.push(...await letters(graph, from, end, last))
+  return report
 }

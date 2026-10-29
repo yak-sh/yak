@@ -247,18 +247,13 @@ let listed = async (
   fetch = go,
   resolved = false,
 ) => {
-  let said: string[] = [], noted: string[] = []
-  await errors(since, options, (l) => said.push(l), (l) => noted.push(l), {
-    fetch,
-    graph: mailbox,
-    resolved,
-  })
-  return { said, noted }
+  let said = await errors(since, options, { fetch, graph: mailbox, resolved })
+  return { said }
 }
 let totalAt = (said: string[]) =>
   said.findIndex((line) => line.endsWith(' bugs') && line.includes('occurr'))
 let bugsIn = ({ said }: Awaited<ReturnType<typeof listed>>) =>
-  said.slice(1, totalAt(said)).map((line) => line.split('  ')[3])
+  said.slice(2, totalAt(said)).map((line) => line.split('  ')[3])
 
 // Exercise filtering and pagination through the deployed tracker's signed door.
 let all = await listed()
@@ -270,17 +265,17 @@ let denied = await listed(undefined, {
 
 test('errors defaults to every unresolved bug however old, newest first', () => {
   assertEquals(bugsIn(all), [ids[108], ...ids.slice(0, 106)])
+  assertEquals(all.said[0].includes('107 unresolved bugs'), true)
+  assertEquals(all.said[0].includes('lifetime'), true)
   assertEquals(
-    all.said[0],
+    all.said[1],
     'COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE',
   )
   assertEquals(
-    all.said[2].endsWith('TypeError: Invalid redirect value'),
+    all.said[3].endsWith('TypeError: Invalid redirect value'),
     true,
   )
   assertEquals(all.said[totalAt(all.said)], '5780 occurrences, 107 bugs')
-  assertEquals(all.noted[0].includes('107 unresolved bugs'), true)
-  assertEquals(all.noted[0].includes('lifetime'), true)
 })
 
 test('errors says whom each bug reached, a person apart from a probe', () => {
@@ -338,13 +333,11 @@ test('errors since optionally narrows unresolved bugs by last seen', () => {
 })
 
 test('errors refuses unavailable tracker configuration without tailing forward', async () => {
-  let said: string[] = []
   await assertRejects(
-    () => errors('30m', {}, (l) => said.push(l), (l) => said.push(l)),
+    () => errors('30m', {}),
     CallError,
     'Remote tracker is not configured',
   )
-  assertEquals(said, [])
 })
 
 test('tracker refuses an invalid signing key without exposing the credential', async () => {

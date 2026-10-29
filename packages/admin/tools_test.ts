@@ -9,6 +9,13 @@ import { integrationEid } from '@yaks/connections/identity'
 import { ramVault, reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
+import { door as trackerDoor } from '../../workers/tracker/door.ts'
+import {
+  options as trackerOptions,
+  platform,
+  store as trackerStore,
+  vocab as trackerVocab,
+} from '../../workers/tracker/core.ts'
 import { ended, Refused, review, runs } from './tools.ts'
 
 let box = async () => {
@@ -66,7 +73,7 @@ let box = async () => {
 let body = (answer: Bundle[]) =>
   answer.map((b) => (b.content as Comp)?.body).filter(Boolean).join('\n')
 let answering = async (
-  reply: (url: string, init?: RequestInit) => Response,
+  reply: (url: string, init?: RequestInit) => Response | Promise<Response>,
   run: () => Promise<void>,
 ) => {
   let was = globalThis.fetch
@@ -315,6 +322,54 @@ for (let bps of ['2.5', '-5', 'lots']) {
     )
   })
 }
+
+// The platform tracker's signed door, holding one unresolved bug.
+let tracked = trackerStore(ram(trackerVocab, trackerOptions), {
+  sink: () => {},
+})
+let bug = '00000000-0000-4000-8000-000000000001'
+await tracked.graph.apply([{
+  entity: { eid: bug },
+  doc: { title: 'Error: still broken' },
+  bug: {
+    fault: 'f',
+    hits: 3,
+    first: '2026-10-28T00:00:00Z',
+    last: new Date().toISOString(),
+  },
+}], { trusted: true })
+let trackerAt = trackerDoor(tracked, platform, 'test-only')
+
+test('admin_errors answers its caller with every unresolved bug', async () => {
+  let { host, kept } = await box()
+  try {
+    await kept('own@example.com')
+    let remote = { url: 'https://tracker.test', secret: 'test-only' }
+    let config = {
+      ...host.config,
+      plugins: [
+        ...host.config.plugins ?? [],
+        { use: '@yaks/tracker', with: { remote } },
+      ],
+    }
+    let { admin_errors } = runs({ ...host, config })
+    let answer: Bundle[] = []
+    await answering(
+      (url, init) => trackerAt(new Request(url, init)),
+      async () => {
+        answer = await admin_errors(
+          { entity: { eid: 'call' }, call: { args: {} } },
+          host.graph,
+        ) as Bundle[]
+      },
+    )
+    let said = body(answer)
+    ok(said.startsWith('Tracker: 1 unresolved bugs'))
+    ok(said.includes(`${bug}  no person recorded  -  Error: still broken`))
+  } finally {
+    await host.close()
+  }
+})
 
 test('an interrupted platform operation is cut off, not refused', () => {
   equal(assertThrows(() => ended('errors', 130), Interrupted).code, 'signal')

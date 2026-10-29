@@ -483,14 +483,12 @@ export let runs = (
 
     admin_errors: verb(async (call, vault, _keep, graph) => {
       await platform(argsOf(call))
-      await errors(
+      let report = await errors(
         word(argsOf(call), 'since'),
         await tracker(host.config, vault),
-        out,
-        note,
         { graph, resolved: argsOf(call).resolved === true },
       )
-      return []
+      return [said(call, report)]
     }),
 
     admin_tail: verb(async (call) => {
