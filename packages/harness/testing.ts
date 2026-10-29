@@ -155,5 +155,8 @@ export let attachedWorkspace = async (h: Pick<Harness, 'g'>, root: string) => {
         }
       })),
   }
-  return { workspace, workspaces: { connect: () => Promise.resolve(files) } }
+  return {
+    workspace,
+    workspaces: { connect: (_workspace: string) => Promise.resolve(files) },
+  }
 }

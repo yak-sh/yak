@@ -150,11 +150,14 @@ test('a fenced listing survives blocks inserted or removed above it', async () =
 
 test('a local slow test reports after one run without warming retries', async () => {
   let calls = 0
-  let measured = await measure(async (flags) => {
+  let measured = await measure((flags) => {
     calls++
     let dir = flags.find((f) => f.startsWith('--times='))!.slice(8)
-    Deno.writeTextFileSync(`${dir}/deno.json`, JSON.stringify(deno({ over: 3 })))
-    return { code: 0 }
+    Deno.writeTextFileSync(
+      `${dir}/deno.json`,
+      JSON.stringify(deno({ over: 3 })),
+    )
+    return Promise.resolve({ code: 0 })
   }, false)
   equal(calls, 1)
   equal(names(judge(list, measured.runs).over), ['over'])

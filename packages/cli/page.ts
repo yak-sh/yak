@@ -120,7 +120,10 @@ export type Build = {
 }
 
 /** Finish or cancel one build, always releasing its context. */
-export let compiled = async (build: Build, signal?: AbortSignal) => {
+export let compiled = async (
+  build: Build,
+  signal?: AbortSignal,
+): Promise<string> => {
   let cancel = () => {
     void build.cancel()
   }

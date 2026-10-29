@@ -43,8 +43,7 @@ export let suite = (
   return {
     name: 'platform-waits',
     metric: 'median-of-round-medians',
-    workload:
-      'v3/local-kernel-http/1-space/1-app/256-docs/7-samples/warm',
+    workload: 'v3/local-kernel-http/1-space/1-app/256-docs/7-samples/warm',
     benches: NAMES.map((name) => ({ name, unit: 'ms' })),
     collect: async () => {
       let child = await new Deno.Command(Deno.execPath(), {

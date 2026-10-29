@@ -50,9 +50,9 @@ Shift+Tab move a line in and out. When the form names an entity (a title, or
 what identifies it) the outline goes inside it.
 
 Any entity's menu offers **new like this** (`/?page=new&like=T-9`: the same
-components, blank) and **add child** (`/?page=new&in=T-9`: made inside it,
-like it); the command line says them as `:like` and `:child`, which is how a
-terminal reaches them.
+components, blank) and **add child** (`/?page=new&in=T-9`: made inside it, like
+it); the command line says them as `:like` and `:child`, which is how a terminal
+reaches them.
 
 What it will write shows as it is typed, and Create (Enter in a field,
 Ctrl+Enter or Alt+Enter anywhere) writes it as one batch, held until the server

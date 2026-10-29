@@ -11,7 +11,7 @@ test('a storage failure answers its writer and retains input for reviewed recove
   )
   assertEquals(facts.settled, true)
   assertEquals(facts.response.status, 202)
-  assertEquals(facts.response.body.error, 'Pending')
+  assertEquals((facts.response.body as { error: string }).error, 'Pending')
   assertEquals(facts.before, [])
   assertEquals(facts.kept.state, 'interrupted')
   assertEquals(JSON.parse(facts.kept.body), facts.body)

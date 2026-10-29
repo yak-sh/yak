@@ -4,7 +4,7 @@
 // into one runtime each.
 // deno run -A bin/test-profile.ts /tmp/fleet-profile [jobs=4]
 import { find } from '@yaks/testing/find'
-import { ROOTS, runtime, workerd } from './test.ts'
+import { ROOTS, runtime } from './test.ts'
 
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
@@ -15,8 +15,7 @@ if (import.meta.main) {
     throw new Error('usage: test-profile.ts OUTPUT_DIRECTORY [JOBS=4]')
   }
   await Deno.mkdir(directory, { recursive: true })
-  // The deno platform's files: a workerd test needs the run's kernel.
-  let files = (await find(ROOTS)).tests.filter((f) => !workerd(f))
+  let files = (await find(ROOTS)).tests
   let host = runtime()
   let at = 0
   let rows: { file: string; seconds: number; code: number }[] = []

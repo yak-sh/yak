@@ -3,15 +3,17 @@ import { changes } from './test-changes.ts'
 
 let changed = async (branch: string) => {
   let called: string[][] = []
-  let files = await changes(async (args) => {
+  let files = await changes((args) => {
     called.push(args)
-    return args[0] == 'branch'
-      ? `${branch}\n`
-      : args[0] == 'merge-base'
-      ? 'base-sha\n'
-      : args[0] == 'diff'
-      ? 'changed.ts\0renamed.ts\0'
-      : 'new.ts\0changed.ts\0'
+    return Promise.resolve(
+      args[0] == 'branch'
+        ? `${branch}\n`
+        : args[0] == 'merge-base'
+        ? 'base-sha\n'
+        : args[0] == 'diff'
+        ? 'changed.ts\0renamed.ts\0'
+        : 'new.ts\0changed.ts\0',
+    )
   })
   return { files, called }
 }

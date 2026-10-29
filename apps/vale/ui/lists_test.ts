@@ -41,8 +41,7 @@ for (let c of cases) {
       equal(c.panes, [true, false, true])
       equal(c.same, true)
     } else {
-      ok(c.title)
-      ok(c.detail.includes(c.title))
+      ok(c.title && c.detail.includes(c.title))
     }
   })
 }

@@ -131,13 +131,13 @@ Domain state, camera, selection, search drafts and observations belong to a
 page-private local `@yaks/client` graph, with `signal`, no server URL and both
 vaults disabled. Cleanup closes the stream, requests, desk, watches and client.
 
-Agent tools are `visualize_anatomy` and `visualize_activity` on their tool
-host. Both accept `url` to read another HTTP(S) serving origin through the
-same snapshot routes as the CLI. Their replies are JSON; `json: true` is
-accepted too. For example, `visualize_anatomy` with
-`{ "url": "https://tasks.yak.sh", "search": "task", "group": "tools" }`
-selects task tools on that origin. The CLI reads the selected serving process instead of composing
-one to answer:
+Agent tools are `visualize_anatomy` and `visualize_activity` on their tool host.
+Both accept `url` to read another HTTP(S) serving origin through the same
+snapshot routes as the CLI. Their replies are JSON; `json: true` is accepted
+too. For example, `visualize_anatomy` with
+`{ "url": "https://tasks.yak.sh", "search": "task", "group": "tools" }` selects
+task tools on that origin. The CLI reads the selected serving process instead of
+composing one to answer:
 
 ```sh
 yak visualize anatomy --group tools --json

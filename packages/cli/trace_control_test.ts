@@ -126,7 +126,7 @@ let commandResult = await scratch(async (db) => {
     process: 101,
     next: 2,
     rate: 0.1,
-  }, { out: (line) => said.push(line) } as import('./run.ts').Ctx)
+  }, { out: (line) => void said.push(line) } as import('./run.ts').Ctx)
   let absent = false
   try {
     Deno.statSync(db)

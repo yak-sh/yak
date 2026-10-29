@@ -997,11 +997,11 @@ Pass `wait: false` to either tool to return the session immediately; the runner
 continues independently. For example, `session_new` with
 `{ "prompt": "Reply with ok", "wait": false }` returns the new session id.
 `model_list` is offered on a command line only (`surfaces`), because it reads
-that machine's model credentials.
-`session_list` is offered everywhere. Both word orders (`session list`,
-`list
-session`) derive from the same noun and verb, without alias declarations.
-See [the command-line entry point and the export shape](../cli/README.md).
+that machine's model credentials. `session_list` is offered everywhere. Both
+word orders (`session list`, `list
+session`) derive from the same noun and verb,
+without alias declarations. See
+[the command-line entry point and the export shape](../cli/README.md).
 
 Mouse clicks select session rows, **New session**, and browser controls.
 Clicking a row focuses the sidebar without changing the current mode or

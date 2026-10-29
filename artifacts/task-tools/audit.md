@@ -162,10 +162,11 @@ individual source hashes had passed. The final replay skips records without
 tool-call tags. Command timing details, including the 87.219 s
 thinking-inclusive scan, are in `audit-counts.json`.
 
-The current retained set was replayed with `python3
-artifacts/task-tools/audit.py --references`: all 651 command hashes across 96
-source files and the act/mechanism counts passed in 3.001 s. This mode checks
-the retained evidence without repeating discovery across unrelated transcripts.
-An independent targeted replay also verified 136 fallback call/report source
-hashes across 59 files in 1.917 s; every retained report excerpt occurs verbatim
-in its hashed source text.
+The current retained set was replayed with
+`python3
+artifacts/task-tools/audit.py --references`: all 651 command hashes
+across 96 source files and the act/mechanism counts passed in 3.001 s. This mode
+checks the retained evidence without repeating discovery across unrelated
+transcripts. An independent targeted replay also verified 136 fallback
+call/report source hashes across 59 files in 1.917 s; every retained report
+excerpt occurs verbatim in its hashed source text.

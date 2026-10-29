@@ -6,10 +6,10 @@ import { caught } from './defects.ts'
 
 class Subject {
   constructor(_state: unknown, _env: unknown) {
-    caught(Error('constructor failure'))
+    caught(Error('constructor failure'), {})
   }
   fetch() {
-    caught(Error('lifecycle failure'))
+    caught(Error('lifecycle failure'), {})
     return new Response('answered', { status: 500 })
   }
   fail() {

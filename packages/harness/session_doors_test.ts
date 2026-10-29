@@ -11,7 +11,9 @@ test('MCP starts a native session and sends input without waiting for a runner',
   let host = await harness()
   let client = await connect({ graph: host.g, tools: loadTools(docs, runs()) })
   try {
-    let listed = (await client.listTools()).tools.map((t) => t.name)
+    let listed = (await client.listTools()).tools.map((t: { name: string }) =>
+      t.name
+    )
     ok(listed.includes('session_new') && listed.includes('session_send'))
     let started = await client.callTool({
       name: 'session_new',
