@@ -7,6 +7,7 @@ import type { Event } from '@yaks/trace'
 import { read } from './config.ts'
 import { compose } from './host.ts'
 import { readThread } from './read_thread.ts'
+import { readActivity } from './read_activity.ts'
 
 test('the web reader sees commits and closes after a refused query', async () => {
   let dir = await Deno.makeTempDir()
@@ -212,7 +213,17 @@ let fakes = () => {
     constructor() {
       workers.push(this)
     }
-    postMessage(data: { id?: number; query?: string; opts?: object }) {
+    postMessage(
+      data: {
+        id?: number
+        query?: string
+        opts?: object
+        activity?: SharedArrayBuffer
+      },
+    ) {
+      if (data.activity) {
+        readActivity(data.activity).say('waiting in a read operation')
+      }
       if (data.id) this.jobs.push({ ...data, id: data.id })
     }
     terminate() {
@@ -359,19 +370,19 @@ test('a read is told when its own time passes slow', async () => {
     [['5000', 'answer', '30000'], []],
     [['10000 9 0.5', '30000'], [
       slow + '(in 10.0 s its worker ran 9.0 s on a CPU, waited 0.5 s for one ' +
-      'and was off one 0.5 s; its worker had not answered a read yet)',
+      'and was off one 0.5 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
     ]],
     // The main thread was held past the check; the answer was waiting.
     [['15800 0 0', 'answer', '30000'], []],
     [['15800 9 0', '16800 9.5 0'], [
       slow + '(in 16.8 s its worker ran 9.5 s on a CPU, waited 0.0 s for one ' +
-      'and was off one 7.3 s; its worker had not answered a read yet)',
+      'and was off one 7.3 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
     ]],
     // The box kept the worker waiting for a CPU: slow only on its own time.
     [['10000 2 7', 'answer', '30000'], []],
     [['10000 2 7', '17000 4 7'], [
       slow + '(in 17.0 s its worker ran 4.0 s on a CPU, waited 7.0 s for one ' +
-      'and was off one 6.0 s; its worker had not answered a read yet)',
+      'and was off one 6.0 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
     ]],
   ]
   for (let [steps, told] of cases) assertEquals(await watched(...steps), told)

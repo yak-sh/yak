@@ -8,6 +8,7 @@ import { mask, parse, stringify } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 import { how, own, since, type Spent, spent } from './stall.ts'
+import { readActivity } from './read_activity.ts'
 
 export type Reader = Pick<Graph, 'read' | 'rows' | 'get'>
 
@@ -16,7 +17,7 @@ type Call =
   | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
 
 export type Said =
-  | { start: string }
+  | { start: string; activity: SharedArrayBuffer }
   | (Call & { id: number; observed?: boolean })
   | { close: true }
 
@@ -42,6 +43,16 @@ let asked = (call: Call): string =>
     ? `get of ${call.eids.length} entities`
     : mask(typeof call.query == 'string' ? call.query : stringify(call.query))
       .slice(0, 512)
+
+let blocked = (thread: string): string => {
+  try {
+    return `worker kernel wait: ${
+      Deno.readTextFileSync(`/proc/${thread}/wchan`).trim()
+    }`
+  } catch {
+    return ''
+  }
+}
 
 /** Independent reads share at most two workers, started only when needed and
  * kept for the reader's life. Each worker owns one read at a time. A read
@@ -100,6 +111,7 @@ export let readThread = (
     heard?: boolean
     /** where its worker's thread is, once the worker has said */
     thread?: string
+    activity: ReturnType<typeof readActivity>
   }
   let told: (error: Error) => void = () => {}
   let lanes = new Set<Lane>()
@@ -144,7 +156,9 @@ export let readThread = (
     let worker = new Worker(new URL('./read_worker.ts', import.meta.url), {
       type: 'module',
     })
-    let lane: Lane = { worker }
+    let activity = readActivity()
+    activity.say('waiting for the worker to receive its configuration')
+    let lane: Lane = { worker, activity }
     lanes.add(lane)
     worker.onmessage = ({ data }: MessageEvent<Heard>) => finish(lane, data)
     worker.onerror = (event) => {
@@ -157,7 +171,9 @@ export let readThread = (
       )
       drain()
     }
-    worker.postMessage({ start: config } satisfies Said)
+    worker.postMessage(
+      { start: config, activity: activity.buffer } satisfies Said,
+    )
     return lane
   }
   let spentBy = (lane: Lane) => lane.thread ? measure(lane.thread) : undefined
@@ -167,6 +183,8 @@ export let readThread = (
   let waited = (lane: Lane, ran: number, s?: Spent): string =>
     [
       how('its worker', ran, s),
+      `worker operation: ${lane.activity.read() ?? 'changing while sampled'}`,
+      lane.thread ? blocked(lane.thread) : '',
       lane.heard ? '' : 'its worker had not answered a read yet',
       ...[...lanes].flatMap((l) =>
         l != lane && l.job

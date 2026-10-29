@@ -7,8 +7,10 @@ import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
 import type { Heard, Said } from './read_thread.ts'
 import { thread } from './stall.ts'
+import { readActivity, readOperations } from './read_activity.ts'
 
 let host: Promise<Served> | undefined
+let activity: ReturnType<typeof readActivity> | undefined
 let tell = (heard: Heard) => self.postMessage(heard)
 // Where this thread is, so the reader can see how long a read here waited
 // for a CPU while it runs.
@@ -27,12 +29,16 @@ let errorOf = (cause: unknown) => {
 
 self.onmessage = ({ data }: MessageEvent<Said>) => {
   if ('start' in data) {
-    host = Promise.resolve().then(() =>
-      compose(read(data.start), ['graph'], facet, {
+    activity = readActivity(data.activity)
+    activity.say('composing the read-only graph')
+    host = Promise.resolve().then(async () => {
+      let host = await compose(read(data.start), ['graph'], facet, {
         process: false,
         readOnly: true,
       })
-    )
+      activity?.say('idle; waiting for a read')
+      return host
+    })
     host.catch(() => {})
     return
   }
@@ -44,9 +50,13 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
     return
   }
   void (async () => {
+    let stop: (() => void) | undefined
     try {
       if (!host) throw new Error('the reader was not started')
+      activity?.say('waiting for the read-only graph to finish composing')
       let graph = (await host).graph
+      activity?.say(`entering graph.${data.op}`)
+      stop = readOperations(graph, (text) => activity?.say(text))
       let query = () =>
         data.op == 'get'
           ? graph.get(data.eids, data.comps, data.opts)
@@ -54,7 +64,9 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
           ? graph.read(data.query, data.opts)
           : graph.rows(data.query, data.opts)
       if (!data.observed) {
-        tell({ id: data.id, value: await query() })
+        let value = await query()
+        activity?.say('posting the read result to the main thread')
+        tell({ id: data.id, value })
         return
       }
       // Catch inside the recorder so a refused/failed read returns its tree,
@@ -69,6 +81,7 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
           return Promise.resolve({ error: errorOf(error) })
         }
       }, { history: false })
+      activity?.say('posting the read result and trace to the main thread')
       tell({
         id: data.id,
         ...captured.result,
@@ -76,7 +89,11 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
         origin: performance.timeOrigin,
       })
     } catch (error) {
+      activity?.say('posting the read failure to the main thread')
       tell({ id: data.id, error: errorOf(error) })
+    } finally {
+      stop?.()
+      activity?.say('idle; the read reply was posted')
     }
   })()
 }
