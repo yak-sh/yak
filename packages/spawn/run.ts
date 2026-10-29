@@ -170,7 +170,10 @@ export let requestOf = (b: Bundle | undefined): Bundle | undefined =>
 
 /**
  * Read a session's request out of its transcript: the `using` component on the
- * first entry that has one, and the instruction text stored with it.
+ * first entry that has one, and the instruction text stored with it. A request
+ * that names a provider alone runs the model on the provider's own
+ * `using{model}`, so the run is told its model and its asks name it; a CLI
+ * left to its own default reports no model to price.
  *
  * ```ts
  * import { asked } from '@yaks/spawn'
@@ -192,15 +195,14 @@ export let asked = async (
   if (!request) return null
   let using = comp(request, 'using')!
   if (!using.provider) return null
-  let [provider, model] = await g.get([
-    String(using.provider),
-    String(using.model ?? ''),
-  ])
+  let [provider] = await g.get([String(using.provider)])
   let name = String(comp(provider, 'provider')?.name ?? '')
   if (!name) return null
+  let chosen = String(using.model ?? comp(provider, 'using')?.model ?? '')
+  let [model] = chosen ? await g.get([chosen]) : []
   let served = comp(model, 'model')
   let spelled = served
-    ? await spelling(g, String(using.provider), String(using.model))
+    ? await spelling(g, String(using.provider), chosen)
     : undefined
   if (served && spelled == null) {
     throw new Error(`${name} does not serve ${String(served.name)}`)
@@ -225,7 +227,7 @@ export let asked = async (
     effort: effort || undefined,
     instruction: String(said?.body ?? ''),
     ask: {
-      ...served ? { to: String(using.model) } : {},
+      ...served ? { to: chosen } : {},
       through: request.entity.eid,
     },
   }

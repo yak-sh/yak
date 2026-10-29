@@ -84,12 +84,20 @@ export let service = async (
         if (told.has(m)) continue
         told.add(m)
         // A model with no price counts as nothing: a failure, fixed with a
-        // `price` on its row, told once while this server runs.
-        let row = (await host.graph.get([m], ['model']))[0]?.model as
-          | { name?: string }
-          | undefined
+        // `price` on its row, told once while this server runs. A request
+        // that named no model is fixed where it was asked, so its ask names
+        // what ran (@yaks/spawn `asked`).
+        let row = m
+          ? (await host.graph.get([m], ['model']))[0]?.model as
+            | { name?: string }
+            | undefined
+          : undefined
         ;(host.report ?? console.error)(
-          new Error(`model ${row?.name ?? m} has no price`),
+          new Error(
+            m
+              ? `model ${row?.name ?? m} has no price`
+              : 'a request named no model, so it has no price',
+          ),
           { tags: { step: 'spend unpriced', model: m } },
         )
       }

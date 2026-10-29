@@ -86,9 +86,9 @@ its sessions. Options: `every` (milliseconds) and `usage` (the cache directory).
 ## The page
 
 `./views` offers the browsing app a `Spend` page in its sidebar
-(`/?page=spend`): each plan limit against its pace, then the week's tally
-beside the week before, ranked by dollars, over the list of days. A day's row
-opens to that day's tally. The bars are @yaks/ui's `Meter`.
+(`/?page=spend`): each plan limit against its pace, then the week's tally beside
+the week before, ranked by dollars, over the list of days. A day's row opens to
+that day's tally. The bars are @yaks/ui's `Meter`.
 
 Beside each row's dollars, its **week %** estimates what it cost on a
 subscription: its share of each plan's weekly limit. `rates` measures a plan's

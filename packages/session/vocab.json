@@ -568,7 +568,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served",
+      "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served, and on a provider's row its model is what a request naming that provider alone runs",
       "properties": {
         "provider": {
           "type": "string",

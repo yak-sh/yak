@@ -22,7 +22,7 @@
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "id or registered name of the model the run uses; optional",
+          "description": "id or registered name of the model the run uses; optional, by default the model in the provider's using{model}",
           "short": "m"
         },
         "persona": {

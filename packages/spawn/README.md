@@ -47,9 +47,12 @@ applied in one transaction.
 
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
 provider's `name`, select the matching `claude` or `codex` adapter, validate the
-requested effort against the model, and start the command. Providers handled
-over HTTP have no command adapter and remain the responsibility of the
-in-process `@yaks/session` daemon.
+requested effort against the model, and start the command. A request that names
+a provider alone runs the model in the provider's own `using{model}`, so the
+command is told its model and the run's asks name it; Codex's JSON output never
+says which model answered, so a run left to its CLI's default could not be
+priced. Providers handled over HTTP have no command adapter and remain the
+responsibility of the in-process `@yaks/session` daemon.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the

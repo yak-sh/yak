@@ -50,6 +50,21 @@ test('a request is the using on the transcript, read back as a job', async () =>
   assertEquals(await asked(g, 'S2'), null)
 })
 
+let alone = tracked().g
+await alone.apply(asking('S1', 'E1', 'fix it', { model: undefined }))
+await alone.apply([{
+  entity: { eid: FAKE.provider },
+  using: { model: FAKE.model },
+}])
+
+test('a request naming the provider alone runs and asks its default model', async () => {
+  let job = await asked(alone, 'S1')
+  assertEquals([job?.model, job?.ask], ['fake-1', {
+    to: FAKE.model,
+    through: 'E1',
+  }])
+})
+
 test('an effort the model does not serve is refused, not launched', async () => {
   let { g } = tracked()
   await g.apply(asking('S1', 'E1', 'fix it', { effort: 'extreme' }))
