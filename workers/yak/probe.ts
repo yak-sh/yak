@@ -1,19 +1,6 @@
-// The kernel under test, and how a test drives it. `kernel` is the kernel in
-// memory: kernel.ts's handler over the platform testing.ts stands up, one per
-// test process, on a port of its own (`fresh` is one of a test's own).
-// `workerd` is the one kernel a run shares in the runtime itself
-// (probe-suite.ts), for what only the runtime has: a socket, a letter at its
-// email door, a script beside the kernel. Both are driven over HTTP the way a
-// browser or a headless client would — a hostname rides `x-yak-host`, since
-// fetch refuses a Host header and LOCAL_DEV=1 enables ours on loopback
-// (route.ts) — and both are configured alike (`vars`). A test on a shared
-// kernel keeps to data of its own: a person `signIn` mints, a space or an
-// address nobody else uses.
-//
-// `script` below runs a Worker that is not the kernel at all — the modules an
-// app's own script is made of — in the same workerd, beside it.
+// The kernel and its network boundaries, driven in process. Each fixture
+// owns a synthetic origin; requests to it dispatch directly to its handler.
 import { apex } from './host.ts'
-import { ask } from './stripe.ts'
 import { b64u } from './mcp-probe.ts'
 import { clock, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
@@ -24,11 +11,30 @@ import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
-import { createServer, request } from 'node:http'
-import { connect, type Socket } from 'node:net'
 
-/** What the run's kernel checks a Stripe event against, at both doors
- * (probe-suite.ts). */
+type Handler = (req: Request) => Response | Promise<Response>
+let routes = new Map<string, Handler>()
+let logs = new Map<string, string>()
+let send = globalThis.fetch
+let routed: typeof fetch = (input, init) => {
+  let req = new Request(input, init)
+  let route = routes.get(new URL(req.url).origin)
+  return route ? Promise.resolve(route(req)) : send(input, init)
+}
+export let endpoint = (handler: Handler) => {
+  let url = `https://${crypto.randomUUID()}.probe.invalid`
+  routes.set(url, handler)
+  globalThis.fetch = routed
+  return {
+    url,
+    stop: () => {
+      routes.delete(url)
+      return Promise.resolve()
+    },
+  }
+}
+
+/** What the in-process kernel checks a Stripe event against. */
 export let WEBHOOK_SECRET = 'probe-webhook-secret'
 
 /** The OpenAI apps challenge token the run's kernel serves. */
@@ -41,9 +47,7 @@ export let CHALLENGE = 'probe-openai-apps-challenge'
 let byte = () => crypto.getRandomValues(new Uint8Array(1))[0]
 let somewhere = () => ({ 'cf-connecting-ip': `198.18.${byte()}.${byte()}` })
 
-/** A kernel at `base`, driven over HTTP: one request, at one hostname.
- * `log` is where its letters land and `cloudflare` the stand-in for
- * Cloudflare's API it talks to (`cloudflare`). */
+/** One kernel request at its addressed hostname, without a network hop. */
 export let driven = (
   base: string,
   secret: string,
@@ -56,15 +60,15 @@ export let driven = (
   log,
   host,
   cloudflare,
-  at: (at: string, path: string, init: RequestInit = {}) =>
-    fetch(`${base}${path}`, {
+  at: (at: string, path: string, init: RequestInit = {}) => {
+    let handler = routes.get(base)
+    let req = new Request(`https://${at}${path}`, {
       ...init,
-      headers: {
-        ...somewhere(),
-        ...(init.headers as Record<string, string>),
-        'x-yak-host': at,
-      },
-    }),
+      headers: { ...somewhere(), ...(init.headers as Record<string, string>) },
+    })
+    if (!handler) throw new Error(`no fixture at ${base}`)
+    return Promise.resolve(handler(req))
+  },
 })
 
 /** A person signed in (`signIn`): who, the cookie, and the code that did it. */
@@ -79,11 +83,9 @@ export type Person = {
 /** A kernel's door (`driven`). */
 export type Door = ReturnType<typeof driven>
 
-/** A kernel as a test holds it: its door, the person who owns its meta space
- * (`meta`), what the test made in the Stripe sandbox, and its stop. */
+/** A kernel's door, its meta-space owner, and its cleanup. */
 export type Kernel = Door & {
   owner: Person
-  made: Set<string>
   stop: () => Promise<void>
   // In-process HTTP probes can inspect what crossed the tracker queue door.
   reported?: Bundle[]
@@ -94,49 +96,13 @@ export type Kernel = Door & {
   deliveries?: () => Promise<void>
 }
 
-let want = (name: string) => {
-  let value = Deno.env.get(name)
-  if (!value) {
-    throw new Error(
-      `${name} is unset: a workerd test runs in the workerd pass of ` +
-        '`deno task test`, which starts the one kernel a run shares ' +
-        '(probe-suite.ts)',
-    )
-  }
-  return value
-}
+let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => ({
+  ...k,
+  stop: close,
+})
 
-// What a test makes in the Stripe sandbox goes in `made`, as the object's path
-// (`/v1/customers/cus_…`), the moment the test knows its id: `subscribed` and
-// `sessionAt` put theirs there, and a test puts the connected account
-// `space_sell` made. The sandbox keeps whatever is not deleted — a
-// subscription left active renews every month, each renewal a webhook to
-// staging, and every leftover customer and account is one more row in the
-// dashboard the owner reads — so every test stops its kernel in a `finally`,
-// and the stop deletes each one (a subscription's DELETE is its cancelling),
-// then `close`s what the kernel holds. A run killed before its stops leaves its
-// subscriptions renewing, and the next run cancels them (`swept`).
-let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => {
-  let made = new Set<string>()
-  let stop = async () => {
-    try {
-      await Promise.all([...made].map(deleted))
-    } finally {
-      await close()
-    }
-  }
-  return { ...k, made, stop }
-}
-
-/**
- * What a test run's kernels are configured with beside wrangler.toml's own
- * vars: the session secret, Cloudflare's account API at `cloudflare` (the
- * stand-in, for mail, domains and Realtime alike), the Stripe signing secrets,
- * and the Stripe sandbox when the run has a key (bin/test.ts).
- */
+/** The test kernel's in-process service endpoints and signing keys. */
 export let vars = (secret: string, cloudflare: string) => {
-  let stripe = Deno.env.get('STRIPE_KEY')
-  let price = Deno.env.get('STRIPE_PRICE')
   return {
     LOCAL_DEV: '1',
     SESSION_SECRET: secret,
@@ -154,8 +120,6 @@ export let vars = (secret: string, cloudflare: string) => {
     REALTIME_API: cloudflare,
     CF_WORKERS_TOKEN: 'a-token',
     WORKERS_API: cloudflare,
-    ...stripe ? { STRIPE_KEY: stripe } : {},
-    ...price ? { STRIPE_PRICE: price } : {},
   }
 }
 
@@ -168,30 +132,12 @@ let toml = () =>
     Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
   ) as Toml
 
-// The Worker's generated files and npm tree made current (wrangler.ts
-// `ready`), once a process, and not at all in a runtime of a test run that
-// readied them before starting it: every kernel the process boots runs the
-// same checkout, and each readying starts generators of its own.
-let readied: Promise<unknown> | undefined
-
-/**
- * The kernel in memory, started: kernel.ts's handler over the platform
- * testing.ts stands up, with wrangler.toml's vars and rate limits and the
- * run's config (`vars`), served on a port of its own. Its owner signs in
- * first, as the workerd kernel's does, since the first person to sign in owns
- * the meta space. `close` ends it.
- */
+// The kernel's handler and graph bindings share the caller's process.
 let boot = async (
   bindings: Partial<Env> = {},
   prepare?: (env: Env) => void,
   load?: Load,
 ) => {
-  // Loaded when a test asks: the runner imports this module for its Stripe
-  // helpers and has no use for the kernel's whole graph. Nor can it load one:
-  // it runs with --node-modules-dir=manual (probe-suite.ts), where a
-  // package's npm import does not resolve, so nothing here imports the
-  // kernel's modules but this.
-  await (readied ??= import('./wrangler.ts').then((w) => w.ready()))
   let [{ handler }, { emailed, limiter, lasting }, { within }] = await Promise
     .all([
       import('./kernel.ts'),
@@ -199,7 +145,8 @@ let boot = async (
       import('./defects.ts'),
     ])
   let secret = crypto.randomUUID()
-  let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
+  let log = crypto.randomUUID()
+  logs.set(log, '')
   let cf = cloudflare(log)
   let { vars: own, ratelimits } = toml()
   let p = lasting(secret, {
@@ -240,35 +187,27 @@ let boot = async (
       await p.settled()
     }
   }
-  let server = Deno.serve(
-    { hostname: '127.0.0.1', port: 0, onListen: () => {} },
-    (req) =>
-      within(
-        p.env,
-        {},
-        () =>
-          new URL(req.url).pathname == '/cdn-cgi/handler/email'
-            ? emailed(req, handler.email, p.env)
-            : handler.fetch(req, p.env),
-        reportClock,
-        { retain },
-      ),
+  let service = endpoint((req) =>
+    within(
+      p.env,
+      {},
+      () =>
+        new URL(req.url).pathname == '/cdn-cgi/handler/email'
+          ? emailed(req, handler.email, p.env)
+          : handler.fetch(req, p.env),
+      reportClock,
+      { retain },
+    )
   )
   let ticking = setInterval(p.ring, 10)
   let close = async () => {
     clearInterval(ticking)
-    await server.shutdown()
+    await service.stop()
     await p[Symbol.asyncDispose]()
     await cf.stop()
-    Deno.removeSync(log)
+    logs.delete(log)
   }
-  let door = driven(
-    `http://127.0.0.1:${server.addr.port}`,
-    secret,
-    log,
-    apex(),
-    cf.url,
-  )
+  let door = driven(service.url, secret, log, apex(), cf.url)
   try {
     return {
       ...door,
@@ -290,21 +229,9 @@ let boot = async (
 // This process's kernel, started by the first test that asks for one.
 let shared: ReturnType<typeof boot> | undefined
 
-/**
- * The kernel in memory this test process shares: started by the first test
- * that asks, and running until the process ends, so the deno platform starts
- * its kernel once per process as the workerd platform does once per run
- * (M-39441). A test on it keeps to data of its own, as a test on `workerd`
- * does, and its `stop` deletes what it made in the Stripe sandbox and leaves
- * the kernel to the next test.
- */
+/** The in-memory kernel shared by this test process. */
 export let kernel = async (): Promise<Kernel> => {
-  let { close: _, ...k } = await (shared ??= boot().then((k) => {
-    // Nothing is awaited as a process ends, and all the kernel holds ends
-    // with it but the file its letters are logged to.
-    addEventListener('unload', () => Deno.removeSync(k.log))
-    return k
-  }))
+  let { close: _, ...k } = await (shared ??= boot())
   return owning(k)
 }
 
@@ -322,73 +249,9 @@ export let fresh = async (
   return owning(k, close)
 }
 
-/** The run's kernel in workerd (probe-suite.ts), as one test holds it. */
-export let workerd = () =>
-  owning({
-    ...driven(
-      want('YAK_PROBE'),
-      want('YAK_PROBE_SECRET'),
-      want('YAK_PROBE_MAIL'),
-      apex(),
-      want('YAK_PROBE_CLOUDFLARE'),
-    ),
-    owner: JSON.parse(want('YAK_PROBE_OWNER')) as Person,
-  })
-
-// One object off the sandbox. Gone already is done: the test deleted it
-// itself, or deleting its customer cancelled a subscription with it, and Stripe
-// answers either as missing (an account it no longer holds, as not ours).
-let deleted = (path: string) =>
-  charged(stripeKey(), path, undefined, undefined, 'DELETE').catch((e) => {
-    if (!/\((resource_missing|account_invalid)\)$/.test(e.message)) throw e
-  })
-
-/**
- * A Worker of a test's own, beside the kernel in the run's workerd
- * (probe-scripts.js): a set of modules, the entry named, and one `at(path)`.
- *
- * It is how a test runs code the platform would upload rather than serve. A
- * dispatch namespace has no local implementation (dispatch.ts), so an app's
- * own script can otherwise only be asserted as a multipart body; this runs
- * the same module set in the same runtime, each module typed by its name the
- * way the upload types it, which is where a module that is mislabelled or
- * missing shows itself (T-34263).
- */
-export let script = async (
-  files: Record<string, string | Uint8Array>,
-  main = 'entry.js',
-) => {
-  let at = `${want('YAK_PROBE')}/__script/${crypto.randomUUID()}`
-  let modules = Object.fromEntries(
-    Object.entries(files).map(([name, body]) => [
-      name,
-      name.endsWith('.wasm')
-        ? { wasm: btoa(String.fromCharCode(...body as Uint8Array)) }
-        : typeof body == 'string'
-        ? body
-        : new TextDecoder().decode(body),
-    ]),
-  )
-  let put = await fetch(at, {
-    method: 'PUT',
-    body: JSON.stringify({ main, modules }),
-  })
-  if (!put.ok) throw new Error(`script: ${put.status} ${await put.text()}`)
-  return {
-    at: (path: string, init?: RequestInit) => fetch(at + path, init),
-  }
-}
-
-// An origin that stands in for `<space>.yaks.app` over HTTP: every request
-// goes to the kernel wearing that hostname, and the person's cookie if they
-// have one. What a browser gives a page and a test cannot is exactly this —
-// the hostname a probe can only spell in `x-yak-host` (route.ts), and the
-// cookie that says who is asking — so a client module running under Deno
-// reaches an app's doors through here exactly as a page's would. The request
-// passes through whole, bytes included: an upload is a body that is not text
-// (apps.ts `/api/blob`).
+// A page client's origin, routed to the kernel with its hostname and cookie.
 export let browser = (k: Kernel, host: string, cookie?: string) => {
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+  let service = endpoint(async (req) => {
     let url = new URL(req.url)
     let sent: Record<string, string> = {}
     for (
@@ -411,91 +274,7 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
         : new Uint8Array(await req.arrayBuffer()),
     })
   })
-  let { port } = server.addr as Deno.NetAddr
-  return { origin: `http://127.0.0.1:${port}`, stop: () => server.shutdown() }
-}
-
-// An origin that stands for `<space>.yaks.app`. HTTP parsing belongs to the
-// runtime so each request on a reused connection gets its own host and cookie.
-// A WebSocket upgrade tunnels its bytes after the rewritten handshake: that
-// one request must keep the kernel's own hibernating socket at the far end.
-//
-// `origin` is the third thing only the wire can say: Deno's WebSocket sends
-// no `Origin` at all, and the page a handshake comes from is exactly what
-// separates one space from another (route.ts `sameOrigin`), so a test that
-// drives a cross-space socket puts it here.
-export let relay = async (
-  k: Pick<Kernel, 'base'>,
-  host: string,
-  cookie?: string,
-  origin?: string,
-) => {
-  let up = Number(new URL(k.base).port)
-  let open = new Set<Socket>()
-  let headers = (from: Record<string, unknown>) => ({
-    ...from,
-    'x-yak-host': host,
-    ...(cookie ? { cookie } : {}),
-    ...(origin ? { origin } : {}),
-  })
-  let server = createServer((from, to) => {
-    let sent = request({
-      hostname: '127.0.0.1',
-      port: up,
-      path: from.url,
-      method: from.method,
-      headers: headers(from.headers),
-    }, (answer) => {
-      to.writeHead(answer.statusCode ?? 502, answer.headers)
-      answer.pipe(to)
-    })
-    sent.on('error', (e) => {
-      if (!to.headersSent) to.writeHead(502)
-      to.end(String(e))
-    })
-    from.pipe(sent)
-  })
-  server.on('connection', (socket) => {
-    open.add(socket)
-    socket.on('close', () => open.delete(socket))
-  })
-  server.on('upgrade', (from, down, first) => {
-    let out = connect(up, '127.0.0.1')
-    open.add(out)
-    out.on('close', () => open.delete(out))
-    let kept: string[] = []
-    for (let i = 0; i < from.rawHeaders.length; i += 2) {
-      let name = from.rawHeaders[i], low = name.toLowerCase()
-      if (
-        low == 'x-yak-host' || cookie && low == 'cookie' ||
-        origin && low == 'origin'
-      ) continue
-      kept.push(`${name}: ${from.rawHeaders[i + 1]}`)
-    }
-    for (let [name, value] of Object.entries(headers({}))) {
-      kept.push(`${name}: ${value}`)
-    }
-    out.write(
-      `${from.method} ${from.url} HTTP/${from.httpVersion}\r\n${
-        kept.join('\r\n')
-      }\r\n\r\n`,
-    )
-    if (first.length) out.write(first)
-    down.pipe(out).pipe(down)
-    out.on('error', () => down.destroy())
-    down.on('error', () => out.destroy())
-  })
-  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
-  let address = server.address()
-  if (!address || typeof address == 'string') throw Error('relay has no port')
-  let port = address.port
-  return {
-    origin: `http://127.0.0.1:${port}`,
-    stop: async () => {
-      for (let c of open) c.destroy()
-      await new Promise<void>((done) => server.close(() => done()))
-    },
-  }
+  return { origin: service.url, stop: service.stop }
 }
 
 // A signed-in person's Cookie header, an hour long.
@@ -611,7 +390,7 @@ export type Letter = {
 }
 
 export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
-  [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
+  [...(logs.get(k.log) ?? '').matchAll(/yak-mail (\{.*\})/g)]
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
 
@@ -679,23 +458,14 @@ export let accepted = async (k: Kernel, email: string, cookie: string) => {
   return r.headers.get('location')!
 }
 
-// A letter into the kernel, at the door workerd keeps for exactly this: the
-// runtime's local email endpoint hands the body to `email()` as a message
-// (index.ts, inbox.ts). The envelope rides the query string — `from` and `to`
-// as the SMTP session gave them, which is why a message may be addressed at an
-// app whose name is nowhere in its own headers — and the body is raw RFC 5322,
-// which must carry a `Message-ID` or the runtime refuses to parse it.
-//
-// The answer is the handler's: 200 where the letter landed, 400 carrying the
-// reason where it was rejected. A rejection only reaches the status because
-// index.ts awaits `setReject` — the message is an RPC stub, and a rejection
-// that is not awaited lands after the answer is built.
+// Deliver an RFC 5322 letter directly through the kernel's email adapter.
 export let arrives = (
   k: Kernel,
   m: { from: string; to: string; raw: string },
 ) =>
-  fetch(
-    `${k.base}/cdn-cgi/handler/email?from=${encodeURIComponent(m.from)}` +
+  k.at(
+    k.host,
+    `/cdn-cgi/handler/email?from=${encodeURIComponent(m.from)}` +
       `&to=${encodeURIComponent(m.to)}`,
     { method: 'POST', body: m.raw },
   )
@@ -866,7 +636,7 @@ export let seed = async (
 // nothing here carries media. `GET` a session reads its tracks back, which is
 // how a test sees what the door opened and closed.
 // A worker upload keeps its script and secret names for later API calls.
-export let cloudflare = (log: string) => {
+export let cloudflare = (log = crypto.randomUUID()) => {
   let held = new Map<string, Custom>()
   let dns = new Map<string, string[]>()
   let calls = new Map<string, Track[]>()
@@ -910,12 +680,12 @@ export let cloudflare = (log: string) => {
     body = '',
     replyTo?: string,
   ) =>
-    Deno.writeTextFileSync(
+    logs.set(
       log,
-      `yak-mail ${JSON.stringify({ to, subject, body, replyTo })}\n`,
-      { append: true },
+      (logs.get(log) ?? '') +
+        `yak-mail ${JSON.stringify({ to, subject, body, replyTo })}\n`,
     )
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+  let service = endpoint(async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
     if (url.pathname == '/probe/txt') {
@@ -941,9 +711,7 @@ export let cloudflare = (log: string) => {
       })
     }
     if (url.pathname == '/tracker-probe' && req.method == 'POST') {
-      Deno.writeTextFileSync(log, `yak-tracker ${await req.text()}\n`, {
-        append: true,
-      })
+      logs.set(log, (logs.get(log) ?? '') + `yak-tracker ${await req.text()}\n`)
       return new Response(null, { status: 200 })
     }
     if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
@@ -1013,7 +781,7 @@ export let cloudflare = (log: string) => {
     return ok(found ? [found.status == 'active' ? active : found] : [])
   })
   return {
-    url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
+    url: service.url,
     // The same product as a Worker binding (post.ts `Binding`), which is how
     // an app's own letters leave.
     binding: {
@@ -1022,7 +790,7 @@ export let cloudflare = (log: string) => {
         return Promise.resolve({ messageId: crypto.randomUUID() })
       },
     },
-    stop: () => server.shutdown(),
+    stop: service.stop,
   }
 }
 
@@ -1104,8 +872,7 @@ export let fakeSub = (space: string, over: Record<string, unknown> = {}) => {
  * A space on Plus for a test whose subject is what the plan allows, not how it
  * is bought: a signed `subscription.updated` carrying an active subscription
  * ({@link fakeSub}) Stripe never held. Nothing is asked of the sandbox, so
- * nothing is left in it. `roster_test.ts` buys the plan at Stripe, since its
- * subject is the whole purchase against a deployed kernel.
+ * nothing is left in it.
  */
 export let onPlus = (k: Pick<Kernel, 'at'>, space: string) =>
   delivered(
@@ -1244,35 +1011,6 @@ export let zipped = async (entries: Packed[]) => {
   return out
 }
 
-// ---- a kernel that is already running (roster_test.ts) ------------
-//
-// yaks.app answers the same doors workerd does, so a suite that drives one can
-// drive the other: this is `kernel` for a host already deployed — where it is,
-// one request at a hostname, and a stop with nothing to stop. What it cannot
-// give is the two things only a local runtime has: its log, so no letter can
-// be read back, and its session secret, so no cookie can be minted. A run
-// against a deployed kernel carries a bearer instead.
-export let deployed = (url: string) => {
-  let base = url.replace(/\/+$/, '')
-  let host = new URL(base).host
-  return owning({
-    base,
-    host,
-    secret: '',
-    log: '',
-    cloudflare: '',
-    at: (where: string, path: string, init: RequestInit = {}) =>
-      fetch(`https://${where}${path}`, init),
-  })
-}
-
-/**
- * A bearer, the way a host gets one: dynamic registration as a public client,
- * the authorization code with PKCE, and the exchange. mcp_auth_test.ts walks
- * the same steps and asserts on each of them; this walks them to come back
- * with a token, for a suite that wants to reach the connector the way a client
- * does rather than with a cookie no client has.
- */
 /**
  * The Allow button, clicked the way a browser clicks it: the consent page is
  * drawn for this cookie and this authorize request, and its form is posted
@@ -1359,327 +1097,9 @@ export let bearerFor = async (
   return got.access_token
 }
 
-// ---- Stripe, in its sandbox (billing.ts, sell.ts) ------------------------
-//
-// Every test that reaches Stripe reaches Stripe itself, in test mode: what
-// proves a purchase works is Stripe taking it, not the right fields having been
-// assembled. The key is the owner's sandbox secret key, passed in the
-// environment and never committed; a run without one fails naming what to set
-// rather than passing over the money paths in silence.
-
-let SANDBOX = 'op://Yak Shaving LLC/yaks.app stripe/sandbox/secret key'
-
-/** The key a test run hands its tests: STRIPE_KEY, or else the owner's from
- * 1Password when `op` can read it here. */
-export let sandboxKey = async () => {
-  let key = Deno.env.get('STRIPE_KEY')
-  if (key) return key
-  let read = await new Deno.Command('op', {
-    args: ['read', SANDBOX],
-    stdout: 'piped',
-    stderr: 'null',
-  }).output().catch(() => undefined)
-  return read?.success ? new TextDecoder().decode(read.stdout).trim() : ''
-}
-
-/** The sandbox secret key, or the sentence saying how to supply one. It must
- * be a test-mode key: a live key here would charge somebody. */
-export let stripeKey = () => {
-  let key = Deno.env.get('STRIPE_KEY') ?? ''
-  if (!key) {
-    throw new Error(
-      'no Stripe sandbox key: set STRIPE_KEY to a test-mode secret key and ' +
-        'the money paths run against Stripe for real. The owner keeps one at ' +
-        `op read '${SANDBOX}'`,
-    )
-  }
-  if (!key.startsWith('sk_test_')) {
-    throw new Error('STRIPE_KEY is not a test-mode key (sk_test_…)')
-  }
-  return key
-}
-
-/** One call to Stripe on the sandbox `key`: stripe.ts `ask`, the platform's
- * own client, so the probe asks as the product does and retries as it does. */
-export let charged = (
-  key: string,
-  path: string,
-  fields?: Record<string, unknown>,
-  on?: string,
-  method?: string,
-) => ask({ STRIPE_KEY: key }, path, fields, on, method)
-
 /**
- * The recurring price a Plus checkout charges, found or made in the sandbox.
- * A price carries no name of its own, so the product holds the name and the
- * price hangs off it: a second run reuses both rather than filling the sandbox
- * with a product per run. STRIPE_PRICE names one outright where the owner has
- * a price they would rather charge.
- */
-export let plusPrice = async (key: string, named = 'yaks.app probe Plus') => {
-  let asked = Deno.env.get('STRIPE_PRICE')
-  if (asked) return asked
-  // Stripe is the seller under Managed Payments, which the platform asks for
-  // (billing.ts), and a seller owes tax — so a product with no tax code is
-  // one Stripe refuses to sell. This is the code for software as a service.
-  let sold = { name: named, tax_code: 'txcd_10103000' }
-  let products = await charged(key, '/v1/products?limit=100') as unknown as {
-    data: { id: string; name: string; tax_code?: string }[]
-  }
-  let found = products.data.find((p) => p.name == named)
-  if (found && !found.tax_code) {
-    await charged(key, `/v1/products/${found.id}`, {
-      tax_code: sold.tax_code,
-    })
-  }
-  let product = found ??
-    await charged(key, '/v1/products', sold) as unknown as { id: string }
-  let prices = await charged(
-    key,
-    `/v1/prices?product=${product.id}&active=true&limit=100`,
-  ) as unknown as { data: { id: string; recurring?: unknown }[] }
-  let price = prices.data.find((p) => p.recurring) ??
-    await charged(key, '/v1/prices', {
-      product: product.id,
-      currency: 'usd',
-      unit_amount: 900,
-      recurring: { interval: 'month' },
-    }) as unknown as { id: string }
-  return price.id
-}
-
-/**
- * A connected account that can take money, found or made in the sandbox. The
- * account `space_sell` makes waits on a person's identity form, which no test
- * can fill in, so this one is onboarded by the platform with Stripe's test
- * identity (`address_full_match`, `000000000`, `btok_us_verified`). Stripe
- * takes about a minute to enable a new one, so it is kept and found again by
- * name. A connected account cannot be looked up by anything but its id, and
- * listing them reads every account the sandbox holds, seven seconds a hundred,
- * so the name is a product's, and the product holds the account's id.
- */
-export let merchant = async (
-  key: string,
-  named = 'yaks.app probe merchant',
-) => {
-  let products = await charged(key, '/v1/products?limit=100') as unknown as {
-    data: { id: string; name: string; metadata?: Record<string, string> }[]
-  }
-  let pointer = products.data.find((p) => p.name == named)
-  let id = pointer?.metadata?.account ?? ''
-  let held = id
-    ? await charged(key, `/v1/accounts/${id}`).catch(() => null)
-    : null
-  if (!held || held.deleted) {
-    id = String(
-      (await charged(key, '/v1/accounts', {
-        country: 'US',
-        business_type: 'individual',
-        controller: {
-          fees: { payer: 'application' },
-          losses: { payments: 'application' },
-          requirement_collection: 'application',
-          stripe_dashboard: { type: 'none' },
-        },
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_profile: { mcc: '5734', url: 'https://yaks.app' },
-        individual: {
-          first_name: 'Probe',
-          last_name: 'Merchant',
-          email: 'merchant@example.com',
-          phone: '0000000000',
-          dob: { day: 1, month: 1, year: 1901 },
-          address: {
-            line1: 'address_full_match',
-            city: 'Brooklyn',
-            state: 'NY',
-            postal_code: '11201',
-            country: 'US',
-          },
-          id_number: '000000000',
-        },
-        external_account: 'btok_us_verified',
-        tos_acceptance: {
-          date: Math.floor(Date.now() / 1000),
-          ip: '127.0.0.1',
-        },
-        metadata: { probe: named },
-      })).id,
-    )
-    await charged(
-      key,
-      pointer ? `/v1/products/${pointer.id}` : '/v1/products',
-      { ...(pointer ? {} : { name: named }), metadata: { account: id } },
-    )
-  }
-  if (!held?.charges_enabled) {
-    await until(
-      async () => (await charged(key, `/v1/accounts/${id}`)).charges_enabled,
-      { timeout: 180_000, poll: 2000, label: `${id} to take charges` },
-    )
-  }
-  return id
-}
-
-/**
- * A Plus subscription Stripe holds, carrying `metadata`, paid with
- * `pm_card_visa` (Stripe's name for 4242 4242 4242 4242) on `customer`, or on a
- * fresh customer when none is named. It is what a completed checkout leaves:
- * Stripe's checkout page draws its card fields in cross-origin frames behind a
- * captcha, which no test can drive, so the card goes in the way the API puts it.
- * It is made for kernel `k`, whose stop cancels it, and deletes the customer
- * too when it was made here.
- */
-export let subscribed = async (
-  k: Pick<Kernel, 'made'>,
-  key: string,
-  metadata: Record<string, string>,
-  customer?: string,
-) => {
-  // Stamped the way checkout stamps it (billing.ts `metaOf`), with the apex a
-  // probe kernel runs under, so staging, which hears this sandbox's events
-  // too, lets the purchase go as another deployment's.
-  metadata = { ...metadata, apex: apex() }
-  if (!customer) {
-    customer = String((await charged(key, '/v1/customers', { metadata })).id)
-    k.made.add(`/v1/customers/${customer}`)
-  }
-  let card = await charged(key, '/v1/payment_methods/pm_card_visa/attach', {
-    customer,
-  })
-  let sub = await charged(key, '/v1/subscriptions', {
-    customer,
-    items: { 0: { price: await plusPrice(key) } },
-    default_payment_method: String(card.id),
-    metadata,
-  })
-  k.made.add(`/v1/subscriptions/${sub.id}`)
-  return sub
-}
-
-// The statuses a subscription renews from, and longer than any run takes.
-let RENEWING = ['active', 'trialing', 'past_due']
-let RUN = 60 * 60
-
-type Held = {
-  id?: string
-  livemode?: boolean
-  status?: string
-  created?: number
-  metadata?: Record<string, string>
-}
-
-/**
- * Whether a sandbox subscription is one an earlier run left renewing at
- * `now` (unix seconds): bought by a probe kernel, which stamps the probe's
- * apex (`subscribed`) where staging stamps its own and live mode is
- * production's, still able to renew, and older than any run, so a run going on
- * beside this one keeps what it holds.
- */
-export let leftover = (sub: Held, now: number) =>
-  sub.livemode === false && sub.metadata?.apex == apex() &&
-  RENEWING.includes(sub.status ?? '') && (sub.created ?? now) < now - RUN
-
-// Every object a list answers, page after page.
-let listed = async (key: string, path: string) => {
-  let all: Held[] = []
-  for (let after = '';;) {
-    let page = await charged(key, `${path}${after}`) as {
-      data: Held[]
-      has_more: boolean
-    }
-    all.push(...page.data)
-    if (!page.has_more || !page.data.length) return all
-    after = `&starting_after=${page.data.at(-1)!.id}`
-  }
-}
-
-/**
- * Cancel what earlier runs left renewing in the sandbox ({@link leftover}). A
- * test deletes what it made in its kernel's `stop`, which a run killed
- * mid-test never reaches, so the next run that holds the key sweeps it, long
- * before a month's renewal. Answers the ids it cancelled.
- */
-export let swept = async (now = Math.floor(Date.now() / 1000)) => {
-  let key = stripeKey()
-  let held = await Promise.all(RENEWING.map((status) =>
-    listed(
-      key,
-      `/v1/subscriptions?status=${status}&created[lt]=${now - RUN}&limit=100`,
-    )
-  ))
-  let gone = held.flat().filter((sub) => leftover(sub, now))
-  await Promise.all(gone.map((sub) => deleted(`/v1/subscriptions/${sub.id}`)))
-  return gone.map((sub) => sub.id!)
-}
-
-/**
- * A subscription whose first invoice was never paid, as Stripe leaves it once
- * its 23 hours have run out: `incomplete_expired`, which bills nobody again.
- * The day passes on a test clock of its own, which takes the sandbox a few
- * seconds; deleting the clock deletes its customer and the subscription.
- */
-export let lapsed = async (
-  k: Pick<Kernel, 'made'>,
-  key: string,
-  metadata: Record<string, string>,
-) => {
-  metadata = { ...metadata, apex: apex() }
-  let now = Math.floor(Date.now() / 1000)
-  let clock = String(
-    (await charged(key, '/v1/test_helpers/test_clocks', { frozen_time: now }))
-      .id,
-  )
-  let at = `/v1/test_helpers/test_clocks/${clock}`
-  k.made.add(at)
-  let customer = await charged(key, '/v1/customers', {
-    test_clock: clock,
-    metadata,
-  })
-  let sub = await charged(key, '/v1/subscriptions', {
-    customer: String(customer.id),
-    items: { 0: { price: await plusPrice(key) } },
-    payment_behavior: 'default_incomplete',
-    metadata,
-  })
-  await charged(key, `${at}/advance`, { frozen_time: now + 24 * 60 * 60 })
-  await until(async () => (await charged(key, at)).status == 'ready', {
-    timeout: 60_000,
-    poll: 500,
-    label: 'the test clock a day on',
-  })
-  return await charged(key, `/v1/subscriptions/${sub.id}`)
-}
-
-/**
- * The checkout session a door's `url` opened, read back off the sandbox with
- * `query` (`?expand[]=line_items`). billing.ts mints a space its customer the
- * first time it opens checkout, so that customer is kernel `k`'s to delete.
- */
-export let sessionAt = async (
-  k: Pick<Kernel, 'made'>,
-  url: string,
-  query = '',
-) => {
-  let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
-  if (!id) throw new Error(`no checkout session in ${url}`)
-  let session = await charged(
-    stripeKey(),
-    `/v1/checkout/sessions/${id}${query}`,
-  )
-  if (session.customer) k.made.add(`/v1/customers/${session.customer}`)
-  return session
-}
-
-/**
- * An event as Stripe would deliver it, carrying an object Stripe actually
- * holds. Stripe cannot reach a workerd bound to loopback, so the half of
- * delivery a probe supplies is the hop itself: the object is fetched from the
- * sandbox, wrapped in the envelope the handler reads, and signed with the
- * secret the kernel was booted with.
+ * A signed Stripe event delivered directly to the kernel's webhook handler.
+ * The event's object is input data; this fixture makes no service call.
  */
 export let delivered = async (
   k: Pick<Kernel, 'at'>,

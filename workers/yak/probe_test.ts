@@ -1,69 +1,38 @@
-import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { leftover, letters, mailed } from './probe.ts'
+import { equal, test } from '@yaks/testing'
+import { cloudflare, endpoint, letters, mailed } from './probe.ts'
 
-test('a run sweeps only a probe subscription an earlier run left renewing', () => {
-  let now = 1_800_000_000
-  let left = {
-    livemode: false,
-    status: 'active',
-    created: now - 2 * 60 * 60,
-    metadata: { apex: 'yaks.app' },
-  }
-  let swept = (over: Record<string, unknown>) =>
-    leftover({ ...left, ...over }, now)
-  assertEquals(swept({}), true)
-  assertEquals(swept({ status: 'past_due' }), true)
-  // A run going on beside this one still holds what it made a minute ago.
-  assertEquals(swept({ created: now - 60 }), false)
-  // Staging's own, one from before the stamp, and anything in live mode.
-  assertEquals(swept({ metadata: { apex: 'yaks.fyi' } }), false)
-  assertEquals(swept({ metadata: {} }), false)
-  assertEquals(swept({ livemode: true }), false)
-  assertEquals(swept({ status: 'canceled' }), false)
-})
-
-test('mailed waits for a new delivery rather than returning a spent code', async () => {
-  let log = Deno.makeTempFileSync()
+test('mailed returns the new delivery rather than a spent code', async () => {
+  let log = crypto.randomUUID()
+  let cf = cloudflare(log)
   let k = { log }
   let to = 'probe@example.test'
-  let sent = (code: string) =>
-    `yak-mail ${JSON.stringify({ to, subject: `Code ${code}`, body: '' })}\n`
+  let sent = (code: string) => cf.binding.send({ to, subject: `Code ${code}` })
   try {
-    Deno.writeTextFileSync(log, sent('111111'))
+    await sent('111111')
     let received = letters(k, to).length
-    let code = mailed(k, to, received)
-    // The next log line arrives after the waiter has seen the old delivery.
-    Deno.writeTextFileSync(log, sent('222222'), { append: true })
-    assertEquals(await code, '222222')
+    await sent('222222')
+    equal(await mailed(k, to, received), '222222')
   } finally {
-    Deno.removeSync(log)
+    await cf.stop()
   }
 })
 
 test('a delivered letter does not wait for an unrelated shared-kernel alarm', async () => {
-  let log = Deno.makeTempFileSync()
+  let log = crypto.randomUUID()
+  let cf = cloudflare(log)
   let to = 'delivery@example.test'
   try {
-    Deno.writeTextFileSync(
-      log,
-      `yak-mail ${
-        JSON.stringify({
-          to,
-          subject: 'Code 654321',
-          body: '',
-        })
-      }\n`,
-    )
+    await cf.binding.send({ to, subject: 'Code 654321' })
     let k = { log, settled: () => new Promise<void>(() => {}) }
-    assertEquals(await mailed(k, to), '654321')
+    equal(await mailed(k, to), '654321')
   } finally {
-    Deno.removeSync(log)
+    await cf.stop()
   }
 })
 
 test('a delivery observer waits for this request without waiting for platform alarms', async () => {
-  let log = Deno.makeTempFileSync()
+  let log = crypto.randomUUID()
+  let cf = cloudflare(log)
   let to = 'invite@example.test'
   let seen = 0
   try {
@@ -72,22 +41,34 @@ test('a delivery observer waits for this request without waiting for platform al
       settled: () => new Promise<void>(() => {}),
       deliveries: () => {
         seen++
-        Deno.writeTextFileSync(
-          log,
-          `yak-mail ${
-            JSON.stringify({
-              to,
-              subject: 'Code 777777',
-              body: '',
-            })
-          }\n`,
-        )
-        return Promise.resolve()
+        return cf.binding.send({ to, subject: 'Code 777777' }).then(() => {})
       },
     }
-    assertEquals(await mailed(k, to), '777777')
-    assertEquals(seen, 1)
+    equal(await mailed(k, to), '777777')
+    equal(seen, 1)
   } finally {
-    Deno.removeSync(log)
+    await cf.stop()
+  }
+})
+
+test('an in-process endpoint receives request headers and binary bodies', async () => {
+  let wire = endpoint(async (req) =>
+    Response.json({
+      cookie: req.headers.get('cookie'),
+      body: [...new Uint8Array(await req.arrayBuffer())],
+    })
+  )
+  try {
+    let response = await fetch(wire.url, {
+      method: 'POST',
+      headers: { cookie: 'yak_session=probe' },
+      body: new Uint8Array([255, 0, 13, 10]),
+    })
+    equal(await response.json(), {
+      cookie: 'yak_session=probe',
+      body: [255, 0, 13, 10],
+    })
+  } finally {
+    await wire.stop()
   }
 })
