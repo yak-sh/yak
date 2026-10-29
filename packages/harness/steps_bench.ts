@@ -106,7 +106,12 @@ let round = async (steps: number) => {
     )
     check(asyncCalls.length == steps, 'did not dispatch real async tools')
     check(results.length == steps, 'wrong completed result count')
-    check(progress.length == 0, 'a background call wrote a progress entry')
+    // Historical baselines wrote one progress entry per tool; current sessions
+    // write only the result. Both run the same scripted model and tools.
+    check(
+      progress.length == 0 || progress.length == steps,
+      'tool progress covered only part of the workload',
+    )
     check(
       entries.some((entry) => !entry.output && textOf(entry) == PROMPT),
       'input lost',
