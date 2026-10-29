@@ -22,7 +22,9 @@ import {
 let utf8 = new TextEncoder()
 let text = new TextDecoder()
 
-let all = async (stream: ReadableStream<Uint8Array>): Promise<Uint8Array> =>
+let all = async (
+  stream: ReadableStream<Uint8Array>,
+): Promise<Uint8Array<ArrayBuffer>> =>
   new Uint8Array(await new Response(stream).arrayBuffer())
 
 // The two files of the fixture, as a deploy manifest names them.
