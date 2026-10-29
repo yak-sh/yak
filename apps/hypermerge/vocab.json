@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hypermerge",
+  "description": "Docs edited with Automerge 0.9.2 and kept as hypermerge kept them: one append-only feed per actor, each block one change, signed by the actor's key. The page only ever adds rows.",
+  "$defs": {
+    "block": {
+      "component": true,
+      "type": "object",
+      "description": "One block of one actor's feed: block index i holds the actor's change seq i + 1. Its eid is the SHA-256 of its bytes, the canonical JSON of the change.",
+      "properties": {
+        "doc": {
+          "type": "string",
+          "index": true,
+          "description": "The doc's id: its root actor's key."
+        },
+        "actor": {
+          "type": "string",
+          "index": true,
+          "description": "The feed's key: the writing actor's Ed25519 public key in base58, which is also its Automerge actor id."
+        },
+        "index": { "type": "number" },
+        "change": {
+          "type": "object",
+          "description": "The Automerge change: actor, seq, deps, message and ops."
+        },
+        "sig": {
+          "type": "string",
+          "description": "The actor's Ed25519 signature, in hex, of its feed's Merkle tree hash once this block was appended."
+        }
+      },
+      "required": ["doc", "actor", "index", "change", "sig"]
+    },
+    "actor": {
+      "component": true,
+      "type": "object",
+      "description": "One member of a doc's actor set, kept apart from every feed as hypermerge kept it.",
+      "properties": {
+        "doc": { "type": "string", "index": true },
+        "key": {
+          "type": "string",
+          "description": "The actor's public key in base58: its id and its feed's key."
+        },
+        "name": { "type": "string" },
+        "color": { "type": "string" }
+      },
+      "required": ["doc", "key"]
+    }
+  }
+}

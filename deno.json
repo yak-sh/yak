@@ -254,9 +254,13 @@
   },
   "imports": {
     "./apps/housebook/api/": "./workers/yak/public/",
+    "./apps/hypermerge/api/": "./workers/yak/public/",
     "./apps/village-tasks/api/": "./workers/yak/public/",
     "preact-render-to-string": "npm:preact-render-to-string@6.7.0",
     "three": "npm:three@^0.186.1",
+    "automerge": "npm:automerge@0.9.2",
+    "blakejs": "npm:blakejs@1.2.1",
+    "bs58": "npm:bs58@6.0.0",
     "es-module-lexer": "npm:es-module-lexer@1.7.0",
     "lucide": "npm:lucide@1.31.0",
     "stemmer": "npm:stemmer@2.0.1",

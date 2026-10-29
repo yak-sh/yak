@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hypermerge</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="Top">
+      <h1><a href="./">Hypermerge</a></h1>
+      <p>
+        How hypermerge kept a doc: Automerge 0.9.2 changes, one append-only feed
+        per actor, each feed a signed Merkle tree as in hypercore. yaks.app
+        carries the feeds between browsers.
+      </p>
+    </header>
+
+    <section class="Start" hidden>
+      <button class="Start_new">New doc</button>
+      <h2>Docs</h2>
+      <ul class="Start_docs"></ul>
+    </section>
+
+    <main class="Doc" hidden>
+      <p class="Doc_link">
+        doc <code class="Doc_id"></code>
+        <button class="Doc_copy">Copy link</button>
+        <span class="Status"></span>
+      </p>
+
+      <section class="Editors">
+        <h2>Editors in this browser</h2>
+        <div class="Editors_list"></div>
+        <button class="Editors_add">Add actor</button>
+      </section>
+
+      <section class="Feeds">
+        <h2>Feeds</h2>
+        <p class="Feeds_legend">
+          A lane per actor. Each block is one change: block #i holds seq i + 1.
+          Above the blocks, the feed's Merkle tree; at its head, the tree hash
+          the actor signed. Solid arrows: a change's deps on other feeds.
+          Dashed: its own previous seq. Click a block to read it.
+        </p>
+        <div class="Feeds_view"></div>
+      </section>
+
+      <section class="Detail" hidden>
+        <h2>Block</h2>
+        <div class="Detail_body"></div>
+      </section>
+
+      <section class="Replay">
+        <h2>Replay</h2>
+        <p>
+          Deliver the blocks one at a time, in the order they arrived or
+          shuffled. Automerge applies a change once its deps are in, and queues
+          it until then.
+        </p>
+        <div class="Replay_controls">
+          <select class="Replay_order">
+            <option value="arrival">arrival order</option>
+            <option value="shuffled">shuffled</option>
+          </select>
+          <button class="Replay_shuffle">Shuffle</button>
+          <input class="Replay_range" type="range" min="0" value="0">
+          <span class="Replay_at"></span>
+        </div>
+        <div class="Replay_state">
+          <h3 class="Replay_title"></h3>
+          <pre class="Replay_text"></pre>
+        </div>
+        <ul class="Replay_queue"></ul>
+      </section>
+
+      <section class="Actors">
+        <h2>Actor set</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>actor</th>
+              <th>key</th>
+              <th>blocks</th>
+              <th>refused</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody class="Actors_rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <template id="pane">
+      <div class="Pane">
+        <div class="Pane_head">
+          <span class="Pane_who"></span>
+          <label><input class="Pane_online" type="checkbox" checked> online</label>
+          <span class="Pane_held"></span>
+        </div>
+        <input class="Pane_title" placeholder="Title" disabled>
+        <p class="Pane_conflict"></p>
+        <textarea class="Pane_body" rows="6" disabled></textarea>
+      </div>
+    </template>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
