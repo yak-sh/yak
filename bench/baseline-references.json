@@ -629,16 +629,6 @@
     "baseline": "bench/relay-admission.baseline.json",
     "groups": [
       {
-        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
-        "kind": "recorded",
-        "source": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204 commit message and bench/suites.md: relay reference measured at 24ef8e577 parent 77ebf5d382",
-        "benches": [
-          "store-relay/1-entities",
-          "store-relay/10-entities",
-          "store-relay/100-entities"
-        ]
-      },
-      {
         "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
         "kind": "derived",
         "source": "git history of bench/relay-admission.baseline.json: origin of unchanged median; measurement revision was not recorded",
@@ -647,6 +637,29 @@
           "graph-full-check/10-entities",
           "graph-full-check/100-entities"
         ]
+      }
+    ],
+    "retired": [
+      {
+        "name": "store-relay/1-entities",
+        "unit": "us/value",
+        "median": 408.93133499999954,
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
+      },
+      {
+        "name": "store-relay/10-entities",
+        "unit": "us/value",
+        "median": 323.07447099999354,
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
+      },
+      {
+        "name": "store-relay/100-entities",
+        "unit": "us/value",
+        "median": 231.3814799750051,
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
       }
     ]
   },
@@ -762,16 +775,29 @@
           "query/memory/apply-100",
           "query/file/apply-100"
         ]
+      }
+    ],
+    "retired": [
+      {
+        "name": "relay/store/entities-1",
+        "unit": "ns/value",
+        "median": 337740,
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
       },
       {
+        "name": "relay/store/entities-10",
+        "unit": "ns/value",
+        "median": 276223,
         "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
-        "kind": "recorded",
-        "source": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204 commit message and bench/suites.md: relay reference measured at 24ef8e577 parent 77ebf5d382",
-        "benches": [
-          "relay/store/entities-1",
-          "relay/store/entities-10",
-          "relay/store/entities-100"
-        ]
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
+      },
+      {
+        "name": "relay/store/entities-100",
+        "unit": "ns/value",
+        "median": 257815,
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "reason": "Historical Store exposes a trace-clock callback but no owned timer injection. The current admission boundary cannot be measured there without shared-global clock changes or a separate historical executor, so this timing case is retired; pure relay behavior tests remain."
       }
     ]
   },
