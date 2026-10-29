@@ -104,7 +104,7 @@ graph_apply with bundles [{"entity": {"eid": "D-…"}, "doc": {"body": "<the rev
 ```
 
 When he comments, record his words verbatim on the design
-(`comment_new` on D-… with '<his words>'), fold the answers into a "Decided"
+(`comment_new` with target `D-…` and body '<his words>'), fold the answers into a "Decided"
 section of the body, and drop what he rejected.
 
 When his comment reshapes the design, the body changes in the same sitting as
@@ -113,7 +113,7 @@ the new one lives only in a chat reply that goes when your context does.
 
 ## Deciding it
 
-When a design looks good, `design_decide` with `D-…` it yourself and
+When a design looks good, `design_decide` it yourself (design `D-…`; the verdict is approved unless you pass declined) and
 build: the tool stamps the caller as the decider, which is the agent's decision
 recorded as the agent's (M-31958). When he approves in conversation, put his
 approval verbatim in a comment beside it. The task tree and follow-ups are yours
