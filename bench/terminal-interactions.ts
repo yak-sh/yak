@@ -8,6 +8,7 @@
 import { processCpu, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
+import { settled } from './settled.ts'
 import { starter } from '../packages/cli/init.ts'
 
 export let TERMINAL_INTERACTIONS = [
@@ -122,6 +123,7 @@ export async function measure(
     )
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
+    await settled(host)
     await host.graph.apply([
       {
         entity: { eid: PERSON },

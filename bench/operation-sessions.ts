@@ -6,6 +6,7 @@ import type { Model } from '@yaks/model'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
+import { settled } from './settled.ts'
 import { starter } from '../packages/cli/init.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { local } from '../packages/harness/local.ts'
@@ -127,6 +128,7 @@ export async function measure(
     let path = `${dir}/yak.json`
     await Deno.writeTextFile(path, JSON.stringify(config))
     host = await compose(read(path), ['graph', 'web'])
+    await settled(host)
     let graph = host.graph
     await graph.apply([
       {
