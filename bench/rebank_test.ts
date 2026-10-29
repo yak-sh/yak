@@ -99,3 +99,23 @@ test('CPU rebanking retains each workload reference in a mixed bank', () => {
     [['read', 100, 'old'], ['write', 200, 'new']],
   )
 })
+
+test('CPU rebanking refuses a failed suite even with a completed group', async () => {
+  let group = {
+    verdict: 'same' as const,
+    slower: [],
+    comparisons: [],
+    reference: 'old',
+    before: reading(100),
+    current: reading(100),
+    after: reading(100),
+  }
+  await throws(() =>
+    bank({
+      ...group,
+      verdict: 'failed',
+      error: 'another reference group did not complete',
+      groups: [group],
+    })
+  )
+})

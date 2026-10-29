@@ -35,16 +35,41 @@ let bankGroup = (evidence: Judgement): Baseline => {
 }
 
 export let bank = (evidence: Judgement): Baseline => {
+  if (evidence.complete === false) {
+    throw Error('Suite measurements are incomplete')
+  }
+  if (
+    evidence.error ||
+    !['same', 'slower', 'inconclusive'].includes(evidence.verdict)
+  ) {
+    throw Error(evidence.error ?? `Comparison was ${evidence.verdict}`)
+  }
   let groups = (evidence.groups ?? [evidence]).map(bankGroup)
   let byName = new Map(groups.flatMap((g) => g.benches.map((b) => [b.name, b])))
   let names = evidence.current?.benches.map((b) => b.name) ?? [...byName.keys()]
   let { reference: _reference, ...first } = groups[0]
   let references = [...new Set(groups.map((g) => g.reference))]
+  let planned = evidence.plan?.flatMap((group) => group.names)
+  if (
+    planned &&
+    (planned.length != byName.size || planned.some((name) => !byName.has(name)))
+  ) {
+    throw Error('Reference measurements do not cover the complete plan')
+  }
+  if (names.length != byName.size || names.some((name) => !byName.has(name))) {
+    throw Error('Reference measurements do not cover the complete suite')
+  }
   return {
     ...first,
     benches: names.map((name) => byName.get(name)!),
     ...(references.length == 1 ? { reference: references[0] } : {}),
   }
+}
+
+let write = async (path: string, value: unknown) => {
+  let next = `${path}.tmp`
+  await Deno.writeTextFile(next, JSON.stringify(value, null, 2) + '\n')
+  await Deno.rename(next, path)
 }
 
 type Provenance = {
@@ -76,10 +101,23 @@ export let rebank = async (
     ['person-commands', 'terminal-interactions', 'hook-waits'].includes(suite)
   let evidence: Judgement
   try {
+    let resume: Judgement | undefined
+    if (!recorded) {
+      try {
+        resume = JSON.parse(await Deno.readTextFile(output))
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error
+      }
+    }
     evidence = recorded ?? await collect(
       suite,
       root,
-      { references, ...(process ? { rounds: 3 } : {}) },
+      {
+        references,
+        ...(process ? { rounds: 3 } : {}),
+        resume,
+        checkpoint: (partial) => write(output, partial),
+      },
     )
   } catch (error) {
     evidence = {
@@ -89,12 +127,9 @@ export let rebank = async (
       error: error instanceof Error ? error.stack ?? error.message : `${error}`,
     }
   }
-  await Deno.writeTextFile(output, JSON.stringify(evidence, null, 2) + '\n')
+  await write(output, evidence)
   let next = bank(evidence)
-  await Deno.writeTextFile(
-    `${root}/${path}`,
-    JSON.stringify(next, null, 2) + '\n',
-  )
+  await write(`${root}/${path}`, next)
   let limited = (evidence.groups ?? [evidence]).some((group) =>
     (group.current?.rounds ?? 0) <
       Math.max(6, Math.ceil(Math.log2(20 * group.comparisons.length)))
@@ -172,10 +207,7 @@ if (import.meta.main) {
       })
       console.error(`${suite}: ${message}`)
     }
-    await Deno.writeTextFile(
-      report,
-      JSON.stringify(results, null, 2) + '\n',
-    )
+    await write(report, results)
   }
   if (failed) Deno.exitCode = 1
 }
