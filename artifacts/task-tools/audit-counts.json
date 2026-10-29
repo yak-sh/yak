@@ -2,16 +2,16 @@
   "cutoff": "2026-10-29T13:48:00Z",
   "invocations": 651,
   "acts": {
+    "requires": 182,
     "tree": 80,
-    "requires": 181,
     "body_part": 239,
-    "create": 18,
+    "create": 17,
     "fields": 70,
     "delete": 25,
     "attach": 22,
     "body_replace": 75,
-    "memory": 43,
     "bulk": 44,
+    "memory": 43,
     "batch_create": 32,
     "decision": 14,
     "comment": 33,
@@ -42,12 +42,12 @@
     "check+apply": 1
   },
   "gap": {
-    "true": 523,
+    "true": 524,
     "mixed": 53,
-    "false": 75
+    "false": 74
   },
-  "fallback_reports": 20,
-  "fallback_sessions": 16,
+  "fallback_reports": 34,
+  "fallback_sessions": 23,
   "scan": {
     "files": 969,
     "lines": 945543,
@@ -58,27 +58,90 @@
     "command": "python3 artifacts/task-tools/audit.py",
     "verified_invocations": 651,
     "exit_code": 0,
-    "elapsed_seconds": 77.237735309
+    "elapsed_seconds": 77.237735309,
+    "retained_verified_subset": 650,
+    "excluded_after_replay": "One additional design-copy proof fixture removed; all 650 remaining command hashes were verified in the successful 651-row replay.",
+    "targeted_recovered_invocations": 1,
+    "recovered_source_hash": "ef8c20025fd67f2919abb1fd9bc28a59a1438c3a2ddc80533d8a8841c9c1e623",
+    "verified_current_invocations": 651,
+    "recovered_command": "python3 artifacts/task-tools/audit.py --recovered",
+    "recovered_exit_code": 0,
+    "reference_replay": {
+      "command": "python3 artifacts/task-tools/audit.py --references",
+      "verified_invocations": 651,
+      "source_files": 96,
+      "exit_code": 0,
+      "elapsed_seconds": 3.001
+    },
+    "fallback_reference_replay": {
+      "verified_source_references": 136,
+      "source_files": 59,
+      "exit_code": 0,
+      "elapsed_seconds": 1.917
+    }
   },
   "measured_commands": {
-    "count": 47,
-    "total_seconds": 354.666568543,
+    "count": 120,
+    "total_seconds": 931.632580308,
     "slowest": [
       {
-        "command": "python3 artifacts/task-tools/audit.py (earlier replay; evidence updated while running)",
+        "command": "python3 artifacts/task-tools/fallback-audit.py /tmp/task-fallback-scan.json",
+        "elapsed_seconds": 432.357090601,
+        "exit_code": 0
+      },
+      {
+        "command": "node /tmp/task-check-json.mjs",
+        "elapsed_seconds": 114.44760172,
+        "exit_code": 0
+      },
+      {
+        "command": "python3 artifacts/task-tools/audit.py",
         "elapsed_seconds": 90.595714902,
         "exit_code": 1
-      },
-      {
-        "command": "python3 /tmp/task-audit-wide-thinking.py",
-        "elapsed_seconds": 87.218795566,
-        "exit_code": 0
-      },
-      {
-        "command": "python3 artifacts/task-tools/audit.py (final optimized replay)",
-        "elapsed_seconds": 77.237735309,
-        "exit_code": 0
       }
     ]
+  },
+  "fallback_scan": {
+    "command": "python3 artifacts/task-tools/fallback-audit.py /tmp/task-fallback-scan.json",
+    "elapsed_seconds": 431.33758881292306,
+    "exit_code": 0,
+    "files": 974,
+    "lines": 954749,
+    "decoded_records": 540282,
+    "unique_tool_calls": 147093,
+    "yak_invocations": 11020,
+    "task_mcp_calls": 666,
+    "invalid_json": 1,
+    "wrapped_task_mcp_calls": 23,
+    "narrative_candidates": 1067,
+    "error_with_following_cli_candidates": 46,
+    "task_mcp_failure_candidates": 89
+  },
+  "fallback_review": {
+    "narrative_candidates": 1067,
+    "additional_prior_candidates": 21,
+    "reviewed_narratives": 1088,
+    "explicit_reports": 34,
+    "report_sessions": 23,
+    "failure_candidates": 89,
+    "confirmed_failure_or_declined_results": 62,
+    "quoted_error_or_metadata_false_positives": 27,
+    "in_scope_failure_cases": 8,
+    "in_scope_cli_attempts": 9,
+    "in_scope_sessions": 7,
+    "out_of_scope_failure_cases_followed_by_cli": 11,
+    "out_of_scope_cli_attempts": 7,
+    "unreadable_json_lines": 0,
+    "recovered_malformed_json_records": 1
+  },
+  "syntax_check": {
+    "command": "node /tmp/task-check-json.mjs",
+    "files": 977,
+    "readline_segments": 959868,
+    "elapsed_seconds": 114.125300113,
+    "malformed_segments": 3,
+    "confirmed_malformed_jsonl_records": 1,
+    "false_positive_segments": 2,
+    "false_positive_reason": "Node readline split a valid JSON record containing a Unicode line separator; targeted Python JSON parsing verified the original LF-delimited record."
   }
 }

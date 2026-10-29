@@ -30,8 +30,8 @@ export let link = (
 })
 
 /**
- * The bundle that removes that link: both components cleared, the entity left
- * in place so the same link can be created again.
+ * The bundle that deletes the link entity and its metadata. Linking the same
+ * endpoints and relation later recreates its derived identity.
  */
 export let unlink = (from: Eid, relation: string, to: Eid): Bundle => ({
   entity: { eid: edgeEid(from, relation, to) },

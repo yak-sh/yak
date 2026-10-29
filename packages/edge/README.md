@@ -90,9 +90,9 @@ equal(placed([a, b], link('p', 'cites', 'd'), 2), [link('p', 'cites', 'd', 3)])
 
 `edgeEid(from, relation, to)` hashes `from|relation|to` with SHA-256 and formats
 it as the graph's derived UUID. The same endpoints and component name identify
-one link. Direction matters. `link()` computes this eid; `unlink()` removes only
-the `edge` and relation components, leaving the entity and any application
-metadata in place. Its eid can be used to create the link again.
+one link. Direction matters. `link()` computes this eid; `unlink()` deletes the
+link entity, including its application metadata. The same eid creates the link
+again when it is linked later.
 
 Both endpoints are [references](../vocab/README.md#routing-and-references) with
 `death: cascade`. The graph enforces reference validity and deletion;
