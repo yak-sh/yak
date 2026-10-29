@@ -3,6 +3,7 @@
  * These are response-complete waits, not browser paint or Cloudflare latency. */
 import type { CollectedSuite, Samples } from '@yaks/benchmark'
 import { FORMS } from './platform-forms.ts'
+import { installed } from '../workers/yak/dependencies.ts'
 
 export let NAMES = [
   'management/html',
@@ -38,14 +39,26 @@ export let NAMES = [
 export let suite = (
   args: string[] = [],
   root = new URL('../', import.meta.url).pathname,
+  selected: readonly string[] = NAMES,
 ): CollectedSuite => {
   if (args.length) throw new Error('platform-waits takes no arguments')
+  for (let name of selected) {
+    if (!(NAMES as readonly string[]).includes(name)) {
+      throw new Error(`Unknown platform workload: ${name}`)
+    }
+  }
   return {
     name: 'platform-waits',
     metric: 'median-of-round-medians',
     workload: 'v3/local-kernel-http/1-space/1-app/256-docs/7-samples/warm',
-    benches: NAMES.map((name) => ({ name, unit: 'ms' })),
+    benches: selected.map((name) => ({ name, unit: 'ms' })),
     collect: async () => {
+      await installed(`${root}/workers/yak`, {
+        seed: new URL('../workers/yak/', import.meta.url).pathname.replace(
+          /\/$/,
+          '',
+        ),
+      })
       let child = await new Deno.Command(Deno.execPath(), {
         args: [
           'run',
@@ -53,6 +66,7 @@ export let suite = (
           `${root}/bench/platform-waits-probe.ts`,
         ],
         cwd: root,
+        env: { BENCH_NAMES: JSON.stringify(selected) },
         stdout: 'piped',
         stderr: 'inherit',
       }).output()

@@ -1,7 +1,7 @@
 /** One process owns one local kernel. Nothing reaches a deployed account. */
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { client, connector, fresh, meta, onPlus } from '../workers/yak/probe.ts'
-import { bindings, external, forms } from './platform-forms.ts'
+import { bindings, external, FORMS, forms } from './platform-forms.ts'
 import { management, VIEWS } from './platform-management.ts'
 import { d1 } from '../packages/d1/testing.ts'
 import type { D1Like } from '@yaks/d1'
@@ -12,6 +12,10 @@ import { content, NAMES } from './platform-waits.ts'
 console.log = console.error
 Deno.env.delete('STRIPE_KEY')
 Deno.env.delete('STRIPE_PRICE')
+let selected: string[] = JSON.parse(
+  Deno.env.get('BENCH_NAMES') ?? JSON.stringify(NAMES),
+)
+let wanted = (name: string) => selected.includes(name)
 let scratch = await Deno.makeTempDir({ prefix: 'T-127095-platform-waits-' })
 Deno.env.set('TMPDIR', scratch)
 // Outside calls are denied before a byte can leave this process. Only exact
@@ -152,7 +156,7 @@ try {
     'connector/graph-query',
     'connector/graph-apply',
   ]
-  for (let name of original) {
+  for (let name of original.filter(wanted)) {
     await acts[name]()
     let samples = []
     for (let i = 0; i < 7; i++) {
@@ -165,20 +169,26 @@ try {
     }
     result[name] = samples
   }
-  for (let slug of ['owner', 'bench-waits']) {
+  let needForms = FORMS.some(wanted)
+  let views = VIEWS.filter((view) =>
+    wanted(`management/${view}-populated-html`) ||
+    ['people', 'new', 'visits', 'selling'].includes(view) &&
+      wanted(`management/${view}-html`)
+  )
+  for (let slug of needForms || views.length ? ['owner', 'bench-waits'] : []) {
     let [row] = await meta(k).query(`.space.slug=${slug}`)
     await onPlus(k, String(row.entity.eid))
   }
-  let submissions = await forms(k, scratch)
-  let dashboard = await management(k)
-  for (let view of VIEWS) {
+  let submissions = needForms ? await forms(k, scratch) : {}
+  let dashboard = views.length ? await management(k) : undefined
+  for (let view of views) {
     let name = `management/${view}-populated-html`
     let act = async () =>
       content(
-        await k!.at(k!.host, dashboard.path(view), {
+        await k!.at(k!.host, dashboard!.path(view), {
           headers: { cookie: k!.owner.cookie },
         }),
-        dashboard.wanted[view],
+        dashboard!.wanted[view],
       )
     await act()
     let samples: Sample[] = []
@@ -195,7 +205,11 @@ try {
       result[`management/${view}-html`] = result[name]
     }
   }
-  for (let [name, op] of Object.entries(submissions)) {
+  for (
+    let [name, op] of Object.entries(submissions).filter(([name]) =>
+      wanted(name)
+    )
+  ) {
     await op.prepare?.()
     await op.act()
     let samples: Sample[] = []
@@ -213,12 +227,15 @@ try {
   if (denied.length) {
     throw new Error(`external calls attempted: ${denied.join(', ')}`)
   }
-  if (NAMES.some((name) => result[name] === undefined)) {
+  if (selected.some((name) => result[name] === undefined)) {
     throw new Error('missing platform metric')
   }
   await Deno.stdout.write(
     new TextEncoder().encode(
-      'PLATFORM_WAITS_RESULT=' + JSON.stringify(result) + '\n',
+      'PLATFORM_WAITS_RESULT=' +
+        JSON.stringify(
+          Object.fromEntries(selected.map((name) => [name, result[name]])),
+        ) + '\n',
     ),
   )
 } finally {

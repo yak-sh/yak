@@ -24,6 +24,12 @@ let streamed = new Response(
   }),
 )
 let consumed = content(streamed, 'The saved app')
+test('platform wait reference groups select only their named workloads', () => {
+  let selected = ['app/html', 'connector/graph-query']
+  equal(suite([], undefined, selected).benches.map((b) => b.name), selected)
+  throws(() => suite([], undefined, ['unknown']))
+})
+
 test('platform HTML waits consume content, not just successful headers', async () => {
   equal(await consumed, '<h1>The saved app</h1>')
   equal(sent, true)
