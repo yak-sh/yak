@@ -48,6 +48,7 @@ export let routes = (host: Hosting): Route[] => {
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
     reply: host.reply,
+    readFile: (path) => Deno.readTextFile(path),
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>
       attachSkills(built, { graph: host.graph, cwd: Deno.cwd() }, exchange),

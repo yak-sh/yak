@@ -47,6 +47,7 @@ import {
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
 import { validator } from './validator.ts'
+import { fileArgs, FILES, fileSchema, type ReadFile } from './files.ts'
 
 /**
  * How a client signs in to call a tool: `noauth` means anybody may call it,
@@ -90,6 +91,9 @@ export type Options = {
    * reads. Used where a runner is built here; a runner passed in has its
    * own. */
   reply?: RunnerOpts['reply']
+  /** Optional local file input: callers opt in with `$files: true`. Hosted
+   * servers without a reader keep literal inputs and their exact schemas. */
+  readFile?: ReadFile
   /** who is calling — every write this server makes is signed with this actor:
    * `by` the identity it acts for, `via` the run it came through (default:
    * nobody, and writes are stored unattributed) */
@@ -200,12 +204,13 @@ export let prepared = async (
  * exchange never sends them, so a function making them is not called.
  */
 export let instructed = async (
-  opts: Pick<Options, 'instructions'>,
+  opts: Pick<Options, 'instructions' | 'readFile'>,
   exchange?: Exchange,
 ): Promise<string | undefined> => {
   let said = opts.instructions
   if (exchange && exchange.method != 'initialize') return undefined
-  return typeof said == 'function' ? await said() : said
+  let text = typeof said == 'function' ? await said() : said
+  return opts.readFile ? [text, FILES].filter(Boolean).join('\n\n') : text
 }
 
 export { answerSchema } from '@yaks/tools/schema'
@@ -436,9 +441,10 @@ export let server = (
 
     let out: CallToolResult
     let id = mint()
+    let input = translated(name, args ?? {})
     let asked: Bundle = {
       entity: { eid: id },
-      call: { to: toolEid(name), args: translated(name, args ?? {}) },
+      call: { to: toolEid(name), args: input },
       ...(actor ? { $actor: { ...actor } } : {}),
     }
     let admitted = run.admit(asked)
@@ -447,6 +453,10 @@ export let server = (
       throw new ProtocolError(-32602, `Tool ${name} not found`)
     }
     try {
+      asked.call = {
+        to: toolEid(name),
+        args: await fileArgs(input, inputSchemaOf(t), opts.readFile),
+      }
       if (!t.readOnly) await admitted.ensure()
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
       out = said(t, answerOf(landed, id), faulted(landed, id))
@@ -469,7 +479,10 @@ export let server = (
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: fromJsonSchema(inputSchemaOf(t), validator),
+      inputSchema: fromJsonSchema(
+        fileSchema(inputSchemaOf(t), opts.readFile),
+        validator,
+      ),
       outputSchema: fromJsonSchema(t.outputSchema ?? answerSchema, validator),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
@@ -490,7 +503,7 @@ export let server = (
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: inputSchemaOf(t),
+      inputSchema: fileSchema(inputSchemaOf(t), opts.readFile),
       outputSchema: t.outputSchema ?? answerSchema,
       annotations: annotated(t),
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),

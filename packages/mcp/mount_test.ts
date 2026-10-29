@@ -15,6 +15,7 @@ import { PATH as HOOK, routes as sessionRoutes } from '@yaks/session/routes'
 import { loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
+import { FILES } from './files.ts'
 import { comp, pinned, shop, shopGraph } from './testing.ts'
 
 let MEMBER = derivedEid('fixture:m1')
@@ -575,7 +576,7 @@ test('initialize carries instructions from the loaded vocabularies', async () =>
   }))).json()
   assertEquals(
     hello.result.instructions,
-    `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.`,
+    `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.\n\n${FILES}`,
   )
 })
 
