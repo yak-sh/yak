@@ -6,7 +6,7 @@ import { h as node } from 'preact'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
@@ -53,12 +53,11 @@ export async function measure(
   }
   try {
     for (let run = 0; run < 3; run++) {
-      let times: Record<string, number> = {}
-      let last = performance.now()
+      let times: Record<string, Sample> = {}
+      let took = stopwatch()
       let mark = (name: string) => {
-        let now = performance.now()
-        times[name] = now - last
-        last = now
+        times[name] = took()
+        took = stopwatch()
       }
       let h = await harness(path)
       mark('open')
@@ -112,10 +111,10 @@ export async function measure(
 
       await r.close()
       mark('remoteClose')
-      for (let [name, value] of Object.entries(times)) {
+      for (let [name, sample] of Object.entries(times)) {
         let collected = (samples[name] ??= []) as Sample[]
         collected.push({
-          value,
+          ...sample,
           source: 'phase',
           counts: { sessions: count, depth },
         })

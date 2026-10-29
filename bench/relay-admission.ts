@@ -1,7 +1,7 @@
 // Ordinary admission at 10 values per second per entity, on a warmed Store.
 // Supply a checkout path to compare the same fixture across revisions.
 import { RELAY_ENTITIES, relayFixture } from './relay-fixture.ts'
-import type { Samples } from '@yaks/benchmark'
+import type { Sample, Samples } from '@yaks/benchmark'
 import { standaloneMain } from './standalone-main.ts'
 
 export async function measure(
@@ -15,15 +15,16 @@ export async function measure(
     for (const variant of ['store-relay', 'graph-full-check']) {
       const fixture = await relayFixture(entities, { root, variant })
       try {
-        const samples: number[] = []
+        const samples: (Sample & { cpu: number })[] = []
         for (let round = 0; round < 3; round++) {
           fixture.reset()
-          samples.push(await fixture.run(N) / 1e6)
+          samples.push(await fixture.run(N))
         }
         const count = fixture.counts(), values = N * entities
         results[variant + '/' + entities + '-entities'] = samples.map(
-          (value) => ({
-            value: value * 1000 / values,
+          (sample) => ({
+            value: sample.value / 1000 / values,
+            cpu: sample.cpu / 1000 / values,
             source: 'batch',
             counts: { values, entities, simulatedSeconds: N / 10, ...count },
             details: {

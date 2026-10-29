@@ -4,6 +4,7 @@
 // to an observer run outside timing. The same fixture accepts a historical root
 // whose Store, graph and guard take the clock it gives them. The fixture's time
 // is its own: it never replaces the runtime's clock or timers.
+import { type Sample, stopwatch } from '@yaks/benchmark'
 import type { durable } from '../packages/durable-object/testing.ts'
 
 import { RELAY_ENTITIES, RELAY_TICKS, relayBenchmarkName } from './names.ts'
@@ -74,7 +75,7 @@ const measured = (db: ReturnType<typeof durable>) => {
 }
 
 export type RelayFixture = {
-  run(ticks?: number): Promise<number>
+  run(ticks?: number): Promise<Sample & { cpu: number }>
   /** One sample, sent at `at` (default: the fixture's time, 100 ms on each
    * round). */
   next(timing: { start(): void; end(): void }, at?: number): Promise<void>
@@ -328,14 +329,18 @@ export async function relayFixture(
     }
   }
   const run = async (ticks = 1) => {
-    let ns = 0, start = 0
+    let value = 0, cpu = 0, took = stopwatch()
     for (let i = 0; i < ticks * entities; i++) {
       await next({
-        start: () => start = performance.now(),
-        end: () => ns += (performance.now() - start) * 1e6,
+        start: () => took = stopwatch(),
+        end: () => {
+          let reading = took()
+          value += reading.value * 1e6
+          cpu += reading.cpu * 1e6
+        },
       })
     }
-    return ns
+    return { value, cpu }
   }
   await run(2)
   m.reset()

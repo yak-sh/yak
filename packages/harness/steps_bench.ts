@@ -1,6 +1,6 @@
 /** Native step overhead with an instantly answered scripted model and no I/O.
  * Fixture composition, verification and cleanup are outside the timed boundary. */
-import type { Samples } from '@yaks/benchmark'
+import { type Samples, stopwatch } from '@yaks/benchmark'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import type { Host } from '@yaks/host'
@@ -73,7 +73,7 @@ let round = async (steps: number) => {
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const start = performance.now()
+    const took = stopwatch()
     const entries = await Promise.race([
       (async () => {
         const session = await a.start(PROMPT)
@@ -87,7 +87,7 @@ let round = async (steps: number) => {
         )
       }),
     ])
-    const elapsed = performance.now() - start
+    const elapsed = took()
     clearTimeout(timer)
     const reply = entries.at(-1)!
     const asyncCalls = entries.filter((entry) => !!entry.tool_async)
@@ -119,7 +119,8 @@ let round = async (steps: number) => {
       )
     }
     return {
-      value: elapsed / (steps || 1),
+      value: elapsed.value / (steps || 1),
+      cpu: elapsed.cpu / (steps || 1),
       counts: {
         modelCalls: asks,
         pendingTurns,

@@ -4,7 +4,7 @@ import { graph, transient } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { subscriptions } from '@yaks/api'
-import type { Samples } from '@yaks/benchmark'
+import { type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
@@ -41,7 +41,7 @@ export async function measure(
       'd',
       '.doc',
     )
-    const start = performance.now(), count = 2000, text = 'abcdefghij'
+    const took = stopwatch(), count = 2000, text = 'abcdefghij'
     if (live) {
       const writer = await transient(g).begin('d', 'doc', 'body', 'stream')
       for (let i = 0; i < count; i++) writer.append(text)
@@ -56,7 +56,7 @@ export async function measure(
     }
     await Promise.resolve()
     results[live ? 'transient' : 'apply'] = {
-      value: performance.now() - start,
+      ...took(),
       source: 'batch',
       counts: {
         deltas: count,

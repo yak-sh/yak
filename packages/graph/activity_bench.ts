@@ -8,7 +8,7 @@ import { channel } from '@yaks/trace'
 import { parse } from '@yaks/query'
 import { books, memory } from './testing.ts'
 import type { Graph } from './graph.ts'
-import type { Samples } from '@yaks/benchmark'
+import { type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
@@ -35,10 +35,11 @@ export async function measure(
       return g
     }],
   ]
-  let results: Record<string, { apply: number[]; query: number[] }> = {}
+  type Timed = ReturnType<ReturnType<typeof stopwatch>>
+  let results: Record<string, { apply: Timed[]; query: Timed[] }> = {}
   let query = parse('.book.pages=1')
   let sample = (g: Graph, operation: 'apply' | 'query') => {
-    let began = performance.now()
+    let took = stopwatch()
     for (let i = 0; i < n; i++) {
       if (operation == 'apply') {
         g.apply([
@@ -46,7 +47,7 @@ export async function measure(
         ])
       } else g.read(query)
     }
-    return performance.now() - began
+    return took()
   }
   for (let [name, make] of modes) {
     results[name] = { apply: [], query: [] }
@@ -82,8 +83,9 @@ export async function measure(
         [op, values],
       ) => [
         mode + '/' + op,
-        values.map((value) => ({
-          value: value * 1e6 / n,
+        values.map((sample) => ({
+          value: sample.value * 1e6 / n,
+          cpu: sample.cpu * 1e6 / n,
           source: 'batch',
           counts: { operations: n },
           details: { baseline: base ?? 'same-build' },

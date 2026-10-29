@@ -5,7 +5,7 @@ import { h as node } from 'preact'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'
-import type { Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
@@ -42,7 +42,7 @@ export async function measure(
     cwd: directory,
     fake: true,
   })
-  let samples: Record<string, number>[] = []
+  let samples: Sample[] = []
   let ui = frontend()
   let screen = await mount(
     () => node(App, { agent: r.agent, subscribe: r.subscribe, frontend: ui }),
@@ -60,7 +60,7 @@ export async function measure(
     // transcript to reach the painter. Sidebar text alone cannot satisfy this.
     for (let i = 0; i < 12; i++) {
       let which = i % 2
-      let start = performance.now()
+      let start = performance.now(), took = stopwatch()
       ui.patch({ selected: 's' + which, generation: i + 1 })
       while (!screen.text().includes('body ' + which + ' ')) {
         if (performance.now() - start > 30000) {
@@ -68,15 +68,15 @@ export async function measure(
         }
         await new Promise((resolve) => setTimeout(resolve, 1))
       }
-      samples.push({ total: performance.now() - start })
+      samples.push(took())
     }
     return {
-      switch: samples.map(({ total }) => ({
-        value: total,
+      switch: samples.map((sample) => ({
+        ...sample,
+        details: { traffic: r.traffic, timerDelay: Math.max(0, delay) },
         source: 'paint',
         counts: { sessions: count, depth },
       })),
-      'timer-delay': { value: Math.max(0, delay), details: r.traffic },
     }
   } finally {
     clearInterval(timer)

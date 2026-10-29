@@ -4,7 +4,7 @@
  */
 import { remote } from './remote.ts'
 import { at, harness } from './testing.ts'
-import type { Sample, Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
 export async function measure(
@@ -44,28 +44,28 @@ export async function measure(
             maxStall = Math.max(maxStall, now - previous - 2)
             previous = now
           }, 2)
-          let before = performance.now()
+          let took = stopwatch()
           let rows = mode == 'full'
             ? await r.agent.transcript('session')
             : (await r.agent.transcriptWindow!('session')).entries
-          let elapsed = performance.now() - before
+          let elapsed = took()
           await new Promise((resolve) => setTimeout(resolve, 3))
           clearInterval(timer)
           let chars = JSON.stringify(rows).length
-          let warm = performance.now()
+          took = stopwatch()
           if (mode == 'full') await r.agent.transcript('session')
           else await r.agent.transcriptWindow!('session')
-          warm = performance.now() - warm
+          let warm = took()
           for (
-            let [phase, value] of Object.entries({
+            let [phase, sample] of Object.entries({
               first: elapsed,
               warm,
-              'timer-delay': maxStall,
             })
           ) {
             let collected = (samples[mode + '/' + phase] ??= []) as Sample[]
             collected.push({
-              value,
+              ...sample,
+              details: { timerDelay: maxStall },
               source: 'transfer',
               counts: {
                 entries: count,
