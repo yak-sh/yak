@@ -72,6 +72,7 @@
     "npm:file-type@21.3.4": "21.3.4",
     "npm:gpt-tokenizer@3.4.0": "3.4.0",
     "npm:highlight.js@11.11.1": "11.11.1",
+    "npm:html-rewriter-wasm@0.4.1": "0.4.1",
     "npm:jsdom@26.1.0": "26.1.0",
     "npm:linkedom@~0.18.12": "0.18.13",
     "npm:lucide@1.31.0": "1.31.0",
@@ -1477,6 +1478,9 @@
     "html-escaper@3.0.3": {
       "integrity": "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ=="
     },
+    "html-rewriter-wasm@0.4.1": {
+      "integrity": "sha512-lNovG8CMCCmcVB1Q7xggMSf7tqPCijZXaH4gL6iE8BFghdQCbaY5Met9i1x2Ex8m/cZHDUtXK9H6/znKamRP8Q=="
+    },
     "htmlparser2@10.1.0": {
       "integrity": "sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==",
       "dependencies": [
@@ -2218,6 +2222,7 @@
       "npm:blakejs@1.2.1",
       "npm:bs58@6.0.0",
       "npm:es-module-lexer@1.7.0",
+      "npm:html-rewriter-wasm@0.4.1",
       "npm:linkedom@~0.18.12",
       "npm:lucide@1.31.0",
       "npm:postal-mime@3.0.0",

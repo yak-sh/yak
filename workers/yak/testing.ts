@@ -1,5 +1,5 @@
 import { decodedPath } from './request-path.ts'
-import { parseHTML } from 'linkedom'
+import { HTMLRewriter as LolHtml } from 'html-rewriter-wasm'
 import { createHash } from 'node:crypto'
 // The platform in memory: the kernel's own bindings, stood up under Deno so a
 // test can drive the code that runs in production with nothing stubbed between
@@ -108,56 +108,44 @@ export let durable = (name = '', declaration: string | null = null) => {
   return raw(from)
 }
 
-// The HTMLRewriter binding, backed by an in-process document. The kernel
-// supplies the selectors and mutations; the fixture supplies DOM traversal.
-type El = {
-  prepend(s: string, o: { html: boolean }): void
-  before(s: string, o: { html: boolean }): void
-  getAttribute(name: string): string | null
-  setAttribute(name: string, value: string): void
-}
+// The HTMLRewriter binding: the runtime's own lol-html, compiled to
+// WebAssembly (html-rewriter-wasm, as Miniflare runs it), behind the
+// Response-in, Response-out shape the runtime gives it. The bytes a handler
+// does not touch pass through as they came, so a page's doctype, case and
+// whitespace survive the way they do in production.
+type Handlers = Parameters<LolHtml['on']>[1]
+type DocumentHandlers = Parameters<LolHtml['onDocument']>[0]
 
 class Rewriter {
-  #on: [string, (el: El) => void][] = []
-  #end: ((e: { append(s: string, o: { html: boolean }): void }) => void)[] = []
-  on(selector: string, h: { element(el: El): void }) {
-    this.#on.push([selector, h.element])
+  #on: [string, Handlers][] = []
+  #documents: DocumentHandlers[] = []
+  on(selector: string, handlers: Handlers) {
+    this.#on.push([selector, handlers])
     return this
   }
-  onDocument(h: { end(e: { append(s: string, o: unknown): void }): void }) {
-    this.#end.push(h.end)
+  onDocument(handlers: DocumentHandlers) {
+    this.#documents.push(handlers)
     return this
   }
   transform(res: Response) {
-    let done = res.text().then((html) => {
-      let { document } = parseHTML(html)
-      let selectors = this.#on.map(([selector]) => selector).join(',')
-      for (let node of selectors ? document.querySelectorAll(selectors) : []) {
-        for (let [selector, element] of this.#on) {
-          if (!node.matches(selector)) continue
-          element({
-            prepend: (s) => node.insertAdjacentHTML('afterbegin', s),
-            before: (s) => node.insertAdjacentHTML('beforebegin', s),
-            getAttribute: (name) => node.getAttribute(name),
-            setAttribute: (name, value) => {
-              node.setAttribute(name, value)
-            },
-          })
+    let on = this.#on, documents = this.#documents
+    let body = new ReadableStream<Uint8Array>({
+      async start(c) {
+        let html = new LolHtml((chunk) => {
+          if (chunk.length) c.enqueue(chunk.slice())
+        })
+        for (let [selector, handlers] of on) html.on(selector, handlers)
+        for (let handlers of documents) html.onDocument(handlers)
+        try {
+          for await (let bytes of res.body ?? []) await html.write(bytes)
+          await html.end()
+        } finally {
+          html.free()
         }
-      }
-      html = document.toString()
-      for (let end of this.#end) end({ append: (s) => void (html += s) })
-      return new TextEncoder().encode(html)
+        c.close()
+      },
     })
-    return new Response(
-      new ReadableStream({
-        async start(c) {
-          c.enqueue(await done)
-          c.close()
-        },
-      }),
-      res,
-    )
+    return new Response(body, res)
   }
 }
 
