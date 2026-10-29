@@ -15,17 +15,6 @@ test('source checks format and lint the change and type check its consumers once
       name: 'types',
       args: ['check', '--quiet', '--frozen', '--doc', 'a.ts', 'a_test.ts'],
     },
-    {
-      name: 'docs',
-      args: [
-        'check',
-        '--quiet',
-        '--frozen',
-        '--doc-only',
-        'doc.md',
-        'README.md',
-      ],
-    },
   ])
   equal(checks([], []), [])
 })

@@ -119,8 +119,10 @@ stronger.
 `deno task test` with no paths uses the dependency graph to select tests and
 doctests the branch and working changes reach, including consumers. It applies
 formatting to changed files, lints them, and checks types in affected source and
-test modules and their fenced documentation examples. Custom `///` doctests run
-through the example runner. Cached passing dependencies can narrow execution further.
+test modules and their doc comment fences. Markdown examples and custom `///`
+doctests run through the example runner without a separate type check. Package
+compiler libraries can differ from the Deno runtime these examples use.
+Cached passing dependencies can narrow execution further.
 
 While iterating, name paths to focus a run:
 

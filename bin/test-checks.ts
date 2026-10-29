@@ -14,7 +14,6 @@ export let checks = (changed: string[], affected: string[]): Check[] => {
   let lint = changed.filter(code)
   let files = [...new Set([...changed, ...affected])]
   let types = files.filter(code)
-  let docs = files.filter((p) => /\.(md|markdown)$/.test(p))
   return [
     ...fmt.length ? [{ name: 'format', args: ['fmt', ...fmt] }] : [],
     ...lint.length ? [{ name: 'lint', args: ['lint', ...lint] }] : [],
@@ -22,12 +21,6 @@ export let checks = (changed: string[], affected: string[]): Check[] => {
       ? [{
         name: 'types',
         args: ['check', '--quiet', '--frozen', '--doc', ...types],
-      }]
-      : [],
-    ...docs.length
-      ? [{
-        name: 'docs',
-        args: ['check', '--quiet', '--frozen', '--doc-only', ...docs],
       }]
       : [],
   ]
