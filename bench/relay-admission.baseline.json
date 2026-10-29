@@ -1,53 +1,36 @@
 {
   "version": 1,
   "suite": "relay-admission",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 2,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
-  "tolerance": 0.1,
+  "tolerance": 0,
   "benches": [
-    {
-      "name": "store-relay/1-entities",
-      "unit": "us/value",
-      "better": "lower",
-      "median": 408.93133499999954,
-      "tolerance": 0.95
-    },
     {
       "name": "graph-full-check/1-entities",
       "unit": "us/value",
       "better": "lower",
-      "median": 621.2107299999997,
-      "tolerance": 0.29
-    },
-    {
-      "name": "store-relay/10-entities",
-      "unit": "us/value",
-      "better": "lower",
-      "median": 323.07447099999354,
-      "tolerance": 0.616
+      "median": 1090.0249999999505,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.935
     },
     {
       "name": "graph-full-check/10-entities",
       "unit": "us/value",
       "better": "lower",
-      "median": 566.5019235000001,
-      "tolerance": 0.298
-    },
-    {
-      "name": "store-relay/100-entities",
-      "unit": "us/value",
-      "better": "lower",
-      "median": 231.3814799750051,
-      "tolerance": 0.178
+      "median": 853.0039999999476,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.421
     },
     {
       "name": "graph-full-check/100-entities",
       "unit": "us/value",
       "better": "lower",
-      "median": 518.2443982,
-      "tolerance": 0.123
+      "median": 664.0566500000108,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.225
     }
-  ]
+  ],
+  "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
 }

@@ -5661,13 +5661,6 @@
     "evidence": "bench/operation-checkout.rebank.results.json"
   },
   {
-    "suite": "relay-admission",
-    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-    "revision": "9db0ebb99e4a16edf3b3ffdf1b718d5cb270a158",
-    "verdict": "inconclusive",
-    "error": "the code at 5758d5ce6 cannot run today's bench: TypeError: opts.clock is not a function\n    at moment (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:681:55)\n    at Object.Now (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:544:29)\n    at hold (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:515:61)\n    at firing (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:573:51)\n    at each (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/fp/mod.ts:148:11)\n    at fire (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/rules.ts:605:5)\n    at runPhase (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:634:17)\n    at file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:758:15\n    at timed (file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:698:22)\n    at file:///tmp/bench-paired-64fff519b8141c5e/0/packages/graph/graph.ts:756:14"
-  },
-  {
     "suite": "harness-startup",
     "baseline": "bench/harness-startup.baseline.json",
     "references": {
@@ -9550,5 +9543,167 @@
       }
     ],
     "evidence": "bench/throughput.rebank.results.json"
+  },
+  {
+    "suite": "relay-admission",
+    "baseline": "bench/relay-admission.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "references": {
+      "graph-full-check/1-entities": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "graph-full-check/10-entities": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "graph-full-check/100-entities": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/relay-admission.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "graph-full-check/1-entities",
+          "graph-full-check/10-entities",
+          "graph-full-check/100-entities"
+        ]
+      }
+    ],
+    "revision": "400f2cc769a07cd2e51b83bda049c660c7e7cc4e",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "collection": {
+      "suite": "relay-admission",
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "revision": "400f2cc769a07cd2e51b83bda049c660c7e7cc4e",
+      "names": [
+        "graph-full-check/1-entities",
+        "graph-full-check/10-entities",
+        "graph-full-check/100-entities"
+      ],
+      "rounds": 3,
+      "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "protocol": "paired-cpu-1"
+    },
+    "plan": [
+      {
+        "suite": "relay-admission",
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "revision": "400f2cc769a07cd2e51b83bda049c660c7e7cc4e",
+        "names": [
+          "graph-full-check/1-entities",
+          "graph-full-check/10-entities",
+          "graph-full-check/100-entities"
+        ],
+        "rounds": 3,
+        "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+        "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+        "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+        "protocol": "paired-cpu-1"
+      }
+    ],
+    "complete": true,
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "revision": "400f2cc769a07cd2e51b83bda049c660c7e7cc4e",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "graph-full-check/1-entities",
+          "graph-full-check/10-entities",
+          "graph-full-check/100-entities"
+        ],
+        "collection": {
+          "suite": "relay-admission",
+          "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+          "revision": "400f2cc769a07cd2e51b83bda049c660c7e7cc4e",
+          "names": [
+            "graph-full-check/1-entities",
+            "graph-full-check/10-entities",
+            "graph-full-check/100-entities"
+          ],
+          "rounds": 3,
+          "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      }
+    ],
+    "verdict": "same",
+    "status": "same in limited rounds; default monitor confirmation pending",
+    "confidence": "limited rounds",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "graph-full-check/1-entities",
+        "unit": "us/value",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          979.0800000000131,
+          1114.650000000184,
+          1244.035000000113
+        ],
+        "current": [
+          1165.9350000000993,
+          1283.125000000127,
+          1518.8950000001205
+        ],
+        "after": [
+          1084.4499999999966,
+          1090.0249999999505,
+          1436.3899999997375
+        ],
+        "reference": 1102.3375000000674,
+        "now": 1283.125000000127
+      },
+      {
+        "name": "graph-full-check/10-entities",
+        "unit": "us/value",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          853.0039999999476,
+          775.3399999999986,
+          938.2259999999468
+        ],
+        "current": [
+          815.5094999999549,
+          789.4515000001421,
+          848.7259999999933
+        ],
+        "after": [
+          859.1044999999691,
+          779.9735000000871,
+          902.5949999999867
+        ],
+        "reference": 856.0542499999583,
+        "now": 815.5094999999549
+      },
+      {
+        "name": "graph-full-check/100-entities",
+        "unit": "us/value",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          664.0566500000108,
+          633.8301999999936,
+          701.8657999999716
+        ],
+        "current": [
+          650.5105999999937,
+          631.08169999999,
+          628.0948500000244
+        ],
+        "after": [
+          668.3699500000012,
+          631.1217500000316,
+          680.9563499999919
+        ],
+        "reference": 666.213300000006,
+        "now": 631.08169999999
+      }
+    ],
+    "evidence": "bench/relay-admission.rebank.results.json"
   }
 ]
