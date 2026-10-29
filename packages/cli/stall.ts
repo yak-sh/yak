@@ -71,6 +71,7 @@ export let stalls = ({
   after = 5000,
   read = () => spent('thread-self'),
   now = () => performance.now(),
+  sample,
   tick = (fn: () => void, ms: number) => {
     let id = setInterval(fn, ms)
     Deno.unrefTimer(id)
@@ -83,6 +84,11 @@ export let stalls = ({
   after?: number
   read?: () => Spent | undefined
   now?: () => number
+  /** Rotate sparse stack samples; a held tick receives its running stacks. */
+  sample?: (
+    ms: number,
+    held: boolean,
+  ) => Promise<string | undefined> | undefined
   /** run `fn` every `ms` and return its stop */
   tick?: (fn: () => void, ms: number) => () => void
 }): () => void => {
@@ -93,12 +99,25 @@ export let stalls = ({
     last = at
     was = is
     let late = gap - every
+    let held = late >= after && own(late, s) >= after
+    let sampled = sample?.(gap, held)
     if (late < after) return
     let said = `the main thread was held ${secs(late)}`
     let why = how('the main thread', gap, s)
     if (own(late, s) < after) return note(`${said}, by the box: ${why}`)
-    report(Object.assign(new Error(said, { cause: new Error(why) }), {
-      name: 'Stalled',
-    }))
+    let tell = (stack?: string) =>
+      report(Object.assign(
+        new Error(said, {
+          cause: new Error(
+            why + (stack ? `\nsampled while held:\n${stack}` : ''),
+          ),
+        }),
+        { name: 'Stalled' },
+      ))
+    if (!sampled) return tell()
+    void sampled.then(
+      tell,
+      (error) => tell(`stack sampling failed: ${String(error)}`),
+    )
   }, every)
 }

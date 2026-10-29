@@ -56,6 +56,7 @@ import {
 } from './host.ts'
 import { readThread } from './read_thread.ts'
 import { stalls } from './stall.ts'
+import { sampler } from './stall_profile.ts'
 import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
@@ -100,14 +101,33 @@ let open = async (
       throw error
     }
     if (!reader) return host
+    let profile: Awaited<ReturnType<typeof sampler>>
+    try {
+      profile = await sampler()
+    } catch (error) {
+      await host.close()
+      throw error
+    }
+    console.info(
+      'main thread stack sampler ready (100 ms samples, 60 s rotation)',
+    )
     let unwatch = stalls({
+      sample: (ms, held) =>
+        profile.take(ms, held)?.catch((error) => {
+          void host.report?.(error, { tags: { step: 'main thread sampling' } })
+          return `stack sampling failed: ${String(error)}`
+        }),
       report: (error) =>
         void host.report?.(error, { tags: { step: 'main thread' } }),
     })
     let close = host.close
-    host.close = (code) => {
+    host.close = async (code) => {
       unwatch()
-      return close(code)
+      try {
+        await profile.close()
+      } finally {
+        await close(code)
+      }
     }
     return host
   }

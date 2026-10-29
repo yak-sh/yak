@@ -1,5 +1,5 @@
 // The stall watch (stall.ts) over ticks: which held main threads it reports.
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { type Spent, stalls } from './stall.ts'
 
 // Each step is a tick `<ms> <cpu> <wait>` after the one before, with what the
@@ -48,4 +48,26 @@ test('a main thread the box kept waiting for a CPU is a line, not a report', () 
     'note: the main thread was held 6.0 s, by the box: in 7.0 s the main ' +
     'thread ran 1.0 s on a CPU, waited 5.0 s for one and was off one 1.0 s',
   ])
+})
+
+test('a held report carries stacks sampled during the gap', async () => {
+  let at = 0, fire = () => {}
+  let reported = Promise.withResolvers<Error>()
+  stalls({
+    now: () => at,
+    read: () => undefined,
+    tick: (fn) => {
+      fire = fn
+      return () => {}
+    },
+    sample: (ms, held) => {
+      equal([ms, held], [7000, true])
+      return Promise.resolve('at serialize (web.ts:10:3)')
+    },
+    report: reported.resolve,
+  })
+  at = 7000
+  fire()
+  let error = await reported.promise
+  ok((error.cause as Error).message.includes('at serialize (web.ts:10:3)'))
 })
