@@ -6,40 +6,47 @@
 // the request's `_meta` (`claudecode/toolUseId`). The hook is the one report
 // that pairs that id with the session and the subagent behind it.
 //
-// Kept in memory, per graph: a call follows its hook within moments, and the
-// hook door and the MCP door are routes of one server. A call whose hook this
-// process never heard (a restart between the two, a harness with no hook) is
-// attributed like any request naming no run.
+// The graph keeps the pairing: a hook and its call can reach different
+// processes, including either side of a ready-first restart.
 
 import type { Eid, Graph } from '@yaks/graph'
-import { sessionFor, subagentSession } from './who.ts'
+import { identityEid } from '@yaks/graph/identity'
+import { sessionFor, speaking, subagentSession } from './who.ts'
 
-// How many calls are remembered at once; the oldest goes first. A call is
-// forgotten once its result is reported, so this bounds only the calls whose
-// end was never heard.
-let LIMIT = 4096
-
-let told = new WeakMap<object, Map<string, Eid>>()
+let announcement = (call: string): Eid => identityEid('announced', [call])
 
 /** Remember that `run` makes the harness's call `call`. */
-export let announce = (graph: object, call: string, run: Eid): void => {
-  let calls = told.get(graph) ?? new Map<string, Eid>()
-  told.set(graph, calls)
-  calls.delete(call)
-  calls.set(call, run)
-  for (let oldest of calls.keys()) {
-    if (calls.size <= LIMIT) break
-    calls.delete(oldest)
-  }
+export let announce = async (
+  graph: Graph,
+  call: string,
+  run: Eid,
+): Promise<void> => {
+  await graph.apply([{
+    entity: { eid: announcement(call) },
+    announced: { call, session: run },
+    $actor: await speaking(graph, { entity: { eid: run } }),
+  }], { trusted: true })
 }
 
 /** The run that makes the harness's call `call`, where its hook said. */
-export let announced = (graph: object, call: string): Eid | undefined =>
-  told.get(graph)?.get(call)
+export let announced = async (
+  graph: Graph,
+  call: string,
+): Promise<Eid | undefined> => {
+  let [row] = await graph.get([announcement(call)], ['announced'])
+  let named = row?.announced as { session?: Eid } | undefined
+  return named?.session
+}
 
 /** Forget a call whose result the harness reported. */
-export let forget = (graph: object, call: string): void => {
-  told.get(graph)?.delete(call)
+export let forget = async (graph: Graph, call: string): Promise<void> => {
+  let run = await announced(graph, call)
+  if (!run) return
+  await graph.apply([{
+    entity: { eid: announcement(call) },
+    announced: null,
+    $actor: await speaking(graph, { entity: { eid: run } }),
+  }], { trusted: true })
 }
 
 /**
@@ -85,7 +92,7 @@ export let hear = async (graph: Graph, hook: Heard): Promise<boolean> => {
   let call = str(hook.tool_use_id)
   if (!call) return false
   if (hook.hook_event_name != 'PreToolUse') {
-    forget(graph, call)
+    await forget(graph, call)
     return false
   }
   let session = str(hook.session_id)
@@ -95,6 +102,6 @@ export let hear = async (graph: Graph, hook: Heard): Promise<boolean> => {
     : session
     ? (await sessionFor(graph, session, ['session.id']))?.entity.eid
     : undefined
-  if (run) announce(graph, call, run)
+  if (run) await announce(graph, call, run)
   return true
 }

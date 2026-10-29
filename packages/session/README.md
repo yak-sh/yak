@@ -684,7 +684,10 @@ so before each MCP tool call its `PreToolUse` hook posts the call's id with the
 session and subagent making it, and the call itself carries that id in its
 `_meta` (`claudecode/toolUseId`). A subagent the graph has not met is written
 then, spawned by its session, and so is one the harness's `SubagentStart` hook
-reports. Applications enforce access separately.
+reports. The hook stores `announced{call, session}` in the graph, so the MCP
+request keeps its caller across serving processes and restarts. The result's
+hook removes the pairing; abandoned pairings expire after a day. Applications
+enforce access separately.
 
 <a id="appending-entries"></a>
 

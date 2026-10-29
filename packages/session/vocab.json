@@ -7,6 +7,28 @@
   },
   "title": "session",
   "$defs": {
+    "announced": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "expire": ".announced .created.at<=\"1d ago\"",
+      "type": "object",
+      "description": "A harness hook's pairing of an MCP tool call with the session making it, shared by every serving process until the result is reported.",
+      "properties": {
+        "call": {
+          "type": "string",
+          "identity": true,
+          "description": "the harness's tool use id, carried in the MCP message metadata"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "cascade",
+          "description": "the session making this call"
+        }
+      }
+    },
     "input_context": {
       "component": true,
       "journal": false,

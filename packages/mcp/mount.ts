@@ -81,8 +81,6 @@ let refusing = (err: unknown, request: Request): Response => {
 }
 
 let ID = 'mcp-session-id'
-let VIA = 'x-via'
-
 /** The connection's own actor wins over its login. An authenticated identity
  * outside the graph remains a fallback when the connection names no actor. */
 export let writer = (session: Actor, login: Actor | null): Actor =>
@@ -281,8 +279,7 @@ export let mcp = (opts: MountOptions): Handler => {
       // the harness call its message makes) speaks through that run; only
       // one naming none speaks through a connection of its own. The host's
       // own fallback is the process acting through itself, which names none.
-      let named = !!request.headers.get(VIA) ||
-        !!actor?.via && actor.via != actor.by
+      let named = !!actor?.via && actor.via != actor.by
       let conn = named || !opts.sessions
         ? undefined
         : await connected(opts.sessions, request.headers.get(ID), actor)

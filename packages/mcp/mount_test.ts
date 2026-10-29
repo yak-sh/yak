@@ -366,6 +366,29 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   assertEquals(made.via, session.entity.eid)
 })
 
+let unknownVia = await (async () => {
+  let g = sessionGraph()
+  let door = mcp({
+    graph: g,
+    sessions: g,
+    authenticate: () => ({ by: 'process', via: 'process' }),
+  })
+  let request = call('graph_apply', {
+    bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+  })
+  request.headers.set('x-via', 'missing-session')
+  let response = await door(request)
+  await response.text()
+  let id = response.headers.get('mcp-session-id')
+  let made = comp((await g.get(['b1']))[0], 'created')
+  return { id, made }
+})()
+test('an unknown x-via still gets a connection instead of the serving process', () => {
+  assert(unknownVia.id)
+  assertEquals(unknownVia.made.by, undefined)
+  assert(unknownVia.made.via != 'process')
+})
+
 // Calls a harness's hook announced to the hook door before making them: one
 // by the session itself, one by a subagent the graph had not met.
 let announced = sessionGraph()
@@ -408,6 +431,73 @@ test("a subagent's announced call writes via its own session, its parent's spawn
   assertEquals(childs, [MEMBER, child])
   assertEquals((await announced.get([child]))[0].spawned, { parent: 'parent' })
 })
+
+for (let modern of [false, true]) {
+  let storage = ram(sessionVocab)
+  let opened = () => graph({ storage, vocab: sessionVocab })
+  let hooks = opened()
+  await hooks.apply([
+    { entity: { eid: MEMBER }, doc: { title: 'A member' } },
+    {
+      entity: { eid: 'parent' },
+      session: { id: 'harness-run', actor: MEMBER },
+    },
+  ])
+  let hooked = sessionRoutes({ graph: hooks }).find((r) =>
+    r.path == HOOK
+  )!.handle
+  let event = {
+    tool_use_id: 'toolu_shared',
+    session_id: 'harness-run',
+    agent_id: 'child',
+  }
+  await hooked(post({ ...event, hook_event_name: 'PreToolUse' }))
+  let g = opened()
+  let door = mcp({
+    graph: g,
+    sessions: g,
+    authenticate: sessionAuth({ graph: g }),
+  })
+  let request = rpc('tools/call', {
+    name: 'graph_apply',
+    arguments: { bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }] },
+    _meta: {
+      'claudecode/toolUseId': event.tool_use_id,
+      ...modern
+        ? {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {},
+          'io.modelcontextprotocol/clientInfo': {
+            name: 'claude',
+            version: '1',
+          },
+        }
+        : {},
+    },
+  })
+  if (modern) {
+    request.headers.set('content-type', 'application/json')
+    request.headers.set('accept', 'application/json, text/event-stream')
+  }
+  let response = await door(request)
+  let status = response.status
+  await response.text()
+  let run = sessionEid('child', 'harness-run')
+  let made = comp((await g.get(['b1']))[0], 'created')
+  let pairing = comp((await g.read('.announced ?created'))[0], 'created')
+  test(`an announced ${modern ? 'modern' : 'legacy'} call keeps its writer across serving graphs`, () => {
+    assertEquals(status, 200)
+    assertEquals([made.by, made.via], [MEMBER, run])
+    assertEquals(pairing.by, MEMBER)
+  })
+  test(`a result hook forgets the ${modern ? 'modern' : 'legacy'} call across serving graphs`, async () => {
+    await sessionRoutes({ graph: opened() }).find((r) => r.path == HOOK)!
+      .handle(
+        post({ ...event, hook_event_name: 'PostToolUse' }),
+      )
+    assertEquals(await g.read('.announced'), [])
+  })
+}
 
 test('what the host owes a direct call rides after the answer, which is unchanged', async () => {
   let door = routes({

@@ -54,7 +54,7 @@ export let authenticate =
   async (request: Request, message?: unknown): Promise<Actor | null> => {
     let call = callIn(message)
     let said = request.headers.get(VIA) ||
-      (call ? announced(host.graph, call) : undefined)
+      (call ? await announced(host.graph, call) : undefined)
     if (!said) return null
     let s = await sessionFor(host.graph, said, ['session.id'])
     return s ? await speaking(host.graph, s) : null
