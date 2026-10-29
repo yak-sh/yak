@@ -86,6 +86,7 @@ export let rebank = async (
   suite: string,
   root: string,
   recorded?: Judgement,
+  options: { rounds?: number } = {},
 ) => {
   let path = registered(suite).baseline
   let output = `${root}/bench/${suite}.rebank.results.json`
@@ -114,7 +115,11 @@ export let rebank = async (
       root,
       {
         references,
-        ...(process ? { rounds: 3 } : {}),
+        ...options.rounds !== undefined
+          ? { rounds: options.rounds }
+          : process
+          ? { rounds: 3 }
+          : {},
         resume,
         checkpoint: (partial) => write(output, partial),
       },
@@ -160,7 +165,7 @@ export let rebank = async (
       : limited && evidence.verdict == 'slower'
       ? 'slower candidate awaiting default monitor confirmation'
       : limited && evidence.verdict == 'same'
-      ? 'same in limited rounds'
+      ? 'same in limited rounds; default monitor confirmation pending'
       : evidence.verdict,
     confidence: limited ? 'limited rounds' : 'default monitor round count',
     reason: evidence.verdict == 'inconclusive'
@@ -174,6 +179,11 @@ export let rebank = async (
 }
 
 if (import.meta.main) {
+  let rounds = Deno.args.find((arg) => arg.startsWith('--rounds='))
+  let options = rounds
+    ? { rounds: Number(rounds.slice('--rounds='.length)) }
+    : {}
+  let suites = Deno.args.filter((arg) => !arg.startsWith('--rounds='))
   using lock = await Deno.open('/tmp/yaks-throughput-bench.lock', {
     create: true,
     read: true,
@@ -189,11 +199,11 @@ if (import.meta.main) {
     if (!(error instanceof Deno.errors.NotFound)) throw error
   }
   let failed = false
-  for (let suite of Deno.args) {
+  for (let suite of suites) {
     console.error(`rebank: ${suite}`)
     results = results.filter((r) => r.suite != suite)
     try {
-      let result = await rebank(suite, root)
+      let result = await rebank(suite, root, undefined, options)
       results.push(result)
       console.error(`${suite}: banked reference CPU; current ${result.status}`)
     } catch (error) {
