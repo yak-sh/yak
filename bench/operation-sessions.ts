@@ -60,7 +60,7 @@ async function bounded<T>(value: Promise<T>, label: string): Promise<T> {
 export async function measure(
   args: string[] = [],
 ): Promise<Record<string, Samples>> {
-  let n = Number(args[0] ?? 3)
+  let n = Number(args[0] ?? 1)
   if (!Number.isInteger(n) || n < 1) {
     throw new Error('positive sample count required')
   }

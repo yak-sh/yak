@@ -175,7 +175,7 @@ async function collect(
   checkout = false,
 ): Promise<Record<string, Samples>> {
   let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
-  let n = Number(args[0] ?? 3)
+  let n = Number(args[0] ?? 1)
   if (!Number.isInteger(n) || n < 1) {
     throw new Error('positive sample count required')
   }
