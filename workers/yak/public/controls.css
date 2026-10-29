@@ -51,8 +51,8 @@
   }
 
   /* A button is a flat fill on a hatch: the hatch is what an offset copy of
-     it would show past its right and bottom edges, and a press slides the
-     button onto it. */
+     it would show past its right and bottom edges. A hover lifts the button
+     off it and a press slides the button onto it; the hatch stays put. */
   .Button {
     position: relative;
     display: inline-flex;
@@ -79,9 +79,11 @@
       calc(100% - var(--lift)));
     pointer-events: none;
   }
-  .Button:hover {
+  .Button:hover:not(:disabled, [aria-pressed='true']) {
+    --lift: 5px;
+    transform: translate(-1px, -1px);
     background: color-mix(in srgb, var(--button-fill, var(--accent)),
-      var(--ink) 12%);
+      white 10%);
   }
   .Button:active:not(:disabled),
   .Button[aria-pressed='true'] {
