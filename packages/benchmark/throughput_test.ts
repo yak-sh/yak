@@ -1,4 +1,4 @@
-/** The committed throughput suite rejects slower operations and extra SQL. */
+/** The committed throughput suite rejects slower operation CPU and retains SQL diagnostics. */
 import { equal, ok, test, throws } from '@yaks/testing'
 import { type Host, Regressed, run } from './mod.ts'
 import bank from '../../bench/throughput.baseline.json' with { type: 'json' }
@@ -18,7 +18,7 @@ let context: Host = {
   cpu: bank.cpu,
   load: [0, 0, 0],
 }
-test('throughput refuses synthetic 30% timing and statement regressions without banking them', async () => {
+test('throughput refuses synthetic 30% CPU regressions without banking them', async () => {
   let suite = throughput()
   let directory = await Deno.makeTempDir()
   try {
@@ -26,6 +26,7 @@ test('throughput refuses synthetic 30% timing and statement regressions without 
     let options = {
       rounds: 7,
       mode: 'check' as const,
+      figure: 'cpu' as const,
       output: directory + '/results.json',
       baseline: 'bench/throughput.baseline.json',
       host: () => context,
@@ -38,7 +39,10 @@ test('throughput refuses synthetic 30% timing and statement regressions without 
           Object.fromEntries(
             Object.entries(values).map((
               [n, v],
-            ) => [n, slower.includes(n) ? v ? v * 1.3 : 1 : v]),
+            ) => [n, {
+              value: v * 10,
+              cpu: slower.includes(n) ? v ? v * 1.3 : 1 : v,
+            }]),
           ),
       }, options)
     let regressed = async (slower: string[]) => {
@@ -48,7 +52,7 @@ test('throughput refuses synthetic 30% timing and statement regressions without 
     }
     equal((await check()).verdict, 'passed')
     // Each bench is compared alone: one slower bench is the only one named,
-    // and every bench in the bank, timing or statement count, refuses 30%.
+    // and every bench in the bank, CPU time, refuses 30%.
     let names = Object.keys(values).sort()
     equal(await regressed([names[0]]), [names[0]])
     equal(await regressed(names), names)
@@ -74,7 +78,7 @@ test('throughput collects each storage report separately from normalized apply a
         benches: (mode == 'pipeline'
           ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
           : storageNames().filter((n) => n.split('/')[1] == mode)).map(
-            (name) => ({ name, results: [{ ok: { avg: 100 } }] }),
+            (name) => ({ name, results: [{ ok: { avg: 100, cpu: 50 } }] }),
           ),
       }),
     counts: () => {
@@ -99,6 +103,12 @@ test('throughput collects each storage report separately from normalized apply a
       100,
     )
     equal((collected['sqlite/file/point'] as { value: number }).value, 100)
+    equal((collected['apply/file/edit-alone-1000'] as { cpu: number }).cpu, .05)
+    equal(
+      (collected['apply/file/edit-alone-1000'] as { counts: unknown }).counts,
+      { sqlPerApply: 1, sqlPerBundle: 1 },
+    )
+    ok(!Object.keys(collected).some((name) => name.endsWith('/sqlPerApply')))
   }
   equal(counts, 1)
 })
@@ -119,7 +129,12 @@ test('recording comparison normalizes both modes per bundle without a statement 
           name.endsWith('/subscribed') == (mode == 'recording-subscribed')
         ).map((name) => ({
           name,
-          results: [{ ok: { avg: name.endsWith('/subscribed') ? 120 : 100 } }],
+          results: [{
+            ok: {
+              avg: name.endsWith('/subscribed') ? 120 : 100,
+              cpu: name.endsWith('/subscribed') ? 60 : 50,
+            },
+          }],
         })),
       }),
     counts: () => {

@@ -105,8 +105,8 @@ export let busy = async (ms = 1000): Promise<number | undefined> => {
 
 let rusage: ((who: number) => number) | null | undefined
 /** The CPU time this process and its finished children have used, in ms:
- * every thread's, user and system, as getrusage(2) keeps it; undefined where
- * the platform does not say. Two readings bracket the CPU a step took, which
+ * every thread's, user and system, as getrusage(2) keeps it. Throws when
+ * CPU accounting is unavailable. Two readings bracket the CPU a step took, which
  * other work on the box barely moves, where it stretches the step's wall
  * time. A child counts once it has exited and been waited for, so a step
  * whose work runs in a process that outlives it is not measured this way. */

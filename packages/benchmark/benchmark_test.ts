@@ -552,7 +552,7 @@ test('shared collectors retain Deno provenance and refuse a changed workload set
     cpu: 'test',
     benches: [{
       name: 'work',
-      results: [{ ok: { avg: 100, min: 50, n: 10 } }],
+      results: [{ ok: { avg: 100, cpu: 90, min: 50, n: 10 } }],
     }],
   }
   let samples = extract(report, ['work'])
@@ -560,7 +560,7 @@ test('shared collectors retain Deno provenance and refuse a changed workload set
   match(result.benches[0].samples[0], {
     value: 100,
     source: 'deno-cpu-average',
-    details: { avg: 100, min: 50, n: 10 },
+    details: { avg: 100, cpu: 90, min: 50, n: 10 },
   })
   await throws(
     () => run({ ...f.suite, collect: () => ({ extra: 1 }) }, f.options),

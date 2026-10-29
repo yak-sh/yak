@@ -1,5 +1,5 @@
-/** Import Deno bench JSON without retiming it. Deno exposes invocation averages,
- * not its raw operation timings; retain both the average and supplied statistics. */
+/** Import CPU invocation averages from the shared Deno workload collector.
+ * Keep wall time and collector statistics alongside the CPU measurement. */
 import { sameNames, type Sample } from './result.ts'
 
 export type DenoReport = {
@@ -29,13 +29,14 @@ export let extract = (
     let ok = b.results[0]?.ok
     if (
       b.results.length != 1 || !ok || b.results[0].failed ||
-      !Number.isFinite(ok.avg) || ok.avg <= 0
+      !Number.isFinite(ok.avg) || ok.avg <= 0 ||
+      !Number.isFinite(ok.cpu) || ok.cpu! < 0
     ) {
       throw new Error(`Failed or invalid Deno result: ${b.name}`)
     }
     return [b.name, {
       value: ok.avg,
-      ...ok.cpu === undefined ? {} : { cpu: ok.cpu },
+      cpu: ok.cpu,
       source: 'deno-cpu-average',
       details: { ...ok },
     }]

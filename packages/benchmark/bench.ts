@@ -22,7 +22,7 @@ export type TimedBench = Pick<Workload, 'name' | 'resolution'> & {
 }
 
 /** Start timing a step; the function it returns says how long it took since,
- * in ms: its wall time, and its CPU time where the box says (host.ts
+ * in ms: its wall time and CPU time (host.ts
  * `cputime`). An externally measured bench spreads the reading into its
  * sample, `{ ...took(), source }`. */
 export let stopwatch = (

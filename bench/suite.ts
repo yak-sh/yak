@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import {
   type Baseline,
   host,
+  type Options,
   Regressed,
   run,
   stopwatch,
@@ -45,7 +46,9 @@ export let paths = (name: string) => {
 export let record = async (
   name: string,
   sample: Sample,
-  options = paths(name),
+  options: Pick<Options, 'output' | 'baseline' | 'files' | 'host'> = paths(
+    name,
+  ),
   accept = false,
 ) => {
   if (
@@ -53,9 +56,11 @@ export let record = async (
       !Number.isFinite(n) || n < 0
     )
   ) throw new Error('invalid suite sample')
-  let base: (Baseline & { controlFloorSeconds?: number }) | undefined
+  let base: Baseline | undefined
   try {
-    base = JSON.parse(await Deno.readTextFile(options.baseline))
+    base = JSON.parse(
+      await (options.files?.read ?? Deno.readTextFile)(options.baseline!),
+    )
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e
   }
@@ -68,10 +73,14 @@ export let record = async (
       ...options,
       rounds: 1,
       figure: 'cpu',
-      mode: accept ? 'accept' : base && !sample.code ? 'check' : 'run',
+      mode: accept
+        ? 'accept'
+        : base?.metric == 'cpu-seconds/cpu' && !sample.code
+        ? 'check'
+        : 'run',
       tolerance: accept ? .25 : undefined,
       host: async () => ({
-        ...await host(),
+        ...await (options.host ?? host)(),
         runtime: 'command-cpu-v2',
       }),
     })
