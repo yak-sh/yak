@@ -27,8 +27,9 @@ export type Run = {
 /** Each workflow's newest run seen. */
 export type Seen = Record<string, number>
 
-/** Reports each red run of each workflow since `seen`, oldest first. `runs`
- * answers a workflow's newest finished runs, newest first. */
+/** Reports new failures since the latest success, oldest first, and repeats
+ * the current failure until fixed. `runs` answers a workflow's newest finished
+ * runs, newest first. */
 export let watch = async (
   workflows: string[],
   seen: Seen,
@@ -39,10 +40,11 @@ export let watch = async (
   for (let workflow of workflows) {
     let rows = await runs(workflow)
     let since = next[workflow] ?? 0
+    let green = rows.findIndex((r) => r.conclusion == 'success')
     // A cancelled or skipped run says nothing either way.
-    let red = rows.filter((r) =>
-      r.databaseId > since && r.conclusion == 'failure'
-    )
+    let failures = rows.slice(0, green < 0 ? rows.length : green)
+      .filter((r) => r.conclusion == 'failure')
+    let red = failures.filter((r, i) => i == 0 || r.databaseId > since)
     for (let run of red.reverse()) {
       await report(
         new Error(

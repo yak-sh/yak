@@ -5,6 +5,7 @@ import { type Run, type Seen, watch } from './ci.ts'
 let CONCLUSION: Record<string, string> = {
   ok: 'success',
   cancelled: 'cancelled',
+  skipped: 'skipped',
   red: 'failure',
 }
 
@@ -36,7 +37,43 @@ let play = async (...ticks: string[][]) => {
   return reported
 }
 
-test('each red run is reported once, when it is first seen', async () => {
-  equal(await play(['red', 'ok'], ['red'], ['cancelled', 'ok']), [1, 3])
-  equal(await play(['red', 'red'], []), [1, 2])
+test('a newer success suppresses older failures in the same poll', async () => {
+  equal(await play(['red', 'ok']), [])
+  equal(await play(['red', 'ok', 'red']), [3])
+  equal(await play(['red', 'ok', 'cancelled', 'skipped']), [])
+})
+
+test('main staying red is reported on every poll until a success', async () => {
+  equal(await play(['red'], [], ['cancelled', 'skipped'], ['ok'], []), [
+    1,
+    1,
+    1,
+  ])
+  equal(await play(['red', 'red'], [], ['ok', 'red'], []), [1, 2, 2, 4, 4])
+})
+
+test('a success in one workflow does not suppress another workflow failing', async () => {
+  let reported: string[] = []
+  let run = (id: number, conclusion: string): Run => ({
+    databaseId: id,
+    conclusion,
+    displayTitle: `run ${id}`,
+    headSha: 'abc',
+    url: '',
+  })
+  let rows = {
+    gate: [run(3, 'success'), run(1, 'failure')],
+    publish: [run(2, 'failure')],
+  }
+  let seen = await watch(
+    ['gate', 'publish'],
+    {},
+    (workflow) => Promise.resolve(rows[workflow as keyof typeof rows]),
+    (_, workflow) => {
+      reported.push(workflow)
+      return Promise.resolve()
+    },
+  )
+  equal(reported, ['publish'])
+  equal(seen, { gate: 3, publish: 2 })
 })
