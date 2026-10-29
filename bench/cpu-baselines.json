@@ -4943,7 +4943,7 @@
       }
     ],
     "verdict": "same",
-    "status": "same in limited rounds",
+    "status": "same in limited rounds; default monitor confirmation pending",
     "confidence": "limited rounds",
     "slower": [],
     "comparisons": [
