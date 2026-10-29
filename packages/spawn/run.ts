@@ -283,8 +283,11 @@ export let follow = async (
         let pid = (b?: Bundle) => comp(b, PROCESS)?.pid
         if (comp(now, EXIT) == null || pid(now) != pid(row)) return
         let well = await finish(g, session, o, run.through)
-        if (well != null) await onward(g, session, o, well).catch(told(o))
-        return
+        if (well != null) {
+          await onward(g, session, o, well).catch(told(o))
+          return
+        }
+        wait = poll * 20
       }
     } catch (e) {
       told(o)(e)
@@ -444,6 +447,7 @@ let reopen = async (g: Graph, row: Bundle): Promise<boolean> => {
       entity: row.entity,
       [PROCESS]: { pid: null },
       [EXIT]: null,
+      brief: null,
       $was: {
         [EXIT]: { code: token(exit.code) },
         [PROCESS]: { pid: token(comp(row, PROCESS)?.pid) },

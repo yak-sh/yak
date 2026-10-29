@@ -71,9 +71,9 @@ that would serve the agent better.
 (M-14370), with the owner's words verbatim in it. The task body is the brief.
 Edit it there, then start the run with `session_spawn` with
 `{task: "T-…", provider: "codex"}` (or `provider: "claude"`). The request
-carries the body and asks the agent to read `graph_show` with `ids: ["T-…"]` for
-updates. The task outlives your context, and it's where the next agent, and the
-owner, look (M-3715).
+carries the body and asks the agent to read `graph_show` with `ids: ["T-…"]`
+(CLI: `yak graph show T-… --json`) for updates. The task outlives your context,
+and it's where the next agent, and the owner, look (M-3715).
 
 **His words, as he said them**, wherever they set the direction. A paraphrase
 can only hold less than what he said, and each relay drifts it further
@@ -101,25 +101,23 @@ persona and the skills carry the rest, and repeating them buries what matters.
 **Pointers, not copies**: the task, the design, shas, files, memory ids. A
 pointer stays true; a pasted excerpt goes stale.
 
-**How it will know it works.** `deno task gate` before it lands: main's checks,
-then the tests its change can reach, which the runner chooses from the
-dependency graph (`testing`); after a yaks.app deploy, `app_errors`. Never name
-the tests for it: a path picked by judgment misses the consumer that breaks, and
-that is how main's gate went red. Whatever it runs to check starts no other
-process: no probe server, no Chrome, no benchmark driving a server ("tests and
-benchmarks should be starting zero other processes", M-132169; "we need to stop
-all this chrome testing locally", 18bc9a78). An end-to-end check runs in its own
-process (`end-to-end-checks`).
+**How it will know it works.** Run the tests the change could break before
+landing (`testing`); after a yaks.app deploy, check `app_errors`. Keep waits to
+10 seconds or less and read progress between them. Main’s CI runs independently.
+Whatever it runs to check starts no other process: no probe server, no Chrome,
+no benchmark driving a server ("tests and benchmarks should be starting zero
+other processes", M-132169; "we need to stop all this chrome testing locally",
+18bc9a78). An end-to-end check runs in its own process (`end-to-end-checks`).
 
 **Tests worth having.** The behavior a new test must catch, or no new test at
 all. "Add a test" alone gets one that restates the code (M-39441).
 
 **The loop**: `session spawn` creates the session and claims the task, starts
 the CLI in a checkout of its own off main, and imports its transcript. The agent
-runs `deno task gate`, lands with `yak land` (run the gate again when land
-rebased you onto newer work), closes the task and runs `yak restart` when it
-changed the server. The system puts its final report on the task, releases the
-claim when it ends, and tells the spawning session through the delivery
+runs the affected tests, lands with `yak land` (check affected behavior again
+when land rebases onto newer work), closes the task and runs `yak restart` when
+it changed the server. The system puts its final report on the task, releases
+the claim when it ends, and tells the spawning session through the delivery
 `yak session listen` reads. A run parked on a dependency keeps its claim. Landed
 worktrees are removed; dirty or unlanded work stays available. A task has one
 writer at a time. A second agent in the same task finds the first one's process
@@ -150,8 +148,8 @@ Work T-123: `graph_show` with `ids: ["T-123"]` is the spec, with the owner’s w
 <what should be true when you're done, and why it matters to him; how it should
 feel; the constraints that bite; pointers>
 
-You'll know it works when <how, checked in your own process>. Run `deno task
-gate` before landing, and start no servers and no Chrome. Land with `yak land`,
+You'll know it works when <how, checked in your own process>. Run the tests
+your change could break, and start no servers and no Chrome. Land with `yak land`,
 close T-123. Report in a few lines, including the landed sha: <what
 you need back>.
 ```

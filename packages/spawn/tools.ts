@@ -238,12 +238,14 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       }
       let effort = str(args.effort)
       let session = uuid()
+      let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)
+      let owner = parent ? await one(graph, parent) : undefined
       let name = human(graph.vocab)(on)
       // Snapshot the task body into the request: the task is the brief, even
       // for a provider that has no graph tools in its own context.
       let instruction = [
         `Work ${name} in your own checkout. You already hold its claim under this session.`,
-        `The task is your spec; read \`yak graph show ${name}\` for its current body and comments.`,
+        `The task is your spec; read \`yak graph show ${name} --json\` for its current body.`,
         str(comp(on, 'doc')?.title),
         str(comp(on, 'doc')?.body),
         str(args.instruction),
@@ -261,6 +263,14 @@ export let runs = (host: Host, options: Options = {}): Runs => {
               operator: false,
               ...(persona ? { persona } : {}),
             },
+            ...owner?.session
+              ? {
+                spawned: {
+                  parent,
+                  ...call.entry ? { call: call.entity.eid } : {},
+                },
+              }
+              : {},
           },
           {
             entity: { eid: uuid() },

@@ -7,8 +7,8 @@ import { sessionDerived, sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
-import { asked, down, follow, resume, start } from './run.ts'
-import { asking, FAKE, host, tracked, until } from './testing.ts'
+import { asked, down, finish, follow, resume, start } from './run.ts'
+import { asking, FAKE, host, launching, tracked, until } from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
@@ -153,6 +153,80 @@ test('a pass that fails is taken up again where the transcript stands', async ()
   } finally {
     close()
   }
+})
+
+let finishing = await (async () => {
+  let { g, dir, close } = await logged(said)
+  await g.apply([
+    { entity: { eid: 'work' }, task: {}, claim: { session: 'S1' } },
+  ])
+  let failed = false
+  let told: unknown[] = []
+  let flaky: Graph = {
+    ...g,
+    apply: ((rows, o) => {
+      if (!failed && rows.some((b) => b.comment)) {
+        failed = true
+        throw new Error('database is locked')
+      }
+      return g.apply(rows, o)
+    }) as Graph['apply'],
+  }
+  try {
+    await follow(flaky, 'S1', claude.read, {
+      dir,
+      poll: 0,
+      report: (error) => told.push(error),
+    })
+    let [report] = await g.read('.comment.target=work&*')
+    return {
+      errors: told.length,
+      report: String(comp(report, 'doc')?.body ?? ''),
+      log: await Deno.stat(`${dir}/S1.out`).catch(() => null),
+    }
+  } finally {
+    close()
+  }
+})()
+test('a completion write that fails is retried before the log is cleaned', () => {
+  assertEquals(finishing.errors, 1)
+  assert(finishing.report.includes('hi'))
+  assertEquals(finishing.log, null)
+})
+
+let continuation = await (async () => {
+  let { g, dir, close } = await logged(said)
+  await finish(g, 'S1')
+  await g.apply([
+    {
+      entity: { eid: 'S1' },
+      session: { id: 'provider-thread' },
+      brief: { text: 'The first run finished.' },
+    },
+    {
+      entity: { eid: 'E2' },
+      entry: { session: 'S1' },
+      content: { body: 'Continue the work.' },
+      using: FAKE,
+    },
+  ])
+  try {
+    let run = await start(g, 'S1', {
+      dir,
+      cwd: dir,
+      adapters: { fake: claude },
+      launch: launching().launch,
+      signal: AbortSignal.abort(),
+    })
+    let [row] = await g.get(['S1'], ['brief'])
+    return { run, brief: row?.brief }
+  } finally {
+    close()
+  }
+})()
+test('a continued run drops its earlier final account', () => {
+  assert(continuation.run)
+  assertEquals(continuation.brief, undefined)
 })
 
 test('a run that ended while nobody read its log is read to its end on start-up', async () => {

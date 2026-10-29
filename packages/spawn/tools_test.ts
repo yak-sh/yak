@@ -20,7 +20,7 @@ import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
-import { sessionDoc, sessions, statusOf } from '@yaks/session'
+import { actorOf, sessionDoc, sessions, statusOf } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
@@ -173,6 +173,33 @@ test('an added instruction keeps the task body as the spec', async () => {
   let instruction = String(comp(entry, 'content')?.body)
   assertStringIncludes(instruction, 'Keep the owner’s exact requirement.')
   assertStringIncludes(instruction, 'Check the edge case too.')
+})
+
+let delegated = await (async () => {
+  let { g } = host()
+  let parent = mint()
+  let persona = mint()
+  await g.apply([
+    ...shelf,
+    { entity: { eid: persona }, persona: {} },
+    { entity: { eid: parent }, session: { persona } },
+  ])
+  let [call] = asked(g, { task: 'the-task', provider: P })
+  await tools.session_spawn!({ ...call, $actor: { via: parent } }, g)
+  let [held] = await g.read('.claim&*')
+  let child = String(comp(held, 'claim')?.session)
+  let [row] = await g.get([child])
+  return {
+    parent,
+    persona,
+    spawned: row.spawned,
+    actor: await actorOf(g, child),
+  }
+})()
+
+test('a managed child belongs to its spawning session and speaks as its persona', () => {
+  assertEquals(delegated.spawned, { parent: delegated.parent })
+  assertEquals(delegated.actor, delegated.persona)
 })
 
 test('a spawn records the chosen persona on its session', async () => {
