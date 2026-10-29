@@ -28,3 +28,10 @@ export class WorkerEntrypoint<E = unknown> {
     this.env = env
   }
 }
+
+// Retain an invocation's asynchronous delivery in the caller's process.
+let pending = new Set<Promise<unknown>>()
+export let waitUntil = (work: Promise<unknown>) => {
+  pending.add(work)
+  void work.then(() => pending.delete(work), () => pending.delete(work))
+}

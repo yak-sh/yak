@@ -296,6 +296,9 @@
     "https://jsr.io/@db/sqlite/0.13.0/": {
       "https://jsr.io/@db/sqlite/0.13.0/deps.ts": "./packages/sqlite/deps.ts"
     },
+    "./workers/yak/defects-runtime.ts": {
+      "cloudflare:workers": "./workers/yak/runtime.ts"
+    },
     "./workers/yak/node_modules/@cloudflare/workers-oauth-provider/": {
       "cloudflare:workers": "./workers/yak/runtime.ts"
     }
