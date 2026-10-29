@@ -184,3 +184,20 @@ test('shared runners reach unconditional code, while observed modules reach thei
     true,
   )
 })
+
+write('types.ts', 'export type Input = string')
+let typed = (await survey([at('a_test.ts')], () =>
+  Promise.resolve({
+    modules: [
+      {
+        specifier: `file://${at('a_test.ts')}`,
+        dependencies: [{ type: { specifier: `file://${at('types.ts')}` } }],
+      },
+      { specifier: `file://${at('types.ts')}` },
+    ],
+    redirects: {},
+  })))!
+
+test('relevance includes type-only consumers', () => {
+  equal(affected(typed, [at('a_test.ts')], [], [at('types.ts')]), true)
+})

@@ -94,9 +94,9 @@ persona and the skills carry the rest, and repeating them buries what matters.
 **Pointers, not copies**: the task, the design, shas, files, memory ids. A
 pointer stays true; a pasted excerpt goes stale.
 
-**How it will know it works.** Run only the tests the change could break, in
-seconds (`testing`), then land. The dependency graph can select affected files
-without running unchanged consumers. There is no pre-land gate, no browser tests
+**How it will know it works.** Run `deno task test` without paths on the
+finished change, in seconds (`testing`), then land. The dependency graph selects
+affected files without running unchanged consumers. There is no pre-land gate, no browser tests
 and no waiting for main's CI or a deploy: CI files a bug after a red run.
 Whatever it runs to check starts no other process: no probe server, no Chrome,
 no benchmark driving a server (M-132169, 18bc9a78). An end-to-end check runs in

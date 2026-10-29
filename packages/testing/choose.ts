@@ -23,6 +23,8 @@ let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 export type Chosen = {
   keys: Map<string, string>
   run: string[]
+  affected: string[]
+  sources: string[]
   reaches: (paths: string[]) => boolean
 }
 
@@ -44,6 +46,7 @@ export let choose = async (
     kind = () => '',
     also = () => [],
     runner = [],
+    sources = [],
     changed,
   }: {
     all?: boolean
@@ -51,11 +54,18 @@ export let choose = async (
     kind?: (file: string) => string
     also?: (kind: string) => string[]
     runner?: string[]
+    sources?: string[]
     changed?: string[]
   } = {},
 ): Promise<Chosen> => {
   if (changed && !changed.length) {
-    return { keys: new Map(), run: [], reaches: () => false }
+    return {
+      keys: new Map(),
+      run: [],
+      affected: [],
+      sources: [],
+      reaches: () => false,
+    }
   }
   let pages = files.filter((f) => !tested(f))
   await sweep(pages)
@@ -67,6 +77,7 @@ export let choose = async (
       ...plans.values(),
       ...kinds.flatMap(also),
       ...runner,
+      ...sources,
     ])
     if (!s) {
       if (changed) {
@@ -74,7 +85,13 @@ export let choose = async (
           'Cannot select relevant tests: dependency graph unavailable',
         )
       }
-      return { keys: new Map(), run: files, reaches: () => true }
+      return {
+        keys: new Map(),
+        run: files,
+        affected: files,
+        sources,
+        reaches: () => true,
+      }
     }
     let common = new Map(
       await Promise.all(
@@ -101,6 +118,7 @@ export let choose = async (
     }
     let before = all || !t ? {} : passed()
     let run: string[] = []
+    let reached: string[] = []
     for (let f of files) {
       if (
         changed &&
@@ -113,12 +131,16 @@ export let choose = async (
           t ?? s,
         )
       ) continue
+      reached.push(f)
       if (!(t && await proof(t, keys.get(f)!, reads(f)) in before)) run.push(f)
     }
-    let roots = run.map((f) => plans.get(f) ?? f)
+    let typed = sources.filter((f) => !changed || s.reaches([f], changed))
+    let roots = [...reached.map((f) => plans.get(f) ?? f), ...typed]
     return {
       keys,
       run,
+      affected: reached,
+      sources: typed,
       reaches: (paths) => s.reaches(roots, paths),
     }
   } finally {

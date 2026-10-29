@@ -6,6 +6,12 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Handler } from '@yaks/api'
+import * as apiVocab from '@yaks/api/vocab'
+import * as apiGraph from '@yaks/api/graph'
+import * as apiTools from '@yaks/api/tools'
+import * as apiRoutes from '@yaks/api/routes'
+import * as mcpRoutes from '@yaks/mcp/routes'
+import * as mcpTools from '@yaks/mcp/tools'
 import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, CallError, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
@@ -155,21 +161,32 @@ let shop: Plugged = {
   },
 }
 
-// Every facet of every plugin, by name. A facet nobody wrote is `null` — the
-// answer the default loader gives for a subpath a package does not export. A
-// package named by its own specifier is loaded off disk instead, so a test
-// composes @yaks/api beside the plugins written here and gets the doors,
-// the handler and the `serve` verb a config would.
-let only =
-  (mods: Record<string, Plugged>) =>
-  <F extends keyof Facets>(spec: string, name: F): Promise<Facets[F] | null> =>
-    spec.startsWith('@yaks/')
-      ? facet(spec, name)
-      : Promise.resolve((mods[spec]?.[name] ?? null) as Facets[F] | null)
+// The HTTP composition uses its modules as inputs to the loader boundary,
+// beside each test's inline plugins. Other installed plugins use the loader.
+let http: Record<string, Plugged> = {
+  '@yaks/api': {
+    vocab: apiVocab,
+    graph: apiGraph,
+    tools: apiTools,
+    routes: apiRoutes,
+  },
+  '@yaks/mcp': { routes: mcpRoutes, tools: mcpTools as Facets['tools'] },
+}
+
+let only = (mods: Record<string, Plugged>) =>
+<F extends keyof Facets>(
+  spec: string,
+  name: F,
+): Promise<Facets[F] | null> => {
+  let plugged = mods[spec] ?? http[spec]
+  return plugged || !spec.startsWith('@yaks/')
+    ? Promise.resolve((plugged?.[name] ?? null) as Facets[F] | null)
+    : facet(spec, name)
+}
 
 // The two packages a host lists when it wants HTTP: one hosts the routes, the
 // other is a route on it.
-let HTTP = ['@yaks/api', '@yaks/mcp']
+let HTTP = Object.keys(http)
 
 // What a host that listed them answers with. A test asking for a handler has
 // composed @yaks/api, so an absent one is that test's own bug.

@@ -35,9 +35,13 @@ suite('sum', ({ it, equal }) => {
 ```
 
 From this repository, `deno task test` selects tests through the dependency
-graph. A path narrows the selection to the changed package or file. Tests run in
-process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's
-`lay`. There are no browser tests or slow platform tier.
+graph, including consumers and examples. It applies formatting to changed files,
+lints changed code, and type checks affected source modules, tests and native
+documentation fences. Passing test caches do not skip type checks. Paths and
+tags narrow a run while iterating; the finished change uses the no-path command
+to include its consumers. Tests run in process; page behavior uses linkedom, and
+terminal behavior uses @yaks/tui's `lay`. There are no browser tests or slow
+platform tier.
 
 ## Exports
 
@@ -296,7 +300,7 @@ holding the key of each file given, from a caller that chose them already
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that
-runs (deno, terminal and workerd), each auditing into a file of its own.
+runs (deno and terminal), each auditing into a file of its own.
 
 ## Controlling time
 

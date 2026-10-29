@@ -23,11 +23,15 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   }
 }
 
-let { relative } = await import('node:path')
+let { relative, matchesGlob } = await import('node:path')
+let { default: config } = await import('../deno.json', {
+  with: { type: 'json' },
+})
 let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
-let { find, tested } = await import('@yaks/testing/find')
+let { check, format } = await import('./test-checks.ts')
+let { find, tested, walk } = await import('@yaks/testing/find')
 let { own } = await import('@yaks/testing/own')
 let { AUDIT } = await import('@yaks/testing/reads')
 let { runTestCommands } = await import('./phases.ts')
@@ -35,7 +39,11 @@ let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
 let { library } = await import('./sqlite.ts')
 
-export let ROOTS = ['packages', 'bin', 'workers', 'apps', 'homepage-concepts']
+export let SOURCES = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
+export let ROOTS = [
+  ...SOURCES.filter((path) => path != 'plugins'),
+  'homepage-concepts',
+]
 
 /** The module cache this process runs on: DENO_DIR where the environment
  * pins it, and Deno's own default for the platform otherwise. The run pins
@@ -106,7 +114,7 @@ export let runtime = (shared: string = denoDir()) => ({
   args: [
     'run',
     '--frozen',
-    // Type-checking is separate from running tests (`deno check --doc`).
+    // The coordinator checks affected sources before running tests.
     '--no-check',
     '-A',
     // Every function compiled as its module loads. A test runs once, so V8's
@@ -314,10 +322,12 @@ export let chosen = async (
   all: boolean,
   also: string[] = [],
   changed?: string[],
+  sources: string[] = [],
 ) =>
   await choose(files, {
     all,
     changed,
+    sources,
     observed: true,
     kind: (f) => tested(f) ? platform(f) : 'deno',
     also: () => [...ALSO, ...also],
@@ -527,19 +537,32 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     .flatMap((a) => a.slice(6).split(','))
   let named = PLATFORMS.filter((p) => tags.includes(p))
   let on = (p: string) => !named.length || named.includes(p)
+  let changedPaths = await changes()
+  let changedFiles = await format(changedPaths)
   let { tests, pages } = await find(paths.length ? paths : ROOTS)
+  let sources = await walk(paths.length ? paths : SOURCES)
   let files = [
     ...tests.filter((f) => on(platform(f))),
     ...on('deno') ? pages : [],
   ]
   // Choose files before starting runtimes; hand each its dependency keys.
   let all = flags.includes('--all')
-  let changed = !paths.length && !all ? await changes() : undefined
-  let { keys, run, reaches } = await chosen(files, all, [sqlite], changed)
-  if (run.length && reaches(READIES)) {
+  let changed = !paths.length && !all ? changedPaths : undefined
+  let { keys, run, reaches, affected, sources: typed } = await chosen(
+    files,
+    all,
+    [sqlite],
+    changed,
+    sources.filter((f) =>
+      /\.[mc]?[jt]sx?$/.test(f) &&
+      !config.exclude.some((p) => matchesGlob(f, p) || f.startsWith(`${p}/`))
+    ),
+  )
+  if ((affected.length || typed.length) && reaches(READIES)) {
     let { ready } = await import('../workers/yak/wrangler.ts')
     await ready(!flags.includes('--verbose'))
   }
+  if (!await check(changedFiles, [...affected, ...typed])) Deno.exit(1)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   let suite: Suite = async (more) => {

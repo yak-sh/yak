@@ -40,8 +40,10 @@ ability to see the platform_" (15ce9bf9). He would rather recover than gate
 (M-37965): main's CI reports failures after the push, the tracker reports what
 breaks live, and a failure is fixed forward.
 
-Run only the tests your change could break, in seconds, then land with
-`yak land`. There is no pre-land gate. A check or landing wait must take less
+Run `deno task test` without paths on your finished change, then land with
+`yak land`. The command follows dependencies to consumers and checks the changed
+files; a package-only run can miss a consumer outside that package. There is no
+pre-land gate. A check or landing wait must take less
 than ten seconds; a multi-minute command is a problem to remove, not a ritual to
 repeat. Main's CI runs after the push and files a bug when it goes red. Nobody
 waits for CI or a deploy before calling the work done.
@@ -114,25 +116,31 @@ stronger.
 
 ## Running
 
-`deno task test` with no paths uses the dependency graph to select tests the
-change reaches, including consumers. Cached passing dependencies can narrow
-that selection further. Name paths to narrow the run:
+`deno task test` with no paths uses the dependency graph to select tests and
+doctests the branch and working changes reach, including consumers. It applies
+formatting to changed files, lints them, and checks types in affected source and
+test modules and their fenced documentation examples. Custom `///` doctests run
+through the example runner. Cached passing dependencies can narrow execution further.
+
+While iterating, name paths to focus a run:
 
 ```sh
 deno task test packages/<name>
 deno task test workers/yak/<file>_test.ts
 ```
 
-Run only the tests the change could break; there is no separate landing run.
-`--tag=<tag>` narrows a selection. A test run skips type checking;
-`deno task check:types` is separate, as are formatting and other checks. Choose
-an individual check when the change needs it.
+A path or `--tag=<tag>` deliberately narrows coverage; it is useful for debugging,
+but does not establish that consumers elsewhere passed. Finish with the no-path
+command so dependency selection covers the change. There is no separate landing
+run or gate. When landing rebases onto new work, rerun it on that combination.
 
 The dependency key comes from the module graph and recorded reads
 (packages/testing/deps.ts, choose.ts and reads.ts). A pass record is shared
 across checkouts under `~/.cache/yak`. "Unchanged since they passed" describes
 that cache; it is not a new pass. Keep dependencies visible through imports or
-Deno reads so selection includes the consumers a change can break.
+Deno reads so selection includes the consumers a change can break. A test that
+loads modules through an injected boundary can supply statically imported
+modules there; their dependencies then remain visible before the first run.
 
 The runner reports failures and one closing result line. `--verbose` expands
 the output when diagnosing a failure. Piping a run eats its exit code: read

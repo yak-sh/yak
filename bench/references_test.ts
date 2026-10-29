@@ -3,6 +3,7 @@ import type { Baseline, Host, Run } from '@yaks/benchmark'
 import { combined, grouped, references } from './references.ts'
 import type { Judgement } from './paired.ts'
 import { throughput } from './throughput.ts'
+import { applyBenchmarkNames, bundlesPerOp } from './names.ts'
 
 let base = {
   reference: 'suite',
@@ -42,8 +43,8 @@ test('mixed comparison evidence retains each reference instead of inventing one 
   equal(out.groups?.map((group) => group.reference), ['old-b', 'old-a'])
 })
 
-test('a throughput reference group runs only its storage modes and pipeline workloads', async () => {
-  let names = ['sqlite/memory/point', 'apply/ram/edit-alone-200']
+test('a throughput reference group collects only its selected pipeline workloads', async () => {
+  let names = applyBenchmarkNames().slice(0, 2)
   let modes: string[] = []
   let machine: Host = {
     config: {},
@@ -62,17 +63,19 @@ test('a throughput reference group runs only its storage modes and pipeline work
         version: 1,
         runtime: 'test',
         cpu: 'test',
-        benches: [{
-          name: mode == 'pipeline' ? names[1] : names[0],
+        benches: names.map((name) => ({
+          name,
           results: [{ ok: { avg: 100, cpu: 50 } }],
-        }],
+        })),
       })
     },
     counts: () => Promise.resolve({}),
   })
   equal(suite.benches.map((bench) => bench.name).sort(), [...names].sort())
   let result = await suite.collect(0)
-  equal(modes, ['memory', 'pipeline'])
+  equal(modes, ['pipeline'])
   equal(Object.keys(result).sort(), [...names].sort())
-  equal((result[names[1]] as { cpu: number }).cpu, .25)
+  for (let name of names) {
+    equal((result[name] as { cpu: number }).cpu, 50 / bundlesPerOp(name))
+  }
 })

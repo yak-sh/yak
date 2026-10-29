@@ -23,7 +23,11 @@ export type Info = {
   modules: {
     specifier: string
     local?: string
-    dependencies?: { code?: { specifier?: string }; isDynamic?: boolean }[]
+    dependencies?: {
+      code?: { specifier?: string }
+      type?: { specifier?: string }
+      isDynamic?: boolean
+    }[]
   }[]
   redirects: Record<string, string>
 }
@@ -227,9 +231,9 @@ export let survey = async (
     let { digest: d, names } = await fact(path)
     own.set(m.specifier, `${path} ${d}`)
     let deps = (m.dependencies ?? []).flatMap((d) =>
-      d.code?.specifier
-        ? [{ to: at(d.code.specifier), asked: d.isDynamic }]
-        : []
+      [d.code?.specifier, d.type?.specifier].flatMap((specifier) =>
+        specifier ? [{ to: at(specifier), asked: d.isDynamic }] : []
+      )
     )
     let beside: string[] = []
     for (let n of names) {
