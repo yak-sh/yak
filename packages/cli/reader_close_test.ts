@@ -12,7 +12,7 @@ let closing = await (async () => {
   try {
     let spool = `${dir}/spool`
     let host = await compose(
-      { db: ':memory:', tracker: { spool } },
+      { db: ':memory:', tracker: { spool, commit: 'a'.repeat(40) } },
       ['graph'],
       undefined,
       {
@@ -81,7 +81,7 @@ let disposal = await (async () => {
   try {
     let spool = `${dir}/spool`
     let host = await compose(
-      { db: ':memory:', tracker: { spool } },
+      { db: ':memory:', tracker: { spool, commit: 'a'.repeat(40) } },
       ['graph'],
     )
     let released = false

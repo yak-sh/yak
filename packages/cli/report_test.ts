@@ -16,7 +16,7 @@ import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 
 export let trackerConfig = (dir: string) => ({
   db: `${dir}/tracker.db`,
-  tracker: { spool: `${dir}/spool` },
+  tracker: { spool: `${dir}/spool`, commit: 'a'.repeat(40) },
   plugins: [
     '@yaks/kernel',
     '@yaks/provenance',

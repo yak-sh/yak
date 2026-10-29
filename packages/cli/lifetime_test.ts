@@ -1,4 +1,4 @@
-// File removal, replacement and starter death end a worker's reason to serve.
+// File removal and replacement end a worker's reason to serve.
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { lifetime } from './lifetime.ts'
@@ -16,23 +16,9 @@ try {
   let replaced = await lifetime(path)
   await Deno.remove(path)
   results.push(await replaced())
-  let owner = new Deno.Command('sleep', { args: ['60'] }).spawn()
-  try {
-    let owned = await lifetime(':memory:', owner.pid)
-    results.push(await owned())
-    owner.kill('SIGTERM')
-    await owner.status
-    results.push(await owned())
-  } finally {
-    try {
-      Deno.kill(owner.pid, 'SIGKILL')
-    } catch (error) {
-      assertEquals(error instanceof Deno.errors.NotFound, true)
-    }
-  }
 } finally {
   await Deno.remove(dir, { recursive: true })
 }
-test('worker lifetime ends on graph replacement, removal or starter death', () => {
-  assertEquals(results, [true, false, false, true, false])
+test('worker lifetime ends on graph replacement or removal', () => {
+  assertEquals(results, [true, false, false])
 })

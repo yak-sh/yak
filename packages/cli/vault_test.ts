@@ -40,7 +40,8 @@ test('the file vault is private files, one per secret, and follows no symlink', 
     assertEquals(vault.all().map(([e]) => e), [eid])
     await g.apply([unsealed('A')])
     assertEquals(vault.all(), [])
-    Deno.symlinkSync('/etc/hostname', `${dir}/secrets/${eid}.json`)
+    Deno.writeTextFileSync(`${dir}/outside`, 'outside the vault')
+    Deno.symlinkSync(`${dir}/outside`, `${dir}/secrets/${eid}.json`)
     assertEquals(
       await Promise.resolve().then(() => vault.read(eid)).catch(() =>
         'refused'

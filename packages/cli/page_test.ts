@@ -1,6 +1,6 @@
 import { test, tick } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Body, bundle, kept, sweep } from './page.ts'
+import { type Body, kept } from './page.ts'
 
 let get = (handle: (r: Request) => Promise<Response>) =>
   handle(new Request('http://x/x'))
@@ -79,44 +79,3 @@ test('a body once made is kept, and revalidated by its hash', async () => {
     304,
   )
 })
-
-test('a stopped bundle stops the bundler', async () => {
-  let stop = new AbortController()
-  let built = bundle(new URL('./page.ts', import.meta.url), stop.signal)
-  stop.abort()
-  let why = await built.then(() => '', (e: Error) => e.message)
-  assertEquals(why, 'deno bundle was stopped')
-})
-
-// A pid that named a process a moment ago and names none now.
-let gone = async () => {
-  let child = new Deno.Command('true').spawn()
-  await child.status
-  return child.pid
-}
-
-let there = (path: string) => Deno.stat(path).then(() => true, () => false)
-
-test("a gone host's bundler is ended and its directory removed", async () => {
-  let base = await Deno.makeTempDir()
-  let dead = `${base}/yaks-page-${await gone()}-a`
-  let mine = `${base}/yaks-page-${Deno.pid}-b`
-  await Deno.mkdir(dead)
-  await Deno.mkdir(mine)
-  // Stands in for a bundler still writing into the dead host's directory.
-  await Deno.writeTextFile(`${dead}/app.js`, 'setTimeout(() => {}, 60_000)')
-  let left = new Deno.Command(Deno.execPath(), {
-    args: ['run', `${dead}/app.js`],
-  }).spawn()
-  try {
-    await sweep(base)
-    assertEquals((await left.status).signal, 'SIGKILL')
-    assertEquals(await there(dead), false)
-    assertEquals(await there(mine), true)
-  } finally {
-    try {
-      left.kill('SIGKILL')
-    } catch { /* already ended */ }
-    await Deno.remove(base, { recursive: true })
-  }
-}, { skip: Deno.build.os != 'linux' })

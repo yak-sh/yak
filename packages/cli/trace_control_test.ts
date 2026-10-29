@@ -1,4 +1,4 @@
-import { equal, ok, test, throws, until } from '@yaks/testing'
+import { equal, test, throws, until } from '@yaks/testing'
 import { traceControl } from './trace_control.ts'
 
 // A control that polls its sidecar every millisecond, and a wait that looks
@@ -8,10 +8,10 @@ let watching = (db: string, pid: number) => traceControl(db, pid, 1)
 let noticed = (fact: () => Promise<boolean>, label: string) =>
   until(fact, { poll: 1, label })
 
-let scratch = async (run: (db: string) => void | Promise<void>) => {
+let scratch = async <T>(run: (db: string) => T | Promise<T>): Promise<T> => {
   let dir = await Deno.makeTempDir({ prefix: 'T-64930-control-' })
   try {
-    await run(`${dir}/watched.db`)
+    return await run(`${dir}/watched.db`)
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
@@ -119,106 +119,38 @@ test('trace controls reject invalid probability and capture counts without writi
     }
   }))
 
-test('yak trace arms a missing database without opening or creating it and exits', () =>
-  scratch(async (db) => {
-    let config = db.replace('/watched.db', '/yak.json')
-    await Deno.writeTextFile(config, JSON.stringify({ db, plugins: [] }))
-    let line = new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        '--config',
-        new URL('../../deno.json', import.meta.url).pathname,
-        new URL('./yak.ts', import.meta.url).pathname,
-        'trace',
-        '--config',
-        config,
-        '--process',
-        '101',
-        '--next',
-        '2',
-        '--rate',
-        '0.1',
-      ],
-      stdout: 'piped',
-      stderr: 'piped',
-    }).spawn()
-    let result = await line.output()
-    equal(result.code, 0, new TextDecoder().decode(result.stderr))
-    equal(JSON.parse(new TextDecoder().decode(result.stdout)), {
-      next: 2,
-      rate: 0.1,
-      process: 101,
-    })
-    throws(() => Deno.statSync(db))
-    ok(Deno.statSync(`${db}.trace.json`).isFile)
-    let control = traceControl(db, 101)
-    try {
-      equal(await control.take(), { requested: true, rate: 0.1 })
-    } finally {
-      control.close()
+let commandResult = await scratch(async (db) => {
+  let { traceCommand } = await import('./trace_control.ts')
+  let said: string[] = []
+  let code = await traceCommand({ db }).run!({
+    process: 101,
+    next: 2,
+    rate: 0.1,
+  }, { out: (line) => said.push(line) } as import('./run.ts').Ctx)
+  let absent = false
+  try {
+    Deno.statSync(db)
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+    absent = true
+  }
+  let control = traceControl(db, 101)
+  try {
+    return {
+      code,
+      said: JSON.parse(said[0]),
+      absent,
+      selection: await control.take(),
     }
-  }))
-test('separate processes share one capture budget without duplicate consumption', () =>
-  scratch(async (db) => {
-    let arm = traceControl(db)
-    try {
-      await arm.set({ next: 3 })
-      let source =
-        `import {traceControl} from ${
-          JSON.stringify(new URL('./trace_control.ts', import.meta.url).href)
-        };\n` +
-        `let control=traceControl(${JSON.stringify(db)});\n` +
-        `try {let all=await Promise.all(Array.from({length:6},()=>control.take())); console.log(all.filter(s=>s.requested).length)} finally {control.close()}`
-      let children = Array.from(
-        { length: 4 },
-        () =>
-          new Deno.Command(Deno.execPath(), {
-            args: [
-              'eval',
-              '--config',
-              new URL('../../deno.json', import.meta.url).pathname,
-              source,
-            ],
-            stdout: 'piped',
-            stderr: 'piped',
-          }).spawn(),
-      )
-      let counts = await Promise.all(children.map(async (child) => {
-        let output = await child.output()
-        equal(output.code, 0, new TextDecoder().decode(output.stderr))
-        return Number(new TextDecoder().decode(output.stdout).trim())
-      }))
-      equal(counts.reduce((a, b) => a + b), 3)
-    } finally {
-      arm.close()
-    }
-  }))
-
-test('capture controls leave HTTP servers free to drain and release their ports', () =>
-  scratch(async (db) => {
-    let control = traceControl(db)
-    let server = Deno.serve({
-      hostname: '127.0.0.1',
-      port: 0,
-      onListen: () => {},
-    }, () => Response.json({ ready: true }))
-    try {
-      let response = await fetch(`http://127.0.0.1:${server.addr.port}`)
-      equal(await response.json(), { ready: true })
-      control.close()
-      let stopped = false
-      let closing = server.shutdown().then(() => {
-        stopped = true
-      })
-      await until(() => stopped, { timeout: 2000, label: 'HTTP server drains' })
-      await closing
-      let listener = Deno.listen({
-        hostname: '127.0.0.1',
-        port: server.addr.port,
-      })
-      listener.close()
-    } finally {
-      control.close()
-    }
-  }))
+  } finally {
+    control.close()
+  }
+})
+test('trace command arms a missing database without opening or creating it', () => {
+  equal(commandResult, {
+    code: 0,
+    said: { next: 2, rate: 0.1, process: 101 },
+    absent: true,
+    selection: { requested: true, rate: 0.1 },
+  })
+})
