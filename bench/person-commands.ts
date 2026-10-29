@@ -363,7 +363,7 @@ export async function measure(
       terminalPid = Number(await tmux('display-message', '-p', '#{pid}'))
       await painted(capture, 'Person benchmark target')
       await timed('tui/query-navigation', async () => {
-        await tmux('send-keys', '-t', 'bench', 'H')
+        await tmux('send-keys', '-t', 'bench', 'C-o')
         await painted(capture, TASKS.toLocaleString('en-US'))
         await tmux('send-keys', '-t', 'bench', 'C-f')
         await painted(capture, 'Person benchmark target')
