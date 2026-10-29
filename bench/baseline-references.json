@@ -1,0 +1,707 @@
+[
+  {
+    "suite": "client-frame",
+    "baseline": "bench/client-frame.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-frame.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "frame: 50k-entity world, 208 bundles, 3 reads, 40 watches",
+          "part: one patch (the local player steps)",
+          "part: a 200-bundle batch (the simulation)",
+          "part: what is near (range over creatures)",
+          "part: what lies at its feet (range over items)",
+          "part: what a player carries (a reference)",
+          "part: what is alive (a property over one component)"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "client-rules",
+    "baseline": "bench/client-rules.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "keystroke, no rules",
+          "keystroke, four rules"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "graph-activity",
+    "baseline": "bench/graph-activity.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/graph-activity.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "absent/apply",
+          "absent/query",
+          "uncreated/apply",
+          "uncreated/query",
+          "inactive/apply",
+          "inactive/query"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-startup",
+    "baseline": "bench/harness-startup.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-startup.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "open",
+          "agent",
+          "sessions",
+          "transcriptRead",
+          "remoteReady",
+          "resume",
+          "remoteSessions",
+          "remoteTranscript",
+          "mount",
+          "selectedPaintAfterRead",
+          "remoteClose"
+        ]
+      },
+      {
+        "reference": "8132092644cd7c7587faccb16c1565b538d5dbcc",
+        "kind": "derived",
+        "source": "git history of bench/harness-startup.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "close"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-steps",
+    "baseline": "packages/harness/steps.baseline.json",
+    "groups": [
+      {
+        "reference": "01f3ab27db00022cafadc271e18db1d894c6727e",
+        "kind": "derived",
+        "source": "git history of packages/harness/steps.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "no-tools",
+          "tool-step"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-streaming",
+    "baseline": "bench/harness-streaming.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-streaming.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "apply",
+          "transient"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-switch",
+    "baseline": "bench/harness-switch.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "switch",
+          "timer-delay"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-window",
+    "baseline": "bench/harness-window.baseline.json",
+    "groups": [
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "kind": "derived",
+        "source": "git history of bench/harness-window.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "full/first",
+          "full/warm",
+          "full/timer-delay",
+          "window/first",
+          "window/warm",
+          "window/timer-delay"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "harness-worker",
+    "baseline": "bench/harness-worker.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-worker.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "inline/startup",
+          "inline/work",
+          "inline/timer-delay",
+          "worker/startup",
+          "worker/work",
+          "worker/timer-delay"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "hook-waits",
+    "baseline": "bench/hook-waits.baseline.json",
+    "groups": [
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/hook-waits.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "hook/SessionStart",
+          "hook/SubagentStart",
+          "hook/SessionEnd",
+          "hook/PostToolUse-delivery",
+          "hook/PostToolUse-subagent"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-checkout",
+    "baseline": "bench/operation-checkout.baseline.json",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-checkout.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/file-cites-verify",
+          "cli/file-cites-check",
+          "connector/code-sync-cwd-refusal",
+          "connector/land-cwd-refusal",
+          "connector/file-cites-verify-cwd-refusal"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-commands",
+    "baseline": "bench/operation-commands.baseline.json",
+    "groups": [
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/operation-commands.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/task-new",
+          "cli/task-update",
+          "cli/comment-new",
+          "cli/decision-new",
+          "cli/decision-answer",
+          "cli/graph-schema",
+          "cli/history",
+          "cli/board-check",
+          "cli/project-check",
+          "cli/claim-take",
+          "cli/claim-release",
+          "cli/memory-save",
+          "cli/memory-recall",
+          "cli/topic-new",
+          "cli/topic-find",
+          "cli/persona-read",
+          "cli/storage-check",
+          "cli/archetype-check",
+          "cli/effect-check",
+          "connector/task-new",
+          "connector/task-update",
+          "connector/comment-new",
+          "connector/decision-new",
+          "connector/decision-answer",
+          "connector/graph-schema",
+          "connector/history",
+          "connector/board-check",
+          "connector/project-check",
+          "connector/claim-take",
+          "connector/claim-release",
+          "connector/memory-save",
+          "connector/memory-recall",
+          "connector/topic-new",
+          "connector/topic-find",
+          "connector/persona-read",
+          "connector/storage-check",
+          "connector/archetype-check",
+          "connector/effect-check"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-controls",
+    "baseline": "bench/operation-controls.baseline.json",
+    "groups": [
+      {
+        "reference": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "kind": "derived",
+        "source": "git history of bench/operation-controls.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/builder-choose",
+          "connector/builder-choose",
+          "cli/builder-supply",
+          "connector/builder-supply",
+          "cli/builder-plan",
+          "connector/builder-plan",
+          "cli/session-cache",
+          "cli/session-listen",
+          "cli/trace-arm",
+          "cli/init",
+          "cli/land"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-diagnostics",
+    "baseline": "bench/operation-diagnostics.baseline.json",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-diagnostics.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/model-list-local-catalogue",
+          "cli/vector-check-populated",
+          "connector/vector-check-populated",
+          "cli/session-home",
+          "connector/session-home"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-lifecycle",
+    "baseline": "bench/operation-lifecycle.baseline.json",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-lifecycle.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "lifecycle/serve-ready",
+          "lifecycle/work-ready",
+          "lifecycle/restart-ready",
+          "lifecycle/restart-request-gap"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-remaining",
+    "baseline": "bench/operation-remaining.baseline.json",
+    "groups": [
+      {
+        "reference": "9f7f792b2782529f824c14cf7c511228835aa7c9",
+        "kind": "derived",
+        "source": "git history of bench/operation-remaining.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/design-new",
+          "cli/design-decide",
+          "cli/effect-retry",
+          "cli/effect-drop",
+          "cli/claim-check",
+          "cli/session-check",
+          "cli/session-context",
+          "cli/session-brief",
+          "cli/session-wrap",
+          "cli/memory-source",
+          "cli/memory-around",
+          "cli/memory-target",
+          "cli/memory-thread",
+          "cli/memory-session",
+          "cli/hooks-install",
+          "cli/code-sync",
+          "cli/persona-sync",
+          "cli/search",
+          "cli/cites-verify",
+          "cli/cites-check",
+          "cli/connection-need",
+          "cli/connection-list",
+          "cli/mail-send",
+          "cli/mail-reply",
+          "cli/mail-show",
+          "cli/mail-check",
+          "cli/visualize-anatomy",
+          "cli/visualize-activity",
+          "connector/design-new",
+          "connector/design-decide",
+          "connector/effect-retry",
+          "connector/effect-drop",
+          "connector/claim-check",
+          "connector/session-check",
+          "connector/session-context",
+          "connector/session-brief",
+          "connector/session-wrap",
+          "connector/memory-source",
+          "connector/memory-around",
+          "connector/memory-target",
+          "connector/memory-thread",
+          "connector/memory-session",
+          "connector/hooks-install",
+          "connector/persona-sync",
+          "connector/search",
+          "connector/cites-verify",
+          "connector/cites-check",
+          "connector/connection-need",
+          "connector/connection-list",
+          "connector/mail-send",
+          "connector/mail-reply",
+          "connector/mail-show",
+          "connector/mail-check",
+          "connector/visualize-anatomy",
+          "connector/visualize-activity"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-scale",
+    "baseline": "bench/operation-scale.baseline.json",
+    "groups": [
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/operation-scale.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/task-list",
+          "cli/filtered-query",
+          "cli/history",
+          "cli/transcript-query",
+          "connector/task-list",
+          "connector/filtered-query",
+          "connector/history",
+          "connector/transcript-query"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "operation-sessions",
+    "baseline": "bench/operation-sessions.baseline.json",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-sessions.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/session-list",
+          "cli/session-new",
+          "cli/session-peek",
+          "cli/session-send",
+          "cli/session-spawn",
+          "cli/session-stop",
+          "cli/session-wait",
+          "connector/session-list",
+          "connector/session-peek",
+          "connector/session-spawn",
+          "connector/session-stop",
+          "connector/session-wait"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "person-commands",
+    "baseline": "bench/person-commands.baseline.json",
+    "groups": [
+      {
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "kind": "derived",
+        "source": "git history of bench/person-commands.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/help",
+          "cli/task-list",
+          "cli/graph-show",
+          "cli/graph-query",
+          "cli/graph-apply",
+          "hook/UserPromptSubmit",
+          "connector/graph-query",
+          "connector/graph-apply",
+          "tui/startup",
+          "tui/query-navigation"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "platform-waits",
+    "baseline": "bench/platform-waits.baseline.json",
+    "groups": [
+      {
+        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+        "kind": "derived",
+        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "management/html",
+          "management/connections-html",
+          "management/trash-html",
+          "management/billing-html",
+          "management/connect-html",
+          "app/html",
+          "app/paint-cold",
+          "app/paint-warm",
+          "connector/app-list",
+          "connector/file-list",
+          "connector/graph-query",
+          "connector/graph-apply"
+        ]
+      },
+      {
+        "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
+        "kind": "derived",
+        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "management/settings-html",
+          "management/people-html",
+          "management/new-html",
+          "management/visits-html",
+          "management/selling-html",
+          "management/apps/paint-cold",
+          "management/apps/paint-warm",
+          "management/settings/paint-cold",
+          "management/settings/paint-warm",
+          "management/connections/paint-cold",
+          "management/connections/paint-warm",
+          "management/trash/paint-cold",
+          "management/trash/paint-warm",
+          "management/billing/paint-cold",
+          "management/billing/paint-warm",
+          "management/connect/paint-cold",
+          "management/connect/paint-warm",
+          "management/people/paint-cold",
+          "management/people/paint-warm",
+          "management/new/paint-cold",
+          "management/new/paint-warm",
+          "management/visits/paint-cold",
+          "management/visits/paint-warm",
+          "management/selling/paint-cold",
+          "management/selling/paint-warm",
+          "management/apps-populated-html",
+          "management/settings-populated-html",
+          "management/connections-populated-html",
+          "management/trash-populated-html",
+          "management/billing-populated-html",
+          "management/connect-populated-html",
+          "management/people-populated-html",
+          "management/new-populated-html",
+          "management/visits-populated-html",
+          "management/selling-populated-html",
+          "form/settings-name",
+          "form/settings-space",
+          "form/restore",
+          "form/people-resend",
+          "form/connections-add",
+          "form/connections-signin",
+          "form/connections-key",
+          "form/connections-disconnect",
+          "form/connections-attach",
+          "form/connections-open",
+          "form/connections-close",
+          "form/selling-start",
+          "form/app-new-upload",
+          "form/app-update-upload",
+          "form/selling-stop",
+          "form/billing-checkout",
+          "form/billing-portal",
+          "form/agent-disconnect"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "relay-admission",
+    "baseline": "bench/relay-admission.baseline.json",
+    "groups": [
+      {
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "kind": "recorded",
+        "source": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204 commit message and bench/suites.md: relay reference measured at 24ef8e577 parent 77ebf5d382",
+        "benches": [
+          "store-relay/1-entities",
+          "store-relay/10-entities",
+          "store-relay/100-entities"
+        ]
+      },
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/relay-admission.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "graph-full-check/1-entities",
+          "graph-full-check/10-entities",
+          "graph-full-check/100-entities"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "session-status",
+    "baseline": "bench/session-status.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/session-status.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "status by identity beside 2,700 other calls",
+          "status by query beside 2,700 other calls"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "terminal-interactions",
+    "baseline": "bench/terminal-interactions.baseline.json",
+    "groups": [
+      {
+        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
+        "kind": "derived",
+        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "tui/comment-keystroke-paint",
+          "tui/comment-submit",
+          "tui/query-to-answer"
+        ]
+      },
+      {
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "kind": "derived",
+        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "tui/comment-draft-save"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "throughput",
+    "baseline": "bench/throughput.baseline.json",
+    "groups": [
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "kind": "derived",
+        "source": "git history of bench/throughput.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "sqlite/memory/point",
+          "sqlite/memory/status-open",
+          "sqlite/file/point",
+          "sqlite/file/status-open",
+          "sql/memory/point",
+          "sql/memory/status-open",
+          "sql/file/point",
+          "sql/file/status-open",
+          "sql/file/apply-100",
+          "query/memory/point",
+          "query/memory/status-open",
+          "query/memory/fts",
+          "query/memory/walk-16",
+          "query/memory/walk-unbounded",
+          "query/file/point",
+          "query/file/status-open",
+          "query/file/fts",
+          "query/file/walk-16",
+          "query/file/walk-unbounded",
+          "archetype/memory/backfill",
+          "archetype/memory/move-100",
+          "archetype/file/backfill",
+          "archetype/file/move-100",
+          "apply/file/edit-alone-200",
+          "apply/file/edit-batch-200",
+          "apply/file/edit-alone-1000",
+          "apply/file/edit-batch-1000",
+          "apply/file/create-alone-200",
+          "apply/file/create-batch-200",
+          "apply/file/create-alone-1000",
+          "apply/file/create-batch-1000",
+          "apply/ram/edit-alone-200",
+          "apply/ram/edit-batch-200",
+          "apply/ram/edit-alone-1000",
+          "apply/ram/edit-batch-1000",
+          "apply/ram/create-alone-200",
+          "apply/ram/create-batch-200",
+          "apply/ram/create-alone-1000",
+          "apply/ram/create-batch-1000"
+        ]
+      },
+      {
+        "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "kind": "recorded",
+        "source": "bench/baseline.json at de70942d8^: explicit revision for preserved timing; migration commit says banked baselines were preserved",
+        "benches": [
+          "sqlite/memory/fts",
+          "sqlite/memory/walk-16",
+          "sqlite/memory/walk-unbounded",
+          "sqlite/memory/apply-100",
+          "sqlite/file/fts",
+          "sqlite/file/walk-16",
+          "sqlite/file/walk-unbounded",
+          "sqlite/file/apply-100",
+          "sql/memory/fts",
+          "sql/memory/walk-16",
+          "sql/memory/walk-unbounded",
+          "sql/memory/apply-100",
+          "sql/file/fts",
+          "sql/file/walk-16",
+          "sql/file/walk-unbounded",
+          "query/memory/apply-100",
+          "query/file/apply-100"
+        ]
+      },
+      {
+        "reference": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+        "kind": "recorded",
+        "source": "4eb03bcf62a45a0bbc93d2b45fc78d9e7b1ea204 commit message and bench/suites.md: relay reference measured at 24ef8e577 parent 77ebf5d382",
+        "benches": [
+          "relay/store/entities-1",
+          "relay/store/entities-10",
+          "relay/store/entities-100"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "web-client",
+    "baseline": "bench/web-client.baseline.json",
+    "groups": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/web-client.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "rows: 2k-task snapshot",
+          "query: filter 2k rows (a board render)",
+          "applyLocal: fold a working-set seed into the cache",
+          "resetSignals: rebuild every index from the cache"
+        ]
+      }
+    ]
+  }
+]

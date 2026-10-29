@@ -1,10 +1,10 @@
 /** Convert a suite's reference to CPU by measuring its banked revision beside
  * today's code. The reference's readings are banked; a slower current reading
  * remains visible in the retained comparison instead of becoming the baseline. */
-import { baseline, type Run } from '@yaks/benchmark'
+import { type Baseline, baseline } from '@yaks/benchmark'
 import { collect, type Judgement, registered } from './paired.ts'
 
-export let bank = (evidence: Judgement) => {
+let bankGroup = (evidence: Judgement): Baseline => {
   if (!['same', 'slower'].includes(evidence.verdict)) {
     throw Error(evidence.error ?? `Comparison was ${evidence.verdict}`)
   }
@@ -19,27 +19,60 @@ export let bank = (evidence: Judgement) => {
       }
     }
   }
+  // The wall-clock bank's quiet-box condition does not apply to matched CPU.
+  let out = baseline(
+    [evidence.before, evidence.after].map((r) => ({ ...r, busy: null })),
+    0,
+  )
   return {
-    // The paired measurements carry their measured pressure in the evidence.
-    // CPU banking takes the spread of these matched reference observations;
-    // the wall-clock bank's quiet-box requirement does not apply to them.
-    ...baseline(
-      [evidence.before, evidence.after].map((r) => ({ ...r, busy: null })),
-      0,
-    ),
+    ...out,
+    benches: out.benches.map((b) => ({ ...b, reference: evidence.reference })),
     reference: evidence.reference,
   }
+}
+
+export let bank = (evidence: Judgement): Baseline => {
+  let groups = (evidence.groups ?? [evidence]).map(bankGroup)
+  let byName = new Map(groups.flatMap((g) => g.benches.map((b) => [b.name, b])))
+  let names = evidence.current?.benches.map((b) => b.name) ?? [...byName.keys()]
+  let { reference: _reference, ...first } = groups[0]
+  let references = [...new Set(groups.map((g) => g.reference))]
+  return {
+    ...first,
+    benches: names.map((name) => byName.get(name)!),
+    ...(references.length == 1 ? { reference: references[0] } : {}),
+  }
+}
+
+type Provenance = {
+  suite: string
+  groups: {
+    reference: string
+    source: string
+    kind: 'recorded' | 'derived'
+    benches: string[]
+  }[]
 }
 
 export let rebank = async (suite: string, root: string) => {
   let path = registered(suite).baseline
   let output = `${root}/bench/${suite}.rebank.results.json`
+  let provenance = (JSON.parse(
+    await Deno.readTextFile(`${root}/bench/baseline-references.json`),
+  ) as Provenance[]).find((p) => p.suite == suite)
+  let references = provenance && Object.fromEntries(
+    provenance.groups.flatMap((g) =>
+      g.benches.map((name) => [name, g.reference])
+    ),
+  )
+  let process = suite.startsWith('operation-') ||
+    ['person-commands', 'terminal-interactions', 'hook-waits'].includes(suite)
   let evidence: Judgement
   try {
     evidence = await collect(
       suite,
       root,
-      suite == 'operation-lifecycle' ? { rounds: 3 } : {},
+      { references, ...(process ? { rounds: 3 } : {}) },
     )
   } catch (error) {
     evidence = {
@@ -55,25 +88,18 @@ export let rebank = async (suite: string, root: string) => {
     `${root}/${path}`,
     JSON.stringify(next, null, 2) + '\n',
   )
-  let summary = (run: Run | undefined) =>
-    run?.benches.map((b) => ({
-      name: b.name,
-      median: b.median,
-      rounds: b.rounds.map((r) => r.cpu),
-    }))
   return {
     suite,
     baseline: path,
     reference: evidence.reference,
+    references: evidence.references,
+    provenance: provenance?.groups,
     revision: evidence.revision,
     rounds: evidence.current?.rounds,
     verdict: evidence.verdict,
     slower: evidence.slower,
     error: evidence.error,
     comparisons: evidence.comparisons,
-    before: summary(evidence.before),
-    current: summary(evidence.current),
-    after: summary(evidence.after),
     evidence: `bench/${suite}.rebank.results.json`,
   }
 }
