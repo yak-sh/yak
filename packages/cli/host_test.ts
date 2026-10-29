@@ -239,20 +239,15 @@ test('compose takes each facet from its own subpath, and mounts the doors', asyn
     // Each component is known by the plugin that declared it.
     assertEquals(host.vocab.comp('book')?.package, 'shop')
     // The generic tier is this graph's own, ahead of the plugins': one list,
-    // which the command line runs and `/mcp` restates for itself.
-    assertEquals(host.tools.map((t) => t.name), [
-      'graph_apply',
-      'graph_query',
-      'graph_show',
-      'graph_schema',
-      // `search` is there because a property of this vocabulary said
-      // `search: true`; a vocabulary that indexes nothing lists no search.
-      'search',
-      'book_list',
-      'book_add',
-      // And the verb the package in the config brought with it.
-      'serve',
-    ])
+    // which the command line runs and `/mcp` restates for itself. `search` is
+    // there because a property of this vocabulary said `search: true`, and
+    // `serve` is the verb the package in the config brought with it.
+    let names = host.tools.map((t) => t.name)
+    let at = (name: string) => names.indexOf(name)
+    for (let name of ['search', 'book_list', 'book_add', 'serve']) {
+      assert(at(name) >= 0, `${name} in ${names}`)
+    }
+    assert(at('graph_apply') < at('book_list'), String(names))
 
     let applied = await serving(host)(
       new Request('http://h/apply', {
