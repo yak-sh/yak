@@ -76,7 +76,7 @@ let prepared = (db?: ReturnType<typeof open>) => {
   return { g, store }
 }
 
-let fileSeed = fixture(async (path: string) => {
+let fileSeed = fixture((path: string) => {
   let db = open(path)
   try {
     let { store } = prepared(db)

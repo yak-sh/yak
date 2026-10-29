@@ -3,10 +3,14 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { passages } from './worker.js'
 
 test('a signed-out visitor looks up Scripture through the sentinel', async () => {
-  let worker = passages((url, init) => {
+  let worker = passages((input, init) => {
+    let url = new URL(String(input))
     assertEquals(url.hostname, 'api.esv.org')
     assertEquals(url.searchParams.get('q'), 'John 15:1-5')
-    assertEquals(init.headers.Authorization, 'Token yak_sentinel_demo')
+    assertEquals(
+      new Headers(init?.headers).get('Authorization'),
+      'Token yak_sentinel_demo',
+    )
     return Promise.resolve(Response.json({
       canonical: 'John 15:1–5',
       passages: ['<p>Scripture from the service</p>'],

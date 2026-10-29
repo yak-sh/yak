@@ -239,7 +239,8 @@
   ],
   "fmt": {
     "semiColons": false,
-    "singleQuote": true
+    "singleQuote": true,
+    "exclude": ["bench/flake-ci-*.json"]
   },
   "lint": {
     "rules": {

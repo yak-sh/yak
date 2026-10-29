@@ -2,7 +2,7 @@
  * Every collector admits its own seed, warming the product equally before its
  * discarded collection. Sharing an image across workers would skip that work. */
 export let fixture = <T extends readonly unknown[]>(
-  build: (path: string, ...args: T) => Promise<void>,
+  build: (path: string, ...args: T) => void | Promise<void>,
 ) => {
   let images = new Map<string, Promise<Uint8Array>>()
   return async (path: string, ...args: T): Promise<void> => {
