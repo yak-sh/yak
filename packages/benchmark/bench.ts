@@ -1,7 +1,7 @@
 /** Timed sync or async workloads. Setup and teardown are outside each sample;
  * operations normalizes a batch, while iterations keeps individual samples. */
 import type { Bench, Sample, Workload } from './result.ts'
-import { during, peek, record } from '@yaks/trace'
+import * as trace from '@yaks/trace'
 import { cputime } from './host.ts'
 
 type DurationUnit = 'ns' | 'us' | 'ms' | 's'
@@ -80,11 +80,11 @@ export let bench = (options: TimedBench): Bench => {
               ? Promise.resolve(result).then(done)
               : done()
           }
-          let captured = await record(
+          let captured = await trace.record(
             target,
             () =>
-              options.target ? timed() : during(
-                peek(target)?.begin({
+              options.target ? timed() : trace.during(
+                trace.peek(target)?.begin({
                   kind: 'bench',
                   name: options.name,
                   package: '@yaks/benchmark',

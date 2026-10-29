@@ -512,6 +512,16 @@ let collectAt = async (
         'packages/benchmark/.',
         `${target}/packages/benchmark/`,
       ])
+      // The timing library is part of the driver overlay, including on
+      // revisions whose workspace predates the benchmark package.
+      let config = JSON.parse(await Deno.readTextFile(`${target}/deno.json`))
+      config.workspace = [
+        ...new Set([
+          ...config.workspace ?? [],
+          './packages/benchmark',
+        ]),
+      ]
+      await Deno.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
       for (let file of driver.files) {
         await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
           recursive: true,
