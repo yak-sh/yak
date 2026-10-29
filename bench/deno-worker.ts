@@ -3,6 +3,7 @@
 import { host } from '@yaks/benchmark'
 import { declarations, invocation } from '../packages/benchmark/invocations.ts'
 import { serve } from './collector.ts'
+import { selected } from './selected.ts'
 
 let files = Deno.args.filter((arg) => arg != '--serve')
 let entries = declarations(), sequence = 0
@@ -26,15 +27,9 @@ await serve(async () => {
       await import(url.href)
     }
     sequence++
-    let filter = Deno.env.get('BENCH_FILTER')
-    let names = Deno.env.get('BENCH_NAMES')
-    let wanted = names ? new Set<string>(JSON.parse(names)) : undefined
-    let selected = entries.filter((entry) =>
-      (!wanted || wanted.has(entry.name)) &&
-      (!filter || new RegExp(filter).test(entry.name))
-    )
+    let workloads = entries.filter((entry) => selected(entry.name))
     let benches = []
-    for (let entry of selected) {
+    for (let entry of workloads) {
       benches.push({
         name: entry.name,
         results: [{ ok: await invocation(entry) }],

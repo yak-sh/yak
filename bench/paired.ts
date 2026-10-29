@@ -363,6 +363,7 @@ let collectAt = async (
       )
       await command(target, 'git', ['read-tree', commit])
       await command(target, 'git', ['update-ref', 'HEAD', commit])
+      await Deno.writeTextFile(`${target}/.git/bench-archive`, commit)
       roots.push(target)
     }
     collectors = [collector(roots[0]), collector(roots[1]), collector(roots[0])]

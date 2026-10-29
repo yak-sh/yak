@@ -69,7 +69,7 @@ export let bench = (options: TimedBench): Bench => {
               let { value, cpu } = took()
               return {
                 value: value * scale / operations,
-                ...cpu === undefined ? {} : { cpu: cpu * scale / operations },
+                cpu: cpu * scale / operations,
                 counts: { operations },
                 source: 'invocation',
               }
