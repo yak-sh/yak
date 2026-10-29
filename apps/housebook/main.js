@@ -322,13 +322,20 @@ let shell = () => {
         el(
           'span',
           { class: 'privacy' },
-          demo ? '◇ Public demo' : '◇ Private housebook',
+          demo ? '◇ Shared demo' : '◇ Private housebook',
         ),
         el(
           'small',
           {},
           demo
-            ? 'Sample records. Try adding your own.'
+            ? [
+              'Sample records. ',
+              el(
+                'a',
+                { href: 'https://yaks.app/install?name=housebook' },
+                'Get your own Housebook',
+              ),
+            ]
             : 'Your home. Your records.',
         ),
         el(
