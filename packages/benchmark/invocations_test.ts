@@ -57,3 +57,19 @@ test('explicit CPU boundaries exclude setup and teardown for sync and async work
     )
   }
 })
+
+test('calibration and cold compilation are excluded from retained CPU batches', async () => {
+  let time = clock(), calls = 0
+  let measured = await invocation(
+    {
+      name: 'cold',
+      warmup: 5,
+      n: 1,
+      fn: () => time.work(++calls <= 6 ? 100 : 2),
+    },
+    time.timer,
+    1,
+  )
+  equal(measured.cpu, 2e6)
+  equal(measured.cpuSamples, [2e6, 2e6, 2e6, 2e6, 2e6])
+})
