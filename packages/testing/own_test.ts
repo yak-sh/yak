@@ -1,5 +1,5 @@
-import { equal, test, until } from '@yaks/testing'
-import { own, started, waits } from './own.ts'
+import { equal, test } from '@yaks/testing'
+import { own } from './own.ts'
 
 // A clock over scripted looks: what each look finds each thread has waited,
 // and the wall clock at the clock's making and at each call after it.
@@ -31,31 +31,4 @@ test('own time counts its first interval whole and looks once per interval', () 
     read([{ a: 500 }, { a: 550 }], [0, 50, 100, 150, 200], 100),
     [50, 100, 150, 150],
   )
-})
-
-// A shell started as the file loads, with a child of its own, and a pid
-// looked at that names nothing (Deno's first refusal is its slowest), so the
-// case times only its looks. Both end when their input does, as the runtime
-// ends.
-let shell = new Deno.Command('sh', {
-  args: ['-c', 'cat; :'],
-  stdin: 'piped',
-  stdout: 'null',
-}).spawn()
-shell.unref()
-await until(() => waits(shell.pid).size == 2, { label: 'the shell runs cat' })
-waits(2 ** 30)
-
-test('waits reads every thread of a process and of the processes it started', () => {
-  let found = [...waits(shell.pid).keys()]
-  equal(found.length, 2)
-  equal(found.includes(`/proc/${shell.pid}/task/${shell.pid}`), true)
-  equal(waits(2 ** 30).size, 0)
-})
-
-test('started reads the main thread of each process the runtime started, not its own threads', () => {
-  let found = [...started().keys()]
-  equal(found.includes(`/proc/${shell.pid}/task/${shell.pid}`), true)
-  equal(found.some((at) => at.startsWith(`/proc/${Deno.pid}/`)), false)
-  equal(started(2 ** 30).size, 0)
 })

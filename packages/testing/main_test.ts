@@ -1,200 +1,5 @@
-// The runner as a person runs it: a process of its own over a directory of
-// test modules and pages, its record of passes kept in the directory.
-import { cleanup, equal, match, ok, test } from './mod.ts'
-import { one, type Times } from './run.ts'
-import { fenceName, fences } from './examples.ts'
-
-let MAIN = new URL('./main.ts', import.meta.url).pathname
-let TESTING = new URL('./mod.ts', import.meta.url).href
-
-// A directory holding `files` (`@yaks/testing` in them naming this package),
-// and runs of the runner over it, from this run's directory (the checkout)
-// so its config resolves.
-let fixture = async (files: Record<string, string>) => {
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-testing-' })
-  let write = async (name: string, text: string) => {
-    let path = `${dir}/${name}`
-    await Deno.mkdir(path.slice(0, path.lastIndexOf('/')), { recursive: true })
-    await Deno.writeTextFile(path, text.replaceAll('@yaks/testing', TESTING))
-  }
-  for (let [name, text] of Object.entries(files)) await write(name, text)
-  let run = async (...args: string[]) => {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', MAIN, ...args, dir],
-      env: { XDG_CACHE_HOME: `${dir}/.cache`, NO_COLOR: '1' },
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    let text = new TextDecoder().decode(out.stdout) +
-      new TextDecoder().decode(out.stderr)
-    // Each test's name, and how it went.
-    let said = Object.fromEntries(
-      [...text.matchAll(/^(.+?) \.\.\. (ok|FAILED|ignored) /gm)]
-        .map(([, name, how]) => [name.replace(`${dir}/`, ''), how]),
-    )
-    return { code: out.code, text, said }
-  }
-  return {
-    run,
-    write,
-    [Symbol.asyncDispose]: () => Deno.remove(dir, { recursive: true }),
-  }
-}
-
-test('every test runs and says how it went; a module that cannot load fails as one', async () => {
-  await using dir = await fixture({
-    'a_test.ts': `import { equal, test } from '@yaks/testing'
-test('adds', () => equal(1 + 1, 2))
-test('fails', () => equal(1 + 1, 3))
-test('later', () => {}, { skip: true })`,
-    'b_test.ts': `import './missing.ts'`,
-    'c_test.ts': `import { suite } from '@yaks/testing'
-suite('sum', ({ it, ok }) => it('holds', () => ok(true)))`,
-  })
-  let { code, said, text } = await dir.run()
-  equal(code, 1)
-  equal(said, {
-    'adds': 'ok',
-    'fails': 'FAILED',
-    'later': 'ignored',
-    'b_test.ts loads': 'FAILED',
-    'sum › holds': 'ok',
-  })
-  // A failure's error is said at once, not only in the closing report: a
-  // runtime that dies later has still said it.
-  match(text, /^fails \.\.\. FAILED \(\S+\)\n\S*Error: /m)
-  match(text, /2 passed \| 2 failed \| 1 ignored/)
-})
-
-test('the examples beside the code run: fences, and a module’s doctests', async () => {
-  await using dir = await fixture({
-    'README.md': "# m\n\n```ts\nimport { twice } from './m.ts'\n" +
-      "if (twice(2) != 4) throw new Error('no')\n```\n\n" +
-      '```ts ignore\nnever()\n```\n',
-    'm.ts': [
-      '/**',
-      ' * ```ts',
-      ' * if (twice(1) != 2) throw new Error("unimported")',
-      ' * ```',
-      ' */',
-      'export let twice = (n: number) => n * 2',
-      '/// let n = 3',
-      '/// twice(n) -> 6',
-      '/// ({ a: twice(1), b: 0 }) ~> { a: 2 }',
-      '/// twice(1)',
-      '///   -> 3',
-      "/// JSON.parse('{') throws 'JSON'",
-      '// / later() -> 1',
-      'export let seen = 0',
-      'export let see = () => seen = 1',
-      '/// see()',
-      '/// seen -> 1',
-    ].join('\n'),
-  })
-  let { said } = await dir.run()
-  equal(said, {
-    [
-      await fenceName(
-        'README.md',
-        fences(
-          "# m\n\n```ts\nimport { twice } from './m.ts'\nif (twice(2) != 4) throw new Error('no')\n```",
-        )[0],
-      )
-    ]: 'ok',
-    [
-      await fenceName('m.ts', {
-        line: 2,
-        skip: false,
-        lang: 'ts',
-        code: 'if (twice(1) != 2) throw new Error("unimported")',
-      })
-    ]: 'ok',
-    'm.ts:8 twice(n) -> 6': 'ok',
-    'm.ts:9 ({ a: twice(1), b: 0 }) ~> { a: 2 }': 'ok',
-    'm.ts:10 twice(1)': 'FAILED',
-    "m.ts:12 JSON.parse('{') throws 'JSON'": 'ok',
-    'm.ts:13 later() -> 1': 'ignored',
-    'm.ts:17 seen -> 1': 'ok',
-  })
-})
-
-test('a file that passed is left out until what it depends on changes', async () => {
-  await using dir = await fixture({
-    'a_test.ts': `import { test } from '@yaks/testing'
-import { one } from './one.ts'
-let here = new URL('./', import.meta.url)
-test('a', () => one && here)`,
-    'b_test.ts': `import { test } from '@yaks/testing'
-let data = new URL('./data.json', import.meta.url)
-test('b', () => Deno.readTextFile(data))`,
-    'one.ts': 'export let one = 1',
-    'data.json': '{}',
-    'README.md': "```ts\nimport { one } from './one.ts'\n```\n",
-  })
-  let ran = async (...args: string[]) =>
-    Object.keys((await dir.run(...args)).said).sort()
-  let example = await fenceName(
-    'README.md',
-    fences("```ts\nimport { one } from './one.ts'\n```")[0],
-  )
-  equal(await ran(), [example, 'a', 'b'])
-  let again = await dir.run()
-  equal(again.said, {})
-  match(again.text, /3 unchanged since they passed/)
-  await dir.write('one.ts', 'export let one = 2')
-  equal(await ran(), [example, 'a'])
-  // A directory a module names is a place, not what lies in it.
-  await dir.write('data.json', '[]')
-  await dir.write('other.txt', '')
-  equal(await ran(), ['b'])
-  equal(await ran('--all'), [example, 'a', 'b'])
-})
-
-test('tags pick tests, and a test that never ends fails alone', async () => {
-  await using dir = await fixture({
-    'a_test.ts': `import { test } from '@yaks/testing'
-test('hangs', () => new Promise(() => {}), { tags: ['slow'] })
-test('after', () => {}, { tags: ['slow'] })
-test('untagged', () => {})`,
-  })
-  // A test that ends at once ends before any timer, so the shortest bound
-  // fails only the one that never does.
-  let { code, said, text } = await dir.run('--tag=slow', '--timeout=1')
-  equal(code, 1)
-  equal(said, { hangs: 'FAILED', after: 'ok' })
-  ok(text.includes('did not end within 1ms'))
-  // A run that picked by tag ran only some, so nothing is recorded.
-  equal(Object.keys((await dir.run('--timeout=1')).said).length, 3)
-})
-
-test('--times says what each test and each load took', async () => {
-  await using dir = await fixture({
-    'a_test.ts': `import { test } from '@yaks/testing'
-test('waits', () => new Promise((go) => setTimeout(go, 20)))
-test('fails', () => { throw new Error('no') })
-test('later', () => {}, { skip: true })`,
-    'b_test.ts': 'export {}',
-  })
-  let at = await Deno.makeTempDir({ prefix: 'yaks-testing-times-' })
-  try {
-    await dir.run('--platform=p', `--times=${at}`)
-    let times: Times = JSON.parse(await Deno.readTextFile(`${at}/p.json`))
-    match(times.tests, [
-      { name: 'waits', ok: true, file: /a_test\.ts$/ },
-      { name: 'fails', ok: false },
-    ])
-    equal(times.tests.length, 2)
-    ok(times.tests[0].ms >= 20)
-    let [[file, load]] = Object.entries(times.loads)
-    ok(file.endsWith('a_test.ts') && load > 0)
-    // Only the file whose tests all passed is remembered, by its key.
-    let [[passing, key], ...more] = Object.entries(times.remembered)
-    ok(passing.endsWith('b_test.ts') && key && !more.length)
-    ok(times.wall >= times.planned + times.loading)
-  } finally {
-    await Deno.remove(at, { recursive: true })
-  }
-})
+import { cleanup, equal, ok, test } from './mod.ts'
+import { one } from './run.ts'
 
 // A test as the runner holds one, its body being `body`.
 let declared = (body: () => unknown) =>
@@ -235,4 +40,25 @@ test('a completed outcome keeps report metadata without retaining the fixture bo
     file: 'fixture_test.ts',
   })
   equal(Object.hasOwn(releasedOutcome.test, 'body'), false)
+})
+
+test('one reports passing, failing and skipped bodies independently', async () => {
+  let ran: string[] = []
+  let body = (name: string, fail = false, skip = false) => ({
+    name,
+    body: () => {
+      ran.push(name)
+      if (fail) throw new Error(name)
+    },
+    tags: ['unit'],
+    skip,
+    file: 'memory_test.ts',
+  })
+  let passed = await one(body('passed'), 1000)
+  let failed = await one(body('failed', true), 1000)
+  let skipped = await one(body('skipped', false, true), 1000)
+  equal([passed.ok, failed.ok, skipped.ok], [true, false, true])
+  equal(skipped.skipped, true)
+  equal(ran, ['passed', 'failed'])
+  equal(String(failed.errors[0]), 'Error: failed')
 })

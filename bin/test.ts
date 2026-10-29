@@ -1,29 +1,7 @@
-// Every test in the repository, divided by the platform it runs on, each
-// platform's tests in one runtime of @yaks/testing's runner, started once
-// per run (M-39441):
-//
-// - deno: every `*_test.ts`, and every example: a fenced block in a README
-//   or a doc comment, and a `///` doctest;
-// - browser and terminal: the web app's tests and the TUI's, each host
-//   setting up the globals of its own kind of document;
-// - workerd: every `*_workerd_test.ts`, against the one kernel
-//   workers/yak/probe-suite.ts starts for the run.
-//
-// `deno task test [--tag=t]... [--all] [--verbose] [path...]` runs what lies
-// under the paths given, or all of it, its platforms at once, and says what
-// each test took beside the budget (./test-budget.ts): a test over 1 ms that
-// bench/test-budget.json does not list is said, and fails nothing.
-// A platform's name is a tag every test on it carries, so `--tag=workerd`
-// runs that platform alone. A file whose tests all passed, with nothing it
-// depends on changed since, is left out unless `--all` is given
-// (packages/testing/deps.ts), and that is chosen before anything starts: a
-// platform, the run's kernel and what the Worker's tests need start only for
-// a file that runs. `--write` and `--from=dir` are the budget's.
-//
-// A run says its failures, each error cut short, a line for what the budget
-// flags, and one closing line; an agent reads all of it on every later turn.
-// `--verbose` says each test as it ran, each error whole, and the budget's
-// findings in full: what the gate's log keeps.
+// Tests run on Deno, with a separate document for the terminal UI. Page
+// behavior runs in process on linkedom. With no paths, dependency keys select
+// only files changed since their last pass; paths narrow that selection.
+// There are no browser or workerd tests and no platform setup before a run.
 
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
@@ -46,6 +24,7 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
 let { relative } = await import('node:path')
 let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
+let { changes } = await import('./test-changes.ts')
 let { find, tested } = await import('@yaks/testing/find')
 let { own } = await import('@yaks/testing/own')
 let { AUDIT } = await import('@yaks/testing/reads')
@@ -53,9 +32,8 @@ let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
 let { library } = await import('./sqlite.ts')
-let { tools } = await import('./test-tools.ts')
 
-export let ROOTS = ['packages', 'bin', 'workers', 'apps']
+export let ROOTS = ['packages', 'bin', 'workers', 'apps', 'homepage-concepts']
 
 /** The module cache this process runs on: DENO_DIR where the environment
  * pins it, and Deno's own default for the platform otherwise. The run pins
@@ -72,28 +50,14 @@ export let denoDir = (
     ? `${env.LOCALAPPDATA}\\deno`
     : `${env.XDG_CACHE_HOME ?? `${env.HOME}/.cache`}/deno`)
 
-export let PLATFORMS = ['deno', 'browser', 'terminal', 'workerd']
-
-/** A test that runs against the run's kernel, in workerd. */
-export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
+export let PLATFORMS = ['deno', 'terminal']
 
 /// platform('packages/graph/graph_test.ts') -> 'deno'
-/// platform('packages/web/live_test.ts') -> 'browser'
+/// platform('packages/web/live_test.ts') -> 'deno'
 /// platform('packages/browse/tui/run_test.tsx') -> 'terminal'
-/// platform('workers/yak/mail_workerd_test.ts') -> 'workerd'
-/**
- * The platform a test file runs on. The web app's files set up a browser tab
- * (a document, and the app's own state, which it keeps in its modules) and
- * the TUI's a terminal, a document of another kind: a runtime is one host.
- */
+/** The TUI owns a terminal document; page behavior uses linkedom in Deno. */
 export let platform = (file: string) =>
-  workerd(file)
-    ? 'workerd'
-    : file.includes('packages/browse/tui/')
-    ? 'terminal'
-    : (file.includes('packages/web/') || file.includes('packages/browse/'))
-    ? 'browser'
-    : 'deno'
+  file.includes('packages/browse/tui/') ? 'terminal' : 'deno'
 
 /**
  * Git as every process a run starts sees it: none of the machine's config
@@ -140,12 +104,9 @@ export let runtime = (shared: string = denoDir()) => ({
   args: [
     'run',
     '--frozen',
-    // `deno task gate` runs the stricter whole-repo check first, and it types
-    // every example in a doc comment beside the modules (`deno check --doc`).
+    // Type-checking is separate from running tests (`deno check --doc`).
     '--no-check',
     '-A',
-    '--unstable-net',
-    '--unstable-worker-options',
     // Every function compiled as its module loads. A test runs once, so V8's
     // lazy compilation charged each test for compiling its own body and all
     // the code it was the first to call: a third of what a test between 0.5
@@ -322,52 +283,36 @@ export let ALSO = [
 
 /** What runs every file: the runner, this file starting it, the preload, and
  * the scratch directory `deno task test` gives them (./scratch.ts). Each is
- * keyed by what loads with it: the Worker's modules this file imports only
- * for a run with the Worker's tests are those tests' to depend on. Imports
- * delayed until after the nested-run refusal are explicit roots here too,
- * so their budget records and tool packages participate in every key. */
+ * keyed by what loads with it. Imports delayed until after the nested-run
+ * refusal are explicit roots here too, so budget records participate in
+ * every key. */
 export let RUNS = [
   rel(import.meta.resolve('@yaks/testing/main')),
   rel(import.meta.url),
   rel(new URL('./phases.ts', import.meta.url)),
   rel(new URL('./test-budget.ts', import.meta.url)),
-  rel(new URL('./test-tools.ts', import.meta.url)),
   rel(new URL('./sqlite.ts', import.meta.url)),
   rel(new URL('./test-runtime.ts', import.meta.url)),
   rel(new URL('./scratch.ts', import.meta.url)),
 ]
 
-/**
- * Which of `files` a run runs (@yaks/testing/choose), seeing what each reads
- * (bin/test.ts audits every runtime). A file is of its platform's kind, every
- * file also depends on what `also` names (the run's SQLite), and a workerd
- * test on what the run's kernel is made of (workers/yak/probe-suite.ts
- * `MADE`).
- */
+/** Files whose source or observed dependencies changed since their pass. */
 export let chosen = async (
   files: string[],
   all: boolean,
   also: string[] = [],
-) => {
-  let kernel = files.some(workerd)
-    ? (await import('../workers/yak/probe-suite.ts')).MADE.map(rel)
-    : []
-  let shared = [...ALSO, ...also]
-  return await choose(files, {
+  changed?: string[],
+) =>
+  await choose(files, {
     all,
+    changed,
     observed: true,
     kind: (f) => tested(f) ? platform(f) : 'deno',
-    also: (kind) => kind == 'workerd' ? [...shared, ...kernel] : shared,
+    also: () => [...ALSO, ...also],
     runner: RUNS,
   })
-}
 
-// `--bulk [--tag=t]... [--keys=file] path...`: a runtime of the runner for
-// each platform the paths hold, run at once and watched together, each
-// handed the keys the run chose by (`--keys`, packages/testing/main.ts). A test file runs
-// on its platform; a page's examples run on deno. The workerd platform starts
-// once the run's kernel is up (probe-suite.ts), which this process holds
-// beside the others and stops after its last test.
+// `--bulk` gives each document environment its selected files and their keys.
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // This coordinator and all its children stay in the outer runner's process
   // group: a signal still settles the complete tree, not just a platform's
@@ -421,14 +366,12 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // Each platform is idle by its runtime's own time once that runtime starts
   // (@yaks/testing/own): the wall clock less what the box kept it, and every
   // process it started, waiting for a CPU. A runtime that hangs waits for no
-  // CPU, so it is ended as soon on a busy box as on an idle one. Before then
-  // it is idle by this process's own time: the kernel starts here, and the
-  // workerd runtime waits for it.
-  let progress = runs.map(([p]) => {
+  // CPU, so it is ended as soon on a busy box as on an idle one.
+  let progress = runs.map(() => {
     let now = own(Deno.pid, { every: pulse / 2 })
     return {
       now,
-      name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
+      name: 'loading tests',
       at: now(),
       phase: 'loading' as Progress['phase'],
       count: 0,
@@ -473,8 +416,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   }
   // The closing word on a long run: which platforms were red, after every one
   // of them has printed its own report. A short run said each as it ended.
-  // The code is said outright: wrangler's close sets Node's exit code, which
-  // is Deno's.
   let finish = () => {
     clearInterval(watch)
     if (verbose && failed.length) {
@@ -556,33 +497,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     await followed
     say(i, status)
   }
-  // The workerd platform, once the kernel it shares is up; the kernel stops
-  // after its last test.
-  let kernel = async (i: number, files: readonly string[]) => {
-    let suite
-    try {
-      suite = await (await import('../workers/yak/probe-suite.ts'))
-        .probeSuite()
-    } catch (e) {
-      let why = 'test workerd: the kernel did not start'
-      if (!verbose) console.error(why)
-      console.error(e)
-      progress[i].done = true
-      failed.push(why)
-      return
-    }
-    try {
-      progress[i].name = 'loading tests'
-      await run(i, spawn('workerd', files, suite.env))
-    } finally {
-      await suite.stop()
-    }
-  }
-  await Promise.all(
-    runs.map(([p, files], i) =>
-      p == 'workerd' ? kernel(i, files) : run(i, spawn(p, files))
-    ),
-  )
+  await Promise.all(runs.map(([p, files], i) => run(i, spawn(p, files))))
   finish()
 } else if (import.meta.main) {
   Deno.env.set(RUN, String(Deno.pid))
@@ -605,52 +520,20 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     ...tests.filter((f) => on(platform(f))),
     ...on('deno') ? pages : [],
   ]
-  // What runs is chosen before anything starts: a platform, its kernel, and
-  // what the Worker's tests need, each only for a file that runs. Every
-  // runtime is handed the keys, so none makes them again.
-  let { keys, run } = await chosen(files, flags.includes('--all'), [sqlite])
-  let bins = await tools(run)
-  if (bins.length) {
-    Deno.env.set('PATH', [...bins, Deno.env.get('PATH') ?? ''].join(':'))
-  }
+  // Choose files before starting runtimes; hand each its dependency keys.
+  let all = flags.includes('--all')
+  let changed = !paths.length && !all ? await changes() : undefined
+  let { keys, run } = await chosen(files, all, [sqlite], changed)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
-  // The Worker's npm dependencies, current before any test loads: workerd
-  // bundles from workers/yak/node_modules, and the kernel in memory imports
-  // the OAuth provider out of it (workers/yak/oauth-provider.ts). `npm ci`
-  // empties that tree before it fills it, so an install racing the deno pass
-  // left every runtime that loaded its tests meanwhile without that module
-  // for the rest of its life, and each kernel in it answered its first
-  // sign-in with a 500.
-  let worker = run.some((f) => f.startsWith('workers/'))
   let verbose = flags.includes('--verbose')
-  if (worker) await (await import('../workers/yak/wrangler.ts')).ready(!verbose)
-  // The Stripe sandbox every kernel sells in, found once for a run that has
-  // the Worker's tests and handed to every process by its environment
-  // (probe.ts `vars`). The same run cancels what an earlier one left renewing
-  // there (probe.ts `swept`).
-  if (worker) {
-    let { plusPrice, sandboxKey, swept } = await import(
-      '../workers/yak/probe.ts'
-    )
-    let stripe = await sandboxKey()
-    if (stripe) {
-      Deno.env.set('STRIPE_KEY', stripe)
-      let [price] = await Promise.all([plusPrice(stripe), swept()])
-      Deno.env.set('STRIPE_PRICE', price)
-    }
-  }
-  let suite: Suite = async (more) => {
-    if (!run.length) return { code: 0 }
+  let suite: Suite = async (more, over = run) => {
+    if (!over.length) return { code: 0 }
     let bulk: TestCommand = {
       command: Deno.execPath(),
       args: [
         'run',
         '-A',
-        // The kernel's harness loads workers/yak's own wrangler, and Deno
-        // resolves it from there only in this mode (probe-suite.ts).
-        '--node-modules-dir=manual',
-        '--unstable-worker-options',
         import.meta.filename!,
         '--bulk',
         ...flags,
