@@ -171,11 +171,12 @@ export let runtime = (shared: string = denoDir()) => ({
 let ansi = /\x1b\[[0-9;]*m/g
 
 /** What a platform's runtime has said so far: the test or file it is on,
- * when a test last ended (by the clock `observe` is given), how many have,
- * and each that failed. */
+ * its phase, when that phase began or a test last ended (by the clock
+ * `observe` is given), how many tests ended, and each that failed. */
 export type Progress = {
   name: string
-  completed: number
+  at: number
+  phase: 'loading' | 'testing'
   count: number
   failed: string[]
 }
@@ -191,12 +192,16 @@ export let observe = async (
   let read = (line: string, done = false) => {
     line = line.replace(ansi, '')
     let loading = line.match(/^loading (.+)$/)
-    if (loading) {
+    if (loading && done) {
       progress.name = `loading ${loading[1]}`
+      progress.phase = 'loading'
+      progress.at = now()
       running = false
     }
     let test = line.match(/^(.+?) \.\.\./)
     if (test) {
+      if (progress.phase == 'loading') progress.at = now()
+      progress.phase = 'testing'
       progress.name = test[1]
       running = true
     }
@@ -206,7 +211,7 @@ export let observe = async (
       /^(?:.+? \.\.\. )?(ok|FAILED|ignored) \(\d+(?:µs|ms|s|m\d+s)\)$/,
     )
     if (done && running && result) {
-      progress.completed = now()
+      progress.at = now()
       progress.count++
       if (result[1] == 'FAILED') progress.failed.push(progress.name)
       running = false
@@ -221,6 +226,12 @@ export let observe = async (
   }
   read(pending + decoder.decode(), true)
 }
+
+/** Loading a runtime or fixture has its own allowance. A short test idle
+ * limit begins only once the file's tests start; a load that hangs still
+ * ends, by the same own-time clock as a test. */
+export let stalled = (progress: Progress, now: number, limit = 60_000) =>
+  now - progress.at >= (progress.phase == 'loading' ? 60_000 : limit)
 
 /** Each chunk `stream` says, kept in `into` as it passes. */
 export async function* kept(
@@ -239,9 +250,9 @@ export async function* kept(
 export let reported = (out: string) =>
   /^(?:ok|FAILED) \| \d+ passed \|/m.test(out.replace(ansi, ''))
 
-/// died({ name: 'b', completed: 0, count: 9, failed: [] }) -> ' during b, after 9 tests'
-/// died({ name: 'c', completed: 0, count: 1, failed: ['a'] }) -> ' during c, after 1 test; failed before it: a'
-/// died({ name: 'd', completed: 0, count: 9, failed: ['a', 'b'] }) -> ' during d, after 9 tests; failed before it: a; b'
+/// died({ name: 'b', at: 0, phase: 'testing', count: 9, failed: [] }) -> ' during b, after 9 tests'
+/// died({ name: 'c', at: 0, phase: 'testing', count: 1, failed: ['a'] }) -> ' during c, after 1 test; failed before it: a'
+/// died({ name: 'd', at: 0, phase: 'testing', count: 9, failed: ['a', 'b'] }) -> ' during d, after 9 tests; failed before it: a; b'
 /**
  * What a runtime that ended before its closing report was doing, from what
  * it said as it ran: the test or file it was on, how many tests had ended,
@@ -421,7 +432,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let progress = runs.map(([p]) => ({
     now: () => Date.now(),
     name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
-    completed: Date.now(),
+    at: Date.now(),
+    phase: 'loading' as Progress['phase'],
     count: 0,
     failed: [] as string[],
     said: 0,
@@ -506,7 +518,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     for (let [i, p] of progress.entries()) {
       if (p.done) continue
       let name = runs[i][0]
-      let idle = p.now() - p.completed
+      let now = p.now()
+      let idle = now - p.at
       if (p.count > p.said && Date.now() - p.reported >= 15_000) {
         // Progress is news to a person watching, not to an agent reading
         // the run once it ends; a wait is news to both.
@@ -523,7 +536,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
         )
         p.reported = Date.now()
       }
-      if (idle >= idleLimit) {
+      if (stalled(p, now, idleLimit)) {
         end(
           `test ${name}: no test completed for ${
             Math.ceil(idle / 1000)
@@ -536,7 +549,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let run = async (i: number, child: Deno.ChildProcess) => {
     let p = progress[i]
     p.now = own(child.pid, { every: pulse / 2 })
-    p.completed = p.now()
+    p.at = p.now()
     let followed = Promise.all([
       observe(kept(child.stdout, heard[i].out), p, p.now),
       observe(kept(child.stderr, heard[i].err), p, p.now),

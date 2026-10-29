@@ -1,7 +1,7 @@
 import { test, until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { denoDir, observe, RUN } from './test.ts'
+import { denoDir, observe, type Progress, RUN } from './test.ts'
 import { runTestCommands, type TestCommand } from './phases.ts'
 
 // What a test file running under the runner imports, for one written here.
@@ -40,13 +40,14 @@ let colored = ['one ... \x1b[0m', '\x1b[32mok\x1b[0m (1ms)\n']
 test('colored test results count as completed', async () => {
   let progress = {
     name: 'loading tests',
-    completed: 0,
+    at: 0,
+    phase: 'loading' as Progress['phase'],
     count: 0,
     failed: [] as string[],
   }
   await observe(colored, progress)
   assertEquals(progress.name, 'one')
-  assert(progress.completed > 0)
+  assert(progress.at > 0)
   assertEquals(progress.count, 1)
 })
 
@@ -67,13 +68,14 @@ let reported = new ReadableStream<Uint8Array>({
 test('test results after console output count once and only while a test runs', async () => {
   let progress = {
     name: 'loading tests',
-    completed: 0,
+    at: 0,
+    phase: 'loading' as Progress['phase'],
     count: 0,
     failed: [] as string[],
   }
   await observe(reported, progress)
   assertEquals(progress.name, 'third')
-  assert(progress.completed > 0)
+  assert(progress.at > 0)
   assertEquals(progress.count, 3)
   assertEquals(progress.failed, ['third'])
 })
