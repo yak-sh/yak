@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "operation-diagnostics",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
@@ -11,36 +11,41 @@
       "name": "cli/model-list-local-catalogue",
       "unit": "ms",
       "better": "lower",
-      "median": 425.43345,
-      "tolerance": 0
+      "median": 496.001000000002,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.465
     },
     {
       "name": "cli/vector-check-populated",
       "unit": "ms",
       "better": "lower",
-      "median": 244.78631600000017,
-      "tolerance": 0
+      "median": 366.5560000000005,
+      "reference": "7243ea9398c82da4396baece8a8c3960034d74b8",
+      "tolerance": 0.438
     },
     {
       "name": "connector/vector-check-populated",
       "unit": "ms",
       "better": "lower",
-      "median": 3.6759370000008857,
-      "tolerance": 0
+      "median": 7.138999999999214,
+      "reference": "7243ea9398c82da4396baece8a8c3960034d74b8",
+      "tolerance": 0.95
     },
     {
       "name": "cli/session-home",
       "unit": "ms",
       "better": "lower",
-      "median": 470.0290130000003,
-      "tolerance": 0
+      "median": 632.1700000000001,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.557
     },
     {
       "name": "connector/session-home",
       "unit": "ms",
       "better": "lower",
-      "median": 17.204671999999846,
-      "tolerance": 0
+      "median": 54.67000000000007,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.409
     }
   ]
 }

@@ -2176,13 +2176,6 @@
     "evidence": "bench/operation-controls.rebank.results.json"
   },
   {
-    "suite": "operation-diagnostics",
-    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-    "revision": "868091370a74bb70b498a949090e3a29caa037e8",
-    "verdict": "inconclusive",
-    "error": "the code at bbf65074e cannot run today's bench: Error: missing vector search reads the current canonical vectors: {\n  \"result\": [\n    {\n      \"entity\": {\n        \"eid\": \"$check\"\n      },\n      \"content\": {\n        \"body\": \"the vector index is being built by the sweep that owns it — nothing to report\"\n      },\n      \"output\": {\n        \"source\": \"6b4f5d29-49ca-459c-855f-b9fbdf639378\"\n      },\n      \"$actor\": {\n        \"by\": \"b1f4d85c-a4ae-4c0e-9b39-bb2ccad13654\",\n        \"via\": \"b1f4d85c-a4ae-4c0e-9b39-bb2ccad13654\"\n      }\n    }\n  ]\n}\n\n    at includes (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/operation-diagnostics.ts:36:11)\n    at Module.measure (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/operation-diagnostics.ts:239:11)\n    at async serve (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "operation-sessions",
     "baseline": "bench/operation-sessions.baseline.json",
     "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
@@ -4060,5 +4053,205 @@
     "suite": "operation-checkout",
     "verdict": "failed",
     "error": "Error: Error: connector/code-sync-cwd-refusal measurement failed: code_sync: /tmp/T-127678-operations-311a04af825c3da3/checkout: read 2 files (1 exports, 0 imports, 1 packages) in 43 ms.\n    at collect (file:///tmp/bench-paired-83c831450833e3f1/1/bench/operation-commands.ts:700:19)\n    at async serve (file:///tmp/bench-paired-83c831450833e3f1/1/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-83c831450833e3f1/1/bench/standalone-worker.ts:5:1\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/collector.ts:53:33)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/standalone.ts:79:22)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:149:20"
+  },
+  {
+    "suite": "operation-diagnostics",
+    "baseline": "bench/operation-diagnostics.baseline.json",
+    "references": {
+      "cli/model-list-local-catalogue": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-home": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-home": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/vector-check-populated": "7243ea9398c82da4396baece8a8c3960034d74b8",
+      "connector/vector-check-populated": "7243ea9398c82da4396baece8a8c3960034d74b8"
+    },
+    "provenance": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-diagnostics.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/model-list-local-catalogue",
+          "cli/session-home",
+          "connector/session-home"
+        ]
+      },
+      {
+        "reference": "7243ea9398c82da4396baece8a8c3960034d74b8",
+        "kind": "derived",
+        "source": "Earliest canonical-vector check implementation: 7243ea939 replaces quantized-index health checks with checking current canonical vector rows. The previous reference does different work and cannot run the corrected workload.",
+        "correction": {
+          "previousReference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+          "workloadChange": "7243ea9398c82da4396baece8a8c3960034d74b8",
+          "reason": "The old tool checked obsolete quantized-index construction; it did not check current canonical vector rows.",
+          "previousMedians": [
+            {
+              "name": "cli/vector-check-populated",
+              "median": 244.78631600000017,
+              "unit": "ms"
+            },
+            {
+              "name": "connector/vector-check-populated",
+              "median": 3.6759370000008857,
+              "unit": "ms"
+            }
+          ]
+        },
+        "benches": [
+          "cli/vector-check-populated",
+          "connector/vector-check-populated"
+        ]
+      }
+    ],
+    "revision": "2b83eb4a2f596f3f3c1ebdc83d9d8004da13322c",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "groups": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "revision": "2b83eb4a2f596f3f3c1ebdc83d9d8004da13322c",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "cli/model-list-local-catalogue",
+          "cli/session-home",
+          "connector/session-home"
+        ]
+      },
+      {
+        "reference": "7243ea9398c82da4396baece8a8c3960034d74b8",
+        "revision": "f0fcb3b324e8cd32b23da9261ef54e057837403c",
+        "rounds": 3,
+        "verdict": "same",
+        "benches": [
+          "cli/vector-check-populated",
+          "connector/vector-check-populated"
+        ]
+      }
+    ],
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "cli/model-list-local-catalogue",
+      "cli/session-home"
+    ],
+    "comparisons": [
+      {
+        "name": "cli/model-list-local-catalogue",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          556.9309999999987,
+          496.001000000002,
+          451.9160000000011
+        ],
+        "current": [
+          656.5559999999987,
+          588.4989999999962,
+          653.7950000000019
+        ],
+        "after": [
+          555.0310000000009,
+          478.22500000000036,
+          512.2930000000015
+        ],
+        "reference": 504.14700000000175,
+        "now": 653.7950000000019
+      },
+      {
+        "name": "cli/vector-check-populated",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "7243ea9398c82da4396baece8a8c3960034d74b8",
+        "before": [
+          375.70500000000175,
+          358.755000000001,
+          376.6779999999999
+        ],
+        "current": [
+          399.853000000001,
+          419.5779999999977,
+          395.79799999999886
+        ],
+        "after": [
+          394.5689999999995,
+          366.5560000000005,
+          323.6930000000011
+        ],
+        "reference": 371.1305000000011,
+        "now": 399.853000000001
+      },
+      {
+        "name": "connector/vector-check-populated",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "7243ea9398c82da4396baece8a8c3960034d74b8",
+        "before": [
+          9.240999999999985,
+          7.631999999999607,
+          5.574999999998909
+        ],
+        "current": [
+          6.570999999999913,
+          10.378000000000611,
+          8.619999999995343
+        ],
+        "after": [
+          7.138999999999214,
+          8.841999999998734,
+          6.597999999999956
+        ],
+        "reference": 7.385499999999411,
+        "now": 8.619999999995343
+      },
+      {
+        "name": "cli/session-home",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          697.7479999999996,
+          632.1700000000001,
+          563.1830000000045
+        ],
+        "current": [
+          832.090000000002,
+          763.4360000000015,
+          797.6380000000026
+        ],
+        "after": [
+          720.018,
+          662.2490000000016,
+          689.788999999997
+        ],
+        "reference": 676.0189999999993,
+        "now": 797.6380000000026
+      },
+      {
+        "name": "connector/session-home",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          58.39499999999862,
+          54.67000000000007,
+          52.9320000000007
+        ],
+        "current": [
+          65.503999999999,
+          61.487999999997555,
+          64.54899999999907
+        ],
+        "after": [
+          63.733000000000175,
+          56.344999999999345,
+          63.71700000000419
+        ],
+        "reference": 57.36999999999898,
+        "now": 64.54899999999907
+      }
+    ],
+    "evidence": "bench/operation-diagnostics.rebank.results.json"
   }
 ]
