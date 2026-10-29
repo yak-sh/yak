@@ -182,6 +182,7 @@ export type Survey = {
   of: (path: string) => Promise<string>
   loads: (path: string) => Promise<string>
   next: (path: string) => string[]
+  reaches: (roots: string[], changed: string[], loaded?: boolean) => boolean
 }
 
 /** The survey of `paths`, their modules' graph from `info` (`deno info`), or
@@ -274,6 +275,20 @@ export let survey = async (
         go.push(...still.get(n) ?? [])
       }
       return Promise.resolve(hex([...reached].map(mine).sort().join('\n')))
+    },
+    reaches: (roots, changed, loaded = false) => {
+      let wanted = new Set(changed.flatMap((p) => [p, at(url(p))]))
+      let edges = loaded ? still : next
+      let seen = new Set<string>()
+      let visit = roots.flatMap((p) => [p, at(url(p))])
+      while (visit.length) {
+        let node = visit.pop()!
+        if (wanted.has(node)) return true
+        if (seen.has(node)) continue
+        seen.add(node)
+        visit.push(...edges.get(node) ?? [])
+      }
+      return false
     },
     next: (path) => (next.get(at(url(path))) ?? []).map((n) => seals.get(n)!),
   }

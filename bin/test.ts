@@ -1,6 +1,7 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
-// behavior runs in process on linkedom. With no paths, dependency keys select
-// only files changed since their last pass; paths narrow that selection.
+// behavior runs in process on linkedom. With no paths, the dependency graph
+// selects only tests reached by branch and working changes; cached passes
+// leave out tests already passed unchanged. Paths narrow an explicit run.
 // There are no browser or workerd tests and no platform setup before a run.
 
 import type { TestCommand } from './phases.ts'
@@ -296,7 +297,7 @@ export let RUNS = [
   rel(new URL('./scratch.ts', import.meta.url)),
 ]
 
-/** Files whose source or observed dependencies changed since their pass. */
+/** Relevant files, leaving out sources and observed dependencies already passed. */
 export let chosen = async (
   files: string[],
   all: boolean,

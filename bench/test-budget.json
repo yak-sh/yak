@@ -454,9 +454,6 @@
       "Vale composition puts the theme before kit and skin fallback assets": 9.8,
       "Vale specimens carry browser content and paint in the terminal": 6.5
     },
-    "apps/vale/ui/lists_test.ts": {
-      "every list keeps its icons on their lines, every grid its rows, and moves nothing when picked, on a desktop and a phone": 894.1
-    },
     "apps/vale/upgrade.ts": {
       "apps/vale/upgrade.ts: 987fff1572e9": 9.1
     },
@@ -485,15 +482,6 @@
     },
     "apps/village-tasks/roundtrip_test.ts": {
       "a task completed in a sibling app changes Pip for one Vale hero": 2762.8
-    },
-    "bin/backup_test.ts": {
-      "a backup stuck behind another is killed at its bound and reported": 307.5,
-      "a damaged database fails the night and drops nothing": 45.2,
-      "a failed daily backup becomes a tracker bug": 332.6,
-      "a failed restore is the reader’s, not a tracker bug": 118.8,
-      "a night restores to the data dir it was taken from": 476.3,
-      "a snapshot directory without enough space is refused": 11.6,
-      "the newest seven complete nights stay, and nothing else": 323.1
     },
     "bin/check-platform_test.ts": {
       "platform entrypoints cover every standalone config and the tail Worker": 46.1
@@ -539,10 +527,6 @@
       "runner preserves SIGTERM and cleans isolated descendants": 106,
       "runner runs every phase and preserves broad-code's status": 53.1,
       "runner runs every phase and preserves isolated-code's status": 57.3
-    },
-    "bin/tidy_test.ts": {
-      "tidy collects a worktree only when nothing in it can be lost": 123.6,
-      "tidy reaps old headless browsers and unused profiles, and nothing else": 137.6
     },
     "packages/README.md": {
       "packages/README.md: e1d7d17c963c": 1.7
@@ -805,9 +789,6 @@
     "packages/browse/components/Status_test.tsx": {
       "fix status links minted ids and follows the session lifecycle": 1.7
     },
-    "packages/browse/components/Tray_test.ts": {
-      "the tray shows live and recent sessions in separate sections": 4.5
-    },
     "packages/browse/components/archetype_test.ts": {
       "432 archetypes preserve every registry pick": 347.6
     },
@@ -1021,10 +1002,6 @@
     "packages/browse/rfc2047_test.ts": {
       "unmime: the RFC 2047 display table": 1.5
     },
-    "packages/browse/sessions_test.ts": {
-      "session selection is capped after putting current runners ahead of newest history": 1.6,
-      "standing session queries exclude automation and bound every arm": 1.5
-    },
     "packages/browse/tui/App_test.ts": {
       "the shared Browse App paints its sidebar and home; its search field goes to a query page": 18
     },
@@ -1147,9 +1124,6 @@
       "help is drawn from the schema the server published": 2.4,
       "the tool list is the subcommand list": 3.9
     },
-    "packages/cli/external_cli_test.ts": {
-      "restart CLI queues replacements before old stops with no blocking shutdown": 48.4
-    },
     "packages/cli/host_test.ts": {
       "a body kept in the store is still found by its own words": 12.4,
       "a call written through the door is run by the effect": 12.5,
@@ -1194,9 +1168,6 @@
       "two plugins may not both say who is calling": 1.5,
       "web gathers UI facets before building routes, graph does not import them": 22.4
     },
-    "packages/cli/local_test.ts": {
-      "a graph read exits and leaves owed effects unclaimed": 198.6
-    },
     "packages/cli/page_test.ts": {
       "a body started early that fails is made again by the first request": 2.6,
       "a body that never comes is given up on, and made again": 3.5,
@@ -1217,9 +1188,6 @@
     "packages/cli/readonly_test.ts": {
       "local read commands leave graph bytes unchanged under a concurrent writer": 77.4
     },
-    "packages/cli/restart_handover_test.ts": {
-      "restart drains tracker intake without losing its spool or a web request": 2078.8
-    },
     "packages/cli/startup_test.ts": {
       "composition records a complete process-start tree on its config channel": 5,
       "unsubscribed composition leaves its channel uncreated or idle": 5.6
@@ -1228,10 +1196,6 @@
       "a broken selected module fails the load without poisoning another selected module": 15.8,
       "an absent file facet does not break another selected module": 29.1,
       "selected facet modules keep request order, shared exports, and module identity": 16.7
-    },
-    "packages/cli/thread_test.ts": {
-      "an ended duty signal runs one pass": 153,
-      "live duties do not wait on a one-shot pass": 165.2
     },
     "packages/cli/trace_control_test.ts": {
       "capture controls leave HTTP servers free to drain and release their ports": 7.4,
@@ -1246,9 +1210,6 @@
     },
     "packages/cli/vault_test.ts": {
       "the file vault is private files, one per secret, and follows no symlink": 2
-    },
-    "packages/cli/work_test.ts": {
-      "web exits during native work; a ready replacement continues after drain": 3017.2
     },
     "packages/cli/yak_test.ts": {
       "a dry run is the tool’s check, and nothing else moves": 1.7,
@@ -1302,9 +1263,6 @@
     "packages/code/source_test.ts": {
       "a remembered catalog asks again after a failure or once its answers age": 26.1,
       "frames resolve only cataloged exports of the exact failing commit": 57.2
-    },
-    "packages/code/sync_test.ts": {
-      "code sync reads a tree, then only what moved, and clears what went": 49.4
     },
     "packages/connections/authorize_test.ts": {
       "auth extension discovers an integration and holds bot session through account renewal": 22.2,
@@ -1671,11 +1629,6 @@
     "packages/esbuild/README.md": {
       "packages/esbuild/README.md: 03dc10dccb99": 20.3
     },
-    "packages/esbuild/compile_test.ts": {
-      "a build whose esbuild ends throws Stopped, and the next starts esbuild again": 23.9,
-      "a worker keeps its runtime's imports and bundles the rest": 4.3,
-      "an app's mistakes come back as lines that say where": 6.9
-    },
     "packages/esbuild/graph.ts": {
       "packages/esbuild/graph.ts: 8c9ae176b5bb": 35.6,
       "packages/esbuild/graph.ts: e07af3065de0": 1.2
@@ -1826,7 +1779,6 @@
       "a rebase conflict returns with git's conflict output, leaving the rebase to resolve": 37,
       "a rebase that re-adds a line main removed is still refused": 66.6,
       "a rival landing after the ancestry check rebases and waits for another land": 66.3,
-      "a transiently failing push publishes on the retry": 33.4,
       "land does not publish when the base has no upstream": 23.2,
       "land fast-forwards a branch whose base has not moved — no graph, no rebase": 48.4,
       "land refuses a rebase that rewound a file past the base": 77.8,
@@ -1841,24 +1793,10 @@
       "git indexes the pack and walks every object in it": 16.6,
       "the objects are named once, commits before trees before blobs": 2.1
     },
-    "packages/git/process-cwd_test.ts": {
-      "the privileged cwd reader accepts one owned PID": 21.2,
-      "the privileged cwd reader refuses paths and extra arguments": 35.4,
-      "the privileged cwd reader requires a numeric UID owning the process": 21.6,
-      "the privileged reader reports open files even outside its cwd": 23
-    },
     "packages/git/refs_test.ts": {
       "a manifest lands as a commit and the branch follows it": 3.2,
       "the plugin commits a release, and commits it once": 2.1,
       "what the caller says about a commit rides the same batch": 1.8
-    },
-    "packages/git/service_test.ts": {
-      "a settled transcript keeps its checkout until its process exits": 49.3,
-      "a worktree the harness manages is left to it": 14,
-      "an idle checkout stays while a graph session or local process uses it": 69.9,
-      "an idle worktree that holds nothing is taken back": 86.9,
-      "collection retires externally removed observations and preserves managed restore history": 32.5,
-      "the service collects each repository the graph knows": 41
     },
     "packages/git/tools_test.ts": {
       "a citation whose file moved since it was verified fails the check": 21.7,
@@ -2080,22 +2018,6 @@
       "explicit default provider seeds correctly and custom model override remains usable": 112.3,
       "fork and spawn selecting an existing model are served by a provider that serves it": 332.9,
       "provider sign-ins are not MCP authorization targets": 128.7
-    },
-    "packages/harness/remote_test.ts": {
-      "explicit force releases unbounded close while a provider is stuck": 430.3,
-      "new reads during graceful shutdown are typed expected refusals": 58.7,
-      "selection subscription does not invalidate its own awaiting projection": 154.6,
-      "stuck model deadline is an expected bounded exit, not a crash": 589.8,
-      "unbounded graceful close finishes a slow response beyond the old deadline": 198.6,
-      "what is typed into the worker is written by the config's person": 138,
-      "worker exit drains a burst and is idempotent": 293.8,
-      "worker frontend typing stays local after its subscribed view is ready": 151.4,
-      "worker model selection is database-backed, passive, and forwarded on start": 260.8,
-      "worker owns an isolated database; selected entries replicate and commands stay explicit": 172.7,
-      "worker publishes a second input while a slow model is still pending": 132.2,
-      "worker rejects bad paths without creating a fallback database": 2.5,
-      "worker stop waits for admitted commands and model turns": 62.7,
-      "worker subscribes only to selected fork ancestry, respecting each boundary": 115.4
     },
     "packages/harness/rendered_navigation_test.ts": {
       "INSERT Escape always selects the final rendered character, preserving the draft": 13.6,
@@ -2657,27 +2579,6 @@
       "skill per-pass lease release errors reject the awaited effect and retry": 1.2,
       "skill watcher reconciles at startup, polls, and cleans on shutdown": 12.8
     },
-    "packages/persona/skill-mirror_test.ts": {
-      "skill mirror advances a clean landed export branch after unrelated main commits": 128.9,
-      "skill mirror blocks reads and same agreements across a conflicted rename": 18.5,
-      "skill mirror does not acknowledge or relink a landed rename with changed bytes": 50.6,
-      "skill mirror graph edit lands a skill-only commit and leaves main clean": 57.7,
-      "skill mirror graph-only skill and companion creation lands safely": 52.9,
-      "skill mirror imports deletions without deleting unrelated entity state": 18.3,
-      "skill mirror imports documents and tracked support without canonical oscillation": 27.9,
-      "skill mirror leaves conflicted rename untouched when another skill lands": 62.6,
-      "skill mirror never adopts main or a dirty linked export worktree": 46.1,
-      "skill mirror only acknowledges exact non-rename export bytes after landing": 49.6,
-      "skill mirror refuses binary and symlink tracked support without dropping graph content": 18.4,
-      "skill mirror refuses concurrent divergence and dirty main graph exports": 19.9,
-      "skill mirror refuses title swaps without touching locators or main": 21.4,
-      "skill mirror repository lock serializes imports and manual sync": 79.6,
-      "skill mirror serializes same-process manual callers": 12.6,
-      "skill mirror title rename retains UUID and relocates companion identities": 59.3,
-      "skill mirror unexpected graph failure rejects without agreement": 12.1,
-      "skill mirror unexpected runner failure rejects and releases lock": 10.1,
-      "skill mirror unreadable memo is an unexpected I/O failure, not an empty agreement": 12.3
-    },
     "packages/persona/skill-text_test.ts": {
       "the body is exact, including line endings, delimiters and inert expansions": 1.3
     },
@@ -2716,17 +2617,6 @@
       "linux: a launched child keeps both its streams and stamps its exit": 25.8,
       "output stays until its caller cleans the finished run": 20.8,
       "watch picks up an unfinished row and stamps the one already gone": 45.1
-    },
-    "packages/sandbox/bubblewrap-pressure_test.ts": {
-      "sandbox controllers throttle CPU, refuse extra tasks and contain memory exhaustion": 581.4
-    },
-    "packages/sandbox/bubblewrap_test.ts": {
-      "concurrent providers reuse one sandbox and one durable command; release defeats ignored TERM": 152.3,
-      "release kills descendants, preserves other sandboxes, and wakes a stopped scope with its files": 338.2,
-      "sandbox commands and files see only their own workspace and a read-only system": 554.6,
-      "sandbox commands outlive a requesting host and recover durable calls without launching twice": 307,
-      "sandbox commit preparation retries safely and rejects unsupported or incompatible requests": 183.3,
-      "sandbox scope enforces aggregate CPU, memory and task limits for every command": 158.4
     },
     "packages/process/supervise_test.ts": {
       "a failing service is respawned once, onto the same row": 39.7,
@@ -2935,9 +2825,6 @@
       "retention pages survive deletion": 7.8,
       "retention pages survive deletion and stop when a session speaks again": 4.2,
       "stripping old imports removes refusals but keeps cost-bearing refusals": 1.2
-    },
-    "packages/session/status_rows_test.ts": {
-      "workerd reads a finished session in bounded rows regardless of history": 1326.6
     },
     "packages/session/status_test.ts": {
       "a harness ending stays ended while its importer catches up, then clears on resume": 11.8,
@@ -3333,9 +3220,6 @@
     "packages/sqlite/scoped_entry_plan_test.ts": {
       "finite entry window identities do not sort their unbounded session": 538.8
     },
-    "packages/sqlite/sqlitepath_test.ts": {
-      "every @db/sqlite import is preceded by the path prelude": 22
-    },
     "packages/sqlite/statements_test.ts": {
       "shared statement revisions observe another host committing": 1.6,
       "statement writes roll back with the graph transaction and nested units": 9.4
@@ -3560,9 +3444,6 @@
     },
     "packages/tracker/reframe_test.ts": {
       "group moves during catalog await link only its current group": 2.6
-    },
-    "packages/tracker/role_test.ts": {
-      "box role groups and enriches a spool occurrence through its configured catalog": 139.1
     },
     "packages/tracker/routes_test.ts": {
       "remote trace doors preserve pages and use a platform-admin ticket the Worker accepts": 2.3
@@ -4452,9 +4333,6 @@
     "workers/yak/preauth_test.ts": {
       "public MCP words and resources use the configured apex": 1.5
     },
-    "workers/yak/probe_http_test.ts": {
-      "relay keeps the app and person across browser requests": 14
-    },
     "workers/yak/provisioning_test.ts": {
       "a domain marked active still routes to its app": 168.5,
       "a domain with nothing ready gets the branded page, not the apex": 6.6
@@ -4536,9 +4414,6 @@
       "a refusal the door meant is not a break": 120.5,
       "the platform's own break is ours, not the app's": 37.7,
       "the platform's own scripts are never the app's break": 134.6
-    },
-    "workers/yak/roster_test.ts": {
-      "every tool the connector lists is called, and one with no call fails this": 11617.3
     },
     "workers/yak/rtc_test.ts": {
       "a lease nobody renewed closes its call at Realtime and drops its row": 52.3,

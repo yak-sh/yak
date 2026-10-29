@@ -22,9 +22,7 @@
 // (`own`, packages/testing run.ts `waited`).
 //
 // A platform's wall clock is said, never compared: it adds every wait among
-// the run's processes and the host's other users. Workerd's tests each cross
-// into the run's kernel, and are not compared one by one: their times, and
-// their wall, are said.
+// the run's processes and the host's other users.
 //
 // Nothing ever joins the list, and a test renamed is a test not listed; an
 // example is listed by its code, not its line or block position (`listed`).
@@ -33,9 +31,9 @@
 // follows a test that got faster, not one run's luck. A test leaves well
 // under the budget, not at it: one that left at 0.9 ms would be over on the
 // next loaded run. Without `--write`, the run says what it would change. The
-// times a whole run took are kept in bench/test-times/, which the gate keeps
+// times a whole run took are kept in bench/test-times/, which CI keeps
 // as an artifact, and `--from=<dir>` says a kept set instead of running: a
-// gate's, downloaded, shrinks the list by what the gate measured.
+// CI's, downloaded, shrinks the list by what CI measured.
 
 import type { Result } from './phases.ts'
 
@@ -132,7 +130,6 @@ export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
   let seen = new Map<string, Seen>()
   let ran = new Set<string>()
   for (let [platform, run] of Object.entries(runs)) {
-    if (platform == 'workerd') continue
     let keys = listed(run.tests)
     run.tests.forEach((t, i) => {
       let at = JSON.stringify([t.file, keys[i]])
@@ -205,7 +202,7 @@ export type Measured = {
   left?: number
 }
 
-/** A set of times kept in `dir`: bench/test-times/, or a gate's, with the
+/** A set of times kept in `dir`: bench/test-times/, or CI's, with the
  * code its run ended with. */
 export let read = async (dir: string): Promise<Measured> => {
   let runs: Record<string, Times> = {}

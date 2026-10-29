@@ -1,4 +1,5 @@
 import { equal, ok, test } from './mod.ts'
+import { affected } from './choose.ts'
 import {
   forget,
   type Info,
@@ -154,4 +155,32 @@ test('a pass forgotten is no longer kept, and the others stay', () => {
 
 test('what a file read is kept by its key, and a file that read nothing keeps no entry', () => {
   equal(recall(reads), { k1: ['x.json'] })
+})
+
+test('relevance follows transitive imports and named data, with an empty pass cache', () => {
+  equal(affected(alone, [at('a_test.ts')], [], [at('one.ts')]), true)
+  equal(affected(alone, [at('a_test.ts')], [], [at('two.ts')]), false)
+  equal(affected(alone, [at('c_test.ts')], [], [at('data.json')]), true)
+  equal(affected(alone, [at('a_test.ts')], [], []), false)
+})
+
+test('shared runners reach unconditional code, while observed modules reach their own imports', () => {
+  equal(
+    affected(alone, [at('c_test.ts')], [at('runner.ts')], [at('helper.ts')]),
+    true,
+  )
+  equal(
+    affected(alone, [at('c_test.ts')], [at('runner.ts')], [at('two.ts')]),
+    false,
+  )
+  equal(
+    affected(alone, [at('a_test.ts')], [], [at('helper.ts')], [
+      at('plugin.ts'),
+    ]),
+    true,
+  )
+  equal(
+    affected(alone, [at('a_test.ts')], [], [at('sub/new.txt')], [at('sub')]),
+    true,
+  )
 })

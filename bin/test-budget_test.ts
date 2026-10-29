@@ -3,6 +3,7 @@ import {
   type Budget,
   judge,
   listed,
+  measure,
   shrunk,
   type Times,
 } from './test-budget.ts'
@@ -96,15 +97,13 @@ test('a failed test is neither timed nor gone', () => {
   equal([j.over, j.slower, j.within, j.gone], [[], [], [], []])
 })
 
-test("a platform's wall clock is said, never compared, and workerd's tests are not compared", () => {
+test("a platform's wall clock is said, never compared", () => {
   let j = judge(list, {
     deno: deno({ quick: 0.2 }, 9e9),
-    workerd: { wall: 5, tests: [{ file: 'w.ts', name: 'w', ms: 9, ok: true }] },
   })
   equal([j.over, j.slower], [[], []])
   equal(j.walls, [
     { platform: 'deno', ms: 9e9 },
-    { platform: 'workerd', ms: 5 },
   ])
 })
 
@@ -147,4 +146,16 @@ test('a fenced listing survives blocks inserted or removed above it', async () =
     deno: { wall: 1, tests: [{ file: page, name, ms: 17, ok: true }] },
   })
   equal([j.over, j.slower, j.gone], [[], [], []])
+})
+
+test('a local slow test reports after one run without warming retries', async () => {
+  let calls = 0
+  let measured = await measure(async (flags) => {
+    calls++
+    let dir = flags.find((f) => f.startsWith('--times='))!.slice(8)
+    Deno.writeTextFileSync(`${dir}/deno.json`, JSON.stringify(deno({ over: 3 })))
+    return { code: 0 }
+  }, false)
+  equal(calls, 1)
+  equal(names(judge(list, measured.runs).over), ['over'])
 })
