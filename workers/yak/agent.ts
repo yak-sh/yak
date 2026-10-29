@@ -25,7 +25,6 @@ import { reacquire } from './tool.ts'
 // documents, first declaration winning, which is the same rule a word's HOME
 // follows (tools.ts `homesIn`): the schema an agent reads is the words it can
 // actually write.
-import { z } from 'zod'
 import type {
   ApplyOpts,
   Bundle,
@@ -72,48 +71,17 @@ import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
 import { caught } from './defects.ts'
 
-// One JSON Schema property as Zod. The tool table declares plain shapes — a
-// string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
-// this is the whole translation. An unknown shape stays unknown rather than
-// being guessed at: the tool's own `run` checks its arguments anyway (tools.ts
-// `text`, `list`, `files`), and a schema that lied would refuse a call the
-// tool would have accepted.
-let propOf = (schema: unknown, env: Host = {}): z.ZodTypeAny => {
-  let s = (schema ?? {}) as { type?: string; items?: unknown }
-  let one = s.type == 'string'
-    ? z.string()
-    : s.type == 'number' || s.type == 'integer'
-    ? z.number()
-    : s.type == 'boolean'
-    ? z.boolean()
-    : s.type == 'array'
-    ? z.array(propOf(s.items, env))
-    : s.type == 'object'
-    ? z.record(z.unknown())
-    : z.unknown()
-  let said = (schema as { description?: string })?.description
-  return said ? one.describe(hosted(said, env)) : one
-}
-
-/**
- * A tool's `input` as the MCP SDK wants it: one Zod schema per named argument,
- * optional unless the JSON Schema `required` list names it.
- */
-export let inputOf = (
-  schema: unknown,
-  env: Host = {},
-): Record<string, z.ZodTypeAny> => {
-  let s = (schema ?? {}) as {
-    properties?: Record<string, unknown>
-    required?: string[]
-  }
-  let need = new Set(s.required ?? [])
+// Keep the declared JSON Schema whole; converting through a partial Zod
+// vocabulary lost unions, integer types and constraints before tools/list.
+let inputOf = (schema: unknown, env: Host): unknown => {
+  if (Array.isArray(schema)) return schema.map((s) => inputOf(s, env))
+  if (!schema || typeof schema != 'object') return schema
   return Object.fromEntries(
-    Object.entries(s.properties ?? {}).map((
-      [name, prop],
-    ) => [
-      name,
-      need.has(name) ? propOf(prop, env) : propOf(prop, env).optional(),
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      key == 'description' && typeof value == 'string'
+        ? hosted(value, env)
+        : inputOf(value, env),
     ]),
   )
 }
@@ -239,7 +207,7 @@ let said = (t: Sugar, env: Host): Omit<Tool, 'run'> => {
         name: t.name,
         title: t.title,
         description: hosted(t.description, env),
-        input: inputOf(t.input, env),
+        inputSchema: inputOf(t.input, env) as Record<string, unknown>,
         // What it does, carried whole — the transport turns these four into
         // the MCP annotations (@yaks/mcp `annotated`), and a hint dropped here
         // is a tool the host mis-prompts about.
