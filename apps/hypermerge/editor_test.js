@@ -8,6 +8,7 @@ import { checked } from './check.js'
 import { editor } from './editor.js'
 import { lanes } from './feed.js'
 import { mint, sign } from './keys.js'
+import { at } from './time.js'
 import { bytes, sha256 } from './pack.js'
 import { indexed, leaf, nodes, treeHash } from './tree.js'
 
@@ -64,4 +65,19 @@ test('a block signed by another key is not trusted', async () => {
   let c = await checked(doc, lanes(doc, [...rows, forged])[0])
   assertEquals(c.trusted.length, 2)
   assertEquals(c.status.get(forged.entity.eid), 'unsigned')
+})
+
+test('an edit made rewound forks onto a writer that saw only that much', async () => {
+  // Rewound to the root's first block, a new writer edits; its change depends
+  // on that block alone, and at the present it merges with all that followed.
+  let out = [], keep = (r) => (out.push(...r), Promise.resolve())
+  let f = editor(doc, await mint(), keep)
+  f.receive(at(await trusted(), 1).applied)
+  f.change('fork', (d) => d.body.insertAt(5, ...'?'))
+  await f.sent()
+  assertEquals(out[0].block.change.deps, { [doc]: 1 })
+  f.receive(await trusted())
+  a.receive(out.map((r) => ({ ...r.block, eid: r.entity.eid })))
+  assertEquals(f.state.body.join(''), a.state.body.join(''))
+  assertEquals(a.state.body.join('').replace('?', ''), '> hello world')
 })

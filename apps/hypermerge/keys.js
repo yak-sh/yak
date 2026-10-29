@@ -70,3 +70,12 @@ export let keep = (doc, actor) => {
   if (!all.some((j) => j.x == actor.jwk.x)) all.push(actor.jwk)
   localStorage.setItem(slot(doc), JSON.stringify(all))
 }
+
+/** Forget an actor's secret key: its log stays in the doc and never grows. */
+export let forget = (doc, actor) => {
+  let all = JSON.parse(localStorage.getItem(slot(doc)) ?? '[]')
+  localStorage.setItem(
+    slot(doc),
+    JSON.stringify(all.filter((j) => j.x != actor.jwk.x)),
+  )
+}

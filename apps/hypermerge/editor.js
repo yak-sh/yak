@@ -11,7 +11,7 @@ import { indexed, leaf, nodes, treeHash } from './tree.js'
 
 export let editor = (doc, actor, publish) => {
   let state = Automerge.init(actor.id)
-  let seen = new Set(), own = [], held = [], online = true
+  let seen = new Set(), own = [], held = [], online = true, seq = 0
   let queue = Promise.resolve()
 
   // Sign and send in the order the changes were made.
@@ -44,6 +44,10 @@ export let editor = (doc, actor, publish) => {
     get held() {
       return held
     },
+    // How many changes this actor has made: its log's length once shared.
+    get seq() {
+      return seq
+    },
     // Settles once every change made so far is signed and sent or held.
     sent: () => queue,
     // Make one change; answers whether there was one to make.
@@ -52,6 +56,7 @@ export let editor = (doc, actor, publish) => {
       let [made] = Automerge.getChanges(state, next)
       if (!made) return false
       state = next
+      seq = made.seq
       seen.add(key(made))
       send(made)
       return true
@@ -63,6 +68,7 @@ export let editor = (doc, actor, publish) => {
       for (let b of blocks) {
         if (b.actor == actor.id && !own[b.index]) {
           own[b.index] = leaf(bytes(b.change))
+          seq = Math.max(seq, b.index + 1)
         }
       }
       let fresh = blocks.filter((b) => !seen.has(key(b.change)))
