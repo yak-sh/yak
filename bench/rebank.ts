@@ -107,6 +107,14 @@ export let rebank = async (
     provenance: provenance?.groups,
     revision: evidence.revision,
     rounds: evidence.current?.rounds,
+    metric: evidence.current?.metric,
+    groups: evidence.groups?.map((group) => ({
+      reference: group.reference,
+      revision: group.revision,
+      rounds: group.current?.rounds,
+      verdict: group.verdict,
+      benches: group.current?.benches.map((b) => b.name),
+    })),
     verdict: evidence.verdict,
     status: evidence.verdict == 'inconclusive'
       ? 'inconclusive; default monitor confirmation pending'
