@@ -414,7 +414,7 @@ test('a candidate seed waits for release and lands once', async () => {
   )
   let next = draftStore(env.STORE, here, { ...page, version: 2 }, '3')
   assertEquals((await put(next, '/vocab', vocab('card'))).status, 200)
-  assertEquals((await put(next, '/seed', seed)).status, 200)
+  assertEquals((await put(next, `/seed?from=${page.eid}`, seed)).status, 200)
   let again = appStore(env.STORE, here, { ...page, version: 3 })
   let kept = await (await again('/query?q=.card', {}, vouched(owner))).json()
   assertEquals(kept.map((row: { card: { title: string } }) => row.card.title), [

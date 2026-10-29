@@ -2126,14 +2126,17 @@ export class Store {
         }
         : null
       let mark: Word = planted?.from ? `seeded:${planted.from}` : 'seeded'
-      if (
-        planted && !this.#get(mark) && !req.headers.has('x-yak-base-release')
-      ) {
+      let seeded = this.#get(mark) ||
+        (planted?.from == this.#get('app') && this.#get('seeded'))
+      if (planted && !seeded && !req.headers.has('x-yak-base-release')) {
         // The guard had its say when the deployer staged it (`#seedDoor`).
         // A shared home remembers each originating app's seed separately.
-        let result = this.#asIs(signed(planted.bundles, planted.actor), {
-          deferEffects: (run) => effects.push(run),
-        })
+        let result = this.#asIs(
+          signed(this.#unseeded(planted.bundles), planted.actor),
+          {
+            deferEffects: (run) => effects.push(run),
+          },
+        )
         if (result instanceof Promise) {
           throw new Error('a staged seed must apply synchronously')
         }
@@ -5265,6 +5268,19 @@ export class Store {
     }
   }
 
+  // A fixed seed identity may already live in a shared home. Keep what the
+  // person has written, including a deletion, when another app comes furnished.
+  #unseeded(bundles: Bundle[]): Bundle[] {
+    let ids = bundles.map((b) => b.entity?.eid)
+      .filter((id) => typeof id == 'string' && !id.startsWith('$'))
+    let rows = this.#graph.get(ids, ['entity'])
+    if (rows instanceof Promise) {
+      throw new Error('a staged seed must read synchronously')
+    }
+    let held = new Set(rows.map((b) => b.entity.eid))
+    return bundles.filter((b) => !held.has(b.entity?.eid))
+  }
+
   // Check a draft seed with its candidate vocabulary and hold it for the
   // release switch. The trial's schema and rows roll back together.
   async #seedDoor(request: Request): Promise<Response> {
@@ -5287,9 +5303,12 @@ export class Store {
           if (!next) throw new Refused('candidate vocabulary is not staged')
           this.#put('vocab', this.#prepared(next))
           this.#build()
-          let result = this.#graph.apply(signed(bundles, actor), {
-            check: true,
-          })
+          let result = this.#graph.apply(
+            signed(this.#unseeded(bundles), actor),
+            {
+              check: true,
+            },
+          )
           if (result instanceof Promise) {
             throw new Error('a staged seed must check synchronously')
           }
