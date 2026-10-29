@@ -210,6 +210,11 @@ Deno.writeTextFileSync(
 )
 await read(childGraph, childSeen, { person: ids.ada })
 let [childRow] = await childGraph.get([child])
+let stamps = async () =>
+  (await childGraph.get([id, child])).map((b) => b.updated)
+let stamped = await stamps()
+await read(childGraph, seen(), { person: ids.ada })
+let restamped = await stamps()
 let childEntries = await childGraph.read(`.entry.session=${child} *`)
 Deno.utimeSync(path(id), new Date(0), new Date(0))
 // A month on, both rollouts are old. A look reads one old rollout, whichever
@@ -233,6 +238,10 @@ test('Codex children retain thread identities and never attribute a delegated pr
     childEntries.find((b) => body(b) == 'follow-up delegation')!.notice,
     {},
   )
+})
+
+test('Codex rollouts opened again by a new importer leave their sessions unwritten', () => {
+  assertEquals(restamped, stamped)
 })
 
 test('old Codex rollouts backfill prose through the existing bounded importer', () => {

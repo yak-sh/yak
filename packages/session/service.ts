@@ -166,6 +166,28 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
   return eid
 }
 
+// The bundles whose components the graph does not already hold as given. A
+// write stamps `updated` even when it changes nothing, so a transcript opened
+// again by each new process would otherwise rewrite every session it names.
+let lacking = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
+  let held = new Map(
+    (await g.get(bundles.map((b) => b.entity.eid))).map((b) => [
+      b.entity.eid,
+      b,
+    ]),
+  )
+  return bundles.filter((b) => {
+    let had = held.get(b.entity.eid)
+    if (!had || had[TOMBSTONE] != null) return true
+    return Object.entries(b).some(([c, comp]) =>
+      c != 'entity' &&
+      Object.entries(comp as Comp).some(([p, v]) =>
+        (had[c] as Comp | undefined)?.[p] !== v
+      )
+    )
+  })
+}
+
 // A tail on a transcript, or null where its session is a managed run.
 let opened = async (
   g: Graph,
@@ -205,7 +227,7 @@ let opened = async (
       f.parent = source?.subagent?.thread_spawn?.parent_thread_id
       let eid = sessionEid(f.id)
       let parent = f.parent && sessionEid(f.parent)
-      await g.apply([
+      let missing = await lacking(g, [
         ...(parent
           ? [{ entity: { eid: parent }, session: { id: f.parent } }]
           : []),
@@ -214,7 +236,8 @@ let opened = async (
           session: { id: f.id, ...(parent ? { operator: false } : {}) },
           ...(parent ? { spawned: { parent } } : {}),
         },
-      ], { trusted: true })
+      ])
+      if (missing.length) await g.apply(missing, { trusted: true })
       return await tail(g, f.path, {
         session: eid,
         id: f.id,
