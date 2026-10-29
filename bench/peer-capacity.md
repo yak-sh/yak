@@ -1,30 +1,15 @@
 # Populated peer capacity
 
-Run these explicitly; neither is part of the default package test run:
-
 ```sh
-CAPACITY_CLIENTS=100 deno task test --all --tag=workerd \
-  bench/vale-capacity_workerd_test.ts
-CAPACITY_CLIENTS=200 CAPACITY_TICKS=12 deno task test --all --tag=workerd \
-  bench/vale-capacity_workerd_test.ts
 deno run -A bench/peer-capacity.ts 100
 deno run -A bench/peer-capacity.ts 200
 ```
 
-The workerd probe seeds a scratch app with 100 players, 100 looks and 1,282
-placed records (1,482 rows; 1,682 at 200 players). Each client opens the current
-area, reference-look and eleven own-record watches plus its own row. It
-acknowledges frames, sends positions and makes three durable item/place writes.
-It reports first-position and paced delivery separately from joins; intermediate
-positions can coalesce, but every latest position and action must arrive.
-`VALE_PROBE_LOG` optionally writes JSON lines; remove that file when finished.
-No production load or copied owner data is used.
-
 The local benchmark measures process CPU with the same watch/data shape over
 RAM, including simulated subscribers, JSON serialization and decoding. It is not
 workerd isolate CPU, Cloudflare duration or a billing estimate. Its ACKs are
-synchronous; use workerd for transport/ACK latency. Comparisons on this shared
-box are subject to other agents' CPU and disk contention.
+synchronous. Comparisons on this shared box are subject to other agents' CPU and
+disk contention.
 
 Instrumented seam comparison for the cross-writer fanout change (`edcdbf14`)
 uses the original baseline fixture. Its own-row query returned 100 refusals;
