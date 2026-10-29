@@ -1,732 +1,459 @@
 {
   "version": 1,
   "suite": "throughput",
-  "metric": "median-of-7-deno-avg-ns",
+  "metric": "median-of-7-deno-avg-ns/cpu",
   "workload": "1/relay-staging-2",
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
-  "tolerance": 0.1,
+  "tolerance": 0,
   "benches": [
     {
       "name": "sqlite/memory/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 279162,
-      "tolerance": 0.1
+      "median": 281066.66666665964,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/memory/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7380499,
-      "tolerance": 0.1
+      "median": 7641000.000000834,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/memory/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 722768,
-      "tolerance": 0.1
+      "median": 1269400.0000000414,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/memory/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 566220,
-      "tolerance": 0.1
+      "median": 935024.9999999504,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/memory/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 914728,
-      "tolerance": 0.105
+      "median": 1588600.0000000424,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/memory/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 6661479,
-      "tolerance": 0.1
+      "median": 8411333.33333346,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/file/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 300435,
-      "tolerance": 0.1
+      "median": 392333.33333333273,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/file/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7914510,
-      "tolerance": 0.1
+      "median": 11139000.000001034,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/file/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 790061,
-      "tolerance": 0.1
+      "median": 1433350.000000064,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/file/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 616529,
-      "tolerance": 0.1
+      "median": 1004366.6666666468,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.671
     },
     {
       "name": "sqlite/file/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 937119,
-      "tolerance": 0.1
+      "median": 1552399.9999999432,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sqlite/file/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7009461,
-      "tolerance": 0.1
+      "median": 9952666.666666118,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/memory/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 300884,
-      "tolerance": 0.1
+      "median": 302857.14285715326,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.886
     },
     {
       "name": "sql/memory/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7619860,
-      "tolerance": 0.1
+      "median": 8140999.999999621,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "sql/memory/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 773439,
-      "tolerance": 0.1
+      "median": 1190700.0000000154,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/memory/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 610185,
-      "tolerance": 0.1
+      "median": 968825.0000000153,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/memory/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 929890,
-      "tolerance": 0.1
+      "median": 1392950.000000019,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/memory/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 6511735,
-      "tolerance": 0.1
+      "median": 8411500.00000016,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/file/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 319936,
-      "tolerance": 0.1
+      "median": 345183.33333332214,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.712
     },
     {
       "name": "sql/file/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7847281,
-      "tolerance": 0.1
+      "median": 8477333.333333567,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.377
     },
     {
       "name": "sql/file/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 823143,
-      "tolerance": 0.1
+      "median": 1312550.0000000102,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/file/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 654558,
-      "tolerance": 0.1
+      "median": 938833.3333333018,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/file/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 1019711,
-      "tolerance": 0.104
+      "median": 1448800.0000000284,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "sql/file/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 6985242,
-      "tolerance": 0.1
+      "median": 7315500.000000005,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/memory/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 86434,
-      "tolerance": 0.1
+      "median": 103216.66666666715,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.216
     },
     {
       "name": "query/memory/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 8761522,
-      "tolerance": 0.1
+      "median": 10409333.33333305,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/memory/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 632641,
-      "tolerance": 0.1
+      "median": 693949.9999999801,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/memory/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 322356,
-      "tolerance": 0.1
+      "median": 384966.6666666356,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.884
     },
     {
       "name": "query/memory/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 686882,
-      "tolerance": 0.1
+      "median": 909633.333333295,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/memory/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 6360371,
-      "tolerance": 0.112
+      "median": 8744999.99999989,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "query/file/point",
       "unit": "ns/op",
       "better": "lower",
-      "median": 90128,
-      "tolerance": 0.1
+      "median": 114611.11111110666,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/file/status-open",
       "unit": "ns/op",
       "better": "lower",
-      "median": 8732388,
-      "tolerance": 0.1
+      "median": 9092999.999999847,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.649
     },
     {
       "name": "query/file/fts",
       "unit": "ns/op",
       "better": "lower",
-      "median": 634088,
-      "tolerance": 0.1
+      "median": 806933.3333333513,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.666
     },
     {
       "name": "query/file/walk-16",
       "unit": "ns/op",
       "better": "lower",
-      "median": 324270,
-      "tolerance": 0.16
+      "median": 384983.3333333057,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.492
     },
     {
       "name": "query/file/walk-unbounded",
       "unit": "ns/op",
       "better": "lower",
-      "median": 717515,
-      "tolerance": 0.1
+      "median": 862933.3333333003,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "query/file/apply-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 7067138,
-      "tolerance": 0.1
+      "median": 8766000.00000053,
+      "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "tolerance": 0.95
     },
     {
       "name": "archetype/memory/backfill",
       "unit": "ns/op",
       "better": "lower",
-      "median": 29435100,
-      "tolerance": 0.1
+      "median": 32406000.00000268,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "archetype/memory/move-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 8307877,
-      "tolerance": 0.1
+      "median": 10581666.66666754,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.691
     },
     {
       "name": "archetype/file/backfill",
       "unit": "ns/op",
       "better": "lower",
-      "median": 30584162,
-      "tolerance": 0.158
+      "median": 33208000.000002358,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "archetype/file/move-100",
       "unit": "ns/op",
       "better": "lower",
-      "median": 8611179,
-      "tolerance": 0.13
+      "median": 10355333.333332965,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/file/edit-alone-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 1099090.595,
-      "tolerance": 0.1
+      "median": 1317994.9999999735,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.844
     },
     {
       "name": "apply/file/edit-batch-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 138069.02,
-      "tolerance": 0.1
+      "median": 215609.99999999694,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.685
     },
     {
       "name": "apply/file/edit-alone-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 992573.906,
-      "tolerance": 0.1
+      "median": 1082263.0000000063,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.212
     },
     {
       "name": "apply/file/edit-batch-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 125062.069,
-      "tolerance": 0.1
+      "median": 183954.00000000154,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/file/create-alone-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 1183561.64,
-      "tolerance": 0.1
+      "median": 975149.9999999942,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.341
     },
     {
       "name": "apply/file/create-batch-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 163467.075,
-      "tolerance": 0.1
+      "median": 241674.99999999563,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/file/create-alone-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 1079566.75,
-      "tolerance": 0.1
+      "median": 1055544.9999999981,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.177
     },
     {
       "name": "apply/file/create-batch-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 168609.028,
-      "tolerance": 0.1
+      "median": 230012.999999999,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/edit-alone-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 130437.645,
-      "tolerance": 0.1
+      "median": 233245.00000000626,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/edit-batch-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 27131.08,
-      "tolerance": 0.1
+      "median": 25635.00000000204,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/edit-alone-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 98074.882,
-      "tolerance": 0.271
+      "median": 154597.00000000157,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/edit-batch-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 24331.682,
-      "tolerance": 0.247
+      "median": 40855.99999999977,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/create-alone-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 105697.145,
-      "tolerance": 0.103
+      "median": 173029.99999999884,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/create-batch-200",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 24496.475,
-      "tolerance": 0.143
+      "median": 26480.000000010477,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     },
     {
       "name": "apply/ram/create-alone-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 98103.835,
-      "tolerance": 0.15
+      "median": 150534.99999999622,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.562
     },
     {
       "name": "apply/ram/create-batch-1000",
       "unit": "ns/bundle",
       "better": "lower",
-      "median": 24843.806,
-      "tolerance": 0.168
-    },
-    {
-      "name": "relay/store/entities-1",
-      "unit": "ns/value",
-      "better": "lower",
-      "median": 337740.0,
-      "tolerance": 0.231
-    },
-    {
-      "name": "relay/store/entities-10",
-      "unit": "ns/value",
-      "better": "lower",
-      "median": 276223.0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-100",
-      "unit": "ns/value",
-      "better": "lower",
-      "median": 257815.0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-alone-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 16.395,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-alone-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 16.395,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-batch-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 1027,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-batch-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 5.135,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-alone-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 16.329,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-alone-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 16.329,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-batch-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 6026,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/edit-batch-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 6.026,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-alone-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 17.02,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-alone-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 17.02,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-batch-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 1613,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-batch-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 8.065,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-alone-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 17.004,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-alone-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 17.004,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-batch-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 8013,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/file/create-batch-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 8.013,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-alone-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-alone-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-batch-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-batch-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-alone-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-alone-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-batch-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/edit-batch-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-alone-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-alone-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-batch-200/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-batch-200/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-alone-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-alone-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-batch-1000/sqlPerApply",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "apply/ram/create-batch-1000/sqlPerBundle",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-1/sql",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-1/reads",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-1/writes",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-1/transactions",
-      "unit": "statements",
-      "better": "lower",
-      "median": 1,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-10/sql",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-10/reads",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-10/writes",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-10/transactions",
-      "unit": "statements",
-      "better": "lower",
-      "median": 1,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-100/sql",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-100/reads",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-100/writes",
-      "unit": "statements",
-      "better": "lower",
-      "median": 0,
-      "tolerance": 0.1
-    },
-    {
-      "name": "relay/store/entities-100/transactions",
-      "unit": "statements",
-      "better": "lower",
-      "median": 1,
-      "tolerance": 0.1
+      "median": 60569.99999999971,
+      "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "tolerance": 0.95
     }
   ]
 }

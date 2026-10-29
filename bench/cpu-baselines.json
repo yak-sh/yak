@@ -6285,12 +6285,6 @@
     "evidence": "bench/harness-startup.rebank.results.json"
   },
   {
-    "suite": "throughput",
-    "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
-    "verdict": "slower",
-    "error": "the code at 680bfaf86 cannot run today's bench: Benchmark collector exited (1): bench/deno-worker.ts,packages/sqlite/throughput_bench.ts,packages/sql/throughput_bench.ts,packages/query/throughput_bench.ts"
-  },
-  {
     "suite": "terminal-interactions",
     "baseline": "bench/terminal-interactions.baseline.json",
     "references": {
@@ -7966,5 +7960,1595 @@
       }
     ],
     "evidence": "bench/platform-waits.rebank.results.json"
+  },
+  {
+    "suite": "throughput",
+    "baseline": "bench/throughput.baseline.json",
+    "references": {
+      "sqlite/memory/fts": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/memory/walk-16": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/memory/walk-unbounded": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/memory/apply-100": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/file/fts": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/file/walk-16": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/file/walk-unbounded": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/file/apply-100": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/memory/fts": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/memory/walk-16": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/memory/walk-unbounded": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/memory/apply-100": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/file/fts": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/file/walk-16": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sql/file/walk-unbounded": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "query/memory/apply-100": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "query/file/apply-100": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "sqlite/memory/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sqlite/memory/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sqlite/file/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sqlite/file/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sql/memory/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sql/memory/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sql/file/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sql/file/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "sql/file/apply-100": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/memory/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/memory/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/memory/fts": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/memory/walk-16": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/memory/walk-unbounded": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/file/point": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/file/status-open": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/file/fts": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/file/walk-16": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "query/file/walk-unbounded": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "archetype/memory/backfill": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "archetype/memory/move-100": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "archetype/file/backfill": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "archetype/file/move-100": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/edit-alone-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/edit-batch-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/edit-alone-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/edit-batch-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/create-alone-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/create-batch-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/create-alone-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/file/create-batch-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/edit-alone-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/edit-batch-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/edit-alone-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/edit-batch-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/create-alone-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/create-batch-200": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/create-alone-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+      "apply/ram/create-batch-1000": "eb5d3964803c4fcda5d07380ac59f67732d3ae01"
+    },
+    "provenance": [
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "kind": "derived",
+        "source": "git history of bench/throughput.baseline.json: origin of unchanged median; measurement revision was not recorded",
+        "benches": [
+          "sqlite/memory/point",
+          "sqlite/memory/status-open",
+          "sqlite/file/point",
+          "sqlite/file/status-open",
+          "sql/memory/point",
+          "sql/memory/status-open",
+          "sql/file/point",
+          "sql/file/status-open",
+          "sql/file/apply-100",
+          "query/memory/point",
+          "query/memory/status-open",
+          "query/memory/fts",
+          "query/memory/walk-16",
+          "query/memory/walk-unbounded",
+          "query/file/point",
+          "query/file/status-open",
+          "query/file/fts",
+          "query/file/walk-16",
+          "query/file/walk-unbounded",
+          "archetype/memory/backfill",
+          "archetype/memory/move-100",
+          "archetype/file/backfill",
+          "archetype/file/move-100",
+          "apply/file/edit-alone-200",
+          "apply/file/edit-batch-200",
+          "apply/file/edit-alone-1000",
+          "apply/file/edit-batch-1000",
+          "apply/file/create-alone-200",
+          "apply/file/create-batch-200",
+          "apply/file/create-alone-1000",
+          "apply/file/create-batch-1000",
+          "apply/ram/edit-alone-200",
+          "apply/ram/edit-batch-200",
+          "apply/ram/edit-alone-1000",
+          "apply/ram/edit-batch-1000",
+          "apply/ram/create-alone-200",
+          "apply/ram/create-batch-200",
+          "apply/ram/create-alone-1000",
+          "apply/ram/create-batch-1000"
+        ]
+      },
+      {
+        "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "kind": "recorded",
+        "source": "bench/baseline.json at de70942d8^: explicit revision for preserved timing; migration commit says banked baselines were preserved",
+        "benches": [
+          "sqlite/memory/fts",
+          "sqlite/memory/walk-16",
+          "sqlite/memory/walk-unbounded",
+          "sqlite/memory/apply-100",
+          "sqlite/file/fts",
+          "sqlite/file/walk-16",
+          "sqlite/file/walk-unbounded",
+          "sqlite/file/apply-100",
+          "sql/memory/fts",
+          "sql/memory/walk-16",
+          "sql/memory/walk-unbounded",
+          "sql/memory/apply-100",
+          "sql/file/fts",
+          "sql/file/walk-16",
+          "sql/file/walk-unbounded",
+          "query/memory/apply-100",
+          "query/file/apply-100"
+        ]
+      }
+    ],
+    "revision": "9ef8f67780e1dcc415fae29441581878e6f87a1a",
+    "rounds": 3,
+    "metric": "median-of-7-deno-avg-ns/cpu",
+    "groups": [
+      {
+        "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "revision": "9ef8f67780e1dcc415fae29441581878e6f87a1a",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "sqlite/memory/fts",
+          "sqlite/memory/walk-16",
+          "sqlite/memory/walk-unbounded",
+          "sqlite/memory/apply-100",
+          "sqlite/file/fts",
+          "sqlite/file/walk-16",
+          "sqlite/file/walk-unbounded",
+          "sqlite/file/apply-100",
+          "sql/memory/fts",
+          "sql/memory/walk-16",
+          "sql/memory/walk-unbounded",
+          "sql/memory/apply-100",
+          "sql/file/fts",
+          "sql/file/walk-16",
+          "sql/file/walk-unbounded",
+          "query/memory/apply-100",
+          "query/file/apply-100"
+        ],
+        "collection": {
+          "suite": "throughput",
+          "reference": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+          "revision": "9ef8f67780e1dcc415fae29441581878e6f87a1a",
+          "names": [
+            "sqlite/memory/fts",
+            "sqlite/memory/walk-16",
+            "sqlite/memory/walk-unbounded",
+            "sqlite/memory/apply-100",
+            "sqlite/file/fts",
+            "sqlite/file/walk-16",
+            "sqlite/file/walk-unbounded",
+            "sqlite/file/apply-100",
+            "sql/memory/fts",
+            "sql/memory/walk-16",
+            "sql/memory/walk-unbounded",
+            "sql/memory/apply-100",
+            "sql/file/fts",
+            "sql/file/walk-16",
+            "sql/file/walk-unbounded",
+            "query/memory/apply-100",
+            "query/file/apply-100"
+          ],
+          "rounds": 3,
+          "driver": "8801cdfe4315f3770a6fc20b8ca15bf09227d117a7432083d84800651422c441",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      },
+      {
+        "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+        "rounds": 3,
+        "verdict": "slower",
+        "benches": [
+          "sqlite/memory/point",
+          "sqlite/memory/status-open",
+          "sqlite/file/point",
+          "sqlite/file/status-open",
+          "sql/memory/point",
+          "sql/memory/status-open",
+          "sql/file/point",
+          "sql/file/status-open",
+          "sql/file/apply-100",
+          "query/memory/point",
+          "query/memory/status-open",
+          "query/memory/fts",
+          "query/memory/walk-16",
+          "query/memory/walk-unbounded",
+          "query/file/point",
+          "query/file/status-open",
+          "query/file/fts",
+          "query/file/walk-16",
+          "query/file/walk-unbounded",
+          "archetype/memory/backfill",
+          "archetype/memory/move-100",
+          "archetype/file/backfill",
+          "archetype/file/move-100",
+          "apply/file/edit-alone-200",
+          "apply/file/edit-batch-200",
+          "apply/file/edit-alone-1000",
+          "apply/file/edit-batch-1000",
+          "apply/file/create-alone-200",
+          "apply/file/create-batch-200",
+          "apply/file/create-alone-1000",
+          "apply/file/create-batch-1000",
+          "apply/ram/edit-alone-200",
+          "apply/ram/edit-batch-200",
+          "apply/ram/edit-alone-1000",
+          "apply/ram/edit-batch-1000",
+          "apply/ram/create-alone-200",
+          "apply/ram/create-batch-200",
+          "apply/ram/create-alone-1000",
+          "apply/ram/create-batch-1000"
+        ],
+        "collection": {
+          "suite": "throughput",
+          "reference": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+          "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
+          "names": [
+            "sqlite/memory/point",
+            "sqlite/memory/status-open",
+            "sqlite/file/point",
+            "sqlite/file/status-open",
+            "sql/memory/point",
+            "sql/memory/status-open",
+            "sql/file/point",
+            "sql/file/status-open",
+            "sql/file/apply-100",
+            "query/memory/point",
+            "query/memory/status-open",
+            "query/memory/fts",
+            "query/memory/walk-16",
+            "query/memory/walk-unbounded",
+            "query/file/point",
+            "query/file/status-open",
+            "query/file/fts",
+            "query/file/walk-16",
+            "query/file/walk-unbounded",
+            "archetype/memory/backfill",
+            "archetype/memory/move-100",
+            "archetype/file/backfill",
+            "archetype/file/move-100",
+            "apply/file/edit-alone-200",
+            "apply/file/edit-batch-200",
+            "apply/file/edit-alone-1000",
+            "apply/file/edit-batch-1000",
+            "apply/file/create-alone-200",
+            "apply/file/create-batch-200",
+            "apply/file/create-alone-1000",
+            "apply/file/create-batch-1000",
+            "apply/ram/edit-alone-200",
+            "apply/ram/edit-batch-200",
+            "apply/ram/edit-alone-1000",
+            "apply/ram/edit-batch-1000",
+            "apply/ram/create-alone-200",
+            "apply/ram/create-batch-200",
+            "apply/ram/create-alone-1000",
+            "apply/ram/create-batch-1000"
+          ],
+          "rounds": 3,
+          "driver": "8ea5bf4aecd7865e32e037cfc22141f0d8ed837ea16912b87dce4fad3b43d4f5",
+          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+          "protocol": "paired-cpu-1"
+        }
+      }
+    ],
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "sql/memory/apply-100",
+      "apply/file/create-alone-200",
+      "apply/ram/edit-batch-200"
+    ],
+    "comparisons": [
+      {
+        "name": "sqlite/memory/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          551441.6666666572,
+          329021.4285714423,
+          390944.4444444186
+        ],
+        "current": [
+          376358.333333322,
+          318857.1428571387,
+          299991.666666665
+        ],
+        "after": [
+          268428.5714285709,
+          281066.66666665964,
+          286860.00000001513
+        ],
+        "reference": 307940.71428572875,
+        "now": 318857.1428571387
+      },
+      {
+        "name": "sqlite/memory/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          18363500.000000387,
+          9228666.66666717,
+          21674499.99999917
+        ],
+        "current": [
+          8808000.000000296,
+          8796999.999999572,
+          8888333.333333625
+        ],
+        "after": [
+          7422333.333333881,
+          7641000.000000834,
+          12443333.333332703
+        ],
+        "reference": 10835999.999999937,
+        "now": 8808000.000000296
+      },
+      {
+        "name": "sqlite/memory/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1144800.0000000321,
+          1269400.0000000414,
+          1434199.9999998733
+        ],
+        "current": [
+          1176500.0000000328,
+          1834450.0000001062,
+          867033.3333332868
+        ],
+        "after": [
+          1379999.9999999271,
+          1739100.0000001441,
+          895775.0000000488
+        ],
+        "reference": 1324699.9999999842,
+        "now": 1176500.0000000328
+      },
+      {
+        "name": "sqlite/memory/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1235575.0000000172,
+          931233.33333333,
+          1014133.3333333023
+        ],
+        "current": [
+          910500.000000017,
+          1105774.9999999942,
+          656399.99999997
+        ],
+        "after": [
+          1598033.3333333572,
+          935024.9999999504,
+          612266.6666666797
+        ],
+        "reference": 974579.1666666263,
+        "now": 910500.000000017
+      },
+      {
+        "name": "sqlite/memory/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1095600.000000013,
+          1588600.0000000424,
+          1703499.9999999856
+        ],
+        "current": [
+          1478600.0000000058,
+          1870850.000000064,
+          973700.000000008
+        ],
+        "after": [
+          1861000.0000001036,
+          2280650.0000000596,
+          1045175.0000000175
+        ],
+        "reference": 1646050.000000014,
+        "now": 1478600.0000000058
+      },
+      {
+        "name": "sqlite/memory/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          7943999.99999996,
+          8411333.33333346,
+          10345000.000001164
+        ],
+        "current": [
+          12051999.99999968,
+          11171000.000000276,
+          9891999.999999825
+        ],
+        "after": [
+          9560000.000000097,
+          12558499.999999184,
+          7317250.000000058
+        ],
+        "reference": 8985666.66666678,
+        "now": 11171000.000000276
+      },
+      {
+        "name": "sqlite/file/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          392333.33333333273,
+          428991.66666666133,
+          320008.33333334717
+        ],
+        "current": [
+          329366.6666666771,
+          308008.3333333277,
+          342591.6666666732
+        ],
+        "after": [
+          458458.3333333285,
+          303958.3333333212,
+          447870.0000000026
+        ],
+        "reference": 410662.49999999703,
+        "now": 329366.6666666771
+      },
+      {
+        "name": "sqlite/file/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          8202749.999999924,
+          11139000.000001034,
+          12161000.000000058
+        ],
+        "current": [
+          20899499.999999534,
+          10100999.99999996,
+          10865999.99999938
+        ],
+        "after": [
+          22162499.999999456,
+          17868500.000000495,
+          9494000.000000596
+        ],
+        "reference": 11650000.000000546,
+        "now": 10865999.99999938
+      },
+      {
+        "name": "sqlite/file/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1543399.9999999288,
+          1433350.000000064,
+          1367950.000000019
+        ],
+        "current": [
+          1374249.999999938,
+          1519949.9999999716,
+          1308199.9999998515
+        ],
+        "after": [
+          1590800.0000000356,
+          3593199.999999979,
+          985533.3333332965
+        ],
+        "reference": 1488374.9999999963,
+        "now": 1374249.999999938
+      },
+      {
+        "name": "sqlite/file/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          878600.0000000058,
+          1173124.9999999818,
+          1153233.3333333856
+        ],
+        "current": [
+          1909999.9999999455,
+          1120550.000000003,
+          751600.0000000531
+        ],
+        "after": [
+          889949.9999999988,
+          1065650.0000000962,
+          1004366.6666666468
+        ],
+        "reference": 1035008.3333333714,
+        "now": 1120550.000000003
+      },
+      {
+        "name": "sqlite/file/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1851099.999999951,
+          1674049.9999999884,
+          1023149.999999987
+        ],
+        "current": [
+          1369416.666666666,
+          2033849.999999984,
+          1342749.999999978
+        ],
+        "after": [
+          1552399.9999999432,
+          1908300.000000054,
+          1514194.4444444056
+        ],
+        "reference": 1613224.9999999658,
+        "now": 1369416.666666666
+      },
+      {
+        "name": "sqlite/file/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          10663500.000000568,
+          10439000.000000305,
+          8045500.000000175
+        ],
+        "current": [
+          12050500.000000283,
+          9759000.000000015,
+          8750666.666666802
+        ],
+        "after": [
+          9952666.666666118,
+          11027500.000000145,
+          7026749.999999993
+        ],
+        "reference": 10195833.333333213,
+        "now": 9759000.000000015
+      },
+      {
+        "name": "sql/memory/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          428128.5714285592,
+          301787.50000000035,
+          302857.14285715326
+        ],
+        "current": [
+          372128.5714285841,
+          329322.2222222135,
+          307269.9999999895
+        ],
+        "after": [
+          296700.0000000033,
+          308742.8571428193,
+          324083.3333333285
+        ],
+        "reference": 305799.99999998626,
+        "now": 329322.2222222135
+      },
+      {
+        "name": "sql/memory/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          11371999.999999994,
+          7452333.333333324,
+          8140999.999999621
+        ],
+        "current": [
+          14118666.66666659,
+          13112666.66666658,
+          10179250.000000138
+        ],
+        "after": [
+          7482666.666666773,
+          8447500.000000218,
+          14029333.333333246
+        ],
+        "reference": 8294249.99999992,
+        "now": 13112666.66666658
+      },
+      {
+        "name": "sql/memory/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1305166.6666666279,
+          1121033.333333374,
+          1600900.0000000014
+        ],
+        "current": [
+          1687650.0000000305,
+          1542050.0000000175,
+          1530499.9999999078
+        ],
+        "after": [
+          1190700.0000000154,
+          1650699.9999999607,
+          798074.9999999716
+        ],
+        "reference": 1247933.3333333216,
+        "now": 1542050.0000000175
+      },
+      {
+        "name": "sql/memory/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1187024.9999999942,
+          755133.3333333484,
+          968825.0000000153
+        ],
+        "current": [
+          983633.3333333338,
+          1249974.9999999949,
+          851400.0000000427
+        ],
+        "after": [
+          1021566.6666666948,
+          1233599.9999999332,
+          907574.999999997
+        ],
+        "reference": 995195.833333355,
+        "now": 983633.3333333338
+      },
+      {
+        "name": "sql/memory/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1309249.9999999744,
+          1433300.0000000538,
+          1956250
+        ],
+        "current": [
+          1652800.0000000247,
+          1846999.9999999343,
+          1286449.9999999679
+        ],
+        "after": [
+          1392950.000000019,
+          2016055.555555391,
+          1361650.0000000088
+        ],
+        "reference": 1413125.0000000363,
+        "now": 1652800.0000000247
+      },
+      {
+        "name": "sql/memory/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          8368999.999999687,
+          10232666.666666774,
+          10227999.999999156
+        ],
+        "current": [
+          12473999.999999553,
+          11511500.000000523,
+          11805333.333332479
+        ],
+        "after": [
+          11453333.333333528,
+          8411500.00000016,
+          7107250.000000021
+        ],
+        "reference": 9319749.999999657,
+        "now": 11805333.333332479
+      },
+      {
+        "name": "sql/file/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          402450.0000000141,
+          330514.2857142658,
+          345183.33333332214
+        ],
+        "current": [
+          323585.71428573795,
+          586140.000000014,
+          336324.999999988
+        ],
+        "after": [
+          407450.0000000171,
+          448099.9999999767,
+          363379.9999999974
+        ],
+        "reference": 382915.0000000057,
+        "now": 336324.999999988
+      },
+      {
+        "name": "sql/file/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          8660499.999999957,
+          8189999.999999903,
+          9274249.999999484
+        ],
+        "current": [
+          8119333.333332785,
+          8972499.999999855,
+          12502333.333333807
+        ],
+        "after": [
+          9282999.999999901,
+          7812666.666666094,
+          8477333.333333567
+        ],
+        "reference": 8568916.666666761,
+        "now": 8972499.999999855
+      },
+      {
+        "name": "sql/file/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1396000.0000000037,
+          1311099.9999999877,
+          1393476.19047623
+        ],
+        "current": [
+          1810600.0000000678,
+          1401599.9999999623,
+          1376000.0000000824
+        ],
+        "after": [
+          1312550.0000000102,
+          1583350.000000064,
+          836266.666666658
+        ],
+        "reference": 1353013.0952381203,
+        "now": 1401599.9999999623
+      },
+      {
+        "name": "sql/file/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1032466.666666672,
+          1080400.0000000086,
+          773683.3333333682
+        ],
+        "current": [
+          1043900.0000000305,
+          1089749.9999999127,
+          1251400.0000000426
+        ],
+        "after": [
+          938833.3333333018,
+          1120399.9999999725,
+          759816.6666666657
+        ],
+        "reference": 985649.999999987,
+        "now": 1089749.9999999127
+      },
+      {
+        "name": "sql/file/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          1753750.0000000366,
+          1581850.0000001222,
+          1197049.9999999446
+        ],
+        "current": [
+          4552450.000000045,
+          1694350.0000001222,
+          1814249.9999999925
+        ],
+        "after": [
+          1448800.0000000284,
+          2229055.5555555327,
+          987349.9999999695
+        ],
+        "reference": 1515325.0000000754,
+        "now": 1814249.9999999925
+      },
+      {
+        "name": "sql/file/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          6684500.000000298,
+          8491666.666666182,
+          7315500.000000005
+        ],
+        "current": [
+          6081250.000000182,
+          6173749.999999927,
+          9901666.666667249
+        ],
+        "after": [
+          12241500.000000088,
+          6858666.666666977,
+          8316000.000000713
+        ],
+        "reference": 7815750.0000003595,
+        "now": 6173749.999999927
+      },
+      {
+        "name": "query/memory/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          102600.00000000218,
+          109099.99999999854,
+          103216.66666666715
+        ],
+        "current": [
+          85704.9999999981,
+          80706.66666666511,
+          84296.6666666689
+        ],
+        "after": [
+          113670.0000000019,
+          108447.50000000204,
+          107729.99999999229
+        ],
+        "reference": 108088.74999999716,
+        "now": 84296.6666666689
+      },
+      {
+        "name": "query/memory/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          8875250.00000005,
+          18646666.66666623,
+          12186999.999999898
+        ],
+        "current": [
+          8888333.333333625,
+          11002666.66666721,
+          16974999.999999758
+        ],
+        "after": [
+          8470999.99999955,
+          27312500,
+          10409333.33333305
+        ],
+        "reference": 11298166.666666474,
+        "now": 11002666.66666721
+      },
+      {
+        "name": "query/memory/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          697600.0000000113,
+          2152399.999999761,
+          987500
+        ],
+        "current": [
+          1208224.999999993,
+          870800.0000000539,
+          1160699.999999997
+        ],
+        "after": [
+          707683.3333333222,
+          676566.6666667432,
+          693949.9999999801
+        ],
+        "reference": 702641.6666666667,
+        "now": 1160699.999999997
+      },
+      {
+        "name": "query/memory/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          439237.5000000129,
+          514050.00000004296,
+          385983.3333333275
+        ],
+        "current": [
+          365966.66666667565,
+          357400.00000000687,
+          359910.00000001804
+        ],
+        "after": [
+          356583.3333333406,
+          448816.6666666681,
+          384966.6666666356
+        ],
+        "reference": 412610.41666667024,
+        "now": 359910.00000001804
+      },
+      {
+        "name": "query/memory/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          1034933.3333333562,
+          1523250.0000000072,
+          768500.00000004
+        ],
+        "current": [
+          763050.0000000212,
+          733749.9999999636,
+          773900.0000000487
+        ],
+        "after": [
+          909633.333333295,
+          1166800.000000027,
+          810833.3333332364
+        ],
+        "reference": 972283.3333333256,
+        "now": 763050.0000000212
+      },
+      {
+        "name": "query/memory/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          6579249.999999775,
+          8744999.99999989,
+          11987500.000001092
+        ],
+        "current": [
+          10546499.99999947,
+          14941500.000000816,
+          9023000.000000138
+        ],
+        "after": [
+          10398666.666666638,
+          12029500.000000553,
+          11078749.999999672
+        ],
+        "reference": 10738708.333333155,
+        "now": 10546499.99999947
+      },
+      {
+        "name": "query/file/point",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          103955.00000000538,
+          164350.0000000131,
+          124765.0000000067
+        ],
+        "current": [
+          92533.33333333179,
+          82150.00000000146,
+          78716.66666665988
+        ],
+        "after": [
+          114611.11111110666,
+          106424.99999999927,
+          137605.0000000032
+        ],
+        "reference": 119688.05555555667,
+        "now": 82150.00000000146
+      },
+      {
+        "name": "query/file/status-open",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          9451500.000000123,
+          11844499.999999244,
+          10075666.666666318
+        ],
+        "current": [
+          9804333.333333489,
+          15986000.000000786,
+          9824000.000000523
+        ],
+        "after": [
+          9092999.999999847,
+          9121000.000000397,
+          8943000.00000021
+        ],
+        "reference": 9286250.00000026,
+        "now": 9824000.000000523
+      },
+      {
+        "name": "query/file/fts",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          965833.3333333455,
+          874849.9999999695,
+          724816.66666669
+        ],
+        "current": [
+          1754666.6666666472,
+          841366.6666667268,
+          635633.3333333168
+        ],
+        "after": [
+          806933.3333333513,
+          825700.0000000213,
+          762366.6666667002
+        ],
+        "reference": 816316.6666666863,
+        "now": 841366.6666667268
+      },
+      {
+        "name": "query/file/walk-16",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          450516.66666668095,
+          371333.333333314,
+          384983.3333333057
+        ],
+        "current": [
+          347833.3333333164,
+          349550.0000000296,
+          368149.999999999
+        ],
+        "after": [
+          415020.0000000041,
+          361650.00000000873,
+          434189.9999999805
+        ],
+        "reference": 400001.66666665487,
+        "now": 349550.0000000296
+      },
+      {
+        "name": "query/file/walk-unbounded",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          809466.666666655,
+          1750100.0000000203,
+          862933.3333333003
+        ],
+        "current": [
+          738149.999999996,
+          1044949.9999999717,
+          1801500.0000000328
+        ],
+        "after": [
+          821574.9999999844,
+          2156366.6666666297,
+          988399.9999999407
+        ],
+        "reference": 925666.6666666205,
+        "now": 1044949.9999999717
+      },
+      {
+        "name": "query/file/apply-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+        "before": [
+          9438000.000000102,
+          8766000.00000053,
+          8426999.99999968
+        ],
+        "current": [
+          9561999.999999898,
+          10270500.000000538,
+          10457333.333333129
+        ],
+        "after": [
+          9018333.33333343,
+          10705500.00000003,
+          7128249.999999752
+        ],
+        "reference": 8892166.66666698,
+        "now": 10270500.000000538
+      },
+      {
+        "name": "archetype/memory/backfill",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          37378000.00000061,
+          55939000.00000212,
+          36527000.00000186
+        ],
+        "current": [
+          40243000.000000395,
+          31301999.99999968,
+          63021000.00000064
+        ],
+        "after": [
+          31009000.000000015,
+          32406000.00000268,
+          39063999.99999849
+        ],
+        "reference": 36952500.00000124,
+        "now": 40243000.000000395
+      },
+      {
+        "name": "archetype/memory/move-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          12730333.333333572,
+          10581666.66666754,
+          9589333.333333343
+        ],
+        "current": [
+          11168000.00000012,
+          29983000.000000175,
+          12864499.99999968
+        ],
+        "after": [
+          12784666.666666454,
+          10340000.000000145,
+          12899500.000000443
+        ],
+        "reference": 11656000.000000555,
+        "now": 12864499.99999968
+      },
+      {
+        "name": "archetype/file/backfill",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          31827999.99999952,
+          33208000.000002358,
+          54386999.99999881
+        ],
+        "current": [
+          34589999.99999832,
+          36725999.99999875,
+          35436999.99999808
+        ],
+        "after": [
+          37471999.999999754,
+          36583999.99999892,
+          36475000.00000218
+        ],
+        "reference": 36529500.00000055,
+        "now": 35436999.99999808
+      },
+      {
+        "name": "archetype/file/move-100",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          11457333.333333129,
+          10355333.333332965,
+          9058333.333333092
+        ],
+        "current": [
+          11164333.333333464,
+          12771333.33333283,
+          31396000.00000064
+        ],
+        "after": [
+          16618666.666667195,
+          10426333.33333409,
+          10026000.000000445
+        ],
+        "reference": 10390833.333333528,
+        "now": 12771333.33333283
+      },
+      {
+        "name": "apply/file/edit-alone-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          1579764.9999999977,
+          1178654.9999999988,
+          1317994.9999999735
+        ],
+        "current": [
+          1307484.999999997,
+          1312240.0000000016,
+          1377020.0000000114
+        ],
+        "after": [
+          1465855.0000000014,
+          1111299.9999999919,
+          1541690.000000017
+        ],
+        "reference": 1391924.9999999874,
+        "now": 1312240.0000000016
+      },
+      {
+        "name": "apply/file/edit-batch-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          215609.99999999694,
+          197299.99999999563,
+          218454.9999999945
+        ],
+        "current": [
+          340460.00000000274,
+          182340.0000000038,
+          189585.0000000064
+        ],
+        "after": [
+          217574.9999999971,
+          178305.0000000003,
+          239370.00000001717
+        ],
+        "reference": 216592.49999999703,
+        "now": 189585.0000000064
+      },
+      {
+        "name": "apply/file/edit-alone-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          1023227.9999999992,
+          1131316.999999999,
+          1082263.0000000063
+        ],
+        "current": [
+          1187157.0000000028,
+          1116826.000000001,
+          1142006.0000000012
+        ],
+        "after": [
+          1131266.9999999981,
+          1059389.9999999993,
+          1108326.000000001
+        ],
+        "reference": 1095294.5000000037,
+        "now": 1142006.0000000012
+      },
+      {
+        "name": "apply/file/edit-batch-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          143536.00000000006,
+          183954.00000000154,
+          205951.9999999975
+        ],
+        "current": [
+          141870.99999999919,
+          148733.00000000017,
+          182440.00000000233
+        ],
+        "after": [
+          281862.000000001,
+          146713.99999999994,
+          187031.00000000268
+        ],
+        "reference": 185492.5000000021,
+        "now": 148733.00000000017
+      },
+      {
+        "name": "apply/file/create-alone-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          967235.0000000006,
+          975149.9999999942,
+          1131769.999999997
+        ],
+        "current": [
+          1161670.0000000128,
+          1405594.9999999937,
+          1233734.9999999786
+        ],
+        "after": [
+          1111460.0000000065,
+          1072494.999999999,
+          1009994.9999999808
+        ],
+        "reference": 1041244.99999999,
+        "now": 1233734.9999999786
+      },
+      {
+        "name": "apply/file/create-batch-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          311054.9999999966,
+          244094.99999999756,
+          276445.00000002154
+        ],
+        "current": [
+          295454.9999999836,
+          327500,
+          268989.99999997613
+        ],
+        "after": [
+          287309.9999999977,
+          204765.0000000067,
+          241674.99999999563
+        ],
+        "reference": 260270.00000000955,
+        "now": 295454.9999999836
+      },
+      {
+        "name": "apply/file/create-alone-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          1068190.0000000023,
+          1062635.000000002,
+          1029373.9999999962
+        ],
+        "current": [
+          1176917.0000000012,
+          1275237.9999999977,
+          1019902.0000000019
+        ],
+        "after": [
+          1055544.9999999981,
+          1053268,
+          1120036
+        ],
+        "reference": 1059090,
+        "now": 1176917.0000000012
+      },
+      {
+        "name": "apply/file/create-batch-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          301930.0000000003,
+          176485.00000000058,
+          230012.999999999
+        ],
+        "current": [
+          256261.9999999988,
+          272585.9999999957,
+          257923.99999999907
+        ],
+        "after": [
+          288594.00000000093,
+          206272.00000000448,
+          249415.00000000087
+        ],
+        "reference": 239713.99999999994,
+        "now": 257923.99999999907
+      },
+      {
+        "name": "apply/ram/edit-alone-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          233245.00000000626,
+          291654.99999999156,
+          171994.99999998807
+        ],
+        "current": [
+          242764.99999999942,
+          177364.9999999907,
+          200669.99999999098
+        ],
+        "after": [
+          209094.99999999756,
+          246114.9999999907,
+          245495.0000000099
+        ],
+        "reference": 239370.0000000081,
+        "now": 200669.99999999098
+      },
+      {
+        "name": "apply/ram/edit-batch-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          29250.000000010914,
+          25635.00000000204,
+          24979.999999995925
+        ],
+        "current": [
+          94994.99999999898,
+          97669.99999999825,
+          91185.00000000495
+        ],
+        "after": [
+          25659.99999998894,
+          24995.000000017175,
+          71014.99999997031
+        ],
+        "reference": 25647.49999999549,
+        "now": 94994.99999999898
+      },
+      {
+        "name": "apply/ram/edit-alone-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          201046.99999999866,
+          174391.99999999983,
+          280461.99999999953
+        ],
+        "current": [
+          202706.99999999852,
+          205154.99999999884,
+          240402.00000000183
+        ],
+        "after": [
+          194610.00000000058,
+          154597.00000000157,
+          151080.9999999983
+        ],
+        "reference": 184501.0000000002,
+        "now": 205154.99999999884
+      },
+      {
+        "name": "apply/ram/edit-batch-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          43931.000000000495,
+          52561.00000000151,
+          30506.000000001222
+        ],
+        "current": [
+          103454.00000000154,
+          103251.99999999313,
+          28397.000000004482
+        ],
+        "after": [
+          46640.99999999962,
+          28754.000000000815,
+          40855.99999999977
+        ],
+        "reference": 42393.50000000013,
+        "now": 103251.99999999313
+      },
+      {
+        "name": "apply/ram/create-alone-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          215920.0000000055,
+          177580.00000001633,
+          155515.00000001397
+        ],
+        "current": [
+          228189.99999999505,
+          252104.9999999741,
+          174294.99999998367
+        ],
+        "after": [
+          122839.9999999965,
+          213050.0000000029,
+          173029.99999999884
+        ],
+        "reference": 175305.00000000757,
+        "now": 228189.99999999505
+      },
+      {
+        "name": "apply/ram/create-batch-200",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          26480.000000010477,
+          27049.999999981086,
+          24245.000000009895
+        ],
+        "current": [
+          60030.00000000611,
+          55574.999999989814,
+          24324.99999998981
+        ],
+        "after": [
+          24809.99999999767,
+          35125.000000007276,
+          70730.0000000032
+        ],
+        "reference": 26764.99999999578,
+        "now": 55574.999999989814
+      },
+      {
+        "name": "apply/ram/create-alone-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          140604.99999999956,
+          168284.99999999622,
+          154228.99999999936
+        ],
+        "current": [
+          151085.99999999933,
+          184495.00000000262,
+          202025.00000000146
+        ],
+        "after": [
+          135341.99999999691,
+          150534.99999999622,
+          173305.99999999686
+        ],
+        "reference": 152381.9999999978,
+        "now": 184495.00000000262
+      },
+      {
+        "name": "apply/ram/create-batch-1000",
+        "unit": "ns/bundle",
+        "figure": "cpu",
+        "referenceCommit": "eb5d3964803c4fcda5d07380ac59f67732d3ae01",
+        "before": [
+          49691.00000000253,
+          60569.99999999971,
+          78979.99999999593
+        ],
+        "current": [
+          57313.99999999849,
+          54896.999999997206,
+          28112.00000000099
+        ],
+        "after": [
+          77591.00000000035,
+          77919.99999999825,
+          72080.00000000175
+        ],
+        "reference": 74835.50000000105,
+        "now": 54896.999999997206
+      }
+    ],
+    "evidence": "bench/throughput.rebank.results.json"
   }
 ]
