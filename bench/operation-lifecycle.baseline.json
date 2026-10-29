@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "operation-lifecycle",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
@@ -11,29 +11,34 @@
       "name": "lifecycle/serve-ready",
       "unit": "ms",
       "better": "lower",
-      "median": 883.3795399999999,
-      "tolerance": 0
+      "median": 3364.923,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.19
     },
     {
       "name": "lifecycle/work-ready",
       "unit": "ms",
       "better": "lower",
-      "median": 524.9962139999998,
-      "tolerance": 0
+      "median": 623.5140000000001,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.257
     },
     {
       "name": "lifecycle/restart-ready",
       "unit": "ms",
       "better": "lower",
-      "median": 1617.7692609999995,
-      "tolerance": 0
+      "median": 2239.642,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.125
     },
     {
       "name": "lifecycle/restart-request-gap",
       "unit": "ms",
       "better": "lower",
-      "median": 30.810036000000764,
-      "tolerance": 0
+      "median": 61.84900000000016,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.824
     }
-  ]
+  ],
+  "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3"
 }

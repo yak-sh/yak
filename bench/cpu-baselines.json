@@ -2107,13 +2107,6 @@
     "evidence": "bench/operation-sessions.rebank.results.json"
   },
   {
-    "suite": "operation-lifecycle",
-    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-    "revision": "7e971086d86c487f189f3ad477aed748424aea61",
-    "verdict": "inconclusive",
-    "error": "the code at bbf65074e cannot run today's bench: TypeError: JSR package not found: @yaks/provenance\n    at async importing (file:///tmp/bench-paired-33fe31309a16ce81/0/packages/cli/config.ts:222:12)"
-  },
-  {
     "suite": "platform-waits",
     "verdict": "failed",
     "error": "Error: platform-waits probe failed (1)\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/platform-waits.ts:61:15)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:149:20"
@@ -5388,5 +5381,134 @@
       }
     ],
     "evidence": "bench/person-commands.rebank.results.json"
+  },
+  {
+    "suite": "operation-lifecycle",
+    "baseline": "bench/operation-lifecycle.baseline.json",
+    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+    "references": {
+      "lifecycle/serve-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "lifecycle/work-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "lifecycle/restart-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "lifecycle/restart-request-gap": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3"
+    },
+    "provenance": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-lifecycle.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "lifecycle/serve-ready",
+          "lifecycle/work-ready",
+          "lifecycle/restart-ready",
+          "lifecycle/restart-request-gap"
+        ]
+      }
+    ],
+    "revision": "0036b0a2d2ac16cfdacdf3c07eea8f70c6a884c0",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "lifecycle/serve-ready",
+      "lifecycle/restart-ready"
+    ],
+    "comparisons": [
+      {
+        "name": "lifecycle/serve-ready",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          3408.214,
+          3495.764,
+          3415.313999999999
+        ],
+        "current": [
+          3948.5920000000006,
+          4032.347,
+          3985.7019999999998
+        ],
+        "after": [
+          3352.0689999999995,
+          3364.923,
+          3670.3109999999997
+        ],
+        "reference": 3411.763999999999,
+        "now": 3985.7019999999998
+      },
+      {
+        "name": "lifecycle/work-ready",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          595.3670000000002,
+          660.5650000000005,
+          623.5140000000001
+        ],
+        "current": [
+          619.527,
+          640.8000000000011,
+          625.0720000000001
+        ],
+        "after": [
+          590.9500000000007,
+          638.8229999999994,
+          666.8110000000006
+        ],
+        "reference": 631.1684999999998,
+        "now": 625.0720000000001
+      },
+      {
+        "name": "lifecycle/restart-ready",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          2188.5989999999993,
+          2290.0369999999984,
+          2324.817000000001
+        ],
+        "current": [
+          2773.7970000000005,
+          2750.7749999999996,
+          3739.342999999999
+        ],
+        "after": [
+          2196.63,
+          2239.642,
+          2310.0149999999976
+        ],
+        "reference": 2264.839499999999,
+        "now": 2773.7970000000005
+      },
+      {
+        "name": "lifecycle/restart-request-gap",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          63.88799999999992,
+          56.79600000000028,
+          61.84900000000016
+        ],
+        "current": [
+          95.53999999999905,
+          70.30500000000029,
+          77.15899999999965
+        ],
+        "after": [
+          80.1859999999997,
+          69.28799999999956,
+          57.5679999999993
+        ],
+        "reference": 62.86850000000004,
+        "now": 77.15899999999965
+      }
+    ],
+    "evidence": "bench/operation-lifecycle.rebank.results.json"
   }
 ]
