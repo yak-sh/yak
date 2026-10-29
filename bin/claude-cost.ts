@@ -162,6 +162,35 @@ export let prefer = (prior: Json, next: Json) =>
     (next.message.usage.output_tokens > prior.message.usage.output_tokens ||
       (next.message.usage.output_tokens === prior.message.usage.output_tokens &&
         !(next.path.endsWith('.output') && !prior.path.endsWith('.output')))))
+export let taskIds = (r: Json): string[] => {
+  let m = r.message, ids = new Set<string>()
+  let blocks = typeof m?.content === 'string'
+    ? [{ type: 'text', text: m.content }]
+    : m?.content ?? []
+  for (let b of blocks) {
+    if (
+      r.type === 'user' && b.type === 'text' && /^Work(?: on)? T-/.test(b.text)
+    ) {
+      for (let id of b.text.split(/[.\n]/, 1)[0].matchAll(/T-\d+/g)) {
+        ids.add(id[0])
+      }
+    }
+    if (r.type !== 'assistant' || b.type !== 'tool_use') continue
+    let input = b.input ?? {}
+    let target = b.name === 'mcp__tasks__claim_take'
+      ? input.target
+      : b.name === 'mcp__tasks__task_update' && input.status === 'done'
+      ? input.task
+      : ''
+    if (/^T-\d+$/.test(target ?? '')) ids.add(target)
+    for (
+      let match of (input.command ?? '').matchAll(
+        /\byak (?:task (?:claim|done|close)|claim take)\s+(T-\d+)/g,
+      )
+    ) ids.add(match[1])
+  }
+  return [...ids]
+}
 let text = (value: Json): string =>
   typeof value === 'string'
     ? value
@@ -351,26 +380,13 @@ if (import.meta.main) {
           }
         }
         let m = r.message
-        if (
-          r.type === 'user' && typeof m?.content === 'string' &&
-          /^Work T-/.test(m.content)
-        ) {
-          for (let id of m.content.split(/[.\n]/, 1)[0].matchAll(/T-\d+/g)) {
-            ids.add(id[0])
-          }
-        }
+        for (let id of taskIds(r)) ids.add(id)
         if (m?.content && Array.isArray(m.content)) {
           for (let b of m.content) {
             if (b.type !== 'tool_use') {
               continue
             }
             calls.set(b.id, b)
-            let command = b.input?.command ?? ''
-            for (
-              let match of command.matchAll(
-                /\byak (?:task (?:claim|done|close)|claim take)\s+(T-\d+)/g,
-              )
-            ) ids.add(match[1])
           }
         }
         if (

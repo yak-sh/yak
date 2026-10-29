@@ -1,6 +1,6 @@
 // Billing and deduplication are checked without reading private transcripts.
 import { equal, test, throws } from '@yaks/testing'
-import { bill, options, prefer, summary } from './claude-cost.ts'
+import { bill, options, prefer, summary, taskIds } from './claude-cost.ts'
 
 let message = (usage: Record<string, unknown>) => ({
   model: 'claude-opus-5-5',
@@ -97,4 +97,40 @@ test('json flag leaves date and root positionals intact in every position', () =
   ) {
     equal(options(args), { json: true, positionals: ['start', 'end', '/root'] })
   }
+})
+
+test('assignments include CLI and MCP work without incidental references', () => {
+  let call = (name: string, input: Record<string, unknown>) => ({
+    type: 'tool_use',
+    name,
+    input,
+  })
+  equal(
+    taskIds({
+      type: 'assistant',
+      message: {
+        content: [
+          call('Bash', { command: 'yak task claim T-1; yak task done T-2' }),
+          call('mcp__tasks__claim_take', { target: 'T-3' }),
+          call('mcp__tasks__task_update', { task: 'T-4', status: 'done' }),
+          call('mcp__tasks__task_update', { task: 'T-5', body: 'See T-6' }),
+          call('mcp__tasks__task_new', { body: 'Fix T-7' }),
+          { type: 'text', text: 'T-8 is related' },
+        ],
+      },
+    }),
+    ['T-1', 'T-2', 'T-3', 'T-4'],
+  )
+  equal(
+    taskIds({
+      type: 'user',
+      message: {
+        content: [
+          { type: 'text', text: 'Work on T-9 and T-10. Related: T-11.' },
+          { type: 'tool_result', content: 'Work T-12.' },
+        ],
+      },
+    }),
+    ['T-9', 'T-10'],
+  )
 })

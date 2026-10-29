@@ -23,12 +23,19 @@ available in these transcripts.
 | Oct 29, through 13:53 UTC      |         $12.35 |        5 |       95 |         $0.1300 |   $4.12 (3 completions) |
 | Oct 20 00:00–Oct 27 18:00      |      $3,053.97 |      343 |   42,855 |         $0.0713 |             not counted |
 
-Completions measure throughput, not independent human requests. Today's three
-completions are bug tickets for one fix. Costs also include work still in
-progress and tasks completed outside the period. The 29 sessions with exactly
-one explicit task claim have a median measured task cost of $13.25, mean $15.40,
-and range $0.15–$48.47; these are period costs, not necessarily the complete
-lifetime of each task. Multi-task sessions are not arbitrarily split.
+Completions measure Task Graph throughput, not independent human requests. The
+denominator query is
+`.task .filed.project=P-19 .completed.at>=<since>
+.completed.at<<until> .count`,
+with the same exclusive end as the cost window; the measurement stores the
+completed task IDs and timestamps. The cost numerator covers all available local
+transcripts, including work in progress and tasks completed outside the period.
+Today also includes $2.48 outside the operator family, so dollars/completion is
+local spend divided by project throughput, rather than a matched task bill.
+Today's three completions are bug tickets for one fix. The 27 sessions with
+exactly one explicit task assignment have a median measured task cost of $13.25,
+mean $15.64, and range $0.15–$48.47; these are period costs, not necessarily the
+complete lifetime of each task. Multi-task sessions are not arbitrarily split.
 
 The expensive single-task examples are T-132914 ($48.47), T-132912 ($46.39),
 T-132879 ($37.65), and T-132878 ($27.79). The largest session is
@@ -96,14 +103,16 @@ incorrectly make the hook look expensive.
 
 ## Changes and projections
 
-The repository's 23 skill descriptions shrink from 19,333 to 6,669 characters,
-65.5% less, while preserving names, trigger domains and skill instructions. The
-primary period's catalogue input allocation is $62.14. Replaying the same work
-with shorter catalogues estimates a $40.70 saving, 4.97% of the total: $14.64
-per completion becomes $13.91. Today's replay is $4.12 to $4.01 per completion.
-These estimates hold request count and generated tokens constant. They apply to
-fresh catalogues; a running conversation still contains the old listing until
-its context is replaced.
+The repository's 23 skill descriptions shrink from 19,306 to 6,669 characters,
+65.5% less, while preserving names, trigger domains and skill instructions. A
+recorded task-agent startup catalogue has 19,777 characters including names,
+prefixes and line breaks; the shorter catalogue has 7,101, a 64.1% reduction.
+Applying that reduction to the primary period's $62.14 catalogue input
+allocation estimates a $39.83 saving, 4.86% of the total: $14.64 per completion
+becomes $13.92. Today's replay is $4.12 to $4.01 per completion. These estimates
+hold request count and generated tokens constant. They apply to fresh
+catalogues; a running conversation still contains the old listing until its
+context is replaced.
 
 `yak admin errors` and `admin_errors` return unresolved work by default.
 `--resolved` or `resolved: true` explicitly requests resolved history. The
@@ -149,14 +158,15 @@ response can appear in multiple streamed content blocks or copied fork
 histories. The originating request wins over copied history; cumulative final
 usage wins within that request. Different child requests are still charged for
 their own cache reads. `.output` mirrors add no unique requests in this period.
-Only explicit task claims and assignment prompts identify tasks; incidental task
-references do not assign cost.
+Only explicit CLI or MCP task claims, completion calls and assignment prompts
+identify tasks; incidental task references do not assign cost. A session that
+claims or completes several tasks is left unsplit.
 
 API request records reconstruct the sent message sequence with `keep` plus
 `tail` blob hashes and the recorded shape's system/tools. Character allocation
 covers $683.47 of $683.53 input cost. Source transcripts are private and remain
-outside git. Five small tests check billing, deduplication, bounded summaries
-and flag positioning without reading private transcripts.
+outside git. Six small tests check billing, deduplication, bounded summaries,
+task assignment and flag positioning without reading private transcripts.
 
 [Anthropic's pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 sets Opus 5.5 per million tokens at $4 input, $20 output, $5 five-minute writes,
