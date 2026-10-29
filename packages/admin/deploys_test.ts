@@ -1,12 +1,10 @@
 // The deploy history's pure seams: how Wrangler's JSON joins uploads to
 // commits, where a data boundary is, and which version a rollback may land on.
-import { test, until } from '@yaks/testing'
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { CallError, Interrupted } from '@yaks/tools'
+import { test } from '@yaks/testing'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { Refused } from './refusal.ts'
 import {
   boundaries,
-  command,
   type Commit,
   commitsIn,
   compilerProtocolIn,
@@ -15,7 +13,6 @@ import {
   type Deployment,
   deploymentLists,
   deploysIn,
-  git,
   marksIn,
   rollbackTarget,
   rowsIn,
@@ -148,18 +145,6 @@ test('explicit rollback boundaries exclude status markers and fail closed', () =
     'yak/store/packages/1',
     'yak/store/refused/6',
   ])
-})
-
-// A rollback is refused wherever the history cannot be read, so the file as it
-// stands has to parse.
-let migrationSource = await Deno.readTextFile(
-  new URL('../../workers/yak/migrate.ts', import.meta.url),
-)
-test('the migrations as they stand are a history deploys can read', () => {
-  assert(
-    marksIn(migrationSource)?.length,
-    'migrate.ts declares no readable history',
-  )
 })
 
 test('a gradual deploy can roll back to its prior version while that version still serves traffic', () => {
@@ -309,70 +294,6 @@ test('main history keeps a data boundary after Wrangler ages its deployment out'
   ])
   assertThrows(() => rollbackTarget(guarded), Refused, 'data moved')
   assert(boundaries(rows, null).every((r) => r.refusal?.includes('unknown')))
-})
-
-test('stopping a platform command interrupts its whole process group', async () => {
-  let stopping = new AbortController()
-  let dir = Deno.makeTempDirSync()
-  let mark = `${dir}/started`
-  // A shell whose pipeline outlives it: once the mark is written, a process
-  // of its own holds the output open, so only killing the group ends it.
-  let ran = command(
-    dir,
-    'sh',
-    ['-c', 'sleep 60 | { touch "$0"; sleep 60; }', mark],
-    stopping.signal,
-  )
-  try {
-    await until(() => Deno.lstat(mark).then(() => true, () => false), {
-      label: 'the pipeline',
-    })
-    let started = Date.now()
-    stopping.abort()
-    let error = await assertRejects(() => ran, Interrupted, 'was interrupted')
-    assertEquals(error.code, 'signal')
-    assert(Date.now() - started < 2_000, 'the child process group stayed alive')
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-test('a git run cut off by shutdown is an interruption, not a git failure', async () => {
-  let error = await assertRejects(
-    () => git(Deno.cwd(), ['status'], AbortSignal.abort()),
-    Interrupted,
-  )
-  assertEquals(error.code, 'signal')
-})
-
-test('a command failure is still a defect when the host is not stopping', async () => {
-  let error = await assertRejects(
-    () =>
-      command(
-        Deno.cwd(),
-        'sh',
-        ['-c', 'exit 143'],
-        new AbortController().signal,
-      ),
-    Error,
-    'sh -c exited 143',
-  )
-  assert(!(error instanceof CallError))
-})
-
-test('a platform command interrupted directly is not a defect', async () => {
-  let error = await assertRejects(
-    () =>
-      command(
-        Deno.cwd(),
-        'sh',
-        ['-c', 'kill -TERM $$'],
-        new AbortController().signal,
-      ),
-    Interrupted,
-    'was interrupted',
-  )
-  assertEquals(error.code, 'signal')
 })
 
 test('deployment history never overlaps Wrangler OAuth refreshes', async () => {

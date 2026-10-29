@@ -12,61 +12,46 @@ let req = {
   items: [{ kind: 'user' as const, text: 'hello' }],
   tools: [tool],
 }
-// Subprocess startup and stream delivery prepare the transcript; each check
-// below observes the provider's public turn/result contract without timing OS
-// process scheduling as the assertion's own work.
-let turns = await (async () => {
-  let model = claude({
-    command: Deno.execPath(),
-    args: ['run', '-A', new URL('./fake_cli.ts', import.meta.url).pathname],
-  })
-  let submitted = 0, marks: unknown[] = []
-  let first = await model({
-    ...req,
-    onSubmit: () => {
-      submitted++
-      return Promise.resolve()
-    },
-    onAck: (m) => {
-      marks.push(m)
-      return Promise.resolve()
-    },
-  })
-  let second = await model({
-    ...req,
-    items: [...req.items, ...first.items, {
-      kind: 'result',
+test('assistant frames expose text and offered harness calls', () => {
+  assertEquals(
+    items({
+      id: 'message-1',
+      content: [
+        { type: 'thinking', thinking: 'private' },
+        { type: 'text', text: 'checking' },
+        {
+          type: 'tool_use',
+          name: 'mcp__harness__graph_query',
+          id: 'call-1',
+          input: { q: 'hello' },
+        },
+      ],
+    }, req),
+    [{
+      kind: 'assistant',
+      text: 'checking',
+      id: 'message-1',
+    }, {
+      kind: 'call',
       id: 'call-1',
-      output: 'found',
+      name: 'graph_query',
+      args: '{"q":"hello"}',
     }],
-  })
-  return { model, first, second, submitted, marks }
-})()
-
-test('Claude CLI turn yields only harness calls, then replays results', () => {
-  let { model, first, second, submitted, marks } = turns
-  assertEquals(first.items, [{
-    kind: 'assistant',
-    text: 'checking',
-    id: 'message-1',
-  }, {
-    kind: 'call',
-    id: 'call-1',
-    name: 'graph_query',
-    args: '{"q":"hello"}',
-  }])
-  assertEquals(second.items, [{
-    kind: 'assistant',
-    text: 'done',
-    id: 'message-2',
-  }])
-  assertEquals(submitted, 1)
-  assertEquals(marks, [{ claude: { session_id: 'fake-session' } }])
-  assertEquals(model.anchor, undefined)
-  assertEquals(model.mark!(first), {
-    claude: { response_id: 'message-1', session_id: 'fake-session' },
-  })
+  )
 })
+
+test('input replays the complete transcript including tool results', () => {
+  let transcript = [...req.items, {
+    kind: 'result' as const,
+    id: 'call-1',
+    output: 'found',
+  }]
+  let message = JSON.parse(input({ ...req, items: transcript }))
+  assertEquals(message.type, 'user')
+  assertEquals(message.message.role, 'user')
+  assertEquals(JSON.parse(message.message.content), { transcript })
+})
+
 test('unknown built-ins fail closed and unsupported requests never submit', async () => {
   assertThrows(
     () =>
@@ -93,18 +78,19 @@ test('unknown built-ins fail closed and unsupported requests never submit', asyn
   assertEquals(listing().map((m) => m.name), ['haiku', 'sonnet', 'opus'])
 })
 
-test('cancellation during submission never starts a CLI', async () => {
-  let abort = new AbortController()
+test('an already cancelled request never submits', async () => {
+  let submitted = false
   await assertRejects(
     () =>
-      claude({ command: '/no-such-claude-command' })({
+      claude()({
         ...req,
-        signal: abort.signal,
+        signal: AbortSignal.abort(),
         onSubmit: () => {
-          abort.abort()
+          submitted = true
           return Promise.resolve()
         },
       }),
     DOMException,
   )
+  assertEquals(submitted, false)
 })

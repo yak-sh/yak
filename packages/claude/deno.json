@@ -9,8 +9,7 @@
   "description": "Claude Code print mode as a one-turn model; the graph harness alone executes tools.",
   "publish": {
     "exclude": [
-      "**/*_test.ts",
-      "fake_cli.ts"
+      "**/*_test.ts"
     ]
   }
 }
