@@ -13,9 +13,14 @@
  * trees its graph produced after it was opened. `compose` stops after opening
  * the graph, opened instead by `compose()` directly with its config's channel
  * subscribed, and records the phases `compose()` itself names. */
+let { cputime } = await import('@yaks/benchmark')
 let boot = performance.now()
 let marks: Record<string, number> = { boot }
-let mark = (name: string) => marks[name] = performance.now()
+let cpus: Record<string, number> = { boot: cputime()! }
+let mark = (name: string) => {
+  marks[name] = performance.now()
+  cpus[name] = cputime()!
+}
 
 let yak = await import('../packages/cli/yak.ts')
 let subcommands = await import('../packages/cli/subcommands.ts')
@@ -36,7 +41,7 @@ if (!out || !['phases', 'compose'].includes(mode)) {
   throw new Error('usage: BOX_PROBE_OUT=<file> box-probe.ts phases|compose …')
 }
 let spans = collector()
-let waste = 0
+let waste = 0, cpuWaste = 0
 
 // The commands `yak` lists for a config, each one opening its graph first
 // where the probe can see the opening end, then running unchanged.
@@ -44,9 +49,10 @@ let more: typeof yak.YAK.more = async (c) => {
   mark('more')
   let listed = await subcommands.commands(c)
   mark('commands')
-  let start = performance.now()
+  let start = performance.now(), cpuStart = cputime()!
   let pooled = (await declarations(read(c.config!), true)).pooled
   waste += performance.now() - start
+  cpuWaste += cputime()! - cpuStart
   return listed.map((command): Command => ({
     ...command,
     run: async (args, ctx) => {
@@ -93,6 +99,8 @@ await Deno.writeTextFile(
   JSON.stringify({
     origin: performance.timeOrigin,
     marks,
+    cpus,
+    cpuWaste,
     waste,
     code,
     spans: spans.take(),

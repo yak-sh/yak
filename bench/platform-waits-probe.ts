@@ -1,5 +1,5 @@
 /** One process owns one local kernel. Nothing reaches a deployed account. */
-import type { Samples } from '@yaks/benchmark'
+import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { client, connector, fresh, meta, onPlus } from '../workers/yak/probe.ts'
 import { bindings, external, forms } from './platform-forms.ts'
 import { management, VIEWS } from './platform-management.ts'
@@ -156,10 +156,10 @@ try {
     await acts[name]()
     let samples = []
     for (let i = 0; i < 7; i++) {
-      let start = performance.now()
+      let took = stopwatch()
       await acts[name]()
       samples.push({
-        value: performance.now() - start,
+        ...took(),
         source: 'local-kernel-http',
       })
     }
@@ -181,13 +181,13 @@ try {
         dashboard.wanted[view],
       )
     await act()
-    let samples: { value: number; source: string }[] = []
+    let samples: Sample[] = []
     result[name] = samples
     for (let i = 0; i < 7; i++) {
-      let start = performance.now()
+      let took = stopwatch()
       await act()
       samples.push({
-        value: performance.now() - start,
+        ...took(),
         source: 'local-kernel-http/populated',
       })
     }
@@ -198,14 +198,14 @@ try {
   for (let [name, op] of Object.entries(submissions)) {
     await op.prepare?.()
     await op.act()
-    let samples: { value: number; source: string }[] = []
+    let samples: Sample[] = []
     result[name] = samples
     for (let i = 0; i < 7; i++) {
       await op.prepare?.()
-      let start = performance.now()
+      let took = stopwatch()
       await op.act()
       samples.push({
-        value: performance.now() - start,
+        ...took(),
         source: 'local-kernel-http/submission-and-readback',
       })
     }

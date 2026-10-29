@@ -1,7 +1,7 @@
 /** The box bench's optional explicit HTTP door, with its own server and cache. */
 import { read } from '@yaks/cli'
 import { derivedEid } from '@yaks/graph'
-import type { Sample } from '@yaks/benchmark'
+import { processCpu, type Sample, stopwatch } from '@yaks/benchmark'
 import type { Event } from '@yaks/trace'
 import { doorUrl, rpc } from '../packages/cli/rpc.ts'
 import { cached } from '../packages/cli/store.ts'
@@ -26,7 +26,14 @@ let PHASES = [
   'total',
 ]
 let CASES = ['read', 'write']
-type Record = { method: string; tool?: string; ms: number; spans: Event[] }
+type Record = {
+  start: number
+  method: string
+  tool?: string
+  ms: number
+  cpu: number
+  spans: Event[]
+}
 type Clock = (
   argv: string[],
   env?: globalThis.Record<string, string>,
@@ -186,58 +193,94 @@ export let door = async (
           value: number,
           details?: unknown,
           counts?: globalThis.Record<string, number>,
-        ) => (got[name] ??= []).push({ value, details, counts })
+          cpu?: number,
+        ) => (got[name] ??= []).push({ value, cpu, details, counts })
         for (let i = -1; i < runs; i++) {
           let body = `box door bench ${crypto.randomUUID()}`
           for (let [name, argv] of commands(body)) {
             let before = (await history()).length
+            let took = stopwatch(() => processCpu(child.pid))
             let t = await yak(argv)
+            let cpu = took().cpu
             let calls = (await history()).slice(before).filter((r) =>
               r.method == 'tools/call'
             )
             if (name == 'write') await verify(body)
             if (i < 0) continue
-            add(`door/${name}/wall`, t.ms, {
-              requests: calls.map((r) => r.tool),
-              by: PERSON,
-              via: SESSION,
-            }, { cpu: t.cpu, inputs: t.inputs })
+            add(
+              `door/${name}/wall`,
+              t.ms,
+              {
+                requests: calls.map((r) => r.tool),
+                by: PERSON,
+                via: SESSION,
+              },
+              { inputs: t.inputs },
+              cpu,
+            )
             let main = calls.find((r) =>
               r.tool == (name == 'read' ? 'task_list' : 'comment_new')
             )
             if (!main) {
               throw new Error(`box door: no ${name} tools/call recorded`)
             }
-            add(`door/${name}/server`, main.ms, {
-              split: split(main.spans),
-              spans: main.spans,
-            })
+            add(
+              `door/${name}/server`,
+              main.ms,
+              {
+                split: split(main.spans),
+                spans: main.spans,
+              },
+              undefined,
+              main.cpu,
+            )
           }
           if (i >= 0) {
-            let start = performance.now()
+            let took = stopwatch()
             let roster = await cached(host, env.YAKS_HOME)
-            let ms = performance.now() - start
+            let { value: ms, cpu } = took()
             if (!roster) throw new Error('box door: warm roster was not cached')
-            add('door/cache', ms, {
-              tools: roster.tools.length,
-              vocabulary: !!roster.vocab,
-            })
+            add(
+              'door/cache',
+              ms,
+              {
+                tools: roster.tools.length,
+                vocabulary: !!roster.vocab,
+              },
+              undefined,
+              cpu,
+            )
           }
         }
         for (
           let [name, argv] of commands(`box door probe ${crypto.randomUUID()}`)
         ) {
           let out = `${scratch}/door-probe.json`
+          let before = (await history()).length
+          let took = stopwatch(() => processCpu(child.pid))
           let t = await timed(
             [`${ROOT}bench/box-door-probe.ts`, '--host', host, ...argv],
             { ...env, BOX_PROBE_OUT: out },
             perms,
           )
+          let totalCpu = took().cpu
           let p = JSON.parse(await Deno.readTextFile(out))
           let m = p.marks
-          let requests =
-            (p.requests as { start: number; ms: number; preparation: number }[])
-              .filter((r) => r.start >= m.runStart)
+          let c = p.cpus
+          let calls = (await history()).slice(before)
+          let totalServerCpu = calls.reduce((sum, call) => sum + call.cpu, 0)
+          let serverCpu = calls.filter((call) =>
+            call.start >= p.origin + m.runStart
+          )
+            .reduce((sum, call) => sum + call.cpu, 0)
+          let requests = (p.requests as {
+            start: number
+            ms: number
+            preparation: number
+            cpu: number
+            preparationCpu: number
+          }[])
+            .filter((r) => r.start >= m.runStart)
           let request = requests.reduce((sum, r) => sum + r.ms, 0)
           let phases = {
             boot: p.origin + m.boot - t.start,
@@ -252,8 +295,28 @@ export let door = async (
             exit: t.end - p.origin - m.close,
             total: t.ms,
           }
+          let requestCpu = requests.reduce((sum, r) => sum + r.cpu, 0)
+          let cpu: globalThis.Record<string, number> = {
+            boot: c.boot,
+            import: c.import - c.boot,
+            setup: c.listStart - c.import,
+            list: c.list - c.listStart + totalServerCpu - serverCpu,
+            dispatch: c.runStart - c.list,
+            request: requestCpu + serverCpu,
+            preparation: requests.reduce((sum, r) => sum + r.preparationCpu, 0),
+            render: c.run - c.runStart - requestCpu,
+            close: c.close - c.run,
+            exit: Math.max(0, t.cpu - c.close),
+            total: totalCpu,
+          }
           for (let [phase, ms] of Object.entries(phases)) {
-            add(`door-startup/${name}/${phase}`, ms, { requests: p.requests })
+            add(
+              `door-startup/${name}/${phase}`,
+              ms,
+              { requests: p.requests },
+              undefined,
+              cpu[phase],
+            )
           }
           if (name == 'write') await verify(argv.at(-1)!)
         }

@@ -1,6 +1,7 @@
 /** Probe-only observer around the composed box HTTP handler. No duties run. */
 import { opened } from '../packages/cli/local.ts'
 import { channel } from '@yaks/trace'
+import { stopwatch } from '@yaks/benchmark'
 import { collector } from './box-lib.ts'
 
 let [config, ready, records] = Deno.args
@@ -16,10 +17,11 @@ let server = Deno.serve({
   let body = await request.clone().json().catch(() => ({}))
   let events = collector()
   let stop = channel(host.graph).subscribe(events.add, { history: false })
-  let start = performance.now()
+  let start = performance.timeOrigin + performance.now()
+  let took = stopwatch()
   try {
     let response = await host.handler!(request)
-    let ms = performance.now() - start
+    let { value: ms, cpu } = took()
     let spans = events.take()
     Deno.writeTextFileSync(
       records,
@@ -27,6 +29,8 @@ let server = Deno.serve({
         method: body.method,
         tool: body.params?.name,
         ms,
+        cpu,
+        start,
         spans,
       }) + '\n',
       { append: true },

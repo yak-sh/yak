@@ -28,11 +28,11 @@ export type Row = {
 export let RECORD: string | URL = Deno.env.get('APP_DEPLOY_RECORD') ??
   new URL('./app-deploys.jsonl', import.meta.url)
 
-// The three gated numbers, by name: what a person waits for. A name's meaning
+// The three observed waits, by name: what a person waits for. A name's meaning
 // never changes: rows before writes were staged until app_deploy measured
 // `files → live`, `deploy` and `one file → live`, and those rows stay in the
 // record, unread (`records`).
-export let GATED = {
+export let WAITS = {
   'ship → live': (r: Row) => r.ship.live.median,
   'ship deploy': (r: Row) => r.ship.deploy.median,
   'edit → live': (r: Row) => r.edit.live.median,
@@ -88,7 +88,7 @@ export let suite = (rows: Row[]): CollectedSuite | null => {
     metric: 'latest-host-medians',
     workload: 1,
     benches: current.flatMap((row) =>
-      Object.keys(GATED).map((name) => ({
+      Object.keys(WAITS).map((name) => ({
         name: `${row.host}/${name}`,
         unit: 'ms',
         resolution: 1,
@@ -97,7 +97,7 @@ export let suite = (rows: Row[]): CollectedSuite | null => {
     collect: () =>
       Object.fromEntries(
         current.flatMap((row) =>
-          Object.entries(GATED).map(([name, of]) => [
+          Object.entries(WAITS).map(([name, of]) => [
             `${row.host}/${name}`,
             { value: of(row), source: 'app-deploy-median', details: row },
           ])
@@ -109,12 +109,14 @@ export let suite = (rows: Row[]): CollectedSuite | null => {
 export let run = async (options: Options, rows?: Row[]) => {
   let work = suite(rows ?? await readRecords())
   if (!work) {
-    console.log('app-deploy: no app deploy data — pass (bootstrap)')
+    console.log('app-deploy: no observations')
     return null
   }
   let context = options.host ?? host
   return await benchmark(work, {
     ...options,
+    figure: undefined,
+    mode: 'run',
     coverage: 'subset',
     rounds: 1,
     host: async () => ({

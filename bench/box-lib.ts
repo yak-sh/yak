@@ -1,6 +1,7 @@
 /** Shared pieces of the box bench (./box.ts): how its children are started,
  * and how a recorded span tree is split into where its time went. */
 import type { Event } from '@yaks/trace'
+import { stopwatch } from '@yaks/benchmark'
 
 /** Every child the box bench starts runs without network permission, so a
  * plugin that tried to reach a model, a mail sender or a remote host would
@@ -129,15 +130,23 @@ export let statements = (spans: readonly Event[]) => {
 
 /** Spans collected from a channel subscription, kept by id: a start event is
  * replaced by its end, so a finished span carries its duration. */
-export let collector = () => {
-  let events = new Map<string, Event>()
+export type MeasuredEvent = Event & { cpu?: number }
+export let collector = (clock = stopwatch) => {
+  let events = new Map<string, MeasuredEvent>()
+  let clocks = new Map<string, ReturnType<typeof stopwatch>>()
   return {
     add: (e: Event) => {
-      if (e.stage == 'end' || !events.has(e.id)) events.set(e.id, e)
+      if (e.stage == 'start') clocks.set(e.id, clock())
+      if (e.stage == 'end' || !events.has(e.id)) {
+        let cpu = e.stage == 'end' ? clocks.get(e.id)?.().cpu : undefined
+        events.set(e.id, { ...e, ...(cpu === undefined ? {} : { cpu }) })
+      }
+      if (e.stage == 'end') clocks.delete(e.id)
     },
-    take: (): Event[] => {
+    take: (): MeasuredEvent[] => {
       let out = [...events.values()]
       events.clear()
+      clocks.clear()
       return out
     },
   }

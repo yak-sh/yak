@@ -26,6 +26,7 @@ import {
   type Run,
   run,
   type Sample,
+  stopwatch,
 } from '@yaks/benchmark'
 import { derivedEid } from '@yaks/graph'
 import { read } from '@yaks/cli'
@@ -192,6 +193,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
               let t = await once(argv)
               add(`cli/${name}`, {
                 value: t.ms,
+                cpu: t.cpu,
                 counts: { cpu: t.cpu, inputs: t.inputs },
               })
             }
@@ -204,6 +206,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
               for (let [phase, ms] of Object.entries(p.phases)) {
                 add(`startup/${name}/${phase}`, {
                   value: ms,
+                  cpu: p.cpu[phase],
                   ...(phase == 'tool' || phase == 'close'
                     ? { details: p[phase] }
                     : {}),
@@ -211,7 +214,11 @@ export let main = async (action: string, args: string[]): Promise<number> => {
               }
               if (name == 'help') continue
               let c = await probe('compose', f.config, argv)
-              add(`compose/${name}`, { value: c.compose, details: c.parts })
+              add(`compose/${name}`, {
+                value: c.compose,
+                cpu: c.composeCpu,
+                details: c.parts,
+              })
             }
           }
         }
@@ -221,7 +228,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
               db,
               'SELECT max(id) FROM entity; SELECT max(id) FROM journal_change;',
             )
-            await yak(argv)
+            let command = await yak(argv)
             let [entity, change] = before.map((r) => Number(r[0]))
             let after = await sqlite(
               db,
@@ -240,6 +247,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
             TABLES.forEach((table, i) =>
               add(`rows/${name}/${table}`, {
                 value: Number(after[i][0]),
+                cpu: command.cpu,
                 ...(table == 'entity' ? { details: made } : {}),
               })
             )
@@ -259,6 +267,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
       let mode = action == 'ratchet' ? 'accept' : action
       result = await run(suite, {
         mode: mode as Options['mode'],
+        figure: 'cpu',
         rounds: f.rounds,
         output: `${ROOT}bench/box.results.json`,
         baseline: `${ROOT}bench/box.baseline.json`,
@@ -366,6 +375,7 @@ let timed = async (
 ): Promise<Timed & { start: number; end: number }> => {
   let usage = await Deno.makeTempFile()
   try {
+    let took = stopwatch()
     let start = performance.timeOrigin + performance.now()
     let child = await new Deno.Command(TIME, {
       args: [
@@ -386,6 +396,7 @@ let timed = async (
       stderr: 'piped',
     }).output()
     let end = performance.timeOrigin + performance.now()
+    let measured = took()
     let text = new TextDecoder()
     if (!child.success) {
       throw new Error(
@@ -394,11 +405,11 @@ let timed = async (
         }`,
       )
     }
-    let [user, system, inputs] = (await Deno.readTextFile(usage)).trim()
+    let [, , inputs] = (await Deno.readTextFile(usage)).trim()
       .split('\n').at(-1)!.split(' ').map(Number)
     return {
       ms: end - start,
-      cpu: (user + system) * 1000,
+      cpu: measured.cpu!,
       inputs,
       stdout: text.decode(child.stdout),
       start,
@@ -409,7 +420,13 @@ let timed = async (
   }
 }
 
-type Probe = { origin: number; marks: Record<string, number>; waste: number }
+type Probe = {
+  origin: number
+  marks: Record<string, number>
+  cpus: Record<string, number>
+  waste: number
+  cpuWaste: number
+}
 let probe = async (mode: string, config: string, argv: string[]) => {
   let out = await Deno.makeTempFile()
   try {
@@ -417,10 +434,22 @@ let probe = async (mode: string, config: string, argv: string[]) => {
       [`${ROOT}bench/box-probe.ts`, mode, '--config', config, ...argv],
       { BOX_PROBE_OUT: out },
     )
-    let p: Probe & { spans: Event[] } = JSON.parse(
+    let p: Probe & { spans: (Event & { cpu?: number })[] } = JSON.parse(
       await Deno.readTextFile(out),
     )
     let m = p.marks
+    let c = p.cpus
+    let cpu: Record<string, number> = {
+      boot: c.boot,
+      import: c.import - c.boot,
+      commands: c.commands - c.import,
+      compose: c.compose ? c.compose - c.commands - p.cpuWaste : 0,
+      tool: (c.tool ?? c.cli) - (c.compose ?? c.commands) -
+        (c.compose ? 0 : p.cpuWaste),
+      close: c.close - (c.tool ?? c.cli),
+      exit: Math.max(0, t.cpu - c.close),
+      total: t.cpu,
+    }
     let at = (name: string) => p.origin + m[name]
     let opened = m.compose ?? m.commands
     let ran = m.tool ?? m.cli
@@ -452,9 +481,11 @@ let probe = async (mode: string, config: string, argv: string[]) => {
     let composed = p.spans.find((s) => s.kind == 'process-start')
     return {
       phases,
+      cpu,
       tool: within(opened, ran),
       close: within(m.cli, m.close),
       compose: composed?.duration ?? 0,
+      composeCpu: composed?.cpu ?? 0,
       parts: {
         split: Object.fromEntries(
           p.spans.filter((s) => s.parent == composed?.id && s.kind == 'phase')

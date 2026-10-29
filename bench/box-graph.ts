@@ -22,11 +22,12 @@ import {
   type Stmt,
   table,
 } from '@yaks/sql'
-import { type Event, record } from '@yaks/trace'
-import type { Sample } from '@yaks/benchmark'
+import { channel, type Event, record } from '@yaks/trace'
+import { cputime, type Sample, stopwatch } from '@yaks/benchmark'
 import {
   BACKLOGS,
   BATCHES,
+  collector,
   GRAPH as NAMES,
   split,
   statements,
@@ -76,9 +77,15 @@ export async function measure(path: string, target: string) {
     }))
   }
   let applied = async (bundles: Bundle[]) => {
-    let start = now()
-    let { spans } = await record(g, () => g.apply(bundles))
-    return { ms: now() - start, spans }
+    let events = collector()
+    let stop = channel(g).subscribe(events.add, { history: false })
+    let took = stopwatch()
+    try {
+      await record(g, () => g.apply(bundles))
+      return { ...took(), spans: events.take() }
+    } finally {
+      stop()
+    }
   }
 
   // The pool as a worker serving `effects` runs it, over an Access that times
@@ -91,6 +98,8 @@ export async function measure(path: string, target: string) {
     eid?: string
     start: number
     end: number
+    cpuStart: number
+    cpuEnd: number
     spans?: Event[]
   }
   let timings: Timing[] = []
@@ -100,6 +109,7 @@ export async function measure(path: string, target: string) {
     eid: string | undefined,
     run: () => Promise<unknown> | unknown,
   ) => {
+    let cpuStart = cputime()!
     let start = now()
     let spans: Event[] | undefined
     let value = recording
@@ -107,7 +117,15 @@ export async function measure(path: string, target: string) {
         spans = r.spans, r.result
       ))
       : await run()
-    timings.push({ kind, eid, start, end: now(), spans })
+    timings.push({
+      kind,
+      eid,
+      start,
+      end: now(),
+      cpuStart,
+      cpuEnd: cputime()!,
+      spans,
+    })
     return value
   }
   let kindOf = (bundles: Bundle[]) =>
@@ -205,9 +223,10 @@ export async function measure(path: string, target: string) {
 
     for (let [n, count] of BATCHES) {
       for (let i = 0; i < count; i++) {
-        let { ms, spans } = await applied(comments(n))
+        let { value, cpu, spans } = await applied(comments(n))
         samples[`apply/${n}`].push({
-          value: ms,
+          value,
+          cpu,
           counts: { bundles: n, statements: spans.filter(sql).length },
           details: {
             split: rounded(split(spans)),
@@ -222,12 +241,13 @@ export async function measure(path: string, target: string) {
       await g.apply(await edits(DRAINED))
       let owed = pending()
       timings = []
-      let start = now()
+      let took = stopwatch()
       await pass(drainer, Infinity)
-      let ms = now() - start
+      let { value: ms, cpu } = took()
       let runs = timings.filter((t) => t.kind == 'settle').length
       samples['pool/drain'].push({
         value: runs ? ms / runs : 0,
+        cpu: runs ? cpu! / runs : 0,
         counts: { runs, owed },
         details: { ms },
       })
@@ -243,12 +263,15 @@ export async function measure(path: string, target: string) {
         let owed = spans.filter((e) =>
           e.kind == 'effect' && e.package == '@yaks/effects'
         ).length
-        let ms = spans.filter((e) =>
+        let phases = spans.filter((e) =>
           e.kind == 'phase' && e.plugin == '@yaks/effects'
-        ).reduce((sum, e) =>
+        )
+        let ms = phases.reduce((sum, e) =>
           sum + (e.duration ?? 0), 0)
+        let cpu = phases.reduce((sum, e) => sum + (e.cpu ?? 0), 0)
         samples['pool/owe'].push({
           value: owed ? ms / owed : 0,
+          cpu: owed ? cpu / owed : 0,
           counts: { owed },
         })
         timings = []
@@ -263,7 +286,10 @@ export async function measure(path: string, target: string) {
           )
           if (!settle) continue
           samples['pool/claim'].push(stepped(claim))
-          samples['pool/run'].push({ value: settle.start - claim.end })
+          samples['pool/run'].push({
+            value: settle.start - claim.end,
+            cpu: settle.cpuStart - claim.cpuEnd,
+          })
           samples['pool/settle'].push(stepped(settle))
         }
       }
@@ -299,19 +325,25 @@ export async function measure(path: string, target: string) {
         }
         let backlog = pending()
         timings = []
-        let start = now()
+        let took = stopwatch()
         await pass(stepper, 1)
-        let ms = now() - start
+        let { value: ms, cpu } = took()
         // An unbounded worker passes without asking first whether another
         // is working the pool; this drain asks (a `lease read`), so that is
         // taken out of the pass.
-        let took = (kind: string) =>
+        let elapsed = (kind: string) =>
           timings.filter((t) => t.kind == kind)
             .reduce((sum, t) => sum + t.end - t.start, 0)
         samples[`pool/due ${name}`].push({
-          value: ms - took('lease read'),
+          value: ms - elapsed('lease read'),
+          cpu: cpu! - timings.filter((t) => t.kind == 'lease read')
+            .reduce((sum, t) => sum + t.cpuEnd - t.cpuStart, 0),
           counts: { pending: backlog },
-          details: { read: took('due read'), lease: took('lease read'), ms },
+          details: {
+            read: elapsed('due read'),
+            lease: elapsed('lease read'),
+            ms,
+          },
         })
       })
     }
@@ -321,9 +353,18 @@ export async function measure(path: string, target: string) {
   }
 }
 
-function stepped(t: { start: number; end: number; spans?: Event[] }): Sample {
+function stepped(
+  t: {
+    start: number
+    end: number
+    cpuStart: number
+    cpuEnd: number
+    spans?: Event[]
+  },
+): Sample {
   return {
     value: t.end - t.start,
+    cpu: t.cpuEnd - t.cpuStart,
     ...(t.spans
       ? {
         counts: { statements: t.spans.filter(sql).length },
