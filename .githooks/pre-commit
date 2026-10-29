@@ -1,0 +1,15 @@
+#!/bin/sh
+# Format what a commit carries, so an unformatted file never reaches main:
+# deno fmt rewrites each staged file in place and it is staged again. It
+# refuses nothing. A file with unstaged changes beside its staged ones is left
+# alone, since staging it again would commit those too.
+
+git diff --cached --name-only --diff-filter=ACMR -z |
+  tr '\0' '\n' |
+  grep -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md)$' |
+  while IFS= read -r file
+  do
+    git diff --quiet -- "$file" || continue
+    deno fmt --quiet -- "$file" 2>/dev/null && git add -- "$file"
+  done
+exit 0
