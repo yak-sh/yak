@@ -996,7 +996,7 @@ let sent = (
 }
 
 // The batch, split by component into one part per store.
-let routed = async (
+export let routed = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,

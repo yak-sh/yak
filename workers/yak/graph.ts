@@ -676,6 +676,7 @@ type Word =
   | `tools:${string}`
   | `seed:${string}`
   | 'seeded'
+  | `seeded:${string}`
   | 'app'
   | 'space'
   | 'access'
@@ -2117,23 +2118,26 @@ export class Store {
       this.#put('release', release)
       if (this.#get('vocab') != was) this.#build()
       let seed = this.#get(`seed:${release}`)
-      if (
-        seed && !this.#get('seeded') && !req.headers.has('x-yak-base-release')
-      ) {
-        let { bundles, actor } = JSON.parse(seed) as {
+      let planted = seed
+        ? JSON.parse(seed) as {
           bundles: Bundle[]
           actor: Actor | null
+          from?: string
         }
+        : null
+      let mark: Word = planted?.from ? `seeded:${planted.from}` : 'seeded'
+      if (
+        planted && !this.#get(mark) && !req.headers.has('x-yak-base-release')
+      ) {
         // The guard had its say when the deployer staged it (`#seedDoor`).
-        // Whoever's request meets the release, possibly in a later
-        // incarnation, was not the one vouched for, so it lands as staged.
-        let result = this.#asIs(signed(bundles, actor), {
+        // A shared home remembers each originating app's seed separately.
+        let result = this.#asIs(signed(planted.bundles, planted.actor), {
           deferEffects: (run) => effects.push(run),
         })
         if (result instanceof Promise) {
           throw new Error('a staged seed must apply synchronously')
         }
-        this.#put('seeded', release)
+        this.#put(mark, release)
       }
       deploymentMoved = this.#get('tools') != toolsWas ||
         this.#get('vocab') != was || !this.#deployedOnce()
@@ -5299,7 +5303,8 @@ export class Store {
       }
       if (this.#refused) return this.#stalled()
       if (new URL(request.url).searchParams.get('check') != '1') {
-        this.#put(`seed:${release}`, JSON.stringify({ bundles, actor }))
+        let from = new URL(request.url).searchParams.get('from')
+        this.#put(`seed:${release}`, JSON.stringify({ bundles, actor, from }))
       }
       return Response.json({ ok: true })
     } catch (e) {

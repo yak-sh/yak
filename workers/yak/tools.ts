@@ -221,12 +221,12 @@ import {
 import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import { vocabAt } from './reach.ts'
+import { applying, seeding } from './release-seed.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon, nameOf } from './signin.ts'
 import { ACCEPTED, type Door } from './door.ts'
 import {
-  type Applying,
   asked,
   loaded,
   loadParts,
@@ -237,7 +237,7 @@ import {
   span,
   type Text,
 } from './seed.ts'
-import { Pending, said as sentence } from './writes.ts'
+import { said as sentence } from './writes.ts'
 import {
   archive,
   breaks,
@@ -869,23 +869,6 @@ let texts = (
     text: decoded(await blobs.get(prefix + path)),
   })))
 
-// A data batch through the app's write door, as the caller: the refusal's
-// sentence back where the store said no, null where it took the batch, and
-// `Pending` thrown where the store's log kept it to apply later (a 202).
-// `check` asks for a dry run, which identifies the refused bundle.
-let applying =
-  (store: Door, head: Record<string, string>, path = '/apply'): Applying =>
-  (batch, check) => {
-    return store.consume(`${path}${check ? '?check=1' : ''}`, async (r) => {
-      let no = await sentence(r)
-      if (r.status == 202) throw new Pending(no)
-      return r.ok ? null : no
-    }, {
-      method: 'POST',
-      body: JSON.stringify(batch),
-    }, head)
-  }
-
 // `map {header: property}` as one argument: its shape, checked once, so a model
 // that sent a list or a nested object hears that rather than a header that
 // silently went nowhere. Whether a mapped name is a property is csv.ts's, which
@@ -1217,6 +1200,7 @@ let published = async (
       }
     }
   }
+  let willSeed = !app.seeded && keys.some(seedy)
   // Stage the home's table before recording the consumer release. Its whole
   // manifest is written back, so it stays the document the home declared —
   // projected to types, a sibling's deploy would silently unsearch the
@@ -1225,6 +1209,7 @@ let published = async (
     let slug of new Set([
       ...Object.keys(split.grows),
       ...Object.keys(retired),
+      ...(willSeed ? Object.values(uses) : []),
     ])
   ) {
     let home = await ctx.dir.app(space, slug)
@@ -1358,10 +1343,17 @@ let published = async (
   // directory moves the release pointer; until then the serving rows stay put.
   let sowed: Sown[] = []
   let seedTook = c.since()
-  if (!app.seeded) {
+  if (willSeed) {
+    let head = await byCaller(ctx, who)
+    let apply = applying(draft, head, '/seed')
+    if (Object.keys(uses).length) {
+      await declare
+      let named = { space, app: { ...app, declaration: pointer }, who }
+      apply = seeding(ctx.env, named, draft, staged, head)
+    }
     sowed = await sow(
       await texts(blobs, prefix, own(keys).filter(seedy)),
-      applying(draft, await byCaller(ctx, who), '/seed'),
+      apply,
     )
   }
   seedTook('seed')
