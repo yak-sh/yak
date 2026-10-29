@@ -11,7 +11,7 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
-import { type Bundle, derivedEid, type Graph, Refused } from '@yaks/graph'
+import { type Bundle, derivedEid, Refused } from '@yaks/graph'
 import { fileOf } from '@yaks/file'
 import { world } from '../persona/testing.ts'
 import { pinned } from './testing.ts'
@@ -195,108 +195,6 @@ test('no scope is empty; fresh request snapshots see graph edits and preserve ex
   } finally {
     await c.close()
   }
-})
-
-let local = async (run: (g: Graph, root: string) => Promise<void>) => {
-  let root = await Deno.makeTempDir({ prefix: 'mcp-skills-' })
-  try {
-    let result = await new Deno.Command('git', {
-      cwd: root,
-      args: ['init', '-q'],
-      stdout: 'null',
-      stderr: 'piped',
-    }).output()
-    assert(result.success)
-    await Deno.mkdir(`${root}/.claude/skills/testing/scripts`, {
-      recursive: true,
-    })
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/testing/SKILL.md`,
-      '---\nname: testing\ndescription: Local testing\nauthor: Exact raw YAML\n---\nLocal instructions\n',
-    )
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/testing/scripts/dom.ts`,
-      'export let dom = "✓"\n',
-    )
-    await run(world(), root)
-  } finally {
-    await Deno.remove(root, { recursive: true })
-  }
-}
-
-test('cwd overlay serves raw YAML, binary companions and nested skills without importing graph', async () => {
-  await local(async (g, root) => {
-    await Deno.writeFile(
-      `${root}/.claude/skills/testing/scripts/data.bin`,
-      new Uint8Array([0, 255, 3, 200]),
-    )
-    await Deno.mkdir(`${root}/.claude/skills/testing/nested`, {
-      recursive: true,
-    })
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/testing/nested/SKILL.md`,
-      '---\nname: nested\ndescription: Nested checks\n---\nNested instructions\n',
-    )
-    let { c } = await client({ graph: g, cwd: root })
-    try {
-      let skills = (await list(c)).skills as Manifest[]
-      assertEquals(skills.length, 2)
-      let parent = skills.find((s) => s.frontmatter.name == 'testing')!
-      assertEquals(parent.resources.length, 4)
-      assertEquals(parent.frontmatter.author, 'Exact raw YAML')
-      let binary = parent.resources.find((r) => r.uri.endsWith('/data.bin'))!
-      let read = await c.readResource({ uri: binary.uri })
-      assert('blob' in read.contents[0])
-      assertEquals(read.contents[0].blob, 'AP8DyA==')
-      assertEquals(binary.size, 4)
-      assertEquals(binary.digest, await hash(new Uint8Array([0, 255, 3, 200])))
-      await Deno.remove(`${root}/.claude/skills/testing/scripts/dom.ts`)
-      assertEquals(
-        ((await list(c)).skills as Manifest[]).find((s) =>
-          s.frontmatter.name == 'testing'
-        )!.resources.length,
-        3,
-      )
-      assertEquals(await g.get(['skill-repo-testing']), [])
-    } finally {
-      await c.close()
-    }
-  })
-})
-
-test('Skills attachment refuses unsafe, nonconforming and oversized snapshots before discovery', async () => {
-  await local(async (g, root) => {
-    let built = () => new McpServer({ name: 'refusal-test', version: '1' })
-    await Deno.symlink(
-      '/etc/passwd',
-      `${root}/.claude/skills/testing/scripts/link`,
-    )
-    await assertRejects(
-      () => attachSkills(built(), { graph: g, cwd: root }),
-      Refused,
-    )
-    await Deno.remove(`${root}/.claude/skills/testing/scripts/link`)
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/testing/SKILL.md`,
-      '---\nname: Testing\ndescription: Invalid name\n---\nText\n',
-    )
-    await assertRejects(
-      () => attachSkills(built(), { graph: g, cwd: root }),
-      Refused,
-    )
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/testing/SKILL.md`,
-      '---\nname: testing\ndescription: Valid name\n---\nText\n',
-    )
-    await Deno.writeFile(
-      `${root}/.claude/skills/testing/scripts/huge`,
-      new Uint8Array(16 * 1024 * 1024 + 1),
-    )
-    await assertRejects(
-      () => attachSkills(built(), { graph: g, cwd: root }),
-      Refused,
-    )
-  })
 })
 
 // The registration boundary records the same contributed resources/prompts

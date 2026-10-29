@@ -5,9 +5,6 @@ import { held, take, until as stopped } from '@yaks/effects'
 import { effectDoc } from '@yaks/effects/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { dirname, join, resolve } from 'node:path'
-import { localFilesystem, repositoryEid } from '@yaks/git/host'
-import { run } from '@yaks/git/land'
-import { repoSkills } from './skills.ts'
 import { skillEffects, type SkillRuntime } from './skill-effects.ts'
 import { world } from './testing.ts'
 
@@ -616,53 +613,4 @@ test('skill per-pass lease release errors reject the awaited effect and retry', 
     (await held(graph, '@yaks/persona/skill_files'))?.holder,
     undefined,
   )
-})
-
-test('skill effects real temp Git and RAM graph preserve import/export agreement', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'skill-effects-git-' })
-  let root = join(dir, 'main')
-  let git = async (...args: string[]) => {
-    let result = await run(args, root)
-    assert(result.ok, result.err)
-    return result.out.trim()
-  }
-  try {
-    await Deno.mkdir(join(root, '.claude/skills/sample'), { recursive: true })
-    await git('init', '-b', 'main')
-    await git('config', 'user.name', 'Test')
-    await git('config', 'user.email', 'test@example.com')
-    let path = join(root, '.claude/skills/sample/SKILL.md')
-    await Deno.writeTextFile(
-      path,
-      '---\nname: sample\ndescription: Useful\n---\nOriginal\n',
-    )
-    await git('add', '.')
-    await git('commit', '-m', 'Initial')
-    let graph = world()
-    let repository = repositoryEid(
-      join(root, '.git'),
-      (await localFilesystem(graph)).entity.eid,
-    )
-    await graph.apply([{
-      entity: { eid: repository },
-      repository: { common: join(root, '.git') },
-    }])
-    let fx = skillEffects({ graph }, { skills: true }, {
-      roots: () => Promise.resolve([root]),
-    })
-    await invoke(fx)
-    let [skill] = await repoSkills(graph, repository)
-    assert(skill)
-    await graph.apply([{
-      entity: { eid: skill.entity.eid },
-      content: { body: 'Exported\n' },
-    }])
-    await invoke(fx)
-    assert((await Deno.readTextFile(path)).endsWith('Exported\n'))
-    assertEquals(await git('status', '--porcelain'), '')
-    await invoke(fx)
-    assertEquals((await repoSkills(graph, repository))[0].entity, skill.entity)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
 })

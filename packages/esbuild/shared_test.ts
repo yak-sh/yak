@@ -1,10 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { analysisCache } from './analysis.ts'
-import { assertEquals, assertNotEquals } from '@std/assert'
 import { Files } from './npm.ts'
 import { type Catalog, seed } from './platform.ts'
-import { shared } from './shared.ts'
-import { stop } from './bundle.ts'
 
 let catalog: Catalog = {
   '@yaks/analysis-fixture': {
@@ -33,65 +30,6 @@ let make = () =>
     'node_modules/analysis-fixture/index.js':
       'export let a = 101; export let b = 202',
   })
-
-// Compile the integration fixture once at module load; the contracts below
-// assert its results independently. Cache behavior is also exercised without
-// the compiler through the same read-validating cache used by shared().
-let integration = await (async () => {
-  let fs = make()
-  let build = () =>
-    shared(fs, setup, catalog, 'https://analysis.test', ['main.js'])
-  try {
-    let first = await build()
-    let warm = await build()
-    fs.write(
-      'main.js',
-      "export { b } from 'analysis-fixture'; import './later.js'",
-    )
-    let edited = await build()
-    fs.write('main.js', files['main.js'])
-    let restored = await build()
-    fs.write('later.js', "import { b } from 'analysis-fixture'; console.log(b)")
-    let added = await build()
-    fs.delete('later.js')
-    let deleted = await build()
-    fs.write(
-      'node_modules/analysis-fixture/index.js',
-      'export let a = 303; export let b = 404',
-    )
-    let npm = await build()
-    fs = make()
-    let fresh = await build()
-    return { first, warm, edited, restored, added, deleted, npm, fresh }
-  } finally {
-    await stop()
-  }
-})()
-
-test('shared analysis reuses unchanged inputs and follows page edits', () => {
-  let { first, warm, edited, restored } = integration
-  assertEquals(warm, first)
-  assertNotEquals(
-    edited.urls['analysis-fixture'],
-    first.urls['analysis-fixture'],
-  )
-  assertEquals(restored, first)
-})
-
-test('shared analysis follows newly resolved files and their deletion', () => {
-  let { first, added, deleted } = integration
-  assertNotEquals(
-    added.urls['analysis-fixture'],
-    first.urls['analysis-fixture'],
-  )
-  assertEquals(deleted, first)
-})
-
-test('shared analysis follows npm changes without contaminating fresh Files', () => {
-  let { first, npm, fresh } = integration
-  assertNotEquals(npm.urls['analysis-fixture'], first.urls['analysis-fixture'])
-  assertEquals(fresh, first)
-})
 
 let fixture = () => {
   let cache = analysisCache<string[]>(

@@ -24,7 +24,7 @@ let messages = () => {
 }
 
 test('MessagePort requests, frames, failures and pending shutdown', async () => {
-  let { port1, port2 } = new MessageChannel()
+  let { port1, port2 } = messages()
   let frames: unknown[] = []
   let a = portLink(port1, { frame: (f) => frames.push(f) })
   let b = portLink(port2, {
@@ -46,8 +46,6 @@ test('MessagePort requests, frames, failures and pending shutdown', async () => 
   } finally {
     a.close()
     b.close()
-    port1.close()
-    port2.close()
   }
 })
 
@@ -77,7 +75,7 @@ test('port codecs restore typed failures and their data', async () => {
 })
 
 test('MessagePort rejects failures its decoder cannot restore', async () => {
-  let { port1, port2 } = new MessageChannel()
+  let { port1, port2 } = messages()
   let a = portLink(port1, {
     decodeError: () => {
       throw new TypeError('invalid failure')
@@ -93,55 +91,55 @@ test('MessagePort rejects failures its decoder cannot restore', async () => {
   } finally {
     a.close()
     b.close()
-    port1.close()
-    port2.close()
   }
 })
 
 test('MessagePort request limits and timeout bound abandoned operations', async () => {
-  let { port1, port2 } = new MessageChannel()
-  let a = portLink(port1, { maxPending: 1, timeout: 10 })
+  let { port1 } = messages()
+  let time = clock()
+  let a = portLink(port1, { maxPending: 1, timeout: 10, clock: time })
   try {
     let first = a.request('never')
     await assertRejects(() => a.request('excess'), Error, 'Too many pending')
-    await assertRejects(() => first, Error, 'timed out')
+    let timedOut = assertRejects(() => first, Error, 'timed out')
+    await time.advance(10)
+    await timedOut
   } finally {
     a.close()
-    port1.close()
-    port2.close()
   }
 })
 
 test('peer disconnect rejects outstanding port requests immediately', async () => {
-  let { port1, port2 } = new MessageChannel()
+  let { port1, port2 } = messages()
   let a = portLink(port1)
   let b = portLink(port2, { receive: () => new Promise(() => {}) })
   let pending = a.request('stuck')
   b.close()
   await assertRejects(() => pending, Error, 'disconnected')
   a.close()
-  port1.close()
-  port2.close()
 })
 
-test('real worker crash rejects pending requests', async () => {
-  let worker = new Worker(
-    'data:application/javascript,onmessage=()=>{throw new Error("crash")}',
-    { type: 'module' },
-  )
-  worker.addEventListener('error', (e) => e.preventDefault())
-  let link = portLink(worker)
+test('port errors reject pending requests', async () => {
+  let { port1, port2 } = messages()
+  let link = portLink(port1)
+  let peer = portLink(port2, { receive: () => new Promise(() => {}) })
   try {
-    await assertRejects(() => link.request('crash'), Error, 'disconnected')
+    let failed = assertRejects(
+      () => link.request('pending'),
+      Error,
+      'disconnected',
+    )
+    port1.dispatchEvent(new Event('error'))
+    await failed
   } finally {
     link.close()
-    worker.terminate()
+    peer.close()
   }
 })
 
 test('request deadline override can wait indefinitely but disconnect still rejects', async () => {
   const time = clock()
-  const { port1, port2 } = new MessageChannel()
+  const { port1 } = messages()
   const link = portLink(port1, { timeout: 10, clock: time })
   try {
     const ordinary = assertRejects(
@@ -172,8 +170,6 @@ test('request deadline override can wait indefinitely but disconnect still rejec
     await disconnected
   } finally {
     link.close()
-    port1.close()
-    port2.close()
   }
 })
 

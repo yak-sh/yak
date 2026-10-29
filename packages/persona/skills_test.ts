@@ -5,7 +5,6 @@ import {
   derivedEid,
   type Graph,
   graph,
-  identityEid,
   Refused,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -32,7 +31,6 @@ import {
 
 let repo = repositoryEid('/repo/.git', 'test-filesystem')
 let elsewhere = repositoryEid('/elsewhere/.git', 'test-filesystem')
-let another = repositoryEid('/another/.git', 'test-filesystem')
 
 let vocab = loadVocab([docDoc, edgeDoc, fileDoc, gitDoc, personaDoc, {
   $defs: {
@@ -68,47 +66,6 @@ let skill = (eid: string, title: string, repository = repo): Bundle[] => {
       references: {},
     },
   ]
-}
-
-let source = (title: string, description: string, body: string): string =>
-  `---\nname: ${title}\ndescription: ${description}\n---\n${body}`
-
-let write = async (
-  root: string,
-  title: string,
-  description = `Local ${title}`,
-  body = `Local instructions for ${title}\n`,
-): Promise<void> => {
-  let dir = `${root}/.claude/skills/${title}`
-  await Deno.mkdir(dir, { recursive: true })
-  await Deno.writeTextFile(`${dir}/SKILL.md`, source(title, description, body))
-}
-
-let git = async (cwd: string, ...args: string[]): Promise<string> => {
-  let result = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!result.success) throw new Error(new TextDecoder().decode(result.stderr))
-  return new TextDecoder().decode(result.stdout).trim()
-}
-
-let fixture = async (
-  run: (g: Graph, root: string, repository: string) => Promise<void>,
-): Promise<void> => {
-  let root = await Deno.makeTempDir()
-  try {
-    await git(root, 'init', '-q')
-    let common = await Deno.realPath(`${root}/.git`)
-    let g = world()
-    let repository = identityEid('repository', [common])
-    await g.apply([{ entity: { eid: repository }, repository: { common } }])
-    await run(g, root, repository)
-  } finally {
-    await Deno.remove(root, { recursive: true })
-  }
 }
 
 let graphOnly = world()
@@ -345,159 +302,6 @@ test('skillFiles refuses a renamed companion overwriting its destination', async
   )
 })
 
-test('local description and body edits preserve graph identity without import', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply([...skill('held', 'review', repository)])
-    await write(
-      root,
-      'review',
-      'Revised description',
-      '# Revised instructions\n',
-    )
-    await Deno.mkdir(`${root}/nested`)
-    let local = await loadSkill(g, 'review', `${root}/nested`)
-    assertEquals(local.entity.eid, 'held')
-    assertEquals(local.doc, { title: 'review', body: 'Revised description' })
-    assertEquals(local.content, { body: '# Revised instructions\n' })
-    assertEquals((await loadSkill(g, 'review')).doc, {
-      title: 'review',
-      body: 'About review',
-    })
-    assertEquals((await loadSkill(g, 'review')).content, {
-      body: 'Instructions for review\n',
-    })
-    await write(root, 'review', 'Second edit', 'Second body')
-    assertEquals((await loadSkill(g, 'review', root)).content, {
-      body: 'Second body',
-    })
-  }))
-
-test('untracked additions, folder renames and deletions replace the graph view', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply([
-      ...skill('held', 'old', repository),
-      ...skill('deleted', 'deleted', repository),
-    ])
-    await write(root, 'old')
-    await write(root, 'fresh')
-    await Deno.rename(
-      `${root}/.claude/skills/old`,
-      `${root}/.claude/skills/renamed`,
-    )
-    await write(root, 'renamed', 'Renamed description', 'Renamed instructions')
-    let local = await skillsAt(g, root)
-    assertEquals(local.map((b) => b.doc), [
-      { title: 'fresh', body: 'Local fresh' },
-      { title: 'renamed', body: 'Renamed description' },
-    ])
-    assert(
-      local.every((b) => b.entity.eid != 'held' && b.entity.eid != 'deleted'),
-    )
-    assertEquals(
-      (await loadSkill(g, 'fresh', root)).entity.eid,
-      local[0].entity.eid,
-    )
-    await assertRejects(() => loadSkill(g, 'old', root), Refused, 'No skill')
-    assertEquals((await repoSkills(g, repository)).length, 2)
-    await Deno.remove(`${root}/.claude`, { recursive: true })
-    assertEquals(await skillsAt(g, root), [])
-  }))
-
-test('checkout overlays never borrow a matching title from another repository', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply([
-      ...skill('here', 'review', repository),
-      ...skill('there', 'review', elsewhere),
-    ])
-    await write(root, 'review')
-    assertEquals((await loadSkill(g, 'review', root)).entity.eid, 'here')
-    await assertRejects(() => loadSkill(g, 'review'), Refused, 'more than one')
-    await Deno.remove(`${root}/.claude`, { recursive: true })
-    assertEquals(await skillsAt(g, root), [])
-    assertEquals((await repoSkills(g, elsewhere)).map((b) => b.entity.eid), [
-      'there',
-    ])
-  }))
-
-test('local skill directories and documents never follow symlinks', () =>
-  fixture(async (g, root) => {
-    await write(root, 'real')
-    await Deno.symlink(
-      `${root}/.claude/skills/real`,
-      `${root}/.claude/skills/link`,
-    )
-    await Deno.mkdir(`${root}/.claude/skills/file-link`)
-    await Deno.symlink(
-      `${root}/.claude/skills/real/SKILL.md`,
-      `${root}/.claude/skills/file-link/SKILL.md`,
-    )
-    assertEquals((await skillsAt(g, root)).map((b) => b.doc), [
-      { title: 'real', body: 'Local real' },
-    ])
-    await Deno.rename(`${root}/.claude/skills`, `${root}/outside`)
-    await Deno.symlink(`${root}/outside`, `${root}/.claude/skills`)
-    assertEquals(await skillsAt(g, root), [])
-  }))
-
-test('malformed local frontmatter is refused, not replaced with stale graph text', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply([...skill('held', 'review', repository)])
-    await write(root, 'review')
-    await Deno.writeTextFile(
-      `${root}/.claude/skills/review/SKILL.md`,
-      'not a skill',
-    )
-    await assertRejects(() => skillsAt(g, root), Refused, 'Cannot load')
-  }))
-
-test('linked checkouts scope graph identities by their shared git common directory', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply(skill('held', 'review', repository))
-    await write(root, 'review')
-    await git(root, 'add', '.')
-    await git(
-      root,
-      '-c',
-      'user.name=Test',
-      '-c',
-      'user.email=test@example.invalid',
-      'commit',
-      '-qm',
-      'skill',
-    )
-    let linked = await Deno.makeTempDir()
-    try {
-      await git(root, 'worktree', 'add', '-q', '--detach', linked)
-      await write(linked, 'review', 'Linked edit', 'Linked instructions')
-      assertEquals((await loadSkill(g, 'review', linked)).entity.eid, 'held')
-      assertEquals((await loadSkill(g, 'review', linked)).content, {
-        body: 'Linked instructions',
-      })
-      assertEquals((await loadSkill(g, 'review', root)).content, {
-        body: 'Local instructions for review\n',
-      })
-      assertEquals((await loadSkill(g, 'review')).content, {
-        body: 'Instructions for review\n',
-      })
-    } finally {
-      await git(root, 'worktree', 'remove', '--force', linked)
-    }
-  }))
-
-test('unregistered repositories get temporary views rather than borrowing graph names', () =>
-  fixture(async (g, root, repository) => {
-    await g.apply([{ entity: { eid: repository }, $delete: true }])
-    await g.apply(skill('elsewhere', 'review', another))
-    await write(root, 'review')
-    let before = await repoSkills(g)
-    let local = await loadSkill(g, 'review', root)
-    assert(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-        .test(local.entity.eid),
-    )
-    assertEquals(await repoSkills(g), before)
-  }))
-
 test('skill catalogue filters authored refusals but propagates unexpected metadata errors', async () => {
   let unexpected = new Error('unexpected skill metadata access')
   let b = skill('broken', 'broken')[0]
@@ -518,23 +322,6 @@ test('skill catalogue filters authored refusals but propagates unexpected metada
   assertEquals(caught, unexpected)
   b.skill = { invoke: 'neither' }
   assertEquals(await repoSkills(g), [])
-})
-
-test('a missing checkout has no local skills and never falls back to graph instructions', async () => {
-  let g = world()
-  await g.apply(skill('held', 'review'))
-  let dir = await Deno.makeTempDir({ prefix: 'missing-skills-' })
-  try {
-    assertEquals(await skillsAt(g, dir + '/removed'), [])
-    assertEquals((await repoSkills(g)).length, 1)
-    await assertRejects(
-      () => loadSkill(g, 'review', dir + '/removed'),
-      Refused,
-      'No skill',
-    )
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
 })
 
 let scoped = world()

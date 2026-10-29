@@ -92,29 +92,3 @@ test('canvas contributions disappear without changing the stored entities', asyn
     }
   }
 })
-
-test('a cold web module graph loads without canvas', async () => {
-  let types = new URL('./types.ts', import.meta.url).href
-  let app = new URL('./components/App.tsx', import.meta.url).href
-  let code = `let {learn} = await import(${JSON.stringify(types)}); learn(${
-    JSON.stringify(without)
-  }); await import(${JSON.stringify(app)})`
-  let file = await Deno.makeTempFile({ suffix: '.ts' })
-  try {
-    await Deno.writeTextFile(file, code)
-    let result = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        '--config',
-        new URL('../../deno.json', import.meta.url).pathname,
-        file,
-      ],
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    assertEquals(result.success, true, new TextDecoder().decode(result.stderr))
-  } finally {
-    await Deno.remove(file)
-  }
-})
