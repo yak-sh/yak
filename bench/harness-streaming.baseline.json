@@ -12,16 +12,16 @@
       "unit": "ms",
       "better": "lower",
       "median": 232.87100000000004,
-      "tolerance": 0.845,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.845
     },
     {
       "name": "transient",
       "unit": "ms",
       "better": "lower",
       "median": 7.4080000000000155,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"

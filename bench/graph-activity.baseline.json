@@ -12,48 +12,48 @@
       "unit": "ns/op",
       "better": "lower",
       "median": 43463.33333333314,
-      "tolerance": 0.936,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.936
     },
     {
       "name": "absent/query",
       "unit": "ns/op",
       "better": "lower",
       "median": 2850.9999999999613,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "uncreated/apply",
       "unit": "ns/op",
       "better": "lower",
       "median": 41878.9999999996,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "uncreated/query",
       "unit": "ns/op",
       "better": "lower",
       "median": 2737.333333333178,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "inactive/apply",
       "unit": "ns/op",
       "better": "lower",
       "median": 45444.99999999971,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "inactive/query",
       "unit": "ns/op",
       "better": "lower",
       "median": 2956.999999999728,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"

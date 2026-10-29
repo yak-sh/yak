@@ -7,94 +7,6 @@
     "error": "the code at 4eb03bcf6 cannot run today's bench: Error: Relay finished without staging a value\n    at file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:230:19\n    at async send (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:227:9)\n    at async next (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:316:7)\n    at async run (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:337:7)\n    at async relayFixture (file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay-fixture.ts:348:3)\n    at async file:///tmp/bench-paired-658ab6d7dfb88d49/0/bench/relay_bench.ts?collection=0:9:19"
   },
   {
-    "suite": "client-rules",
-    "baseline": "bench/client-rules.baseline.json",
-    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "keystroke, no rules",
-          "keystroke, four rules"
-        ]
-      }
-    ],
-    "revision": "458aec0cd98e1a66bc8f8048a295681000230f50",
-    "rounds": 6,
-    "metric": "median-of-deno-averages/cpu",
-    "verdict": "same",
-    "status": "same",
-    "confidence": "default monitor round count",
-    "slower": [],
-    "comparisons": [
-      {
-        "name": "keystroke, no rules",
-        "unit": "ns/op",
-        "figure": "cpu",
-        "before": [
-          73697.40634005856,
-          45415.27446300607,
-          91792.38754325344,
-          52141.975308642686,
-          35091.89189189291,
-          53753.78787879058
-        ],
-        "current": [
-          46237.333333333176,
-          45873.31536388202,
-          46141.11922141105,
-          48961.86440678089,
-          39139.73799126523,
-          35455.12820513079
-        ],
-        "after": [
-          49618.64406779548,
-          63461.5384615392,
-          51251.87969924741,
-          108303.64372469719,
-          37036.842105264535,
-          44106.42570281154
-        ],
-        "reference": 51696.927503945044,
-        "now": 46007.217292646535
-      },
-      {
-        "name": "keystroke, four rules",
-        "unit": "ns/op",
-        "figure": "cpu",
-        "before": [
-          144439.99999999962,
-          103465.5737704941,
-          88545.83333333419,
-          90046.6101694924,
-          71514.92537313382,
-          85317.99163179757
-        ],
-        "current": [
-          89382.07547170059,
-          139996.44128113857,
-          73046.87499999929,
-          64521.53110047255,
-          70439.99999999869,
-          68614.99999999978
-        ],
-        "after": [
-          138330.64516128864,
-          105557.14285714028,
-          136710.38251366137,
-          113246.63677130411,
-          50664.99999998996,
-          89471.42857143003
-        ],
-        "reference": 96756.09196999326,
-        "now": 71743.43749999898
-      }
-    ],
-    "evidence": "bench/client-rules.rebank.results.json"
-  },
-  {
     "suite": "web-client",
     "baseline": "bench/web-client.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
@@ -2503,12 +2415,6 @@
     "evidence": "bench/operation-sessions.rebank.results.json"
   },
   {
-    "suite": "terminal-interactions",
-    "revision": "0199ed8c7b81ccb2240dbe91bdf975ff07912ff7",
-    "verdict": "inconclusive",
-    "error": "the code at f68531abe cannot run today's bench: Error: addressed populated query answer never completed:\n╭──────────────────────╮Search\n│Tasks                 │query count\n│                      │.task .count\n│Search                │\n│/                     │2,000\n│                      │\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\ndrafts: [{\"entity\":{\"eid\":\"8040df04-e5ba-8873-b14a-247c5f1a41ad\",\"num\":2002},\"draft\":{\"by\":\"1d55ab2c-76da-4b66-9c37-e871a427f200\",\"place\":\"search\",\"text\":\"\",\"rev\":2}}]\n    at until (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:68:11)\n    at async file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:209:9\n    at async timed (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:90:7)\n    at async Module.measure (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:194:5)\n    at async serve (file:///tmp/bench-paired-ef478fd854937cda/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-ef478fd854937cda/0/bench/standalone-worker.ts:5:1"
-  },
-  {
     "suite": "hook-waits",
     "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
     "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
@@ -4253,5 +4159,411 @@
       }
     ],
     "evidence": "bench/operation-diagnostics.rebank.results.json"
+  },
+  {
+    "suite": "terminal-interactions",
+    "revision": "d0a0489cb571212445ce35bcc9331f40ccd3d663",
+    "verdict": "inconclusive",
+    "error": "the code at f68531abe cannot run today's bench: Error: paint comment… never completed:\n╭──────────────────────╮Search\n│Tasks                 │query count\n│                      │.task .count\n│Search                │\n│/                     │2,000\n│                      │\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\ndrafts: [{\"entity\":{\"eid\":\"8040df04-e5ba-8873-b14a-247c5f1a41ad\",\"num\":2002},\"draft\":{\"by\":\"1d55ab2c-76da-4b66-9c37-e871a427f200\",\"place\":\"search\",\"text\":\"\",\"rev\":2}}]\n    at until (file:///tmp/bench-paired-47993deaf221e44b/0/bench/terminal-interactions.ts:70:11)\n    at async Module.measure (file:///tmp/bench-paired-47993deaf221e44b/0/bench/terminal-interactions.ts:228:7)\n    at async serve (file:///tmp/bench-paired-47993deaf221e44b/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-47993deaf221e44b/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "client-frame",
+    "baseline": "bench/client-frame.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "references": {
+      "frame: 50k-entity world, 208 bundles, 3 reads, 40 watches": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: one patch (the local player steps)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: a 200-bundle batch (the simulation)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: what is near (range over creatures)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: what lies at its feet (range over items)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: what a player carries (a reference)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "part: what is alive (a property over one component)": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-frame.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "frame: 50k-entity world, 208 bundles, 3 reads, 40 watches",
+          "part: one patch (the local player steps)",
+          "part: a 200-bundle batch (the simulation)",
+          "part: what is near (range over creatures)",
+          "part: what lies at its feet (range over items)",
+          "part: what a player carries (a reference)",
+          "part: what is alive (a property over one component)"
+        ]
+      }
+    ],
+    "revision": "5104ede063c241fd5ec6f87a0d132c440c7e968d",
+    "rounds": 8,
+    "metric": "median-of-deno-averages/cpu",
+    "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "frame: 50k-entity world, 208 bundles, 3 reads, 40 watches",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          5839249.999999993,
+          15936999.999999898,
+          4965000.000000145,
+          8040750.000000116,
+          5054000.000000088,
+          6963799.999999901,
+          9274333.33333344,
+          13865000.0000016
+        ],
+        "current": [
+          9044333.333333572,
+          10315000.000000509,
+          8445500.00000072,
+          5890500.000000429,
+          7332499.999999981,
+          14229500.000001281,
+          17045000.000000075,
+          4662583.333333411
+        ],
+        "after": [
+          6905333.333333147,
+          22147500.000000037,
+          5087250.00000004,
+          6979249.999999865,
+          9540500.000000065,
+          5242499.999999382,
+          5371500.0000001965,
+          4811499.999999796
+        ],
+        "reference": 6934566.6666665245,
+        "now": 8744916.666667147
+      },
+      {
+        "name": "part: one patch (the local player steps)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          92242.49999999983,
+          74194.99999999971,
+          122982.49999999825,
+          95895.00000000044,
+          60709.999999999134,
+          95483.33333333478,
+          109135.00000000568,
+          130338.88888888517
+        ],
+        "current": [
+          123573.33333333374,
+          80040.00000000361,
+          71147.50000000185,
+          111773.33333333384,
+          63368.3333333344,
+          89439.99999999505,
+          80254.99999999738,
+          60372.00000000303
+        ],
+        "after": [
+          116443.33333333331,
+          62241.666666667086,
+          134251.42857143198,
+          91116.66666666981,
+          88782.49999999753,
+          161833.33333334303,
+          61201.66666666895,
+          51450.000000004366
+        ],
+        "reference": 93862.9166666673,
+        "now": 80147.5000000005
+      },
+      {
+        "name": "part: a 200-bundle batch (the simulation)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          4458999.999999984,
+          3777399.999999943,
+          3132785.7142857416,
+          3290500.000000065,
+          3293699.9999999898,
+          3776875.000000018,
+          3442750.00000016,
+          3600666.66666656
+        ],
+        "current": [
+          5004166.6666666055,
+          7082499.999999981,
+          4586999.999999989,
+          4386800.000000039,
+          3833833.333333435,
+          4644400.000000315,
+          4974500.000000262,
+          3036777.7777775903
+        ],
+        "after": [
+          3753000.000000005,
+          4888799.999999992,
+          3875999.999999944,
+          4225499.999999859,
+          3560333.3333334983,
+          2887333.333333421,
+          3062800.000000061,
+          2749000.00000016
+        ],
+        "reference": 3580500.000000029,
+        "now": 4615700.000000152
+      },
+      {
+        "name": "part: what is near (range over creatures)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          607449.9999999943,
+          641875.0000000272,
+          540225.0000000095,
+          582749.9999999872,
+          522262.5000000107,
+          627899.9999999541,
+          300849.99999999127,
+          540000.0000000546
+        ],
+        "current": [
+          668074.9999999988,
+          725761.904761904,
+          616266.666666676,
+          606949.9999999607,
+          544925.000000012,
+          507425.00000005745,
+          316399.99999997596,
+          570125.0000000072
+        ],
+        "after": [
+          549600.0000000094,
+          610624.9999999818,
+          525350.0000000258,
+          571987.5000000002,
+          526424.9999999946,
+          550374.9999999854,
+          402833.3333333042,
+          324524.9999999942
+        ],
+        "reference": 544912.5000000095,
+        "now": 588537.4999999839
+      },
+      {
+        "name": "part: what lies at its feet (range over items)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          493324.999999993,
+          514959.99999999185,
+          520483.33333335293,
+          469233.3333333408,
+          529240.000000027,
+          345116.66666670254,
+          278700.0000000262,
+          375599.9999999858
+        ],
+        "current": [
+          502824.99999998434,
+          536349.9999999931,
+          400579.99999999086,
+          553725.0000000313,
+          528225.0000000204,
+          459939.9999999878,
+          269677.7777777849,
+          370924.99999998836
+        ],
+        "after": [
+          472279.99999999156,
+          533824.9999999788,
+          479012.4999999989,
+          465500.0000000291,
+          438439.9999999732,
+          463580.0000000017,
+          193610.00000000786,
+          123350.00000000946
+        ],
+        "reference": 467366.66666668496,
+        "now": 481382.49999998603
+      },
+      {
+        "name": "part: what a player carries (a reference)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          66344.9999999989,
+          62775.000000001455,
+          60949.999999998,
+          65499.999999998785,
+          60275.000000001455,
+          64457.499999998625,
+          62666.66666666425,
+          67383.74999999905
+        ],
+        "current": [
+          72593.33333333416,
+          69326.66666666896,
+          62595.000000001164,
+          61292.500000004104,
+          67391.66666666583,
+          63270.000000002256,
+          32178.3333333345,
+          55233.33333333237
+        ],
+        "after": [
+          86342.49999999838,
+          63391.66666666642,
+          65340.000000001055,
+          63472.499999998035,
+          74264.9999999988,
+          61807.500000004446,
+          61836.2500000012,
+          36193.33333333392
+        ],
+        "reference": 63432.08333333222,
+        "now": 62932.50000000171
+      },
+      {
+        "name": "part: what is alive (a property over one component)",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          2054800.000000023,
+          1449049.9999999884,
+          1300100.0000000203,
+          1672400.000000016,
+          1397150.000000056,
+          1994050.000000061,
+          868800.0000000102,
+          1449449.999999979
+        ],
+        "current": [
+          1299199.9999999735,
+          1953449.9999999753,
+          1375166.6666667005,
+          1446399.9999999942,
+          1179500.0000000072,
+          1359199.9999998733,
+          701125.0000000473,
+          1164799.999999923
+        ],
+        "after": [
+          2191850.0000000224,
+          1359799.9999999958,
+          1300300.000000061,
+          1783649.9999999434,
+          1373299.9999999264,
+          1495799.999999872,
+          921224.9999999584,
+          1003166.6666665842
+        ],
+        "reference": 1423100.0000000224,
+        "now": 1329199.9999999234
+      }
+    ],
+    "evidence": "bench/client-frame.rebank.results.json"
+  },
+  {
+    "suite": "client-rules",
+    "baseline": "bench/client-rules.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "references": {
+      "keystroke, no rules": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "keystroke, four rules": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "keystroke, no rules",
+          "keystroke, four rules"
+        ]
+      }
+    ],
+    "revision": "5104ede063c241fd5ec6f87a0d132c440c7e968d",
+    "rounds": 6,
+    "metric": "median-of-deno-averages/cpu",
+    "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "keystroke, no rules",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          68693.74999999991,
+          61387.50000000073,
+          77589.99999999559,
+          38976.66666666586,
+          58887.50000000073,
+          36737.50000000382
+        ],
+        "current": [
+          46268.7500000006,
+          42903.00000000025,
+          37100.000000000364,
+          50799.99999999927,
+          77044.99999999825,
+          48692.59259259235
+        ],
+        "after": [
+          32908.33333333328,
+          50429.99999999893,
+          30188.57142857087,
+          72213.33333333254,
+          69032.49999999843,
+          131545.000000001
+        ],
+        "reference": 60137.50000000073,
+        "now": 47480.671296296474
+      },
+      {
+        "name": "keystroke, four rules",
+        "unit": "ns/op",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          201979.9999999964,
+          128584.99999999821,
+          60770.000000002256,
+          74302.50000000115,
+          184682.49999999898,
+          66207.50000000044
+        ],
+        "current": [
+          170581.66666666695,
+          59155.000000000655,
+          105150.00000000025,
+          197225.00000000309,
+          202754.99999999738,
+          53737.500000002
+        ],
+        "after": [
+          90316.66666666752,
+          125619.99999999898,
+          76314.99999999959,
+          144715.00000000105,
+          57475.99999999875,
+          59727.49999999905
+        ],
+        "reference": 83315.83333333355,
+        "now": 137865.8333333336
+      }
+    ],
+    "evidence": "bench/client-rules.rebank.results.json"
   }
 ]

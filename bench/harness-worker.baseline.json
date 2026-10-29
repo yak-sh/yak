@@ -12,32 +12,32 @@
       "unit": "ms",
       "better": "lower",
       "median": 58.443999999999505,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "inline/work",
       "unit": "ms",
       "better": "lower",
       "median": 328.98199999999997,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "worker/startup",
       "unit": "ms",
       "better": "lower",
       "median": 465.16499999999905,
-      "tolerance": 0.703,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.703
     },
     {
       "name": "worker/work",
       "unit": "ms",
       "better": "lower",
       "median": 1047.5439999999999,
-      "tolerance": 0.502,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.502
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"

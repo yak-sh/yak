@@ -11,17 +11,17 @@
       "name": "keystroke, no rules",
       "unit": "ns/op",
       "better": "lower",
-      "median": 50435.261883521445,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 59731.249999998676,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     },
     {
       "name": "keystroke, four rules",
       "unit": "ns/op",
       "better": "lower",
-      "median": 89296.2217514133,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 83315.83333333355,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.95
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
