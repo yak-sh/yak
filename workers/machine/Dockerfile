@@ -10,14 +10,12 @@ RUN printf 'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     bash=5.2.37-2+b10 ca-certificates=20250419 \
-    chromium-headless-shell=155.0.8059.39-1~deb13u1 \
-    curl=8.14.1-2+deb13u7 fonts-liberation=1:2.1.5-3 \
+    curl=8.14.1-2+deb13u7 \
     git=1:2.47.3-0+deb13u1 gh=2.46.0-3 jq=1.7.1-6+deb13u4 \
     openssh-client=1:10.0p1-7+deb13u4 procps=2:4.0.4-9 \
     python3=3.13.5-1 ripgrep=14.1.1-1+b4 \
     sudo=1.9.16p2-3+deb13u2 unzip=6.0-29+deb13u1 \
- && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
- && ln -s /usr/bin/chromium-headless-shell /usr/local/bin/google-chrome
+ && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 ARG DENO_VERSION=2.9.1
 ARG DENO_SHA256=710c54d63477d1100844ef4818f19507ce0dbf40510903b1d883f19e394446a2
