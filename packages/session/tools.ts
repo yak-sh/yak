@@ -336,7 +336,10 @@ export let runs = (
       {
         entity: { eid },
         [SESSION]: {
-          id,
+          // The id the caller typed names the transcript; it is written only
+          // where the transcript has none. An MCP connection is found by its
+          // own id (@yaks/mcp), which an eid typed here must not replace.
+          ...(str(comp(found, SESSION).id) ? {} : { id }),
           ended: null,
           ...(actor ? { actor } : {}),
           ...(persona ? { persona } : {}),

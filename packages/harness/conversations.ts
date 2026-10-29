@@ -34,6 +34,7 @@ let limit = (args: Record<string, unknown>, fallback = 40) => {
 // connection it opened, which speaks for nobody and says so (@yaks/mcp).
 let fallback = async (g: Graph, actor: Actor | null, me: string) => {
   if (actor?.by) return actor.by == me && actor.via == me
+  if (actor?.via == me) return true
   let [conn] = actor?.via ? await g.get([actor.via], ['session']) : []
   return part(conn, 'session').fallback === true
 }

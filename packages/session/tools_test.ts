@@ -171,6 +171,23 @@ test('a session that wears a persona keeps it', async () => {
   assertEquals(await wears('chose', '/r'), undefined)
 })
 
+// A caller naming a transcript by its eid, as an MCP connection names its own:
+// the transcript keeps the id it is found by.
+let named = async (session: string) =>
+  comp(
+    (await tools.session_context!(
+      { entity: { eid: 'c1' }, call: { args: { session, actor: 'p1' } } },
+      checkouts,
+    ) as Bundle[])[0],
+    'session',
+  )
+
+test('naming a transcript by its eid keeps its own id', async () => {
+  assertEquals((await named('s1')).id, undefined)
+  assertEquals((await named('s1')).actor, 'p1')
+  assertEquals((await named('fresh')).id, 'fresh')
+})
+
 // A subagent starting, as its harness's SubagentStart hook reports it: once
 // new, and again once its session is written.
 let starting = fleet('/r', fleetVocab)

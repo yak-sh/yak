@@ -418,6 +418,41 @@ test('a connection the host fallback opened says so, and speaks for nobody', () 
   assertEquals(unknownVia.opened.actor, undefined)
 })
 
+// A modern-era call naming no caller, on the host's process fallback.
+let unnamedModern = await (async () => {
+  let g = sessionGraph()
+  let process = derivedEid('fixture:process')
+  await g.apply([{ entity: { eid: process }, doc: { title: 'a process' } }])
+  let door = mcp({
+    graph: g,
+    sessions: g,
+    authenticate: () => ({ by: process, via: process }),
+  })
+  let request = rpc('tools/call', {
+    name: 'graph_apply',
+    arguments: { bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }] },
+    _meta: {
+      'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+      'io.modelcontextprotocol/clientCapabilities': {},
+      'io.modelcontextprotocol/clientInfo': { name: 'claude', version: '1' },
+    },
+  })
+  request.headers.set('content-type', 'application/json')
+  request.headers.set('accept', 'application/json, text/event-stream')
+  let response = await door(request)
+  let status = response.status
+  await response.text()
+  let made = comp((await g.get(['b1']))[0], 'created')
+  return { status, made, process }
+})()
+test('a modern call naming no caller comes through the process, not as it', () => {
+  assertEquals(unnamedModern.status, 200)
+  assertEquals([unnamedModern.made.by, unnamedModern.made.via], [
+    undefined,
+    unnamedModern.process,
+  ])
+})
+
 // Calls a harness's hook announced to the hook door before making them: one
 // by the session itself, one by a subagent the graph had not met.
 let announced = sessionGraph()

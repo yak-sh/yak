@@ -86,6 +86,12 @@ let ID = 'mcp-session-id'
 // host signs as its process acting for itself through itself.
 let fallback = (login: Actor | null) => !!login?.by && login.by == login.via
 
+// What a call speaks as where no connection names its run: the login, except
+// the host's fallback, which comes through the process for nobody. A process
+// is an instrument, never an actor, so it stands in `via` alone.
+let unnamed = (login: Actor | null): Actor | null =>
+  fallback(login) ? { via: login!.via } : login
+
 /** The connection's own actor wins over its login. An authenticated identity
  * outside the graph remains a fallback when the connection names no actor. */
 export let writer = (session: Actor, login: Actor | null): Actor =>
@@ -299,7 +305,7 @@ export let mcp = (opts: MountOptions): Handler => {
       }
       let caller = conn
         ? writer(await speaking(opts.sessions!, conn.session), actor)
-        : actor
+        : unnamed(actor)
       let exchange = { method: rpc.data.method }
       let built = server({
         ...opts,
@@ -372,7 +378,7 @@ export let mcp = (opts: MountOptions): Handler => {
         ? { method: body.method }
         : undefined
       let sent = mirrored(request, body)
-      callers.set(sent, { actor, exchange })
+      callers.set(sent, { actor: unnamed(actor), exchange })
       try {
         // The SDK owns the exchange lifetime, including SSE and cancellation.
         // Closing here would truncate a response whose stream is still active.
