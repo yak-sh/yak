@@ -96,10 +96,6 @@ let host = (() => {
         written.resolve()
         return release.promise.then(() => g.apply(bundles, opts))
       },
-    },
-    reader: {
-      get: g.get,
-      rows: g.rows,
       read: (_q, opts) => {
         signal = opts?.signal
         reading.resolve()

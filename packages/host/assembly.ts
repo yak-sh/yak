@@ -499,6 +499,7 @@ export let assemble = (
         ...(self ? { actor: self } : {}),
         ...clock ? { clock } : {},
         plugins: [...contributed, fx],
+        ...lent.reader ? { reader: lent.reader } : {},
       })
       binding.ready?.(host)
       part?.('bindings')

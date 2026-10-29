@@ -36,7 +36,6 @@ export type Hosting = {
   graph: Graph
   storage?: Pick<Storage, 'revision'>
   stopping?: AbortSignal
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
   who: Authenticate
   routes: Route[]
   filters?: Filter[]
@@ -73,7 +72,7 @@ export let handler = (host: Hosting, options: {
   timer?: Timer
 } = {}): Handler => {
   let routes = host.routes
-  let graph = host.reader ? { ...host.graph, ...host.reader } : host.graph
+  let graph = host.graph
   // One registry, fed twice: its own graph's `effect` phase for what this host
   // commits, and the host's feed for what every other process or thread
   // commits to the same store — a `yak` command beside `yak serve`, the effect
@@ -82,7 +81,7 @@ export let handler = (host: Hosting, options: {
   // as precise patches. The revision is for a store without one: it moves on
   // any write, so polling it beside a feed would reset every query each time.
   let revision = host.feed ? undefined : host.storage?.revision
-  let subs = subscriptions(graph, { activity: host.graph, revision })
+  let subs = subscriptions(graph, { revision })
   let stopFeed = host.feed?.(subs.hear)
   let cancel = () => {}
   let stopped = host.stopping?.aborted ?? false
@@ -119,7 +118,6 @@ export let handler = (host: Hosting, options: {
     : undefined
   let door = api({
     graph,
-    activity: host.graph,
     authenticate: host.who,
     subs,
     report,

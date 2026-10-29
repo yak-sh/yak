@@ -52,7 +52,24 @@ test('sampled stack output is bounded even for deep and diverse work', () => {
     timeDeltas: nodes.map(() => 1),
   }, 1)
   equal(said.split('\n').filter((line) => line.endsWith('samples:')).length, 3)
-  ok(said.split('\n').length <= 3 * 25)
+  ok(said.split('\n').length <= 3 * 42)
+})
+
+test('a deep stack keeps its root, which names who asked', () => {
+  let nodes = Array.from(
+    { length: 100 },
+    (_, i) => node(i + 1, `frame${i}`, i < 99 ? [i + 2] : []),
+  )
+  let said = stacks({
+    nodes,
+    startTime: 0,
+    endTime: 1,
+    samples: [100],
+    timeDeltas: [1],
+  }, 1)
+  ok(said.includes('at frame99 '))
+  ok(said.includes('at frame0 '))
+  ok(said.includes('… 60 frames'))
 })
 
 test('a hold during profile rotation keeps its evidence and closes its sampler', async () => {

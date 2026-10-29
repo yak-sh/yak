@@ -53,13 +53,12 @@ test('a GET route answers a HEAD with its headers and no body', async () => {
   assertEquals([res.status, await res.text()], [200, ''])
 })
 
-test('an HTTP route answers while the graph reader is busy', async () => {
+test('an HTTP route answers while a graph read is pending', async () => {
   let graph = shopGraph()
   let slow = Promise.withResolvers<Awaited<ReturnType<typeof graph.read>>>()
   let called = false
   let h = handler({
-    graph,
-    reader: {
+    graph: {
       ...graph,
       read: () => {
         called = true
@@ -85,8 +84,7 @@ let brokenRequest = (() => {
   let disk = new Error('disk gone'), boom = new Error('boom')
   let reported: { told: [Bundle, unknown][] } = { told: [] }
   let h = handler({
-    graph,
-    reader: { ...graph, read: () => Promise.reject(disk) },
+    graph: { ...graph, read: () => Promise.reject(disk) },
     who: () => null,
     routes: [
       { method: 'GET', path: '/hello', handle: () => new Response('hi') },

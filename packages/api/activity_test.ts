@@ -12,7 +12,6 @@ import {
 import { served } from './request.ts'
 import { receive } from './socket.ts'
 import { api } from './route.ts'
-import { handler } from './routes.ts'
 import { post, req, shopGraph } from './testing.ts'
 import { subscriptions } from './subs.ts'
 
@@ -63,36 +62,6 @@ test('API reads and writes descend from HTTP requests and streaming imports stay
       e.kind == 'request' && e.stage == 'end' && e.name.startsWith('/')
     )
       .every((e) => e.duration! >= 0 && e.counts?.status == 200),
-  )
-  off()
-})
-
-test('a reader overlay cannot steal composed graph activity or fanout parent', async () => {
-  let g = shopGraph()
-  let events: Event[] = []
-  let off = channel(g).subscribe((e) => events.push(e))
-  let serve = handler({
-    graph: g,
-    reader: { read: g.read, rows: g.rows, get: g.get },
-    who: () => null,
-    routes: [],
-  })
-  let out = await serve(post('/apply', [
-    { entity: { eid: 'book' }, book: { price: 4 } },
-  ]))
-  await out.json()
-  equal(
-    events.filter((e) =>
-      e.kind == 'request' && e.stage == 'start' && e.name == '/apply'
-    ).length,
-    1,
-  )
-  let root = request(events, '/apply')
-  ok(events.some((e) => e.kind == 'apply' && e.parent == root.id))
-  ok(
-    events.some((e) =>
-      e.kind == 'fanout' && e.name == 'subscriptions' && e.parent
-    ),
   )
   off()
 })

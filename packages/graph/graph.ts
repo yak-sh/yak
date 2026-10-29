@@ -256,6 +256,11 @@ export type Options = {
    * own, ./declared.ts `own`). A page decides for itself, since it holds only
    * part of the graph (@yaks/client). */
   runs?: (rule: Ready, o: ApplyOpts) => boolean
+  /** where this graph's committed reads are answered (default: here). A web
+   * host's reads run beside its HTTP thread (@yaks/cli `readThread`), so no
+   * read holds the thread; a write, and the reads it makes in its own
+   * transaction, still run here. */
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
 }
 
 /** A live graph: what it knows, and what you can do with it. */
@@ -1430,7 +1435,7 @@ export let graph = (opts: Options): Graph => {
       return g
     },
     install: () => storage.install(),
-    ...queries(() => g, reads),
+    ...queries(() => g, opts.reader ?? reads),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
   }

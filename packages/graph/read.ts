@@ -666,7 +666,7 @@ export let graph = (opts: Options): Graph => {
   })
   let g: Graph = {
     ...reads,
-    ...queries(() => g, reads),
+    ...queries(() => g, opts.reader ?? reads),
     vocab: opts.vocab,
     storage,
     outside,

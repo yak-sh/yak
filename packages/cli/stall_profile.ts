@@ -4,7 +4,8 @@
 import { type Profiler, Session } from 'node:inspector'
 
 /** The hottest sampled stacks within the last `ms` of a profile. Keep caller
- * frames too: native leaves such as JSON serialization don't name the work. */
+ * frames down to the root: native leaves such as JSON serialization don't name
+ * the work, and a storage read doesn't name who asked for it. */
 export let stacks = (profile: Profiler.Profile, ms: number): string => {
   let nodes = new Map(profile.nodes.map((node) => [node.id, node]))
   let parents = new Map<number, number>()
@@ -23,7 +24,7 @@ export let stacks = (profile: Profiler.Profile, ms: number): string => {
   if (!hot.length) return 'no running stacks were sampled during the gap'
   return hot.map(([id, count]) => {
     let frames: string[] = []
-    while (id && frames.length < 24) {
+    while (id) {
       let node = nodes.get(id)
       if (!node) break
       let f = node.callFrame
@@ -34,9 +35,18 @@ export let stacks = (profile: Profiler.Profile, ms: number): string => {
       )
       id = parents.get(id) ?? 0
     }
-    return `${count} samples:\n${frames.join('\n')}`
+    return `${count} samples:\n${trim(frames).join('\n')}`
   }).join('\n')
 }
+
+/** A deep stack's leaf, which says what ran, and its root, which says who
+ * asked: the frames between are the layers a read passes through. */
+let trim = (frames: string[], leaf = 8, root = 32): string[] =>
+  frames.length <= leaf + root ? frames : [
+    ...frames.slice(0, leaf),
+    `    … ${frames.length - leaf - root} frames`,
+    ...frames.slice(-root),
+  ]
 
 /** Samples only this isolate, at 10 Hz. Rotate once a minute (starting V8's
  * profiler costs tens of ms), or when a tick needs its evidence. Ordinary

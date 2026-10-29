@@ -1001,15 +1001,16 @@ let composed = async (
             await wait('traces', () =>
               cleanup('close traces', () =>
                 recorded?.close()))
-            await wait('reader', () =>
-              cleanup('close reader', () =>
-                opts.reader?.close?.()))
             // A forced ending can arrive while graceful shutdown drains. Stop
             // admitting endings and finish those already admitted before SQL
-            // closes; a late repeat has nothing left to release.
+            // closes; a late repeat has nothing left to release. An ending
+            // reads through the reader, so it closes after them.
             closed = true
             await wait('endings', () =>
               Promise.allSettled([...endings]))
+            await wait('reader', () =>
+              cleanup('close reader', () =>
+                opts.reader?.close?.()))
             await wait('storage', () =>
               cleanup('close storage', () =>
                 sql.close()))
