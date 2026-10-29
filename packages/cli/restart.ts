@@ -40,12 +40,13 @@ export let ROLES: Role[] = [
   },
 ]
 
-/** Includes systemd scheduling, preparing the pinned runtime and graph startup. */
+/** The supervised handover waits for readiness without holding its caller. */
 export let PATIENCE = 120_000
 
 let run: NonNullable<RestartOptions['run']> = async (command, args) => {
   let result = await new Deno.Command(command, {
     args,
+    signal: AbortSignal.timeout(1_000),
     stdout: 'piped',
     stderr: 'piped',
   }).output()
@@ -55,6 +56,44 @@ let run: NonNullable<RestartOptions['run']> = async (command, args) => {
     stdout: decoder.decode(result.stdout),
     stderr: decoder.decode(result.stderr),
   }
+}
+
+/** Queue one supervised handover; its completion never holds the caller.
+ * `launch` invokes this CLI, and `run` is the same command boundary as restart.
+ * ExecStopPost reports failures even if systemd kills the handover. */
+export let queueRestart = async (
+  launch: string[],
+  config?: string,
+  execute: NonNullable<RestartOptions['run']> = run,
+): Promise<string> => {
+  let aimed = config ? [...launch, '--config', config] : launch
+  // systemd parses ExecStopPost as an argv, not a shell command. Literal
+  // percent signs must not become unit specifiers.
+  let quote = (word: string) =>
+    '"' + word.replace(/[%$\\"]/g, (c) =>
+      c == '%' || c == '$' ? c + c : '\\' + c) +
+    '"'
+  let report = [...aimed, 'unit', 'failure', 'yak-restart.service']
+    .map(quote).join(' ')
+  let result = await execute('systemd-run', [
+    '--user',
+    '--no-block',
+    '--no-ask-password',
+    '--expand-environment=no',
+    '--quiet',
+    '--collect',
+    '--unit=yak-restart',
+    '--property=Type=exec',
+    `--property=ExecStopPost=${report}`,
+    '--',
+    ...aimed,
+    'restart',
+    '--handover',
+  ])
+  if (result.code) {
+    throw new Error(`Could not queue restart: ${result.stderr.trim()}`)
+  }
+  return 'Restart queued in yak-restart.service; handover and failure reporting continue in the background'
 }
 
 let ready = async (path: string) => {
@@ -78,7 +117,9 @@ let matches = (pattern: string, unit: string) => {
 let lock = async (path: string) => {
   let file = await Deno.open(path, { create: true, write: true })
   try {
-    await file.lock(true)
+    if (!await file.tryLock(true)) {
+      throw new Error('A restart is already in progress')
+    }
     return file
   } catch (error) {
     file.close()
@@ -125,6 +166,7 @@ let handover = async (options: RestartOptions): Promise<string> => {
     old: [`${p.unit}@*.service`],
     optional: p.optional,
   })) ?? ROLES
+  let deadline = now() + PATIENCE
   // Snapshot every role first: no candidate can be mistaken for an old unit.
   let listed = await call(
     'list-units',
@@ -152,7 +194,6 @@ let handover = async (options: RestartOptions): Promise<string> => {
       candidates.push(candidate)
       let began = now()
       await call('--no-block', 'start', candidate.unit)
-      let deadline = began + PATIENCE
       while (true) {
         if (now() >= deadline) {
           // Inspect before cleanup: systemd may unload the stopped instance,
@@ -189,13 +230,15 @@ let handover = async (options: RestartOptions): Promise<string> => {
     // until every replacement is ready; a failed start may still have queued
     // a job.
     let errors: unknown[] = [error]
-    for (let candidate of candidates.filter((c) => !c.ready)) {
-      try {
-        await call('--no-block', 'stop', candidate.unit)
-      } catch (cleanup) {
-        errors.push(cleanup)
-      }
-    }
+    await Promise.all(
+      candidates.filter((c) => !c.ready).map(async (candidate) => {
+        try {
+          await call('--no-block', 'stop', candidate.unit)
+        } catch (cleanup) {
+          errors.push(cleanup)
+        }
+      }),
+    )
     if (errors.length > 1) {
       throw new AggregateError(errors, 'Handover and cleanup failed')
     }

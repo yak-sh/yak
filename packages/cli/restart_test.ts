@@ -1,7 +1,12 @@
 // Handover ordering and failures, with no systemd or filesystem operations.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import { PATIENCE, restart, type RestartOptions } from './restart.ts'
+import {
+  PATIENCE,
+  queueRestart,
+  restart,
+  type RestartOptions,
+} from './restart.ts'
 
 // A box running two primary workers and a web, with no tracker; `extra`
 // adds active units to what systemd lists.
@@ -132,14 +137,14 @@ test('restart starts unique replacements and stops nothing on a bare box', async
   assert(!first.includes('stopping'), first)
 })
 
-// Complete the fake-clock polling before timing the deadline contract. Its
-// 1200 promise turns measure the runner's scheduling, not elapsed wall time.
+// Complete the fake-clock polling before timing the deadline contract.
+// Promise turns measure the runner's scheduling, not elapsed wall time.
 let timeout = fixture()
 timeout.options.ready = () => Promise.resolve(false)
 let timeoutError = await assertRejects(() => restart(timeout.options), Error)
 
-test('restart bounds readiness to two minutes and stops only its replacement', () => {
-  assertMatch(timeoutError.message, /Timed out after 120000ms/)
+test('restart bounds the supervised handover and stops only its replacement', () => {
+  assert(timeoutError.message.includes(`Timed out after ${PATIENCE}ms`))
   assertEquals(timeout.elapsed(), PATIENCE)
   assertEquals(stopped(timeout), [started(timeout)])
 })
@@ -223,13 +228,16 @@ test('a replacement that never readies leaves the old units and earlier replacem
   assert(work && tracker)
 })
 
-test('restart lets a running replacement take more than 15 seconds to ready', async () => {
+test('every role shares the same readiness deadline', async () => {
   let f = fixture()
-  f.options.ready = () => Promise.resolve(f.elapsed() >= 20_000)
-  await restart(f.options)
-  assertEquals(f.elapsed(), 20_000)
-  assertEquals(stopped(f).length, 1)
-  assert(!f.calls.some((c) => c[0] == 'show'))
+  let sleep = f.options.sleep!
+  f.options.ready = async () => {
+    await sleep(PATIENCE / 2)
+    return true
+  }
+  await assertRejects(() => restart(f.options), Error, 'Timed out')
+  assertEquals(f.elapsed(), PATIENCE)
+  assertEquals(stopped(f), [[started(f)[1]]])
 })
 
 let evidence = fixture()
@@ -305,8 +313,20 @@ let options: RestartOptions = {
     })
   },
 }
-await Promise.all([restart(options), restart(options)])
-let survivors = [...active]
+let listed = Promise.withResolvers<void>()
+let proceed = Promise.withResolvers<void>()
+let run = options.run!
+options.run = async (command, args) => {
+  listed.resolve()
+  await proceed.promise
+  return run(command, args)
+}
+let first = restart(options)
+await listed.promise
+await assertRejects(() => restart(options), Error, 'already in progress')
+proceed.resolve()
+await first
+options.run = run
 // A failed handover must release the same lock for the next caller.
 await assertRejects(() =>
   restart({
@@ -317,11 +337,54 @@ await assertRejects(() =>
 await restart(options)
 await Deno.remove(concurrent, { recursive: true })
 
-test('concurrent restarts leave one replacement and release the lock on failure', () => {
-  assertEquals(snapshots.slice(0, 2), [
-    ['probe@old.service'],
-    [starts[0]],
+test('concurrent restarts return immediately and release the lock on failure', () => {
+  assertEquals(snapshots, [['probe@old.service'], [starts[0]]])
+  assertEquals([...active], [starts[1]])
+})
+
+test('restart queues the handover and its failure reporter without waiting for readiness', async () => {
+  let launch = ['/deno', 'run', '-A', '/code/yak.ts']
+  let calls: [string, string[]][] = []
+  let said = await queueRestart(
+    launch,
+    '/config/a b%".json',
+    (command, args) => {
+      calls.push([command, args])
+      return Promise.resolve({ code: 0, stdout: '', stderr: '' })
+    },
+  )
+  assertMatch(said, /Restart queued/)
+  let [command, args] = calls[0]
+  assertEquals(command, 'systemd-run')
+  assertEquals(args.slice(args.indexOf('--') + 1), [
+    ...launch,
+    '--config',
+    '/config/a b%".json',
+    'restart',
+    '--handover',
   ])
-  assertEquals(survivors, [starts[1]])
-  assertEquals([...active], [starts[2]])
+  assert(!args.includes('--wait'))
+  assert(args.includes('--unit=yak-restart'))
+  assertEquals(
+    args.find((a) => a.startsWith('--property=ExecStopPost=')),
+    '--property=ExecStopPost="/deno" "run" "-A" "/code/yak.ts" "--config" "/config/a b%%\\".json" "unit" "failure" "yak-restart.service"',
+  )
+})
+
+test('a rejected background restart is reported to its caller', async () => {
+  await assertRejects(
+    () =>
+      queueRestart(
+        ['/yak'],
+        undefined,
+        () =>
+          Promise.resolve({
+            code: 1,
+            stdout: '',
+            stderr: 'job already exists',
+          }),
+      ),
+    Error,
+    'Could not queue restart: job already exists',
+  )
 })

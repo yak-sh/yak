@@ -241,14 +241,40 @@ export let own: Command[] = [
   {
     name: 'restart',
     description:
-      "Hand the box's workers and webs to replacements: returns once every " +
-      'replacement is ready, while the old units stop on their own',
-    inputSchema: { type: 'object', properties: {} },
-    run: async (_args, c) => {
+      "Queue a ready-first handover of the box's workers and webs in the background",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        handover: {
+          type: 'boolean',
+          description: 'Run the supervised handover',
+        },
+      },
+    },
+    run: async (args, c) => {
       let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
       if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
-      let { restart } = await import('./restart.ts')
+      let { restart, queueRestart } = await import('./restart.ts')
       let path = configPath(c.config)
+      if (!args.handover) {
+        let source = new URL('./yak.ts', import.meta.url)
+        let launch = [
+          Deno.execPath(),
+          'run',
+          '-A',
+          ...source.protocol == 'file:'
+            ? ['--config', new URL('../../deno.json', source).pathname]
+            : [],
+          source.href,
+        ]
+        c.out(
+          await queueRestart(
+            launch,
+            path ? new URL(path, `file://${Deno.cwd()}/`).pathname : undefined,
+          ),
+        )
+        return 0
+      }
       c.out(
         await restart({
           runtimeDir,

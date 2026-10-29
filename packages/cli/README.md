@@ -538,24 +538,22 @@ The worker templates run `yak work --process yak-work` and
 its own config. `yak restart --config <path>` rolls exactly that config's
 process layout; entries marked `optional` roll only when active. Without a
 process layout it rolls the primary worker and web and active tracker units.
-**Use `yak restart`**, not raw systemctl restart: for each entry it starts a
-replacement from the unit template and waits for its readiness file, and once
-every replacement is ready it queues the old units' stops without waiting for
-them, then says which units it started, how long each took and which it is
-stopping. A worker's replacement is ready once its pool and graph are assembled,
-and the old worker drains its steps in flight. A web's replacement is ready once
-it listens on the same port as the old one (`share`), so no request is refused;
-the old web stops taking requests, closes its sockets and cuts what is still
-open after its grace ([@yaks/api](../api/README.md)). Inactive or uninstalled
-optional units stay untouched; discovery and enqueue failures are reported. A
-session requesting its own restart can finish that request. A failed handover
-before readiness cleans up only the replacement; once ready, a replacement
-survives later enqueue errors. Readiness allows two minutes per replacement,
-including systemd job scheduling, pinned-runtime preparation and graph startup;
-`--no-block start` acknowledges the job, not readiness. On timeout the error
-captures the candidate's systemd state before cleanup can unload the instance
-and erase its execution timestamps. A missing InvocationID after cleanup is not
-evidence that the replacement never started.
+`yak restart` queues a supervised ready-first handover and returns in seconds.
+`yak restart --config /path/to/yak.json` selects its process layout. The
+`yak-restart.service` job starts each replacement from its unit template and
+waits for its readiness file in the background. Once every replacement is ready,
+it queues the old units' stops without waiting for them. Its journal says which
+units it started, how long each took and which it is stopping.
+
+A worker is ready once its pool and graph are assembled; the old worker drains
+its steps in flight. A web listens on the old web's shared port before that web
+stops taking requests ([@yaks/api](../api/README.md)). Inactive optional units
+stay untouched. A second restart fails promptly while the handover is running.
+Readiness has one two-minute deadline for the background job. A failure
+preserves the old units and any ready replacements, cleans up unready
+replacements, and reports through the ordinary `unit failure` tracker spool. The
+report captures the candidate's systemd state before cleanup unloads its
+instance. Nobody waits on that job before finishing a landing.
 
 `yak --no-duties` turns inline duties off for a host that stays up: it takes no
 lease, works no effects, and runs neither the services nor the start-up passes
