@@ -34,10 +34,15 @@ export let checkoutOperations = async (
   await git(['commit', '-qm', 'owned citation fixture'])
   let head = await git(['rev-parse', 'HEAD'])
   let root = String(((await discover(graph, path)).worktree as Comp).repository)
-  let file = identities(graph.vocab).file({ path: 'mod.ts', root }, {
+  // The historical vocabulary calls the same repository file.repository.
+  let key = graph.vocab.identity('file').includes('root')
+    ? 'root'
+    : 'repository'
+  let source = { path: 'mod.ts', [key]: root }
+  let file = identities(graph.vocab).file(source, {
     entity: { eid: '' },
   })
-  await graph.apply([{ entity: { eid: file }, file: { path: 'mod.ts', root } }])
+  await graph.apply([{ entity: { eid: file }, file: source }])
   let citation = link(PERSONA, 'cites', file)
   await graph.apply([citation])
   let prepare = async () => {
