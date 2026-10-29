@@ -100,7 +100,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           !input.names || input.names.includes(name)
         )
         if (!names.length) continue
-        console.error(`throughput: round ${round + 1}/7, ${mode}`)
+        console.error(`throughput: round ${round + 1}, ${mode}`)
         let report = await measured(mode, names)
         if (report.runtime != machine.runtime || report.cpu != machine.cpu) {
           throw new Error('Runtime/CPU changed between samples')
