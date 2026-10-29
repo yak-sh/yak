@@ -3,26 +3,26 @@
  * Never opens the configured/live harness database.
  */
 import { remote } from './remote.ts'
+import type { Bundle } from '@yaks/graph'
 import { at, harness } from './testing.ts'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 import { fixture } from '../../bench/fixture.ts'
 
+export let corpus = (count: number, length: number): Bundle[] => [
+  { entity: { eid: 'session' }, session: { id: 'benchmark' } },
+  ...Array.from({ length: count }, (_, i) => ({
+    entity: { eid: 'e' + i },
+    entry: { session: 'session', seq: i + 1 },
+    content: { body: String(i) + 'x'.repeat(length) },
+  })),
+]
+
 let seeded = fixture(async (path: string, count: number, length: number) => {
   let seed = await harness(path)
   try {
-    for (let offset = 0; offset < count; offset += 250) {
-      await seed.g.apply([
-        ...offset == 0
-          ? [{ entity: { eid: 'session' }, session: { id: 'benchmark' } }]
-          : [],
-        ...Array.from({ length: Math.min(250, count - offset) }, (_, j) => ({
-          entity: { eid: 'e' + (offset + j) },
-          entry: { session: 'session', seq: offset + j + 1 },
-          content: { body: String(offset + j) + 'x'.repeat(length) },
-        })),
-      ])
-    }
+    // The measurement reads stored transcript state, not its setup transactions.
+    await seed.g.apply(corpus(count, length))
   } finally {
     await seed.close()
   }

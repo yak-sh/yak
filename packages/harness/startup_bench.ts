@@ -10,37 +10,41 @@ import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 import { fixture } from '../../bench/fixture.ts'
 
+export let corpus = (count: number, depth: number): Bundle[] => {
+  let rows: Bundle[] = []
+  for (let i = 0; i < count; i++) {
+    rows.push({
+      entity: { eid: 's' + i },
+      session: { id: 's' + i },
+      ...i
+        ? { spawned: { parent: 's0' }, fork: { from: 's0-e' + (depth - 1) } }
+        : {},
+    })
+    for (let j = 0; j < (i ? 10 : depth); j++) {
+      rows.push({
+        entity: { eid: 's' + i + '-e' + j },
+        entry: { session: 's' + i },
+        content: { body: 'message ' + 'x'.repeat(1000) },
+        ...(j ? { output: { source: 's' + i + '-e0' } } : {}),
+      })
+    }
+    if (i) {
+      rows.push({
+        entity: { eid: 'delivery:s' + i + ':s' + i + '-e9' },
+        entry: { session: 's0' },
+        content: { body: 'delivered' },
+        output: { source: 's0-e0' },
+      })
+    }
+  }
+  return rows
+}
+
 let seeded = fixture(async (path: string, count: number, depth: number) => {
   let seed = await harness(path)
   try {
-    for (let i = 0; i < count; i++) {
-      let rows: Bundle[] = [{
-        entity: { eid: 's' + i },
-        session: { id: 's' + i },
-      }]
-      if (i) {
-        rows[0].spawned = { parent: 's0' }
-        rows[0].fork = { from: 's0-e' + (depth - 1) }
-      }
-      let n = i ? 10 : depth
-      for (let j = 0; j < n; j++) {
-        rows.push({
-          entity: { eid: 's' + i + '-e' + j },
-          entry: { session: 's' + i },
-          content: { body: 'message ' + 'x'.repeat(1000) },
-          ...(j ? { output: { source: 's' + i + '-e0' } } : {}),
-        })
-      }
-      await seed.g.apply(rows)
-      if (i) {
-        await seed.g.apply([{
-          entity: { eid: 'delivery:s' + i + ':s' + i + '-e9' },
-          entry: { session: 's0' },
-          content: { body: 'delivered' },
-          output: { source: 's0-e0' },
-        }])
-      }
-    }
+    // The measurement reads stored transcript state, not its setup transactions.
+    await seed.g.apply(corpus(count, depth))
   } finally {
     await seed.close()
   }
