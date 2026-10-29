@@ -830,3 +830,23 @@ test('CPU runs judge measured work and reject missing CPU instead of using wall'
   f.suite.benches[0].sample = () => ({ value: 1 })
   await throws(() => run(f.suite, cpu), 'Missing CPU measurement')
 })
+
+test('the runner disposes collection resources after success and failure', async () => {
+  let f = fixture(), closed = 0
+  let suite = {
+    ...f.suite,
+    close: () => {
+      closed++
+    },
+  }
+  await run(suite, { ...f.options, rounds: 1 })
+  equal(closed, 1)
+  await throws(() =>
+    run({
+      ...suite,
+      collect: () => {
+        throw Error('collection failed')
+      },
+    }, f.options), 'collection failed')
+  equal(closed, 2)
+})

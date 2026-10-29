@@ -3,7 +3,7 @@
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
-import { mem } from '../sqlite/testing.ts'
+import { open } from '@yaks/sqlite/db'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
@@ -14,7 +14,9 @@ if (import.meta.main) {
   await standaloneMain('session-status')
 } else {
   let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
-  let store = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  let db = open(':memory:')
+  addEventListener('unload', () => db.close())
+  let store = storage(db, vocab, { derived: sessionDerived(vocab) })
   store.install()
   let g = graph({ storage: store, vocab })
   store.tx((tx) =>

@@ -94,23 +94,27 @@ export let run = async (
   suite: Suite | CollectedSuite,
   options: Options,
 ): Promise<Run> => {
-  if (!options.lock) return await execute(suite, options)
-  using lock = await Deno.open(options.lock, {
-    create: true,
-    read: true,
-    write: true,
-  })
-  let exclusive: Exclusive = async (work) => {
-    await lock.lock(true)
-    try {
-      await lock.truncate(0)
-      await lock.write(new TextEncoder().encode(`${Deno.pid}\n`))
-      return await work()
-    } finally {
-      await lock.unlock()
+  try {
+    if (!options.lock) return await execute(suite, options)
+    using lock = await Deno.open(options.lock, {
+      create: true,
+      read: true,
+      write: true,
+    })
+    let exclusive: Exclusive = async (work) => {
+      await lock.lock(true)
+      try {
+        await lock.truncate(0)
+        await lock.write(new TextEncoder().encode(`${Deno.pid}\n`))
+        return await work()
+      } finally {
+        await lock.unlock()
+      }
     }
+    return await execute(suite, options, exclusive)
+  } finally {
+    await suite.close?.()
   }
-  return await execute(suite, options, exclusive)
 }
 
 type Exclusive = <T>(work: () => Promise<T>) => Promise<T>

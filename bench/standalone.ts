@@ -16,6 +16,7 @@ import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
 import { CONTROL_NAMES } from './operation-controls.ts'
 import { OPERATION_REMAINING } from './operation-remaining.ts'
+import { collector } from './collector.ts'
 
 let deno = (
   name: string,
@@ -47,41 +48,43 @@ let registration = (
   deno: boolean,
 ): Registration => ({
   baseline: `bench/${name}.baseline.json`,
-  suite: (args = [], root) => ({
-    name,
-    metric: deno ? 'median-of-deno-averages' : 'median-of-round-medians',
-    workload: name == 'graph-activity'
-      ? JSON.stringify([
-        1,
-        Deno.env.get('BENCH_N') ?? '3000',
-        Deno.env.get('BASE_GRAPH') ?? 'same-build',
-      ])
-      : args.length
-      ? JSON.stringify([name == 'relay-admission' ? 2 : 1, ...args])
-      : name == 'relay-admission'
-      ? 2
-      : 1,
-    benches: names.map((name) => ({ name, unit })),
-    collect: async () => {
-      let child = await new Deno.Command(Deno.execPath(), {
-        args: deno
-          ? ['run', '-A', 'bench/deno-worker.ts', file]
-          : ['run', '-A', 'bench/standalone-worker.ts', file, ...args],
-        cwd: root,
-        stdout: 'piped',
-        stderr: 'inherit',
-      }).output()
-      if (!child.success) throw new Error(`${name} failed (${child.code})`)
-      let report = JSON.parse(new TextDecoder().decode(child.stdout))
-      if (!deno) return report as Record<string, Samples>
-      let machine = await host()
-      let imported = report as DenoReport
-      if (imported.runtime != machine.runtime || imported.cpu != machine.cpu) {
-        throw new Error('Runtime/CPU changed between samples')
-      }
-      return extract(imported, names)
-    },
-  }),
+  suite: (args = [], root) => {
+    let worker = collector(
+      deno
+        ? ['bench/deno-worker.ts', file]
+        : ['bench/standalone-worker.ts', file, ...args],
+      root,
+    )
+    return {
+      name,
+      metric: deno ? 'median-of-deno-averages' : 'median-of-round-medians',
+      workload: name == 'graph-activity'
+        ? JSON.stringify([
+          1,
+          Deno.env.get('BENCH_N') ?? '3000',
+          Deno.env.get('BASE_GRAPH') ?? 'same-build',
+        ])
+        : args.length
+        ? JSON.stringify([name == 'relay-admission' ? 2 : 1, ...args])
+        : name == 'relay-admission'
+        ? 2
+        : 1,
+      benches: names.map((name) => ({ name, unit })),
+      collect: async () => {
+        let report = await worker.collect()
+        if (!deno) return report as Record<string, Samples>
+        let machine = await host()
+        let imported = report as DenoReport
+        if (
+          imported.runtime != machine.runtime || imported.cpu != machine.cpu
+        ) {
+          throw new Error('Runtime/CPU changed between samples')
+        }
+        return extract(imported, names)
+      },
+      close: worker.close,
+    }
+  },
 })
 
 export let standalone: Registration[] = [

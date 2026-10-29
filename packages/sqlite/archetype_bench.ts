@@ -13,53 +13,59 @@ import { backfill, storage } from './mod.ts'
 import { location, tuned } from './fixtures/bench.ts'
 import { vocab as corpus, workload } from './fixtures/fleet.ts'
 
-let loc = location()
-let db = new Database(loc.path)
-addEventListener('unload', () => {
-  db.close()
-  loc.cleanup()
-})
-let driver = tuned(db)
-let vocab = loadVocab([...corpus.docs, archetypeDoc], [edgeKeywords])
-let store = storage(driver, vocab)
-store.install()
-let data = workload()
-store.tx((tx) => tx.patch(data.bundles))
-// The owners: a unit through the store has already classified the seed, and
-// the backfill below starts from no descriptors at all.
-let size = tally(driver, 'entity') - tally(driver, 'archetype')
-Deno.bench(`archetype/${loc.mode}/backfill`, (b) => {
-  driver.query({ t: 'savepoint', name: 'sample' })
-  let descriptors = scan(driver, 'archetype', undefined, ['entity'])
-    .map((r) => Number(r.entity))
-  driver.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
-  driver.query({ t: 'delete', from: 'archetype' })
-  driver.query({
-    t: 'delete',
-    from: 'entity',
-    where: among(col('id'), each(descriptors)),
+{
+  let loc = location()
+  let db = new Database(loc.path)
+  addEventListener('unload', () => {
+    db.close()
+    loc.cleanup()
   })
-  b.start()
-  let result = backfill(driver)
-  b.end()
-  assertEquals(result.entities, size)
-  driver.query({ t: 'rollback', to: 'sample' })
-  driver.query({ t: 'release', name: 'sample' })
-})
-backfill(driver)
-assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
-let g = graph({ storage: store, vocab, plugins: [archetypes()] })
-let phase = 0
-let moves = [true, false].map((add) =>
-  data.batches[0].map((b) => ({ entity: b.entity, retired: add ? {} : null }))
-)
-// Warm both directions, verifying the move instead of timing a silent no-op.
-for (let bundles of moves) {
-  g.apply(bundles)
-  let first = store.tx((tx) => tx.get([bundles[0].entity.eid]))[0]
-  let tables = Object.keys(first).filter((n) => n != 'entity')
-  assertEquals(first.entity.archetype, eidOf(tables))
+  let driver = tuned(db)
+  let vocab = loadVocab([...corpus.docs, archetypeDoc], [edgeKeywords])
+  let store = storage(driver, vocab)
+  store.install()
+  let data = workload()
+  store.tx((tx) => tx.patch(data.bundles))
+  // The owners: a unit through the store has already classified the seed, and
+  // the backfill below starts from no descriptors at all.
+  let size = tally(driver, 'entity') - tally(driver, 'archetype')
+  Deno.bench(`archetype/${loc.mode}/backfill`, (b) => {
+    driver.query({ t: 'savepoint', name: 'sample' })
+    let descriptors = scan(driver, 'archetype', undefined, ['entity'])
+      .map((r) => Number(r.entity))
+    driver.query({
+      t: 'update',
+      table: 'entity',
+      set: { archetype: lit(null) },
+    })
+    driver.query({ t: 'delete', from: 'archetype' })
+    driver.query({
+      t: 'delete',
+      from: 'entity',
+      where: among(col('id'), each(descriptors)),
+    })
+    b.start()
+    let result = backfill(driver)
+    b.end()
+    assertEquals(result.entities, size)
+    driver.query({ t: 'rollback', to: 'sample' })
+    driver.query({ t: 'release', name: 'sample' })
+  })
+  backfill(driver)
+  assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
+  let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+  let phase = 0
+  let moves = [true, false].map((add) =>
+    data.batches[0].map((b) => ({ entity: b.entity, retired: add ? {} : null }))
+  )
+  // Warm both directions, verifying the move instead of timing a silent no-op.
+  for (let bundles of moves) {
+    g.apply(bundles)
+    let first = store.tx((tx) => tx.get([bundles[0].entity.eid]))[0]
+    let tables = Object.keys(first).filter((n) => n != 'entity')
+    assertEquals(first.entity.archetype, eidOf(tables))
+  }
+  Deno.bench(`archetype/${loc.mode}/move-100`, () => {
+    g.apply(moves[phase++ % 2])
+  })
 }
-Deno.bench(`archetype/${loc.mode}/move-100`, () => {
-  g.apply(moves[phase++ % 2])
-})

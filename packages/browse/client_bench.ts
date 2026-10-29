@@ -3,7 +3,7 @@ import { rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 import { type Change, learn, type Snapshot } from './types.ts'
 import { docs as kernel } from '@yaks/kernel/vocab'
-import { docs as provenance } from '@yaks/provenance/vocab'
+import { stamps } from '../../bench/vocabulary.ts'
 import { docs as id } from '@yaks/id/vocab'
 import { docs as doc } from '@yaks/doc/vocab'
 import { docs as task } from '@yaks/task/vocab'
@@ -16,9 +16,9 @@ if (import.meta.main) {
 } else {
   // The words a page learns from its server's /vocab before it reads a query.
   learn(
-    [kernel, provenance, id, doc, task, project, session].flatMap((d) =>
-      d ?? []
-    ),
+    [kernel, await stamps(kernel), id, doc, task, project, session].flatMap((
+      d,
+    ) => d ?? []),
   )
   // Synthetic 2k-task snapshot, one session holding a handful of claims.
   let S = crypto.randomUUID()

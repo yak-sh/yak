@@ -59,6 +59,7 @@ if (import.meta.main) {
       vault: false,
       wireVault: false,
     })
+    addEventListener('unload', () => c.close())
     let seed: Bundle[] = []
     for (let i = 0; i < DOCS; i++) {
       seed.push({ entity: { eid: `d${i}` }, doc: { title: `doc ${i}` } })

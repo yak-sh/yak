@@ -6,6 +6,7 @@ import {
   type Sample,
 } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
+import { collector } from './collector.ts'
 import {
   benchmarkNames as storageNames,
   MODES,
@@ -52,6 +53,16 @@ export let throughput = (input: Input = {}): CollectedSuite => {
     !selected || selected.test(name)
   )
   let counts: Record<string, Sample> | undefined
+  let workers = new Map<string, ReturnType<typeof collector>>()
+  let measured = async (mode: string) => {
+    if (input.measure) return await input.measure(mode)
+    let worker = workers.get(mode)
+    if (!worker) {
+      worker = measure(mode, input.filter, input.root)
+      workers.set(mode, worker)
+    }
+    return await worker.collect() as DenoReport
+  }
   return {
     name: 'throughput',
     metric: 'median-of-7-deno-avg-ns',
@@ -75,10 +86,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
       if (recording && round % 2) modes.reverse()
       for (let mode of modes) {
         console.error(`throughput: round ${round + 1}/7, ${mode}`)
-        let report = await (input.measure ?? ((mode) =>
-          measure(mode, input.filter, input.root)))(
-            mode,
-          )
+        let report = await measured(mode)
         if (report.runtime != machine.runtime || report.cpu != machine.cpu) {
           throw new Error('Runtime/CPU changed between samples')
         }
@@ -88,9 +96,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           )
           : mode == 'pipeline'
           ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
-          : storageNames().filter((name) =>
-            name.split('/')[1] == mode
-          )
+          : storageNames().filter((name) => name.split('/')[1] == mode)
         Object.assign(out, extract(report, names))
       }
       for (let [name, sample] of Object.entries(out)) {
@@ -109,13 +115,16 @@ export let throughput = (input: Input = {}): CollectedSuite => {
       }
       return out
     },
+    close: async () => {
+      await Promise.all([...workers.values()].map((worker) => worker.close()))
+    },
   }
 }
-let measure = async (
+let measure = (
   mode: string,
   filter?: string,
   root?: string,
-): Promise<DenoReport> => {
+) => {
   let env: Record<string, string> = {
     BENCH_RECORDING: mode.startsWith('recording-')
       ? mode.slice('recording-'.length)
@@ -130,10 +139,8 @@ let measure = async (
   if (Deno.build.os == 'linux') {
     env.DENO_SQLITE_PATH = Deno.env.get('DENO_SQLITE_PATH') ?? 'libsqlite3.so.0'
   }
-  let child = await new Deno.Command(Deno.execPath(), {
-    args: [
-      'run',
-      '-A',
+  return collector(
+    [
       'bench/deno-worker.ts',
       ...(mode.startsWith('recording-')
         ? ['bench/apply_bench.ts']
@@ -141,13 +148,9 @@ let measure = async (
         ? ['bench/apply_bench.ts', 'bench/relay_bench.ts']
         : files),
     ],
-    cwd: root,
+    root,
     env,
-    stdout: 'piped',
-    stderr: 'inherit',
-  }).output()
-  if (!child.success) throw new Error(`deno bench failed (${child.code})`)
-  return JSON.parse(new TextDecoder().decode(child.stdout))
+  )
 }
 let measureCounts = async (root?: string) => {
   let out: Record<string, Sample> = {}

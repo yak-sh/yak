@@ -5,6 +5,7 @@
 // whose Store, graph and guard take the clock it gives them. The fixture's time
 // is its own: it never replaces the runtime's clock or timers.
 import { type Sample, stopwatch } from '@yaks/benchmark'
+import { stamps } from './vocabulary.ts'
 import type { durable } from '../packages/durable-object/testing.ts'
 
 import { RELAY_ENTITIES, RELAY_TICKS, relayBenchmarkName } from './names.ts'
@@ -263,14 +264,16 @@ export async function relayFixture(
       root + '/packages/member/mod.ts'
     )
     const { kernelDoc } = await import(root + '/packages/kernel/mod.ts')
-    const { provenanceDoc } = await import(
-      root + '/packages/provenance/mod.ts'
-    )
     const { admitSchema } = await import(
       root + '/packages/graph/admit_schema.ts'
     )
     const { system } = await import(root + '/packages/fp/mod.ts')
-    const vocab = loadVocab([kernelDoc, provenanceDoc, memberDoc, schema], [
+    const vocab = loadVocab([
+      kernelDoc,
+      ...await stamps([kernelDoc], root),
+      memberDoc,
+      schema,
+    ], [
       memberKeywords,
     ])
     const g = graph({

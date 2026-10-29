@@ -7,6 +7,7 @@ import {
 
 for (const entities of RELAY_ENTITIES) {
   const fixture = await relayFixture(entities)
+  addEventListener('unload', () => fixture.close())
   Deno.bench({
     name: relayBenchmarkName(entities),
     fn: async (b) => {

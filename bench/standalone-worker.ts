@@ -1,4 +1,5 @@
-/** Isolate workload fixtures from the runner process; only samples cross back. */
-let [file, ...args] = Deno.args
+/** Product imports stay warm; measure creates and disposes a fresh fixture. */
+import { serve } from './collector.ts'
+let [file, ...args] = Deno.args.filter((arg) => arg != '--serve')
 let module = await import(new URL('../' + file, import.meta.url).href)
-console.log(JSON.stringify(await module.measure(args)))
+await serve(() => module.measure(args))

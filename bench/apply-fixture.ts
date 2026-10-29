@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { provenanceDoc } from '@yaks/provenance'
+import { stamps } from './vocabulary.ts'
 import { docDoc, docs } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, traverse } from '@yaks/edge'
 import { taskDoc, tasks } from '@yaks/task'
@@ -24,7 +24,7 @@ import { sqlStatements } from './sql-counts.ts'
 import { APPLY_MODES, APPLY_SHAPES, APPLY_SIZES, APPLY_WORK } from './names.ts'
 export const applyVocab = loadVocab([
   kernelDoc,
-  provenanceDoc,
+  ...await stamps([kernelDoc]),
   docDoc,
   edgeDoc,
   taskDoc,

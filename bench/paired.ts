@@ -263,6 +263,7 @@ export let collect = async (
   )
   let context = await host()
   let scratch = await Deno.makeTempDir({ prefix: 'bench-paired-' })
+  let collectors: CollectedSuite[] = []
   try {
     let roots: string[] = []
     for (let [i, commit] of [reference, revision].entries()) {
@@ -302,13 +303,14 @@ export let collect = async (
       await command(target, 'git', ['read-tree', commit])
       roots.push(target)
     }
+    collectors = [collector(roots[0]), collector(roots[1]), collector(roots[0])]
     let observations: Record<string, Samples>[][] = [[], [], []]
     let names = JSON.stringify(
-      collector(roots[1]).benches.map((b) => b.name).sort(),
+      collectors[1].benches.map((b) => b.name).sort(),
     )
     let measure = async (at: number, round: number) => {
       try {
-        let samples = await collector(roots[at]).collect(round)
+        let samples = await collectors[at].collect(round)
         let got = JSON.stringify(Object.keys(samples).sort())
         if (got != names) throw Error(`measured ${got}, banked ${names}`)
         return samples
@@ -323,28 +325,31 @@ export let collect = async (
     }
     // Each tree runs once unmeasured, so no round times one tree's cold
     // compile caches against the other's warm ones.
-    for (let at of [0, 1]) await measure(at, 0)
+    for (let at of [0, 1, 2]) await measure(at, 0)
     let rounds = revisions.rounds ?? Math.max(
       6,
-      Math.ceil(Math.log2(20 * collector(roots[1]).benches.length)),
+      Math.ceil(Math.log2(20 * collectors[1].benches.length)),
     )
     if (!Number.isInteger(rounds) || rounds < 3) {
       throw Error('A paired comparison needs at least three rounds')
     }
     for (let round = 0; round < rounds; round++) {
       console.error(`${suite}: paired round ${round + 1}/${rounds}`)
+      let reference = 0
       let pair = await bracket(
-        (revision) => measure(revision == 'current' ? 1 : 0, round),
+        (revision) =>
+          measure(revision == 'current' ? 1 : reference++ ? 2 : 0, round),
         async () => {},
       )
       observations[0].push(pair.before)
       observations[1].push(pair.current)
       observations[2].push(pair.after)
     }
-    let suiteOf = collector(roots[1])
+    let suiteOf = collectors[1]
     let aggregate = (slot: number): Promise<Run> =>
       run({
         ...suiteOf,
+        close: undefined,
         collect: (round: number) => observations[slot][round],
       }, {
         rounds,
@@ -373,6 +378,7 @@ export let collect = async (
       revision,
     }
   } finally {
+    await Promise.all(collectors.map((suite) => suite.close?.()))
     await Deno.remove(scratch, { recursive: true })
   }
 }

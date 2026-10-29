@@ -34,6 +34,8 @@ export type Suite = {
   /** Change this when the corpus or timed boundary changes. */
   workload: string | number
   benches: readonly Bench[]
+  /** Release collection resources after the final round, including failures. */
+  close?: () => void | Promise<void>
 }
 /** A shared collector can measure several workloads in one external process. */
 export type CollectedSuite = Omit<Suite, 'benches'> & {
