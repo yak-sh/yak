@@ -39,9 +39,8 @@ test('configured doc Body wraps while the Markdown source tab remains preformatt
     ]
       .map((m) => `${m[1]}{${m[2]}}`).join('\n')
     mounted.root.append(style)
-    // linkedom parses CSS but does not lay it out. Match the real declarations
-    // on each view and its ancestors; Chrome verifies computed style/layout
-    // separately on the scratch server.
+    // linkedom parses CSS without layout. Match the shipped declarations on
+    // each view and its ancestors.
     let whitespace = (node: Element | null): string => {
       if (!node) return 'normal'
       let value = ''

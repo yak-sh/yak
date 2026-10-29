@@ -79,16 +79,12 @@
           "type": "string",
           "description": "what work branches from and lands into"
         },
-        "gate": {
-          "type": "string",
-          "description": "the command a change must pass before it lands"
-        },
         "push": {
           "type": "boolean",
           "description": "whether landing also pushes"
         }
       },
-      "description": "a project's landing policy for its source: which repository it is in, what work branches from, and how a change is proven and published. A sub-project without one lands through the nearest project above it that has one"
+      "description": "a project's landing policy for its source: which repository it is in, what work branches from, and whether a change is published. A sub-project without one lands through the nearest project above it that has one"
     },
     "venture": {
       "component": true,

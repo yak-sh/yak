@@ -6,7 +6,7 @@
 //   board{query}                                a saved filter over it
 //   venture{phase, tagline, site}               a business being built
 //   paused{at}                                  work on it is suspended
-//   repo{repository, base_branch, gate, push}   where it lands its source
+//   repo{repository, base_branch, push}   where it lands its source
 //
 // Filing is separate from being A task. A task with no `filed` component at all
 // is still a task, and the filing is the optional component that puts one in a

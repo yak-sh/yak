@@ -31,12 +31,11 @@ deno add jsr:@yaks/project
   a phase, so the phase underneath is untouched and resuming means removing the
   component; there is no `paused_from` property remembering where to put the
   phase back.
-- `repo{repository, base_branch, gate, push}` — a project's policy for landing
-  its source: which repository the work is in, which branch it branches from and
-  lands into, the command a change must pass first (`gate`), and whether landing
-  also pushes. The repository, its checkouts and its remote are
-  [@yaks/git](../git)'s. A sub-project without a `repo` lands through the
-  nearest project above it that has one.
+- `repo{repository, base_branch, push}` — a project's policy for landing its
+  source: which repository the work is in, which branch it branches from and
+  lands into, and whether landing also pushes. The repository, its checkouts and
+  its remote are [@yaks/git](../git)'s. A sub-project without a `repo` lands
+  through the nearest project above it that has one.
 
 ## Sub-projects
 
