@@ -595,6 +595,8 @@ let composed = async (
         }
       }
     }
+    let endings = new Set<Promise<void>>()
+    let closed = false
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
@@ -619,11 +621,18 @@ let composed = async (
           if (!doing) throw new Error('the duties are not built yet')
           return doing(signal, only)
         },
-        end: async (holder, why) => {
-          // A thread that failed before it wrote itself in holds nothing.
-          if (!self || !g || !(await g.get([holder])).length) return
-          if (!opts.readOnly) await host.runner.interrupt(why, holder)
-          await finish(holder, { entity: { eid: holder }, [EXIT]: {} })
+        end: (holder, why) => {
+          if (closed) return Promise.resolve()
+          let work = (async () => {
+            // A thread that failed before it wrote itself in holds nothing.
+            if (!self || !g || !(await g.get([holder])).length) return
+            if (!opts.readOnly) await host.runner.interrupt(why, holder)
+            await finish(holder, { entity: { eid: holder }, [EXIT]: {} })
+          })()
+          endings.add(work)
+          let done = () => endings.delete(work)
+          work.then(done, done)
+          return work
         },
         bury: async () => {
           if (!self || !g) return []
@@ -995,6 +1004,12 @@ let composed = async (
             await wait('reader', () =>
               cleanup('close reader', () =>
                 opts.reader?.close?.()))
+            // A forced ending can arrive while graceful shutdown drains. Stop
+            // admitting endings and finish those already admitted before SQL
+            // closes; a late repeat has nothing left to release.
+            closed = true
+            await wait('endings', () =>
+              Promise.allSettled([...endings]))
             await wait('storage', () =>
               cleanup('close storage', () =>
                 sql.close()))
@@ -1020,8 +1035,7 @@ let composed = async (
             return shut()
           }
           try {
-            await wait('process ending', () =>
-              finish(selfEid(), ended(code)))
+            await wait('process ending', () => finish(selfEid(), ended(code)))
           } catch (e) {
             await report(e, { tags: { step: 'close host' } })
           }
