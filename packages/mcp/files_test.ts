@@ -1,10 +1,12 @@
 /// <reference lib="deno.ns" />
 import { equal, test } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import { argsOf, type Tool } from '@yaks/graph'
 import { argsFor } from '@yaks/cli/grammar'
 import { registry } from '@yaks/tools'
 import { connect, text } from './testing.ts'
 import { FILES } from './files.ts'
+import { inputSchema } from './schema.ts'
 
 let schema = {
   type: 'object',
@@ -59,15 +61,21 @@ test('MCP file input preserves existing literal @ arguments', async () => {
   equal(JSON.parse(text(await call({ body: '@yaks/fp' }))), {
     body: '@yaks/fp',
   })
-  equal(JSON.parse(text(await call({ body: '@/body.md', $files: false }))), {
+  equal(JSON.parse(text(await call({ body: '@/body.md', _files: false }))), {
     body: '@/body.md',
   })
   equal(reads.length, 0)
 })
 
+test('MCP file input still accepts the previously published opt-in', async () => {
+  equal(JSON.parse(text(await call({ body: '@/body.md', $files: true }))), {
+    body,
+  })
+})
+
 test('MCP file input expands long and nested declared strings once', async () => {
   let out = await call({
-    $files: true,
+    _files: true,
     body: '@/body.md',
     nested: [{ body: '@/body.md' }, { body: null }],
   })
@@ -84,13 +92,13 @@ test('MCP file input expands long and nested declared strings once', async () =>
 })
 
 test('an unreadable MCP file answers the caller without running the tool', async () => {
-  let out = await call({ body: '@/missing.md', $files: true })
+  let out = await call({ body: '@/missing.md', _files: true })
   equal(out.isError, true)
   equal(text(out).includes('Cannot read @/missing.md'), true)
 })
 
 test('MCP file reads retain the admitted schema and implementation during provider replacement', async () => {
-  let pending = call({ body: '@/body.md', $files: true }, swapping)
+  let pending = call({ body: '@/body.md', _files: true }, swapping)
   await opened.promise
   catalog.replace('bodies', [{
     ...echo,
@@ -111,7 +119,7 @@ test('MCP file reads retain the admitted schema and implementation during provid
     equal(JSON.parse(text(await pending)), { body })
     let current = (await swapping.listTools()).tools[0]
     equal(current.inputSchema.properties.body, { type: 'number' })
-    equal(current.inputSchema.properties.$files, { type: 'boolean' })
+    equal(current.inputSchema.properties._files, { type: 'boolean' })
     equal(text(await call({ body: 7 }, swapping)), 'replacement 7')
   } finally {
     await swapping.close()
@@ -121,7 +129,20 @@ test('MCP file reads retain the admitted schema and implementation during provid
 test('only a file-capable MCP door advertises file input', async () => {
   let tools = (await local.listTools()).tools
   let tool = tools.find((t: { name: string }) => t.name == 'echo_body')!
-  equal((tool.inputSchema.properties as Record<string, unknown>).$files, {
+  for (let tool of tools) inputSchema(tool.name, tool.inputSchema)
+  assertThrows(
+    () =>
+      inputSchema('echo_body', {
+        ...tool.inputSchema,
+        properties: {
+          ...tool.inputSchema.properties,
+          $files: { type: 'boolean' },
+        },
+      }),
+    Error,
+    'property "$files"',
+  )
+  equal((tool.inputSchema.properties as Record<string, unknown>)._files, {
     type: 'boolean',
   })
   equal(local.getInstructions()?.includes(FILES), true)

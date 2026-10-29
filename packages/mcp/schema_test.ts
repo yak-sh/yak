@@ -10,8 +10,9 @@
 // publishes the meta-schema instead.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
+import { Ajv2020 } from 'ajv/dist/2020.js'
 import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
@@ -23,6 +24,40 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import { type Options, server } from './server.ts'
 import { answerWith, core, inputSchemaOf } from './tools.ts'
 import { connect, pinned, shop, shopGraph } from './testing.ts'
+import { inputSchema } from './schema.ts'
+import { fileSchema } from './files.ts'
+import { toolsSaid } from '@yaks/vocab/tools'
+
+let schemaMeta = new Ajv2020({ strict: false, allErrors: true })
+schemaMeta.validateSchema({})
+
+// Exercise the declarations through the same generator and decoration as the
+// live doors, including packages absent from the small graph fixtures below.
+let declarations: { name: string; schema: Record<string, unknown> }[] = []
+for await (let entry of Deno.readDir(new URL('../', import.meta.url))) {
+  if (!entry.isDirectory) continue
+  let source = new URL(`../${entry.name}/vocab.json`, import.meta.url)
+  let doc
+  try {
+    doc = JSON.parse(await Deno.readTextFile(source))
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) continue
+    throw err
+  }
+  for (let tool of toolsSaid(doc)) {
+    let schema = fileSchema(inputSchemaOf({ ...tool, run: () => [] }), () => '')
+    declarations.push({ name: `${entry.name}/${tool.name}`, schema })
+  }
+}
+let malformed = declarations.flatMap(({ name, schema }) => {
+  inputSchema(name, schema)
+  return schemaMeta.validateSchema(schema)
+    ? []
+    : [{ name, errors: structuredClone(schemaMeta.errors) }]
+})
+test('every package tool builds an Anthropic-compatible MCP input schema', () => {
+  assertEquals(malformed, [])
+})
 
 let at = (o: unknown, ...keys: string[]): unknown =>
   keys.reduce(
@@ -32,6 +67,40 @@ let at = (o: unknown, ...keys: string[]): unknown =>
         : undefined,
     o,
   )
+
+for (
+  let [why, schema] of [
+    ['root type', { type: 'array' }],
+    ...['allOf', 'anyOf', 'oneOf'].map((key) => [
+      key,
+      { type: 'object', [key]: [{ required: ['body'] }] },
+    ]),
+    ...['$files', '', 'é', 'a b', 'x'.repeat(65)].map((key) => [
+      'property',
+      { type: 'object', properties: { [key]: {} } },
+    ]),
+  ] as [string, Record<string, unknown>][]
+) {
+  test(`MCP schema building refuses unsupported ${JSON.stringify(schema)}`, () => {
+    assertThrows(() => inputSchema('write', schema), Error, why)
+  })
+}
+
+test('MCP schema building preserves supported nested JSON Schema', () => {
+  let schema = {
+    type: 'object',
+    properties: {
+      ['x'.repeat(64)]: {
+        anyOf: [
+          { type: 'string', minLength: 1 },
+          { type: 'object', properties: { $value: {} } },
+        ],
+      },
+      'a.Z_9-': { allOf: [{ oneOf: [{ const: 1 }, { const: 2 }] }] },
+    },
+  }
+  assertEquals(inputSchema('write', schema), schema)
+})
 
 test('every tool publishes its answer, and its answers fit it', async () => {
   let client = await connect({
@@ -48,6 +117,14 @@ test('every tool publishes its answer, and its answers fit it', async () => {
     }],
   })
   let { tools } = await client.listTools()
+  for (let tool of tools) {
+    inputSchema(tool.name, tool.inputSchema)
+    assertEquals(
+      schemaMeta.validateSchema(tool.inputSchema),
+      true,
+      JSON.stringify(schemaMeta.errors),
+    )
+  }
   let schemas = Object.fromEntries(
     tools.map((t: { name: string; outputSchema?: unknown }) => [
       t.name,

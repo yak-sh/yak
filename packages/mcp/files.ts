@@ -6,7 +6,7 @@ type Schema = Record<string, unknown>
 export type ReadFile = (path: string) => string | Promise<string>
 
 export let FILES =
-  'Set "$files":true to read @/absolute/path in string arguments, including nested strings. Omit it for literal @ text.'
+  'Set "_files":true to read @/absolute/path in string arguments, including nested strings. Omit it for literal @ text.'
 
 export let fileSchema = <S extends Schema>(schema: S, read?: ReadFile): S =>
   read
@@ -14,7 +14,7 @@ export let fileSchema = <S extends Schema>(schema: S, read?: ReadFile): S =>
       ...schema,
       properties: {
         ...schema.properties as Schema,
-        $files: { type: 'boolean' },
+        _files: { type: 'boolean' },
       },
     }
     : schema
@@ -87,12 +87,14 @@ export let fileArgs = async (
   schema: Schema,
   read?: ReadFile,
 ): Promise<Record<string, unknown>> => {
-  if (!read || !('$files' in args)) return args
-  let { $files, ...input } = args
-  if (typeof $files != 'boolean') {
-    throw new CallError('file', '$files wants true or false')
+  if (!read || !('_files' in args || '$files' in args)) return args
+  // Keep calls made from the previously published schema working.
+  let { _files, $files, ...input } = args
+  let files = _files ?? $files
+  if (typeof files != 'boolean') {
+    throw new CallError('file', '_files wants true or false')
   }
-  return $files
+  return files
     ? await expanded(input, [schema], schema, read) as Record<string, unknown>
     : input
 }

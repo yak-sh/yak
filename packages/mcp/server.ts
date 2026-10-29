@@ -51,6 +51,7 @@ import {
 import type { Guide } from '@yaks/graph'
 import { validator } from './validator.ts'
 import { fileArgs, FILES, fileSchema, type ReadFile } from './files.ts'
+import { inputSchema } from './schema.ts'
 
 /**
  * How a client signs in to call a tool: `noauth` means anybody may call it,
@@ -94,7 +95,7 @@ export type Options = {
    * reads. Used where a runner is built here; a runner passed in has its
    * own. */
   reply?: RunnerOpts['reply']
-  /** Optional local file input: callers opt in with `$files: true`. Hosted
+  /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
   /** who is calling — every write this server makes is signed with this actor:
@@ -519,7 +520,7 @@ export let server = (
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
       inputSchema: fromJsonSchema(
-        fileSchema(inputSchemaOf(t), opts.readFile),
+        inputSchema(t.name, fileSchema(inputSchemaOf(t), opts.readFile)),
         validator,
       ),
       outputSchema: fromJsonSchema(schemaOf(t), validator),
@@ -542,7 +543,10 @@ export let server = (
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: fileSchema(inputSchemaOf(t), opts.readFile),
+      inputSchema: inputSchema(
+        t.name,
+        fileSchema(inputSchemaOf(t), opts.readFile),
+      ),
       outputSchema: schemaOf(t),
       annotations: annotated(t),
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
