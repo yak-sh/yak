@@ -1,19 +1,11 @@
 ---
 name: builders-and-builds
 description: >
-  How a builder turns each match of a query into durable output entities
-  through a model or a code tool (@yaks/builders), on the box and in yaks.app
-  stores: writing one builder per job with a `$var` template, outputs, slots,
-  `$slot` siblings and edge outputs, chaining through `built.current`, staging
-  and shadows, cost, and reading what was built for an entity. Use it whenever
-  you write or change a `builder{…}`, its `content.body` or `using`, a tool a
-  builder calls, or anything that reads `build` or `built` rows; whenever you
-  run `builder_build`, try a prompt on a few rows, or ask what was built
-  for something; and when a builder rebuilds everything, never builds, costs
-  too much or loses its outputs, even if the request only says "have a model
-  make one for each", "generate", "invent" or "fill these in". The query's
-  syntax is `query-grammar`; effects in general are `effects-and-rules`; the
-  store a hosted builder runs in is `yaks-app`.
+  Use for builder definitions, prompts, output slots, model/tool generation
+  per query match, builder_build, build/built reads, or builders that
+  rebuild, stall, cost too much or lose outputs. Covers @yaks/builders
+  locally and on yaks.app. Query syntax is query-grammar; other effects are
+  effects-and-rules.
 ---
 
 # Builders and builds

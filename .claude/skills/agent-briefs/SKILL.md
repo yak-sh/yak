@@ -1,18 +1,11 @@
 ---
 name: agent-briefs
 description: >
-  Handing work to another agent in ~/code/tasks and taking it back: writing the
-  brief for a fresh subagent, a fork, a Codex run, a managed spawn or a native
-  session, relaying something the owner just said to an agent already running,
-  stopping one whose task the owner reframed, and checking a report before
-  telling the owner. Use it whenever you are about to call the Agent tool,
-  SendMessage a running agent, run `codex exec`, `session_spawn` or `yak
-  session new`, or file a task an agent will be pointed at, even for a one-line
-  fix, and whenever an agent's report or task-notification arrives. Not for
-  doing the work yourself, and not for a design the owner will read (that is
-  `design-docs`); starting, watching and waiting on a native session is
-  `native-sessions`; what every agent in an area needs is a skill
-  (`skill-writing`), not a longer brief.
+  Use when delegating work, filing an agent task, sending a running agent
+  more input, stopping or rebriefing one, or reviewing its report. Covers
+  Agent/SendMessage, codex exec, session_spawn and yak session new. Native
+  session operation is native-sessions; owner-facing proposals are
+  design-docs.
 ---
 
 # Briefing an agent

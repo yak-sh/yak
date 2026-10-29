@@ -423,8 +423,12 @@
       "noun": "admin",
       "verb": "errors",
       "title": "List yaks.app failures by tracker bug",
-      "description": "Every unresolved tracker bug (not resolved or archived), however old, newest first. No time window by default; since optionally narrows by last seen. Thrown or caught: lifetime count, first and last seen, global bug id, place and message. Then the time to fix of the bugs resolved in the window (a week without since): median and worst, first seen or regressed to resolved; and how long the oldest open bug has been open. Then people's letters to the platform's addresses in the same window: how many, how many have a reply in their thread with median and worst time to answer, and each one still unanswered (archive a letter that needs no answer). Reads the tracker through its signed door using the remote URL and vault reference in tracker.json beside this graph; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Every unresolved tracker bug (not resolved or archived), however old, newest first. No time window by default; since optionally narrows by last seen. Thrown or caught: lifetime count, first and last seen, global bug id, place and message. Then the time to fix of the bugs resolved in the window (a week without since): median and worst, first seen or regressed to resolved; and how long the oldest open bug has been open. Pass resolved to include each resolved bug’s full explanation. Then people's letters to the platform's addresses in the same window: how many, how many have a reply in their thread with median and worst time to answer, and each one still unanswered (archive a letter that needs no answer). Reads the tracker through its signed door using the remote URL and vault reference in tracker.json beside this graph; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
+        "resolved": {
+          "type": "boolean",
+          "description": "include each bug resolved in the window with its full explanation; default only reports time-to-fix totals"
+        },
         "since": {
           "type": "string",
           "description": "optional duration narrowing bugs by last seen (for example 7d); no time window by default"

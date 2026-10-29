@@ -1,18 +1,11 @@
 ---
 name: platform-visualize
 description: >
-  Read the running platform's composed anatomy and bounded causal activity with
-  @yaks/visualize, its /visualize page, agent tools `visualize_anatomy` and
-  `visualize_activity`, and the yak visualize command.
-  Use it whenever you need to see what is wired, which package owns a part,
-  whether a facet is declared, loaded or bound, what ran after a write, why a
-  connection looks missing, or whether a quiet trace means nothing happened;
-  and when changing packages/visualize. Stored rows and read/write behavior are
-  graph-reads-and-writes; graph query syntax is query-grammar, not anatomy's
-  plain-text search. Wiring packages is packages-and-plugins; changing effects
-  or rules is effects-and-rules. Building the screen is ui-building, not just
-  reading it. Automated assertions are testing; proving commands or the page
-  in your own process is end-to-end-checks. Observation is not proof.
+  Use to inspect composed platform anatomy and bounded causal activity: what
+  is wired, package ownership, declared/loaded/bound facets, what ran after
+  a write or a quiet trace. Covers @yaks/visualize, visualize_anatomy and
+  visualize_activity and its page/CLI. Row values are
+  graph-reads-and-writes; wiring changes are packages-and-plugins.
 ---
 
 # Platform anatomy and activity

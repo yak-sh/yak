@@ -1,17 +1,11 @@
 ---
 name: design-docs
 description: >
-  Write, revise, file and decide a design (a D- entity) in the yaks repo: a
-  proposal he can skim, with where things live, components and their
-  properties, open questions and a task tree. Use it
-  whenever you are asked to pitch, propose, draft, design, "write up" or "think
-  through" a change bigger than a bug fix; when a change moves code between
-  packages or adds a package, a vocabulary keyword or a worker; when a design
-  needs revising, deciding (`design_decide`) or turning into tasks; or when an agent's draft needs
-  reviewing before it goes on a D- entity. Not for a bug fix or a small feature,
-  which are just done. How each proposed component is shaped is `vocabulary`,
-  and making and wiring a package is `packages-and-plugins`; this one is the
-  document around them.
+  Use for proposals or designs beyond a bug fix or small feature, D- entity
+  drafting/revision/decision/task trees, design_decide, and changes adding
+  or moving packages, vocabulary or workers. Component shapes are
+  vocabulary; package wiring is packages-and-plugins. Small features and
+  fixes are done directly.
 ---
 
 # Writing a design

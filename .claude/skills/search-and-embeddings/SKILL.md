@@ -1,17 +1,11 @@
 ---
 name: search-and-embeddings
 description: >
-  How finding things works in the graph, on the box and in yaks.app stores:
-  full-text search (@yaks/fts), embeddings and vectors (@yaks/embedding),
-  `.near=<entity>` and `.order=similar` or `.order=search`, similar-task twins,
-  memory recall, which embedding provider and model run, and what a lookup
-  costs. Use it whenever a change or question touches search, `.near`,
-  embeddings, vectors, similarity, neighbours, recall, ranking, `search: true`,
-  `embed: false`, an embedder's config or model, or why something is or isn't
-  found, even if the request only says "find", "related", "duplicates" or "slow
-  query". How a query is written is `query-grammar`, how the archetype index
-  answers one is `graph-reads-and-writes`; re-embedding stored vectors after a
-  model change is still this skill.
+  Use for full-text search, .near, embeddings, vectors, similarity,
+  neighbours, recall, ranking, search/embed vocabulary flags, embedder
+  configuration and re-embedding, or missing/slow results. Covers @yaks/fts
+  and @yaks/embedding locally and on yaks.app. Query syntax is
+  query-grammar.
 ---
 
 # Search

@@ -36,7 +36,8 @@ the matching bugs; counts and first seen cover each bug's lifetime. Each row
 says whom the bug reached: people, test accounts only, or no person recorded.
 The last lines time the fixes: the median and worst time to fix (first seen, or
 its regression, to resolved) of the bugs resolved in the window, a week without
-`--since`, and how long the oldest open bug has been open. Then people's letters
+`--since`, and how long the oldest open bug has been open. `--resolved` includes
+each resolved bug’s full explanation, for reviewing fixes. Then people's letters
 in the same window: each letter a person wrote to the platform's addresses
 (bot.yak.sh, yaks.app), how many have a reply in their thread with the median
 and worst time to that reply, and every one still waiting, oldest last. A letter
@@ -44,7 +45,7 @@ that needs no answer is archived (`archived{}`) to leave the list.
 
 ```sh
 yak admin errors --as admin
-yak admin errors --since 14d --as admin
+yak admin errors --since 14d --resolved --as admin
 ```
 
 ## A throwaway without a browser

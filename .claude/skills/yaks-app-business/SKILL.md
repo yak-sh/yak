@@ -1,19 +1,11 @@
 ---
 name: yaks-app-business
 description: >
-  yaks.app's own business: who it is for (Jill, companygardener and the
-  personas in D-131886), the space as the unit of data and billing, the free
-  and Plus plans, the growth cycle and the maker's path, and where the plans,
-  prices and marketing pages live. Use it whenever you touch yaks.app's
-  pricing, plans, allowances or limits (meter.ts ceilings, upgrade prompts,
-  refusal text), its marketing site (workers/yak/public/index.html,
-  pricing.html, help.html), sign-up or onboarding copy, the billing page, the
-  gallery or a home-page example, or decide who a yaks.app feature is for, even
-  if the request only says "make this paid", "add a limit", "tweak the home
-  page", "write the copy" or "who would use this?". The principles behind it,
-  for any venture, are `business-model`; how the platform meters and bills is
-  `yaks-app`; how prose reads is `writing-documentation`; a proposal for the
-  owner is `design-docs`.
+  Use for yaks.app pricing, plans, meter.ts allowances/limits,
+  upgrade/refusal text, marketing pages, sign-up/onboarding, billing,
+  gallery, homepage examples or audience decisions. Covers its customers,
+  spaces and plans. Business principles are business-model; platform
+  mechanics are yaks-app.
 ---
 
 # yaks.app's business

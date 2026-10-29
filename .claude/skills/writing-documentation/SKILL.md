@@ -1,20 +1,11 @@
 ---
 name: writing-documentation
 description: >
-  How documentation in the yaks repo is written: package READMEs, guide pages
-  under workers/yak/public/docs, doc comments and a file's opening paragraph,
-  and any prose that explains how something works. Use it whenever you write or
-  edit a README or a guide page, describe a package, feature or term for a
-  reader, add or change an example, title a page or a heading, or name a
-  concept in prose, even for a one-line doc fix, and when a request says
-  "document this", "write it up", "explain how X works" or "update the
-  README". A title names its subject with the standard technical term, prose
-  says what it means directly, terms are defined where they are first used
-  and then used exactly, never a synonym, and every major feature has a short
-  example that runs. A skill is `skill-writing`, a design
-  is `design-docs`, naming a component is `vocabulary`, which files a package
-  carries is `packages-and-plugins`, and what yaks.app's marketing site
-  promises and to whom is `yaks-app-business`.
+  Use for READMEs, guide pages, doc comments, opening file prose, examples,
+  titles, headings, or explaining a feature/term. Covers plain technical
+  prose and consistent defined terms. Skills are skill-writing; proposals
+  are design-docs; component names are vocabulary; marketing is
+  yaks-app-business.
 ---
 
 # Writing documentation

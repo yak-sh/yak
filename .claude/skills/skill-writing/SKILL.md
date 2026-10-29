@@ -1,19 +1,11 @@
 ---
 name: skill-writing
 description: >
-  How to write, change, rename, split, merge or review a skill in
-  .claude/skills, and how to decide where a piece of knowledge, a workflow or a
-  recurring task should live: a skill, the persona, a package README, a code
-  comment or a task. Use it whenever you are about to create or edit a SKILL.md
-  or a script beside one, write or tune a skill's description, fix a skill that
-  fired at the wrong moment, never fired or reads like a rulebook, turn what a
-  session learned about an area into something the next agent will know, or
-  find area knowledge sitting in a memory, a README or a brief that every agent
-  there needs, even when the request only says "write this down", "so agents
-  know how this works" or "make a skill". Anthropic's `skill-creator` covers
-  the format; this is the judgment on top. A brief for one agent is
-  `agent-briefs`; a proposal for the owner is `design-docs`; how a README or
-  guide page is written is `writing-documentation`.
+  Use when creating, editing, reviewing, renaming, splitting or merging
+  skills and their scripts/descriptions, fixing skill triggers, recording
+  durable lessons, or deciding whether knowledge belongs in a skill,
+  persona, README, comment or task. One agent’s brief is agent-briefs; prose
+  guides are writing-documentation.
 ---
 
 # Writing skills
@@ -149,9 +141,11 @@ Say what it isn't for and which skill owns that, and let the neighbouring skill
 say the same, so the boundary is drawn from both sides.
 
 The frontmatter is just `name` and a folded `description: >`, under 1,024
-characters (the spec's limit; most here run 600 to 950). A good gut check:
-imagine three ways the owner might ask for something that needs the skill
-without naming it, and see whether the description would catch each one.
+characters (the spec's limit, not a target). Every description is loaded for
+every task and read again on later turns. Keep it to the subject, the moments
+that need it and the boundaries that prevent confusion. Teaching, tool lists
+and examples belong in the body. A good gut check: imagine three requests
+that need the skill without naming it, and see whether it catches each one.
 
 ## The name
 

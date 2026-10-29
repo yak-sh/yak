@@ -1,17 +1,11 @@
 ---
 name: query-grammar
 description: >
-  How a yaks query is written and read: clauses, operators, `.p` `!p` `?p`,
-  bare text, `|`, grouping, walks (`->` `<-`), qualifiers, directives (`.order`
-  `.limit` `.after` `.count` `.tally` `.distinct` `.fields` `*` `.refs` `.near`
-  `.edges`), time values, reverse associations, rule matches with `;` `$vars`
-  `+` and brackets, and refusing a property named without its component.
-  Use it for any query: `graph_query`, a tool's `q`, a
-  board, filter, rule/effect `match`, builder query, `.near` search or saved
-  query; and before adding syntax that may exist already. Anatomy's
-  plain-text search is `platform-visualize`, not query syntax. Computation
-  and row cost are `graph-reads-and-writes`; full-text ranking and `.near`
-  internals are `search-and-embeddings`; outputs are `builders-and-builds`.
+  Use for any yaks query: graph_query and CLI, boards, filters, saved
+  queries, rule/effect matches, builders, .near, walks and directives, or
+  before adding query syntax. Read/write cost is graph-reads-and-writes;
+  search ranking is search-and-embeddings; anatomy search is
+  platform-visualize.
 ---
 
 # The query grammar

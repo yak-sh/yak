@@ -1,19 +1,10 @@
 ---
 name: packages-and-plugins
 description: >
-  How an @yaks package or plugin is made, wired and published in ~/code/tasks,
-  and where code belongs. Use it whenever you add a package or plugin, move code
-  between packages (or out of workers/yak, packages/web or packages/browse),
-  change a subpath export or facet (./vocab, ./graph, ./tools, ./effects,
-  ./routes, ./ui, ./service, ./cli, ./views, ./tui, ./web, ./mail), add a plugin to
-  ~/.yak/yak.json, hit an import cycle, publish to jsr, or land with `yak land
-  --allow-revert`, even if the task says "put this somewhere", "share this
-  helper" or "make it reusable". Reading composed anatomy and causal activity
-  is `platform-visualize`, not wiring. Declared words are `vocabulary`; effects
-  and rules are `effects-and-rules`; drawn views are `ui-building`; keys a
-  plugin reads are `secrets-and-connections`; how its README is written is
-  `writing-documentation`. A new package or an owner-decided boundary gets a
-  design first (`design-docs`).
+  Use when adding/moving @yaks packages or plugins, changing exports or
+  facets, wiring plugins, fixing import cycles, publishing to jsr or landing
+  with --allow-revert. New package boundaries need design-docs; vocabulary
+  is vocabulary; reading composed wiring is platform-visualize.
 ---
 
 # Packages and plugins

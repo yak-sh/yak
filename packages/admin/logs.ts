@@ -315,9 +315,10 @@ export let errors = async (
   options: Options,
   out: Note,
   note: Note,
-  { fetch = globalThis.fetch, graph }: {
+  { fetch = globalThis.fetch, graph, resolved = false }: {
     fetch?: typeof globalThis.fetch
     graph?: Pick<Graph, 'read' | 'vocab'>
+    resolved?: boolean
   } = {},
 ): Promise<void> => {
   let window = '', seen = '', end = Date.now()
@@ -369,9 +370,9 @@ export let errors = async (
   let resolvedAt = (b: Bundle) => text(object(b.resolved).at)
   let bare = 0
   for (
-    let row of fixed.toSorted((a, b) =>
-      resolvedAt(b).localeCompare(resolvedAt(a))
-    )
+    let row of resolved
+      ? fixed.toSorted((a, b) => resolvedAt(b).localeCompare(resolvedAt(a)))
+      : []
   ) {
     let ms = fixtime(row), lines = explained(row)
     if (!lines.length) {

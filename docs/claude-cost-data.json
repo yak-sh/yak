@@ -1,0 +1,2603 @@
+{
+  "all": {
+    "since": "2026-10-27T22:00:00Z",
+    "until": "2026-10-29T04:00:00Z",
+    "scanned": 189209,
+    "uniqueMessages": 10239,
+    "duplicateRecords": 26309,
+    "totalCost": 819.6084173999991,
+    "costs": {
+      "read": 404.4889003999989,
+      "write5m": 265.5292250000001,
+      "thinking": 72.7794200000002,
+      "output": 63.298240000000014,
+      "write1h": 13.430599999999998,
+      "input": 0.08203199999999139,
+      "search": 0
+    },
+    "tokens": {
+      "input": 20508,
+      "write5m": 53105845,
+      "write1h": 1678825,
+      "read": 2022444502,
+      "output": 6803883,
+      "thinking": 3638971
+    },
+    "context": {
+      "median": 190093,
+      "p90": 350192,
+      "max": 466961,
+      "mean": 202876.22619396425
+    },
+    "models": {
+      "claude-opus-5-5": 819.6084173999974
+    },
+    "effort": {
+      "xhigh": 819.6084173999974
+    },
+    "operator": {
+      "cost": 819.6084173999998,
+      "own": 21.86813019999999,
+      "sessions": 60
+    },
+    "allocation": {
+      "inputCostCovered": 683.4661505999997,
+      "estimate": {
+        "assistant-history": 149.1527355277102,
+        "instructions": 147.60576569393504,
+        "user-and-reminders": 96.82069873109802,
+        "repo-skills": 62.13528808223188,
+        "skills": 61.047145172863736,
+        "bash-output": 58.639468228583425,
+        "tool-schemas": 58.59955723027039,
+        "cli-environment": 20.979541104343443,
+        "file-reads": 10.064007019899975,
+        "system-prompt": 9.006197115733382,
+        "other-tool-results": 7.166439916753942,
+        "test-output": 1.2381217684912398,
+        "hooks": 0.5502549404862763,
+        "mcp-results": 0.46093006759942945
+      }
+    },
+    "taskCosts": {
+      "T-132914": 48.46593359999997,
+      "T-132912": 46.39229480000001,
+      "T-132879": 37.64559519999999,
+      "T-132878": 27.788719599999993,
+      "T-132967": 23.962129199999993,
+      "T-132973": 23.423849000000008,
+      "T-132997": 21.968965800000017,
+      "T-132901": 21.887111600000008,
+      "T-132978": 21.85837079999999,
+      "T-132898": 21.486000199999996,
+      "T-132844": 20.657643999999998,
+      "T-132892": 18.063259599999995,
+      "T-132948": 15.737318599999995,
+      "T-132981": 13.926345000000003,
+      "T-132950": 13.246502999999999,
+      "T-132933": 11.601816600000003,
+      "T-132936": 9.134633599999999,
+      "T-132885": 6.644181400000001,
+      "T-132639": 6.313886199999999,
+      "T-127900": 5.8558226,
+      "T-132893": 5.317803799999997,
+      "T-132904": 5.127825399999998,
+      "T-132882": 4.411823799999999,
+      "T-132968": 4.1197604000000005,
+      "T-132884": 4.1158567999999995,
+      "T-132883": 2.9560907999999997,
+      "T-132881": 2.3889454000000003,
+      "T-132880": 1.8481428000000002,
+      "T-126945": 0.15026219999999998
+    },
+    "sessions": [
+      {
+        "session": "agent-a2ff4121ddd5fbe17",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 548,
+        "cost": 80.05897879999999,
+        "tokens": {
+          "input": 1096,
+          "write5m": 10406120,
+          "write1h": 0,
+          "read": 112532874,
+          "output": 275871,
+          "thinking": 126982
+        },
+        "costs": {
+          "input": 0.0043840000000000545,
+          "write5m": 52.03059999999997,
+          "write1h": 0,
+          "read": 22.506574799999953,
+          "thinking": 2.539640000000001,
+          "output": 2.9777800000000014,
+          "search": 0
+        },
+        "context": {
+          "median": 211140,
+          "p90": 408806,
+          "max": 466377,
+          "mean": 224343.2299270073
+        },
+        "tasks": [
+          "T-132935",
+          "T-133009",
+          "T-133006",
+          "T-132905",
+          "T-133014"
+        ],
+        "firstContext": 40977,
+        "firstInputCost": 0.1770286
+      },
+      {
+        "session": "agent-abe003c6da3ec03a4",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 666,
+        "cost": 48.46593359999997,
+        "tokens": {
+          "input": 1332,
+          "write5m": 1676853,
+          "write1h": 0,
+          "read": 152547903,
+          "output": 478338,
+          "thinking": 279235
+        },
+        "costs": {
+          "input": 0.0053280000000000775,
+          "write5m": 8.384265,
+          "write1h": 0,
+          "read": 30.509580599999993,
+          "thinking": 5.5846999999999944,
+          "output": 3.9820599999999966,
+          "search": 0
+        },
+        "context": {
+          "median": 218319,
+          "p90": 408129,
+          "max": 466961,
+          "mean": 231570.7027027027
+        },
+        "tasks": [
+          "T-132914"
+        ],
+        "firstContext": 40494,
+        "firstInputCost": 0.1746136
+      },
+      {
+        "session": "agent-a8f7a9caa9305ea06",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 663,
+        "cost": 46.39229480000001,
+        "tokens": {
+          "input": 1326,
+          "write5m": 1163488,
+          "write1h": 0,
+          "read": 159179554,
+          "output": 436682,
+          "thinking": 251672
+        },
+        "costs": {
+          "input": 0.005304000000000077,
+          "write5m": 5.817439999999995,
+          "write1h": 0,
+          "read": 31.8359108,
+          "thinking": 5.0334399999999935,
+          "output": 3.7002000000000006,
+          "search": 0
+        },
+        "context": {
+          "median": 228806,
+          "p90": 408446,
+          "max": 466573,
+          "mean": 241846.7088989442
+        },
+        "tasks": [
+          "T-132912"
+        ],
+        "firstContext": 40509,
+        "firstInputCost": 0.1746886
+      },
+      {
+        "session": "agent-a18dd9f86e8891a70",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 451,
+        "cost": 43.89118579999996,
+        "tokens": {
+          "input": 902,
+          "write5m": 2967682,
+          "write1h": 0,
+          "read": 110884839,
+          "output": 343610,
+          "thinking": 187977
+        },
+        "costs": {
+          "input": 0.0036080000000000357,
+          "write5m": 14.838409999999998,
+          "write1h": 0,
+          "read": 22.176967799999993,
+          "thinking": 3.759539999999999,
+          "output": 3.112659999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 244971,
+          "p90": 426051,
+          "max": 466246,
+          "mean": 252446.61419068737
+        },
+        "tasks": [
+          "T-132949",
+          "T-132951"
+        ],
+        "firstContext": 42663,
+        "firstInputCost": 0.1854586
+      },
+      {
+        "session": "agent-ad5506fd6e86893c6",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 385,
+        "cost": 37.64559519999999,
+        "tokens": {
+          "input": 770,
+          "write5m": 3046979,
+          "write1h": 0,
+          "read": 86128001,
+          "output": 259101,
+          "thinking": 133487
+        },
+        "costs": {
+          "input": 0.003080000000000023,
+          "write5m": 15.234895,
+          "write1h": 0,
+          "read": 17.225600200000002,
+          "thinking": 2.66974,
+          "output": 2.5122799999999987,
+          "search": 0
+        },
+        "context": {
+          "median": 204494,
+          "p90": 427835,
+          "max": 464957,
+          "mean": 231625.32467532466
+        },
+        "tasks": [
+          "T-132879"
+        ],
+        "firstContext": 40790,
+        "firstInputCost": 0.17609360000000002
+      },
+      {
+        "session": "agent-aed9610bed3d25027",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 309,
+        "cost": 27.788719599999993,
+        "tokens": {
+          "input": 622,
+          "write5m": 1515656,
+          "write1h": 0,
+          "read": 78644358,
+          "output": 223954,
+          "thinking": 116391
+        },
+        "costs": {
+          "input": 0.0024880000000000076,
+          "write5m": 7.578279999999999,
+          "write1h": 0,
+          "read": 15.728871600000002,
+          "thinking": 2.327820000000001,
+          "output": 2.1512599999999984,
+          "search": 0
+        },
+        "context": {
+          "median": 278434,
+          "p90": 427397,
+          "max": 466010,
+          "mean": 259419.53398058252
+        },
+        "tasks": [
+          "T-132878"
+        ],
+        "firstContext": 41007,
+        "firstInputCost": 0.205033
+      },
+      {
+        "session": "agent-a4e2d03af09c0145f",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 184,
+        "cost": 23.962129199999993,
+        "tokens": {
+          "input": 368,
+          "write5m": 3062859,
+          "write1h": 0,
+          "read": 31994811,
+          "output": 112370,
+          "thinking": 57096
+        },
+        "costs": {
+          "input": 0.0014719999999999967,
+          "write5m": 15.314295000000005,
+          "write1h": 0,
+          "read": 6.3989622000000015,
+          "thinking": 1.1419199999999998,
+          "output": 1.1054800000000005,
+          "search": 0
+        },
+        "context": {
+          "median": 199834,
+          "p90": 277484,
+          "max": 291689,
+          "mean": 190532.8152173913
+        },
+        "tasks": [
+          "T-132967"
+        ],
+        "firstContext": 40813,
+        "firstInputCost": 0.17620860000000002
+      },
+      {
+        "session": "agent-a472a69e3609a8d04",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 237,
+        "cost": 23.423849000000008,
+        "tokens": {
+          "input": 474,
+          "write5m": 2464508,
+          "write1h": 0,
+          "read": 43388665,
+          "output": 121084,
+          "thinking": 67768
+        },
+        "costs": {
+          "input": 0.0018959999999999956,
+          "write5m": 12.322539999999998,
+          "write1h": 0,
+          "read": 8.677733000000003,
+          "thinking": 1.3553600000000006,
+          "output": 1.0663200000000002,
+          "search": 0
+        },
+        "context": {
+          "median": 192452,
+          "p90": 308229,
+          "max": 327151,
+          "mean": 193475.30379746837
+        },
+        "tasks": [
+          "T-132973"
+        ],
+        "firstContext": 40659,
+        "firstInputCost": 0.1754386
+      },
+      {
+        "session": "agent-a5e6dbd9612c7fd92",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 188,
+        "cost": 22.65797039999999,
+        "tokens": {
+          "input": 376,
+          "write5m": 2266353,
+          "write1h": 0,
+          "read": 39752007,
+          "output": 168715,
+          "thinking": 95201
+        },
+        "costs": {
+          "input": 0.0015039999999999967,
+          "write5m": 11.331765000000003,
+          "write1h": 0,
+          "read": 7.950401400000006,
+          "thinking": 1.9040199999999994,
+          "output": 1.4702800000000011,
+          "search": 0
+        },
+        "context": {
+          "median": 232359,
+          "p90": 331981,
+          "max": 343590,
+          "mean": 223503.914893617
+        },
+        "tasks": [
+          "T-132979",
+          "T-132989"
+        ],
+        "firstContext": 41060,
+        "firstInputCost": 0.1774436
+      },
+      {
+        "session": "agent-abf35234f29ed2523",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 258,
+        "cost": 21.968965800000017,
+        "tokens": {
+          "input": 532,
+          "write5m": 1451742,
+          "write1h": 0,
+          "read": 57677439,
+          "output": 158632,
+          "thinking": 69502
+        },
+        "costs": {
+          "input": 0.0021279999999999992,
+          "write5m": 7.25871,
+          "write1h": 0,
+          "read": 11.535487800000002,
+          "thinking": 1.39004,
+          "output": 1.7825999999999997,
+          "search": 0
+        },
+        "context": {
+          "median": 237438,
+          "p90": 344092,
+          "max": 370995,
+          "mean": 229184.93410852714
+        },
+        "tasks": [
+          "T-132997"
+        ],
+        "firstContext": 40769,
+        "firstInputCost": 0.17598860000000002
+      },
+      {
+        "session": "agent-a56cc1abe5111192d",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 252,
+        "cost": 21.887111600000008,
+        "tokens": {
+          "input": 504,
+          "write5m": 1216011,
+          "write1h": 0,
+          "read": 60679503,
+          "output": 183457,
+          "thinking": 109099
+        },
+        "costs": {
+          "input": 0.002015999999999997,
+          "write5m": 6.080054999999998,
+          "write1h": 0,
+          "read": 12.135900600000006,
+          "thinking": 2.1819800000000003,
+          "output": 1.4871600000000005,
+          "search": 0
+        },
+        "context": {
+          "median": 251885,
+          "p90": 407633,
+          "max": 439253,
+          "mean": 245619.11904761905
+        },
+        "tasks": [
+          "T-132901"
+        ],
+        "firstContext": 41211,
+        "firstInputCost": 0.1781986
+      },
+      {
+        "session": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 191,
+        "cost": 21.86813019999999,
+        "tokens": {
+          "input": 382,
+          "write5m": 0,
+          "write1h": 1678825,
+          "read": 32629911,
+          "output": 95501,
+          "thinking": 28412
+        },
+        "costs": {
+          "input": 0.0015279999999999966,
+          "write5m": 0,
+          "write1h": 13.430599999999998,
+          "read": 6.525982200000002,
+          "thinking": 0.5682399999999995,
+          "output": 1.3417799999999995,
+          "search": 0
+        },
+        "context": {
+          "median": 181960,
+          "p90": 259691,
+          "max": 280250,
+          "mean": 179628.89005235603
+        },
+        "tasks": [],
+        "firstContext": 83078,
+        "firstInputCost": 0.0225746
+      },
+      {
+        "session": "agent-aa650da111b13c4e5",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 206,
+        "cost": 21.85837079999999,
+        "tokens": {
+          "input": 412,
+          "write5m": 1770135,
+          "write1h": 0,
+          "read": 46133939,
+          "output": 188963,
+          "thinking": 121312
+        },
+        "costs": {
+          "input": 0.0016479999999999963,
+          "write5m": 8.850675,
+          "write1h": 0,
+          "read": 9.226787800000002,
+          "thinking": 2.426239999999998,
+          "output": 1.35302,
+          "search": 0
+        },
+        "context": {
+          "median": 263445,
+          "p90": 365869,
+          "max": 379342,
+          "mean": 232546.0485436893
+        },
+        "tasks": [
+          "T-132978"
+        ],
+        "firstContext": 40698,
+        "firstInputCost": 0.1756336
+      },
+      {
+        "session": "agent-a2f04723608bc482b",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 274,
+        "cost": 21.486000199999996,
+        "tokens": {
+          "input": 548,
+          "write5m": 804294,
+          "write1h": 0,
+          "read": 70244691,
+          "output": 170670,
+          "thinking": 82969
+        },
+        "costs": {
+          "input": 0.0021920000000000012,
+          "write5m": 4.021469999999999,
+          "write1h": 0,
+          "read": 14.048938200000004,
+          "thinking": 1.6593799999999999,
+          "output": 1.7540200000000012,
+          "search": 0
+        },
+        "context": {
+          "median": 273123,
+          "p90": 402437,
+          "max": 433128,
+          "mean": 259304.86496350364
+        },
+        "tasks": [
+          "T-132898"
+        ],
+        "firstContext": 41724,
+        "firstInputCost": 0.18076360000000002
+      },
+      {
+        "session": "agent-a504179cf22193ff3",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 247,
+        "cost": 20.657643999999998,
+        "tokens": {
+          "input": 494,
+          "write5m": 876639,
+          "write1h": 0,
+          "read": 63579065,
+          "output": 177833,
+          "thinking": 100653
+        },
+        "costs": {
+          "input": 0.001975999999999996,
+          "write5m": 4.383194999999999,
+          "write1h": 0,
+          "read": 12.715813000000002,
+          "thinking": 2.01306,
+          "output": 1.5435999999999992,
+          "search": 0
+        },
+        "context": {
+          "median": 275366,
+          "p90": 437278,
+          "max": 466819,
+          "mean": 260956.26720647773
+        },
+        "tasks": [
+          "T-132844"
+        ],
+        "firstContext": 193985,
+        "firstInputCost": 0.043859
+      },
+      {
+        "session": "agent-a14410bb9b5debb22",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 192,
+        "cost": 18.063259599999995,
+        "tokens": {
+          "input": 384,
+          "write5m": 1445360,
+          "write1h": 0,
+          "read": 39692418,
+          "output": 144822,
+          "thinking": 77861
+        },
+        "costs": {
+          "input": 0.0015359999999999966,
+          "write5m": 7.226799999999999,
+          "write1h": 0,
+          "read": 7.938483600000003,
+          "thinking": 1.5572200000000005,
+          "output": 1.3392200000000003,
+          "search": 0
+        },
+        "context": {
+          "median": 218214,
+          "p90": 359043,
+          "max": 378691,
+          "mean": 214261.26041666666
+        },
+        "tasks": [
+          "T-132892"
+        ],
+        "firstContext": 40629,
+        "firstInputCost": 0.17528860000000002
+      },
+      {
+        "session": "agent-a722696e0941bcd9e",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 261,
+        "cost": 18.01302120000001,
+        "tokens": {
+          "input": 522,
+          "write5m": 698007,
+          "write1h": 0,
+          "read": 58895291,
+          "output": 137092,
+          "thinking": 60235
+        },
+        "costs": {
+          "input": 0.0020879999999999987,
+          "write5m": 3.490034999999999,
+          "write1h": 0,
+          "read": 11.779058200000005,
+          "thinking": 1.2046999999999999,
+          "output": 1.5371400000000013,
+          "search": 0
+        },
+        "context": {
+          "median": 239775,
+          "p90": 337179,
+          "max": 354972,
+          "mean": 228328.8122605364
+        },
+        "tasks": [],
+        "firstContext": 40956,
+        "firstInputCost": 0.17692360000000001
+      },
+      {
+        "session": "agent-aeedd6e0c2c2a9242",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 233,
+        "cost": 16.302741800000007,
+        "tokens": {
+          "input": 466,
+          "write5m": 379400,
+          "write1h": 0,
+          "read": 55952889,
+          "output": 160665,
+          "thinking": 79400
+        },
+        "costs": {
+          "input": 0.0018639999999999957,
+          "write5m": 1.8970000000000007,
+          "write1h": 0,
+          "read": 11.190577799999996,
+          "thinking": 1.588000000000001,
+          "output": 1.6253000000000004,
+          "search": 0
+        },
+        "context": {
+          "median": 243961,
+          "p90": 359781,
+          "max": 384008,
+          "mean": 241771.4806866953
+        },
+        "tasks": [],
+        "firstContext": 40779,
+        "firstInputCost": 0.1817842
+      },
+      {
+        "session": "agent-aec896e73a39cea5f",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 191,
+        "cost": 15.737318599999995,
+        "tokens": {
+          "input": 382,
+          "write5m": 921091,
+          "write1h": 0,
+          "read": 43747278,
+          "output": 119044,
+          "thinking": 60879
+        },
+        "costs": {
+          "input": 0.0015279999999999966,
+          "write5m": 4.605455000000004,
+          "write1h": 0,
+          "read": 8.749455600000003,
+          "thinking": 1.2175799999999992,
+          "output": 1.1632999999999996,
+          "search": 0
+        },
+        "context": {
+          "median": 249359,
+          "p90": 321005,
+          "max": 332647,
+          "mean": 233867.8062827225
+        },
+        "tasks": [
+          "T-132948"
+        ],
+        "firstContext": 41456,
+        "firstInputCost": 0.17942360000000002
+      },
+      {
+        "session": "agent-ac0bda16c513f9917",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 141,
+        "cost": 13.926345000000003,
+        "tokens": {
+          "input": 282,
+          "write5m": 1514636,
+          "write1h": 0,
+          "read": 22365085,
+          "output": 93951,
+          "thinking": 57248
+        },
+        "costs": {
+          "input": 0.0011279999999999977,
+          "write5m": 7.573180000000001,
+          "write1h": 0,
+          "read": 4.4730170000000005,
+          "thinking": 1.1449600000000006,
+          "output": 0.7340600000000005,
+          "search": 0
+        },
+        "context": {
+          "median": 177749,
+          "p90": 257983,
+          "max": 269140,
+          "mean": 169361.72340425532
+        },
+        "tasks": [
+          "T-132981"
+        ],
+        "firstContext": 40678,
+        "firstInputCost": 0.1755336
+      },
+      {
+        "session": "agent-a1027f2f67b2b5eb9",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 149,
+        "cost": 13.246502999999999,
+        "tokens": {
+          "input": 298,
+          "write5m": 1076790,
+          "write1h": 0,
+          "read": 28282305,
+          "output": 110245,
+          "thinking": 49188
+        },
+        "costs": {
+          "input": 0.0011919999999999975,
+          "write5m": 5.383949999999999,
+          "write1h": 0,
+          "read": 5.656461000000002,
+          "thinking": 0.9837600000000001,
+          "output": 1.221139999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 199747,
+          "p90": 280662,
+          "max": 297252,
+          "mean": 197042.90604026846
+        },
+        "tasks": [
+          "T-132950"
+        ],
+        "firstContext": 42066,
+        "firstInputCost": 0.1824736
+      },
+      {
+        "session": "agent-adf5f0fe29657e772",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 216,
+        "cost": 12.513657399999994,
+        "tokens": {
+          "input": 432,
+          "write5m": 321740,
+          "write1h": 0,
+          "read": 43930547,
+          "output": 105856,
+          "thinking": 49556
+        },
+        "costs": {
+          "input": 0.001727999999999996,
+          "write5m": 1.6087000000000011,
+          "write1h": 0,
+          "read": 8.7861094,
+          "thinking": 0.9911199999999998,
+          "output": 1.1259999999999997,
+          "search": 0
+        },
+        "context": {
+          "median": 215811,
+          "p90": 313560,
+          "max": 327545,
+          "mean": 204873.69907407407
+        },
+        "tasks": [],
+        "firstContext": 40615,
+        "firstInputCost": 0.1752186
+      },
+      {
+        "session": "agent-a71e7e81d967f213d",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 12,
+        "cost": 12.059265200000002,
+        "tokens": {
+          "input": 24,
+          "write5m": 2351046,
+          "write1h": 0,
+          "read": 850796,
+          "output": 6689,
+          "thinking": 2855
+        },
+        "costs": {
+          "input": 9.600000000000002e-05,
+          "write5m": 11.75523,
+          "write1h": 0,
+          "read": 0.1701592,
+          "thinking": 0.0571,
+          "output": 0.07668,
+          "search": 0
+        },
+        "context": {
+          "median": 266651,
+          "p90": 270437,
+          "max": 273292,
+          "mean": 266822.1666666667
+        },
+        "tasks": [],
+        "firstContext": 262582,
+        "firstInputCost": 1.2850536
+      },
+      {
+        "session": "agent-aabfa391ca6729ed5",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 183,
+        "cost": 11.861440600000002,
+        "tokens": {
+          "input": 366,
+          "write5m": 332594,
+          "write1h": 0,
+          "read": 38201433,
+          "output": 127836,
+          "thinking": 71270
+        },
+        "costs": {
+          "input": 0.0014639999999999968,
+          "write5m": 1.6629700000000005,
+          "write1h": 0,
+          "read": 7.6402866,
+          "thinking": 1.4254000000000002,
+          "output": 1.1313199999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 217080,
+          "p90": 315472,
+          "max": 337202,
+          "mean": 210570.45355191256
+        },
+        "tasks": [],
+        "firstContext": 40834,
+        "firstInputCost": 0.1820592
+      },
+      {
+        "session": "agent-a986487138549c545",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 169,
+        "cost": 11.601816600000003,
+        "tokens": {
+          "input": 340,
+          "write5m": 320719,
+          "write1h": 0,
+          "read": 38421808,
+          "output": 115625,
+          "thinking": 58255
+        },
+        "costs": {
+          "input": 0.001359999999999997,
+          "write5m": 1.6035949999999999,
+          "write1h": 0,
+          "read": 7.684361599999999,
+          "thinking": 1.1650999999999991,
+          "output": 1.1474,
+          "search": 0
+        },
+        "context": {
+          "median": 241424,
+          "p90": 311388,
+          "max": 326524,
+          "mean": 229247.73372781064
+        },
+        "tasks": [
+          "T-132933"
+        ],
+        "firstContext": 40632,
+        "firstInputCost": 0.1753036
+      },
+      {
+        "session": "agent-af0dbc96b115065fb",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 193,
+        "cost": 10.778262400000006,
+        "tokens": {
+          "input": 386,
+          "write5m": 302630,
+          "write1h": 0,
+          "read": 35740442,
+          "output": 105774,
+          "thinking": 38220
+        },
+        "costs": {
+          "input": 0.0015439999999999965,
+          "write5m": 1.5131500000000004,
+          "write1h": 0,
+          "read": 7.148088399999999,
+          "thinking": 0.7644,
+          "output": 1.3510799999999987,
+          "search": 0
+        },
+        "context": {
+          "median": 191322,
+          "p90": 284262,
+          "max": 307238,
+          "mean": 186753.66839378237
+        },
+        "tasks": [],
+        "firstContext": 40605,
+        "firstInputCost": 0.1809142
+      },
+      {
+        "session": "agent-a9a7d7a68d4e24202",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 162,
+        "cost": 10.433952399999994,
+        "tokens": {
+          "input": 324,
+          "write5m": 310323,
+          "write1h": 0,
+          "read": 31372807,
+          "output": 130324,
+          "thinking": 70377
+        },
+        "costs": {
+          "input": 0.0012959999999999972,
+          "write5m": 1.5516150000000002,
+          "write1h": 0,
+          "read": 6.274561399999997,
+          "thinking": 1.407540000000001,
+          "output": 1.1989400000000003,
+          "search": 0
+        },
+        "context": {
+          "median": 209672,
+          "p90": 296133,
+          "max": 314931,
+          "mean": 195576.8765432099
+        },
+        "tasks": [],
+        "firstContext": 40433,
+        "firstInputCost": 0.1800542
+      },
+      {
+        "session": "agent-a3c5925da1956ee03",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 161,
+        "cost": 10.148101,
+        "tokens": {
+          "input": 322,
+          "write5m": 682002,
+          "write1h": 0,
+          "read": 25693715,
+          "output": 79903,
+          "thinking": 35919
+        },
+        "costs": {
+          "input": 0.0012879999999999973,
+          "write5m": 3.410009999999999,
+          "write1h": 0,
+          "read": 5.138743000000001,
+          "thinking": 0.7183799999999999,
+          "output": 0.87968,
+          "search": 0
+        },
+        "context": {
+          "median": 168961,
+          "p90": 237011,
+          "max": 255231,
+          "mean": 163826.32919254657
+        },
+        "tasks": [],
+        "firstContext": 40561,
+        "firstInputCost": 0.1749486
+      },
+      {
+        "session": "agent-af11815b3b1902170",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 127,
+        "cost": 9.597437999999999,
+        "tokens": {
+          "input": 254,
+          "write5m": 330202,
+          "write1h": 0,
+          "read": 23156860,
+          "output": 165702,
+          "thinking": 111732
+        },
+        "costs": {
+          "input": 0.001015999999999998,
+          "write5m": 1.6510099999999999,
+          "write1h": 0,
+          "read": 4.631372,
+          "thinking": 2.2346399999999997,
+          "output": 1.0793999999999997,
+          "search": 0
+        },
+        "context": {
+          "median": 180411,
+          "p90": 278511,
+          "max": 336007,
+          "mean": 184939.4960629921
+        },
+        "tasks": [],
+        "firstContext": 41507,
+        "firstInputCost": 0.17967860000000002
+      },
+      {
+        "session": "agent-aefb296f64981f11c",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 168,
+        "cost": 9.265596199999997,
+        "tokens": {
+          "input": 336,
+          "write5m": 289634,
+          "write1h": 0,
+          "read": 30460511,
+          "output": 86199,
+          "thinking": 45152
+        },
+        "costs": {
+          "input": 0.001343999999999997,
+          "write5m": 1.44817,
+          "write1h": 0,
+          "read": 6.0921022,
+          "thinking": 0.90304,
+          "output": 0.8209399999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 187731,
+          "p90": 274064,
+          "max": 295439,
+          "mean": 183038.57738095237
+        },
+        "tasks": [],
+        "firstContext": 41048,
+        "firstInputCost": 0.1773836
+      },
+      {
+        "session": "agent-a415828f3cdf1edb0",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 158,
+        "cost": 9.134633599999999,
+        "tokens": {
+          "input": 316,
+          "write5m": 276137,
+          "write1h": 0,
+          "read": 30017723,
+          "output": 87457,
+          "thinking": 42123
+        },
+        "costs": {
+          "input": 0.0012639999999999973,
+          "write5m": 1.3806850000000002,
+          "write1h": 0,
+          "read": 6.003544600000002,
+          "thinking": 0.8424599999999999,
+          "output": 0.9066799999999996,
+          "search": 0
+        },
+        "context": {
+          "median": 208871,
+          "p90": 270952,
+          "max": 281942,
+          "mean": 191735.2911392405
+        },
+        "tasks": [
+          "T-132936"
+        ],
+        "firstContext": 40792,
+        "firstInputCost": 0.1761036
+      },
+      {
+        "session": "agent-a5a2fdc62c70f16fe",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 152,
+        "cost": 8.466947599999996,
+        "tokens": {
+          "input": 304,
+          "write5m": 273361,
+          "write1h": 0,
+          "read": 25274333,
+          "output": 102203,
+          "thinking": 61611
+        },
+        "costs": {
+          "input": 0.0012159999999999975,
+          "write5m": 1.366805,
+          "write1h": 0,
+          "read": 5.0548665999999995,
+          "thinking": 1.2322199999999999,
+          "output": 0.8118399999999998,
+          "search": 0
+        },
+        "context": {
+          "median": 166952,
+          "p90": 261128,
+          "max": 277969,
+          "mean": 168078.93421052632
+        },
+        "tasks": [],
+        "firstContext": 40681,
+        "firstInputCost": 0.18129420000000002
+      },
+      {
+        "session": "agent-aedb09286b4105c98",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 130,
+        "cost": 8.3025802,
+        "tokens": {
+          "input": 260,
+          "write5m": 469414,
+          "write1h": 0,
+          "read": 20920051,
+          "output": 88523,
+          "thinking": 46047
+        },
+        "costs": {
+          "input": 0.001039999999999998,
+          "write5m": 2.3470700000000004,
+          "write1h": 0,
+          "read": 4.1840102,
+          "thinking": 0.9209400000000002,
+          "output": 0.8495200000000003,
+          "search": 0
+        },
+        "context": {
+          "median": 177581,
+          "p90": 239202,
+          "max": 247941,
+          "mean": 164536.34615384616
+        },
+        "tasks": [],
+        "firstContext": 40729,
+        "firstInputCost": 0.17578860000000002
+      },
+      {
+        "session": "agent-acc6d87a734e19c3f",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 115,
+        "cost": 7.703669599999995,
+        "tokens": {
+          "input": 230,
+          "write5m": 488406,
+          "write1h": 0,
+          "read": 17504798,
+          "output": 87988,
+          "thinking": 46136
+        },
+        "costs": {
+          "input": 0.0009199999999999982,
+          "write5m": 2.44203,
+          "write1h": 0,
+          "read": 3.5009595999999994,
+          "thinking": 0.9227200000000001,
+          "output": 0.8370399999999996,
+          "search": 0
+        },
+        "context": {
+          "median": 151347,
+          "p90": 224620,
+          "max": 266365,
+          "mean": 156464.64347826087
+        },
+        "tasks": [],
+        "firstContext": 41450,
+        "firstInputCost": 0.17939360000000001
+      },
+      {
+        "session": "agent-a96c38afb8a7f0b0c",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 124,
+        "cost": 6.853684199999997,
+        "tokens": {
+          "input": 248,
+          "write5m": 256412,
+          "write1h": 0,
+          "read": 21355461,
+          "output": 64977,
+          "thinking": 37151
+        },
+        "costs": {
+          "input": 0.000991999999999998,
+          "write5m": 1.28206,
+          "write1h": 0,
+          "read": 4.271092199999998,
+          "thinking": 0.7430200000000002,
+          "output": 0.5565199999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 182600,
+          "p90": 242169,
+          "max": 261020,
+          "mean": 174291.2983870968
+        },
+        "tasks": [],
+        "firstContext": 39093,
+        "firstInputCost": 0.1733542
+      },
+      {
+        "session": "agent-ac1f0eebb41f6017f",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 104,
+        "cost": 6.644181400000001,
+        "tokens": {
+          "input": 208,
+          "write5m": 246658,
+          "write1h": 0,
+          "read": 17250697,
+          "output": 97996,
+          "thinking": 51840
+        },
+        "costs": {
+          "input": 0.0008319999999999984,
+          "write5m": 1.2332899999999993,
+          "write1h": 0,
+          "read": 3.4501394000000007,
+          "thinking": 1.0367999999999995,
+          "output": 0.92312,
+          "search": 0
+        },
+        "context": {
+          "median": 181371,
+          "p90": 245190,
+          "max": 252463,
+          "mean": 168245.79807692306
+        },
+        "tasks": [
+          "T-132885"
+        ],
+        "firstContext": 40687,
+        "firstInputCost": 0.1755786
+      },
+      {
+        "session": "agent-a3841228510bc2ea1",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 118,
+        "cost": 6.592595599999999,
+        "tokens": {
+          "input": 236,
+          "write5m": 234979,
+          "write1h": 0,
+          "read": 17864383,
+          "output": 92194,
+          "thinking": 54314
+        },
+        "costs": {
+          "input": 0.0009439999999999981,
+          "write5m": 1.1748949999999994,
+          "write1h": 0,
+          "read": 3.5728766,
+          "thinking": 1.08628,
+          "output": 0.7575999999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 161147,
+          "p90": 225565,
+          "max": 235539,
+          "mean": 153386.42372881356
+        },
+        "tasks": [],
+        "firstContext": 40381,
+        "firstInputCost": 0.201903
+      },
+      {
+        "session": "agent-a90d557d3f6a2120e",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 98,
+        "cost": 6.313886199999999,
+        "tokens": {
+          "input": 200,
+          "write5m": 418094,
+          "write1h": 0,
+          "read": 14664281,
+          "output": 64488,
+          "thinking": 28067
+        },
+        "costs": {
+          "input": 0.0007999999999999985,
+          "write5m": 2.0904700000000007,
+          "write1h": 0,
+          "read": 2.9328561999999994,
+          "thinking": 0.5613400000000002,
+          "output": 0.7284200000000004,
+          "search": 0
+        },
+        "context": {
+          "median": 160119,
+          "p90": 211699,
+          "max": 215818,
+          "mean": 153903.82653061225
+        },
+        "tasks": [
+          "T-132639"
+        ],
+        "firstContext": 40809,
+        "firstInputCost": 0.1761886
+      },
+      {
+        "session": "agent-a4ad87607d85026ca",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 99,
+        "cost": 6.265692000000001,
+        "tokens": {
+          "input": 200,
+          "write5m": 346505,
+          "write1h": 0,
+          "read": 16422235,
+          "output": 62396,
+          "thinking": 34859
+        },
+        "costs": {
+          "input": 0.0007999999999999985,
+          "write5m": 1.7325250000000003,
+          "write1h": 0,
+          "read": 3.2844470000000006,
+          "thinking": 0.6971799999999998,
+          "output": 0.5507399999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 178734,
+          "p90": 219399,
+          "max": 226366,
+          "mean": 169383.2323232323
+        },
+        "tasks": [
+          "T-132841",
+          "T-132842"
+        ],
+        "firstContext": 95805,
+        "firstInputCost": 0.0207478
+      },
+      {
+        "session": "agent-a3428c59353d42e9d",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 103,
+        "cost": 5.8558226,
+        "tokens": {
+          "input": 206,
+          "write5m": 441910,
+          "write1h": 0,
+          "read": 11969143,
+          "output": 62581,
+          "thinking": 37444
+        },
+        "costs": {
+          "input": 0.0008239999999999985,
+          "write5m": 2.2095500000000006,
+          "write1h": 0,
+          "read": 2.3938286000000004,
+          "thinking": 0.7488799999999998,
+          "output": 0.5027400000000001,
+          "search": 0
+        },
+        "context": {
+          "median": 133133,
+          "p90": 169015,
+          "max": 176494,
+          "mean": 120497.66019417475
+        },
+        "tasks": [
+          "T-127900"
+        ],
+        "firstContext": 40708,
+        "firstInputCost": 0.17568360000000002
+      },
+      {
+        "session": "agent-aa670b20845bc7637",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 91,
+        "cost": 5.317803799999997,
+        "tokens": {
+          "input": 182,
+          "write5m": 207966,
+          "write1h": 0,
+          "read": 13032329,
+          "output": 83539,
+          "thinking": 53095
+        },
+        "costs": {
+          "input": 0.0007279999999999987,
+          "write5m": 1.03983,
+          "write1h": 0,
+          "read": 2.606465799999999,
+          "thinking": 1.0618999999999996,
+          "output": 0.60888,
+          "search": 0
+        },
+        "context": {
+          "median": 162155,
+          "p90": 204858,
+          "max": 213771,
+          "mean": 145499.74725274724
+        },
+        "tasks": [
+          "T-132893"
+        ],
+        "firstContext": 40734,
+        "firstInputCost": 0.17581360000000001
+      },
+      {
+        "session": "agent-a42ef1dfb191ec2fe",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 80,
+        "cost": 5.127825399999998,
+        "tokens": {
+          "input": 160,
+          "write5m": 204353,
+          "write1h": 0,
+          "read": 11492702,
+          "output": 90344,
+          "thinking": 56619
+        },
+        "costs": {
+          "input": 0.000639999999999999,
+          "write5m": 1.021765,
+          "write1h": 0,
+          "read": 2.2985404000000003,
+          "thinking": 1.1323799999999997,
+          "output": 0.6744999999999998,
+          "search": 0
+        },
+        "context": {
+          "median": 159058,
+          "p90": 205862,
+          "max": 210158,
+          "mean": 146215.1875
+        },
+        "tasks": [
+          "T-132904"
+        ],
+        "firstContext": 40886,
+        "firstInputCost": 0.17657360000000002
+      },
+      {
+        "session": "agent-aa211c99e606fd7ab",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 73,
+        "cost": 4.583583799999999,
+        "tokens": {
+          "input": 146,
+          "write5m": 231985,
+          "write1h": 0,
+          "read": 11557674,
+          "output": 55577,
+          "thinking": 33973
+        },
+        "costs": {
+          "input": 0.0005839999999999991,
+          "write5m": 1.1599249999999999,
+          "write1h": 0,
+          "read": 2.311534800000001,
+          "thinking": 0.6794600000000001,
+          "output": 0.4320799999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 182461,
+          "p90": 224789,
+          "max": 231987,
+          "mean": 161504.1780821918
+        },
+        "tasks": [],
+        "firstContext": 40298,
+        "firstInputCost": 0.201488
+      },
+      {
+        "session": "agent-ad13699e97db3407c",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 106,
+        "cost": 4.543263199999998,
+        "tokens": {
+          "input": 212,
+          "write5m": 193618,
+          "write1h": 0,
+          "read": 13322426,
+          "output": 45492,
+          "thinking": 22453
+        },
+        "costs": {
+          "input": 0.0008479999999999984,
+          "write5m": 0.9680900000000001,
+          "write1h": 0,
+          "read": 2.6644852000000014,
+          "thinking": 0.44905999999999996,
+          "output": 0.46078000000000013,
+          "search": 0
+        },
+        "context": {
+          "median": 131838,
+          "p90": 184955,
+          "max": 198226,
+          "mean": 127511.84905660378
+        },
+        "tasks": [],
+        "firstContext": 39033,
+        "firstInputCost": 0.17305420000000002
+      },
+      {
+        "session": "agent-aae39346098e8c68e",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 100,
+        "cost": 4.531608600000002,
+        "tokens": {
+          "input": 200,
+          "write5m": 195420,
+          "write1h": 0,
+          "read": 13326943,
+          "output": 44416,
+          "thinking": 22819
+        },
+        "costs": {
+          "input": 0.0007999999999999985,
+          "write5m": 0.9771000000000005,
+          "write1h": 0,
+          "read": 2.6653886,
+          "thinking": 0.45637999999999995,
+          "output": 0.43194000000000016,
+          "search": 0
+        },
+        "context": {
+          "median": 138112,
+          "p90": 190366,
+          "max": 200028,
+          "mean": 135225.63
+        },
+        "tasks": [],
+        "firstContext": 39031,
+        "firstInputCost": 0.1730442
+      },
+      {
+        "session": "agent-a293b7bb7f8fbd734",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 100,
+        "cost": 4.443308,
+        "tokens": {
+          "input": 200,
+          "write5m": 206345,
+          "write1h": 0,
+          "read": 12181815,
+          "output": 48721,
+          "thinking": 27531
+        },
+        "costs": {
+          "input": 0.0007999999999999985,
+          "write5m": 1.0317250000000002,
+          "write1h": 0,
+          "read": 2.436363000000001,
+          "thinking": 0.5506199999999999,
+          "output": 0.42379999999999984,
+          "search": 0
+        },
+        "context": {
+          "median": 120918,
+          "p90": 190989,
+          "max": 210953,
+          "mean": 123883.6
+        },
+        "tasks": [],
+        "firstContext": 39033,
+        "firstInputCost": 0.17305420000000002
+      },
+      {
+        "session": "agent-a9d928fc18c361e92",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 76,
+        "cost": 4.411823799999999,
+        "tokens": {
+          "input": 152,
+          "write5m": 181356,
+          "write1h": 0,
+          "read": 10212379,
+          "output": 73098,
+          "thinking": 47090
+        },
+        "costs": {
+          "input": 0.0006079999999999991,
+          "write5m": 0.9067799999999999,
+          "write1h": 0,
+          "read": 2.042475800000001,
+          "thinking": 0.9417999999999999,
+          "output": 0.52016,
+          "search": 0
+        },
+        "context": {
+          "median": 145401,
+          "p90": 183873,
+          "max": 187161,
+          "mean": 136761.67105263157
+        },
+        "tasks": [
+          "T-132882"
+        ],
+        "firstContext": 40630,
+        "firstInputCost": 0.17529360000000002
+      },
+      {
+        "session": "agent-a5148d8ad2c0160ff",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 96,
+        "cost": 4.192942800000001,
+        "tokens": {
+          "input": 192,
+          "write5m": 178497,
+          "write1h": 0,
+          "read": 11237349,
+          "output": 52611,
+          "thinking": 24290
+        },
+        "costs": {
+          "input": 0.0007679999999999986,
+          "write5m": 0.8924849999999999,
+          "write1h": 0,
+          "read": 2.2474697999999997,
+          "thinking": 0.48579999999999995,
+          "output": 0.5664199999999998,
+          "search": 0
+        },
+        "context": {
+          "median": 123630,
+          "p90": 171587,
+          "max": 178499,
+          "mean": 118917.0625
+        },
+        "tasks": [],
+        "firstContext": 40514,
+        "firstInputCost": 0.202568
+      },
+      {
+        "session": "agent-aeb19f9ad9661edd3",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 101,
+        "cost": 4.1284258000000005,
+        "tokens": {
+          "input": 202,
+          "write5m": 173825,
+          "write1h": 0,
+          "read": 11567964,
+          "output": 47245,
+          "thinking": 27088
+        },
+        "costs": {
+          "input": 0.0008079999999999985,
+          "write5m": 0.8691249999999999,
+          "write1h": 0,
+          "read": 2.313592800000001,
+          "thinking": 0.5417599999999999,
+          "output": 0.4031399999999998,
+          "search": 0
+        },
+        "context": {
+          "median": 115470,
+          "p90": 166596,
+          "max": 178433,
+          "mean": 116257.33663366336
+        },
+        "tasks": [],
+        "firstContext": 39047,
+        "firstInputCost": 0.17312419999999998
+      },
+      {
+        "session": "agent-a7819a3f47193ad28",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 65,
+        "cost": 4.1197604000000005,
+        "tokens": {
+          "input": 130,
+          "write5m": 500573,
+          "write1h": 0,
+          "read": 5215477,
+          "output": 28664,
+          "thinking": 14517
+        },
+        "costs": {
+          "input": 0.0005199999999999993,
+          "write5m": 2.502864999999999,
+          "write1h": 0,
+          "read": 1.0430954,
+          "thinking": 0.29034,
+          "output": 0.28293999999999986,
+          "search": 0
+        },
+        "context": {
+          "median": 89376,
+          "p90": 116998,
+          "max": 119470,
+          "mean": 87941.23076923077
+        },
+        "tasks": [
+          "T-132968"
+        ],
+        "firstContext": 40699,
+        "firstInputCost": 0.1756386
+      },
+      {
+        "session": "agent-a34bb7bddeb0a35a3",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 70,
+        "cost": 4.1158567999999995,
+        "tokens": {
+          "input": 140,
+          "write5m": 312754,
+          "write1h": 0,
+          "read": 8183634,
+          "output": 45740,
+          "thinking": 25929
+        },
+        "costs": {
+          "input": 0.0005599999999999992,
+          "write5m": 1.5637699999999999,
+          "write1h": 0,
+          "read": 1.6367267999999993,
+          "thinking": 0.51858,
+          "output": 0.39622000000000007,
+          "search": 0
+        },
+        "context": {
+          "median": 132922,
+          "p90": 157166,
+          "max": 163857,
+          "mean": 121378.97142857143
+        },
+        "tasks": [
+          "T-132884"
+        ],
+        "firstContext": 40704,
+        "firstInputCost": 0.1756636
+      },
+      {
+        "session": "agent-a8bcff0bf3c58e7b0",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 79,
+        "cost": 3.4679507999999997,
+        "tokens": {
+          "input": 160,
+          "write5m": 153205,
+          "write1h": 0,
+          "read": 8754629,
+          "output": 47518,
+          "thinking": 22217
+        },
+        "costs": {
+          "input": 0.000639999999999999,
+          "write5m": 0.7660249999999998,
+          "write1h": 0,
+          "read": 1.7509258,
+          "thinking": 0.4443399999999999,
+          "output": 0.5060199999999998,
+          "search": 0
+        },
+        "context": {
+          "median": 117107,
+          "p90": 154759,
+          "max": 159010,
+          "mean": 112759.41772151898
+        },
+        "tasks": [],
+        "firstContext": 40665,
+        "firstInputCost": 0.1754686
+      },
+      {
+        "session": "agent-a7a4de229c1240906",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 73,
+        "cost": 3.342931599999999,
+        "tokens": {
+          "input": 146,
+          "write5m": 158409,
+          "write1h": 0,
+          "read": 7976913,
+          "output": 47746,
+          "thinking": 25110
+        },
+        "costs": {
+          "input": 0.0005839999999999991,
+          "write5m": 0.792045,
+          "write1h": 0,
+          "read": 1.5953825999999998,
+          "thinking": 0.5021999999999998,
+          "output": 0.4527199999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 119071,
+          "p90": 157662,
+          "max": 163234,
+          "mean": 111444.76712328767
+        },
+        "tasks": [],
+        "firstContext": 40616,
+        "firstInputCost": 0.18096920000000002
+      },
+      {
+        "session": "agent-a8bc912b175833e62",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 59,
+        "cost": 2.9560907999999997,
+        "tokens": {
+          "input": 118,
+          "write5m": 145628,
+          "write1h": 0,
+          "read": 6331594,
+          "output": 48058,
+          "thinking": 26462
+        },
+        "costs": {
+          "input": 0.00047199999999999944,
+          "write5m": 0.72814,
+          "write1h": 0,
+          "read": 1.2663188,
+          "thinking": 0.52924,
+          "output": 0.43191999999999997,
+          "search": 0
+        },
+        "context": {
+          "median": 115055,
+          "p90": 147963,
+          "max": 151433,
+          "mean": 109785.42372881356
+        },
+        "tasks": [
+          "T-132883"
+        ],
+        "firstContext": 40671,
+        "firstInputCost": 0.1754986
+      },
+      {
+        "session": "agent-a6ff8b719b6be5b1d",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 66,
+        "cost": 2.6234812,
+        "tokens": {
+          "input": 132,
+          "write5m": 143578,
+          "write1h": 0,
+          "read": 6663016,
+          "output": 28623,
+          "thinking": 14430
+        },
+        "costs": {
+          "input": 0.0005279999999999993,
+          "write5m": 0.7178900000000003,
+          "write1h": 0,
+          "read": 1.3326032000000005,
+          "thinking": 0.28859999999999997,
+          "output": 0.2838599999999999,
+          "search": 0
+        },
+        "context": {
+          "median": 106201,
+          "p90": 138211,
+          "max": 148186,
+          "mean": 103132.21212121213
+        },
+        "tasks": [],
+        "firstContext": 39035,
+        "firstInputCost": 0.1730642
+      },
+      {
+        "session": "agent-a07cb5d486164b8fb",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 42,
+        "cost": 2.3889454000000003,
+        "tokens": {
+          "input": 84,
+          "write5m": 116488,
+          "write1h": 0,
+          "read": 3967247,
+          "output": 50636,
+          "thinking": 31527
+        },
+        "costs": {
+          "input": 0.0003359999999999998,
+          "write5m": 0.5824399999999998,
+          "write1h": 0,
+          "read": 0.7934494000000001,
+          "thinking": 0.6305400000000002,
+          "output": 0.38218,
+          "search": 0
+        },
+        "context": {
+          "median": 105765,
+          "p90": 120850,
+          "max": 122293,
+          "mean": 97233.78571428571
+        },
+        "tasks": [
+          "T-132881"
+        ],
+        "firstContext": 40631,
+        "firstInputCost": 0.17529860000000003
+      },
+      {
+        "session": "agent-a9fb6321e1c5b15af",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 50,
+        "cost": 2.0031654,
+        "tokens": {
+          "input": 100,
+          "write5m": 178582,
+          "write1h": 0,
+          "read": 3636977,
+          "output": 19123,
+          "thinking": 6864
+        },
+        "costs": {
+          "input": 0.00039999999999999964,
+          "write5m": 0.89291,
+          "write1h": 0,
+          "read": 0.7273953999999999,
+          "thinking": 0.13727999999999999,
+          "output": 0.24517999999999993,
+          "search": 0
+        },
+        "context": {
+          "median": 76653,
+          "p90": 99009,
+          "max": 103252,
+          "mean": 76313.18
+        },
+        "tasks": [],
+        "firstContext": 40451,
+        "firstInputCost": 0.17439860000000001
+      },
+      {
+        "session": "agent-a8081355130691dae",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 61,
+        "cost": 1.8481428000000002,
+        "tokens": {
+          "input": 122,
+          "write5m": 98755,
+          "write1h": 0,
+          "read": 4727699,
+          "output": 20417,
+          "thinking": 6395
+        },
+        "costs": {
+          "input": 0.0004879999999999994,
+          "write5m": 0.493775,
+          "write1h": 0,
+          "read": 0.9455398000000002,
+          "thinking": 0.12789999999999999,
+          "output": 0.28043999999999997,
+          "search": 0
+        },
+        "context": {
+          "median": 79935,
+          "p90": 101017,
+          "max": 104560,
+          "mean": 79124.19672131147
+        },
+        "tasks": [
+          "T-132880"
+        ],
+        "firstContext": 40286,
+        "firstInputCost": 0.17357360000000002
+      },
+      {
+        "session": "agent-a578a8c9fc964ebe2",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 31,
+        "cost": 1.6159537999999998,
+        "tokens": {
+          "input": 62,
+          "write5m": 106513,
+          "write1h": 0,
+          "read": 2439704,
+          "output": 29760,
+          "thinking": 15037
+        },
+        "costs": {
+          "input": 0.00024800000000000007,
+          "write5m": 0.5325650000000001,
+          "write1h": 0,
+          "read": 0.48794080000000006,
+          "thinking": 0.30073999999999995,
+          "output": 0.29446000000000006,
+          "search": 0
+        },
+        "context": {
+          "median": 85930,
+          "p90": 103543,
+          "max": 111121,
+          "mean": 82138.03225806452
+        },
+        "tasks": [],
+        "firstContext": 40521,
+        "firstInputCost": 0.18049420000000002
+      },
+      {
+        "session": "agent-a3773ebb84a57e355",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 2,
+        "cost": 0.15026219999999998,
+        "tokens": {
+          "input": 4,
+          "write5m": 626,
+          "write1h": 0,
+          "read": 611181,
+          "output": 1244,
+          "thinking": 30
+        },
+        "costs": {
+          "input": 1.6e-05,
+          "write5m": 0.00313,
+          "write1h": 0,
+          "read": 0.12223619999999999,
+          "thinking": 0.0006,
+          "output": 0.02428,
+          "search": 0
+        },
+        "context": {
+          "median": 306037,
+          "p90": 306037,
+          "max": 306037,
+          "mean": 305905.5
+        },
+        "tasks": [
+          "T-126945"
+        ],
+        "firstContext": 305774,
+        "firstInputCost": 0.06290479999999998
+      }
+    ]
+  },
+  "today": {
+    "since": "2026-10-29T04:00:00Z",
+    "until": "2026-10-29T13:53:00Z",
+    "scanned": 7110,
+    "uniqueMessages": 95,
+    "duplicateRecords": 78,
+    "totalCost": 12.347977799999999,
+    "costs": {
+      "write1h": 7.504528,
+      "read": 2.5991423,
+      "write5m": 0.7945674999999999,
+      "thinking": 0.73105,
+      "output": 0.7180099999999998,
+      "input": 0.000679999999999999,
+      "search": 0
+    },
+    "tokens": {
+      "input": 196,
+      "write5m": 233547,
+      "write1h": 938066,
+      "read": 13832213,
+      "output": 78135,
+      "thinking": 38108
+    },
+    "context": {
+      "median": 112020,
+      "p90": 301465,
+      "max": 309745,
+      "mean": 157937.07368421054
+    },
+    "models": {
+      "claude-sonnet-5-5": 0.6542118,
+      "claude-opus-5-5": 11.693765999999997
+    },
+    "effort": {
+      "medium": 0.6542118,
+      "xhigh": 11.693765999999997
+    },
+    "operator": {
+      "cost": 9.868194999999998,
+      "own": 9.213983199999998,
+      "sessions": 3
+    },
+    "allocation": {
+      "inputCostCovered": 9.869280599999998,
+      "estimate": {
+        "user-and-reminders": 2.9949686174381385,
+        "assistant-history": 2.112566806702279,
+        "instructions": 1.195253365577235,
+        "skills": 1.112361481649676,
+        "tool-schemas": 0.9441390788914066,
+        "repo-skills": 0.5018308679335214,
+        "bash-output": 0.3908725778584097,
+        "other-tool-results": 0.2735352059856536,
+        "system-prompt": 0.16148766781230164,
+        "mcp-results": 0.06779550488164923,
+        "cli-environment": 0.04476558770204069,
+        "test-output": 0.036337443026407866,
+        "hooks": 0.03336639454127985
+      }
+    },
+    "taskCosts": {},
+    "sessions": [
+      {
+        "session": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 33,
+        "cost": 9.213983199999998,
+        "tokens": {
+          "input": 66,
+          "write5m": 0,
+          "write1h": 881592,
+          "read": 8849316,
+          "output": 19556,
+          "thinking": 6940
+        },
+        "costs": {
+          "input": 0.000264,
+          "write5m": 0,
+          "write1h": 7.0527359999999994,
+          "read": 1.7698632,
+          "thinking": 0.1388,
+          "output": 0.25231999999999993,
+          "search": 0
+        },
+        "context": {
+          "median": 295559,
+          "p90": 306809,
+          "max": 309745,
+          "mean": 294878
+        },
+        "tasks": [],
+        "firstContext": 281595,
+        "firstInputCost": 2.2527519999999996
+      },
+      {
+        "session": "agent-a9a512357e858aeb9",
+        "parent": "0bbc4a4f-1d25-4b9d-9a07-d2667aeb8c16",
+        "turns": 31,
+        "cost": 1.9441772000000002,
+        "tokens": {
+          "input": 64,
+          "write5m": 84280,
+          "write1h": 0,
+          "read": 3039906,
+          "output": 45727,
+          "thinking": 27497
+        },
+        "costs": {
+          "input": 0.00025600000000000004,
+          "write5m": 0.4214000000000001,
+          "write1h": 0,
+          "read": 0.6079811999999999,
+          "thinking": 0.54994,
+          "output": 0.36459999999999987,
+          "search": 0
+        },
+        "context": {
+          "median": 105611,
+          "p90": 132487,
+          "max": 136623,
+          "mean": 100782.25806451614
+        },
+        "tasks": [],
+        "firstContext": 53492,
+        "firstInputCost": 0.0162212
+      },
+      {
+        "session": "0bbc4a4f-1d25-4b9d-9a07-d2667aeb8c16",
+        "turns": 6,
+        "cost": 0.5356056,
+        "tokens": {
+          "input": 14,
+          "write5m": 0,
+          "write1h": 56474,
+          "read": 269988,
+          "output": 1488,
+          "thinking": 560
+        },
+        "costs": {
+          "input": 5.6e-05,
+          "write5m": 0,
+          "write1h": 0.45179199999999997,
+          "read": 0.0539976,
+          "thinking": 0.011199999999999998,
+          "output": 0.01856,
+          "search": 0
+        },
+        "context": {
+          "median": 54072,
+          "p90": 56476,
+          "max": 56476,
+          "mean": 54412.666666666664
+        },
+        "tasks": [],
+        "firstContext": 52343,
+        "firstInputCost": 0.418736
+      },
+      {
+        "session": "agent-a50390f3868cda45a",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 20,
+        "cost": 0.4766944999999999,
+        "tokens": {
+          "input": 40,
+          "write5m": 96791,
+          "write1h": 0,
+          "read": 1485970,
+          "output": 8604,
+          "thinking": 1993
+        },
+        "costs": {
+          "input": 8.000000000000002e-05,
+          "write5m": 0.24197749999999998,
+          "write1h": 0,
+          "read": 0.148597,
+          "thinking": 0.01993,
+          "output": 0.06611,
+          "search": 0
+        },
+        "context": {
+          "median": 88560,
+          "p90": 96353,
+          "max": 96793,
+          "mean": 79140.05
+        },
+        "tasks": [],
+        "firstContext": 40599,
+        "firstInputCost": 0.1014965
+      },
+      {
+        "session": "agent-a3959be197ed09b9f",
+        "parent": "ac7184a3-f341-4697-a8a7-b4ea0984c0db",
+        "turns": 5,
+        "cost": 0.1775173,
+        "tokens": {
+          "input": 12,
+          "write5m": 52476,
+          "write1h": 0,
+          "read": 187033,
+          "output": 2760,
+          "thinking": 1118
+        },
+        "costs": {
+          "input": 2.3999999999999997e-05,
+          "write5m": 0.13119,
+          "write1h": 0,
+          "read": 0.0187033,
+          "thinking": 0.011179999999999999,
+          "output": 0.01642,
+          "search": 0
+        },
+        "context": {
+          "median": 45809,
+          "p90": 58674,
+          "max": 58674,
+          "mean": 47904.2
+        },
+        "tasks": [],
+        "firstContext": 41015,
+        "firstInputCost": 0.0876661
+      }
+    ]
+  },
+  "wednesday": {
+    "since": "2026-10-28T04:00:00Z",
+    "until": "2026-10-29T04:00:00Z",
+    "scanned": 171624,
+    "uniqueMessages": 9838,
+    "duplicateRecords": 25366,
+    "totalCost": 778.3573289999991,
+    "costs": {
+      "read": 387.3733479999989,
+      "write5m": 247.65514499999998,
+      "thinking": 69.9298000000002,
+      "output": 60.867500000000064,
+      "write1h": 12.45272,
+      "input": 0.07881599999999375,
+      "search": 0
+    },
+    "tokens": {
+      "input": 19704,
+      "write5m": 49531029,
+      "write1h": 1556590,
+      "read": 1936866740,
+      "output": 6539865,
+      "thinking": 3496490
+    },
+    "context": {
+      "median": 189633,
+      "p90": 346329,
+      "max": 466961,
+      "mean": 202070.95578369588
+    },
+    "models": {
+      "claude-opus-5-5": 778.3573289999982
+    },
+    "effort": {
+      "xhigh": 778.3573289999982
+    },
+    "operator": {
+      "cost": 778.3573289999997,
+      "own": 19.749905199999993,
+      "sessions": 56
+    },
+    "allocation": {
+      "inputCostCovered": 647.5600290000001,
+      "estimate": {
+        "instructions": 141.5163558863117,
+        "assistant-history": 140.19175504740295,
+        "user-and-reminders": 89.78940964354922,
+        "repo-skills": 59.538561842229136,
+        "skills": 57.54048287889573,
+        "tool-schemas": 56.020828735679956,
+        "bash-output": 55.71537473030115,
+        "cli-environment": 20.979541104343443,
+        "file-reads": 9.216530481434086,
+        "system-prompt": 8.608261157859133,
+        "other-tool-results": 6.346771996387834,
+        "test-output": 1.1036994453854891,
+        "hooks": 0.5357190176039994,
+        "mcp-results": 0.4567370326168527
+      }
+    },
+    "taskCosts": {
+      "T-132914": 48.46593359999997,
+      "T-132912": 46.39229480000001,
+      "T-132879": 37.64559519999999,
+      "T-132878": 27.788719599999993,
+      "T-132967": 23.962129199999993,
+      "T-132973": 23.423849000000008,
+      "T-132997": 21.968965800000017,
+      "T-132901": 21.887111600000008,
+      "T-132978": 21.85837079999999,
+      "T-132898": 21.486000199999996,
+      "T-132892": 18.063259599999995,
+      "T-132948": 15.737318599999995,
+      "T-132981": 13.926345000000003,
+      "T-132950": 13.246502999999999,
+      "T-132933": 11.601816600000003,
+      "T-132936": 9.134633599999999,
+      "T-132885": 6.644181400000001,
+      "T-132639": 6.313886199999999,
+      "T-127900": 5.8558226,
+      "T-132893": 5.317803799999997,
+      "T-132904": 5.127825399999998,
+      "T-132882": 4.411823799999999,
+      "T-132968": 4.1197604000000005,
+      "T-132884": 4.1158567999999995,
+      "T-132883": 2.9560907999999997,
+      "T-132881": 2.3889454000000003,
+      "T-132880": 1.8481428000000002
+    }
+  },
+  "baseline": {
+    "since": "2026-10-20T04:00:00Z",
+    "until": "2026-10-27T22:00:00Z",
+    "scanned": 914521,
+    "uniqueMessages": 42855,
+    "duplicateRecords": 115378,
+    "totalCost": 3053.973119500015,
+    "costs": {
+      "read": 1709.6782936500122,
+      "write5m": 756.5388292500014,
+      "output": 269.0396880000001,
+      "thinking": 256.87167800000077,
+      "write1h": 61.50573599999997,
+      "input": 0.3388946000001739,
+      "search": 0
+    },
+    "tokens": {
+      "input": 86152,
+      "write5m": 154986223,
+      "write1h": 7688217,
+      "read": 8605132542,
+      "output": 26654308,
+      "thinking": 12947432
+    },
+    "context": {
+      "median": 186063,
+      "p90": 367957,
+      "max": 467977,
+      "mean": 204594.402846809
+    },
+    "models": {
+      "claude-opus-5-5": 3019.290870599972,
+      "claude-sonnet-5-5": 34.5737008999999,
+      "claude-haiku-5-5": 0.10854799999999998
+    },
+    "effort": {
+      "xhigh": 2798.603642999981,
+      "medium": 255.13614930000008,
+      "low": 0.23332719999999996
+    },
+    "operator": {
+      "cost": 862.3928503,
+      "own": 16.96051279999999,
+      "sessions": 80
+    },
+    "allocation": {
+      "inputCostCovered": 2466.0521957000187,
+      "estimate": {
+        "instructions": 624.6792714149699,
+        "assistant-history": 493.6285331744778,
+        "user-and-reminders": 334.65750761381196,
+        "skills": 290.1636285827601,
+        "tool-schemas": 243.61874615341532,
+        "repo-skills": 190.67774306110275,
+        "bash-output": 160.1582742236398,
+        "file-reads": 55.7682209296244,
+        "system-prompt": 30.52791990717449,
+        "other-tool-results": 21.52300979175573,
+        "test-output": 11.029780445703587,
+        "mcp-results": 4.334371583510567,
+        "cli-environment": 3.9541912063270774,
+        "hooks": 1.1607627183133185,
+        "admin-resolved": 0.17023489341721734
+      }
+    },
+    "taskCosts": {
+      "T-130737": 78.99945019999996,
+      "T-130929": 52.41337499999999,
+      "T-131094": 51.48641,
+      "T-132729": 47.83403459999999,
+      "T-130762": 38.256600599999985,
+      "T-130883": 37.10266040000001,
+      "T-130889": 36.05048979999999,
+      "T-130868": 36.00908399999996,
+      "T-121377": 34.80007139999998,
+      "T-132740": 32.0622904,
+      "T-131247": 28.56344539999999,
+      "T-132588": 28.038595000000008,
+      "T-130803": 27.88908159999999,
+      "T-132217": 26.418189800000015,
+      "T-132705": 25.2752906,
+      "T-132637": 25.155443000000005,
+      "T-131939": 24.884354999999992,
+      "T-131291": 24.412525599999995,
+      "T-131302": 23.440075599999997,
+      "T-130802": 22.90929700000001,
+      "T-131263": 21.01492379999999,
+      "T-131981": 20.967464600000007,
+      "T-131401": 19.986269199999995,
+      "T-132233": 19.33027699999999,
+      "T-130761": 19.32752859999999,
+      "T-131391": 18.832771800000007,
+      "T-130884": 18.196004399999993,
+      "T-131923": 16.901253399999995,
+      "T-131144": 16.896673599999996,
+      "T-132141": 16.324952999999997,
+      "T-132706": 15.328638000000002,
+      "T-131862": 14.663523800000007,
+      "T-126945": 13.503094400000002,
+      "T-132747": 13.213495000000002,
+      "T-132649": 13.175542199999999,
+      "T-132736": 12.5424252,
+      "T-131043": 12.4851542,
+      "T-130862": 12.4681414,
+      "T-132818": 12.187590799999994,
+      "T-131140": 11.765758399999996,
+      "T-132655": 11.516914999999997,
+      "T-131858": 11.238608399999993,
+      "T-132827": 11.231286599999999,
+      "T-131138": 10.948938400000001,
+      "T-132194": 10.659985200000003,
+      "T-131096": 10.5303862,
+      "T-131753": 10.506407799999996,
+      "T-132170": 10.1913226,
+      "T-130869": 10.156847400000006,
+      "T-130760": 10.094312399999996,
+      "T-130730": 10.029775200000005,
+      "T-131943": 9.807612800000005,
+      "T-130906": 9.684766799999995,
+      "T-130745": 9.008143800000003,
+      "T-132723": 8.700122799999997,
+      "T-131164": 8.133768,
+      "T-132252": 8.008851799999999,
+      "T-130848": 7.912915899999998,
+      "T-131448": 7.6780298,
+      "T-131757": 7.624003999999999,
+      "T-132657": 7.292196999999999,
+      "T-132143": 7.224464,
+      "T-131461": 6.878388799999998,
+      "T-132744": 6.555105399999997,
+      "T-132638": 6.356916,
+      "T-132041": 6.292601399999999,
+      "T-130841": 5.893140400000002,
+      "T-132760": 5.7823424,
+      "T-131328": 5.5872296000000015,
+      "T-131261": 5.543215000000001,
+      "T-130746": 5.4787669999999995,
+      "T-132839": 5.475411200000001,
+      "T-132767": 5.3790188000000025,
+      "T-131426": 5.015712599999999,
+      "T-131120": 4.9810490000000005,
+      "T-132834": 4.9071878,
+      "T-132639": 4.83976,
+      "T-131122": 4.686627,
+      "T-132221": 4.284278399999999,
+      "T-131097": 4.143330199999999,
+      "T-132773": 4.0993176,
+      "T-132844": 4.0647204,
+      "T-132208": 3.6905386000000004,
+      "T-130627": 3.633045599999999,
+      "T-132808": 3.546191399999999,
+      "T-132774": 3.5006455999999995,
+      "T-131436": 3.2955522,
+      "T-130759": 3.0916997999999998,
+      "T-132758": 3.0144502,
+      "T-131468": 2.9401476000000004,
+      "T-131368": 2.7698833999999994,
+      "T-131259": 2.6694326000000004,
+      "T-131729": 2.6114504000000003,
+      "T-131364": 2.5853184,
+      "T-131095": 2.3318022000000003,
+      "T-131181": 1.7622144,
+      "T-132640": 1.4790463000000003,
+      "T-132037": 1.3985370000000001,
+      "T-131409": 1.1935649999999998,
+      "T-132772": 1.1846902000000001,
+      "T-130741": 0.5884002,
+      "T-131929": 0.5496345000000002,
+      "T-131026": 0.41318080000000007,
+      "T-131105": 0.33293049999999996
+    }
+  },
+  "metadata": {
+    "collected_at": "2026-10-29T13:53:00Z",
+    "pricing": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "scope": "Available local transcripts; global standard API-equivalent USD, not subscription invoice",
+    "completed_tasks": {
+      "all": 56,
+      "today": 3,
+      "wednesday": 49
+    },
+    "catalogue_before_chars": 19333,
+    "catalogue_after_chars": 6669,
+    "today_cutoff": "2026-10-29T13:53:00Z"
+  },
+  "cache_write_gaps": {
+    ">5m": {
+      "requests": 199,
+      "write5m": 177.59291499999998,
+      "write1h": 12.216392
+    },
+    "<=5m": {
+      "requests": 9985,
+      "write5m": 78.16388000000003,
+      "write1h": 1.2142080000000006
+    },
+    "first": {
+      "requests": 55,
+      "write5m": 9.772430000000004,
+      "write1h": 0.0
+    }
+  }
+}

@@ -1,13 +1,9 @@
 ---
 name: sharing
 description: >
-  Publish or unpublish a file on the public web (public.yak.sh), or explain what
-  ~/shared is — use when asked to make a shared file public, share a file, put
-  something on public.yak.sh, get a public/tailnet link for an artifact, or take a
-  published file down. Not for yaks apps (those are served by yaks.app) or for
-  the inspector or browse at tasks.yak.sh.
-scope: fleet
-volatility: stable
+  Use to publish/unpublish files on public.yak.sh, share a file, obtain an
+  artifact’s public/tailnet link, or explain ~/shared. yaks apps are served
+  by yaks.app; this does not cover inspector or browse at tasks.yak.sh.
 ---
 
 # Sharing files — `~/shared`, tailnet-private by default, public on request

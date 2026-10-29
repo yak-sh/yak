@@ -1,19 +1,10 @@
 ---
 name: secrets-and-connections
 description: >
-  How a key, token, password or other credential is kept and used, on the box
-  and on yaks.app: @yaks/secrets (`secret{name, value}`, the vault, handles and
-  sentinels, `reveal`, `{"secret": "NAME"}` in a config, `op://` references),
-  connections and integrations (@yaks/connections), the swap on the way out
-  (@yaks/egress, `./api/env`, `./api/fetch`), and where an environment variable
-  is still right. Use it whenever you are about to read `Deno.env` or
-  `process.env` for a key or token, add an API key, credential, password or
-  token to anything, wire a new integration, provider or OAuth client, set an
-  app's secret (`app_secret_set`, `connection_need`), touch `~/.yak/secrets` or
-  a vault, or debug a call failing on auth (a 401, the egress's 403, "not
-  connected"), even when the request never says "secret". Re-keying what people
-  hold is `data-migration`; the kernel Worker in general is `yaks-app`; wiring a
-  plugin is `packages-and-plugins`.
+  Use for API keys, tokens, passwords, credentials, vaults, secrets,
+  connections, integrations, OAuth, egress, environment reads for
+  credentials, or auth failures (401/403, not connected). Covers local and
+  yaks.app secrets. Re-keying stored links/tokens is data-migration.
 ---
 
 # Secrets and connections

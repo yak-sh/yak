@@ -1,16 +1,10 @@
 ---
 name: data-migration
 description: >
-  Move stored data from one shape to another without losing any of it or taking
-  an app down: on the box (~/.yak/yak.db) or in yaks.app stores. Use whenever a
-  change renames, removes, splits or retypes a component or property that has
-  rows, rewrites or repairs stored rows, re-derives ids, deletes data in bulk,
-  backfills, changes a default or how a missing value reads, writes a one-time
-  script, or re-keys anything people hold (links, tokens, saved queries), even
-  when the task only says "rename", "clean up", "drop", "purge", "backfill" or
-  "fix the old rows". Deciding the new shape is `vocabulary`; how one write or
-  query behaves is `graph-reads-and-writes`; how a key or token is kept is
-  `secrets-and-connections`; this one is getting the existing data there.
+  Use for changes to stored component/property shapes or defaults,
+  backfills, row repair or deletion, derived-id changes, and re-keying links
+  or tokens, locally or on yaks.app. Includes one-time data scripts. New
+  shapes are vocabulary; individual reads/writes are graph-reads-and-writes.
 ---
 
 # Migrating stored data

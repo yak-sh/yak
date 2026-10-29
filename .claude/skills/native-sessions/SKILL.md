@@ -1,16 +1,10 @@
 ---
 name: native-sessions
 description: >
-  Starting and running a graph-native session in ~/code/tasks: one our own
-  agent loop runs (@yaks/harness, the native harness), started with `yak
-  session new`, with a provider-backed machine when it needs commands or
-  files; then finding its S-id, watching it, saying more to it, waiting for
-  its work and knowing what stops it. Use it whenever you are asked for a
-  "native", "graph-native" or "harness" session, or for a model to work "in
-  the harness", and whenever you are about to run `yak session new` or
-  `yak session send`. `session_spawn` and the Codex plugin in Claude Code
-  (`codex:codex-rescue`, `/codex:rescue`) run outside agents, not native
-  sessions. What the brief says is `agent-briefs`.
+  Use for native/graph-native/harness sessions, yak session new/send,
+  provider-backed machines, S-id discovery, watching and waiting. These run
+  @yaks/harness. session_spawn and codex:codex-rescue run outside agents.
+  Delegation briefs are agent-briefs.
 ---
 
 # Native sessions

@@ -1,19 +1,11 @@
 ---
 name: ui-building
 description: >
-  How to build interface here, browser and terminal: @yaks/ui parts, themes,
-  @yaks/ux components (editing, picking, disclosure, popovers), entity pages
-  and views (inspector, browse, TUI, style guides, /views), and drawing any
-  entity anywhere through the shared renderers. Use it whenever a change adds
-  or changes what a person sees or presses, shows entities in a row, list,
-  inbox, panel or detail, restyles anything, touches packages/ui, packages/ux,
-  packages/tui, packages/inspect, packages/visualize or packages/browse, or a
-  screen is confusing, ugly, slow to read or different in the terminal, even
-  if the request never says "UI". Reading platform anatomy or causal activity
-  is `platform-visualize`; building that screen takes this skill too. A yaks
-  app's pages are its author's; platform pages from workers/yak also take
-  `yaks-app`. Proving a screen is `end-to-end-checks`; wiring /views is
-  `packages-and-plugins`.
+  Use for anything a person sees or presses in browser or terminal: UI/UX
+  components, entity renderers, pages, lists, panels, styling and
+  confusing/slow screens. Covers ui, ux, tui, inspect, browse and visualize
+  packages. Manual proof is end-to-end-checks; app platform pages also use
+  yaks-app.
 ---
 
 # Building UI

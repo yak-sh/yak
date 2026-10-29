@@ -1,20 +1,11 @@
 ---
 name: yaks-app
 description: >
-  How the yaks.app platform works: the kernel Worker in workers/yak, its stores
-  (one Durable Object per app, plus the directory), an app's vocabulary on top
-  of the platform's core words, access modes, the connector's tools, deploys,
-  budgets and what a Durable Object can't do. Use it whenever you change
-  anything under workers/yak, touch a store, an app's vocab.json or its stored
-  rows, add or rename a platform word, change a connector tool, its prompts or
-  the guide, spend money on an account's behalf, or debug a yaks app that is
-  broken, slow, refusing or showing the wrong thing, even if the request only
-  names an app ("jill's app"). Not for the box's own server (`yak serve`).
-  Designing words is `vocabulary`, moving stored rows is `data-migration`, a
-  platform page's parts are `ui-building`, vectors and `.near` in a store are
-  `search-and-embeddings`, an app's builders are `builders-and-builds`, its
-  tests are `testing`, a key it calls out with is `secrets-and-connections`,
-  and pricing is `yaks-app-business`.
+  Use for workers/yak, kernel Workers, stores, app vocab/rows, platform
+  words, connector tools/prompts/guides, account spending, or
+  broken/slow/refusing yaks apps. This is the hosted platform; local yak
+  serve is separate. Shapes are vocabulary; migrations are data-migration;
+  pricing is yaks-app-business.
 ---
 
 # The yaks.app platform
@@ -368,8 +359,9 @@ through the connector's graph tier (tool.ts `roleIn`).
   through the store's own apply (`--check` rehearses and keeps nothing). Both
   go through `graph_query` and `graph_apply` with `space` and `app`.
 - `admin_errors` reads platform bugs through the independent tracker's
-  signed door (every unresolved one; `--since` narrows by last seen). Every
-  unexpected caught failure reports to the tracker with its catch location
+  signed door (every unresolved one; `--since` narrows by last seen). It
+  summarizes time to fix; `resolved: true` adds full explanations of past
+  fixes. Every unexpected caught failure reports to the tracker with its catch location
   (M-37965); a new platform bug mails the owner through workers/tracker's
   delivery. `yak --config ~/.yak/tracker.json bug show <bug> --source
   yaks.app` reads one bug with its kept occurrences (tags, stack, request),

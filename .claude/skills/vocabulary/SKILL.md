@@ -1,18 +1,11 @@
 ---
 name: vocabulary
 description: >
-  Designing, adding, changing, renaming or reviewing a component or property of
-  the graph's vocabulary, or modeling new data for a feature. Use it whenever
-  you edit any vocab.json, write comp{…} in a design, task or reply, put a
-  property into a bundle that no vocabulary declares yet, decide how to record
-  that something happened or how two things relate, or review a design that
-  proposes components, even when the request never says "vocabulary" or
-  "component": "add a field", "track whether X happened", "store Y on the
-  entity", "link X to Y", "keep a list of", and whenever you move state that
-  code keeps outside the graph (a Map, an array, localStorage, IndexedDB, a
-  cache, a module's variables) into it. Moving rows already stored into the
-  new shape is `data-migration`; how a read or write of them behaves is
-  `graph-reads-and-writes`.
+  Use when designing, adding, renaming or reviewing graph
+  components/properties, editing vocab.json, modeling state or
+  relationships, or moving state from Maps, arrays, localStorage or caches
+  into the graph. Existing-row moves are data-migration; read/write behavior
+  is graph-reads-and-writes.
 ---
 
 # Designing vocabulary

@@ -1,18 +1,11 @@
 ---
 name: end-to-end-checks
 description: >
-  Prove a change end to end in ~/code/tasks from inside your own process: the
-  box's server composed in memory (`compose()` from @yaks/cli/host, its
-  `handler` called with a Request), yaks.app's kernel in memory (`kernel()`),
-  a page on a linkedom document, the TUI painted by @yaks/tui's `lay`, data
-  copied from the live graph; then, once landed, the live system (`yak admin
-  deploys`, `admin_errors`, a throwaway account). Use it whenever checking
-  "in the browser", "in the terminal", "live", on a "probe server" or "against
-  real data", taking a screenshot, auditing a screen, or verifying UI, query,
-  write path or migration by hand, even if asked only "make sure it works" or
-  "check it". Local Chrome, a scratch `yak serve`, tmux probes and docker are
-  not how a change is proved here. Automated tests are `testing`;
-  `platform-visualize` is causal observation, not proof.
+  Use when checking a change by hand, against live or copied data, in a
+  browser/terminal, taking screenshots or proving UI, query, write and
+  migration behavior. Proof runs in your process with compose(), kernel(),
+  linkedom or TUI lay; no probe servers or Chrome. Automated tests are
+  testing.
 ---
 
 # Proving a change end to end

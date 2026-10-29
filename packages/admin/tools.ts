@@ -488,7 +488,7 @@ export let runs = (
         await tracker(host.config, vault),
         out,
         note,
-        { graph },
+        { graph, resolved: argsOf(call).resolved === true },
       )
       return []
     }),

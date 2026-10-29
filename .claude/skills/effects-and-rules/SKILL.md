@@ -1,17 +1,11 @@
 ---
 name: effects-and-rules
 description: >
-  How work after a write is done in ~/code/tasks: transactional rules,
-  post-commit effects (the queue, start-up work, retries, leases),
-  process-local observers, roles, services and independent workers. Use it
-  when changing an effect, rule, start-up job, worker scan, lease, duty, service
-  or role, an `/effects` or `/graph` facet or `effect: true` / `rule: true`
-  vocab entry, or debugging work after a write: loops, never fires, fires
-  too often, retries forever, or runs in the wrong process. Reading composed
-  anatomy and causal activity is `platform-visualize`, not changing behavior.
-  Facet placement and plugin wiring are `packages-and-plugins`; one-time
-  stored-row fixes are `data-migration`; turning query matches into model
-  or tool outputs is `builders-and-builds`.
+  Use for transactional rules, post-commit effects, queues, retries, leases,
+  startup work, duties, services, roles and workers, or debugging work after
+  a write that loops, stalls or runs in the wrong process. Observation is
+  platform-visualize; builders are builders-and-builds; row repairs are
+  data-migration.
 ---
 
 # Effects, rules and roles

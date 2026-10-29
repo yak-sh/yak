@@ -1,17 +1,11 @@
 ---
 name: graph-reads-and-writes
 description: >
-  How writing to and reading from the yaks graph works: bundles and patch
-  rules, `$was`, writer stamps, deletes and tombstones, derived ids and edges,
-  queries and the archetype index, scripts against ~/.yak/yak.db. Use it when
-  writing bundles (`graph_apply`, a script, tool or rule),
-  querying (`graph_query`, a board or filter), writing db
-  scripts or SQL, or surprised by a refusal, missing component, wrong count,
-  wrong writer or a deleted entity returning. Value-free composed anatomy and
-  causal observation are `platform-visualize`, not stored rows or returned
-  values. Query syntax is `query-grammar`; component design is `vocabulary`;
-  changing stored row shape is `data-migration`; rules and effects are
-  `effects-and-rules`; full-text and `.near` are `search-and-embeddings`.
+  Use for graph bundles, queries, graph_apply/graph_query, database scripts
+  or SQL, and debugging refusals, counts, missing components, writer stamps
+  or returning deleted entities. Covers local graph read/write semantics.
+  Query syntax is query-grammar; shapes are vocabulary; observation is
+  platform-visualize.
 ---
 
 # Writing to and reading from the graph

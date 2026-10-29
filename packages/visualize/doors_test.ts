@@ -10,7 +10,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { channel, peek } from '@yaks/trace'
 import { observe } from './activity.ts'
 import { type Capture, capture } from './capture.ts'
-import { commands } from './cli.ts'
+import { command } from './cli.ts'
 import { select, type Snapshot, snapshot } from './snapshot.ts'
 import { runs } from './tools.ts'
 import doc from './vocab.json' with { type: 'json' }
@@ -230,8 +230,8 @@ let accounts = async (tokens: Record<string, string>): Promise<string> => {
   }
   return state
 }
-// The only replaced interface is network delivery. No test reads the user's
-// credentials or starts a server, and the command composes no host. Without
+// Network delivery and environment are inputs. No test reads credentials
+// or starts a server, and the command composes no host. Without
 // `state` there is no personal account at all, so the call finds no
 // credential.
 let terminal = async (
@@ -250,15 +250,16 @@ let terminal = async (
   let sent: Request[] = []
   let out: string[] = []
   let notes: string[] = []
-  let fetcher = globalThis.fetch
-  let token = Deno.env.get('YAKS_TOKEN')
   let state = opts.state ?? await Deno.makeTempDir()
-  if (opts.token) Deno.env.set('YAKS_TOKEN', opts.token)
-  else Deno.env.delete('YAKS_TOKEN')
-  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-    sent.push(new Request(input, init))
-    return Promise.resolve(Response.json(value, { status: opts.status ?? 200 }))
-  }) as typeof fetch
+  let cli = command({
+    env: (name) => name == 'YAKS_TOKEN' ? opts.token : undefined,
+    fetch: ((input: string | URL | Request, init?: RequestInit) => {
+      sent.push(new Request(input, init))
+      return Promise.resolve(
+        Response.json(value, { status: opts.status ?? 200 }),
+      )
+    }) as typeof fetch,
+  })
   let context = {
     host: opts.host ?? 'localhost:8787',
     json: opts.json ?? false,
@@ -275,14 +276,11 @@ let terminal = async (
     },
   }
   try {
-    let code = await commands[0].run(args, host, context)
+    let code = await cli.run(args, host, context)
     return { code, sent, out, notes }
   } finally {
-    globalThis.fetch = fetcher
     await closeAccounts()
     if (!opts.state) await Deno.remove(state, { recursive: true })
-    if (token == null) Deno.env.delete('YAKS_TOKEN')
-    else Deno.env.set('YAKS_TOKEN', token)
   }
 }
 
@@ -382,6 +380,25 @@ test('CLI selects credentials only for the requested origin and carries provenan
     'Bearer explicit-env-token',
   )
   await Deno.remove(state, { recursive: true })
+})
+
+test('concurrent CLI commands keep their credentials and requests separate', async () => {
+  let [left, right] = await Promise.all([
+    terminal({ url: 'https://left.test', json: true }, { side: 'left' }, {
+      token: 'left-fixture',
+    }),
+    terminal({ url: 'https://right.test', json: true }, { side: 'right' }, {
+      token: 'right-fixture',
+    }),
+  ])
+  equal([left.code, right.code], [0, 0])
+  equal([left.sent.length, right.sent.length], [1, 1])
+  equal(left.sent[0].url, 'https://left.test/visualize/anatomy')
+  equal(right.sent[0].url, 'https://right.test/visualize/anatomy')
+  equal(left.sent[0].headers.get('authorization'), 'Bearer left-fixture')
+  equal(right.sent[0].headers.get('authorization'), 'Bearer right-fixture')
+  equal(left.out, [JSON.stringify({ side: 'left' })])
+  equal(right.out, [JSON.stringify({ side: 'right' })])
 })
 
 test('CLI reports HTTP refusals without printing a DTO or response values', async () => {

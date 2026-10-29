@@ -1,18 +1,11 @@
 ---
 name: code-style
 description: >
-  How code in ~/code/tasks is shaped at the scale of a file and a function: the
-  owner's JS/TS style (curried `export let` arrows, `let` over `const`, no
-  semicolons, `///` doctests, small vocabulary files composed top to bottom,
-  factories over classes, effects as data, `when` tables, @yaks/fp), his CSS
-  style (one file per `Block_Element-modifier` component, custom properties as
-  the variant mechanism) and which of his code to imitate. Use it whenever you
-  write a new module, function or stylesheet, refactor or split a file that
-  grew long, name something, review a diff for shape, or a request says "clean
-  this up", "make it idiomatic", "simplify", "tidy" or "match the style", even
-  for a few lines. Which package code belongs in is `packages-and-plugins`;
-  where a UI part lives and how it is themed is `ui-building`; tests are
-  `testing`; prose in READMEs and doc comments is `writing-documentation`.
+  Use whenever writing, naming, refactoring or reviewing JS/TS modules,
+  functions or CSS, even a small fix. Covers this repo’s functional style
+  and CSS components. Package placement is packages-and-plugins; UI
+  composition is ui-building; tests are testing; prose is
+  writing-documentation.
 ---
 
 # Code style

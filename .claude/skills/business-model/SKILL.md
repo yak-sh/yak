@@ -1,19 +1,10 @@
 ---
 name: business-model
 description: >
-  How we build good businesses, in any venture: start from people with a
-  problem worth paying to solve, grow by word of mouth from the first day,
-  choose customers by selection rather than by discount, make every part turn
-  the flywheel, and read a price as a signal. Use it whenever you decide who a
-  product or feature is for, what is free and what is paid, a price, a plan, a
-  limit, an upgrade prompt, a discount or promotion, a landing page's pitch,
-  how a product will find its people, or whether an idea is worth building, for
-  one of our ventures or for someone else's idea, even if the request only says
-  "make this paid", "add a limit", "should this be free?", "who would use
-  this?", "run a promo", "how do we get users?", "write the business plan" or
-  "is this worth building?". A venture's own people, plans, prices and pages
-  live in that venture's own skill or design; this skill is the thinking
-  behind them.
+  Use when choosing a product’s audience, free/paid scope, prices, plans,
+  limits, upgrades, promotions, pitch or growth, or evaluating a business
+  idea. Applies to every venture. yaks.app’s specific customers, plans and
+  marketing are yaks-app-business.
 ---
 
 # Building a good business

@@ -245,11 +245,13 @@ let listed = async (
   since?: string,
   options = config,
   fetch = go,
+  resolved = false,
 ) => {
   let said: string[] = [], noted: string[] = []
   await errors(since, options, (l) => said.push(l), (l) => noted.push(l), {
     fetch,
     graph: mailbox,
+    resolved,
   })
   return { said, noted }
 }
@@ -260,6 +262,7 @@ let bugsIn = ({ said }: Awaited<ReturnType<typeof listed>>) =>
 
 // Exercise filtering and pagination through the deployed tracker's signed door.
 let all = await listed()
+let history = await listed(undefined, config, go, true)
 let narrow = await listed('90m'), wide = await listed('14d')
 let denied = await listed(undefined, {
   remote: { ...config.remote, secret: 'wrong' },
@@ -291,14 +294,6 @@ test('errors says whom each bug reached, a person apart from a probe', () => {
 test('errors times the fixes resolved in its window and the longest open bug', () => {
   let [fixed, ...rest] = all.said.slice(totalAt(all.said) + 1)
   let open = rest.find((l) => l.startsWith('Open longest'))!
-  let [head, ...why] = rest.slice(0, rest.indexOf(open))
-  assertMatch(head, new RegExp(`^Resolved in \\d+d\\d*h?: ${ids[106]} `))
-  assertEquals(why, [
-    '  What broke: Error: bug 106',
-    '  Why: A typo in the route.',
-    '  Fixed in: no commit named',
-    '  Can it come back: No.',
-  ])
   assertMatch(
     fixed,
     new RegExp(
@@ -308,6 +303,21 @@ test('errors times the fixes resolved in its window and the longest open bug', (
     ),
   )
   assertMatch(open, new RegExp(`^Open longest: \\d+d\\d*h? \\(${ids[108]} `))
+})
+
+test('errors includes full resolved explanations only when requested', () => {
+  assertEquals(all.said.some((l) => l.startsWith('Resolved')), false)
+  assertEquals(bugsIn(history), bugsIn(all))
+  let from = history.said.findIndex((l) => l.startsWith('Resolved'))
+  let to = history.said.findIndex((l) => l.startsWith('Open longest'))
+  let [head, ...why] = history.said.slice(from, to)
+  assertMatch(head, new RegExp(`^Resolved in \\d+d\\d*h?: ${ids[106]} `))
+  assertEquals(why, [
+    '  What broke: Error: bug 106',
+    '  Why: A typo in the route.',
+    '  Fixed in: no commit named',
+    '  Can it come back: No.',
+  ])
 })
 
 test('errors times the first answer to each person who wrote in its window', () => {

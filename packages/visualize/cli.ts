@@ -1,6 +1,6 @@
 // The command reads the serving process, not a freshly composed graph.
 
-import type { Ctx } from '@yaks/cli'
+import type { AccountOptions, Ctx } from '@yaks/cli'
 import type { Host } from '@yaks/host'
 import type { CliCommand } from '@yaks/cli/host'
 import type { Capture } from './capture.ts'
@@ -60,7 +60,10 @@ let activity = (value: Capture): string => {
 }
 
 /** The CLI door into the same served snapshots used by the page. */
-export let commands = [{
+export let command = ({ fetch = globalThis.fetch, env }: {
+  fetch?: typeof globalThis.fetch
+  env?: AccountOptions['env']
+} = {}) => ({
   name: 'visualize',
   description:
     'Read the serving platform’s anatomy or bounded causal activity. ' +
@@ -188,6 +191,7 @@ export let commands = [{
       let token = await tokenFor(key, context.state, {
         config: context.config,
         as: context.as,
+        env,
       })
       let headers = new Headers({ accept: 'application/json' })
       if (token) headers.set('authorization', `Bearer ${token}`)
@@ -218,4 +222,6 @@ export let commands = [{
       return 1
     }
   },
-}] satisfies CliCommand[]
+} satisfies CliCommand)
+
+export let commands: CliCommand[] = [command()]
