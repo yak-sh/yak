@@ -1,7 +1,6 @@
 /** Deno workload declarations, measured with one CPU clock for the whole
  * batch. Explicit start/end boundaries exclude fixture setup and teardown. */
 import { stopwatch } from './bench.ts'
-import { median } from './result.ts'
 
 export type Invocation = Pick<
   Deno.BenchDefinition,
@@ -15,7 +14,7 @@ export let invocation = async (
   timer: Timer = stopwatch,
   minimum = 20,
 ): Promise<{ avg: number; cpu: number; n: number; cpuSamples: number[] }> => {
-  let batch = async (n: number): Promise<Reading> => {
+  let batch = async (n: number): Promise<Reading & { outer: number }> => {
     let explicit = false, running = false
     let sum = { value: 0, cpu: 0 }
     let stop: () => Reading
@@ -41,32 +40,31 @@ export let invocation = async (
       if (result && typeof result.then == 'function') await result
       if (running) context.end()
     }
-    return explicit ? sum : elapsed()
+    let total = elapsed()
+    return { ...(explicit ? sum : total), outer: total.cpu }
   }
-  await batch(entry.warmup ?? 5)
+  let warm = await batch(entry.warmup ?? 5)
   let n = Math.max(1, entry.n ?? 1)
-  while (true) {
-    let reading = await batch(n)
-    if (reading.cpu >= minimum || n >= 10_000_000) break
-    n *= Math.max(2, Math.min(10, Math.ceil(minimum / (reading.cpu || .001))))
-  }
-  // Fixture construction can compile the same product paths as the work.
-  // Warm for a bounded CPU interval over the whole invocation, including its
-  // setup and teardown, instead of publishing the first calibration batch.
-  let warmed = 0
-  for (let turn = 0; warmed < minimum * 5 && turn < 20; turn++) {
-    let elapsed = timer()
-    let warm = await batch(n)
-    warmed += elapsed().cpu
-    if (warm.cpu < minimum) {
-      n = Math.min(10_000_000, Math.ceil(n * minimum / (warm.cpu || .001)))
+  if (entry.n === undefined) {
+    let warmed = warm.outer
+    for (let turn = 0; turn < 20; turn++) {
+      let reading = await batch(n)
+      warmed += reading.outer
+      // An explicit timed act can be tiny beside its fixture. Growing by
+      // timed CPU alone would repeat that fixture thousands of times.
+      if (reading.cpu >= minimum || reading.outer >= minimum) {
+        if (warmed >= minimum * 5) break
+      } else {
+        let scale = Math.ceil(minimum / (reading.outer || .001))
+        n = Math.min(10_000_000, n * Math.max(2, Math.min(10, scale)))
+      }
     }
   }
-  let readings: Reading[] = []
-  for (let i = 0; i < 5; i++) readings.push(await batch(n))
-  let middle = [...readings].sort((a, b) => a.cpu - b.cpu)[2]
-  let cpuSamples = readings.map((r) => r.cpu * 1e6 / n)
-  return { avg: middle.value * 1e6 / n, cpu: median(cpuSamples), n, cpuSamples }
+  // A declared n is the total measured invocation count. Paired rounds own
+  // repeated observations; this collector never multiplies that contract.
+  let reading = await batch(n)
+  let cpu = reading.cpu * 1e6 / n
+  return { avg: reading.value * 1e6 / n, cpu, n, cpuSamples: [cpu] }
 }
 
 /** Install only at the isolated collector's process boundary. Workload files

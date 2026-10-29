@@ -28,7 +28,7 @@ test('CPU batches normalize work while keeping wall waits diagnostic', async () 
       time.timer,
       1,
     ),
-    { avg: 100e6, cpu: 2e6, n: 4, cpuSamples: [2e6, 2e6, 2e6, 2e6, 2e6] },
+    { avg: 100e6, cpu: 2e6, n: 4, cpuSamples: [2e6] },
   )
 })
 
@@ -53,7 +53,7 @@ test('explicit CPU boundaries exclude setup and teardown for sync and async work
         time.timer,
         1,
       ),
-      { avg: 20e6, cpu: 3e6, n: 2, cpuSamples: [3e6, 3e6, 3e6, 3e6, 3e6] },
+      { avg: 20e6, cpu: 3e6, n: 2, cpuSamples: [3e6] },
     )
   }
 })
@@ -64,12 +64,47 @@ test('calibration and cold compilation are excluded from retained CPU batches', 
     {
       name: 'cold',
       warmup: 5,
-      n: 1,
       fn: () => time.work(++calls <= 6 ? 100 : 2),
     },
     time.timer,
     1,
   )
   equal(measured.cpu, 2e6)
-  equal(measured.cpuSamples, [2e6, 2e6, 2e6, 2e6, 2e6])
+  equal(measured.cpuSamples, [2e6])
+})
+
+test('a declared invocation count does not multiply expensive fixture setup', async () => {
+  let time = clock(), calls = 0
+  let measured = await invocation({
+    name: 'expensive fixture',
+    n: 2,
+    warmup: 1,
+    fn: (b) => {
+      calls++
+      time.work(100)
+      b.start()
+      time.work(.001)
+      b.end()
+      time.work(100)
+    },
+  }, time.timer)
+  equal(calls, 3)
+  equal(measured.n, 2)
+})
+
+test('adaptive calibration counts fixture CPU when bounding the batch size', async () => {
+  let time = clock(), calls = 0
+  let measured = await invocation({
+    name: 'expensive adaptive fixture',
+    warmup: 0,
+    fn: (b) => {
+      calls++
+      time.work(100)
+      b.start()
+      time.work(.001)
+      b.end()
+    },
+  }, time.timer)
+  equal(measured.n, 1)
+  equal(calls, 2)
 })
