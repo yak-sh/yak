@@ -29,8 +29,56 @@ import { graph, token } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { Ajv } from 'ajv'
 import { scope, unasked } from './agent.ts'
 import { asking, screened } from './listing.ts'
+
+// A client holds every answer to the output schema its tool is listed with
+// and refuses the whole answer when one row does not fit. Every row here says
+// its `kind`, so the reads answered rows a client refused (`kind must be
+// object,null`) until the listing declared it (agent.ts `ROWS`).
+test('the reads answer rows that fit the schema their tools are listed with', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    let made = await agent.tool('app_new', { slug: 'merge', title: 'Merge' })
+    let at = `${/https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]}/merge`
+    await agent.tool('app_files', {
+      app: 'merge',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile({ actor: { name: txt } }),
+    })
+    await agent.tool('app_deploy', { app: 'merge' })
+    let eid = minted(
+      await agent.tool('graph_apply', {
+        app: 'merge',
+        entities: [{
+          entity: { eid: '$root' },
+          actor: { name: 'Root actor' },
+          doc: { title: 'Root actor' },
+        }],
+      }),
+      '$root',
+    )
+    let ajv = new Ajv({ strict: false })
+    let { tools } = await agent.call('tools/list', {})
+    let held = async (name: string, args: Record<string, unknown>) => {
+      let fits = ajv.compile(
+        tools.find((t: { name: string }) => t.name == name).outputSchema,
+      )
+      let out = await agent.call('tools/call', { name, arguments: args })
+      assertEquals(out.structuredContent.result[0]?.kind, 'actor', name)
+      assert(fits(out.structuredContent), JSON.stringify(fits.errors))
+    }
+    await held('graph_query', { q: `.actor&.in=${at}` })
+    await held('graph_query', { q: '.actor' })
+    await held('graph_show', { ids: [eid] })
+    await held('search', { words: 'Root' })
+  } finally {
+    await k.stop()
+  }
+})
 
 test(
   'a platform secret alias derives before the reach hands it to the store',

@@ -125,21 +125,16 @@ let converted = (tool: Tool): Json => {
 }
 
 /**
- * The default output schema: returned bundles under `result`, shared by tool
- * discovery and transports that send structured answers.
- *
- * Every tool whose answer is entities answers this one shape, so it is written
- * once and listed on all of them, a plugin's tool included without declaring
- * anything; a tool whose answer is not entities declares its own
- * `outputSchema` (`graph_schema`, a vocabulary document). It says what a
- * bundle is and not what any component holds: a fully typed bundle is tens of
- * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
- * the agent has asked its first question. What a component holds is
- * `graph_schema`'s answer, asked for when it is wanted. It carries no prose
- * for the same reason: it rides on every tool, and `graph_apply`'s
- * description says what a bundle is once.
+ * The bundle answer for a door whose rows say words of their own beside their
+ * components: {@link answerSchema}, with each of those words declared on the
+ * row under its own schema. A client checks every answer against the schema
+ * its tool is listed with, so a row word left undeclared reads to it as a
+ * component that is not an object, and the whole answer is refused. yaks.app's
+ * rows name what each entity is (`kind`), for one.
  */
-export let answerSchema: { type: 'object'; [key: string]: unknown } = {
+export let answerWith = (
+  words: Record<string, Json>,
+): { type: 'object'; [key: string]: unknown } => ({
   type: 'object',
   properties: {
     result: {
@@ -152,6 +147,7 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
             properties: { eid: { type: 'string' } },
             required: ['eid'],
           },
+          ...words,
         },
         required: ['entity'],
         // The `$` sugars a bundle may wear beside its components — `$alias`,
@@ -164,4 +160,23 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
     },
   },
   required: ['result'],
-}
+})
+
+/**
+ * The default output schema: returned bundles under `result`, shared by tool
+ * discovery and transports that send structured answers.
+ *
+ * Every tool whose answer is entities answers this one shape, so it is written
+ * once and listed on all of them, a plugin's tool included without declaring
+ * anything; a tool whose answer is not entities declares its own
+ * `outputSchema` (`graph_schema`, a vocabulary document). It says what a
+ * bundle is and not what any component holds: a fully typed bundle is tens of
+ * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
+ * the agent has asked its first question. What a component holds is
+ * `graph_schema`'s answer, asked for when it is wanted. It carries no prose
+ * for the same reason: it rides on every tool, and `graph_apply`'s
+ * description says what a bundle is once. A door whose rows carry words of
+ * their own lists {@link answerWith} instead.
+ */
+export let answerSchema: { type: 'object'; [key: string]: unknown } =
+  answerWith({})

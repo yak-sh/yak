@@ -27,7 +27,12 @@ import type { Vocab } from '@yaks/vocab'
 
 export type { Search }
 
-export { answerSchema, inputSchemaOf, shapeOf } from '@yaks/tools/schema'
+export {
+  answerSchema,
+  answerWith,
+  inputSchemaOf,
+  shapeOf,
+} from '@yaks/tools/schema'
 
 /** What the generic tier needs in order to describe itself. */
 export type CoreOpts = {

@@ -41,10 +41,12 @@ admitted call retains its implementation. `ensure()` advertises the current
 catalog declaration at the same tool identity. Direct reads keep no call
 history; recorded calls use the ordinary runner.
 
-`@yaks/tools/schema` owns `inputSchemaOf`, `shapeOf` and `answerSchema`.
-`inputSchemaOf(tool)` returns its public JSON Schema or converts its Zod input;
-`shapeOf(tool)` returns the Zod argument map. `answerSchema` describes the
-default structured bundle answer. `@yaks/mcp/tools` re-exports these helpers.
+`@yaks/tools/schema` owns `inputSchemaOf`, `shapeOf`, `answerSchema` and
+`answerWith`. `inputSchemaOf(tool)` returns its public JSON Schema or converts
+its Zod input; `shapeOf(tool)` returns the Zod argument map. `answerSchema`
+describes the default structured bundle answer, and `answerWith(words)` the same
+answer for rows that carry words of their own beside their components, each word
+with its schema. `@yaks/mcp/tools` re-exports these helpers.
 
 ## Calls and answers
 
@@ -136,7 +138,7 @@ is assigned a fresh eid first.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/tools`          | `registry`, `Registry`, `Provider`, `Description`; `runner`, `Runner`, `Opts`, `Reply`, `Invocation`; `toolEid`, `toolRow`, `answerOf`, `worded`, `texts`, `structured`, `valueIn`, `display`, `faulted`, `parsed`; `reconcile`, `CallError`, `UnfinishedCall`, `Interrupted`; `executionState`, `executionComputed`, `executionDerived`; `RULES`, `READY`, `WOKEN`, `WORDS`, `MOST`; `CHECK`, `checks`, `checked`, `ailing`, `Finding`, `Level`; `toolsDoc`, `callDoc`, `toolDoc` |
 | `@yaks/tools/registry` | `registry`, `registryOf`, `Registry`, `Provider`, `Description`: provider catalogs, lookup and discovery                                                                                                                                                                                                                                                                                                                                                                           |
-| `@yaks/tools/schema`   | `inputSchemaOf`, `shapeOf`, `answerSchema`: shared public schemas                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `@yaks/tools/schema`   | `inputSchemaOf`, `shapeOf`, `answerSchema`, `answerWith`: shared public schemas                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                                                                                              |
 | `@yaks/tools/routes`   | `routes`, `refused`                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

@@ -84,7 +84,7 @@ import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
 import { translated } from '@yaks/mcp/tools'
-import { reaching, searching } from './agent.ts'
+import { reaching, ROWS, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
@@ -433,6 +433,9 @@ let door = async (ctx: Ctx, session: string) => {
         : instructions(ctx.env)
     },
     search: searching(ctx, reach),
+    // What a row here is, `kind` beside its components (agent.ts `ROWS`), so
+    // a client checking an answer against its tool's listing finds it fits.
+    answer: ROWS,
     // What this connector needs: a token (preauth.ts SIGNIN). A tool that
     // works either way declares that itself and keeps it (tools.ts
     // `security: EITHER`) — which is every tool a stranger may call except the
@@ -546,6 +549,7 @@ let stranger = async (
     calls: ledger(graph),
     guide: (comp: string) => pageFor(comp, env),
     search: searching(ctx, reach),
+    answer: ROWS,
     // Every tool, and what each one declares about signing in (anon.ts
     // `asked`): `EITHER`, both schemes, for what a stranger may call, `oauth2`
     // alone for the rest, which is the field an MCP client reads to offer the

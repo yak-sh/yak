@@ -7,7 +7,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { answerSchema } from '@yaks/mcp'
+import { ROWS } from './agent.ts'
 
 import {
   connector,
@@ -183,13 +183,13 @@ test(
       assertEquals(hints('store_mail_send')?.openWorldHint, true)
       // And every one of them promises the same answer (T-37852): bundles,
       // under `result`, which is what each tool returns as structured content.
-      // The shape is the generic one (@yaks/mcp `answerSchema`) and not the
-      // vocabulary typed out per tool, which would be megabytes of listing.
-      // graph_schema answers a vocabulary document instead (T-37998), so it
-      // promises the vocab meta-schema.
+      // The shape is the generic one with this platform's row words declared
+      // (agent.ts `ROWS`) and not the vocabulary typed out per tool, which
+      // would be megabytes of listing. graph_schema answers a vocabulary
+      // document instead (T-37998), so it promises the vocab meta-schema.
       for (let t of tools as { name: string; outputSchema?: unknown }[]) {
         if (t.name == 'graph_schema') continue
-        assertEquals(t.outputSchema, answerSchema, `${t.name}'s answer`)
+        assertEquals(t.outputSchema, ROWS, `${t.name}'s answer`)
       }
       let schema = (tools as { name: string; outputSchema?: unknown }[])
         .find((t) => t.name == 'graph_schema')!.outputSchema as {

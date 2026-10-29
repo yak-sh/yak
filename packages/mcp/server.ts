@@ -21,7 +21,10 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // something the agent reads and corrects, not a broken connection.
 
 import { McpServer } from '@modelcontextprotocol/server'
-import type { CallToolResult } from '@modelcontextprotocol/server'
+import type {
+  CallToolResult,
+  JsonSchemaType,
+} from '@modelcontextprotocol/server'
 import type { Actor, Bundle, Graph, Tool } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { toolsOf } from '@yaks/graph'
@@ -152,6 +155,11 @@ export type Options = {
    * needs a token, so a client has something concrete to prompt the sign-in
    * for */
   security?: Security[] | ((t: NamedTool) => Security[] | undefined)
+  /** the output schema every tool whose answer is entities is listed with
+   * (default {@link answerSchema}): a host whose rows carry words of their own
+   * beside their components declares them here ({@link answerWith}), since a
+   * client refuses an answer that does not fit what its tool is listed with */
+  answer?: { type: 'object'; [key: string]: unknown }
   /** tools to list beside the generic tier and the graph's plugins' */
   tools?: Tool[]
   /** whether this server adds the generic tier itself (default: yes). A
@@ -213,7 +221,7 @@ export let instructed = async (
   return opts.readFile ? [text, FILES].filter(Boolean).join('\n\n') : text
 }
 
-export { answerSchema } from '@yaks/tools/schema'
+export { answerSchema, answerWith } from '@yaks/tools/schema'
 
 // The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
@@ -436,6 +444,27 @@ export let server = (
     report,
     ...opts.reply ? { reply: opts.reply } : {},
   })
+  let answer = opts.answer ?? answerSchema
+  let schemaOf = (t: NamedTool) => t.outputSchema ?? answer
+  // The check a client makes of every answer, made here first, against the
+  // schema the tool is listed with. A client refuses an answer that does not
+  // fit after this server has answered, so nothing here would ever hear of
+  // it: the failure is caught where the answer leaves, and reported. A schema
+  // the check cannot read is the same failure, in the validator's words. The
+  // answer still goes either way, since what to do with it is the client's.
+  let misfit = (t: NamedTool, out: CallToolResult): unknown => {
+    if (out.structuredContent === undefined) return undefined
+    try {
+      let held = validator.getValidator(schemaOf(t) as JsonSchemaType)(
+        out.structuredContent,
+      )
+      return held.valid ? undefined : new Error(
+        `${t.name}'s answer does not fit its output schema: ${held.errorMessage}`,
+      )
+    } catch (err) {
+      return err
+    }
+  }
   let call = async (name: string, args: Record<string, unknown>) => {
     let names = tools().map((t) => t.name)
 
@@ -469,6 +498,8 @@ export let server = (
       }
       out = failed(err)
     }
+    let unfit = misfit(t, out)
+    if (unfit) await report(unfit, asked, t.name)
     // A refusal carries the roster sentence too: an agent holding a stale
     // tool list is likelier to be refused than served, so that is exactly
     // the reply worth attaching it to.
@@ -483,7 +514,7 @@ export let server = (
         fileSchema(inputSchemaOf(t), opts.readFile),
         validator,
       ),
-      outputSchema: fromJsonSchema(t.outputSchema ?? answerSchema, validator),
+      outputSchema: fromJsonSchema(schemaOf(t), validator),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
@@ -496,15 +527,15 @@ export let server = (
   // The listing is this server's own, not the SDK's: a tool that declared its
   // input as JSON Schema is sent that declaration unchanged. The direct
   // tools/call dispatch below leaves argument validation to the runner, and
-  // every tool is listed with the one
-  // answer schema, since every tool answers bundles, unless it declared its own.
+  // every tool is listed with the one answer schema, since every tool answers
+  // bundles, unless it declared its own.
   mcp.server.setRequestHandler('tools/list', () => ({
     tools: tools().map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
       inputSchema: fileSchema(inputSchemaOf(t), opts.readFile),
-      outputSchema: t.outputSchema ?? answerSchema,
+      outputSchema: schemaOf(t),
       annotations: annotated(t),
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
     })),

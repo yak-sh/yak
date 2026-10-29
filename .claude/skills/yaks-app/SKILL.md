@@ -325,10 +325,18 @@ answer and `outputSchema` keep answering until the next listing (M-37853); a
 rename serves the old name as a translation (`published.ts`), listed in
 `tools/list` like any tool: a client installed from a directory's snapshot
 checks the live list before it calls, and a name missing there fails in the
-client ("was not returned by tools/list") without reaching us. Prompts and
-examples start from the person's own situation, never a scenario invented for
-them (M-37856; the owner on one such example, verbatim: "these are still made-up
-scenarios"). The guide's list of taken words lives in
+client ("was not returned by tools/list") without reaching us. A client also
+holds every answer to the `outputSchema` its tool is listed with and refuses
+one that doesn't fit, after we answered 200. Every tool whose answer is
+entities is listed with agent.ts `ROWS`, the generic bundle plus the row words
+a store and the composing read put beside components (`kind`, `space`): a new
+row word is declared there, or every read answering it fails in the client.
+@yaks/mcp checks each answer against its listing as it leaves and reports one
+that doesn't fit.
+
+Prompts and examples start from the person's own situation, never a scenario
+invented for them (M-37856; the owner on one such example, verbatim: "these are
+still made-up scenarios"). The guide's list of taken words lives in
 `public/docs/components.md`, and `guide_test.ts` keeps it true.
 
 Guide pages live in `workers/yak/public/docs/<slug>.md`; their frontmatter

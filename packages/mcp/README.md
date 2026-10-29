@@ -237,6 +237,14 @@ most of a `tools/list`. A tool whose answer is not entities declares its own
 in that shape in `output.value`, which is what `structuredContent` carries.
 `graph_schema` is that tool, and its output schema is the vocab meta-schema.
 
+Every key on a bundle beside `entity` and the `$` sugars is read as a component,
+an object or null. A host whose rows carry words of their own beside their
+components passes `answer: answerWith({kind: {type: 'string'}})`, and every tool
+whose answer is entities is listed with that schema instead. A client refuses an
+answer that does not fit what its tool is listed with, after the server has
+answered, so the server checks each answer against the same schema as it leaves
+and passes one that does not fit to `report`; the answer is still sent.
+
 A recorded failure carries a `refusal` or `exception` component and sets
 `isError`. Errors caught before a recorded answer is available can return only
 error text and `isError`, without `structuredContent`.

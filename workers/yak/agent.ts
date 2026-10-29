@@ -48,6 +48,7 @@ import { parse, stringify, tokens } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
+import { answerWith } from '@yaks/tools/schema'
 import type { PropSchema, Vocab } from '@yaks/vocab'
 import { clock } from './timing.ts'
 import { letters } from './letters.ts'
@@ -564,6 +565,20 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
     where: slug ? await named(ctx, slug, true) : undefined,
   }
 }
+
+/**
+ * A row as this platform answers it, and the output schema every tool here
+ * whose answer is entities is listed with: the generic bundle, and the two
+ * words a row says about itself beside its components. `kind` is what the
+ * entity is, on every row a store or the composing read answers (graph.ts
+ * `#kind`, reach.ts `composed`); `space` is the space a row answers for where
+ * two spaces mean two things by one word (T-32728). Both are documented on the
+ * rows graph_query answers (public/docs/querying.md, entities.md).
+ */
+export let ROWS = answerWith({
+  kind: { type: 'string' },
+  space: { type: 'string' },
+})
 
 /** Ranked search over everything in reach, as the package's `search` seam. */
 export let searching =

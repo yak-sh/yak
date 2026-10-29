@@ -10,7 +10,7 @@
 // publishes the meta-schema instead.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
@@ -20,8 +20,8 @@ import {
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
 import { createMcpHandler } from '@modelcontextprotocol/server'
-import { server } from './server.ts'
-import { core, inputSchemaOf } from './tools.ts'
+import { type Options, server } from './server.ts'
+import { answerWith, core, inputSchemaOf } from './tools.ts'
 import { connect, pinned, shop, shopGraph } from './testing.ts'
 
 let at = (o: unknown, ...keys: string[]): unknown =>
@@ -108,6 +108,42 @@ test('every tool publishes its answer, and its answers fit it', async () => {
   assertEquals(no.isError, true)
   held(no, 'shelve')
   await client.close()
+})
+
+// A row saying a word of its own beside its components, as yaks.app's rows
+// say `kind`. Undeclared, a client refuses the whole answer after the server
+// has sent it, so the server reports it as it leaves; declared through
+// `answer`, the same rows fit. The client checks what it has listed, as a
+// client does once connected.
+let shelf = async (reported: string[], answer?: Options['answer']) => {
+  let client = await connect({
+    ...(answer ? { answer } : {}),
+    report: (_err, _call, tool) => void reported.push(String(tool)),
+    tools: [{
+      name: 'shelf',
+      description: 'The books on a shelf',
+      input: {},
+      readOnly: true,
+      run: () => [{ entity: { eid: 'b1' }, kind: 'book', book: { price: 9 } }],
+    }],
+  })
+  await client.listTools()
+  return client
+}
+
+test('an answer outside its listed schema is reported, and fits once its row words are declared', async () => {
+  let reported: string[] = []
+  let bare = await shelf(reported)
+  await assertRejects(() => bare.callTool({ name: 'shelf', arguments: {} }))
+  assertEquals(reported, ['shelf'])
+  await bare.close()
+
+  let quiet: string[] = []
+  let kinded = await shelf(quiet, answerWith({ kind: { type: 'string' } }))
+  let out = await kinded.callTool({ name: 'shelf', arguments: {} })
+  assertEquals(at(out.structuredContent, 'result', '0', 'kind'), 'book')
+  assertEquals(quiet, [])
+  await kinded.close()
 })
 
 // The write door as a client's validator holds it: whether one bundle passes.

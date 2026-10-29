@@ -82,6 +82,7 @@ export { mcp, type MountOptions } from './mount.ts'
 export {
   annotated,
   answerSchema,
+  answerWith,
   COMMAND,
   type Exchange,
   instructed,
