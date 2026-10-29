@@ -8,16 +8,9 @@ import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
+import { fixture } from '../../bench/fixture.ts'
 
-export async function measure(
-  args: string[] = [],
-): Promise<Record<string, Samples>> {
-  let samples: Record<string, Samples> = {}
-
-  let directory = await Deno.makeTempDir({ prefix: 'harness-startup-' })
-  let count = Number(args[0] ?? 300)
-  let depth = Number(args[1] ?? 4000)
-  let path = directory + '/bench.db'
+let seeded = fixture(async (path: string, count: number, depth: number) => {
   let seed = await harness(path)
   try {
     for (let i = 0; i < count; i++) {
@@ -49,8 +42,20 @@ export async function measure(
       }
     }
   } finally {
-    seed.close()
+    await seed.close()
   }
+})
+
+export async function measure(
+  args: string[] = [],
+): Promise<Record<string, Samples>> {
+  let samples: Record<string, Samples> = {}
+
+  let directory = await Deno.makeTempDir({ prefix: 'harness-startup-' })
+  let count = Number(args[0] ?? 300)
+  let depth = Number(args[1] ?? 4000)
+  let path = directory + '/bench.db'
+  await seeded(path, count, depth)
   try {
     for (let run = 0; run < 3; run++) {
       let times: Record<string, Sample> = {}

@@ -6,6 +6,27 @@ import { remote } from './remote.ts'
 import { at, harness } from './testing.ts'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
+import { fixture } from '../../bench/fixture.ts'
+
+let seeded = fixture(async (path: string, count: number, length: number) => {
+  let seed = await harness(path)
+  try {
+    for (let offset = 0; offset < count; offset += 250) {
+      await seed.g.apply([
+        ...offset == 0
+          ? [{ entity: { eid: 'session' }, session: { id: 'benchmark' } }]
+          : [],
+        ...Array.from({ length: Math.min(250, count - offset) }, (_, j) => ({
+          entity: { eid: 'e' + (offset + j) },
+          entry: { session: 'session', seq: offset + j + 1 },
+          content: { body: String(offset + j) + 'x'.repeat(length) },
+        })),
+      ])
+    }
+  } finally {
+    await seed.close()
+  }
+})
 
 export async function measure(
   args: string[] = [],
@@ -19,20 +40,7 @@ export async function measure(
   }
   const directory = await Deno.makeTempDir({ prefix: 'harness-window-bench-' })
   const db = directory + '/bench.sqlite'
-  const seed = await harness(db)
-  for (let offset = 0; offset < count; offset += 250) {
-    await seed.g.apply([
-      ...offset == 0
-        ? [{ entity: { eid: 'session' }, session: { id: 'benchmark' } }]
-        : [],
-      ...Array.from({ length: Math.min(250, count - offset) }, (_, j) => ({
-        entity: { eid: 'e' + (offset + j) },
-        entry: { session: 'session', seq: offset + j + 1 },
-        content: { body: String(offset + j) + 'x'.repeat(length) },
-      })),
-    ])
-  }
-  seed.close()
+  await seeded(db, count, length)
   try {
     for (let run = 0; run < runs; run++) {
       for (let mode of ['full', 'window']) {

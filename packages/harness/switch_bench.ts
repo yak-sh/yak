@@ -7,14 +7,10 @@ import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { standaloneMain } from '../../bench/standalone-main.ts'
+import { fixture } from '../../bench/fixture.ts'
 
-export async function measure(
-  args: string[] = [],
-): Promise<Record<string, Samples>> {
-  let directory = await Deno.makeTempDir()
-  let count = Number(args[0] ?? 100)
-  let depth = Number(args[1] ?? 1000)
-  let h = await harness(directory + '/test.db')
+let seeded = fixture(async (path: string, count: number, depth: number) => {
+  let h = await harness(path)
   try {
     for (let i = 0; i < count; i++) {
       let bundles: Bundle[] = [{
@@ -35,8 +31,17 @@ export async function measure(
       await h.g.apply(bundles)
     }
   } finally {
-    h.close()
+    await h.close()
   }
+})
+
+export async function measure(
+  args: string[] = [],
+): Promise<Record<string, Samples>> {
+  let directory = await Deno.makeTempDir()
+  let count = Number(args[0] ?? 100)
+  let depth = Number(args[1] ?? 1000)
+  await seeded(directory + '/test.db', count, depth)
   let r = await remote({
     config: at(directory + '/test.db'),
     cwd: directory,
