@@ -1,6 +1,7 @@
 /** Deno workload declarations, measured with one CPU clock for the whole
  * batch. Explicit start/end boundaries exclude fixture setup and teardown. */
 import { stopwatch } from './bench.ts'
+import { median } from './result.ts'
 
 export type Invocation = Pick<
   Deno.BenchDefinition,
@@ -13,7 +14,7 @@ export let invocation = async (
   entry: Invocation,
   timer: Timer = stopwatch,
   minimum = 20,
-): Promise<{ avg: number; cpu: number; n: number }> => {
+): Promise<{ avg: number; cpu: number; n: number; cpuSamples: number[] }> => {
   let batch = async (n: number): Promise<Reading> => {
     let explicit = false, running = false
     let sum = { value: 0, cpu: 0 }
@@ -46,11 +47,26 @@ export let invocation = async (
   let n = Math.max(1, entry.n ?? 1)
   while (true) {
     let reading = await batch(n)
-    if (reading.cpu >= minimum || n >= 10_000_000) {
-      return { avg: reading.value * 1e6 / n, cpu: reading.cpu * 1e6 / n, n }
-    }
+    if (reading.cpu >= minimum || n >= 10_000_000) break
     n *= Math.max(2, Math.min(10, Math.ceil(minimum / (reading.cpu || .001))))
   }
+  // Fixture construction can compile the same product paths as the work.
+  // Warm for a bounded CPU interval over the whole invocation, including its
+  // setup and teardown, instead of publishing the first calibration batch.
+  let warmed = 0
+  for (let turn = 0; warmed < minimum * 5 && turn < 20; turn++) {
+    let elapsed = timer()
+    let warm = await batch(n)
+    warmed += elapsed().cpu
+    if (warm.cpu < minimum) {
+      n = Math.min(10_000_000, Math.ceil(n * minimum / (warm.cpu || .001)))
+    }
+  }
+  let readings: Reading[] = []
+  for (let i = 0; i < 5; i++) readings.push(await batch(n))
+  let middle = [...readings].sort((a, b) => a.cpu - b.cpu)[2]
+  let cpuSamples = readings.map((r) => r.cpu * 1e6 / n)
+  return { avg: middle.value * 1e6 / n, cpu: median(cpuSamples), n, cpuSamples }
 }
 
 /** Install only at the isolated collector's process boundary. Workload files

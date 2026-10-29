@@ -28,7 +28,7 @@ test('CPU batches normalize work while keeping wall waits diagnostic', async () 
       time.timer,
       1,
     ),
-    { avg: 100e6, cpu: 2e6, n: 4 },
+    { avg: 100e6, cpu: 2e6, n: 4, cpuSamples: [2e6, 2e6, 2e6, 2e6, 2e6] },
   )
 })
 
@@ -53,7 +53,7 @@ test('explicit CPU boundaries exclude setup and teardown for sync and async work
         time.timer,
         1,
       ),
-      { avg: 20e6, cpu: 3e6, n: 2 },
+      { avg: 20e6, cpu: 3e6, n: 2, cpuSamples: [3e6, 3e6, 3e6, 3e6, 3e6] },
     )
   }
 })
