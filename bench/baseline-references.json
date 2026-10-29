@@ -124,8 +124,7 @@
         "kind": "derived",
         "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
-          "switch",
-          "timer-delay"
+          "switch"
         ]
       }
     ]
@@ -141,10 +140,8 @@
         "benches": [
           "full/first",
           "full/warm",
-          "full/timer-delay",
           "window/first",
-          "window/warm",
-          "window/timer-delay"
+          "window/warm"
         ]
       }
     ]
@@ -160,10 +157,8 @@
         "benches": [
           "inline/startup",
           "inline/work",
-          "inline/timer-delay",
           "worker/startup",
-          "worker/work",
-          "worker/timer-delay"
+          "worker/work"
         ]
       }
     ]
@@ -466,8 +461,6 @@
           "management/billing-html",
           "management/connect-html",
           "app/html",
-          "app/paint-cold",
-          "app/paint-warm",
           "connector/app-list",
           "connector/file-list",
           "connector/graph-query",
@@ -484,26 +477,6 @@
           "management/new-html",
           "management/visits-html",
           "management/selling-html",
-          "management/apps/paint-cold",
-          "management/apps/paint-warm",
-          "management/settings/paint-cold",
-          "management/settings/paint-warm",
-          "management/connections/paint-cold",
-          "management/connections/paint-warm",
-          "management/trash/paint-cold",
-          "management/trash/paint-warm",
-          "management/billing/paint-cold",
-          "management/billing/paint-warm",
-          "management/connect/paint-cold",
-          "management/connect/paint-warm",
-          "management/people/paint-cold",
-          "management/people/paint-warm",
-          "management/new/paint-cold",
-          "management/new/paint-warm",
-          "management/visits/paint-cold",
-          "management/visits/paint-warm",
-          "management/selling/paint-cold",
-          "management/selling/paint-warm",
           "management/apps-populated-html",
           "management/settings-populated-html",
           "management/connections-populated-html",
