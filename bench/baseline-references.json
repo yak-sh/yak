@@ -172,11 +172,36 @@
         "kind": "derived",
         "source": "git history of bench/hook-waits.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
-          "hook/SessionStart",
-          "hook/SubagentStart",
-          "hook/SessionEnd",
           "hook/PostToolUse-delivery",
           "hook/PostToolUse-subagent"
+        ]
+      },
+      {
+        "reference": "04b25fc039042d19f556445882b2dceb0d0950e6",
+        "kind": "derived",
+        "source": "Earliest matching HTTP lifecycle hook implementation: 04b25fc03 dispatches session_context and session_wrap through the HTTP route. The previous HTTP route only delivered bus knocks and did not execute the measured lifecycle work.",
+        "correction": {
+          "previousReference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+          "workloadChange": "04b25fc039042d19f556445882b2dceb0d0950e6",
+          "reason": "The old baseline measured local lifecycle commands; today's HTTP lifecycle workload requires a route that executes session_context or session_wrap, rather than returning bus delivery context.",
+          "previousMedians": [
+            {
+              "name": "hook/SessionStart",
+              "unit": "ms",
+              "median": 570.6915650000001
+            },
+            {
+              "name": "hook/SubagentStart",
+              "unit": "ms",
+              "median": 403.46523700000034
+            },
+            { "name": "hook/SessionEnd", "unit": "ms", "median": 404.031876 }
+          ]
+        },
+        "benches": [
+          "hook/SessionStart",
+          "hook/SubagentStart",
+          "hook/SessionEnd"
         ]
       }
     ]
