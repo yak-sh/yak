@@ -114,8 +114,7 @@ test("an app's voice door calls for its members, and for visitors where it opens
 })
 
 test('a lease nobody renewed closes its call at Realtime and drops its row', async () => {
-  let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
-  let cf = cloudflare(log)
+  let cf = cloudflare()
   let p = platform('a probe secret', {
     REALTIME_APP: 'app',
     REALTIME_TOKEN: 'a-token',
@@ -170,6 +169,5 @@ test('a lease nobody renewed closes its call at Realtime and drops its row', asy
   } finally {
     await p[Symbol.asyncDispose]()
     await cf.stop()
-    Deno.removeSync(log)
   }
 })

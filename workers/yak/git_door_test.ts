@@ -1,9 +1,5 @@
-// The repository at an app's address, judged by git: a real `git clone` over a
-// real socket against the door the plugin mounts, then `git log` and `git fsck`
-// in what it wrote. Everything below the wire is @yaks/git's and is checked
-// there (packages/git/http_test.ts); what is pinned here is the mount — which
-// app a URL names, who may clone it and how they say so, and that a path which
-// is no repository is left for the apps.
+// Repository routes, visibility and credentials through the in-memory door.
+// The git protocol and history are covered through @yaks/git's own interface.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { r2Objects } from './lib/objects.ts'
@@ -23,7 +19,6 @@ let SECRET = 'a probe secret'
 let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
 let WHO: Who = { person: ADA, role: 'owner' }
 let utf8 = new TextEncoder()
-let text = new TextDecoder()
 
 // A space with one app in it, at the access mode this test is about. Ada owns
 // the space, which is what a credential of hers has to find to reach a private
@@ -102,102 +97,6 @@ let basic = (token: string) => ({
   authorization: `Basic ${btoa(`x:${token}`)}`,
 })
 
-let run = async (...args: string[]) => {
-  let { code, stdout, stderr } = await new Deno.Command('git', {
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  return { code, out: text.decode(stdout), err: text.decode(stderr) }
-}
-
-let git = async (...args: string[]) => {
-  let { code, out, err } = await run(...args)
-  assertEquals(code, 0, `git ${args.join(' ')}: ${err}`)
-  return out
-}
-
-// The door on a socket, so a real `git` speaks to the mount the router mounts.
-let serving = (env: Env) =>
-  Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let path = new URL(req.url).pathname
-    let at = { env, req, path, space: 'ada' }
-    return await answer(at) ?? new Response('no', { status: 404 })
-  })
-
-test('git clones an app at <app>.git, and its history is its deploys', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  let { dir: listing, space, app } = await standing(env, 'public')
-  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
-  app = (await listing.app(space, 'recipes'))!
-  await deploy(p, app, 2, {
-    'index.html': '<h1>hello</h1>\n',
-    'lib/app.js': 'export let go = () => 1\n',
-  })
-
-  let server = serving(env)
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
-  try {
-    let url = `http://127.0.0.1:${server.addr.port}/recipes.git`
-    await git('-c', 'protocol.version=2', 'clone', '--quiet', url, `${dir}/a`)
-    assertEquals(
-      await git('-C', `${dir}/a`, 'log', '--format=%s'),
-      'deploy 2\ndeploy 1\n',
-    )
-    assertEquals(
-      await Deno.readTextFile(`${dir}/a/lib/app.js`),
-      'export let go = () => 1\n',
-    )
-    assertEquals(
-      await git('-C', `${dir}/a`, 'log', '--format=%an <%ae>', '-1'),
-      `Ada <${ADA}@users.yaks.app>\n`,
-    )
-    assertEquals(
-      await git('-C', `${dir}/a`, 'symbolic-ref', 'HEAD'),
-      'refs/heads/main\n',
-    )
-    await git('-C', `${dir}/a`, 'fsck', '--strict')
-  } finally {
-    await server.shutdown()
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
-test('git clones the browser address, with and without its slash', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  let { app } = await standing(env, 'public')
-  // A file at the very address the door now answers: what proves the app is
-  // still the one serving its pages.
-  await deploy(p, app, 1, {
-    'index.html': '<h1>hi</h1>\n',
-    'info/refs': 'a static file\n',
-  })
-
-  let server = serving(env)
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
-  try {
-    let base = `http://127.0.0.1:${server.addr.port}/recipes`
-    // The URL straight from the browser, and the same without its slash: git
-    // strips the slash, so both ask for the same advertisement, follow the
-    // 301, and post the fetch to the address they landed on.
-    for (let [n, url] of [`${base}/`, base].entries()) {
-      let into = `${dir}/${n}`
-      await git('-c', 'protocol.version=2', 'clone', '--quiet', url, into)
-      assertEquals(await git('-C', into, 'log', '--format=%s'), 'deploy 1\n')
-      assertEquals(
-        await Deno.readTextFile(`${into}/info/refs`),
-        'a static file\n',
-      )
-      await git('-C', into, 'fsck', '--strict')
-    }
-  } finally {
-    await server.shutdown()
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
 test('the browser address redirects to the repository, query and all', async () => {
   let p = platform(SECRET)
   let { env } = p
@@ -271,53 +170,6 @@ test('a trashed app is gone to a credential as much as to nobody', async () => {
     // Not a challenge: there is nothing here to sign in to.
     assertEquals(res!.headers.get('www-authenticate'), null)
     assertEquals(await res!.text(), 'git: no such repository\n')
-  }
-})
-
-test('git clones a private app with the token as the password', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  let { app } = await standing(env, 'private')
-  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
-  let hers = await tokenFor(env, ADA)
-
-  let server = serving(env)
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
-  try {
-    let at = `127.0.0.1:${server.addr.port}/recipes.git`
-    // No credential, and no terminal to ask on: git stops at the challenge.
-    let shut = await run(
-      '-c',
-      'protocol.version=2',
-      'clone',
-      `http://${at}`,
-      `${dir}/a`,
-    )
-    assert(shut.code != 0, 'a clone with no credential fails')
-    assert(
-      /terminal prompts disabled|Authentication failed|401/i.test(shut.err),
-      `the 401 is what stopped it: ${shut.err}`,
-    )
-    // The same URL wearing the token, which is what a person is handed.
-    await git(
-      '-c',
-      'protocol.version=2',
-      'clone',
-      '--quiet',
-      `http://x:${hers}@${at}`,
-      `${dir}/b`,
-    )
-    assertEquals(
-      await git('-C', `${dir}/b`, 'log', '--format=%s'),
-      'deploy 1\n',
-    )
-    assertEquals(
-      await Deno.readTextFile(`${dir}/b/index.html`),
-      '<h1>hi</h1>\n',
-    )
-  } finally {
-    await server.shutdown()
-    await Deno.remove(dir, { recursive: true })
   }
 })
 

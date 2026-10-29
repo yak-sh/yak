@@ -11,6 +11,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import * as apps from './apps.ts'
+import { endpoint } from './probe.ts'
 import {
   ANON,
   build,
@@ -370,14 +371,12 @@ let terra = (env: Env) => ({
   price: { input: 1, output: 1 },
 })
 
-// OpenAI's Responses API, stood up on a socket: the gateway is a URL, so
-// pointing OPENAI_API at this one drives the whole provider — the request it
-// writes and the response it reads — with no key and no account.
+// OpenAI Responses requests and responses stay inside this process.
 let openaiStub = (
   answer: (n: number) => { status?: number; body?: unknown },
 ) => {
   let heard: { auth: string | null; body: Record<string, unknown> }[] = []
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+  let server = endpoint(async (req) => {
     heard.push({
       auth: req.headers.get('authorization'),
       body: await req.json(),
@@ -385,11 +384,10 @@ let openaiStub = (
     let { status = 200, body = {} } = answer(heard.length)
     return Response.json(body, { status })
   })
-  let { port } = server.addr as Deno.NetAddr
   return {
     heard,
-    url: `http://127.0.0.1:${port}`,
-    stop: () => server.shutdown(),
+    url: server.url,
+    stop: server.stop,
   }
 }
 

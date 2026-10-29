@@ -19,12 +19,11 @@ import {
   client,
   connector,
   delivered,
+  fakeSub,
   kernel,
-  lapsed,
   letters,
   meta,
   seed,
-  stripeKey,
   WEBHOOK_SECRET,
 } from './probe.ts'
 
@@ -212,12 +211,11 @@ test('an erased space gives its domain back', async () => {
 // `incomplete_expired` and bills nobody again, so its space goes like one
 // whose subscription was cancelled (erase.ts `refused`, billing.ts `ending`).
 test('a space whose subscription lapsed unpaid may be erased', async () => {
-  let key = stripeKey()
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'lapsed21', apps: [] }])
     let eid = them.eids.lapsed21
-    let sub = await lapsed(k, key, { space: eid, slug: 'lapsed21' })
+    let sub = { ...fakeSub(eid), status: 'incomplete_expired' }
     await delivered(
       k,
       '/stripe/webhook',

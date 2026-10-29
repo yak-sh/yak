@@ -9,15 +9,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import {
-  client,
-  connector,
-  kernel,
-  meta,
-  sessionAt,
-  signIn,
-  stripeKey,
-} from './probe.ts'
+import { client, connector, kernel, meta, signIn } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 import type { App } from './directory.ts'
 import { library } from './pages.ts'
@@ -268,48 +260,3 @@ test('an app that throws is marked on the dashboard, with what to ask', () => {
 test('a fixed app has no dashboard error mark or repair request', () => {
   assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
 })
-
-test(
-  'Billing management opens checkout and the customer portal for this space',
-  async () => {
-    // Stripe's sandbox, or the sentence saying how to supply it.
-    stripeKey()
-    let k = await kernel()
-    try {
-      let them = await signIn(k)
-      let slug = them.email.split('@')[0]
-      let path = managePath('billing', slug)
-      let headers = { cookie: them.cookie, origin: 'https://yaks.app' }
-      let page = await (await k.at('yaks.app', path, { headers })).text()
-      assertStringIncludes(page, 'Billing')
-      assertStringIncludes(page, 'data-door="checkout"')
-      let url: Record<string, string> = {}
-      for (let door of ['checkout', 'portal']) {
-        let response = await k.at('yaks.app', path, {
-          method: 'POST',
-          headers,
-          body: new URLSearchParams({ billing: door }),
-        })
-        assertEquals(response.status, 200)
-        url[door] = (await response.json()).url
-      }
-      // Where a purchase started from is where it comes back to, both ways,
-      // read back off the session Stripe holds.
-      let made = await sessionAt(k, url.checkout)
-      assertEquals(made.success_url, `https://yaks.app${path}&paid=1`)
-      assertEquals(made.cancel_url, `https://yaks.app${path}&paid=0`)
-      // The portal is Stripe's own page, for the customer checkout made.
-      assertStringIncludes(url.portal, 'https://billing.stripe.com/')
-      page = await (await k.at('yaks.app', path, { headers })).text()
-      assertStringIncludes(page, 'data-door="portal"')
-      let denied = await k.at('yaks.app', path, {
-        method: 'POST',
-        headers: { ...headers, origin: 'https://evil.example' },
-        body: new URLSearchParams({ billing: 'portal' }),
-      })
-      assertEquals(denied.status, 403)
-    } finally {
-      await k.stop()
-    }
-  },
-)

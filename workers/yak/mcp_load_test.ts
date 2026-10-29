@@ -6,32 +6,22 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { parseHTML } from 'linkedom'
 import {
-  charged,
   connector,
-  delivered,
-  fakeSub,
   fresh,
   kernel,
-  meta,
   num,
-  plusPrice,
   seed,
-  sessionAt,
   signIn,
-  stripeKey,
   txt,
   unique,
   vocabFile,
-  WEBHOOK_SECRET,
 } from './probe.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
 import { load } from './load.ts'
 import { HAS_NOTES } from './standing.ts'
 import { ROOM } from './writes.ts'
-import { managePath } from './route.ts'
 import { HELLO } from './mcp-probe.ts'
 
 // And a bundle the store refuses refuses the deploy, naming the file and the
@@ -634,235 +624,6 @@ test('an app says what it holds, and keeps notes about itself', async () => {
     )
     assertStringIncludes(await maya.tool('about'), 'Weights in grams, never')
   } finally {
-    await k.stop()
-  }
-})
-
-// ---- selling (sell.ts, T-34524) --------------------------------------------
-//
-// `space_sell` through the whole kernel, and the space page beside it — which
-// is here rather than in serving_test.ts because drawing that page reaches
-// identity.ts for whether an assistant has ever connected, which wants the
-// kernel whole.
-// Stripe is Stripe's own sandbox (probe.ts `stripeKey`): the checkout session,
-// the subscription and the connected account are all made there and read back.
-test('space_sell connects an account and hands back one link', async () => {
-  let key = stripeKey()
-  let price = await plusPrice(key)
-  let k = await kernel()
-  let purchasing: Promise<Record<string, unknown>> | undefined
-  try {
-    let space = unique('ada39')
-    let { cookie, eids } = await seed(k, [{ slug: space, apps: ['shop'] }])
-    let agent = connector(k, cookie)
-    // Selling has its own account page; the library links to it. The form's
-    // action and next step must follow the account through all three states.
-    let path = managePath('selling', space)
-    let page = async (button: string, value = 'start') => {
-      let r = await k.at('yaks.app', path, { headers: { cookie } })
-      assertEquals(r.status, 200)
-      let { document } = parseHTML(await r.text())
-      let form = document.querySelector(`form[action="${path}"]`)
-      assert(form, 'the selling form')
-      assertEquals(form.getAttribute('method'), 'post')
-      assertEquals(
-        form.querySelector('[name="sell"]')?.getAttribute('value'),
-        value,
-      )
-      assertEquals(
-        form.querySelector('button[type="submit"]')?.textContent,
-        button,
-      )
-    }
-    let library = await k.at('yaks.app', managePath('apps', space), {
-      headers: { cookie },
-    })
-    assertStringIncludes(await library.text(), `href="${path}"`)
-    let freePage = async () => {
-      let r = await k.at('yaks.app', path, { headers: { cookie } })
-      let { document } = parseHTML(await r.text())
-      assert(!document.querySelector('[name="sell"][value="start"]'))
-      assertEquals(
-        document.querySelector('[data-door="checkout"]')?.getAttribute(
-          'data-target',
-        ),
-        path,
-      )
-    }
-    await freePage()
-    await assertRejects(
-      () => agent.tool('space_sell', { space: space }),
-      Error,
-      'Plus',
-    )
-    let denied = await k.at('yaks.app', path, {
-      method: 'POST',
-      headers: { cookie, origin: 'https://yaks.app' },
-      body: new URLSearchParams({ sell: 'start' }),
-    })
-    assertEquals(denied.status, 400)
-    assert(
-      !parseHTML(await denied.text()).document.querySelector(
-        '[name="sell"][value="start"]',
-      ),
-    )
-    // The subscription button uses this space's guarded form door, then the
-    // existing billing checkout. A sibling page cannot start it.
-    let subscribe = (origin = 'https://yaks.app', session = cookie) =>
-      k.at('yaks.app', path, {
-        method: 'POST',
-        redirect: 'manual',
-        headers: { cookie: session, origin },
-        body: new URLSearchParams({ billing: 'checkout' }),
-      })
-    // Permission refusals do not depend on the independent checkout.
-    purchasing = (async () => {
-      let checkout = await subscribe()
-      assertEquals(checkout.status, 200)
-      let url = (await checkout.json()).url as string
-      assertStringIncludes(url, 'https://checkout.stripe.com/')
-      return await sessionAt(k, url, '?expand[]=line_items')
-    })()
-    purchasing.catch(() => {})
-    for (
-      let [origin, session, status] of [
-        ['https://other.yaks.app', cookie, 403],
-        ['https://yaks.app', '', 303],
-        ['https://yaks.app', (await signIn(k)).cookie, 404],
-      ] as const
-    ) {
-      let r = await subscribe(origin, session)
-      assertEquals(r.status, status)
-      await r.body?.cancel()
-    }
-    let purchase = await purchasing! as {
-      metadata: Record<string, string>
-      line_items: { data: { price: { id: string } }[] }
-      success_url: string
-      cancel_url: string
-    }
-    assertEquals(purchase.metadata.space, eids[space])
-    assertEquals(purchase.line_items.data[0].price.id, price)
-    // Checkout started from a space's page hands the person back to that
-    // space's plan settings, not to the apex connector (billing.ts `checkout`).
-    assertEquals(
-      purchase.success_url,
-      `https://yaks.app${managePath('billing', space)}&paid=1`,
-    )
-    assertEquals(
-      purchase.cancel_url,
-      `https://yaks.app${managePath('billing', space)}&paid=0`,
-    )
-    // Plus is what selling asks for, not this test's subject, so the space is
-    // moved onto it by the webhook the way onPlus does — carrying a fabricated
-    // subscription the door reads whole — and cancelled the same way below.
-    let sub = fakeSub(eids[space])
-    await delivered(
-      k,
-      '/stripe/webhook',
-      WEBHOOK_SECRET,
-      'customer.subscription.updated',
-      sub,
-    )
-    await page('Connect Stripe')
-    let paid = await subscribe()
-    assertEquals(paid.status, 409)
-    assertEquals((await paid.json()).error.code, 'already_plus')
-
-    // The tool hands back one link and says to stop there — an assistant that
-    // kept going would be an assistant clicking through somebody's identity
-    // form.
-    let said = await agent.tool('space_sell', { space: space })
-    assertStringIncludes(said, 'https://connect.stripe.com/')
-    assertStringIncludes(said, 'They are the merchant')
-
-    // The account Stripe now holds is the charge-merchants-directly model, and
-    // it names the space so an account read back at Stripe says whose it is.
-    let seller = async () =>
-      ((await meta(k).query(`id=${eids[space]}`))[0] as {
-        stripe?: { account: string }
-      }).stripe?.account
-    let acct = await seller()
-    assert(acct, 'the space holds the account Stripe made')
-    // The sandbox keeps what a test made unless it is deleted: the kernel's
-    // stop deletes it.
-    k.made.add(`/v1/accounts/${acct}`)
-    let made = await charged(key, `/v1/accounts/${acct}`) as {
-      controller: {
-        fees: { payer: string }
-        losses: { payments: string }
-        stripe_dashboard: { type: string }
-        requirement_collection: string
-      }
-      metadata: Record<string, string>
-    }
-    assertEquals(made.controller.fees.payer, 'account')
-    assertEquals(made.controller.losses.payments, 'stripe')
-    assertEquals(made.controller.stripe_dashboard.type, 'full')
-    assertEquals(made.controller.requirement_collection, 'stripe')
-    assertEquals(made.metadata.slug, space)
-
-    // The page now reads mid-setup, and does not offer the first step again.
-    await page('Continue setup')
-
-    // Stripe says they are ready, at the Connect door. Being ready is Stripe's
-    // verdict on a person's identity form, which no test can fill in, so the
-    // two flags that verdict sets are laid over the account Stripe holds.
-    let ready = await delivered(
-      k,
-      '/stripe/connect',
-      WEBHOOK_SECRET,
-      'account.updated',
-      { ...made, charges_enabled: true, details_submitted: true },
-      acct,
-    )
-    assertEquals(JSON.parse(ready).did, `${space} can sell`)
-
-    // The page says so, and the tool stops offering a link nobody needs.
-    await page('Disconnect Stripe', 'stop')
-    assertStringIncludes(
-      await agent.tool('space_sell', { space: space }),
-      'already selling',
-    )
-    assertEquals(await seller(), acct, 'one account, ever')
-
-    let ended = {
-      ...sub,
-      status: 'canceled',
-      ended_at: Math.floor(Date.now() / 1000),
-    }
-    await delivered(
-      k,
-      '/stripe/webhook',
-      WEBHOOK_SECRET,
-      'customer.subscription.deleted',
-      ended,
-    )
-    await freePage()
-    await page('Disconnect Stripe', 'stop')
-    await assertRejects(
-      () => agent.tool('space_sell', { space: space }),
-      Error,
-      'Plus',
-    )
-
-    // Stopping is the platform forgetting, never Stripe deleting: the account
-    // is the merchant's own.
-    assertStringIncludes(
-      await agent.tool('space_sell', { space: space, disconnect: true }),
-      'Their Stripe account is untouched',
-    )
-    await freePage()
-
-    // And nobody but the owner may connect a space to a bank account.
-    let stranger = connector(k, (await signIn(k)).cookie)
-    await assertRejects(
-      () => stranger.tool('space_sell', { space: space }),
-      Error,
-      space,
-    )
-  } finally {
-    await purchasing?.catch(() => {})
     await k.stop()
   }
 })

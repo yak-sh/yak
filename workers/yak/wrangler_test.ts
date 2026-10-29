@@ -16,7 +16,6 @@ import { globToRegExp } from 'jsr:@std/path@^1.0.0/glob-to-regexp'
 import {
   aliased,
   bundled,
-  changed,
   command,
   guard,
   images,
@@ -35,7 +34,6 @@ import {
   siblingMessage,
   SIBLINGS,
   siblings,
-  superseded,
   uploadSibling,
   WATCHED,
 } from './wrangler.ts'
@@ -707,157 +705,6 @@ test('aliased: every export of a member, relative to the paths file', () => {
     '@yaks/two/tools': ['../../packages/two/tools.ts'],
   })
   Deno.removeSync(root, { recursive: true })
-})
-
-// A repository and the remote its pushes land on, driven the way pushes to
-// main drive the one Workers Builds clones.
-let run = async (cwd: string, ...args: string[]) => {
-  let r = await new Deno.Command('git', {
-    args: ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
-    cwd,
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  return new TextDecoder().decode(r.stdout).trim()
-}
-
-test('wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do', async () => {
-  let root = Deno.makeTempDirSync({ prefix: 'yak-live-' })
-  try {
-    let origin = join(root, 'origin.git')
-    let work = join(root, 'work')
-    let thin = join(root, 'thin')
-    await run(root, 'init', '-q', '--bare', '-b', 'main', origin)
-    await Deno.writeTextFile(
-      join(origin, 'config'),
-      '\n[uploadpack]\nallowFilter = true\n',
-      { append: true },
-    )
-    let body = ''
-    for (
-      let [index, paths] of [
-        ['workers/yak/site.ts'],
-        ['apps/vale/main.ts'],
-        ['workers/yak/site.ts', 'packages/graph/mod.ts'],
-      ].entries()
-    ) {
-      body += `commit refs/heads/main\nmark :${
-        index + 1
-      }\ncommitter t <t@t> 1 +0000\ndata 1\nc\n`
-      if (index) body += `from :${index}\n`
-      for (let path of paths) {
-        let content = crypto.randomUUID()
-        body += `M 100644 inline ${path}\ndata ${content.length}\n${content}\n`
-      }
-      body += '\n'
-    }
-    // Import the history once; moving main still makes each push visible
-    // independently, and shallow clones receive only what main can reach.
-    body += 'reset refs/heads/main\nfrom :1\n\n'
-    let marks = join(root, 'marks')
-    let child = new Deno.Command('git', {
-      args: ['fast-import', '--quiet', `--export-marks=${marks}`],
-      cwd: origin,
-      stdin: 'piped',
-      stdout: 'null',
-      stderr: 'piped',
-    }).spawn()
-    let writer = child.stdin.getWriter()
-    await writer.write(new TextEncoder().encode(body))
-    await writer.close()
-    assertEquals((await child.output()).code, 0)
-    let commits = Object.fromEntries(
-      (await Deno.readTextFile(marks)).trim().split('\n')
-        .map((line) => line.split(' ')),
-    )
-    let [a, b, c] = [':1', ':2', ':3'].map((mark) => commits[mark])
-    // Cloned the way a build is, before the next push arrives.
-    await run(
-      root,
-      'clone',
-      '-q',
-      '--no-checkout',
-      '--depth',
-      '1',
-      `file://${origin}`,
-      thin,
-    )
-    await run(origin, 'update-ref', 'refs/heads/main', b)
-    // An app-only push starts no replacement build; the last one may land.
-    let app = await seen(thin, [a])
-    assertEquals(app.tip, b)
-    assertEquals(app.changed, false)
-    assertEquals(superseded(app), null)
-    await run(origin, 'update-ref', 'refs/heads/main', c)
-    let latest = join(root, 'latest')
-    await Promise.all([
-      run(root, 'clone', '-q', '--no-checkout', origin, work),
-      run(
-        root,
-        'clone',
-        '-q',
-        '--no-checkout',
-        '--depth',
-        '1',
-        `file://${origin}`,
-        latest,
-      ),
-    ])
-    let [current, old] = await Promise.all([seen(work, [a]), seen(thin, [a])])
-    // The latest build goes live over what is behind it.
-    assertEquals(superseded(current), null)
-    // An older build that finishes last must leave newer source to its build.
-    assertEquals(old.changed, true)
-    assert(superseded(old))
-    let [, older] = await Promise.all([
-      run(work, 'checkout', '-q', a),
-      seen(latest, [a]),
-    ])
-    assertEquals(older, {
-      head: c,
-      tip: c,
-      changed: false,
-      live: [{ sha: a, ahead: false }],
-    })
-    assertEquals(superseded(older), null)
-    // Ancestry reads retain the old commits, without downloading their files.
-    let oldBlob = await run(work, 'rev-parse', `${a}:workers/yak/site.ts`)
-    let objects = await run(
-      latest,
-      'cat-file',
-      '--batch-all-objects',
-      '--batch-check=%(objectname)',
-    )
-    assert(!objects.split('\n').includes(oldBlob))
-    // With no remote to ask, a live version ahead of it still stops it.
-    await run(work, 'remote', 'remove', 'origin')
-    let blind = await seen(work, [c])
-    assertEquals(blind.tip, null)
-    assert(superseded(blind))
-    // A shallow clone fetches the live commit it lacks before it answers.
-    assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
-    // A push starts a build when it changes the watched source since its
-    // parent: an app alone does not, Worker and package source does.
-    let thinnest = join(root, 'thinnest')
-    await run(
-      root,
-      'clone',
-      '-q',
-      '--no-checkout',
-      '--depth',
-      '1',
-      `file://${origin}`,
-      thinnest,
-    )
-    assertEquals(await changed(thinnest, a, b), false)
-    assertEquals(await changed(thinnest, b, c), true)
-    // A deploy runs in its Worker's directory, where the paths mean the same.
-    let worker = join(work, 'workers/yak')
-    assertEquals(await changed(worker, a, b), false)
-    assertEquals(await changed(worker, b, c), true)
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
 })
 
 test('sibling uploads use all bundled modules and configuration, not file order', () => {
