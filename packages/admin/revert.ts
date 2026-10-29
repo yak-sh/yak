@@ -1,13 +1,8 @@
-// Correct main, then wait for Workers Builds to serve the correction. Land is
-// the same git primitive `yak land` calls; its two outcomes matter here: a
-// rebase needs another gate, and a local landing is not proof of a push. A
-// landing land refuses (a LandError is a CallError) or a rebase that conflicts
-// is an answer about the revert asked for, so it refuses the caller, as
-// `yak land` does.
+// Revert a main commit and publish its correction. Workers Builds and the
+// deploy catch-up report deployment failures after this command returns.
 import { CallError } from '@yaks/tools/errors'
-import { land } from '@yaks/git/land'
-import { deploys, git, needGit, table } from './deploys.ts'
-import { output } from './subprocess.ts'
+import { land, type Run } from '@yaks/git/land'
+import { git } from './deploys.ts'
 
 export let revert = async (
   root: string,
@@ -15,35 +10,51 @@ export let revert = async (
   out: (line: string) => void,
   note: (line: string) => void,
   stopping: AbortSignal,
+  run: Run = (args, cwd) =>
+    git(
+      cwd,
+      args,
+      ['fetch', 'push'].includes(args[0])
+        ? AbortSignal.any([stopping, AbortSignal.timeout(2_500)])
+        : stopping,
+    ),
 ) => {
-  let list = await needGit(root, ['worktree', 'list', '--porcelain'], stopping)
+  let command = (cwd: string, args: string[]) => run(args, cwd)
+  let need = async (cwd: string, args: string[], refusal?: string) => {
+    let r = await command(cwd, args)
+    if (!r.ok) {
+      let message = `git ${args[0]} exited ${r.code}: ${r.err.trim()}`
+      if (refusal) throw new CallError(refusal, message)
+      throw new Error(message)
+    }
+    return r.out.trim()
+  }
+  let list = await need(root, ['worktree', 'list', '--porcelain'])
   if (!list.split('\n\n')[0].split('\n').includes('branch refs/heads/main')) {
     throw new Error(
       'land must target main; the primary checkout is on another branch',
     )
   }
-  let remote = await needGit(root, ['config', 'branch.main.remote'], stopping)
-  let branch = await needGit(root, ['config', 'branch.main.merge'], stopping)
+  let remote = await need(root, ['config', 'branch.main.remote'])
+  let branch = await need(root, ['config', 'branch.main.merge'])
   if (!remote || remote == '.' || branch != 'refs/heads/main') {
     throw new Error('main needs a remote main upstream for Workers Builds')
   }
-  await needGit(root, ['fetch', remote, 'main'], stopping)
-  let base = await needGit(root, ['rev-parse', 'main'], stopping)
-  if (base != await needGit(root, ['rev-parse', 'FETCH_HEAD'], stopping)) {
+  await need(root, ['fetch', remote, 'main'])
+  let base = await need(root, ['rev-parse', 'main'])
+  if (base != await need(root, ['rev-parse', 'FETCH_HEAD'])) {
     throw new Error(
       'local main differs from remote main; synchronize main before reverting',
     )
   }
-  let target = await needGit(
+  let target = await need(
     root,
     ['rev-parse', '--verify', `${sha}^{commit}`],
-    stopping,
     'sha',
   )
-  let ancestor = await git(
+  let ancestor = await command(
     root,
     ['merge-base', '--is-ancestor', target, base],
-    stopping,
   )
   if (!ancestor.ok) {
     let message = `${sha} is not an ancestor of main`
@@ -55,112 +66,56 @@ export let revert = async (
   let parent = `${root}/.claude/worktrees`
   await Deno.mkdir(parent, { recursive: true })
   let tree = `${parent}/${name}`
-  await needGit(
+  await need(
     root,
     ['worktree', 'add', '-b', name, tree, 'main'],
-    stopping,
   )
   let kept = true
   note(`revert worktree: ${tree}`)
-  // Preserve the worktree on failure: conflicts and failed gates are work an
+  // Preserve the worktree on failure: conflicts are work an
   // owner can finish, not scratch that this command is entitled to erase.
   try {
-    await needGit(tree, ['revert', '--no-edit', target], stopping, 'sha')
+    await need(tree, ['revert', '--no-edit', target], 'sha')
     // These files are the explicit git revert, not a rebase that silently
     // restores older content. Keep the exception scoped to that patch.
-    let paths = (await needGit(
+    let paths = (await need(
       tree,
       ['diff', '--name-only', '-z', 'HEAD^', 'HEAD'],
-      stopping,
     )).split('\0').filter(Boolean)
     for (let attempt = 0; attempt < 3; attempt++) {
-      note('gating the revert: deno task check')
-      let check = await output(Deno.execPath(), {
-        args: ['task', 'check'],
-        cwd: tree,
-        stdin: 'null',
-      }, stopping)
-      if (!check.success) {
-        throw new Error(`deno task check exited ${check.code}`)
-      }
-      let pushed = Date.now()
       let outcome = await land({
         cwd: tree,
         allow: paths,
-        run: (args, cwd) => git(cwd, args, stopping),
+        run,
         write: (line, error) => (error ? note : out)(line.trimEnd()),
       })
       if (!('landed' in outcome)) {
         if (outcome.conflict) {
           throw new CallError('sha', 'rebase conflicts need resolution')
         }
-        note('main moved; gating the rebased revert before landing again')
+        note('main moved; landing the rebased revert')
         continue
       }
       let commit = outcome.landed
       // land deliberately treats a failed push as a successful local merge.
-      // Confirm remote ancestry before starting a deployment watch.
-      await needGit(tree, ['fetch', remote, 'main'], stopping)
-      let published = await git(tree, [
+      // Confirm publication before removing its recovery worktree.
+      await need(tree, ['fetch', remote, 'main'])
+      let published = await command(tree, [
         'merge-base',
         '--is-ancestor',
         commit,
         'FETCH_HEAD',
-      ], stopping)
+      ])
       if (!published.ok) {
         throw new Error(`${commit} landed locally but was not pushed to main`)
       }
-      out(`pushed ${commit}; waiting for Workers Builds`)
-      let due = Date.now() + 20 * 60_000
-      let previous = ''
-      while (Date.now() < due) {
-        let rows = await deploys(root, stopping)
-        let seen = table(rows)
-        if (seen != previous) out(seen)
-        previous = seen
-        let live = rows.filter((r) => r.live > 0)
-        let served = live.length > 0
-        for (let row of live) {
-          if (!row.commit || row.estimated) {
-            served = false
-            break
-          }
-          // A later main push may overtake this build. It also serves the
-          // correction if its commit contains the revert.
-          let known = await git(tree, [
-            'cat-file',
-            '-e',
-            `${row.commit.sha}^{commit}`,
-          ], stopping)
-          if (!known.ok) {
-            await needGit(tree, ['fetch', remote, 'main'], stopping)
-          }
-          let contains = await git(tree, [
-            'merge-base',
-            '--is-ancestor',
-            commit,
-            row.commit.sha,
-          ], stopping)
-          if (!contains.ok) served = false
-        }
-        if (served) {
-          out(
-            `${commit} live — push-to-live ${
-              ((Date.now() - pushed) / 1000).toFixed(1)
-            }s`,
-          )
-          await needGit(root, ['worktree', 'remove', tree], stopping)
-          kept = false
-          await needGit(outcome.root, ['branch', '-d', name], stopping)
-          return 0
-        }
-        await new Promise((ok) => setTimeout(ok, 10_000))
-      }
-      throw new Error(
-        `Workers Builds did not serve ${commit} within 20m; check yak admin deploys --as admin@bot.yak.sh and the build logs`,
-      )
+      out(`pushed ${commit}; Workers Builds deploys in the background`)
+      await need(root, ['worktree', 'remove', tree])
+      kept = false
+      await need(outcome.root, ['branch', '-d', name])
+      return 0
     }
-    throw new Error('main kept moving through three gate attempts')
+    throw new Error('main kept moving through three landing attempts')
   } catch (e) {
     if (kept) note(`worktree kept at ${tree}`)
     throw e

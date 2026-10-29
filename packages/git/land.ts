@@ -80,6 +80,8 @@ export let run: Run = async (args, cwd) => {
     let out = await new Deno.Command('git', {
       args,
       cwd,
+      // Publishing must not hold the local landing behind the network.
+      signal: args[0] == 'push' ? AbortSignal.timeout(5_000) : undefined,
       env: quiet,
       stdout: 'piped',
       stderr: 'piped',
@@ -446,7 +448,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     return { diverged: true, conflict: true }
   }
   write(
-    'land: rebased cleanly. Re-gate if the diff above could affect you, then ' +
+    'land: rebased cleanly. Run affected tests if the diff above reaches them, then ' +
       'land again.',
   )
   return { diverged: true, conflict: false }
@@ -468,13 +470,11 @@ let publish = async (
   let cut = ref.indexOf('/')
   let remote = ref.slice(0, cut)
   let branch = ref.slice(cut + 1)
-  // One immediate retry: the failures seen in practice were transient
-  // subprocess-spawn errors under load, and a push is idempotent, so a second
-  // attempt costs nothing and turns a blip into a successful push.
-  let push = () =>
-    git(root, ['push', '--quiet', remote, `${base}:${branch}`], false)
-  let sent = await push()
-  if (sent.code) sent = await push()
+  let sent = await git(
+    root,
+    ['push', '--quiet', remote, `${base}:${branch}`],
+    false,
+  )
   if (sent.code) {
     write(
       `${message(`land: publish to ${remote}/${branch}`, sent)} — landed ` +

@@ -485,8 +485,8 @@
       "tool": true,
       "noun": "admin",
       "verb": "revert",
-      "title": "Revert a main commit and wait for it to deploy",
-      "description": "Revert a main commit in a fresh worktree, run deno task check, land and push main, and wait up to 20m for Workers Builds to serve the revert. A failed worktree is kept. Infrastructure requires the platform admin or the configured person’s own account.",
+      "title": "Revert and publish a main commit",
+      "description": "Revert a main commit in a fresh worktree, land and push main. Workers Builds deploys in the background; deployment failures are reported by recovery. A failed worktree is kept. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
         "sha": {
           "type": "string",
