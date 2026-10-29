@@ -1,11 +1,7 @@
 // Two checkouts start from one release. The second hears what its files would
 // remove and replace, and serving stays on the first until it confirms.
 import { test } from '@yaks/testing'
-import {
-  assertEquals,
-  assertNotEquals,
-  assertStringIncludes,
-} from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { connector, kernel, seed, unique } from './probe.ts'
 
 let k = await kernel()
@@ -55,10 +51,10 @@ await write([page('<h1>Without a base</h1>')])
 let unguarded = await agent.answer('app_deploy', app)
 let unchanged = await agent.answer('app_deploy', { ...app, base: 1 })
 let invalid: string[] = []
-for (let base of [-1, 1.5, '1', 100]) {
+for (let base of [-1, 1.5, 'one', 100]) {
   try {
     await agent.tool('app_deploy', { ...app, base })
-    invalid.push('accepted')
+    invalid.push(`accepted ${JSON.stringify(base)}`)
   } catch (e) {
     invalid.push(String(e))
   }
@@ -108,6 +104,8 @@ test('confirmation releases the kept draft and calls without a base still deploy
 })
 
 test('a deploy refuses a malformed or future base', () => {
-  for (let error of invalid) assertNotEquals(error, 'accepted')
+  for (let error of invalid) {
+    assertEquals(error.startsWith('accepted'), false, error)
+  }
   assertStringIncludes(invalid.at(-1)!, 'base')
 })

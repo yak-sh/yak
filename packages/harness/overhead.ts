@@ -98,9 +98,9 @@ export const overheadSamples = (
 /** How many of a session's newest samples of a phase are judged together. */
 export const RECENT = 5
 
-/// overheadDue(new Map([['s dispatch', [60, 60, 60, 60]]]), 's dispatch', 60) -> true
-/// overheadDue(new Map([['s dispatch', [60, 60, 9, 9]]]), 's dispatch', 9) -> false
-/// overheadDue(new Map(), 's dispatch', 999) -> false
+/// overheadDue(new Map([['s dispatch', [60, 60, 60, 60]]]), 's dispatch', 60, 50) -> true
+/// overheadDue(new Map([['s dispatch', [60, 60, 9, 9]]]), 's dispatch', 9, 50) -> false
+/// overheadDue(new Map(), 's dispatch', 999, 50) -> false
 /** Whether a phase is over its reference now: the median of a session's
  * newest {@link RECENT} samples of it (kept under `key` in `recent`) is over
  * the limit, as the bench judges the median of its steps. A whole benchmark

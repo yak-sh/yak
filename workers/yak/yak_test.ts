@@ -431,7 +431,7 @@ test('an app says who may read it and who may write it', async () => {
     await assertRejects(
       () => born('junk', 'sideways'),
       Error,
-      'access: one of public, open, private',
+      'access: wants one of "public", "open", "private", not "sideways"',
     )
 
     let owner = (app: string) => client(k, `${club70}.yaks.app`, app, cookie)
