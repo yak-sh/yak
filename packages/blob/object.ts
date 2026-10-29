@@ -63,14 +63,44 @@ export let DELETES = 1000
 // (10043), and too many requests at once for one key or prefix (10058).
 let BUSY = [10001, 10043, 10058]
 
-let busy = (e: unknown) => BUSY.includes(Object(e).code)
+/** R2's code, whether carried as a property or in the Workers binding's message. */
+export let bucketCode = (e: unknown): number | undefined => {
+  let { code, message } = Object(e)
+  if (code != null && Number.isFinite(Number(code))) return Number(code)
+  let match = typeof message == 'string' ? /\((\d+)\)\s*$/.exec(message) : null
+  return match ? Number(match[1]) : undefined
+}
+
+/** Whether the bucket failed on its own side, including the Workers binding
+ * which carries R2's code in its message rather than on the Error. */
+export let busy = (e: unknown): boolean => {
+  let { status, statusCode, message } = Object(e)
+  let http = Number(status ?? statusCode)
+  return BUSY.includes(bucketCode(e) ?? 0) ||
+    http >= 500 && http < 600 ||
+    typeof message == 'string' &&
+      /\b(?:HTTP|status(?: code)?)[: =]+5\d\d\b/i.test(message)
+}
+
+/** A bucket that kept failing on its own side through every attempt. */
+export class BucketUnavailable extends Error {
+  override name = 'BucketUnavailable'
+  constructor(cause: unknown) {
+    super(
+      typeof Object(cause).message == 'string'
+        ? Object(cause).message
+        : String(cause),
+      { cause },
+    )
+  }
+}
 
 /**
  * A bucket call, sent again while the bucket answers that it is busy: a burst
  * of uploads to one space is enough for R2 to refuse some of them. Each wait
  * doubles from `wait` milliseconds, jittered so calls that collided once do not
- * collide again, and after `tries` the bucket's last answer is thrown. Any
- * other refusal is thrown at once. `pause` spends each wait, a timer unless the
+ * collide again, and after `tries` throws {@link BucketUnavailable} with the
+ * last answer as its cause. Other failures are thrown at once. `pause` spends each wait, a timer unless the
  * caller brings its own. Every call the stores below make to a bucket goes
  * through it; a stream is read once, so a caller putting one cannot.
  *
@@ -96,7 +126,8 @@ export let patient = async <T>(
     try {
       return await call()
     } catch (e) {
-      if (i >= tries || !busy(e)) throw e
+      if (!busy(e)) throw e
+      if (i >= tries) throw new BucketUnavailable(e)
       await pause(wait * 2 ** (i - 1) * (0.5 + Math.random()))
     }
   }
@@ -113,26 +144,99 @@ export type Opened = {
 
 export type Loaded = { bytes: Uint8Array<ArrayBuffer>; version: string }
 
-let open = async (bucket: Pick<Bucket, 'head' | 'get'>, key: string) => {
-  let head = await patient(() => bucket.head(key))
+type Pause = (ms: number) => Promise<void>
+
+// Consume a buffered read inside the retry: an R2 body can fail after GET
+// has answered, and sending GET again gives that read a fresh body.
+let load = (bucket: Pick<Bucket, 'get'>, key: string, pause: Pause) =>
+  patient(
+    async (): Promise<Loaded | null> => {
+      let object = await bucket.get(key)
+      return object
+        ? {
+          bytes: new Uint8Array(await object.arrayBuffer()),
+          version: object.etag.replace(/^"|"$/g, ''),
+        }
+        : null
+    },
+    5,
+    100,
+    pause,
+  )
+
+// A stream can fail after GET answered. Resume at the first byte not yet
+// delivered, and require the same validator so two versions never mix. Read
+// its first chunk before answering, while a failure can still become HTTP 500.
+let reading = async (
+  bucket: Pick<Bucket, 'get'>,
+  key: string,
+  head: { size: number; etag: string },
+  range: { from: number; to: number } | undefined,
+  pause: Pause,
+) => {
+  let offset = range?.from ?? 0, end = range?.to ?? head.size - 1
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let next = () =>
+    patient(
+      async () => {
+        try {
+          if (!reader) {
+            let object = await bucket.get(
+              key,
+              range || offset
+                ? { range: { offset, length: end - offset + 1 } }
+                : undefined,
+            )
+            if (!object) throw new Error(`no object at ${key}`)
+            if (object.etag != head.etag) {
+              await object.body.cancel().catch(() => {})
+              throw new Error(`object at ${key} changed while reading`)
+            }
+            reader = object.body.getReader()
+          }
+          return await reader.read()
+        } catch (error) {
+          await reader?.cancel().catch(() => {})
+          reader = undefined
+          throw error
+        }
+      },
+      5,
+      100,
+      pause,
+    )
+  let first = await next()
+  let send = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    chunk: ReadableStreamReadResult<Uint8Array>,
+  ) => {
+    if (chunk.done) return controller.close()
+    offset += chunk.value.byteLength
+    controller.enqueue(chunk.value)
+    if (offset > end) {
+      controller.close()
+      void reader?.cancel().catch(() => {})
+    }
+  }
+  return new ReadableStream<Uint8Array>({
+    start: (controller) => send(controller, first),
+    pull: async (controller) => send(controller, await next()),
+    cancel: (reason) => reader?.cancel(reason),
+  })
+}
+
+let open = async (
+  bucket: Pick<Bucket, 'head' | 'get'>,
+  key: string,
+  pause: Pause,
+) => {
+  let head = await patient(() => bucket.head(key), 5, 100, pause)
   if (!head) return null
   return {
     size: head.size,
     version: head.etag.replace(/^"|"$/g, ''),
-    read: async (range?: { from: number; to: number }) => {
-      let object = await patient(() =>
-        bucket.get(
-          key,
-          range
-            ? {
-              range: { offset: range.from, length: range.to - range.from + 1 },
-            }
-            : undefined,
-        )
-      )
-      if (!object) throw new Error(`no object at ${key}`)
-      return object.body
-    },
+    read: (range?: { from: number; to: number }) =>
+      reading(bucket, key, head, range, pause),
   }
 }
 
@@ -152,15 +256,17 @@ let open = async (bucket: Pick<Bucket, 'head' | 'get'>, key: string) => {
 export let objectBlobs = (
   bucket: Pick<Bucket, 'head' | 'get' | 'put'>,
   prefix = '',
+  pause: Pause = sleep,
 ): Blobs => ({
-  has: async (sha) => (await patient(() => bucket.head(prefix + sha))) != null,
+  has: async (sha) =>
+    (await patient(() => bucket.head(prefix + sha), 5, 100, pause)) != null,
   get: async (sha) => {
-    let found = await patient(() => bucket.get(prefix + sha))
-    return found ? new Uint8Array(await found.arrayBuffer()) : undefined
+    let found = await load(bucket, prefix + sha, pause)
+    return found?.bytes
   },
-  open: (sha) => open(bucket, prefix + sha),
+  open: (sha) => open(bucket, prefix + sha, pause),
   put: async (sha, bytes) => {
-    await patient(() => bucket.put(prefix + sha, bytes))
+    await patient(() => bucket.put(prefix + sha, bytes), 5, 100, pause)
   },
 })
 
@@ -198,11 +304,16 @@ export type Objects = {
 // One walk of the prefix, every page of it, as key to when the object landed.
 // `list` is this with the times dropped, so the two answers can never disagree
 // about what is in the bucket.
-let walk = async (bucket: Bucket, prefix: string) => {
+let walk = async (bucket: Bucket, prefix: string, pause: Pause) => {
   let at: Record<string, number> = {}
   let cursor: string | undefined
   do {
-    let page = await patient(() => bucket.list({ prefix, cursor }))
+    let page = await patient(
+      () => bucket.list({ prefix, cursor }),
+      5,
+      100,
+      pause,
+    )
     for (let o of page.objects) at[o.key] = o.uploaded.getTime()
     cursor = page.truncated ? page.cursor : undefined
   } while (cursor)
@@ -219,38 +330,33 @@ let walk = async (bucket: Bucket, prefix: string) => {
  * // let files = bucketObjects(env.BLOBS)
  * ```
  */
-export let bucketObjects = (bucket: Bucket): Objects => ({
-  has: async (key) => (await patient(() => bucket.head(key))) != null,
+export let bucketObjects = (bucket: Bucket, pause: Pause = sleep): Objects => ({
+  has: async (key) =>
+    (await patient(() => bucket.head(key), 5, 100, pause)) != null,
   put: async (key, bytes) => {
-    await patient(() => bucket.put(key, bytes))
+    await patient(() => bucket.put(key, bytes), 5, 100, pause)
   },
-  read: async (key) => {
-    let object = await patient(() => bucket.get(key))
-    return object ? new Uint8Array(await object.arrayBuffer()) : null
-  },
-  load: async (key) => {
-    let object = await patient(() => bucket.get(key))
-    return object
-      ? {
-        bytes: new Uint8Array(await object.arrayBuffer()),
-        version: object.etag.replace(/^"|"$/g, ''),
-      }
-      : null
-  },
+  read: async (key) => (await load(bucket, key, pause))?.bytes ?? null,
+  load: (key) => load(bucket, key, pause),
   get: async (key) => {
-    let object = await patient(() => bucket.get(key))
+    let object = await load(bucket, key, pause)
     if (!object) throw new Error(`no object at ${key}`)
-    return new Uint8Array(await object.arrayBuffer())
+    return object.bytes
   },
-  open: (key) => open(bucket, key),
+  open: (key) => open(bucket, key, pause),
   delete: async (keys) => {
     if (typeof keys == 'string') {
-      return void await patient(() => bucket.delete(keys))
+      return void await patient(() => bucket.delete(keys), 5, 100, pause)
     }
     for (let at = 0; at < keys.length; at += DELETES) {
-      await patient(() => bucket.delete(keys.slice(at, at + DELETES)))
+      await patient(
+        () => bucket.delete(keys.slice(at, at + DELETES)),
+        5,
+        100,
+        pause,
+      )
     }
   },
-  list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
-  uploaded: (prefix) => walk(bucket, prefix),
+  list: async (prefix) => Object.keys(await walk(bucket, prefix, pause)).sort(),
+  uploaded: (prefix) => walk(bucket, prefix, pause),
 })

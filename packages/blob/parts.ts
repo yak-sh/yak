@@ -20,7 +20,9 @@
 // (workers/yak/README.md). Its parts are never objects, so no listing of a
 // prefix counts them.
 
-import { type Objects, patient } from './object.ts'
+import { bucketCode, busy, type Objects, patient } from './object.ts'
+import { sleep } from '@yaks/fp'
+import { fixed } from './fixed.ts'
 import { hasher, START } from './sha256.ts'
 
 /** A bucket's multipart upload, as R2's Workers binding offers it. */
@@ -102,19 +104,7 @@ export let sized = (bytes: number, part: number): number =>
 let NO_UPLOAD = 10024
 
 let lost = (e: unknown) => {
-  if (Object(e).code != NO_UPLOAD) throw e
-}
-
-// A stream R2 will take a part from: one whose length is known, which a
-// Worker's own FixedLengthStream says. Anywhere else the stream is read.
-let fixed = (stream: ReadableStream<Uint8Array>, length: number) => {
-  let Fixed = (globalThis as {
-    FixedLengthStream?: new (length: number) => TransformStream<
-      Uint8Array,
-      Uint8Array
-    >
-  }).FixedLengthStream
-  return Fixed ? stream.pipeThrough(new Fixed(length)) : stream
+  if (bucketCode(e) != NO_UPLOAD) throw e
 }
 
 let range = (n: number) => Array.from({ length: n }, (_, i) => i + 1)
@@ -143,6 +133,7 @@ export let parts = (
   objects: Objects,
   bucket: Multipart,
   at: { key: string; sha: string; ledger: string; part: number },
+  pause: (ms: number) => Promise<void> = sleep,
 ): Parts => {
   let { key, sha, ledger } = at
   let begun = `${ledger}${sha}.`
@@ -212,20 +203,37 @@ export let parts = (
       chain.some((r, i) => r.from != (i ? chain[i - 1].to : START)) ||
       chain[chain.length - 1].to != sha
     ) {
-      await up.abort().catch(lost)
+      await patient(() => up.abort().catch(lost), 5, 100, pause)
       await drop(held, t)
       throw new Wrong(`the parts sent do not hash to ${sha}`)
     }
     try {
-      await up.complete(
-        chain.map((r, i) => ({ partNumber: i + 1, etag: r.etag })),
+      await patient(
+        async () => {
+          try {
+            return await up.complete(
+              chain.map((r, i) => ({ partNumber: i + 1, etag: r.etag })),
+            )
+          } catch (error) {
+            if (!busy(error) && bucketCode(error) != NO_UPLOAD) throw error
+            // Completion may have landed before its acknowledgment failed.
+            // Reconcile that outcome before repeating the same completion.
+            let done = await whole()
+            if (done) return { size: done.bytes }
+            throw error
+          }
+        },
+        5,
+        100,
+        pause,
       )
     } catch (e) {
-      // Another request finished it first, or the bucket refused the parts:
-      // whole already, or begun again.
+      // Another request finished it first, or the upload expired. Any other
+      // failure remains a failure and leaves the parts available to recover.
+      if (bucketCode(e) != NO_UPLOAD) throw e
       let done = await whole()
       if (done) return done
-      await up.abort().catch(lost)
+      await patient(() => up.abort().catch(lost), 5, 100, pause)
       await drop(held, t)
       throw new Gone(`the parts of ${sha} could not be assembled: ${e}`)
     }
@@ -242,9 +250,9 @@ export let parts = (
       if (done) return { part, need: [], whole: done }
       let [t] = tickets(held).filter((t) => t.bytes == bytes)
       if (!t) {
-        let { uploadId } = await patient(() =>
-          bucket.createMultipartUpload(key)
-        )
+        // Creating twice makes two uploads: unlike the numbered parts and
+        // their completion, this operation cannot safely be resent.
+        let { uploadId } = await bucket.createMultipartUpload(key)
         let fresh = { id: uploadId, bytes, part, at: 0 }
         await objects.put(ticket(fresh), new Uint8Array())
         return { part, need: range(count(fresh)) }
@@ -285,13 +293,15 @@ export let parts = (
         for (let got; !(got = await reader.read()).done;) hash.add(got.value)
       })()
       hashed.catch(() => {})
+      let upload = fixed(kept, length)
       let sent
       try {
         sent = await bucket.resumeMultipartUpload(key, t.id)
-          .uploadPart(n, fixed(kept, length))
+          .uploadPart(n, upload.body)
+        await upload.done
         await hashed
       } catch (e) {
-        await reader.cancel().catch(() => {})
+        await Promise.allSettled([reader.cancel(e), upload.cancel(e)])
         lost(e)
         await drop(await book(), t)
         throw new Gone(`the upload of ${sha} has expired`)

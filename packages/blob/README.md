@@ -213,9 +213,12 @@ requested byte span. The package imports no cloud SDK.
 
 Both stores send every bucket call through `patient(call)`, which sends it again
 with a jittered, doubling wait while the bucket answers that it is busy (R2's
-10001, 10043 and 10058: a burst of requests at one key or prefix is refused, not
-queued). Any other refusal is thrown at once. A caller reaching the bucket
-itself uses the same.
+10001, 10043 and 10058, as a code or in the binding's error message, and HTTP
+5xx). After five attempts `BucketUnavailable` carries the original error as its
+cause; other failures are thrown at once. Buffered reads retry the body too, and
+buffered writes can be sent again safely. A consumed upload stream cannot be
+resent. A caller reaching the bucket itself uses the same. Both stores accept a
+final `pause` function for spending the waits (a timer by default).
 
 `bucketObjects(bucket)` is the same bucket keyed by name rather than by content:
 an **Objects** store whose caller chooses each key, as a host does for an app's

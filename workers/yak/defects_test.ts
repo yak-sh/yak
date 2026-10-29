@@ -12,6 +12,7 @@ import {
   delivery,
   redone,
   refusing,
+  responding,
   within,
 } from './defects.ts'
 import { Pending } from './writes.ts'
@@ -208,4 +209,14 @@ test('parallel invocation tags remain isolated and escaping failures reach track
     { request_id: 'first', request: 'first catch' },
     { request_id: 'second' },
   ])
+})
+
+test('an internal buffered response keeps native cache clone cancellation', async () => {
+  let answer = await responding(
+    () => Promise.resolve(new Response('not found', { status: 404 })),
+    {},
+  )
+  let cached = answer.clone()
+  await answer.body!.cancel()
+  equal(await cached.text(), 'not found')
 })

@@ -1,3 +1,4 @@
+import { BucketUnavailable } from '@yaks/blob'
 // The clock, as every store now keeps it (D-37562): a wake row is owed at an
 // instant, a write to one arms the object's own alarm, and the alarm fires
 // what is due and comes back for the next. There is no heartbeat to drive, so
@@ -228,6 +229,30 @@ test('a run Cloudflare could not answer is reported once no run has finished for
     'analytics: HTTP 403',
     undefined,
   ]])
+})
+
+test('a job whose R2 retries ran out reports a lasting outage once with its cause', async () => {
+  let error = new Error(
+    'head: We encountered an internal error. Please try again. (10001)',
+  )
+  let run = () => Promise.reject(new BucketUnavailable(error))
+  let began = iso('05:00'), since = new Date(at('05:00') - STUCK).toISOString()
+  assertEquals((await ran({}, at('05:00'), run)).reported, [])
+  let lasted = await ran({ since }, at('05:00'), run)
+  assertEquals(lasted.reported.length, 1)
+  assertEquals(lasted.reported[0][1], error.message)
+  assertEquals(
+    (await ran({ since, reported: began }, at('05:05'), run)).reported,
+    [],
+  )
+  assertEquals(
+    (await ran(
+      {},
+      at('05:00'),
+      () => Promise.reject(new Error('other: HTTP 500')),
+    )).reported,
+    [['other: HTTP 500', undefined]],
+  )
 })
 
 // The runtime moved the directory to a new instance in the middle of its

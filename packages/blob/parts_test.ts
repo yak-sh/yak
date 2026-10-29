@@ -1,3 +1,4 @@
+import { fixed } from './fixed.ts'
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import {
@@ -77,7 +78,12 @@ let setup = async (file: Uint8Array, sha?: string) => {
   sha ??= await addressOf(file)
   let key = `app/blobs/${sha}`
   let open = () =>
-    parts(objects, multipart, { key, sha, ledger: 'ledger/', part: 64 })
+    parts(
+      objects,
+      multipart,
+      { key, sha, ledger: 'ledger/', part: 64 },
+      () => Promise.resolve(),
+    )
   let up = open()
   let reopen = () => up = open()
   // Part n as a sender sends it: its bytes, and the hash state the bytes
@@ -88,7 +94,7 @@ let setup = async (file: Uint8Array, sha?: string) => {
     return up.put(n, stream(part), part.length, from)
   }
   let ledger = () => [...held.keys()].filter((k) => k.startsWith('ledger/'))
-  return { up, reopen, send, held, key, ledger, multipart, begun }
+  return { up, reopen, send, held, key, ledger, multipart, begun, bucket }
 }
 
 let file = new Uint8Array(150).map((_, i) => (i * 7) & 0xff)
@@ -175,4 +181,169 @@ test('an upload the bucket forgot begins again', async () => {
   equal((await up.post(file.length)).need, all)
   for (let n of all) await send(n)
   equal((await up.post(file.length)).whole?.bytes, 150)
+})
+
+let r2Failure = new Error(
+  'complete: We encountered an internal error. Please try again. (10001)',
+)
+let completingAfter = async (lostAck = false, lasting = false) => {
+  let fixture = await setup(file)
+  await fixture.up.post(file.length)
+  for (let n of all) await fixture.send(n)
+  let calls = 0
+  let resume = fixture.multipart.resumeMultipartUpload
+  fixture.multipart.resumeMultipartUpload = (key, id) => {
+    let upload = resume(key, id)
+    return {
+      ...upload,
+      complete: async (parts) => {
+        calls++
+        if (calls == 1 || lasting) {
+          if (lostAck) await upload.complete(parts)
+          throw r2Failure
+        }
+        return upload.complete(parts)
+      },
+    }
+  }
+  return { ...fixture, calls: () => calls }
+}
+let retriedCompletion = await completingAfter()
+let acknowledgedCompletion = await completingAfter(true)
+let unavailableCompletion = await completingAfter(false, true)
+
+for (
+  let [name, fixture, attempts] of [
+    ['a failed completion', retriedCompletion, 2],
+    ['a completion whose acknowledgment failed', acknowledgedCompletion, 1],
+  ] as const
+) {
+  test(`${name} keeps the assembled bytes and clears the ledger`, async () => {
+    equal((await fixture.up.post(file.length)).whole?.bytes, file.length)
+    equal(fixture.held.get(fixture.key), file)
+    equal(fixture.ledger(), [])
+    equal(fixture.calls(), attempts)
+  })
+}
+
+test('a lasting R2 failure keeps uploaded parts for a later completion', async () => {
+  let fixture = unavailableCompletion
+  await assertRejects(
+    () => fixture.up.post(file.length),
+    Error,
+    r2Failure.message,
+  )
+  equal(fixture.calls(), 5)
+  equal(fixture.ledger().length, 4)
+})
+
+let abortingAfter = await (async () => {
+  let fixture = await setup(file, 'f'.repeat(64))
+  await fixture.up.post(file.length)
+  for (let n of all) await fixture.send(n)
+  let calls = 0
+  let resume = fixture.multipart.resumeMultipartUpload
+  fixture.multipart.resumeMultipartUpload = (key, id) => ({
+    ...resume(key, id),
+    abort: async () => {
+      if (++calls == 1) {
+        await resume(key, id).abort()
+        throw new Error(
+          'abort: We encountered an internal error. Please try again. (10001)',
+        )
+      }
+      throw new Error(
+        'abort: The specified multipart upload does not exist. (10024)',
+      )
+    },
+  })
+  return { ...fixture, calls: () => calls }
+})()
+
+test('an abort whose acknowledgment failed accepts the binding saying already absent', async () => {
+  let fixture = abortingAfter
+  await assertRejects(() => fixture.up.post(file.length), Wrong)
+  equal(fixture.calls(), 2)
+  equal(fixture.ledger(), [])
+})
+
+let completionDefect = await (async () => {
+  let fixture = await setup(file)
+  await fixture.up.post(file.length)
+  for (let n of all) await fixture.send(n)
+  let error = new TypeError('completion adapter broke')
+  void error.stack
+  let calls = 0, reconciled = 0
+  let head = fixture.bucket.head
+  fixture.bucket.head = (key) => {
+    if (calls) {
+      reconciled++
+      return Promise.reject(r2Failure)
+    }
+    return head(key)
+  }
+  let resume = fixture.multipart.resumeMultipartUpload
+  fixture.multipart.resumeMultipartUpload = (key, id) => ({
+    ...resume(key, id),
+    complete: () => (calls++, Promise.reject(error)),
+  })
+  return { ...fixture, error, counts: () => [calls, reconciled] }
+})()
+
+test('an unrelated completion defect escapes immediately without reconciliation or losing parts', async () => {
+  let fixture = completionDefect
+  let got = await assertRejects(() => fixture.up.post(file.length), TypeError)
+  equal(got === fixture.error, true)
+  equal(fixture.counts(), [1, 0])
+  equal(fixture.ledger().length, 4)
+})
+
+let rejectedPart = await (async () => {
+  let fixture = await setup(file)
+  await fixture.up.post(file.length)
+  let resume = fixture.multipart.resumeMultipartUpload
+  let error = new TypeError('part adapter rejected before reading')
+  void error.stack
+  fixture.multipart.resumeMultipartUpload = (key, id) => ({
+    ...resume(key, id),
+    uploadPart: () => Promise.reject(error),
+  })
+  let cancelled = false
+  let incoming = new ReadableStream<Uint8Array>({
+    start: (controller) => controller.enqueue(file.slice(0, 16)),
+    cancel: () => {
+      cancelled = true
+    },
+  })
+  return { ...fixture, incoming, error, cancelled: () => cancelled }
+})()
+
+test('a part rejected before its body is consumed cancels both tee branches and preserves the cause', async () => {
+  let fixture = rejectedPart
+  let got = await assertRejects(
+    () => fixture.up.put(1, fixture.incoming, 64),
+    TypeError,
+  )
+  equal(got === fixture.error, true)
+  equal(fixture.cancelled(), true)
+  equal(fixture.ledger().length, 1)
+})
+
+test('fixed-length upload cleanup stops both owned branches before its output is consumed', async () => {
+  let cancelled = false
+  let incoming = new ReadableStream<Uint8Array>({
+    start: (controller) => controller.enqueue(new Uint8Array(16)),
+    cancel: () => {
+      cancelled = true
+    },
+  })
+  let [kept, hashed] = incoming.tee()
+  let hash = hashed.getReader()
+  let upload = fixed(
+    kept,
+    64,
+    () => new TransformStream<Uint8Array, Uint8Array>(),
+  )
+  await Promise.all([hash.cancel(), upload.cancel()])
+  equal(cancelled, true)
 })

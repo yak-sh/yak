@@ -1576,27 +1576,37 @@ let gave = async (
     etag: `"${eid}"`,
     cache: app.access == 'private' ? 'private' : 'browser',
   }
+  return blobResponse(
+    (seek) =>
+      files.blobBytes(
+        env,
+        app,
+        blobPrefix(space, app),
+        sha,
+        seek.headers.get('range'),
+        seek.method,
+      ),
+    sha,
+    response,
+    req,
+    { request: 'GET /api/blob', space: space.slug, app: app.slug },
+  )
+}
+
+// The public blob answer after access and representation selection: only
+// byte failures become the uncached unavailable response.
+export let blobResponse = async (
+  read: (seek: Request) => Promise<Response>,
+  sha: string,
+  response: Served,
+  req: Request,
+  tags: Record<string, string>,
+): Promise<Response> => {
   try {
-    let bytes = await fencedVia(
-      (seek) =>
-        files.blobBytes(
-          env,
-          app,
-          blobPrefix(space, app),
-          sha,
-          seek.headers.get('range'),
-          seek.method,
-        ),
-      response,
-      req,
-    )
+    let bytes = await fencedVia(read, response, req)
     if (bytes.status == 404) {
       await bytes.body?.cancel()
-      caught(new Error(`missing blob ${sha}`), {
-        request: 'GET /api/blob',
-        space: space.slug,
-        app: app.slug,
-      })
+      caught(new Error(`missing blob ${sha}`), tags)
       return json(404, 'no_such_file')
     }
     if (![200, 206, 304, 416].includes(bytes.status)) {
@@ -1605,7 +1615,7 @@ let gave = async (
     }
     return bytes
   } catch (e) {
-    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
+    caught(e, tags)
     return json(503, 'blob_unavailable')
   }
 }

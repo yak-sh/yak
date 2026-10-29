@@ -29,7 +29,7 @@ import { servable } from './blob-key.ts'
 import { at, blobAt, immutable, servableAt } from './cache.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { caught } from './defects.ts'
+import { caught, relayed, responding } from './defects.ts'
 import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -266,10 +266,10 @@ export let nearest = (path: string) => {
 // in-process the same way, so a person's image still loads.
 export let door = (env: Env): Fetcher => ({
   fetch: async (req) => {
-    if (!env.FILES) return fetch(req, env)
+    if (!env.FILES) return relayed(await fetch(req, env))
     try {
       let cached = await env.FILES.fetch(req)
-      if (cached.status < 520 || cached.status > 530) return cached
+      if (cached.status < 520 || cached.status > 530) return relayed(cached)
       await cached.body?.cancel()
       caught(new Error(`the files cache answered ${cached.status}`), {
         request: `${req.method} files`,
@@ -277,7 +277,7 @@ export let door = (env: Env): Fetcher => ({
     } catch (e) {
       if ((e as Error | null)?.name != 'DataCloneError') throw e
     }
-    return fetch(req, env)
+    return relayed(await fetch(req, env))
   },
 })
 
@@ -340,7 +340,9 @@ export let fileBytes = (
     headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
     redirect: 'manual',
   })
-  return range || method == 'HEAD' ? fetch(req, env) : door(env).fetch(req)
+  return range || method == 'HEAD'
+    ? fetch(req, env).then(relayed)
+    : door(env).fetch(req)
 }
 
 // The addresses a browser opens for a release's files, pages first: a page
@@ -501,7 +503,11 @@ let told = (said: string | null): StoreAt | null => {
 //
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
-  return c.counting(async () => timed(await fileFetch(req, env, c), c, 'file_'))
+  return responding(
+    () =>
+      c.counting(async () => timed(await fileFetch(req, env, c), c, 'file_')),
+    { request: 'Files fetch' },
+  )
 }
 
 let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {

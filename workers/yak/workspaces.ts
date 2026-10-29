@@ -91,13 +91,13 @@ export class WorkspaceStore extends DurableObject<Env> {
         }
       },
       async (name, snapshot) => {
-        let object = await env.BLOBS.get(snapshot.id)
+        let object = await r2RawObjects(env.BLOBS).open(snapshot.id)
         if (!object) return false
-        await provider.restore({ id: name }, object.body)
+        await provider.restore({ id: name }, await object.read())
         return true
       },
       async ({ id }) => {
-        await env.BLOBS.delete(id)
+        await r2RawObjects(env.BLOBS).delete(id)
       },
       (name) => provider.active({ id: name }),
     )
@@ -121,7 +121,7 @@ export class WorkspaceStore extends DurableObject<Env> {
         await r2RawObjects(this.#bucket).uploaded(this.#prefix),
       )
     ) {
-      await this.#bucket.delete(key)
+      await r2RawObjects(this.#bucket).delete(key)
     }
     await this.#copies.clear()
     await this.#storage.delete('source')

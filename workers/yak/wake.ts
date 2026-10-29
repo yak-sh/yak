@@ -33,6 +33,7 @@ import { Stale } from '@yaks/graph/errors'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
+import { BucketUnavailable } from '@yaks/blob'
 import { Unavailable } from './workers_api.ts'
 import type { Wake as Schedule } from '@yaks/wake'
 
@@ -121,7 +122,9 @@ export let reporting = async (
   try {
     await run()
   } catch (error) {
-    if (!(error instanceof Unavailable)) {
+    if (
+      !(error instanceof Unavailable) && !(error instanceof BucketUnavailable)
+    ) {
       await report(job, error)
       throw error
     }
@@ -136,7 +139,7 @@ export let reporting = async (
 let unanswered = async (
   row: Fired,
   began: string,
-  error: Unavailable,
+  error: unknown,
   now: number,
   report: Report,
 ): Promise<Marks> => {
@@ -158,7 +161,11 @@ let unanswered = async (
       ),
     )
   } else {
-    console.warn(`wake ${job}: ${error.message}; the next run tries again`)
+    console.warn(
+      `wake ${job}: ${
+        error instanceof Error ? error.message : String(error)
+      }; the next run tries again`,
+    )
   }
   return { began: null, since, reported: told }
 }

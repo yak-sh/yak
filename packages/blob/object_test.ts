@@ -1,7 +1,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { decode, encode } from './store.ts'
-import { type Bucket, bucketObjects, objectBlobs, patient } from './object.ts'
+import {
+  type Bucket,
+  bucketObjects,
+  BucketUnavailable,
+  objectBlobs,
+  patient,
+} from './object.ts'
 
 // That a real `R2Bucket` satisfies `Bucket` is checked by the compiler, in
 // conform.ts — it has to live outside this compile, because
@@ -155,4 +161,130 @@ test('a busy bucket is asked again, and only while busy', async () => {
   )
   let wrong = Object.assign(Error('list: no such bucket'), { code: 10006 })
   await assertRejects(asked([wrong, { code: 10058 }]), Error, 'no such bucket')
+})
+
+let internal = new Error(
+  'head: We encountered an internal error. Please try again. (10001)',
+)
+let immediate = () => Promise.resolve()
+
+for (
+  let [name, error] of [
+    ['the binding message', internal],
+    ['an HTTP status', Object.assign(new Error('R2 down'), { status: 503 })],
+    ['a statusCode', { statusCode: 500 }],
+    ['an HTTP message', new Error('get: HTTP 502')],
+  ] as const
+) {
+  test(`a bucket retries ${name} and throws the original cause if it stays down`, async () => {
+    let calls = 0
+    let call = () => {
+      calls++
+      return Promise.reject(error)
+    }
+    let got = await patient(call, 3, 100, immediate).catch((e) => e)
+    assertEquals([calls, got instanceof BucketUnavailable, got.cause], [
+      3,
+      true,
+      error,
+    ])
+  })
+}
+
+test('bucket HEAD and range GET recover without changing the requested bytes', async () => {
+  let bucket = fake()
+  let head = bucket.head, get = bucket.get
+  let heads = 0, gets = 0
+  bucket.head = (key) => ++heads == 1 ? Promise.reject(internal) : head(key)
+  bucket.get = (key, opts) =>
+    ++gets == 1 ? Promise.reject(internal) : get(key, opts)
+  let store = objectBlobs(bucket, '', immediate)
+  await store.put('abc', encode('a long essay'))
+  let object = await store.open!('abc')
+  assertEquals(
+    await new Response(await object!.read({ from: 2, to: 5 })).text(),
+    'long',
+  )
+  assertEquals([heads, gets], [2, 2])
+})
+
+test('buffered bucket reads retry a body that failed after GET answered', async () => {
+  let bucket = fake()
+  let get = bucket.get, gets = 0
+  await bucket.put('abc', encode('saved'))
+  bucket.get = async (key, options) => {
+    let object = (await get(key, options))!
+    return ++gets == 1
+      ? { ...object, arrayBuffer: () => Promise.reject(internal) }
+      : object
+  }
+  assertEquals(
+    decode((await bucketObjects(bucket, immediate).read('abc'))!),
+    'saved',
+  )
+  assertEquals(gets, 2)
+})
+
+test('a buffered PUT whose acknowledgment failed can safely be sent twice', async () => {
+  let bucket = fake()
+  let put = bucket.put, puts = 0
+  bucket.put = async (key, bytes) => {
+    await put(key, bytes)
+    if (++puts == 1) throw internal
+  }
+  let objects = bucketObjects(bucket, immediate)
+  await objects.put('abc', encode('saved'))
+  assertEquals([puts, decode(await objects.get('abc'))], [2, 'saved'])
+})
+
+test('a bucket permission failure is thrown without waiting or resending', async () => {
+  let wrong = Object.assign(new Error('head: forbidden (10006)'), {
+    status: 403,
+  })
+  let calls = 0, waits = 0
+  let got = await patient(
+    () => (calls++, Promise.reject(wrong)),
+    5,
+    100,
+    () => (waits++, Promise.resolve()),
+  ).catch((e) => e)
+  assertEquals([calls, waits, got], [1, 0, wrong])
+})
+
+test('a resumed stream refuses bytes from a different object version', async () => {
+  let bucket = fake(), gets = 0
+  let get = bucket.get
+  await bucket.put('abc', encode('saved'))
+  bucket.get = async (key, opts) => {
+    let object = (await get(key, opts))!
+    if (++gets > 1) {
+      return {
+        ...object,
+        etag: 'another version',
+        body: new ReadableStream<Uint8Array>({
+          start: (c) => c.enqueue(encode('ved')),
+          cancel: () => Promise.reject(internal),
+        }),
+      }
+    }
+    let first = true
+    return {
+      ...object,
+      body: new ReadableStream<Uint8Array>({
+        pull: (controller) => {
+          if (first) {
+            first = false
+            controller.enqueue(encode('sa'))
+          } else controller.error(internal)
+        },
+      }),
+    }
+  }
+  let opened = await bucketObjects(bucket, immediate).open('abc')
+  await assertRejects(
+    async () => new Response(await opened!.read()).text(),
+    Error,
+    'changed while reading',
+  )
+  assertEquals(gets, 2)
 })

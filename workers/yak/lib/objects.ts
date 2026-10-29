@@ -2,6 +2,8 @@
 // name over the `BLOBS` binding, with every trip counted on the request's
 // tally (hops.ts), which the request reports as `r2;dur=<n>`.
 import { type Bucket, bucketObjects, type Objects } from '@yaks/blob'
+import { streaming } from '../defects.ts'
+import { sleep } from '@yaks/fp'
 import { elapsed, hop, type Tally } from './hops.ts'
 import { releaseFiles } from '../release.ts'
 
@@ -45,7 +47,13 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
     },
     open: (key) => {
       trip('open')
-      return elapsed('r2_wait', () => objects.open(key))
+      return elapsed('r2_wait', async () => {
+        let opened = await objects.open(key)
+        return opened && {
+          ...opened,
+          read: async (range) => streaming(await opened.read(range)),
+        }
+      })
     },
     // No keys is no call: the bucket is never asked.
     delete: (keys) => {
@@ -69,8 +77,8 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
 let raw = new WeakMap<Bucket, Objects>()
 
 /** The bucket's physical keys, for staging and sweeping. */
-export let r2RawObjects = (bucket: Bucket): Objects => {
-  let objects = raw.get(bucket) ?? counted(bucketObjects(bucket))
+export let r2RawObjects = (bucket: Bucket, pause = sleep): Objects => {
+  let objects = raw.get(bucket) ?? counted(bucketObjects(bucket, pause))
   raw.set(bucket, objects)
   return objects
 }

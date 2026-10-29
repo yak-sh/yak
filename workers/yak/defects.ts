@@ -138,6 +138,64 @@ export let reported = (error: unknown) => {
   if (error && typeof error == 'object') context.getStore()?.seen.add(error)
 }
 
+// Only internal service bindings carry this answer. A failure is reported at
+// its source; the gateway receives its cause without filing the relay too.
+let REPORTED = 'x-yak-reported'
+
+// Observe a storage stream in the invocation that opened it. Buffered HTTP
+// bodies stay native: wrapping one changes how a cache can clone and cancel it.
+export let streaming = (
+  source: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> => {
+  let invocation = context.getStore()
+  let reader = source.getReader()
+  return new ReadableStream<Uint8Array>({
+    pull: async (controller) => {
+      try {
+        let chunk = await reader.read()
+        if (chunk.done) controller.close()
+        else controller.enqueue(chunk.value)
+      } catch (error) {
+        if (invocation) context.run(invocation, () => caught(error, {}))
+        controller.error(error)
+      }
+    },
+    cancel: (reason) => reader.cancel(reason),
+  })
+}
+
+export let responding = async (
+  run: () => Promise<Response>,
+  tags: Tags,
+): Promise<Response> => {
+  try {
+    return await run()
+  } catch (error) {
+    caught(error, tags)
+    let cause = error instanceof Error ? error : new Error(String(error))
+    return Response.json({
+      name: cause.name,
+      message: cause.message,
+      stack: cause.stack,
+    }, {
+      status: 500,
+      headers: { [REPORTED]: '1', 'cache-control': 'private, no-store' },
+    })
+  }
+}
+
+export let relayed = async (answer: Response): Promise<Response> => {
+  if (!answer.headers.has(REPORTED) || answer.status < 500) return answer
+  let cause = await answer.json() as {
+    name: string
+    message: string
+    stack: string
+  }
+  let error = Object.assign(new Error(cause.message), cause)
+  reported(error)
+  throw error
+}
+
 /** Whether a failure met by an instance is its replacement's to redo, and so
  * no defect: the runtime moved the instance (`replaced`, absent outside a
  * Durable Object) and the failure says so. */
