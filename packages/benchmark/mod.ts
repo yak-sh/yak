@@ -12,6 +12,7 @@ export {
   type Bench,
   type CollectedSuite,
   type Direction,
+  insufficient,
   median,
   type Regression,
   type Result,
@@ -19,6 +20,7 @@ export {
   type Run,
   type Sample,
   type Samples,
+  type Sampling,
   type Suite,
   type Workload,
 } from './result.ts'

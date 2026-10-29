@@ -9,6 +9,7 @@
 import {
   type Baseline,
   type Direction,
+  insufficient,
   type Regression,
   type Run,
   sameNames,
@@ -91,6 +92,8 @@ export let spread = (medians: readonly number[], better: Direction): number => {
 export let best = (runs: readonly Run[]): Run => {
   let last = runs.at(-1)
   if (!last) throw new Error('Expected at least one run')
+  let incomplete = runs.find(insufficient)
+  if (incomplete) return { ...incomplete, verdict: 'inconclusive' }
   let busy = runs.flatMap((r) => r.busy ?? [])
   return {
     ...last,
@@ -174,6 +177,7 @@ export let baseline = (
   let last = runs.at(-1)
   if (!last) throw new Error('Expected at least one run to bank')
   for (let run of runs) {
+    if (insufficient(run)) throw new Error('Insufficient CPU sampling to bank')
     let key = incomparable(last, run)
     if (key) throw new Error(`Repeated runs differ in ${key}`)
     sameNames(last.benches, run.benches)
@@ -276,6 +280,9 @@ export let compare = (
   current: Run,
   coverage: Coverage = 'exact',
 ): Regression[] => {
+  if (insufficient(current)) {
+    throw new Error('Insufficient CPU sampling to compare')
+  }
   if (!['exact', 'subset'].includes(coverage)) {
     throw new Error(`Unknown benchmark coverage: ${coverage}`)
   }

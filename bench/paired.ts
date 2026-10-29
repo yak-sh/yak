@@ -22,6 +22,7 @@ import {
   type Baseline,
   type CollectedSuite,
   host,
+  insufficient,
   limit,
   median,
   type Run,
@@ -169,7 +170,10 @@ export let collectGroups = async (
     }
   }
   for (let at of plan) {
-    let retained = previous.find((group) => completeGroup(group, at))
+    let retained = previous.find((group) =>
+      completeGroup(group, at) &&
+      ![group.before!, group.current!, group.after!].some(insufficient)
+    )
     let group: Judgement
     try {
       group = retained ?? {
@@ -248,6 +252,9 @@ export let compare = (
       now: y.length && y.every(Number.isFinite) ? median(y) : NaN,
     }
   })
+  if ([before, current, after].some(insufficient)) {
+    return { verdict: 'inconclusive', slower: [], comparisons }
+  }
   let overlap = (a: number[], b: number[]) =>
     Math.max(...a) >= Math.min(...b) && Math.max(...b) >= Math.min(...a)
   let valid = (xs: number[]) =>

@@ -1,7 +1,7 @@
 /** Convert a suite's reference to CPU by measuring its banked revision beside
  * today's code. The reference's readings are banked; a slower current reading
  * remains visible in the retained comparison instead of becoming the baseline. */
-import { type Baseline, baseline } from '@yaks/benchmark'
+import { type Baseline, baseline, insufficient } from '@yaks/benchmark'
 import { collect, type Judgement, registered } from './paired.ts'
 
 let bankGroup = (evidence: Judgement): Baseline => {
@@ -14,6 +14,11 @@ let bankGroup = (evidence: Judgement): Baseline => {
   if (!evidence.before || !evidence.after || !evidence.reference) {
     throw Error(evidence.error ?? 'No reference measurements to bank')
   }
+  if (
+    [evidence.before, evidence.current, evidence.after].some((run) =>
+      run && insufficient(run)
+    )
+  ) throw Error('Insufficient CPU sampling to bank')
   for (let run of [evidence.before, evidence.after]) {
     if (!run.metric.endsWith('/cpu')) throw Error('Reference is not CPU timing')
     for (let bench of run.benches) {

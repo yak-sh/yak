@@ -831,6 +831,74 @@ test('CPU runs judge measured work and reject missing CPU instead of using wall'
   await throws(() => run(f.suite, cpu), 'Missing CPU measurement')
 })
 
+test('insufficient CPU remains observable without passing, regressing or banking', async () => {
+  let f = fixture([{
+    name: 'work',
+    unit: 'ns/op',
+    sample: () => ({ value: 1000, cpu: 2 }),
+  }])
+  let options = { ...f.options, figure: 'cpu' as const, rounds: 1 }
+  await run(f.suite, { ...options, mode: 'accept', tolerance: 0 })
+  let previous = f.saved.get('baseline')
+  let sampling = {
+    status: 'insufficient' as const,
+    minimum: 200,
+    measured: .001,
+    outer: 1000,
+  }
+  let imported = extract({
+    version: 1,
+    runtime: 'test',
+    cpu: 'test',
+    benches: [{
+      name: 'work',
+      results: [{ ok: { avg: 1e9, cpu: 100, sampling } }],
+    }],
+  }, ['work']).work
+  f.suite.benches[0].sample = () => imported
+  for (let mode of ['run', 'check', 'accept'] as const) {
+    let result = await run(f.suite, {
+      ...options,
+      mode,
+      ...mode == 'accept' ? { tolerance: 0 } : {},
+    })
+    equal([result.verdict, result.regressions], ['inconclusive', []])
+    match(result.benches[0].samples[0], { cpu: 100, value: 1e9, sampling })
+    equal(result.benches[0].median, 100)
+    equal(f.saved.get('baseline'), previous)
+    await throws(() => baseline(result, 0), 'Insufficient CPU sampling')
+    await throws(
+      () => compare(JSON.parse(previous!), result),
+      'Insufficient CPU sampling',
+    )
+  }
+})
+
+test('a later sufficient repeat cannot turn an insufficient observation into a pass', async () => {
+  let calls = 0
+  let f = fixture([{
+    name: 'work',
+    unit: 'ms',
+    sample: () =>
+      ++calls == 1
+        ? {
+          value: 100,
+          cpu: 100,
+          sampling: {
+            status: 'insufficient',
+            minimum: 200,
+            measured: 100,
+            outer: 1000,
+          },
+        }
+        : { value: 1, cpu: 1 },
+  }])
+  let result = await run(f.suite, { ...f.options, rounds: 1, runs: 2 })
+  equal(result.verdict, 'inconclusive')
+  equal(result.benches[0].samples[0].sampling?.measured, 100)
+  await throws(() => baseline(result, 0), 'Insufficient CPU sampling')
+})
+
 test('the runner disposes collection resources after success and failure', async () => {
   let f = fixture(), closed = 0
   let suite = {

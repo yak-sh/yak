@@ -51,6 +51,21 @@ let banked = (tolerance: number) =>
     tolerance,
     benches: [{ name: 'work', unit: 'ms', better: 'lower', median: 1 }],
   }) as Baseline
+
+test('a paired slowdown with insufficient CPU sampling stays inconclusive', () => {
+  let reference = run([10, 11, 10])
+  let current = run([100, 110, 100])
+  current.benches[0].samples[0].sampling = {
+    status: 'insufficient',
+    minimum: 200,
+    measured: 100,
+    outer: 1000,
+  }
+  let result = compare({ before: reference, current, after: reference })
+  equal(result.verdict, 'inconclusive')
+  equal(result.slower, [])
+  equal(result.comparisons[0].current, [100, 110, 100])
+})
 let verdict = (
   before: Run,
   current: Run,
@@ -210,12 +225,15 @@ let observed = (at: Collection): Judgement => {
 test('a later group failure checkpoints completed CPU observations and resumes only unfinished work', async () => {
   let plan = [collection('read'), collection('write')]
   let checkpoints: Judgement[] = []
-  let failed = await collectGroups(plan, async (at) => {
-    if (at.names[0] == 'write') throw Error('current probe failed')
-    return observed(at)
+  let failed = await collectGroups(plan, (at) => {
+    if (at.names[0] == 'write') {
+      return Promise.reject(Error('current probe failed'))
+    }
+    return Promise.resolve(observed(at))
   }, {
-    checkpoint: async (evidence) => {
+    checkpoint: (evidence) => {
       checkpoints.push(structuredClone(evidence))
+      return Promise.resolve()
     },
   })
   equal(failed.verdict, 'failed')
@@ -228,9 +246,9 @@ test('a later group failure checkpoints completed CPU observations and resumes o
     105,
   ])
   let measured: string[] = []
-  let completed = await collectGroups(plan, async (at) => {
+  let completed = await collectGroups(plan, (at) => {
     measured.push(at.names[0])
-    return observed(at)
+    return Promise.resolve(observed(at))
   }, { resume: failed })
   equal(measured, ['write'])
   equal(completed.complete, true)
@@ -240,7 +258,7 @@ test('a later group failure checkpoints completed CPU observations and resumes o
 
 test('resuming refuses changed sources, product revisions, sampling, or incomplete CPU groups', async () => {
   let at = collection('read')
-  let saved = await collectGroups([at], async (at) => observed(at))
+  let saved = await collectGroups([at], (at) => Promise.resolve(observed(at)))
   for (
     let changed of [
       { ...at, driver: 'different-source' },
@@ -250,17 +268,37 @@ test('resuming refuses changed sources, product revisions, sampling, or incomple
     ]
   ) {
     let called = 0
-    await collectGroups([changed], async (at) => {
+    await collectGroups([changed], (at) => {
       called++
-      return observed(at)
+      return Promise.resolve(observed(at))
     }, { resume: saved })
     equal(called, 1)
   }
   delete saved.groups![0].after
   let called = 0
-  await collectGroups([at], async (at) => {
+  await collectGroups([at], (at) => {
     called++
-    return observed(at)
+    return Promise.resolve(observed(at))
   }, { resume: saved })
   equal(called, 1)
+})
+
+test('a resumed group remeasures insufficient CPU observations', async () => {
+  let at = collection('read')
+  let sample = observed(at)
+  sample.verdict = 'inconclusive'
+  sample.current!.benches[0].samples[0].sampling = {
+    status: 'insufficient',
+    minimum: 200,
+    measured: 100,
+    outer: 1000,
+  }
+  let saved = await collectGroups([at], () => Promise.resolve(sample))
+  let called = 0
+  let resumed = await collectGroups([at], (next) => {
+    called++
+    return Promise.resolve(observed(next))
+  }, { resume: saved })
+  equal(called, 1)
+  equal(resumed.verdict, 'same')
 })

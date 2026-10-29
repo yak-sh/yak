@@ -4,12 +4,22 @@
 
 import type { Event } from '@yaks/trace'
 
+/** The collector kept the CPU reading but could not sample enough timed work.
+ * Durations are total CPU milliseconds, before per-operation normalization. */
+export type Sampling = {
+  status: 'insufficient'
+  minimum: number
+  measured: number
+  outer: number
+}
+
 export type Sample = {
   value: number
   /** The CPU time the step took, in the bench's unit: this process's and its
    * finished children's (host.ts `cputime`). Absent where the step's work runs
    * in a process that outlives it, or where the box does not say. */
   cpu?: number
+  sampling?: Sampling
   counts?: Record<string, number>
   source?: string
   details?: unknown
@@ -93,9 +103,15 @@ export type Run = {
   rounds: number
   benches: Result[]
   tolerance: number | null
-  /** `loaded`: a figure was past its limit, but the box was loaded, so the
-   * run can tell nothing either way. */
-  verdict: 'measured' | 'passed' | 'regressed' | 'loaded' | 'accepted'
+  /** `loaded`: a figure was past its limit on a loaded box.
+   * `inconclusive`: CPU sampling was insufficient; readings remain diagnostic. */
+  verdict:
+    | 'measured'
+    | 'passed'
+    | 'regressed'
+    | 'loaded'
+    | 'accepted'
+    | 'inconclusive'
   regressions: Regression[]
 }
 export type Baseline =
@@ -114,6 +130,15 @@ export type Baseline =
       tolerance?: number
     })[]
   }
+
+/** Insufficient sampling is an observation, never a pass or a regression. */
+export let insufficient = (
+  run: Pick<Run, 'benches'> & Partial<Pick<Run, 'verdict'>>,
+): boolean =>
+  run.verdict == 'inconclusive' ||
+  run.benches.some((bench) =>
+    bench.samples?.some((sample) => sample.sampling?.status == 'insufficient')
+  )
 
 export let value = (n: number): number => {
   if (typeof n != 'number' || !Number.isFinite(n) || n < 0) {
@@ -148,6 +173,14 @@ export let samples = (input: Samples): Sample[] => {
   return out.map((s) => {
     value(s.value)
     if (s.cpu !== undefined) value(s.cpu)
+    if (s.sampling) {
+      let { status, minimum, measured, outer } = s.sampling
+      if (
+        status != 'insufficient' || value(minimum) <= 0 ||
+        value(measured) >= minimum
+      ) throw new Error('Invalid CPU sampling observation')
+      value(outer)
+    }
     for (let count of Object.values(s.counts ?? {})) value(count)
     return { ...s, counts: s.counts && { ...s.counts } }
   })

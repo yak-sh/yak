@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import {
   type Baseline,
   type CollectedSuite,
+  insufficient,
   median,
   names,
   type Result,
@@ -206,10 +207,10 @@ let execute = async (
     current.tolerance = mode == 'accept'
       ? options.tolerance!
       : base?.tolerance ?? null
-    if (mode == 'accept') {
+    if (mode == 'accept' && !insufficient(current)) {
       current.verdict = loaded(current) ? 'loaded' : 'accepted'
     }
-    if (base && mode == 'check') {
+    if (base && mode == 'check' && !insufficient(current)) {
       current.regressions = compare(base, current, options.coverage)
       current.verdict = current.regressions.length
         ? loaded(current) ? 'loaded' : 'regressed'
@@ -234,7 +235,7 @@ let execute = async (
       }
     await store.write(options.output, current)
     // A loaded run is kept as measured; baseline() refuses to bank it.
-    if (mode == 'accept') {
+    if (mode == 'accept' && !insufficient(current)) {
       await store.write(
         options.baseline!,
         baseline(runs, options.tolerance!, previous, options.slower),
@@ -353,7 +354,7 @@ let measure = async (
     rounds,
     benches,
     tolerance: null,
-    verdict: 'measured',
+    verdict: insufficient({ benches }) ? 'inconclusive' : 'measured',
     regressions: [],
   }
 }

@@ -1,6 +1,6 @@
 /** Import CPU invocation averages from the shared Deno workload collector.
  * Keep wall time and collector statistics alongside the CPU measurement. */
-import { sameNames, type Sample } from './result.ts'
+import { sameNames, type Sample, type Sampling } from './result.ts'
 
 export type DenoReport = {
   version: number
@@ -9,7 +9,12 @@ export type DenoReport = {
   benches: {
     name: string
     results: {
-      ok?: { avg: number; cpu?: number; [key: string]: unknown }
+      ok?: {
+        avg: number
+        cpu?: number
+        sampling?: Sampling
+        [key: string]: unknown
+      }
       failed?: unknown
     }[]
   }[]
@@ -37,6 +42,7 @@ export let extract = (
     return [b.name, {
       value: ok.avg,
       cpu: ok.cpu,
+      ...ok.sampling ? { sampling: ok.sampling } : {},
       source: 'deno-cpu-average',
       details: { ...ok },
     }]

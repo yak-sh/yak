@@ -338,6 +338,7 @@ let check = async (suite: string): Promise<Outcome> => {
     if (after != null) run.busy = Math.max(run.busy ?? 0, after)
   }
   if (run.verdict == 'loaded' || loaded(run)) return { verdict: 'loaded' }
+  if (run.verdict == 'inconclusive') return { verdict: 'inconclusive' }
   if (run.verdict == 'passed' || run.verdict == 'measured') {
     return { verdict: run.verdict, run }
   }

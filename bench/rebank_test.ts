@@ -58,6 +58,30 @@ test('CPU rebanking cannot convert an unmeasured reference', async () => {
   )
 })
 
+test('CPU rebanking rejects insufficient sampling in reference or current work', async () => {
+  for (let slot of ['before', 'current', 'after'] as const) {
+    let pair = {
+      before: reading(100),
+      current: reading(100),
+      after: reading(100),
+    }
+    pair[slot].benches[0].samples[0].sampling = {
+      status: 'insufficient',
+      minimum: 200,
+      measured: 100,
+      outer: 1000,
+    }
+    await throws(() =>
+      bank({
+        ...pair,
+        verdict: 'inconclusive',
+        slower: [],
+        comparisons: [],
+        reference: 'banked-revision',
+      }), 'Insufficient CPU sampling')
+  }
+})
+
 test('CPU rebanking preserves observations when comparison is inconclusive', () => {
   let baseline = bank({
     verdict: 'inconclusive',
