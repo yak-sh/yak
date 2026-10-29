@@ -10,9 +10,23 @@
     "suite": "client-rules",
     "baseline": "bench/client-rules.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "keystroke, no rules",
+          "keystroke, four rules"
+        ]
+      }
+    ],
     "revision": "458aec0cd98e1a66bc8f8048a295681000230f50",
     "rounds": 6,
+    "metric": "median-of-deno-averages/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -78,30 +92,31 @@
         "now": 71743.43749999898
       }
     ],
-    "evidence": "bench/client-rules.rebank.results.json",
-    "references": {
-      "keystroke, no rules": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "keystroke, four rules": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/client-rules.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "keystroke, no rules",
-          "keystroke, four rules"
-        ]
-      }
-    ]
+    "evidence": "bench/client-rules.rebank.results.json"
   },
   {
     "suite": "web-client",
     "baseline": "bench/web-client.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/web-client.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "rows: 2k-task snapshot",
+          "query: filter 2k rows (a board render)",
+          "applyLocal: fold a working-set seed into the cache",
+          "resetSignals: rebuild every index from the cache"
+        ]
+      }
+    ],
     "revision": "6499040a7b83071a76192fbd7157839abb1c601b",
     "rounds": 7,
+    "metric": "median-of-deno-averages/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -241,34 +256,29 @@
         "now": 178924.99999999924
       }
     ],
-    "evidence": "bench/web-client.rebank.results.json",
-    "references": {
-      "rows: 2k-task snapshot": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "query: filter 2k rows (a board render)": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "applyLocal: fold a working-set seed into the cache": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "resetSignals: rebuild every index from the cache": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/web-client.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "rows: 2k-task snapshot",
-          "query: filter 2k rows (a board render)",
-          "applyLocal: fold a working-set seed into the cache",
-          "resetSignals: rebuild every index from the cache"
-        ]
-      }
-    ]
+    "evidence": "bench/web-client.rebank.results.json"
   },
   {
     "suite": "session-status",
     "baseline": "bench/session-status.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/session-status.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "status by identity beside 2,700 other calls",
+          "status by query beside 2,700 other calls"
+        ]
+      }
+    ],
     "revision": "6499040a7b83071a76192fbd7157839abb1c601b",
     "rounds": 6,
+    "metric": "median-of-deno-averages/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -334,30 +344,33 @@
         "now": 31483.18713450381
       }
     ],
-    "evidence": "bench/session-status.rebank.results.json",
-    "references": {
-      "status by identity beside 2,700 other calls": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "status by query beside 2,700 other calls": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/session-status.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "status by identity beside 2,700 other calls",
-          "status by query beside 2,700 other calls"
-        ]
-      }
-    ]
+    "evidence": "bench/session-status.rebank.results.json"
   },
   {
     "suite": "graph-activity",
     "baseline": "bench/graph-activity.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/graph-activity.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "absent/apply",
+          "absent/query",
+          "uncreated/apply",
+          "uncreated/query",
+          "inactive/apply",
+          "inactive/query"
+        ]
+      }
+    ],
     "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
     "rounds": 7,
+    "metric": "median-of-round-medians/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -565,38 +578,29 @@
         "now": 3088.999999999942
       }
     ],
-    "evidence": "bench/graph-activity.rebank.results.json",
-    "references": {
-      "absent/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "absent/query": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "uncreated/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "uncreated/query": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "inactive/apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "inactive/query": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/graph-activity.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "absent/apply",
-          "absent/query",
-          "uncreated/apply",
-          "uncreated/query",
-          "inactive/apply",
-          "inactive/query"
-        ]
-      }
-    ]
+    "evidence": "bench/graph-activity.rebank.results.json"
   },
   {
     "suite": "harness-streaming",
     "baseline": "bench/harness-streaming.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-streaming.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "apply",
+          "transient"
+        ]
+      }
+    ],
     "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
     "rounds": 6,
+    "metric": "median-of-round-medians/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -662,30 +666,31 @@
         "now": 5.063999999999851
       }
     ],
-    "evidence": "bench/harness-streaming.rebank.results.json",
-    "references": {
-      "apply": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "transient": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/harness-streaming.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "apply",
-          "transient"
-        ]
-      }
-    ]
+    "evidence": "bench/harness-streaming.rebank.results.json"
   },
   {
     "suite": "harness-worker",
     "baseline": "bench/harness-worker.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-worker.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "inline/startup",
+          "inline/work",
+          "worker/startup",
+          "worker/work"
+        ]
+      }
+    ],
     "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
     "rounds": 7,
+    "metric": "median-of-round-medians/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -825,34 +830,28 @@
         "now": 836.1590000000015
       }
     ],
-    "evidence": "bench/harness-worker.rebank.results.json",
-    "references": {
-      "inline/startup": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "inline/work": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "worker/startup": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-      "worker/work": "5758d5ce6c5c97375712f1950b7db386533d2d74"
-    },
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/harness-worker.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "inline/startup",
-          "inline/work",
-          "worker/startup",
-          "worker/work"
-        ]
-      }
-    ]
+    "evidence": "bench/harness-worker.rebank.results.json"
   },
   {
     "suite": "harness-switch",
     "baseline": "bench/harness-switch.baseline.json",
     "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "switch"
+        ]
+      }
+    ],
     "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
     "rounds": 6,
+    "metric": "median-of-round-medians/cpu",
     "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
     "slower": [],
     "comparisons": [
       {
@@ -887,19 +886,1673 @@
         "now": 26.44400000000087
       }
     ],
-    "evidence": "bench/harness-switch.rebank.results.json",
+    "evidence": "bench/harness-switch.rebank.results.json"
+  },
+  {
+    "suite": "operation-commands",
+    "baseline": "bench/operation-commands.baseline.json",
+    "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
     "references": {
-      "switch": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "cli/task-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/task-update": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/comment-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/decision-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/decision-answer": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/graph-schema": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/history": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/board-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/project-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/claim-take": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/claim-release": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/memory-save": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/memory-recall": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/topic-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/topic-find": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/persona-read": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/storage-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/archetype-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "cli/effect-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/task-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/task-update": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/comment-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/decision-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/decision-answer": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/graph-schema": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/history": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/board-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/project-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/claim-take": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/claim-release": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/memory-save": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/memory-recall": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/topic-new": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/topic-find": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/persona-read": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/storage-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/archetype-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "connector/effect-check": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
     },
     "provenance": [
       {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
         "kind": "derived",
-        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "source": "git history of bench/operation-commands.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
-          "switch"
+          "cli/task-new",
+          "cli/task-update",
+          "cli/comment-new",
+          "cli/decision-new",
+          "cli/decision-answer",
+          "cli/graph-schema",
+          "cli/history",
+          "cli/board-check",
+          "cli/project-check",
+          "cli/claim-take",
+          "cli/claim-release",
+          "cli/memory-save",
+          "cli/memory-recall",
+          "cli/topic-new",
+          "cli/topic-find",
+          "cli/persona-read",
+          "cli/storage-check",
+          "cli/archetype-check",
+          "cli/effect-check",
+          "connector/task-new",
+          "connector/task-update",
+          "connector/comment-new",
+          "connector/decision-new",
+          "connector/decision-answer",
+          "connector/graph-schema",
+          "connector/history",
+          "connector/board-check",
+          "connector/project-check",
+          "connector/claim-take",
+          "connector/claim-release",
+          "connector/memory-save",
+          "connector/memory-recall",
+          "connector/topic-new",
+          "connector/topic-find",
+          "connector/persona-read",
+          "connector/storage-check",
+          "connector/archetype-check",
+          "connector/effect-check"
         ]
       }
-    ]
+    ],
+    "revision": "c0cf50afd8bc005112112ed287ab4a386a3f0510",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "cli/task-new",
+      "cli/decision-new",
+      "cli/claim-release",
+      "connector/comment-new",
+      "connector/memory-recall",
+      "connector/archetype-check"
+    ],
+    "comparisons": [
+      {
+        "name": "cli/task-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          496.98399999999674,
+          445.63300000000163,
+          500.45999999999185
+        ],
+        "current": [
+          603.7929999999978,
+          669.7929999999978,
+          591.4420000000027
+        ],
+        "after": [
+          394.2000000000007,
+          457.17699999999604,
+          422.3890000000101
+        ],
+        "reference": 451.40499999999884,
+        "now": 603.7929999999978
+      },
+      {
+        "name": "cli/task-update",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          494.98999999999796,
+          413.4629999999961,
+          540.4879999999976
+        ],
+        "current": [
+          530.719000000001,
+          557.523000000001,
+          606.9850000000006
+        ],
+        "after": [
+          411.52700000000004,
+          416.4780000000028,
+          374.58000000000175
+        ],
+        "reference": 414.97049999999945,
+        "now": 557.523000000001
+      },
+      {
+        "name": "cli/comment-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          531.2279999999955,
+          368.83699999999953,
+          480.3429999999935
+        ],
+        "current": [
+          511.89500000000044,
+          541.1990000000005,
+          622.3249999999971
+        ],
+        "after": [
+          388.2360000000008,
+          386.6000000000022,
+          373.8969999999972
+        ],
+        "reference": 387.4180000000015,
+        "now": 541.1990000000005
+      },
+      {
+        "name": "cli/decision-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          524.1410000000033,
+          395.1880000000019,
+          382.52099999999336
+        ],
+        "current": [
+          525.5349999999999,
+          525.8790000000008,
+          563.6630000000005
+        ],
+        "after": [
+          380.0679999999993,
+          440.4019999999982,
+          385.3770000000004
+        ],
+        "reference": 390.28250000000116,
+        "now": 525.8790000000008
+      },
+      {
+        "name": "cli/decision-answer",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          505.57600000000093,
+          367.0739999999969,
+          464.0109999999986
+        ],
+        "current": [
+          522.9480000000003,
+          468.95900000000256,
+          569.0929999999935
+        ],
+        "after": [
+          455.77400000000125,
+          374.8119999999981,
+          382.63699999999517
+        ],
+        "reference": 419.2054999999982,
+        "now": 522.9480000000003
+      },
+      {
+        "name": "cli/graph-schema",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          316.98899999999776,
+          259.5509999999995,
+          258.81699999999546
+        ],
+        "current": [
+          340.4579999999987,
+          274.51600000000326,
+          294.59799999999814
+        ],
+        "after": [
+          262.4939999999988,
+          247.2260000000024,
+          247.31499999999505
+        ],
+        "reference": 259.18399999999747,
+        "now": 294.59799999999814
+      },
+      {
+        "name": "cli/history",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          426.59500000000116,
+          342.3050000000003,
+          343.4349999999977
+        ],
+        "current": [
+          380.65400000000227,
+          412.8660000000018,
+          472.02399999999034
+        ],
+        "after": [
+          339.5400000000009,
+          324.85999999999694,
+          309.5089999999982
+        ],
+        "reference": 340.9225000000006,
+        "now": 412.8660000000018
+      },
+      {
+        "name": "cli/board-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          350.46500000000015,
+          327.0059999999976,
+          335.4429999999993
+        ],
+        "current": [
+          319.22399999999834,
+          291.9279999999999,
+          427.4499999999971
+        ],
+        "after": [
+          276.63700000000244,
+          327.1310000000012,
+          309.6469999999972
+        ],
+        "reference": 327.0684999999994,
+        "now": 319.22399999999834
+      },
+      {
+        "name": "cli/project-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          625.3280000000013,
+          495.89100000000326,
+          496.9490000000005
+        ],
+        "current": [
+          555.0879999999997,
+          632.6620000000039,
+          634.6129999999976
+        ],
+        "after": [
+          529.8579999999965,
+          546.7760000000017,
+          537.3419999999969
+        ],
+        "reference": 533.5999999999967,
+        "now": 632.6620000000039
+      },
+      {
+        "name": "cli/claim-take",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          517.6450000000041,
+          420.9720000000016,
+          422.747000000003
+        ],
+        "current": [
+          581.4919999999984,
+          511.012999999999,
+          628.4120000000112
+        ],
+        "after": [
+          509.1209999999992,
+          462.6389999999956,
+          422.3029999999999
+        ],
+        "reference": 442.6929999999993,
+        "now": 581.4919999999984
+      },
+      {
+        "name": "cli/claim-release",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          490.3019999999997,
+          374.92499999999563,
+          388.5149999999994
+        ],
+        "current": [
+          537.0479999999989,
+          493.9599999999991,
+          505.9820000000036
+        ],
+        "after": [
+          375.0119999999988,
+          454.89700000000084,
+          400.90400000000227
+        ],
+        "reference": 394.70950000000084,
+        "now": 505.9820000000036
+      },
+      {
+        "name": "cli/memory-save",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          486.4820000000036,
+          360.4820000000036,
+          405.40000000000146
+        ],
+        "current": [
+          452.1759999999995,
+          472.4520000000048,
+          480.51199999999517
+        ],
+        "after": [
+          468.85199999999895,
+          436.0400000000009,
+          409.13700000000244
+        ],
+        "reference": 422.58850000000166,
+        "now": 472.4520000000048
+      },
+      {
+        "name": "cli/memory-recall",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          367.7390000000014,
+          301.3580000000002,
+          294.275999999998
+        ],
+        "current": [
+          337.11399999999776,
+          376.45500000000175,
+          452.29500000000553
+        ],
+        "after": [
+          343.0819999999985,
+          315.0750000000007,
+          323.26200000000244
+        ],
+        "reference": 319.1685000000016,
+        "now": 376.45500000000175
+      },
+      {
+        "name": "cli/topic-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          497.67199999999866,
+          434.7890000000043,
+          351.90000000000146
+        ],
+        "current": [
+          485.3790000000008,
+          504.1959999999963,
+          515.8859999999913
+        ],
+        "after": [
+          385.60199999999895,
+          364.50900000000547,
+          435.99199999999837
+        ],
+        "reference": 410.19550000000163,
+        "now": 504.1959999999963
+      },
+      {
+        "name": "cli/topic-find",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          332.3610000000008,
+          284.41399999999703,
+          273.650999999998
+        ],
+        "current": [
+          341.86299999999756,
+          352.9560000000056,
+          326.68099999999686
+        ],
+        "after": [
+          296.3580000000002,
+          263.9160000000011,
+          270.2870000000039
+        ],
+        "reference": 279.0324999999975,
+        "now": 341.86299999999756
+      },
+      {
+        "name": "cli/persona-read",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          362.87400000000343,
+          302.60699999999633,
+          269.4360000000015
+        ],
+        "current": [
+          323.93300000000454,
+          404.59999999999854,
+          361.5350000000035
+        ],
+        "after": [
+          309.1959999999999,
+          280.25999999999476,
+          277.9599999999991
+        ],
+        "reference": 291.43349999999555,
+        "now": 361.5350000000035
+      },
+      {
+        "name": "cli/storage-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          341.8710000000028,
+          334.8949999999968,
+          259.0529999999999
+        ],
+        "current": [
+          280.71299999999974,
+          318.61900000000605,
+          297.18500000000495
+        ],
+        "after": [
+          251.1850000000013,
+          322.7560000000012,
+          284.3919999999998
+        ],
+        "reference": 303.5740000000005,
+        "now": 297.18500000000495
+      },
+      {
+        "name": "cli/archetype-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          337.5310000000027,
+          345.1310000000012,
+          267.1730000000025
+        ],
+        "current": [
+          270.22299999999814,
+          299.65000000000146,
+          298.75399999999354
+        ],
+        "after": [
+          252.69800000000032,
+          250.65299999999843,
+          289.0239999999976
+        ],
+        "reference": 278.09850000000006,
+        "now": 298.75399999999354
+      },
+      {
+        "name": "cli/effect-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          333.5020000000004,
+          334.96800000000076,
+          347.78800000000774
+        ],
+        "current": [
+          306.4890000000014,
+          311.9290000000037,
+          335.67200000000594
+        ],
+        "after": [
+          260.8239999999969,
+          255.6690000000017,
+          303.81999999999243
+        ],
+        "reference": 318.6609999999964,
+        "now": 311.9290000000037
+      },
+      {
+        "name": "connector/task-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          43.83400000000256,
+          30.883999999998196,
+          34.58099999999831
+        ],
+        "current": [
+          54.56500000000233,
+          37.99700000000303,
+          63.838999999992666
+        ],
+        "after": [
+          40.736000000000786,
+          35.831999999998516,
+          28.91599999999744
+        ],
+        "reference": 35.206499999998414,
+        "now": 54.56500000000233
+      },
+      {
+        "name": "connector/task-update",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          23.497999999999593,
+          16.450000000000728,
+          17.00300000000425
+        ],
+        "current": [
+          27.117000000002008,
+          19.6050000000032,
+          27.270999999993364
+        ],
+        "after": [
+          20.59400000000096,
+          22.85399999999936,
+          10.721999999994296
+        ],
+        "reference": 18.798500000002605,
+        "now": 27.117000000002008
+      },
+      {
+        "name": "connector/comment-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          23.55999999999767,
+          19.718000000000757,
+          18.72599999999511
+        ],
+        "current": [
+          32.80899999999747,
+          28.760000000002037,
+          31.3070000000007
+        ],
+        "after": [
+          22.458999999998923,
+          18.697000000000116,
+          24.0370000000039
+        ],
+        "reference": 21.08849999999984,
+        "now": 31.3070000000007
+      },
+      {
+        "name": "connector/decision-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          25.29699999999866,
+          14.997999999999593,
+          20.473000000005413
+        ],
+        "current": [
+          18.274999999997817,
+          13.044000000001688,
+          17.25100000000384
+        ],
+        "after": [
+          17.29399999999805,
+          15.38799999999901,
+          17.915000000000873
+        ],
+        "reference": 17.60449999999946,
+        "now": 17.25100000000384
+      },
+      {
+        "name": "connector/decision-answer",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          16.93000000000029,
+          19.005999999997584,
+          11.807000000000698
+        ],
+        "current": [
+          19.687000000001717,
+          15.509000000005472,
+          16.47200000000157
+        ],
+        "after": [
+          13.131000000001222,
+          14.47099999999773,
+          16.8179999999993
+        ],
+        "reference": 15.644499999998516,
+        "now": 16.47200000000157
+      },
+      {
+        "name": "connector/graph-schema",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          3.947999999996682,
+          2.879000000000815,
+          2.6449999999967986
+        ],
+        "current": [
+          4.003000000000611,
+          3.4089999999996508,
+          5.449000000000524
+        ],
+        "after": [
+          3.106999999999971,
+          2.375,
+          2.9320000000006985
+        ],
+        "reference": 2.9055000000007567,
+        "now": 4.003000000000611
+      },
+      {
+        "name": "connector/history",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          34.06199999999808,
+          21.29500000000189,
+          22.59900000000198
+        ],
+        "current": [
+          32.77600000000166,
+          23.5199999999968,
+          24.48300000000745
+        ],
+        "after": [
+          33.552999999999884,
+          34.62299999999959,
+          17.210999999995693
+        ],
+        "reference": 28.07600000000093,
+        "now": 24.48300000000745
+      },
+      {
+        "name": "connector/board-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          4.75,
+          3.3479999999981374,
+          3.622000000003027
+        ],
+        "current": [
+          4.144000000000233,
+          4.119000000006054,
+          5.4099999999962165
+        ],
+        "after": [
+          3.5230000000010477,
+          3.7299999999959255,
+          4.7370000000009895
+        ],
+        "reference": 3.675999999999476,
+        "now": 4.144000000000233
+      },
+      {
+        "name": "connector/project-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          217.39600000000064,
+          107.23099999999977,
+          100.15999999999622
+        ],
+        "current": [
+          180.11000000000058,
+          211.65700000000652,
+          186.12199999999575
+        ],
+        "after": [
+          179.52400000000125,
+          123.7390000000014,
+          154.43399999999383
+        ],
+        "reference": 139.0864999999976,
+        "now": 186.12199999999575
+      },
+      {
+        "name": "connector/claim-take",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          37.29000000000087,
+          37.04599999999482,
+          31.561000000001513
+        ],
+        "current": [
+          40.653000000002066,
+          17.904999999998836,
+          20.203000000008615
+        ],
+        "after": [
+          25.955000000001746,
+          40.96800000000076,
+          24.570000000006985
+        ],
+        "reference": 34.30349999999817,
+        "now": 20.203000000008615
+      },
+      {
+        "name": "connector/claim-release",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          18.153000000002066,
+          18.506000000001222,
+          15.576000000000931
+        ],
+        "current": [
+          11.578000000001339,
+          10.501000000003842,
+          11.806999999993423
+        ],
+        "after": [
+          18.163000000000466,
+          17.747000000003027,
+          16.94499999999971
+        ],
+        "reference": 17.950000000002547,
+        "now": 11.578000000001339
+      },
+      {
+        "name": "connector/memory-save",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          13.505999999997584,
+          18.120999999999185,
+          9.580000000001746
+        ],
+        "current": [
+          11.01299999999901,
+          13.51299999999901,
+          11.404000000009546
+        ],
+        "after": [
+          22.187999999998283,
+          12.323000000003958,
+          12.618999999998778
+        ],
+        "reference": 13.062499999998181,
+        "now": 11.404000000009546
+      },
+      {
+        "name": "connector/memory-recall",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          6.172000000002299,
+          6.232000000003609,
+          4.966000000000349
+        ],
+        "current": [
+          7.195999999999913,
+          6.61699999999837,
+          7.5460000000020955
+        ],
+        "after": [
+          5.632999999997992,
+          5.1120000000009895,
+          5.76600000000326
+        ],
+        "reference": 5.699500000000626,
+        "now": 7.195999999999913
+      },
+      {
+        "name": "connector/topic-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          13.794999999998254,
+          10.539999999993597,
+          9.12800000000425
+        ],
+        "current": [
+          23.77100000000064,
+          18.836999999999534,
+          9.843000000000757
+        ],
+        "after": [
+          9.175999999999476,
+          13.800999999999476,
+          11.461999999999534
+        ],
+        "reference": 11.000999999996566,
+        "now": 18.836999999999534
+      },
+      {
+        "name": "connector/topic-find",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          12.888000000002648,
+          4.732000000003609,
+          4.752999999996973
+        ],
+        "current": [
+          5.341000000000349,
+          7.131000000001222,
+          5.735000000000582
+        ],
+        "after": [
+          12.28099999999904,
+          9.061000000001513,
+          6.584000000002561
+        ],
+        "reference": 7.822500000002037,
+        "now": 5.735000000000582
+      },
+      {
+        "name": "connector/persona-read",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          5.682999999997264,
+          4.076000000000931,
+          5.176999999996042
+        ],
+        "current": [
+          4.037000000000262,
+          12.676000000006752,
+          10.955999999998312
+        ],
+        "after": [
+          4.887000000002445,
+          5.129000000000815,
+          3.8369999999995343
+        ],
+        "reference": 5.00800000000163,
+        "now": 10.955999999998312
+      },
+      {
+        "name": "connector/storage-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          31.382000000001426,
+          30.477000000006228,
+          18.281999999991967
+        ],
+        "current": [
+          23.593000000000757,
+          33.08900000000722,
+          35.112999999997555
+        ],
+        "after": [
+          30.310999999997875,
+          21.70100000000093,
+          21.12999999999738
+        ],
+        "reference": 26.005999999999403,
+        "now": 33.08900000000722
+      },
+      {
+        "name": "connector/archetype-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          8.891999999999825,
+          7.841999999996915,
+          8.125
+        ],
+        "current": [
+          9.04200000000128,
+          11.915000000000873,
+          16.80399999999645
+        ],
+        "after": [
+          8.985000000000582,
+          7.276999999998225,
+          7.794999999998254
+        ],
+        "reference": 7.9834999999984575,
+        "now": 11.915000000000873
+      },
+      {
+        "name": "connector/effect-check",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+        "before": [
+          5.885999999998603,
+          5.834999999999127,
+          5.435999999994237
+        ],
+        "current": [
+          4.186000000001513,
+          6.356999999996333,
+          6.135000000002037
+        ],
+        "after": [
+          4.100000000002183,
+          4.379999999997381,
+          5.1120000000009895
+        ],
+        "reference": 5.2739999999976135,
+        "now": 6.135000000002037
+      }
+    ],
+    "evidence": "bench/operation-commands.rebank.results.json"
+  },
+  {
+    "suite": "operation-remaining",
+    "reference": "9f7f792b2782529f824c14cf7c511228835aa7c9",
+    "revision": "2956e247c47e85924c8f5333d550653f5de915f2",
+    "verdict": "inconclusive",
+    "error": "the code at 9f7f792b2 cannot run today's bench: Error: cli/cites-check measurement failed: missing cited content changed: {\n  \"result\": [\n    {\n      \"entity\": {\n        \"eid\": \"$check\"\n      },\n      \"finding\": {\n        \"level\": \"warn\"\n      },\n      \"content\": {\n        \"body\": \"1 finding(s) against: every citation still holds\\n- warn: N-3 cites P-2 — never checked\"\n      },\n      \"output\": {\n        \"source\": \"6ee93f67-f295-407b-bfdc-e2db6ae09eb9\"\n      },\n      \"$actor\": {\n        \"by\": \"b66dbec0-632c-4fe8-a5ed-000000000001\",\n        \"via\": \"b66dbec0-632c-4fe8-a5ed-000000000004\"\n      }\n    }\n  ]\n}\n\n    at collect (file:///tmp/bench-paired-8ac06b7ead09f7a2/0/bench/operation-commands.ts:723:19)\n    at async serve (file:///tmp/bench-paired-8ac06b7ead09f7a2/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-8ac06b7ead09f7a2/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "operation-controls",
+    "baseline": "bench/operation-controls.baseline.json",
+    "reference": "1e76aab35731f409f74c052d21a2487e87036a64",
+    "references": {
+      "cli/builder-choose": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "connector/builder-choose": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/builder-supply": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "connector/builder-supply": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/builder-plan": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "connector/builder-plan": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/session-cache": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/session-listen": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/trace-arm": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/init": "1e76aab35731f409f74c052d21a2487e87036a64",
+      "cli/land": "1e76aab35731f409f74c052d21a2487e87036a64"
+    },
+    "provenance": [
+      {
+        "reference": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "kind": "derived",
+        "source": "git history of bench/operation-controls.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/builder-choose",
+          "connector/builder-choose",
+          "cli/builder-supply",
+          "connector/builder-supply",
+          "cli/builder-plan",
+          "connector/builder-plan",
+          "cli/session-cache",
+          "cli/session-listen",
+          "cli/trace-arm",
+          "cli/init",
+          "cli/land"
+        ]
+      }
+    ],
+    "revision": "2956e247c47e85924c8f5333d550653f5de915f2",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "slower",
+    "status": "slower candidate awaiting default monitor confirmation",
+    "confidence": "limited rounds",
+    "slower": [
+      "cli/session-cache",
+      "cli/land"
+    ],
+    "comparisons": [
+      {
+        "name": "cli/builder-choose",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          715.0870000000014,
+          485.49800000000323,
+          531.8859999999986
+        ],
+        "current": [
+          816.3169999999955,
+          686.0520000000033,
+          932.474000000002
+        ],
+        "after": [
+          678.9929999999986,
+          581.219000000001,
+          711.8689999999988
+        ],
+        "reference": 630.1059999999998,
+        "now": 816.3169999999955
+      },
+      {
+        "name": "connector/builder-choose",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          80.39700000000084,
+          54.86200000000099,
+          47.63300000000163
+        ],
+        "current": [
+          75.55299999999988,
+          64.10900000000038,
+          83.37600000000384
+        ],
+        "after": [
+          69.54299999999785,
+          51.065999999998894,
+          68.79200000000128
+        ],
+        "reference": 61.827000000001135,
+        "now": 75.55299999999988
+      },
+      {
+        "name": "cli/builder-supply",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          772.4540000000015,
+          647.0919999999969,
+          628.3759999999966
+        ],
+        "current": [
+          837.0060000000012,
+          680.2209999999977,
+          966.8999999999942
+        ],
+        "after": [
+          737.8459999999995,
+          577.2109999999993,
+          765.7630000000026
+        ],
+        "reference": 692.4689999999982,
+        "now": 837.0060000000012
+      },
+      {
+        "name": "connector/builder-supply",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          71.47799999999916,
+          67.94999999999709,
+          62.19000000000233
+        ],
+        "current": [
+          75.34999999999854,
+          47.37999999999738,
+          122.3660000000018
+        ],
+        "after": [
+          80.39700000000084,
+          40.16600000000108,
+          62.59200000000055
+        ],
+        "reference": 65.27099999999882,
+        "now": 75.34999999999854
+      },
+      {
+        "name": "cli/builder-plan",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          669.2839999999978,
+          636.2639999999992,
+          685.6520000000019
+        ],
+        "current": [
+          803.7699999999968,
+          640.6499999999978,
+          939.6349999999948
+        ],
+        "after": [
+          731.0930000000008,
+          587.9880000000012,
+          708.1979999999967
+        ],
+        "reference": 677.4679999999998,
+        "now": 803.7699999999968
+      },
+      {
+        "name": "connector/builder-plan",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          42.85099999999875,
+          40.89400000000023,
+          37.457000000002154
+        ],
+        "current": [
+          49.06499999999869,
+          41.23999999999796,
+          41.68800000000192
+        ],
+        "after": [
+          53.36999999999898,
+          42.422999999998865,
+          39.383999999998196
+        ],
+        "reference": 41.65849999999955,
+        "now": 41.68800000000192
+      },
+      {
+        "name": "cli/session-cache",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          440.9160000000011,
+          459.49199999999837,
+          445.8129999999983
+        ],
+        "current": [
+          574.2499999999964,
+          579.226999999999,
+          667.5919999999969
+        ],
+        "after": [
+          482.10399999999936,
+          351.650999999998,
+          554.5249999999978
+        ],
+        "reference": 452.6524999999983,
+        "now": 579.226999999999
+      },
+      {
+        "name": "cli/session-listen",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          640.9589999999989,
+          582.4200000000019,
+          593.6310000000012
+        ],
+        "current": [
+          783.0610000000015,
+          703.0969999999979,
+          933.3870000000024
+        ],
+        "after": [
+          680.7640000000029,
+          605.4099999999962,
+          763.3200000000033
+        ],
+        "reference": 623.1844999999976,
+        "now": 783.0610000000015
+      },
+      {
+        "name": "cli/trace-arm",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          95.19700000000375,
+          92.42700000000332,
+          132.51599999999962
+        ],
+        "current": [
+          108.09100000000035,
+          96.4539999999979,
+          123.11000000000058
+        ],
+        "after": [
+          109.98599999999897,
+          94.56199999999808,
+          110.99499999999898
+        ],
+        "reference": 102.59150000000136,
+        "now": 108.09100000000035
+      },
+      {
+        "name": "cli/init",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          538.6919999999955,
+          549.5190000000039,
+          444.1979999999967
+        ],
+        "current": [
+          674.8109999999979,
+          567.6949999999997,
+          817.9219999999987
+        ],
+        "after": [
+          564.7980000000007,
+          468.1140000000014,
+          597.9500000000007
+        ],
+        "reference": 544.1054999999997,
+        "now": 674.8109999999979
+      },
+      {
+        "name": "cli/land",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "1e76aab35731f409f74c052d21a2487e87036a64",
+        "before": [
+          600.2160000000003,
+          616.2410000000018,
+          591.0690000000031
+        ],
+        "current": [
+          822.773000000001,
+          757.3859999999986,
+          894.2410000000091
+        ],
+        "after": [
+          748.4939999999988,
+          527.367000000002,
+          739.8689999999988
+        ],
+        "reference": 608.2285000000011,
+        "now": 822.773000000001
+      }
+    ],
+    "evidence": "bench/operation-controls.rebank.results.json"
+  },
+  {
+    "suite": "operation-checkout",
+    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+    "revision": "868091370a74bb70b498a949090e3a29caa037e8",
+    "verdict": "inconclusive",
+    "error": "the code at bbf65074e cannot run today's bench: Refused: bundle 0 needs an entity: {entity: {eid}} — an eid you mint, or '$name' to have the graph mint one\n    at file:///tmp/bench-paired-2a032ea011613edf/0/packages/graph/bundle.ts:303:13\n    at Array.forEach (<anonymous>)\n    at formed (file:///tmp/bench-paired-2a032ea011613edf/0/packages/graph/bundle.ts:300:11)\n    at formed (file:///tmp/bench-paired-2a032ea011613edf/0/packages/graph/admit.ts:62:23)\n    at applying (file:///tmp/bench-paired-2a032ea011613edf/0/packages/graph/graph.ts:1328:13)\n    at during.input (file:///tmp/bench-paired-2a032ea011613edf/0/packages/graph/graph.ts:1350:9)\n    at scoped (file:///tmp/bench-paired-2a032ea011613edf/0/packages/trace/mod.ts:519:14)\n    at AsyncLocalStorage.run (ext:deno_node/async_hooks.ts:105:16)\n    at Object.run (file:///tmp/bench-paired-2a032ea011613edf/0/packages/cli/host.ts:123:34)\n    at scope (file:///tmp/bench-paired-2a032ea011613edf/0/packages/trace/mod.ts:524:28)"
+  },
+  {
+    "suite": "operation-diagnostics",
+    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+    "revision": "868091370a74bb70b498a949090e3a29caa037e8",
+    "verdict": "inconclusive",
+    "error": "the code at bbf65074e cannot run today's bench: Error: missing vector search reads the current canonical vectors: {\n  \"result\": [\n    {\n      \"entity\": {\n        \"eid\": \"$check\"\n      },\n      \"content\": {\n        \"body\": \"the vector index is being built by the sweep that owns it — nothing to report\"\n      },\n      \"output\": {\n        \"source\": \"6b4f5d29-49ca-459c-855f-b9fbdf639378\"\n      },\n      \"$actor\": {\n        \"by\": \"b1f4d85c-a4ae-4c0e-9b39-bb2ccad13654\",\n        \"via\": \"b1f4d85c-a4ae-4c0e-9b39-bb2ccad13654\"\n      }\n    }\n  ]\n}\n\n    at includes (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/operation-diagnostics.ts:36:11)\n    at Module.measure (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/operation-diagnostics.ts:239:11)\n    at async serve (file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-b5ea01e3e9293ae2/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "operation-sessions",
+    "baseline": "bench/operation-sessions.baseline.json",
+    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+    "references": {
+      "cli/session-list": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-new": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-peek": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-send": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-spawn": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-stop": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "cli/session-wait": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-list": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-peek": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-spawn": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-stop": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "connector/session-wait": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3"
+    },
+    "provenance": [
+      {
+        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "kind": "derived",
+        "source": "git history of bench/operation-sessions.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "cli/session-list",
+          "cli/session-new",
+          "cli/session-peek",
+          "cli/session-send",
+          "cli/session-spawn",
+          "cli/session-stop",
+          "cli/session-wait",
+          "connector/session-list",
+          "connector/session-peek",
+          "connector/session-spawn",
+          "connector/session-stop",
+          "connector/session-wait"
+        ]
+      }
+    ],
+    "revision": "868091370a74bb70b498a949090e3a29caa037e8",
+    "rounds": 3,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "inconclusive",
+    "status": "inconclusive; default monitor confirmation pending",
+    "confidence": "limited rounds",
+    "reason": "Reference CPU ranges did not overlap in the measured rounds",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "cli/session-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          548.0859999999993,
+          522.6089999999967,
+          520.2620000000024
+        ],
+        "current": [
+          444.73499999999694,
+          547.8270000000011,
+          583.0089999999982
+        ],
+        "after": [
+          535.6029999999992,
+          550.4569999999985,
+          556.3770000000004
+        ],
+        "reference": 541.8444999999992,
+        "now": 547.8270000000011
+      },
+      {
+        "name": "cli/session-new",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          987.6770000000015,
+          935.2169999999969,
+          955.8719999999958
+        ],
+        "current": [
+          878.2050000000017,
+          955.2580000000016,
+          1017.6139999999941
+        ],
+        "after": [
+          886.0949999999993,
+          935.7440000000024,
+          940.0779999999977
+        ],
+        "reference": 937.9110000000001,
+        "now": 955.2580000000016
+      },
+      {
+        "name": "cli/session-peek",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          580.152,
+          596.6020000000026,
+          559.4890000000014
+        ],
+        "current": [
+          481.6550000000025,
+          558.1229999999996,
+          518.9560000000056
+        ],
+        "after": [
+          502.987000000001,
+          547.2189999999973,
+          536.4130000000005
+        ],
+        "reference": 553.3539999999994,
+        "now": 518.9560000000056
+      },
+      {
+        "name": "cli/session-send",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          887.9819999999982,
+          907.5629999999983,
+          819.6160000000018
+        ],
+        "current": [
+          728.8849999999984,
+          1071.6369999999988,
+          884.2150000000038
+        ],
+        "after": [
+          746.6179999999986,
+          873.5130000000026,
+          919.8309999999983
+        ],
+        "reference": 880.7475000000004,
+        "now": 884.2150000000038
+      },
+      {
+        "name": "cli/session-spawn",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          957.5849999999991,
+          868.3209999999999,
+          733.9719999999943
+        ],
+        "current": [
+          749.1160000000018,
+          920.8719999999958,
+          1037.689999999995
+        ],
+        "after": [
+          869.6129999999994,
+          893.5040000000008,
+          940.857
+        ],
+        "reference": 881.5585000000001,
+        "now": 920.8719999999958
+      },
+      {
+        "name": "cli/session-stop",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          885.1980000000003,
+          800.9960000000028,
+          654.4979999999996
+        ],
+        "current": [
+          836.2669999999998,
+          880.2560000000012,
+          892.3520000000062
+        ],
+        "after": [
+          758.1929999999993,
+          700.9979999999996,
+          928.2040000000052
+        ],
+        "reference": 779.5945000000011,
+        "now": 880.2560000000012
+      },
+      {
+        "name": "cli/session-wait",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          495.5499999999993,
+          762.143,
+          507.88699999999517
+        ],
+        "current": [
+          615.5910000000003,
+          606.6539999999986,
+          635.4789999999921
+        ],
+        "after": [
+          612.0839999999989,
+          544.3950000000004,
+          696.9590000000026
+        ],
+        "reference": 578.2394999999997,
+        "now": 615.5910000000003
+      },
+      {
+        "name": "connector/session-list",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          15.268000000000029,
+          14.904999999998836,
+          6.392999999996391
+        ],
+        "current": [
+          23.814000000002125,
+          21.195999999996275,
+          25.864999999990687
+        ],
+        "after": [
+          18.197000000000116,
+          172.58400000000256,
+          14.25300000000425
+        ],
+        "reference": 15.086499999999432,
+        "now": 23.814000000002125
+      },
+      {
+        "name": "connector/session-peek",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          11.359000000000378,
+          14.517000000003463,
+          9.16700000000128
+        ],
+        "current": [
+          10.608000000000175,
+          15.97899999999936,
+          13.244000000006054
+        ],
+        "after": [
+          14.384000000001834,
+          7.337999999999738,
+          15.964000000007218
+        ],
+        "reference": 12.871500000001106,
+        "now": 13.244000000006054
+      },
+      {
+        "name": "connector/session-spawn",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          141.20300000000134,
+          124.90699999999924,
+          158.50500000000466
+        ],
+        "current": [
+          167,
+          184.93699999999808,
+          174.42899999999645
+        ],
+        "after": [
+          144.62200000000303,
+          124.42699999999968,
+          171.53800000000047
+        ],
+        "reference": 142.91250000000218,
+        "now": 174.42899999999645
+      },
+      {
+        "name": "connector/session-stop",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          84.05400000000009,
+          82.85599999999977,
+          83.85800000000017
+        ],
+        "current": [
+          91.89899999999761,
+          96.4320000000007,
+          77.86200000000099
+        ],
+        "after": [
+          113.77499999999782,
+          73.68899999999849,
+          97.97799999999552
+        ],
+        "reference": 83.95600000000013,
+        "now": 91.89899999999761
+      },
+      {
+        "name": "connector/session-wait",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+        "before": [
+          54.56000000000131,
+          50.47399999999834,
+          51.46899999999732
+        ],
+        "current": [
+          59.84899999999834,
+          78.76299999999901,
+          64.04700000000594
+        ],
+        "after": [
+          41.54200000000128,
+          42.96800000000076,
+          44.116000000001804
+        ],
+        "reference": 47.29500000000007,
+        "now": 64.04700000000594
+      }
+    ],
+    "evidence": "bench/operation-sessions.rebank.results.json"
+  },
+  {
+    "suite": "terminal-interactions",
+    "revision": "0199ed8c7b81ccb2240dbe91bdf975ff07912ff7",
+    "verdict": "inconclusive",
+    "error": "the code at f68531abe cannot run today's bench: Error: addressed populated query answer never completed:\n╭──────────────────────╮Search\n│Tasks                 │query count\n│                      │.task .count\n│Search                │\n│/                     │2,000\n│                      │\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\ndrafts: [{\"entity\":{\"eid\":\"8040df04-e5ba-8873-b14a-247c5f1a41ad\",\"num\":2002},\"draft\":{\"by\":\"1d55ab2c-76da-4b66-9c37-e871a427f200\",\"place\":\"search\",\"text\":\"\",\"rev\":2}}]\n    at until (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:68:11)\n    at async file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:209:9\n    at async timed (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:90:7)\n    at async Module.measure (file:///tmp/bench-paired-ef478fd854937cda/0/bench/terminal-interactions.ts:194:5)\n    at async serve (file:///tmp/bench-paired-ef478fd854937cda/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-ef478fd854937cda/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "hook-waits",
+    "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+    "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
+    "verdict": "inconclusive",
+    "error": "the code at 8603ad4f3 cannot run today's bench: Error: missing held context: {\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"knock #ad68b69401 at #683730322d from #f11fb41351: Hook delivery ad68b694-0133-499d-8779-942a2f8e75ef\"}}\n    at file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:176:21\n    at async timed (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:43:7)\n    at async Module.measure (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/hook-waits.ts:151:7)\n    at async serve (file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-dbcc3972412fe8f4/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "person-commands",
+    "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
+    "revision": "75d7698d94e471504349b2b92374f8431095ce3b",
+    "verdict": "inconclusive",
+    "error": "the code at bc927bbb4 cannot run today's bench: Error: terminal never painted 2,000: ╭──────────────────────╮T-2Person benchmark target                                          ◇ ◇ ◇ ◇\n│Tasks                 │T-2 task Person benchmark target P0 open\n│                      │eid 1d55ab2c-76da-4b66-9c37-e871a427f101 num 2 created.by #90ad854db3  90ad854d-b328-4874-85c9-847e68c01168 created.at\n│Search                │2026-10-29T16:15:05.827Z created.via #90ad854db3  90ad854d-b328-4874-85c9-847e68c01168 doc.title Person benchmark target doc.body\n│/                     │Connector edit 2 updated.by #c4267f9129  c4267f91-292a-42e6-970a-d98c434d07a2 updated.at 2026-10-29T16:15:17.334Z updated.via\n│                      │#c4267f9129  c4267f91-292a-42e6-970a-d98c434d07a2 task.status open\n│Home                  │\n│Favorites             │\n│Recent                │\n│Projects              │\n│Saved searches        │\n│Sessions              │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │\n│                      │NORMAL\n╰──────────────────────╯⌃All sessions\n\n    at painted (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:48:9)\n    at async file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:343:7\n    at async timed (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:107:7)\n    at async Module.measure (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/person-commands.ts:341:5)\n    at async serve (file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/collector.ts:75:25)\n    at async file:///tmp/bench-paired-7fe04d94eb07430c/0/bench/standalone-worker.ts:5:1"
+  },
+  {
+    "suite": "operation-lifecycle",
+    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+    "revision": "7e971086d86c487f189f3ad477aed748424aea61",
+    "verdict": "inconclusive",
+    "error": "the code at bbf65074e cannot run today's bench: TypeError: JSR package not found: @yaks/provenance\n    at async importing (file:///tmp/bench-paired-33fe31309a16ce81/0/packages/cli/config.ts:222:12)"
+  },
+  {
+    "suite": "platform-waits",
+    "verdict": "failed",
+    "error": "Error: platform-waits probe failed (1)\n    at Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/platform-waits.ts:61:15)\n    at async Object.collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:57:25)\n    at async measure (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:375:23)\n    at async collectAt (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:390:31)\n    at async collect (file:///home/yaks/.yak/worktrees/bench-cpu/bench/paired.ts:289:21)\n    at async rebank (file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:79:28)\n    at async file:///home/yaks/.yak/worktrees/bench-cpu/bench/rebank.ts:149:20"
   }
 ]

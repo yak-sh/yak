@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "operation-sessions",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
@@ -11,85 +11,98 @@
       "name": "cli/session-list",
       "unit": "ms",
       "better": "lower",
-      "median": 521.063005,
-      "tolerance": 0
+      "median": 522.6089999999967,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.139
     },
     {
       "name": "cli/session-new",
       "unit": "ms",
       "better": "lower",
-      "median": 1716.516576,
-      "tolerance": 0
+      "median": 935.7440000000024,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.23
     },
     {
       "name": "cli/session-peek",
       "unit": "ms",
       "better": "lower",
-      "median": 440.12043300000005,
-      "tolerance": 0
+      "median": 536.4130000000005,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.373
     },
     {
       "name": "cli/session-send",
       "unit": "ms",
       "better": "lower",
-      "median": 1635.793079000001,
-      "tolerance": 0
+      "median": 873.5130000000026,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.464
     },
     {
       "name": "cli/session-spawn",
       "unit": "ms",
       "better": "lower",
-      "median": 1582.317874999997,
-      "tolerance": 0
+      "median": 868.3209999999999,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.61
     },
     {
       "name": "cli/session-stop",
       "unit": "ms",
       "better": "lower",
-      "median": 629.000004999998,
-      "tolerance": 0
+      "median": 758.1929999999993,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.837
     },
     {
       "name": "cli/session-wait",
       "unit": "ms",
       "better": "lower",
-      "median": 438.9595929999996,
-      "tolerance": 0
+      "median": 507.88699999999517,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.95
     },
     {
       "name": "connector/session-list",
       "unit": "ms",
       "better": "lower",
-      "median": 14.094981000002008,
-      "tolerance": 0
+      "median": 14.904999999998836,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.95
     },
     {
       "name": "connector/session-peek",
       "unit": "ms",
       "better": "lower",
-      "median": 11.706899999997404,
-      "tolerance": 0
+      "median": 11.359000000000378,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.95
     },
     {
       "name": "connector/session-spawn",
       "unit": "ms",
       "better": "lower",
-      "median": 1104.4196959999972,
-      "tolerance": 0
+      "median": 141.20300000000134,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.758
     },
     {
       "name": "connector/session-stop",
       "unit": "ms",
       "better": "lower",
-      "median": 70.67175600000337,
-      "tolerance": 0
+      "median": 83.85800000000017,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.95
     },
     {
       "name": "connector/session-wait",
       "unit": "ms",
       "better": "lower",
-      "median": 28.11808100000053,
-      "tolerance": 0
+      "median": 42.96800000000076,
+      "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+      "tolerance": 0.627
     }
-  ]
+  ],
+  "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3"
 }

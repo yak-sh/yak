@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "operation-commands",
-  "metric": "median-of-round-medians",
+  "metric": "median-of-round-medians/cpu",
   "workload": 1,
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
@@ -11,267 +11,306 @@
       "name": "cli/task-new",
       "unit": "ms",
       "better": "lower",
-      "median": 499.2057199999999,
-      "tolerance": 0
+      "median": 422.3890000000101,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.54
     },
     {
       "name": "cli/task-update",
       "unit": "ms",
       "better": "lower",
-      "median": 390.9760580000002,
-      "tolerance": 0
+      "median": 411.52700000000004,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.886
     },
     {
       "name": "cli/comment-new",
       "unit": "ms",
       "better": "lower",
-      "median": 345.6979389999997,
-      "tolerance": 0
+      "median": 386.6000000000022,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.881
     },
     {
       "name": "cli/decision-new",
       "unit": "ms",
       "better": "lower",
-      "median": 465.6834200000003,
-      "tolerance": 0
+      "median": 385.3770000000004,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.759
     },
     {
       "name": "cli/decision-answer",
       "unit": "ms",
       "better": "lower",
-      "median": 334.0058199999994,
-      "tolerance": 0
+      "median": 382.63699999999517,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.755
     },
     {
       "name": "cli/graph-schema",
       "unit": "ms",
       "better": "lower",
-      "median": 233.30496099999982,
-      "tolerance": 0
+      "median": 247.31499999999505,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.565
     },
     {
       "name": "cli/history",
       "unit": "ms",
       "better": "lower",
-      "median": 282.0165629999992,
-      "tolerance": 0
+      "median": 324.85999999999694,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.757
     },
     {
       "name": "cli/board-check",
       "unit": "ms",
       "better": "lower",
-      "median": 239.6214059999984,
-      "tolerance": 0
+      "median": 309.6469999999972,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.534
     },
     {
       "name": "cli/project-check",
       "unit": "ms",
       "better": "lower",
-      "median": 387.486155999999,
-      "tolerance": 0
+      "median": 496.9490000000005,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.523
     },
     {
       "name": "cli/claim-take",
       "unit": "ms",
       "better": "lower",
-      "median": 411.62529300000097,
-      "tolerance": 0
+      "median": 422.747000000003,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.46
     },
     {
       "name": "cli/claim-release",
       "unit": "ms",
       "better": "lower",
-      "median": 354.03393700000015,
-      "tolerance": 0
+      "median": 388.5149999999994,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.616
     },
     {
       "name": "cli/memory-save",
       "unit": "ms",
       "better": "lower",
-      "median": 344.80894400000034,
-      "tolerance": 0
+      "median": 405.40000000000146,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.7
     },
     {
       "name": "cli/memory-recall",
       "unit": "ms",
       "better": "lower",
-      "median": 249.4663299999993,
-      "tolerance": 0
+      "median": 301.3580000000002,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.5
     },
     {
       "name": "cli/topic-new",
       "unit": "ms",
       "better": "lower",
-      "median": 337.5307590000011,
-      "tolerance": 0
+      "median": 385.60199999999895,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.829
     },
     {
       "name": "cli/topic-find",
       "unit": "ms",
       "better": "lower",
-      "median": 244.30418700000155,
-      "tolerance": 0
+      "median": 270.2870000000039,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.519
     },
     {
       "name": "cli/persona-read",
       "unit": "ms",
       "better": "lower",
-      "median": 242.44198799999867,
-      "tolerance": 0
+      "median": 280.25999999999476,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.694
     },
     {
       "name": "cli/storage-check",
       "unit": "ms",
       "better": "lower",
-      "median": 253.14569699999993,
-      "tolerance": 0
+      "median": 284.3919999999998,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.723
     },
     {
       "name": "cli/archetype-check",
       "unit": "ms",
       "better": "lower",
-      "median": 240.42373099999895,
-      "tolerance": 0
+      "median": 252.69800000000032,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.754
     },
     {
       "name": "cli/effect-check",
       "unit": "ms",
       "better": "lower",
-      "median": 240.97848800000065,
-      "tolerance": 0
+      "median": 260.8239999999969,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.721
     },
     {
       "name": "connector/task-new",
       "unit": "ms",
       "better": "lower",
-      "median": 46.85762900000009,
-      "tolerance": 0
+      "median": 34.58099999999831,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/task-update",
       "unit": "ms",
       "better": "lower",
-      "median": 15.978965000000244,
-      "tolerance": 0
+      "median": 17.00300000000425,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/comment-new",
       "unit": "ms",
       "better": "lower",
-      "median": 14.898307999999815,
-      "tolerance": 0
+      "median": 19.718000000000757,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.572
     },
     {
       "name": "connector/decision-new",
       "unit": "ms",
       "better": "lower",
-      "median": 15.48532399999931,
-      "tolerance": 0
+      "median": 17.29399999999805,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/decision-answer",
       "unit": "ms",
       "better": "lower",
-      "median": 13.462378999998691,
-      "tolerance": 0
+      "median": 14.47099999999773,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/graph-schema",
       "unit": "ms",
       "better": "lower",
-      "median": 2.9766469999995024,
-      "tolerance": 0
+      "median": 2.879000000000815,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/history",
       "unit": "ms",
       "better": "lower",
-      "median": 18.66555999999946,
-      "tolerance": 0
+      "median": 22.59900000000198,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/board-check",
       "unit": "ms",
       "better": "lower",
-      "median": 2.6807950000002165,
-      "tolerance": 0
+      "median": 3.622000000003027,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.838
     },
     {
       "name": "connector/project-check",
       "unit": "ms",
       "better": "lower",
-      "median": 89.4603790000001,
-      "tolerance": 0
+      "median": 107.23099999999977,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/claim-take",
       "unit": "ms",
       "better": "lower",
-      "median": 16.523275000001377,
-      "tolerance": 0
+      "median": 25.955000000001746,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/claim-release",
       "unit": "ms",
       "better": "lower",
-      "median": 11.193058999997447,
-      "tolerance": 0
+      "median": 17.747000000003027,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.377
     },
     {
       "name": "connector/memory-save",
       "unit": "ms",
       "better": "lower",
-      "median": 11.87095600000248,
-      "tolerance": 0
+      "median": 12.618999999998778,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/memory-recall",
       "unit": "ms",
       "better": "lower",
-      "median": 4.857633999999962,
-      "tolerance": 0
+      "median": 5.632999999997992,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.51
     },
     {
       "name": "connector/topic-new",
       "unit": "ms",
       "better": "lower",
-      "median": 9.08079799999905,
-      "tolerance": 0
+      "median": 10.539999999993597,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/topic-find",
       "unit": "ms",
       "better": "lower",
-      "median": 7.049047000000428,
-      "tolerance": 0
+      "median": 4.752999999996973,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/persona-read",
       "unit": "ms",
       "better": "lower",
-      "median": 3.1417269999983546,
-      "tolerance": 0
+      "median": 4.887000000002445,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/storage-check",
       "unit": "ms",
       "better": "lower",
-      "median": 19.962051000002248,
-      "tolerance": 0
+      "median": 21.70100000000093,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.95
     },
     {
       "name": "connector/archetype-check",
       "unit": "ms",
       "better": "lower",
-      "median": 2.8014150000017253,
-      "tolerance": 0
+      "median": 7.794999999998254,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.47
     },
     {
       "name": "connector/effect-check",
       "unit": "ms",
       "better": "lower",
-      "median": 7.042755999998917,
-      "tolerance": 0
+      "median": 4.379999999997381,
+      "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
+      "tolerance": 0.872
     }
-  ]
+  ],
+  "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
 }
