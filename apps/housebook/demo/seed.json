@@ -1,0 +1,254 @@
+[
+  {
+    "entity": {
+      "eid": "d2d5f854-9eb2-5b40-ad9b-343ea5359cf5"
+    },
+    "doc": {
+      "title": "The example house",
+      "body": "This is a fictional home with sample records. Explore the manual, add an item, or build a handover. Keep personal information out of this public demo."
+    },
+    "house_profile": {
+      "address": "123 Example Lane · Sample home",
+      "water": "Utility room, blue-handled valve beside the meter",
+      "gas": "Exterior meter cabinet, west wall",
+      "electric": "Garage, main breaker at the top of the panel"
+    }
+  },
+  {
+    "entity": {
+      "eid": "483fe89d-c717-5572-8d47-76eba812170c"
+    },
+    "doc": {
+      "title": "Kitchen dishwasher",
+      "body": "Clean the removable filter monthly. Example record only."
+    },
+    "house_item": {
+      "category": "Kitchen & appliances",
+      "location": "Kitchen",
+      "brand": "Example Appliances",
+      "model": "DW-240",
+      "installed": "2024-04-15",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "de0aa654-0bb7-50aa-a40e-90e707996bbc"
+    },
+    "doc": {
+      "title": "Kitchen refrigerator",
+      "body": "Water filter: model WF-10. Leave clearance around the rear vents."
+    },
+    "house_item": {
+      "category": "Kitchen & appliances",
+      "location": "Kitchen",
+      "brand": "Example Appliances",
+      "model": "RF-360",
+      "installed": "2023-08-02",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "b1f67cbe-b03a-5377-bf0e-0c057b2c0be4"
+    },
+    "doc": {
+      "title": "Heat pump",
+      "body": "Filter size: 20 × 25 × 1 inches. Filter access is on the return side."
+    },
+    "house_item": {
+      "category": "Heating & cooling",
+      "location": "Utility room",
+      "brand": "Sample Climate",
+      "model": "HP-18",
+      "installed": "2022-06-10",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "0f78b55f-8037-5351-a016-9369c4ced38b"
+    },
+    "doc": {
+      "title": "Hot water heater",
+      "body": "50 gallon tank. Installation and warranty details here are fictional."
+    },
+    "house_item": {
+      "category": "Plumbing & water",
+      "location": "Utility room",
+      "brand": "Sample Waterworks",
+      "model": "WH-50",
+      "installed": "2021-09-20",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "b213a31f-62da-562a-b4b4-4c98acc0531d"
+    },
+    "doc": {
+      "title": "Living room walls",
+      "body": "Color: Soft Sage SG-102 (#B3BEAC). Eggshell finish. Two coats; leftover sample tin on utility shelf."
+    },
+    "house_item": {
+      "category": "Paint & finishes",
+      "location": "Living room",
+      "brand": "Example Paint",
+      "model": "Soft Sage · SG-102",
+      "installed": "2025-03-08",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "b4c5a3e4-4156-5347-956a-e853646ee486"
+    },
+    "doc": {
+      "title": "Kitchen walls",
+      "body": "Color: Warm Linen WL-204 (#EAE2D0). Washable satin finish. Trim uses Porcelain White PW-001."
+    },
+    "house_item": {
+      "category": "Paint & finishes",
+      "location": "Kitchen",
+      "brand": "Example Paint",
+      "model": "Warm Linen · WL-204",
+      "installed": "2025-03-10",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "454db16a-426b-55d9-bea7-4257162e2474"
+    },
+    "doc": {
+      "title": "Front door finish",
+      "body": "Color: Deep Fern DF-318 (#35594A). Exterior semi-gloss. Sample finish specification."
+    },
+    "house_item": {
+      "category": "Paint & finishes",
+      "location": "Front entry",
+      "brand": "Example Paint",
+      "model": "Deep Fern · DF-318",
+      "installed": "2024-06-15",
+      "handover": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "eea620c9-6da4-585a-945e-bede5330328f"
+    },
+    "doc": {
+      "title": "Replace the heat pump filter",
+      "body": "Sample recurring reminder. Check the recorded filter size before ordering."
+    },
+    "house_care": {
+      "item": "b1f67cbe-b03a-5377-bf0e-0c057b2c0be4",
+      "due": "2026-11-15",
+      "months": 3
+    }
+  },
+  {
+    "entity": {
+      "eid": "8a8ba4dc-61cb-5697-b26e-867356fe4284"
+    },
+    "doc": {
+      "title": "Clean the dishwasher filter",
+      "body": "Remove and rinse the filter according to its manual."
+    },
+    "house_care": {
+      "item": "483fe89d-c717-5572-8d47-76eba812170c",
+      "due": "2026-11-01",
+      "months": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "97642e04-e75a-50f9-9672-530536490348"
+    },
+    "doc": {
+      "title": "Arrange a water heater service",
+      "body": "Sample annual service reminder; follow the manufacturer’s guidance."
+    },
+    "house_care": {
+      "item": "0f78b55f-8037-5351-a016-9369c4ced38b",
+      "due": "2027-04-01",
+      "months": 12
+    }
+  },
+  {
+    "entity": {
+      "eid": "af95f3e6-c3ce-550a-a6eb-1455603a5fd7"
+    },
+    "doc": {
+      "title": "Heat pump autumn service",
+      "body": "Sample visit: checked the filter and cleared leaves around the outdoor unit."
+    },
+    "house_record": {
+      "item": "b1f67cbe-b03a-5377-bf0e-0c057b2c0be4",
+      "date": "2026-10-05",
+      "kind": "Maintenance",
+      "cost": 95,
+      "provider": "Example Heating Services"
+    }
+  },
+  {
+    "entity": {
+      "eid": "a1ffe626-cc4d-51ef-9ddd-494b0aca058d"
+    },
+    "doc": {
+      "title": "Living room repainted",
+      "body": "Two coats of Soft Sage, eggshell. Color and finish are recorded in the house manual."
+    },
+    "house_record": {
+      "item": "b213a31f-62da-562a-b4b4-4c98acc0531d",
+      "date": "2025-03-08",
+      "kind": "Improvement",
+      "cost": 86,
+      "provider": "Homeowner · sample"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0696ea42-5126-5470-8502-6c44e09b7a06"
+    },
+    "doc": {
+      "title": "Sample appliance care sheet",
+      "body": "An example document created for this public demo."
+    },
+    "house_file": {
+      "item": "483fe89d-c717-5572-8d47-76eba812170c",
+      "url": "https://yourname.yaks.app/housebook/demo/appliance-care.txt",
+      "mime": "text/plain",
+      "reference": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "f02787a4-e558-5229-9b48-bbae03dec2f9"
+    },
+    "doc": {
+      "title": "Sample paint schedule",
+      "body": "An example document created for this public demo."
+    },
+    "house_file": {
+      "item": "b213a31f-62da-562a-b4b4-4c98acc0531d",
+      "url": "https://yourname.yaks.app/housebook/demo/paint-schedule.txt",
+      "mime": "text/plain",
+      "reference": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "12dddbbf-2aa7-55f4-bd83-2e85b880602e"
+    },
+    "doc": {
+      "title": "Example Heating Services",
+      "body": "Fictional contact for the sample house."
+    },
+    "house_contact": {
+      "trade": "Heating & cooling",
+      "phone": "+1 202-555-0142",
+      "email": "service@example.com"
+    }
+  }
+]

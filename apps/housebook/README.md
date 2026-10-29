@@ -10,8 +10,14 @@ electrical directory preserves circuit labels, including OFF markings.
 The browser uses `./api/client.js` for storage, uploads, live subscriptions and
 recoverable drafts. `model.js` holds date and input behavior; `editor.js` edits
 records; `views.js` renders them; `export.js` makes a standalone handover file.
-App files contain no house records. A person's records belong in the app store,
-so publishing code must never require copying their house data into a seed.
+App files contain no personal house records. A person's records belong in the
+app store, so publishing code must never require copying their house data into a
+seed.
+
+The public gallery copy lives at https://yourname.yaks.app/housebook/. The
+fictional records and documents in `demo/` furnish that copy. Deploy
+`demo/seed.json` as `seed.json` and `demo/index.html` as `index.html` there; the
+private app uses its ordinary index and has no root seed file.
 
 To record a service visit, open an item and add a History entry. To keep a
 receipt, add a document and upload it or paste its direct download URL.

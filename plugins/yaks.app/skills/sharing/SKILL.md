@@ -265,6 +265,12 @@ publisher offers now. See "Updating an installed copy" below.
 
 ## The gallery
 
+An approved private app from a space owned by yaks.app's staff gets an open demo
+in `yourname`, through `app_install`. The gallery's visit and install links use
+that published copy. Its store is independent: the source's records are never
+copied. Relisting updates its code to the source's published release and keeps
+the demo's data. Give the demo fictional sample data before sharing it.
+
 Publishing makes an app installable. The gallery, <https://yaks.app/gallery>, is
 a separate public page that shows apps people have made on yaks.app. Publishing
 and listing are deliberately separate: an offer is between whoever made the app

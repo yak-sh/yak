@@ -96,6 +96,7 @@ import * as install from './install.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
+import { call } from './tools.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { HANDOFF } from './handoff.ts'
 import { apex, hosted } from './host.ts'
@@ -247,7 +248,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   if (path == install.PATH) return install.answer(req, env, dir)
   if (path == gallery.REVIEW || path.startsWith(gallery.IMAGE)) {
-    let shown = await gallery.answer(req, env, path, dir)
+    let shown = await gallery.answer(req, env, path, dir, call)
     if (shown) return shown
   }
   // The platform admin's directory, signed in and uncached like the review.

@@ -23,6 +23,7 @@ import { documents } from './documents.js'
 import { download, embedded, handover } from './export.js'
 
 let data = byKind([])
+let demo = document.documentElement.hasAttribute('data-demo')
 let state = { page: 'overview', category: '', term: '', item: null }
 let selected = new Set(),
   initialized = false,
@@ -318,8 +319,18 @@ let shell = () => {
       el(
         'div',
         { class: 'sidebar-bottom' },
-        el('span', { class: 'privacy' }, '◇ Private housebook'),
-        el('small', {}, 'Your home. Your records.'),
+        el(
+          'span',
+          { class: 'privacy' },
+          demo ? '◇ Public demo' : '◇ Private housebook',
+        ),
+        el(
+          'small',
+          {},
+          demo
+            ? 'Sample records. Try adding your own.'
+            : 'Your home. Your records.',
+        ),
         el(
           'a',
           { href: 'https://yaks.app', target: '_blank', rel: 'noopener' },

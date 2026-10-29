@@ -106,6 +106,7 @@ import {
 import * as dirPart from './directory.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
+import { demonstrate, ours } from './gallery-demo.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
   listCommands,
@@ -666,7 +667,10 @@ let toGallery = async (
         'gallery: true), which does both)',
     )
   }
-  if (onGallery(app) == 'listed') return onGallery(app)
+  if (onGallery(app) == 'listed') {
+    await demonstrate(ctx, space, app, call)
+    return onGallery(app)
+  }
   if (!await pictureOf(ctx.env, space, app)) {
     throw refuse(
       'conflict',
@@ -676,11 +680,12 @@ let toGallery = async (
     )
   }
   if (skip) {
+    await demonstrate(ctx, space, app, call)
     await decideGallery(ctx.env, app, true, skip, 'listed without review')
     return 'listed' as const
   }
   let owner = await ctx.dir.nameAt(ctx.person) ?? space.slug
-  let asking = await ours(ctx, space)
+  let asking = await ours(ctx.dir, space)
     ? await reviewLetter(ctx, space, app, owner)
     : codeReviewLetter({
       title: app.title,
@@ -730,16 +735,6 @@ let reviewLetter = async (
     no: galleryDoor(await ticketFor(app, false, secret), ctx.env),
     ...(code ? { code } : {}),
   }, ctx.env)
-}
-
-// A space one of the platform's own people owns (an owner of the meta space
-// owns it too: yourname, Jeff's own). Its apps skip the code review a
-// stranger's ask gets (gallery.ts).
-let ours = async (ctx: Ctx, space: Space) => {
-  let meta = await ctx.dir.space(META.space)
-  if (!meta) return false
-  let staff = new Set(await ctx.dir.owners(meta))
-  return (await ctx.dir.owners(space)).some((person) => staff.has(person))
 }
 
 // Who a gallery decision is recorded as (gallery.ts `decision`). The admin's
@@ -6201,6 +6196,7 @@ let OURS: Row[] = [
       if (!approve && args.decision != 'decline') {
         throw refuse('arguments', 'decision is approve or decline')
       }
+      if (approve) await demonstrate(ctx, at.space, at.app, call)
       await decideGallery(
         ctx.env,
         at.app,
@@ -6244,7 +6240,7 @@ let OURS: Row[] = [
       if (onGallery(at.app) != 'asked') {
         throw refuse('conflict', `${name} is not waiting for gallery review`)
       }
-      if (await ours(ctx, at.space)) {
+      if (await ours(ctx.dir, at.space)) {
         throw refuse(
           'conflict',
           `${name} is one of ours, so its review went to yaks.app's owner ` +

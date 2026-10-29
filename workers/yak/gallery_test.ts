@@ -108,6 +108,26 @@ test('the listing is the approved offers', async () => {
   assertEquals(install(all[0]), "app_install(name: 'recipes')")
 })
 
+test('a private listing visits and installs its public demo while keeping its approval and image', async () => {
+  let source = app({ access: 'private', gallery: live, screenshot: 'approved' })
+  let demo = app({
+    eid: 'demo-eid',
+    installed: { of: source.eid, version: 1, sandboxed: null },
+    published: { ...source.published!, name: 'recipes-demo' },
+  })
+  let offers = [
+    { space: space(), app: source },
+    { space: space({ slug: 'yourname' }), app: demo },
+  ]
+  let dir = { offers: () => Promise.resolve(offers) } as unknown as Directory
+  let shown = await listed(dir)
+  assertEquals(shown.length, 1)
+  assertEquals(shown[0].eid, source.eid)
+  assertEquals(shown[0].at, 'https://yourname.yaks.app/recipes/')
+  assertEquals(install(shown[0]), "app_install(name: 'recipes-demo')")
+  assertEquals(shown[0].app.screenshot, 'approved')
+})
+
 test('gallery decisions record the actor and session and clear a declined request', () => {
   let pending = app({ gallery: asked })
   let actor = { by: 'operator-project', via: 'review-session' }

@@ -1,0 +1,8 @@
+Housebook sample paint schedule
+
+Living room walls: Example Paint Soft Sage SG-102, eggshell, #B3BEAC.
+Kitchen walls: Example Paint Warm Linen WL-204, satin, #EAE2D0.
+Front door: Example Paint Deep Fern DF-318, exterior semi-gloss, #35594A.
+Trim: Example Paint Porcelain White PW-001.
+
+All products and specifications are fictional sample data.

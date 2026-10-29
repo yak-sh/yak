@@ -1,0 +1,6 @@
+Housebook sample appliance care sheet
+
+Fictional appliance: Example Appliances DW-240 dishwasher
+Location: kitchen
+
+Record where the removable filter is and how to clean it. Keep the manufacturer’s manual and your purchase receipt with the appliance’s record. This document is an example for trying Housebook, not service instructions for an appliance.

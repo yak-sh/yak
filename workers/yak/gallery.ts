@@ -76,6 +76,8 @@ import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
+import { DEMO } from './gallery-demo.ts'
+import type { Args, Ctx, Out } from './tool.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two
@@ -185,11 +187,31 @@ let shownOf = (space: Space, app: App, env: Host): Shown => ({
 // published app and nothing else: unpublishing is what takes an app out of
 // that list, and it takes it out of this one at the same moment without a
 // second rule to keep in step.
-export let listed = async (dir: Directory, env: Host = {}): Promise<Shown[]> =>
-  (await dir.offers())
+export let listed = async (
+  dir: Directory,
+  env: Host = {},
+): Promise<Shown[]> => {
+  let offers = await dir.offers()
+  let demos = new Map(
+    offers.filter(({ space, app }) =>
+      space.slug == DEMO && app.access != 'private' && app.installed?.of
+    ).map((offer) => [offer.app.installed!.of, offer]),
+  )
+  return offers
     .filter(({ app }) => app.gallery?.listedAt)
-    .map(({ space, app }) => shownOf(space, app, env))
+    .map(({ space, app }) => {
+      let shown = shownOf(space, app, env)
+      let demo = app.access == 'private' ? demos.get(app.eid) : null
+      return demo
+        ? {
+          ...shown,
+          at: url(demo.space, demo.app, env),
+          name: demo.app.published!.name,
+        }
+        : shown
+    })
     .sort((a, b) => b.since.localeCompare(a.since))
+}
 
 // The line an agent runs to give somebody their own copy. It is the whole
 // point of a listing: a gallery you cannot install from is a picture of apps.
@@ -700,6 +722,7 @@ export let answer = async (
   env: Env,
   path: string,
   dir: Directory,
+  run: (ctx: Ctx, name: string, args: Args) => Promise<Out>,
 ): Promise<Response | null> => {
   if (path.startsWith(IMAGE) && ['GET', 'HEAD'].includes(req.method)) {
     return image(req, dir, r2Objects(env.BLOBS), path)
@@ -769,7 +792,9 @@ export let answer = async (
   }
   if (req.method != 'POST') return confirm(said, env)
   let session = await browserOf(req, env.SESSION_SECRET)
-  await decide(env, at.app, ok.list, {
+  await run({ env, dir, person: who }, 'gallery_review', {
+    app: `${at.space.slug}/${at.app.slug}`,
+    decision: ok.list ? 'approve' : 'decline',
     by: who,
     ...(session?.via ? { via: session.via } : {}),
   })
