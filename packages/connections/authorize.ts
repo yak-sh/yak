@@ -26,6 +26,8 @@ export type Authorization = {
 }
 export type AuthTarget = { integration: string; redirect?: string }
 export type AuthOptions = {
+  /** Transport for discovery, token exchange and account reads. */
+  fetch?: typeof fetch
   /** Discover/register an unknown integration, returning its name and redirect. */
   prepare?: (name: string, as?: string) => Promise<AuthTarget | undefined>
   /** An unattended sign-in returns its private callback and optional website session. */
@@ -39,7 +41,7 @@ export let authorize = (
   h: { graph: Graph; vault: Vault; owner?: Eid },
   options: AuthOptions = {},
 ): Authorization & { returned: (name: string) => boolean } => {
-  let signin = signins({ g: h.graph, vault: h.vault })
+  let signin = signins({ g: h.graph, vault: h.vault, fetch: options.fetch })
   let targets = new Map<string, AuthTarget>()
   let replies = new Map<string, Callback>()
   let seed = async () => {

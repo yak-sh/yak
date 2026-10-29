@@ -1,4 +1,4 @@
-// Bot sign-in exercises the browser's real pages and keeps every private value off graph text.
+// Bot sign-in uses its own HTTP transport and keeps private values off graph text.
 import { equal, ok, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { compose } from '@yaks/cli/host'
@@ -116,10 +116,6 @@ test('bot OAuth walks code and consent pages without a browser or private input'
     }
     throw new Error(`unexpected ${url.pathname}`)
   }
-  // The OAuth code exchange uses the standard client's fetch. Keep this
-  // test's global swap bounded, as the runtime runs these tests sequentially.
-  let was = globalThis.fetch
-  globalThis.fetch = go
   let auth = authorize(
     { graph: host.graph, vault: host.vault, owner },
     yaksApp(host, {
@@ -164,7 +160,6 @@ test('bot OAuth walks code and consent pages without a browser or private input'
     equal((await pick(host.graph.read, owner, 'yaks.app'))?.entity.eid, first)
     equal(calls.filter((p) => p == '/oauth/register').length, discoveries)
   } finally {
-    globalThis.fetch = was
     await auth.close()
     await host.close()
   }

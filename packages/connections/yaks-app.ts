@@ -107,6 +107,7 @@ export let yaksApp = (
   let origin = opts.origin ?? 'https://yaks.app'
   let go = opts.fetch ?? fetch
   return {
+    fetch: go,
     prepare: async (name) => {
       if (name != 'yaks.app') return undefined
       let held = await known(h.graph.read, name)

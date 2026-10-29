@@ -43,8 +43,7 @@ test('auth starts OpenAI without a harness or provider owner', async () => {
 
 test('auth extension discovers an integration and holds bot session through account renewal', async () => {
   let host = await open(), owner = mint()
-  let original = globalThis.fetch
-  globalThis.fetch = (() =>
+  let go: typeof fetch = (() =>
     Promise.resolve(Response.json({
       access_token: 'bearer',
       refresh_token: 'refresh',
@@ -53,6 +52,7 @@ test('auth extension discovers an integration and holds bot session through acco
     }))) as typeof fetch
   let prepared: string[] = []
   let auth = authorize({ graph: host.graph, vault: host.vault, owner }, {
+    fetch: go,
     prepare: async (name, as) => {
       prepared.push(`${name}:${as}`)
       await host.graph.apply([{
@@ -94,7 +94,10 @@ test('auth extension discovers an integration and holds bot session through acco
     let raw = await reveal(host.vault, String((b.secret as Comp)?.name))
     equal(JSON.parse(raw!).website_session, 'private-website-session')
     equal(
-      await signins({ g: host.graph, vault: host.vault }).key(owner, 'site'),
+      await signins({ g: host.graph, vault: host.vault, fetch: go }).key(
+        owner,
+        'site',
+      ),
       'bearer',
     )
     ok(
@@ -103,7 +106,6 @@ test('auth extension discovers an integration and holds bot session through acco
       ),
     )
   } finally {
-    globalThis.fetch = original
     await auth.close()
     await host.close()
   }

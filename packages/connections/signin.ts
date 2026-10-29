@@ -38,10 +38,15 @@ export type SignIns = {
   cancel: (owner?: Eid) => void
 }
 
-export const signins = (h: { g: Graph; vault: Vault }): SignIns => {
+export const signins = (h: {
+  g: Graph
+  vault: Vault
+  fetch?: typeof fetch
+}): SignIns => {
   const ctx = (redirect: string): Ctx => ({
     graph: h.g,
     vault: h.vault,
+    fetch: h.fetch,
     redirect,
   })
   const pending = new Map<
