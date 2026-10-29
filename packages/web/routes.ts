@@ -32,7 +32,7 @@ import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
-import { type Config, located, subpath, used } from '@yaks/cli/config'
+import { type Config, located, subpaths, used } from '@yaks/cli/config'
 import { broken, type Context } from '@yaks/tracker/report'
 import type { Registry } from '@yaks/render'
 import type { Vault } from '@yaks/secrets'
@@ -246,17 +246,16 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
         'text/javascript; charset=utf-8',
         async (signal) => {
           let specs: string[] = []
-          for (let plug of host.config?.plugins ?? []) {
-            let plugin = used(plug)
-            let facet = await subpath<
-              {
-                views?: Registry
-                inspectViews?: unknown[]
-                destinations?: unknown[]
-                home?: unknown
-                tabs?: unknown[]
-              }
-            >(plugin, 'views')
+          let plugins = (host.config?.plugins ?? []).map(used)
+          let facets = await subpaths(plugins.map((p) => [p, 'views'])) as ({
+            views?: Registry
+            inspectViews?: unknown[]
+            destinations?: unknown[]
+            home?: unknown
+            tabs?: unknown[]
+          } | null)[]
+          for (let [i, plugin] of plugins.entries()) {
+            let facet = facets[i]
             if (
               facet?.views || facet?.inspectViews || facet?.destinations ||
               facet?.home || facet?.tabs

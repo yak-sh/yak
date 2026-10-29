@@ -7,7 +7,7 @@
  * app and @yaks/inspect's page are each one.
  *
  * Making a body is bounded: one that has not settled within the limit is
- * aborted, which kills whatever it spawned, and counts as a failure. A failure
+ * aborted, cancelling the work it owns, and counts as a failure. A failure
  * is never kept: it is reported once, where it happened, and the next request
  * makes the body again. So a build that hangs heals on its own, without
  * anybody restarting the host. A make still going when its host closes is
@@ -23,7 +23,7 @@ import { released } from './release.ts'
 export type Body = string | Uint8Array<ArrayBuffer>
 
 /** How long a body may take to make before it is given up on. A bundle takes
- * about a second; a hung one never finishes (T-38240). */
+ * a few seconds; a hung one never finishes (T-38240). */
 export let LIMIT = 60_000
 
 let sha = async (body: Body) =>
@@ -108,164 +108,117 @@ export let kept = (
   }
 }
 
-// A bundler ends when it finishes, or when `kept` aborts it: past its limit,
-// or as its host closes. Only a host killed outright leaves one behind, with
-// its directory, which is named for that host's pid. The next bundle on the
-// machine ends it and removes the directory. That sweep reads /proc, which is
-// how a pid is known to be that bundler and not a stranger reusing it, so
-// elsewhere it does nothing.
-let PREFIX = 'yaks-page-'
-
-let exists = (path: string) => Deno.stat(path).then(() => true, () => false)
-
-// The processes whose command line names `dir`: the bundler writing into it.
-let writing = async (dir: string) => {
-  let pids: number[] = []
-  for await (let e of Deno.readDir('/proc')) {
-    if (!/^\d+$/.test(e.name)) continue
-    let line = await Deno.readTextFile(`/proc/${e.name}/cmdline`).catch(() =>
-      ''
-    )
-    if (line.split('\0').some((arg) => arg.startsWith(`${dir}/`))) {
-      pids.push(Number(e.name))
-    }
-  }
-  return pids
-}
-
-/** End the bundlers, and remove the directories, of hosts that are gone. */
-export let sweep = async (base: string): Promise<void> => {
-  if (!await exists('/proc/self')) return
-  for await (let e of Deno.readDir(base)) {
-    let host = e.isDirectory && e.name.startsWith(PREFIX) &&
-      e.name.slice(PREFIX.length).split('-')[0]
-    if (!host || !/^\d+$/.test(host) || await exists(`/proc/${host}`)) continue
-    let dir = `${base}/${e.name}`
-    for (let pid of await writing(dir)) {
-      try {
-        Deno.kill(pid, 'SIGKILL')
-      } catch { /* it ended on its own */ }
-    }
-    await Deno.remove(dir, { recursive: true }).catch(() => {})
-  }
-}
-
-// TODO(T-38240): the tries stand in for a fix in Deno. Its 2.9.1 bundler
-// sometimes never finishes: `deno bundle` stops reading its esbuild service,
-// whose stdout pipe fills (61 KB unread, esbuild blocked writing, deno idle in
-// epoll). About one bundle in eight hung with eight at once on this box. A try
-// that hangs is killed and the bundle tried again.
-
-/** How long one try may take: a bundle takes a few seconds, eight at once. */
-let TRY = 20_000
-
-/** How many tries a bundle gets. */
-let TRIES = 3
-
-/** The longest a bundle takes, every try together. */
-export let BUNDLE_LIMIT = TRY * TRIES
-
-// TODO(T-132250): the bundler's own graph should be whole. Deno 2.9.1's, under
-// the workspace's lazy-dynamic-imports (deno.json), cannot load a jsr package
-// a bundle reaches only through a dynamic import, and names the one it could
-// not: "Do not know how to load path: deno:jsr:@std/yaml@^1.2.0". An entry
-// importing it statically bundles, so a written entry is bundled again with an
-// import of each package so named, and no module a command line loads has to
-// import one for the bundler's sake.
-let unloaded = /Do not know how to load path: deno:(jsr:[\w@/.^~=<>*+-]+)/
-
-// The entry again with a static import of the package `e` says the bundler
-// could not load; undefined where it says none, or one already imported.
-let loading = (entry: URL | Written, e: unknown): Written | undefined => {
-  let missing = String((e as Error)?.message).match(unloaded)?.[1]
-  if (!missing || entry instanceof URL) return
-  let line = `import ${JSON.stringify(missing)}\n`
-  if (entry.code.includes(line)) return
-  return { ...entry, code: line + entry.code }
-}
-
 /** An entry written where it is bundled rather than read from a file: its
- * `code`, whose imports resolve as they would in a module at `at`. A page
- * composed of what a config's plugins contribute starts from one. */
+ * `code`, whose imports resolve as they would in a module at `at`. */
 export type Written = { code: string; at: URL }
 
-/** One file of browser JavaScript: `entry` and everything it imports, by
- * `deno bundle`. Aborting `signal` kills the bundler.
- *
- * From a checkout the entry is a file, and the bundler runs where its
- * package's config is found, so the workspace resolves every import the way
- * it does there. From JSR it is a URL, and the bundler runs in a directory of
- * its own under the config a release resolves by (./release.ts): on the day
- * this one published the rest of it is exactly as new, and a bundler waiting
- * a day for it would find none. An entry `Written` here is put beside the
- * bundle and read the same way, from where it says it is. */
+/** The operations one build owns, independent of its compiler's service. */
+export type Build = {
+  rebuild: () => Promise<{ outputFiles?: { text: string }[] }>
+  cancel: () => Promise<void>
+  dispose: () => Promise<void>
+}
+
+/** Finish or cancel one build, always releasing its context. */
+export let compiled = async (build: Build, signal?: AbortSignal) => {
+  let cancel = () => {
+    void build.cancel()
+  }
+  signal?.addEventListener('abort', cancel, { once: true })
+  try {
+    if (signal?.aborted) throw new Error('browser bundle was stopped')
+    let result = await build.rebuild()
+    if (signal?.aborted) throw new Error('browser bundle was stopped')
+    return result.outputFiles![0].text
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+    await build.dispose()
+  }
+}
+
+// Pass the discovered config to both halves of the loader: its native loader
+// otherwise starts `deno info --no-config`, losing the workspace's lock pins.
+let configAt = async (at: URL): Promise<string | undefined> => {
+  let dir = new URL('./', at)
+  for (;;) {
+    for (let name of ['deno.json', 'deno.jsonc']) {
+      let path = new URL(name, dir)
+      try {
+        if ((await Deno.stat(path)).isFile) return path.pathname
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error
+      }
+    }
+    let parent = new URL('../', dir)
+    if (parent.href == dir.href) return
+    dir = parent
+  }
+}
+
+/** One browser module, compiled by esbuild's JavaScript service bridge and
+ * Deno's workspace resolver, replacing the `deno bundle` bridge that can
+ * deadlock (T-38240). Each context owns its cancellation and cleanup, so
+ * concurrent builds cannot stop one another's compiler. */
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
 ): Promise<string> => {
-  for (let tried = 1;; tried++) {
-    let late = AbortSignal.timeout(TRY)
-    try {
-      return await once(signal ? AbortSignal.any([signal, late]) : late, entry)
-    } catch (e) {
-      let whole = loading(entry, e)
-      if (whole) {
-        entry = whole
-        tried--
-        continue
-      }
-      if (!late.aborted || signal?.aborted) throw e
-      if (tried == TRIES) {
-        throw new Error(
-          `deno bundle did not finish in ${TRIES} tries of ${TRY / 1000}s`,
-        )
-      }
-    }
-  }
-}
-
-// One try: the bundler, killed if `stop` aborts.
-let once = async (
-  stop: AbortSignal,
-  entry: URL | Written,
-): Promise<string> => {
-  let dir = await Deno.makeTempDir({ prefix: `${PREFIX}${Deno.pid}-` })
-  await sweep(dir.slice(0, dir.lastIndexOf('/')))
+  if (signal?.aborted) throw new Error('browser bundle was stopped')
+  let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
+    .all([
+      import('esbuild'),
+      import('@luca/esbuild-deno-loader'),
+    ])
+  let at = entry instanceof URL ? entry : entry.at
+  let dir = at.protocol == 'file:'
+    ? undefined
+    : await Deno.makeTempDir({ prefix: 'yaks-page-' })
+  let from = entry instanceof URL ? entry : new URL('./.yak-page.ts', at)
+  let virtual = urlToEsbuildResolution(from)
   try {
-    let to = `${dir}/app.js`
-    let at = entry instanceof URL ? entry : entry.at
-    let local = at.protocol == 'file:'
-    if (!local) {
+    if (dir) {
       await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
     }
-    let from = entry instanceof URL
-      ? local ? entry.pathname : entry.href
-      : `${dir}/entry.ts`
-    if (!(entry instanceof URL)) await Deno.writeTextFile(from, entry.code)
-    let run = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'bundle',
-        '--quiet',
-        '--platform',
-        'browser',
-        '--minify',
-        '-o',
-        to,
-        from,
+    let configPath = dir ? `${dir}/deno.json` : await configAt(at)
+    if (signal?.aborted) throw new Error('browser bundle was stopped')
+    let build = await context({
+      absWorkingDir: dir ?? new URL('./', at).pathname,
+      entryPoints: [from.href],
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'esnext',
+      minify: true,
+      write: false,
+      logLevel: 'silent',
+      plugins: [
+        ...entry instanceof URL ? [] : [{
+          name: 'written',
+          setup(build: import('esbuild').PluginBuild) {
+            build.onResolve(
+              { filter: /.*/ },
+              (args) =>
+                args.kind == 'entry-point' && args.path == from.href
+                  ? virtual
+                  : undefined,
+            )
+            build.onLoad(
+              { filter: /.*/, namespace: virtual.namespace },
+              (args) =>
+                args.path == virtual.path
+                  ? { contents: entry.code, loader: 'ts' }
+                  : undefined,
+            )
+          },
+        }],
+        // The loader carries esbuild 0.20 types; its plugin API is unchanged.
+        ...denoPlugins(
+          { configPath },
+        ) as import('esbuild').Plugin[],
       ],
-      cwd: local ? new URL('./', at).pathname : dir,
-      stdout: 'piped',
-      stderr: 'piped',
-      signal: stop,
-    }).output()
-    if (stop.aborted) throw new Error('deno bundle was stopped')
-    if (!run.success) {
-      throw new Error(
-        `deno bundle failed: ${new TextDecoder().decode(run.stderr).trim()}`,
-      )
-    }
-    return await Deno.readTextFile(to)
+    })
+    return await compiled(build, signal)
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    if (dir) await Deno.remove(dir, { recursive: true })
   }
 }

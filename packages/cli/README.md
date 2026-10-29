@@ -30,8 +30,8 @@ package: [@yaks/api](../api/README.md) declares and implements it, so a config
 listing that package is a config whose graph can be served.
 
 A composed CLI host also offers `help` and `restart` through MCP. `help` with
-`{ "words": ["task", "update"] }` returns that tool's arguments; no words
-lists names. `restart` with `{}` uses the same ready-first systemd handover as
+`{ "words": ["task", "update"] }` returns that tool's arguments; no words lists
+names. `restart` with `{}` uses the same ready-first systemd handover as
 `yak restart`, with the host's configured processes.
 
 The package has two main responsibilities:
@@ -753,10 +753,10 @@ The package exports eight entry points:
   answers an address with a body made once and kept for the process, bounded,
   healed on its next request after a failure, and ended as its host closes;
   `bundle(entry, signal)` makes a page's script and everything it imports into
-  one browser module with `deno bundle`, from a file or from an entry written
-  for the host (`Written`: its code, and where its imports resolve from).
-  @yaks/web serves the application its plugin config chooses through a
-  contributed `./web` facet, such as @yaks/browse.
+  one browser module with esbuild and Deno’s module resolver, from a file or
+  from an entry written for the host (`Written`: its code, and where its imports
+  resolve from). @yaks/web serves the application its plugin config chooses
+  through a contributed `./web` facet, such as @yaks/browse.
 
 Application commands use `yak command <name> [arguments] --app <app>`, or the
 short form `yak <app> <name> [arguments]`, as the selected yaks.app connection.

@@ -1,6 +1,6 @@
 import { test, tick } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Body, kept } from './page.ts'
+import { type Body, type Build, compiled, kept } from './page.ts'
 
 let get = (handle: (r: Request) => Promise<Response>) =>
   handle(new Request('http://x/x'))
@@ -78,4 +78,51 @@ test('a body once made is kept, and revalidated by its hash', async () => {
     )).status,
     304,
   )
+})
+
+let compiling = (rebuild: Build['rebuild']) => {
+  let seen = { cancelled: 0, disposed: 0 }
+  let build: Build = {
+    rebuild,
+    cancel: () => {
+      seen.cancelled++
+      return Promise.resolve()
+    },
+    dispose: () => {
+      seen.disposed++
+      return Promise.resolve()
+    },
+  }
+  return { seen, build }
+}
+
+test('a completed build releases its context and ignores later cancellation', async () => {
+  let stop = new AbortController()
+  let { seen, build } = compiling(() =>
+    Promise.resolve({ outputFiles: [{ text: 'built' }] })
+  )
+  assertEquals(await compiled(build, stop.signal), 'built')
+  stop.abort()
+  assertEquals(seen, { cancelled: 0, disposed: 1 })
+})
+
+test('a cancelled build releases its context without returning its output', async () => {
+  let stop = new AbortController()
+  let done!: (value: { outputFiles: { text: string }[] }) => void
+  let { seen, build } = compiling(() =>
+    new Promise((resolve) => {
+      done = resolve
+    })
+  )
+  let answer = compiled(build, stop.signal).catch((e) => e.message)
+  stop.abort()
+  done({ outputFiles: [{ text: 'incomplete' }] })
+  assertEquals(await answer, 'browser bundle was stopped')
+  assertEquals(seen, { cancelled: 1, disposed: 1 })
+})
+
+test('a failed build releases its context', async () => {
+  let { seen, build } = compiling(() => Promise.reject(new Error('broken')))
+  assertEquals(await compiled(build).catch((e) => e.message), 'broken')
+  assertEquals(seen.disposed, 1)
 })

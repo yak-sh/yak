@@ -73,10 +73,10 @@ web contributes no app-specific graph state.
 
 ## Limits
 
-The script is built with `deno bundle`. From a checkout it resolves the
-workspace; from JSR it resolves the matching release through @yaks/cli's bundle
-machinery. Terminal rendering belongs to @yaks/tui, and the terminal app belongs
-to browse.
+The script is built with esbuild and Deno’s module resolver. From a checkout it
+resolves the workspace; from JSR it resolves the matching release through
+@yaks/cli's bundle machinery. Terminal rendering belongs to @yaks/tui, and the
+terminal app belongs to browse.
 
 ## Home query and plugin views
 
