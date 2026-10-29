@@ -404,7 +404,8 @@ test('a card offers installation separately from opening the app', () => {
   let html = card(shown())
   assertStringIncludes(html, 'id="recipes"')
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
-  assertStringIncludes(html, 'jeff.yaks.app/recipes/')
+  // The link carries the address; the card does not print it.
+  assert(!html.includes('>jeff.yaks.app/recipes/<'))
   // No picture of its own falls back to the platform's tile.
   assertStringIncludes(html, 'connector-512.png')
   assert(html.indexOf('</a>') < html.indexOf('<form'))

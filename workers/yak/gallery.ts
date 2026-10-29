@@ -357,7 +357,7 @@ export let pictures = async (env: Env, all: Shown[]) =>
 
 // Trying the app and installing a copy are separate actions: its head is its
 // name, linked to the app, and the copy it offers; its picture opens the app
-// too; and its address sits outside every link, so it can be selected.
+// too.
 export let card = (a: Shown) =>
   `<li class="Card Make_Card" id="${esc(a.name)}">
 <header class="Card_Head"><h3 class="Card_Title"><a href="${esc(a.at)}">${
@@ -373,7 +373,6 @@ export let card = (a: Shown) =>
       : `<img class="Make_Shot-none" src="/connector-512.png" alt="" loading="lazy" width="512" height="512">`
   }</a>
 ${a.about ? `<p class="Card_Sub">${esc(a.about)}</p>` : ''}
-<p class="Note Note-small">${esc(a.at.replace('https://', ''))}</p>
 </li>`
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an
