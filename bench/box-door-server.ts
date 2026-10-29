@@ -3,12 +3,14 @@ import { opened } from '../packages/cli/local.ts'
 import { channel } from '@yaks/trace'
 import { stopwatch } from '@yaks/benchmark'
 import { collector } from './box-lib.ts'
+import { settled } from './settled.ts'
 
 let [config, ready, records] = Deno.args
 let host = await opened(config, ['graph', 'web'], false)
 if (!host.handler) {
   throw new Error('box door: config needs @yaks/api and @yaks/mcp')
 }
+await settled(host)
 let server = Deno.serve({
   hostname: '127.0.0.1',
   port: host.config.port,
