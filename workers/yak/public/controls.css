@@ -43,9 +43,9 @@
   a.Pill::after {
     content: '';
     position: absolute;
-    inset: calc(-1px - var(--over));
-    color: var(--pencil, var(--graphite));
-    background: var(--drawn);
+    inset: -1px;
+    border: var(--stroke) solid var(--pencil, var(--graphite));
+    border-radius: var(--corner);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -60,7 +60,7 @@
     justify-content: center;
     gap: .35rem;
     border: 1px solid transparent;
-    border-radius: 0;
+    border-radius: var(--corner);
     background: var(--button-fill, var(--accent));
     color: var(--button-ink, var(--on-accent));
     font-weight: 800;
@@ -73,6 +73,7 @@
     position: absolute;
     inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
       calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+    border-radius: var(--corner);
     background: var(--hatch);
     clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
       0 calc(100% - var(--lift)), calc(100% - var(--lift))
@@ -103,7 +104,7 @@
     min-width: 0;
     max-width: 100%;
     border: var(--stroke) solid var(--graphite);
-    border-radius: 0;
+    border-radius: var(--corner);
     background: var(--paper);
     color: var(--ink);
   }
@@ -136,6 +137,7 @@
     display: inline-block;
     padding: var(--pill-pad, .3rem .75rem);
     border: var(--pill-edge, 1px solid var(--line));
+    border-radius: var(--corner);
     background: var(--pill-fill, var(--paper));
     color: var(--pill-ink, var(--ink));
     font-family: var(--pill-font, inherit);
@@ -215,6 +217,7 @@
     min-width: 0;
     padding: var(--pad-block) var(--pad-inline);
     border: 1px solid transparent;
+    border-radius: var(--corner);
     background: var(--paper);
     overflow-wrap: break-word;
   }
@@ -238,17 +241,20 @@
     margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline)) 0;
     padding: .5rem var(--pad-inline);
   }
-  /* The rule under it crosses the card's sides, as they cross each other. */
+  /* The rule under it meets the card's sides. */
   .Card_Head::after {
     content: '';
     position: absolute;
-    inset: auto calc(-1px - var(--over)) 0;
+    inset: auto -1px 0;
     height: var(--stroke);
     background: var(--graphite);
     filter: url(pencil.svg#line);
   }
   .Card_Head:last-child {
     margin-bottom: calc(-1 * var(--pad-block));
+  }
+  .Card_Head:last-child::after {
+    content: none;
   }
   .Card_Head:last-child::after {
     content: none;

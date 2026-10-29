@@ -37,25 +37,16 @@
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
 
-    /* Pencil and paper. A part worth outlining is drawn: four straight lines
-       in graphite that run a little past each corner, the way an architect
-       sketches a box, given the paper's tooth by pencil.svg. What can be
-       pressed sits on a hatch it slides onto. A surface is flat, and nothing
-       is rounded but what is round. */
+    /* Pencil and paper. A part worth outlining is drawn: a graphite line
+       around it with slightly rounded corners, given the paper's tooth by
+       pencil.svg. What can be pressed sits on a hatch it slides onto. A
+       surface is flat. */
     --graphite: color-mix(in srgb, var(--ink) 88%, transparent);
     --stroke: 1.5px; /* the weight of a drawn line */
-    --over: 3px; /* how far a drawn line runs past its corner */
+    --corner: 4px; /* how round a drawn box's corners are */
     --lift: 4px; /* how far what can be pressed sits off its hatch */
     --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
       transparent 1px 3px);
-    /* A drawn box, laid on a pseudo-element `--over` outside the part, in
-       its currentColor. */
-    --drawn: linear-gradient(currentColor 0 0) 0 var(--over) / 100%
-      var(--stroke) no-repeat, linear-gradient(currentColor 0 0) 0
-      calc(100% - var(--over)) / 100% var(--stroke) no-repeat,
-      linear-gradient(currentColor 0 0) var(--over) 0 / var(--stroke) 100%
-      no-repeat, linear-gradient(currentColor 0 0) calc(100% - var(--over)) 0
-      / var(--stroke) 100% no-repeat;
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
 

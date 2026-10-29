@@ -200,15 +200,16 @@
   .Window {
     position: relative;
     border: 1px solid transparent;
+    border-radius: var(--corner);
     background: var(--paper);
   }
 
   .Window::after {
     content: '';
     position: absolute;
-    inset: calc(-1px - var(--over));
-    color: var(--graphite);
-    background: var(--drawn);
+    inset: -1px;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--corner);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -223,7 +224,7 @@
   .Window_Bar::after {
     content: '';
     position: absolute;
-    inset: auto calc(-1px - var(--over)) 0;
+    inset: auto -1px 0;
     height: var(--stroke);
     background: var(--graphite);
     filter: url(pencil.svg#line);
