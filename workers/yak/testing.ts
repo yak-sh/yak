@@ -1,4 +1,5 @@
 import { decodedPath } from './request-path.ts'
+import { parseHTML } from 'linkedom'
 import { createHash } from 'node:crypto'
 // The platform in memory: the kernel's own bindings, stood up under Deno so a
 // test can drive the code that runs in production with nothing stubbed between
@@ -107,18 +108,14 @@ export let durable = (name = '', declaration: string | null = null) => {
   return raw(from)
 }
 
-// The streaming HTML rewriter, in the one shape apps.ts asks for it
-// (`reported` weaves the reporter into every page): a tag prepended inside the
-// first `head` or `body`, or put before the first `script`, else appended to
-// the document. Each selector's first element is handed over in document
-// order, as the streaming one meets them. Deno has none, and what a page
-// carries out of that door is part of what the door does.
+// The HTMLRewriter binding, backed by an in-process document. The kernel
+// supplies the selectors and mutations; the fixture supplies DOM traversal.
 type El = {
   prepend(s: string, o: { html: boolean }): void
   before(s: string, o: { html: boolean }): void
+  getAttribute(name: string): string | null
+  setAttribute(name: string, value: string): void
 }
-let opening = (selector: string) =>
-  new RegExp(`<${selector}(?=[\\s>/])[^>]*>`, 'i')
 
 class Rewriter {
   #on: [string, (el: El) => void][] = []
@@ -133,26 +130,22 @@ class Rewriter {
   }
   transform(res: Response) {
     let done = res.text().then((html) => {
-      let met = this.#on
-        .map(([selector, element]) => ({
-          selector,
-          element,
-          at: opening(selector).exec(html)?.index ?? -1,
-        }))
-        .filter((m) => m.at >= 0)
-        .sort((a, b) => a.at - b.at)
-      for (let { selector, element } of met) {
-        let at = opening(selector).exec(html)!
-        element({
-          prepend: (s) => {
-            let cut = at.index + at[0].length
-            html = html.slice(0, cut) + s + html.slice(cut)
-          },
-          before: (s) => {
-            html = html.slice(0, at.index) + s + html.slice(at.index)
-          },
-        })
+      let { document } = parseHTML(html)
+      let selectors = this.#on.map(([selector]) => selector).join(',')
+      for (let node of selectors ? document.querySelectorAll(selectors) : []) {
+        for (let [selector, element] of this.#on) {
+          if (!node.matches(selector)) continue
+          element({
+            prepend: (s) => node.insertAdjacentHTML('afterbegin', s),
+            before: (s) => node.insertAdjacentHTML('beforebegin', s),
+            getAttribute: (name) => node.getAttribute(name),
+            setAttribute: (name, value) => {
+              node.setAttribute(name, value)
+            },
+          })
+        }
       }
+      html = document.toString()
       for (let end of this.#end) end({ append: (s) => void (html += s) })
       return new TextEncoder().encode(html)
     })

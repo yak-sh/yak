@@ -2,10 +2,10 @@
 // rollback, while the page and ordinary file paths follow the live release.
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
-import { connector, seed, workerd } from './probe.ts'
+import { connector, kernel, seed } from './probe.ts'
 
 test('a page uses release assets whose bytes survive deploy and rollback', async () => {
-  let k = workerd()
+  let k = await kernel()
   try {
     let space = 'releaseassets'
     let app = { space, app: 'page' }
