@@ -9,6 +9,7 @@ import { processCpu, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { settled } from './settled.ts'
+import { selected } from './selected.ts'
 import { starter } from '../packages/cli/init.ts'
 
 export let TERMINAL_INTERACTIONS = [
@@ -191,72 +192,80 @@ export async function measure(
     await paint('comment…')
     // Each sample reopens the actual palette and types into its freshly
     // mounted input. Neither a target title nor the query heading is an answer.
-    await timed('tui/query-to-answer', async () => {
-      let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
-      if (state.entries[state.at].path == '/?.task%20.count') {
-        await keys('H')
-        await paint('comment…')
-      }
-      await keys('/')
-      await paint('Type words or a query')
-      return async () => {
-        await type('.task ')
-        await paint('.task ')
-        await type('.count')
-        await paint('.task .count')
-        await paint('2,000') // aggregate preview, not an entity tile
-        await keys('Enter')
-        await until('addressed populated query answer', async () => {
-          // History is written by the other process; a read can meet its
-          // truncate/write boundary, which is not a completed navigation.
-          let text = await Deno.readTextFile(env.TASKS_TUI_STATE)
-          let state
-          try {
-            state = JSON.parse(text)
-          } catch {
-            return false
-          }
-          return state.entries[state.at].path == '/?.task%20.count' &&
-            /^│[^│]*│2,000\s*$/m.test(await capture())
-        })
-      }
-    })
-    await keys('H')
-    await paint('comment…')
+    if (selected('tui/query-to-answer')) {
+      await timed('tui/query-to-answer', async () => {
+        let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
+        if (state.entries[state.at].path == '/?.task%20.count') {
+          await keys('H')
+          await paint('comment…')
+        }
+        await keys('/')
+        await paint('Type words or a query')
+        return async () => {
+          await type('.task ')
+          await paint('.task ')
+          await type('.count')
+          await paint('.task .count')
+          await paint('2,000') // aggregate preview, not an entity tile
+          await keys('Enter')
+          await until('addressed populated query answer', async () => {
+            // History is written by the other process; a read can meet its
+            // truncate/write boundary, which is not a completed navigation.
+            let text = await Deno.readTextFile(env.TASKS_TUI_STATE)
+            let state
+            try {
+              state = JSON.parse(text)
+            } catch {
+              return false
+            }
+            return state.entries[state.at].path == '/?.task%20.count' &&
+              /^│[^│]*│2,000\s*$/m.test(await capture())
+          })
+        }
+      })
+      await keys('H')
+      await paint('comment…')
+    }
     await keys('G')
     await keys('i')
     // Keystroke timing ends on usable input paint. Submission resets between
     // samples outside that timing; it is measured independently below.
-    await timed('tui/comment-keystroke-paint', () => {
-      let text = `terminal-paint-${++serial}`
-      return async () => {
-        await type(text)
-        await paint(text)
-        // Reset is not part of the keystroke figure.
-      }
-    })
-    await keys('Enter')
-    await posted('terminal-paint-')
-    await timed('tui/comment-draft-save', () => {
-      let text = `terminal-draft-${++serial}`
-      return async () => {
+    if (selected('tui/comment-keystroke-paint')) {
+      await timed('tui/comment-keystroke-paint', () => {
+        let text = `terminal-paint-${++serial}`
+        return async () => {
+          await type(text)
+          await paint(text)
+          // Reset is not part of the keystroke figure.
+        }
+      })
+      await keys('Enter')
+      await posted('terminal-paint-')
+    }
+    if (selected('tui/comment-draft-save')) {
+      await timed('tui/comment-draft-save', () => {
+        let text = `terminal-draft-${++serial}`
+        return async () => {
+          await type(text)
+          await saved(text)
+          await paint(text)
+        }
+      })
+      await keys('Enter')
+      await posted('terminal-draft-')
+    }
+    if (selected('tui/comment-submit')) {
+      await timed('tui/comment-submit', async () => {
+        let text = `terminal-submit-${++serial}`
         await type(text)
         await saved(text)
-        await paint(text)
-      }
-    })
-    await keys('Enter')
-    await posted('terminal-draft-')
-    await timed('tui/comment-submit', async () => {
-      let text = `terminal-submit-${++serial}`
-      await type(text)
-      await saved(text)
-      return async () => {
-        await keys('Enter')
-        await posted(text)
-        await paint(text)
-      }
-    })
+        return async () => {
+          await keys('Enter')
+          await posted(text)
+          await paint(text)
+        }
+      })
+    }
     return results
   } finally {
     if (started) {

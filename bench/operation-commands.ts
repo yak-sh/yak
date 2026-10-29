@@ -14,6 +14,7 @@ import { declarations } from '../packages/cli/declarations.ts'
 import type { Config } from '../packages/cli/config.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { settled } from './settled.ts'
+import { selected } from './selected.ts'
 
 let root = new URL('../', import.meta.url).pathname
 let decode = new TextDecoder()
@@ -678,13 +679,17 @@ async function collect(
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
     for (let operation of operations) {
+      let doors = (operation.doors ?? ['cli', 'connector']).filter((door) =>
+        selected(`${door}/${operation.family}`)
+      )
+      if (!doors.length) continue
       if (
         operation.registered !== false && !registered.has(operation.tool) &&
         !(operation.doors?.length == 1 && operation.doors[0] == 'cli')
       ) {
         throw new Error(`unregistered operation ${operation.tool}`)
       }
-      for (let door of operation.doors ?? ['cli', 'connector']) {
+      for (let door of doors) {
         let samples: Sample[] = []
         for (let i = 0; i < n; i++) {
           let name = `${door}/${operation.family}`
