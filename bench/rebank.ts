@@ -36,7 +36,7 @@ let bankGroup = (evidence: Judgement): Baseline => {
 
 export let bank = (evidence: Judgement): Baseline => {
   if (evidence.complete === false) {
-    throw Error('Suite measurements are incomplete')
+    throw Error(evidence.error ?? 'Suite measurements are incomplete')
   }
   if (
     evidence.error ||
