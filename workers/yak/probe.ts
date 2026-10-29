@@ -11,28 +11,11 @@ import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
+import { endpoints } from './endpoints.ts'
 
-type Handler = (req: Request) => Response | Promise<Response>
-let routes = new Map<string, Handler>()
 let logs = new Map<string, string>()
-let send = globalThis.fetch
-let routed: typeof fetch = (input, init) => {
-  let req = new Request(input, init)
-  let route = routes.get(new URL(req.url).origin)
-  return route ? Promise.resolve(route(req)) : send(input, init)
-}
-export let endpoint = (handler: Handler) => {
-  let url = `https://${crypto.randomUUID()}.probe.invalid`
-  routes.set(url, handler)
-  globalThis.fetch = routed
-  return {
-    url,
-    stop: () => {
-      routes.delete(url)
-      return Promise.resolve()
-    },
-  }
-}
+let transport = endpoints(globalThis)
+export let endpoint = transport.open
 
 /** What the in-process kernel checks a Stripe event against. */
 export let WEBHOOK_SECRET = 'probe-webhook-secret'
@@ -61,13 +44,11 @@ export let driven = (
   host,
   cloudflare,
   at: (at: string, path: string, init: RequestInit = {}) => {
-    let handler = routes.get(base)
     let req = new Request(`https://${at}${path}`, {
       ...init,
       headers: { ...somewhere(), ...(init.headers as Record<string, string>) },
     })
-    if (!handler) throw new Error(`no fixture at ${base}`)
-    return Promise.resolve(handler(req))
+    return transport.at(base, req)
   },
 })
 
