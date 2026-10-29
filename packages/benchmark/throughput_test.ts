@@ -1,6 +1,6 @@
 /** The committed throughput suite rejects slower operation CPU and retains SQL diagnostics. */
 import { equal, ok, test, throws } from '@yaks/testing'
-import { type Host, Regressed, run } from './mod.ts'
+import { type Baseline, type Host, limit, Regressed, run } from './mod.ts'
 import bank from '../../bench/throughput.baseline.json' with { type: 'json' }
 import { countNames, throughput } from '../../bench/throughput.ts'
 import {
@@ -17,20 +17,27 @@ let context: Host = {
   cpu: bank.cpu,
   load: [0, 0, 0],
 }
-test('throughput refuses synthetic 30% CPU regressions without banking them', async () => {
+test('throughput refuses CPU regressions past each banked limit without banking them', async () => {
   let suite = throughput()
   let directory = await Deno.makeTempDir()
   try {
+    let base = bank as Baseline
+    let baseline = directory + '/baseline.json'
+    await Deno.writeTextFile(baseline, JSON.stringify(base))
     let values = Object.fromEntries(bank.benches.map((b) => [b.name, b.median]))
+    let limits = Object.fromEntries(base.benches.map((b) => [
+      b.name,
+      limit(base, b),
+    ]))
     let options = {
       rounds: 7,
       mode: 'check' as const,
       figure: 'cpu' as const,
       output: directory + '/results.json',
-      baseline: 'bench/throughput.baseline.json',
+      baseline,
       host: () => context,
     }
-    // A run of the suite whose named benches came in 30% worse.
+    // CPU crosses the named case's allowance; wall time is diagnostic.
     let check = (slower: string[] = []) =>
       run({
         ...suite,
@@ -40,7 +47,7 @@ test('throughput refuses synthetic 30% CPU regressions without banking them', as
               [n, v],
             ) => [n, {
               value: v * 10,
-              cpu: slower.includes(n) ? v ? v * 1.3 : 1 : v,
+              cpu: slower.includes(n) ? limits[n] * 1.3 + 1 : v,
             }]),
           ),
       }, options)
@@ -51,10 +58,11 @@ test('throughput refuses synthetic 30% CPU regressions without banking them', as
     }
     equal((await check()).verdict, 'passed')
     // Each bench is compared alone: one slower bench is the only one named,
-    // and every bench in the bank, CPU time, refuses 30%.
+    // and every case refuses CPU beyond its measured noise allowance.
     let names = Object.keys(values).sort()
     equal(await regressed([names[0]]), [names[0]])
     equal(await regressed(names), names)
+    equal(JSON.parse(await Deno.readTextFile(baseline)), bank)
     equal(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
   } finally {
     await Deno.remove(directory, { recursive: true })
