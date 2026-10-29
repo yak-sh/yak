@@ -1,5 +1,5 @@
 /** Isolated transcript transfer comparison. Run with `deno run -A`.
- * Arguments: entries (default 10000), body characters (default 1000), runs (3).
+ * Arguments: entries (default 10000), body characters (default 1000), runs (1).
  * Never opens the configured/live harness database.
  */
 import { remote } from './remote.ts'
@@ -34,17 +34,26 @@ export async function measure(
   let samples: Record<string, Samples> = {}
   const count = Number(args[0] ?? 10000)
   const length = Number(args[1] ?? 1000)
-  const runs = Number(args[2] ?? 3)
+  const runs = Number(args[2] ?? 1)
   if (![count, length, runs].every((v) => Number.isSafeInteger(v) && v > 0)) {
     throw new Error('positive integer arguments required')
   }
   const directory = await Deno.makeTempDir({ prefix: 'harness-window-bench-' })
   const db = directory + '/bench.sqlite'
+  let phases: (ReturnType<ReturnType<typeof stopwatch>> & {
+    phase: string
+    run?: number
+    mode?: string
+  })[] = []
+  let preparing = stopwatch()
   await seeded(db, count, length)
+  phases.push({ phase: 'fixture', ...preparing() })
   try {
     for (let run = 0; run < runs; run++) {
       for (let mode of ['full', 'window']) {
+        let opening = stopwatch()
         let r = await remote({ config: at(db), cwd: directory, fake: true })
+        phases.push({ phase: 'open', run, mode, ...opening() })
         try {
           let maxStall = 0, previous = performance.now()
           let timer = setInterval(() => {
@@ -57,6 +66,7 @@ export async function measure(
             ? await r.agent.transcript('session')
             : (await r.agent.transcriptWindow!('session')).entries
           let elapsed = took()
+          phases.push({ phase: 'first', run, mode, ...elapsed })
           await new Promise((resolve) => setTimeout(resolve, 3))
           clearInterval(timer)
           let chars = JSON.stringify(rows).length
@@ -64,6 +74,7 @@ export async function measure(
           if (mode == 'full') await r.agent.transcript('session')
           else await r.agent.transcriptWindow!('session')
           let warm = took()
+          phases.push({ phase: 'warm', run, mode, ...warm })
           for (
             let [phase, sample] of Object.entries({
               first: elapsed,
@@ -84,12 +95,15 @@ export async function measure(
             })
           }
         } finally {
+          let closing = stopwatch()
           await r.close()
+          phases.push({ phase: 'close', run, mode, ...closing() })
         }
       }
     }
   } finally {
     await Deno.remove(directory, { recursive: true })
+    console.error('harness-window phases:', JSON.stringify(phases))
   }
   return samples
 }
