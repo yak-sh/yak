@@ -11,9 +11,9 @@
       "name": "switch",
       "unit": "ms",
       "better": "lower",
-      "median": 174.63700000000063,
-      "tolerance": 0.95,
-      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+      "median": 163.44625000000133,
+      "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+      "tolerance": 0.829
     }
   ],
   "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74"

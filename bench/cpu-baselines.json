@@ -493,62 +493,6 @@
     "evidence": "bench/harness-worker.rebank.results.json"
   },
   {
-    "suite": "harness-switch",
-    "baseline": "bench/harness-switch.baseline.json",
-    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-    "provenance": [
-      {
-        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
-        "kind": "derived",
-        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "switch"
-        ]
-      }
-    ],
-    "revision": "ae80c8547657793942b6adcad9bc3f7e62c0e8fb",
-    "rounds": 6,
-    "metric": "median-of-round-medians/cpu",
-    "verdict": "same",
-    "status": "same",
-    "confidence": "default monitor round count",
-    "slower": [],
-    "comparisons": [
-      {
-        "name": "switch",
-        "unit": "ms",
-        "figure": "cpu",
-        "before": [
-          180.52399999999943,
-          173.05299999999988,
-          245.02600000000166,
-          203.85249999999905,
-          177.81750000000102,
-          168.23099999999977
-        ],
-        "current": [
-          25.800500000000284,
-          25.681000000000495,
-          32.64749999999913,
-          23.699000000002343,
-          30.92399999999907,
-          27.087500000001455
-        ],
-        "after": [
-          171.21299999999974,
-          238.09799999999996,
-          167.58449999999903,
-          152.6265000000003,
-          218.10299999999916,
-          178.0610000000015
-        ],
-        "reference": 177.93925000000127,
-        "now": 26.44400000000087
-      }
-    ],
-    "evidence": "bench/harness-switch.rebank.results.json"
-  },
-  {
     "suite": "operation-commands",
     "baseline": "bench/operation-commands.baseline.json",
     "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
@@ -4681,5 +4625,65 @@
       }
     ],
     "evidence": "bench/harness-steps.rebank.results.json"
+  },
+  {
+    "suite": "harness-switch",
+    "baseline": "bench/harness-switch.baseline.json",
+    "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+    "references": {
+      "switch": "5758d5ce6c5c97375712f1950b7db386533d2d74"
+    },
+    "provenance": [
+      {
+        "reference": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "kind": "derived",
+        "source": "git history of bench/harness-switch.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
+        "benches": [
+          "switch"
+        ]
+      }
+    ],
+    "revision": "ffa1be366eb5ae34677031e68d1084c6e1556b05",
+    "rounds": 6,
+    "metric": "median-of-round-medians/cpu",
+    "verdict": "same",
+    "status": "same",
+    "confidence": "default monitor round count",
+    "slower": [],
+    "comparisons": [
+      {
+        "name": "switch",
+        "unit": "ms",
+        "figure": "cpu",
+        "referenceCommit": "5758d5ce6c5c97375712f1950b7db386533d2d74",
+        "before": [
+          208.65549999999985,
+          158.10249999999996,
+          153.375,
+          168.7900000000027,
+          185.13700000000063,
+          147.52899999999863
+        ],
+        "current": [
+          31.034499999999753,
+          22.290500000000975,
+          30.178499999999985,
+          20.930500000000393,
+          26.92200000000048,
+          25.07300000000032
+        ],
+        "after": [
+          179.6279999999988,
+          202.6319999999996,
+          200.11300000000028,
+          154.0749999999989,
+          153.91200000000026,
+          176.54849999999897
+        ],
+        "reference": 172.66925000000083,
+        "now": 25.9975000000004
+      }
+    ],
+    "evidence": "bench/harness-switch.rebank.results.json"
   }
 ]
