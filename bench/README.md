@@ -2,8 +2,8 @@
 
 The repository's benchmarks run through
 [@yaks/benchmark](../packages/benchmark/README.md), with one committed baseline
-file per suite. `deno task bench` measures the throughput suite's storage reads,
-storage patches and `graph.apply`. `deno task bench:check` takes fresh CPU
+file per suite. `deno task bench` measures the throughput suite's three SQLite
+file `graph.apply` workloads. `deno task bench:check` takes fresh CPU
 measurements and refuses any figure past its slack over
 `bench/throughput.baseline.json`. Statement counts are retained separately.
 `deno task bench:ratchet` banks a baseline; review and commit its diff. Runs
@@ -158,15 +158,11 @@ The deterministic corpus in `packages/sqlite/fixtures/fleet.ts` has seed
 `0x36756`, 2,048 tasks, 128 claims, 384 completed tasks, and 4,064
 requires/contains edges: 6,113 entities including the session. Dependency chains
 are 64 tasks long. FTS selects 64 documents; the open-status filter selects
-1,536 tasks. Each storage bench checks its expected eid set before timing.
+1,536 tasks. The retained apply workloads use this fixed corpus.
 
-The `sqlite`, `sql` and `query` layers measure five hydrated reads and a
-transactional batch of 100 changed titles, in memory and in a fresh SQLite file.
-The SQLite layer executes precompiled membership SQL; SQL lowers a parsed AST;
-query includes parsing. All three use the same prepare-per-call driver and small
-fleet-shaped vocabulary. The `archetype` cases measure backfill and 100
-archetype moves. Setup, seed loading, assertions and cleanup are outside timing.
-Files use WAL and `synchronous=normal`; timed writes commit to the file.
+The storage/query and archetype timing cases are retired. Their behavioral
+coverage remains in package tests. The retained apply timings use SQLite files
+with WAL and `synchronous=normal`; timed writes commit to the file.
 
 ## Graph apply
 
@@ -184,7 +180,10 @@ plugins, including declared task rules and core stamps. SQLite records the
 journal and uses the production cached driver. This fixed composition is
 independent of the operator's config; it does not include blob storage or FTS
 indexing. Retired apply timing cases and their subscribed variants are recorded
-in [baseline provenance](baseline-references.json).
+in [baseline provenance](baseline-references.json). Throughput retains three
+cases from its 56-case CPU conversion: 40 automatic storage/query/archetype
+cases and 13 other apply cases are retired. The evidence keeps all 56 original
+CPU comparisons and their wall medians and source identities.
 
 A sample owns a private seeded store. Each collector creates its own closed
 SQLite seed file once through this graph, then copies its bytes outside timing.
@@ -259,15 +258,16 @@ Linux load averages. Collector processes retain warmed product imports across
 rounds; each collection creates and disposes fresh fixtures. The shared Deno
 collector measures CPU for batches of registered workloads, honoring their
 explicit timing boundaries. Authored `n` and `warmup` counts are honored
-exactly. Without `n`, calibration uses whole-invocation CPU, including fixture
-cost and targets at least 200 ms of measured CPU; calibration growth uses a
-one-second budget for whole-invocation CPU. A final batch below the measured
-minimum carries `sampling.status: 'insufficient'`. Its run and paired comparison
-are `inconclusive`: no regression is reported and nothing is banked. Each
-collection reports one measured batch average with CPU retained in
-`details.cpuSamples`; paired rounds supply the repeated observations. These are
-batch averages, not per-invocation medians. The result metric carries `/cpu`.
-Storage modes run in separate processes, followed by the graph apply cases.
+exactly. Other suites without `n` target at least 200 ms of measured CPU;
+calibration growth accounts for fixture cost and uses a one-second budget for
+whole-invocation CPU. A final batch below the measured minimum carries
+`sampling.status: 'insufficient'`. Its run and paired comparison are
+`inconclusive`: no regression is reported and nothing is banked. Each collection
+reports one measured batch average with CPU retained in `details.cpuSamples`;
+paired rounds supply the repeated observations. These are batch averages, not
+per-invocation medians. The result metric carries `/cpu`. Throughput collects
+only the three retained apply cases; recording collects their unsubscribed and
+subscribed variants in separate processes.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed

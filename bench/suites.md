@@ -29,8 +29,11 @@ measured CPU observations. The retained apply cases are
 `apply/file/edit-alone-1000`, `apply/file/create-alone-200` and
 `apply/file/create-alone-1000`. Recording keeps the same cases and their
 `/subscribed` variants, grouping five complete fixture workloads per callback.
-Retired cases and references are recorded in
-[baseline provenance](baseline-references.json).
+Throughput contains only those three file cases. The 40 automatic
+storage/query/archetype timings and 13 other apply timings are retired; all 56
+original CPU comparisons, wall medians and source identities are retained in
+[baseline provenance](baseline-references.json). Its three earlier Store relay
+retirements are recorded separately from those 53 short timings.
 
 Collectors retain their process and product imports across rounds. Deno workload
 modules load afresh for each collection, with fixture disposal awaited before
