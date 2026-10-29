@@ -2,6 +2,7 @@
 import { equal, test } from '@yaks/testing'
 import { argsOf, type Tool } from '@yaks/graph'
 import { argsFor } from '@yaks/cli/grammar'
+import { registry } from '@yaks/tools'
 import { connect, text } from './testing.ts'
 import { FILES } from './files.ts'
 
@@ -40,6 +41,17 @@ let readFile = (path: string) => {
 }
 let local = await connect({ tools: [echo], readFile })
 let remote = await connect({ tools: [echo] })
+let catalog = registry([{ name: 'bodies', tools: [echo] }])
+let opened = Promise.withResolvers<void>()
+let loaded = Promise.withResolvers<string>()
+let swapping = await connect({
+  registry: catalog,
+  core: false,
+  readFile: () => {
+    opened.resolve()
+    return loaded.promise
+  },
+})
 let call = (args: Record<string, unknown>, client = local) =>
   client.callTool({ name: 'echo_body', arguments: args })
 
@@ -75,6 +87,35 @@ test('an unreadable MCP file answers the caller without running the tool', async
   let out = await call({ body: '@/missing.md', $files: true })
   equal(out.isError, true)
   equal(text(out).includes('Cannot read @/missing.md'), true)
+})
+
+test('MCP file reads retain the admitted schema and implementation during provider replacement', async () => {
+  let pending = call({ body: '@/body.md', $files: true }, swapping)
+  await opened.promise
+  catalog.replace('bodies', [{
+    ...echo,
+    inputSchema: {
+      type: 'object',
+      properties: { body: { type: 'number' } },
+      required: ['body'],
+      additionalProperties: false,
+    },
+    run: (call) => [{
+      entity: { eid: '$out' },
+      content: { body: `replacement ${argsOf(call).body}` },
+      output: { source: call.entity.eid },
+    }],
+  }])
+  loaded.resolve(body)
+  try {
+    equal(JSON.parse(text(await pending)), { body })
+    let current = (await swapping.listTools()).tools[0]
+    equal(current.inputSchema.properties.body, { type: 'number' })
+    equal(current.inputSchema.properties.$files, { type: 'boolean' })
+    equal(text(await call({ body: 7 }, swapping)), 'replacement 7')
+  } finally {
+    await swapping.close()
+  }
 })
 
 test('only a file-capable MCP door advertises file input', async () => {
