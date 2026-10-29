@@ -10,17 +10,27 @@ back to wall time. SQL statement and row counts remain separate measurements.
 shared CPU clock. An authored `n` and `warmup` set the measured and discarded
 invocation counts exactly. Without `n`, adaptive calibration is bounded by CPU
 usage of the whole invocation, including fixture creation and teardown, so a
-tiny timed act cannot multiply costly setup indefinitely. Each collection then
-reports one measured batch's CPU and wall averages in ns/op, retaining the CPU
-average in `details.cpuSamples`. Paired rounds provide repeated observations.
-Explicit `start()` and `end()` boundaries exclude fixture setup and teardown
-from measured work. Workload files need no separate CPU instrumentation.
+tiny timed act cannot multiply costly setup indefinitely. Automatic sampling
+targets 200 ms of measured CPU and budgets one second of whole-invocation CPU
+for calibration growth. The retained batch must itself meet the measured
+minimum. Otherwise its typed `sampling.status: 'insufficient'` makes the run and
+paired comparison `inconclusive`; the monitor files no regression or failure for
+that observation, and no baseline is banked. Authored `n` and `warmup` stay
+exact. Each collection then reports one measured batch's CPU and wall averages
+in ns/op, retaining the CPU average in `details.cpuSamples`. Paired rounds
+provide repeated observations. Explicit `start()` and `end()` boundaries exclude
+fixture setup and teardown from measured work. Workload files need no separate
+CPU instrumentation.
 
 Each paired collector uses the shared apply declaration: one warmup and one
 measured invocation per case. Each callback retains its full 200 or 1,000
 writes, private corpus, and 20 fixture warm writes. Paired rounds repeat the
-measured CPU observations; their callbacks already run long enough to measure
-directly.
+measured CPU observations. The retained apply cases are
+`apply/file/edit-alone-1000`, `apply/file/create-alone-200` and
+`apply/file/create-alone-1000`. Recording keeps the same cases and their
+`/subscribed` variants, grouping five complete fixture workloads per callback.
+Retired cases and references are recorded in
+[baseline provenance](baseline-references.json).
 
 Collectors retain their process and product imports across rounds. Deno workload
 modules load afresh for each collection, with fixture disposal awaited before

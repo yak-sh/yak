@@ -170,57 +170,61 @@ Files use WAL and `synchronous=normal`; timed writes commit to the file.
 
 ## Graph apply
 
-`bench/apply_bench.ts` compares N separate one-bundle applies with one apply of
-N bundles, for edits and creates at N=200 and N=1,000, on a SQLite file and
-`@yaks/ram`. It reuses the fleet corpus with production vocabulary documents
-from kernel, doc, edge, task, session, tools, model, context, archetype and
-effects. The graph uses the production kernel, doc, edge, task, session,
-archetype and effects plugins, including declared task rules and core stamps.
-SQLite additionally records the journal and uses the production cached driver.
-Both adapters number entities. This fixed composition is independent of the
-operator's config; it does not include blob storage or FTS indexing.
+`bench/apply_bench.ts` measures separate one-bundle applies on a SQLite file for
+three cases:
+
+- `apply/file/edit-alone-1000`
+- `apply/file/create-alone-200`
+- `apply/file/create-alone-1000`
+
+It uses the fleet corpus with production vocabulary documents from kernel, doc,
+edge, task, session, tools, model, context, archetype and effects. The graph
+uses the production kernel, doc, edge, task, session, archetype and effects
+plugins, including declared task rules and core stamps. SQLite records the
+journal and uses the production cached driver. This fixed composition is
+independent of the operator's config; it does not include blob storage or FTS
+indexing. Retired apply timing cases and their subscribed variants are recorded
+in [baseline provenance](baseline-references.json).
 
 A sample owns a private seeded store. Each collector creates its own closed
-SQLite seed file once through this graph, then copies its bytes outside timing;
-RAM samples copy seeded bundles through storage. Stamps and archetype
-descriptors are retained. Seed images are private to each collector, so
-reference and current workers perform the same seed preparation before their
-discarded collection. The graph is warmed before measuring. Every edited entity
-already exists; every created entity is absent. Creates cannot turn into edits
-or grow the corpus across samples. Each sample verifies the saved titles, stamps
-and archetype pointers after timing. The shared apply declaration takes one
-measured invocation and one warmup per case in each collector. Every invocation
-still applies the full 200 or 1,000 bundles; paired rounds repeat these CPU
-observations after each worker's discarded collection. SQLite writes use
-ordinary commits; there is no enclosing rollback transaction. A file sample
-starts on a WAL checkpointed during warmup, so a checkpoint of setup's own pages
-never lands in its timed apply.
+SQLite seed file once through this graph, then copies its bytes outside timing.
+Stamps and archetype descriptors are retained. Seed images are private to each
+collector, so reference and current workers perform the same seed preparation
+before their discarded collection. The graph is warmed before measuring. Every
+edited entity already exists; every created entity is absent. Creates cannot
+turn into edits or grow the corpus across samples. Each sample verifies the
+saved titles, stamps and archetype pointers after timing. The shared apply
+declaration takes one measured invocation and one warmup per case in each
+collector. Every invocation still applies the full 200 or 1,000 bundles; paired
+rounds repeat these CPU observations after each worker's discarded collection.
+SQLite writes use ordinary commits; there is no enclosing rollback transaction.
+A file sample starts on a WAL checkpointed during warmup, so a checkpoint of
+setup's own pages never lands in its timed apply.
 
 The ratchet divides each Deno operation by N and records **ns/bundle**,
 displayed as **µs/bundle**. `counts` reports SQL statements per apply and per
 bundle, including BEGIN/COMMIT, post-commit reads and the cached driver's
 internal schema-version probes. Native statement executions are counted in a
-separate process so the observer adds no timing overhead. RAM has zero SQL
-statements. `deno run -A bench/apply-fixture.ts` independently verifies these
-counts.
+separate process so the observer adds no timing overhead.
+`deno run -A bench/apply-fixture.ts` independently verifies these counts.
 
 ## Recording overhead
 
 `deno task bench:check throughput -- --recording` compares unsubscribed applies
 with a graph channel subscribed to `@yaks/timing`'s `summarize` and `sample`. It
-measures the same edit/create, alone/batch, SQLite/RAM and 200/1,000-bundle
-cases. The two modes run in separate Deno processes so recording cannot alter
-the unsubscribed process’s JIT feedback. Process order alternates each round.
-Each recording invocation groups five fresh fixture workloads into a finite
-minute with a shared ordinary-sample quota and summary buffer. One measured
-invocation and one warmup each process five complete fixture workloads per case.
-It buffers all completed events by minute and assembles root-first trees,
-including SQL and both tracker flush phases. It samples every completed tree
-with the default slow thresholds and a shared ordinary-sample quota, then
+measures the same three retained file cases listed above, with a `/subscribed`
+variant for each. The two modes run in separate Deno processes so recording
+cannot alter the unsubscribed process’s JIT feedback. Process order alternates
+each round. Each recording invocation groups five fresh fixture workloads into a
+finite minute with a shared ordinary-sample quota and summary buffer. One
+measured invocation and one warmup each process five complete fixture workloads
+per case. It buffers all completed events by minute and assembles root-first
+trees, including SQL and both tracker flush phases. It samples every completed
+tree with the default slow thresholds and a shared ordinary-sample quota, then
 summarizes closed minutes. The finite minute is closed inside timing so summary
 cost is included without waiting for the clock. No tracker writes run.
 
-Use `--filter='-200|batch-1000'` after `--recording` to select a subset by
+Use `--filter='create-alone-200'` after `--recording` to select a subset by
 regular expression.
 
 The comparison uses subset coverage against the throughput baseline: banked
@@ -256,7 +260,11 @@ rounds; each collection creates and disposes fresh fixtures. The shared Deno
 collector measures CPU for batches of registered workloads, honoring their
 explicit timing boundaries. Authored `n` and `warmup` counts are honored
 exactly. Without `n`, calibration uses whole-invocation CPU, including fixture
-cost. Each collection reports one measured batch average with CPU retained in
+cost and targets at least 200 ms of measured CPU; calibration growth uses a
+one-second budget for whole-invocation CPU. A final batch below the measured
+minimum carries `sampling.status: 'insufficient'`. Its run and paired comparison
+are `inconclusive`: no regression is reported and nothing is banked. Each
+collection reports one measured batch average with CPU retained in
 `details.cpuSamples`; paired rounds supply the repeated observations. These are
 batch averages, not per-invocation medians. The result metric carries `/cpu`.
 Storage modes run in separate processes, followed by the graph apply cases.

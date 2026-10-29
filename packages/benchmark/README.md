@@ -164,6 +164,13 @@ a baseline only when explicitly requested, with an explicit tolerance. Commit
 and review that file. A missing or malformed baseline fails a check before any
 work runs. A check never changes the baseline or overrides its tolerance.
 
+A sample can carry `sampling` with `status: 'insufficient'`, its required
+`minimum`, measured CPU (`measured`) and whole-invocation CPU (`outer`), all in
+milliseconds. Such a run is `inconclusive` in every mode: its observations are
+saved, no regression is reported, and acceptance leaves the baseline unchanged.
+Fixture work cannot substitute for the measured CPU required by a sampling
+policy.
+
 A figure counts only where it clears the noise. A bench's **spread** is how far
 apart its round medians fell, across every run of the measurement, as a fraction
 of the best (`spread()`). With `runs: n`, a run measures the suite n times over
