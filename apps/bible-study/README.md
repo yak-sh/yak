@@ -12,7 +12,9 @@ can connect their own ESV key. The worker passes only a sentinel to egress and
 preserves its cap notice, including the connection instructions.
 
 `demo/seed.json` contains original sample study prompts, without private notes
-or published pages. Deploy it as `seed.json` in the demo alone. New installs
+or published pages. Keep `demo/` in the private source alongside its ordinary
+files. The platform applies its files at the root of the gallery copy on every
+install and update, including the demo notice in `demo/index.html`. New installs
 from Jeff's published app start with their own empty notebook. Scripture comes
 from the ESV API; the app's footer and published pages retain the ESV notice.
 

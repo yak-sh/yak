@@ -1,7 +1,17 @@
 import { type App, type Directory, META, type Space } from './directory.ts'
 import type { Args, Ctx, Out } from './tool.ts'
+import type { Files } from './versions.ts'
 
 export let DEMO = 'yourname'
+
+/** Demo files replace their root counterparts only in the gallery copy. */
+export let demoFiles = (files: Files): Files => ({
+  ...files,
+  ...Object.fromEntries(
+    Object.entries(files).filter(([path]) => path.startsWith('demo/'))
+      .map(([path, sha]) => [path.slice(5), sha]),
+  ),
+})
 
 export let ours = async (dir: Directory, space: Space) => {
   let meta = await dir.space(META.space)
@@ -24,8 +34,9 @@ export let demonstrate = async (
   let demo = await ctx.dir.space(DEMO)
   if (!demo) throw new Error('the gallery demo space is missing')
   let copy = copyOf(await ctx.dir.apps(demo), app)
+  let copying = { ...ctx, copyFiles: demoFiles }
   if (!copy) {
-    let installed = await run(ctx, 'app_install', {
+    let installed = await run(copying, 'app_install', {
       space: DEMO,
       name: app.published!.name,
     })
@@ -34,7 +45,7 @@ export let demonstrate = async (
   if (!copy) throw new Error('the gallery copy is missing after installation')
   let changed = copy.installed!.version != app.published!.version
   if (changed) {
-    await run(ctx, 'app_update', { space: DEMO, app: copy.slug })
+    await run(copying, 'app_update', { space: DEMO, app: copy.slug })
   }
   if (copy.access != 'open') {
     await run(ctx, 'app_set', { space: DEMO, app: copy.slug, access: 'open' })

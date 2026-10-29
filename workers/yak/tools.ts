@@ -1775,9 +1775,10 @@ let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
   let files = version.source
     ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
     : version.files
-  return Object.fromEntries(
+  let source = Object.fromEntries(
     Object.entries(files).filter(([path]) => transferable(path)),
   ) as Files
+  return ctx.copyFiles ? ctx.copyFiles(source) : source
 }
 
 // A publication's source and completed build travel together, named by their
@@ -5186,12 +5187,12 @@ let OURS: Row[] = [
           'so everyone already told to install it still finds it'
         : `\nit was offered as ${was}, and that name no longer resolves: ` +
           `anyone holding it finds nothing, so tell them ${name}`
-      // The gallery, where the call said anything about it: true puts the
-      // offer forward, false takes it back. The row is read back first — the
+      // The gallery: true puts the offer forward, false takes it back, and
+      // an existing listing refreshes its demo on republish. Read back first — the
       // letter names the offer as it now stands, and on a first publish the
       // app in hand has no offer on it at all.
       let shown: Standing | null = null
-      if (show) {
+      if (show || (show == null && onGallery(app) == 'listed')) {
         let now: App
         if (ctx.reopen) {
           let current = await reacquire(ctx, space, app, true, !!skip)

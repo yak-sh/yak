@@ -32,10 +32,13 @@ import * as directoryPart from './directory.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
 import type { Clock } from './timing.ts'
+import type { Files } from './versions.ts'
 
 export type Ctx = {
   env: Env
   dir: Directory
+  /** Project a publication's files before an internal install or update. */
+  copyFiles?: (files: Files) => Files
   /** Start a new authorization operation; no standing crosses this boundary. */
   reopen?: () => Directory
   person: string

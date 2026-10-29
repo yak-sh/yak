@@ -585,6 +585,16 @@ it stays one command, run after a Builds deploy goes green. `--tail 0` skips the
 tail and needs no credential at all. The box's deploy catch-up asks for the home
 page alone once main's head goes live, and reports it not answering.
 
+## Gallery demo files
+
+A private gallery app owned by the platform staff gets an open copy in
+`yourname`. Files in the published source's `demo/` directory replace their root
+counterparts in that copy before its install or update is deployed. A
+`demo/index.html` can carry a notice and `demo/seed.json` can furnish sample
+records. Stored records keep visitors' edits across updates. The private source
+and ordinary installs use their ordinary root files; `demo/seed.json` does not
+seed them. Republishing a listed source refreshes its demo.
+
 ## App archetype indexing
 
 Hosted app stores include the `archetype` vocabulary and tracker. Each entity's
