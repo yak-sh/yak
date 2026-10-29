@@ -119,7 +119,7 @@ test('a check that could tell nothing reports nothing', async () => {
 })
 
 test('a comparison names the benches it found slower and the time it judged', () => {
-  let comparison = (name: string, figure: 'cpu' | 'wall', now: number) => ({
+  let comparison = (name: string, figure: 'cpu', now: number) => ({
     name,
     unit: 'ms',
     figure,
@@ -135,7 +135,7 @@ test('a comparison names the benches it found slower and the time it judged', ()
     comparisons: [
       comparison('a', 'cpu', 130),
       comparison('b', 'cpu', 101),
-      comparison('c', 'wall', 150),
+      comparison('c', 'cpu', 150),
     ],
     revision: 'c3',
     current: run('measured', .1),
@@ -143,6 +143,6 @@ test('a comparison names the benches it found slower and the time it judged', ()
   let out = judged(run('regressed', .05), evidence)
   equal(
     [out.commit, out.busy, out.regressions.map((r) => [r.name, r.current])],
-    ['c3', .1, [['a (CPU)', 130], ['c', 150]]],
+    ['c3', .1, [['a (CPU)', 130], ['c (CPU)', 150]]],
   )
 })

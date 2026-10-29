@@ -59,7 +59,6 @@ export let SUITES = [
   'harness-window',
   'harness-switch',
   'throughput',
-  'app-deploy',
 ]
 
 /** User-facing waits are checked every half hour, independent of slow throughput. */
@@ -81,7 +80,7 @@ export let HOURLY = [
 
 /** Suites that measure the live box (its server, its workers, its deploys),
  * so no older code can run beside them: they report only failures. */
-export let LIVE = ['worker-health', 'app-deploy']
+export let LIVE = ['worker-health']
 
 /** Deploy checks need fresh observations before comparison. */
 export let MEASURE: Record<string, string[]> = {
@@ -196,7 +195,7 @@ export let judged = (run: Run, evidence: Judgement): Run => ({
   regressions: evidence.comparisons.filter((b) =>
     evidence.slower.includes(b.name)
   ).map((b) => ({
-    name: b.figure == 'cpu' ? `${b.name} (CPU)` : b.name,
+    name: `${b.name} (CPU)`,
     unit: b.unit,
     baseline: b.reference,
     limit: b.reference,

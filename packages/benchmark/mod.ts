@@ -44,3 +44,5 @@ export {
   waited,
 } from './host.ts'
 export { type Files, type Options, Regressed, run } from './runner.ts'
+
+export { processCpu } from './process.ts'

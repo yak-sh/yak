@@ -110,7 +110,7 @@ let rusage: ((who: number) => number) | null | undefined
  * other work on the box barely moves, where it stretches the step's wall
  * time. A child counts once it has exited and been waited for, so a step
  * whose work runs in a process that outlives it is not measured this way. */
-export let cputime = (): number | undefined => {
+export let cputime = (): number => {
   if (rusage === undefined) {
     try {
       if (Deno.build.os != 'linux') throw new Error('glibc layout only')
@@ -128,7 +128,8 @@ export let cputime = (): number | undefined => {
       rusage = null
     }
   }
-  return rusage ? rusage(0) + rusage(-1) : undefined
+  if (!rusage) throw new Error('CPU accounting is unavailable on this platform')
+  return rusage(0) + rusage(-1)
 }
 
 /** How long the calling thread has waited for a CPU since it started, in ms:

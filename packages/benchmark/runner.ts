@@ -54,6 +54,8 @@ export let files: Files = {
 }
 export type Options = {
   rounds?: number
+  /** Judge CPU time; wall readings remain in raw samples for diagnostics. */
+  figure?: 'cpu'
   mode?: 'run' | 'check' | 'accept'
   output: string
   baseline?: string
@@ -185,10 +187,12 @@ let execute = async (
   await readBase()
   let context = await (options.host ?? host)()
   // Only a check or an acceptance is judged, so only they sample the box.
-  let sampled = mode == 'run' ? { ...context, busy: undefined } : context
+  let sampled = mode == 'run' || options.figure == 'cpu'
+    ? { ...context, busy: undefined }
+    : context
   let runs: Run[] = []
   for (let i = 0; i < repeats; i++) {
-    runs.push(await measure(suite, rounds, sampled, exclusive))
+    runs.push(await measure(suite, rounds, sampled, exclusive, options.figure))
   }
   // A different acceptance may have banked while our rounds yielded. Read its
   // baseline under the publication lock before comparing or moving the best.
@@ -264,6 +268,7 @@ let measure = async (
   rounds: number,
   context: Host,
   exclusive: Exclusive,
+  figure?: 'cpu',
 ): Promise<Run> => {
   let benches: Result[] = suite.benches.map((b) => ({
     name: b.name,
@@ -298,16 +303,22 @@ let measure = async (
           ? collected[b.name]
           : await (suite as Suite).benches[i].sample(round)
         let raw = samples(input)
+        if (figure && raw.some((s) => s.cpu === undefined)) {
+          throw new Error(`Missing CPU measurement: ${b.name}`)
+        }
+        let measured = (s: typeof raw[number]) => figure ? s.cpu! : s.value
         b.samples.push(
           ...raw.map(({ spans: _spans, ...s }) => ({ ...s, round })),
         )
         let middle = [...raw].sort((a, b) =>
-          a.value - b.value
+          measured(a) - measured(b)
         )[Math.floor(raw.length / 2)]
-        let cpu = raw.map((s) => s.cpu)
+        let cpu = raw.map((s) =>
+          s.cpu
+        )
         b.rounds.push({
           index: round,
-          median: median(raw.map((s) => s.value)),
+          median: median(raw.map(measured)),
           ...cpu.every((n) => n !== undefined)
             ? { cpu: median(cpu as number[]) }
             : {},
@@ -327,7 +338,7 @@ let measure = async (
   return {
     version: 1,
     suite: suite.name,
-    metric: suite.metric,
+    metric: figure ? `${suite.metric}/cpu` : suite.metric,
     workload: suite.workload,
     at: new Date().toISOString(),
     commit: context.commit,

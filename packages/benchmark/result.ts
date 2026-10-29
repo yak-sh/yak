@@ -98,6 +98,8 @@ export type Run = {
 export type Baseline =
   & Pick<Run, 'version' | 'suite' | 'metric' | 'workload' | 'runtime' | 'cpu'>
   & {
+    /** The revision measured when converting a baseline to a new metric. */
+    reference?: string
     /** The slack a bench without its own may take. */
     tolerance: number
     benches: (Workload & {

@@ -35,7 +35,7 @@ let run = (
     rounds: values.map((median, index) => ({
       index,
       median,
-      ...cpu ? { cpu: cpu[index] } : {},
+      cpu: cpu ? cpu[index] : median,
       spans: null,
     })),
   }],
@@ -69,7 +69,7 @@ test('a slowdown counts only past a tenth and the slack its baseline banked', ()
   equal(verdict(run(shared), times(1.25), run(shared), banked(.2)), 'slower')
 })
 
-test('CPU time is judged where every round carries it, so a wall-clock wobble is not a slowdown', () => {
+test('CPU time is judged in every round, so a wall-clock wobble is not a slowdown', () => {
   let cpu = [50, 51, 50, 52, 49, 50]
   let reference = run(shared, { cpu })
   let stretched = run(shared.map((n) => n * 1.5), { cpu })
@@ -83,7 +83,7 @@ test('CPU time is judged where every round carries it, so a wall-clock wobble is
     verdict(reference, run(shared, { cpu: cpu.map((n) => n * 1.3) })),
     'slower',
   )
-  equal(verdict(run(shared), stretched), 'slower')
+  equal(verdict(run(shared), stretched), 'same')
 })
 
 test('a moving reference is inconclusive rather than a code regression', () => {
@@ -159,4 +159,10 @@ test('bracket orders reference/current/reference and closes on a failed adapter'
       return Promise.resolve(v)
     }, close), 'missing API')
   equal(seen, ['reference', 'current', 'closed'])
+})
+
+test('missing CPU readings are inconclusive without a wall-clock fallback', () => {
+  let missing = run(shared)
+  for (let round of missing.benches[0].rounds) delete round.cpu
+  equal(verdict(run(shared), missing), 'inconclusive')
 })

@@ -559,7 +559,7 @@ test('shared collectors retain Deno provenance and refuse a changed workload set
   let result = await run({ ...f.suite, collect: () => samples }, f.options)
   match(result.benches[0].samples[0], {
     value: 100,
-    source: 'deno-average',
+    source: 'deno-cpu-average',
     details: { avg: 100, min: 50, n: 10 },
   })
   await throws(
@@ -813,4 +813,20 @@ test('queued suites measure between rounds without losing a faster acceptance', 
   await fast
   equal(order, ['slow0', 'fast', 'slow1'])
   equal(JSON.parse(f.saved.get('baseline')!).benches[0].median, 10)
+})
+
+test('CPU runs judge measured work and reject missing CPU instead of using wall', async () => {
+  let f = fixture([{
+    name: 'work',
+    unit: 'ms',
+    sample: () => ({ value: 1000, cpu: 2 }),
+  }])
+  let cpu = { ...f.options, figure: 'cpu' as const, rounds: 1 }
+  let result = await run(f.suite, { ...cpu, mode: 'accept', tolerance: .1 })
+  equal(result.benches[0].median, 2)
+  equal(result.benches[0].samples[0].value, 1000)
+  f.suite.benches[0].sample = () => ({ value: 100_000, cpu: 2 })
+  equal((await run(f.suite, { ...cpu, mode: 'check' })).verdict, 'passed')
+  f.suite.benches[0].sample = () => ({ value: 1 })
+  await throws(() => run(f.suite, cpu), 'Missing CPU measurement')
 })

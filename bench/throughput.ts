@@ -65,10 +65,6 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           ? 'ns/value'
           : 'ns/op',
       })),
-      ...(recording ? [] : countNames()).map((name) => ({
-        name,
-        unit: 'statements',
-      })),
     ],
     collect: async (round) => {
       let machine = await (input.host ?? host)()
@@ -98,11 +94,20 @@ export let throughput = (input: Input = {}): CollectedSuite => {
         Object.assign(out, extract(report, names))
       }
       for (let [name, sample] of Object.entries(out)) {
-        sample.value /= bundlesPerOp(name) * (recording ? RECORDING_BATCHES : 1)
+        let operations = bundlesPerOp(name) *
+          (recording ? RECORDING_BATCHES : 1)
+        sample.value /= operations
+        if (sample.cpu !== undefined) sample.cpu /= operations
       }
       if (recording) return out
       counts ??= await (input.counts ?? (() => measureCounts(input.root)))()
-      return { ...out, ...counts }
+      for (let [name, sample] of Object.entries(out)) {
+        sample.counts = Object.fromEntries(
+          Object.entries(counts).filter(([key]) => key.startsWith(`${name}/`))
+            .map(([key, value]) => [key.slice(name.length + 1), value.value]),
+        )
+      }
+      return out
     },
   }
 }
@@ -115,6 +120,7 @@ let measure = async (
     BENCH_RECORDING: mode.startsWith('recording-')
       ? mode.slice('recording-'.length)
       : '0',
+    ...filter ? { BENCH_FILTER: filter } : {},
     DB_PATH: ':memory:',
     BENCH_STORAGE: mode,
     TASKS_SYNC: 'off',
@@ -126,12 +132,9 @@ let measure = async (
   }
   let child = await new Deno.Command(Deno.execPath(), {
     args: [
-      'bench',
+      'run',
       '-A',
-      '--json',
-      ...(mode.startsWith('recording-') && filter
-        ? ['--filter', `/${filter}/`]
-        : []),
+      'bench/deno-worker.ts',
       ...(mode.startsWith('recording-')
         ? ['bench/apply_bench.ts']
         : mode == 'pipeline'

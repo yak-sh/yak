@@ -1,4 +1,4 @@
-/** Wall-clock commands normalized by a concurrent fixed CPU yardstick.
+/** Command CPU includes every thread and its finished children.
  * Timing is report-only: the command's status always remains authoritative. */
 import { createHash } from 'node:crypto'
 import {
@@ -6,26 +6,27 @@ import {
   host,
   Regressed,
   run,
+  stopwatch,
   type Suite,
 } from '@yaks/benchmark'
-export const VERSION = 1
+export const VERSION = 2
 export type Sample = {
   seconds: number
-  controlSeconds: number
-  samples: number
+  cpuSeconds: number
   code: number
   at: string
 }
 export let suite = (name: string, sample: Sample): Suite => ({
   name: `suite/${name}`,
-  metric: 'wall-seconds / mean-concurrent-8M-LCG-seconds',
+  metric: 'cpu-seconds',
   workload: VERSION,
   benches: [{
-    name: 'wall/control',
-    unit: 'ratio',
+    name: 'cpu',
+    unit: 's',
     sample: () => ({
-      value: sample.seconds / sample.controlSeconds,
-      source: 'concurrent-control',
+      value: sample.seconds,
+      cpu: sample.cpuSeconds,
+      source: 'command-cpu',
       details: sample,
     }),
   }],
@@ -48,8 +49,8 @@ export let record = async (
   accept = false,
 ) => {
   if (
-    [sample.seconds, sample.controlSeconds, sample.samples].some((n) =>
-      !Number.isFinite(n) || n <= 0
+    [sample.seconds, sample.cpuSeconds].some((n) =>
+      !Number.isFinite(n) || n < 0
     )
   ) throw new Error('invalid suite sample')
   let base: (Baseline & { controlFloorSeconds?: number }) | undefined
@@ -58,93 +59,59 @@ export let record = async (
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e
   }
-  let loaded = !!base?.controlFloorSeconds &&
-    sample.controlSeconds > base.controlFloorSeconds * 1.5
-  if (accept && (sample.code || loaded)) {
-    throw new Error('Cannot accept a failed or loaded command')
+  if (accept && sample.code) {
+    throw new Error('Cannot accept a failed command')
   }
   let current
   try {
     current = await run(suite(name, sample), {
       ...options,
       rounds: 1,
+      figure: 'cpu',
       mode: accept ? 'accept' : base && !sample.code ? 'check' : 'run',
       tolerance: accept ? .25 : undefined,
-      // The sample was timed beside its own concurrent control, which already
-      // carries the load it ran under; the box after the command says nothing
-      // about it.
       host: async () => ({
         ...await host(),
-        runtime: 'control-v1',
-        cpu: 'load-normalized',
-        busy: undefined,
+        runtime: 'command-cpu-v2',
       }),
     })
   } catch (e) {
     if (!(e instanceof Regressed)) throw e
     current = e.result
   }
-  if (accept) {
-    let banked = JSON.parse(await Deno.readTextFile(options.baseline))
-    banked.controlFloorSeconds = sample.controlSeconds
-    await Deno.writeTextFile(
-      options.baseline,
-      JSON.stringify(banked, null, 2) + '\n',
-    )
-  }
-  return { ...current, loaded }
+  return current
 }
 export async function timed(command: string, args: string[]): Promise<Sample> {
-  let worker = new Worker(new URL('./control.ts', import.meta.url).href, {
-    type: 'module',
-  })
-  let controls: number[] = []
-  try {
-    await new Promise<void>((resolve, reject) => {
-      worker.onerror = (event) => reject(new Error(event.message))
-      worker.onmessage = ({ data }) => {
-        if (data.ready) resolve()
-        if (data.seconds) controls.push(data.seconds)
-      }
-    })
-    let start = performance.now()
-    let child = new Deno.Command(command, {
-      args,
-      stdin: 'inherit',
-      stdout: 'inherit',
-      stderr: 'inherit',
-    }).spawn()
-    let forward = (signal: Deno.Signal) => () => {
-      try {
-        child.kill(signal)
-      } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e
-      }
-    }
-    let interrupt = forward('SIGINT')
-    let terminate = forward('SIGTERM')
-    Deno.addSignalListener('SIGINT', interrupt)
-    Deno.addSignalListener('SIGTERM', terminate)
+  let took = stopwatch()
+  let child = new Deno.Command(command, {
+    args,
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).spawn()
+  let forward = (signal: Deno.Signal) => () => {
     try {
-      let status = await child.status
-      let seconds = (performance.now() - start) / 1000
-      // A short command can finish before the first control message arrives.
-      while (!controls.length) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
-      }
-      return {
-        seconds,
-        controlSeconds: controls.reduce((a, b) => a + b, 0) / controls.length,
-        samples: controls.length,
-        code: status.code,
-        at: new Date().toISOString(),
-      }
-    } finally {
-      Deno.removeSignalListener('SIGINT', interrupt)
-      Deno.removeSignalListener('SIGTERM', terminate)
+      child.kill(signal)
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+    }
+  }
+  let interrupt = forward('SIGINT')
+  let terminate = forward('SIGTERM')
+  Deno.addSignalListener('SIGINT', interrupt)
+  Deno.addSignalListener('SIGTERM', terminate)
+  try {
+    let status = await child.status
+    let reading = took()
+    return {
+      seconds: reading.value / 1000,
+      cpuSeconds: reading.cpu / 1000,
+      code: status.code,
+      at: new Date().toISOString(),
     }
   } finally {
-    worker.terminate()
+    Deno.removeSignalListener('SIGINT', interrupt)
+    Deno.removeSignalListener('SIGTERM', terminate)
   }
 }
 
@@ -202,9 +169,9 @@ export let command = async (args: string[]) => {
     )
     let message = `benchmark: ${result.suite}: ${
       sample.code ? 'FAILED' : result.verdict.toUpperCase()
-    } — ${sample.seconds.toFixed(3)}s, ratio ${
+    } — ${sample.seconds.toFixed(3)}s wall, ${
       result.benches[0].median.toFixed(3)
-    }${result.loaded ? ' (loaded)' : ''}`
+    }s CPU`
     // Report-only, so said where a run is read whole: in CI, or on
     // `--verbose`. An agent reads the rest of a run on every later turn.
     if (name.startsWith('ci/') || rest.includes('--verbose')) {

@@ -10,7 +10,7 @@ import { RELAY_ENTITIES } from './names.ts'
 import { suite as platformWaits } from './platform-waits.ts'
 import { suite as workerHealth } from './worker-health.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
-import { HOOK_WAITS, measure as hookWaits } from './hook-waits.ts'
+import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
 import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
@@ -65,7 +65,7 @@ let registration = (
     collect: async () => {
       let child = await new Deno.Command(Deno.execPath(), {
         args: deno
-          ? ['bench', '-A', '--json', file]
+          ? ['run', '-A', 'bench/deno-worker.ts', file]
           : ['run', '-A', 'bench/standalone-worker.ts', file, ...args],
         cwd: root,
         stdout: 'piped',
@@ -85,16 +85,7 @@ let registration = (
 })
 
 export let standalone: Registration[] = [
-  {
-    ...measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
-    suite: (args = [], root) => ({
-      ...measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS).suite(
-        args,
-        root,
-      ),
-      collect: () => hookWaits(args),
-    }),
-  },
+  measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
   measured(
     'operation-commands',
     'bench/operation-commands.ts',
@@ -177,19 +168,18 @@ export let standalone: Registration[] = [
     'harness-worker',
     'packages/harness/worker_bench.ts',
     ['inline', 'worker'].flatMap((mode) =>
-      ['startup', 'work', 'timer-delay'].map((phase) => `${mode}/${phase}`)
+      ['startup', 'work'].map((phase) => `${mode}/${phase}`)
     ),
   ),
   measured(
     'harness-window',
     'packages/harness/window_bench.ts',
     ['full', 'window'].flatMap((mode) =>
-      ['first', 'warm', 'timer-delay'].map((phase) => `${mode}/${phase}`)
+      ['first', 'warm'].map((phase) => `${mode}/${phase}`)
     ),
   ),
   measured('harness-switch', 'packages/harness/switch_bench.ts', [
     'switch',
-    'timer-delay',
   ]),
   measured(
     'graph-activity',

@@ -9,7 +9,7 @@ export type DenoReport = {
   benches: {
     name: string
     results: {
-      ok?: { avg: number; [key: string]: unknown }
+      ok?: { avg: number; cpu?: number; [key: string]: unknown }
       failed?: unknown
     }[]
   }[]
@@ -35,7 +35,8 @@ export let extract = (
     }
     return [b.name, {
       value: ok.avg,
-      source: 'deno-average',
+      ...ok.cpu === undefined ? {} : { cpu: ok.cpu },
+      source: 'deno-cpu-average',
       details: { ...ok },
     }]
   }))

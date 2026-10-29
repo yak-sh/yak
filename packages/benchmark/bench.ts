@@ -25,15 +25,12 @@ export type TimedBench = Pick<Workload, 'name' | 'resolution'> & {
  * in ms: its wall time, and its CPU time where the box says (host.ts
  * `cputime`). An externally measured bench spreads the reading into its
  * sample, `{ ...took(), source }`. */
-export let stopwatch = (): () => { value: number; cpu?: number } => {
-  // The wall interval sits inside the CPU one, so it never pays for a reading.
-  let cpu = cputime(), wall = performance.now()
-  return () => {
-    let value = performance.now() - wall, now = cputime()
-    return cpu === undefined || now === undefined
-      ? { value }
-      : { value, cpu: now - cpu }
-  }
+export let stopwatch = (
+  ...sources: (() => number)[]
+): () => { value: number; cpu: number } => {
+  let used = () => sources.reduce((total, read) => total + read(), cputime())
+  let cpu = used(), wall = performance.now()
+  return () => ({ value: performance.now() - wall, cpu: used() - cpu })
 }
 
 export let bench = (options: TimedBench): Bench => {

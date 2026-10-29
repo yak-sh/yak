@@ -1,15 +1,14 @@
 import { equal, test } from '@yaks/testing'
-import { paths, record, type Sample, suiteOf, timed } from './suite.ts'
+import { paths, record, type Sample, suiteOf } from './suite.ts'
 
 let sample = (seconds = 10, controlSeconds = .05, code = 0): Sample => ({
   seconds,
-  controlSeconds,
+  cpuSeconds: seconds / controlSeconds,
   code,
-  samples: 10,
   at: '',
 })
 for (let name of ['check', 'test']) {
-  test(`wall-clock ${name} cancels load and refuses regression without accepting new numbers`, async () => {
+  test(`CPU ${name} ignores wall delay and refuses regression without accepting new numbers`, async () => {
     let directory = await Deno.makeTempDir()
     let options = {
       baseline: directory + '/baseline.json',
@@ -34,12 +33,6 @@ for (let name of ['check', 'test']) {
     }
   })
 }
-test('wall-clock timer retains a short command exit status', async () => {
-  let result = await timed('sh', ['-c', 'exit 7'])
-  equal(result.code, 7)
-  equal(result.samples > 0, true)
-})
-
 test('long narrowed command names retain distinct durable measurements', async () => {
   let directory = await Deno.makeTempDir()
   try {

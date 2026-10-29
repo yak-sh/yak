@@ -6,8 +6,8 @@
  * figure is past every reference one), and its median is past the
  * reference's by more than the slack its baseline banked, and at least
  * `SLOWER`. The figure is CPU
- * time where the bench's samples carry it (@yaks/benchmark `stopwatch`),
- * which other work on the box barely moves, and wall time where they do not.
+ * time from every sample (@yaks/benchmark `stopwatch`). Wall time remains
+ * diagnostic and is never a fallback for a missing CPU reading.
  *
  * Both revisions run this checkout's driver (bench/*.ts and @yaks/benchmark)
  * over their own product code. When the older code cannot run today's driver
@@ -59,8 +59,8 @@ export type Pair = { before: Run; current: Run; after: Run }
 export type Comparison = {
   name: string
   unit: string
-  /** Which time the rounds compare: CPU where every sample carried it. */
-  figure: 'cpu' | 'wall'
+  /** Every comparison judges CPU time. */
+  figure: 'cpu'
   before: number[]
   current: number[]
   after: number[]
@@ -94,7 +94,7 @@ export type Judgement = Evidence & Partial<Pair> & {
  *   suite: 's', metric: 'm', workload: 1, runtime: 'r', cpu: 'c', busy: 0,
  *   benches: [{
  *     name: 'b', unit: 'ms', better: 'lower',
- *     rounds: rounds.map((median, index) => ({ index, median, spans: null })),
+ *     rounds: rounds.map((median, index) => ({ index, median, cpu: median, spans: null })),
  *   }],
  * }) as unknown as Run
  * let reference = at(100, 104, 98, 102, 101, 99)
@@ -124,22 +124,19 @@ export let compare = (
   }
   let comparisons: Comparison[] = current.benches.map((b, i) => {
     let runs = [before, current, after].map((r) => r.benches[i].rounds)
-    let cpu = runs.every((rounds) =>
-      rounds.length && rounds.every((r) => r.cpu !== undefined)
-    )
-    let [x, y, z] = runs.map((rounds) =>
-      rounds.map((r) => cpu ? r.cpu! : r.median)
-    )
+    let [x, y, z] = runs.map((rounds) => rounds.map((r) => r.cpu ?? NaN))
     let reference = [...x, ...z]
     return {
       name: b.name,
       unit: b.unit,
-      figure: cpu ? 'cpu' : 'wall',
+      figure: 'cpu' as const,
       before: x,
       current: y,
       after: z,
-      reference: reference.length ? median(reference) : NaN,
-      now: y.length ? median(y) : NaN,
+      reference: reference.length && reference.every(Number.isFinite)
+        ? median(reference)
+        : NaN,
+      now: y.length && y.every(Number.isFinite) ? median(y) : NaN,
     }
   })
   let overlap = (a: number[], b: number[]) =>
@@ -227,12 +224,13 @@ export let collect = async (
   let { baseline: path, collector } = registered(suite)
   let git = async (...args: string[]) =>
     text.decode(await command(root, 'git', args)).trim()
+  let base: Baseline = JSON.parse(await Deno.readTextFile(`${root}/${path}`))
   let reference = await git(
     'rev-parse',
-    revisions.reference ?? await git('log', '-1', '--format=%H', '--', path),
+    revisions.reference ?? base.reference ??
+      await git('log', '-1', '--format=%H', '--', path),
   )
   let revision = await git('rev-parse', revisions.current ?? 'HEAD')
-  let base: Baseline = JSON.parse(await Deno.readTextFile(`${root}/${path}`))
   let context = await host()
   let scratch = await Deno.makeTempDir({ prefix: 'bench-paired-' })
   try {
@@ -252,6 +250,16 @@ export let collect = async (
         'packages/benchmark/.',
         `${target}/packages/benchmark/`,
       ])
+      let driver = (await git('ls-files', '*_bench.ts')).split('\n').filter(
+        Boolean,
+      )
+      for (let file of driver) {
+        await command(root, 'mkdir', [
+          '-p',
+          `${target}/${file.slice(0, file.lastIndexOf('/'))}`,
+        ])
+        await command(root, 'cp', [file, `${target}/${file}`])
+      }
       // Reuse dependencies, not generated product assets or a graph.
       await Deno.symlink(`${root}/node_modules`, `${target}/node_modules`)
         .catch((e) => {
@@ -264,20 +272,14 @@ export let collect = async (
       roots.push(target)
     }
     let observations: Record<string, Samples>[][] = [[], [], []]
-    let pressure: number[] = []
-    // Other work slows both revisions alike, so it is recorded, not refused.
-    let resting = async () => {
-      let use = await context.busy?.()
-      if (use != null) pressure.push(use)
-    }
-    let names = JSON.stringify(base.benches.map((b) => b.name).sort())
+    let names = JSON.stringify(
+      collector(roots[1]).benches.map((b) => b.name).sort(),
+    )
     let measure = async (at: number, round: number) => {
-      await resting()
       try {
         let samples = await collector(roots[at]).collect(round)
         let got = JSON.stringify(Object.keys(samples).sort())
         if (got != names) throw Error(`measured ${got}, banked ${names}`)
-        await resting()
         return samples
       } catch (error) {
         if (at == 1) throw error
@@ -291,7 +293,10 @@ export let collect = async (
     // Each tree runs once unmeasured, so no round times one tree's cold
     // compile caches against the other's warm ones.
     for (let at of [0, 1]) await measure(at, 0)
-    let rounds = Math.max(6, Math.ceil(Math.log2(20 * base.benches.length)))
+    let rounds = Math.max(
+      6,
+      Math.ceil(Math.log2(20 * collector(roots[1]).benches.length)),
+    )
     for (let round = 0; round < rounds; round++) {
       let pair = await bracket(
         (revision) => measure(revision == 'current' ? 1 : 0, round),
@@ -308,12 +313,13 @@ export let collect = async (
         collect: (round: number) => observations[slot][round],
       }, {
         rounds,
+        figure: 'cpu',
         output: `${scratch}/run.json`,
         reporters: () => [],
         host: () => ({ ...context, commit: slot == 1 ? revision : reference }),
       }).then((r) => ({
         ...r,
-        busy: pressure.length ? Math.max(...pressure) : null,
+        busy: null,
       }))
     let pair = {
       before: await aggregate(0),

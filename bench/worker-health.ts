@@ -56,7 +56,10 @@ export let suite = (args: string[] = []): CollectedSuite => {
           'Workers changed during CPU measurement; retry after restart',
         )
       }
-      return { 'workers/cpu': (after - before) * 1000 / elapsed }
+      let rate = (after - before) * 1000 / elapsed
+      return {
+        'workers/cpu': { value: rate, cpu: rate, source: 'cgroup-cpu-rate' },
+      }
     },
   }
 }

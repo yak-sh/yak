@@ -138,6 +138,7 @@ let options = (
   }
   return {
     mode: mode as Options['mode'],
+    figure: 'cpu',
     rounds,
     output: `bench/${name}.results.json`,
     baseline: `bench/${name}.baseline.json`,
