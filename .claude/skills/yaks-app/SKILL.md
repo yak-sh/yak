@@ -109,10 +109,10 @@ and recovery is quick:
   the home page doesn't answer once the head is live. Main's gate never waits
   on or times a deploy, so a slow or failed Cloudflare build can't turn it red
   (bench/deploys.md).
-- `yak admin revert <sha>` reverts a main commit in a fresh worktree, lands it
+- `admin_revert` with `<sha>` reverts a main commit in a fresh worktree, lands it
   and waits for Workers Builds to serve the revert. Since main deploys on every
   push, this is the usual way back.
-- `yak admin rollback` is for a broken build path. It refuses to cross a data
+- `admin_rollback` is for a broken build path. It refuses to cross a data
   migration boundary, so it never lands on code that can't read what a newer
   release moved.
 - `deno task verify:yak` checks the public doors and watches three minutes of
@@ -181,7 +181,7 @@ box. A query that works on the box can be refused in a store.
   has no place in boot. It goes to the store mover (`mover.ts`): from the
   alarm, once the store serves, a few dozen rows a batch with requests in
   between. A batch that fails unwinds and waits for the next incarnation while
-  the store keeps serving the shape it holds. `yak admin move --rehearse` runs
+  the store keeps serving the shape it holds. `admin_move` with rehearse true runs
   every rule in a transaction the store rolls back and says what it found.
   Moving rows people already have is `data-migration`'s ground.
 
@@ -367,7 +367,7 @@ through the connector's graph tier (tool.ts `roleIn`).
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
   through the store's own apply (`--check` rehearses and keeps nothing). Both
   go through `graph_query` and `graph_apply` with `space` and `app`.
-- `yak admin errors` reads platform bugs through the independent tracker's
+- `admin_errors` reads platform bugs through the independent tracker's
   signed door (every unresolved one; `--since` narrows by last seen). Every
   unexpected caught failure reports to the tracker with its catch location
   (M-37965); a new platform bug mails the owner through workers/tracker's
@@ -380,7 +380,7 @@ through the connector's graph tier (tool.ts `roleIn`).
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following
   logs is not app traffic.
-- `yak admin throwaway [name]` signs this box in as `<name>@bot.yak.sh`, a test
+- `admin_throwaway` with an optional name signs this box in as `<name>@bot.yak.sh`, a test
   account for probes, to name per command with `--as`.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).

@@ -8,7 +8,7 @@ description: >
   and shadows, cost, and reading what was built for an entity. Use it whenever
   you write or change a `builder{…}`, its `content.body` or `using`, a tool a
   builder calls, or anything that reads `build` or `built` rows; whenever you
-  run `yak builder build`, try a prompt on a few rows, or ask what was built
+  run `builder_build`, try a prompt on a few rows, or ask what was built
   for something; and when a builder rebuilds everything, never builds, costs
   too much or loses its outputs, even if the request only says "have a model
   make one for each", "generate", "invent" or "fill these in". The query's
@@ -55,7 +55,7 @@ and treat every take as something worth keeping.
   current}` takes, keyed by build, slot and call. A replay keeps that call's
   takes. Each slot's newest successful take is `chosen{at, by, via}` by
   default; old takes and their sibling links stay queryable, and
-  `yak builder choose <output>` picks an earlier one without spending. The
+  `builder_choose` with `<output>` picks an earlier one without spending. The
   server holds one choice per build and slot.
 - `built.current` means chosen while the binding still exists and its inputs
   still match. A pending reroll with unchanged inputs keeps the choice playing;
@@ -118,9 +118,9 @@ That split is the whole economy of a builder, and it pulls two ways:
   tool revision wasn't recorded count as outdated.
 - The query text, variant name, staged and archived never enter input keys.
 
-`yak builder build <builder>` leaves current outputs untouched. `--outdated`
-redoes selected bindings under another definition; `--rebuild` redoes every
-selected binding, even unchanged ones. Both combine with `--only` and
+`builder_build` with builder <builder> leaves current outputs untouched. `outdated`
+redoes selected bindings under another definition; `rebuild` redoes every
+selected binding, even unchanged ones. Both combine with `only` and
 `--limit`. A new definition earns its way in as a shadow before it redoes
 existing work.
 
@@ -152,7 +152,7 @@ designed in `vocabulary` like any other. Every write lands as one batch, or none
   refusal answered to the model, or a request the runner retries, doesn't.
 - The model adapter reads the reply of an ask that called no tools, once that
   ask completes; prose beside a tool call is the model working.
-- `yak builder supply <builder> <for> <slot> <artifact>` answers one binding's
+- `builder_supply` with builder, for, slot and artifact answers one binding's
   slot with an artifact you already have, spending nothing (README,
   "Supplying an existing artifact"). It works on a staged builder.
 
@@ -164,7 +164,7 @@ Every builder reconciles when it's created, when its definition is edited
 (query, `to`, `immediate`, template, `using`, `sending`, wiring), when `floor` is moved,
 when a wake fires on it (`wake{target}`), each time a process starts working
 the effects pool (`builder_open`'s sweep, which finds new and changed bindings
-without redoing current outputs), and on `yak builder build`. The scheduled
+without redoing current outputs), and on `builder_build`. The scheduled
 doors (creation, a wake, the sweep) wait until `floor` has passed; nothing
 fires just because it passed.
 
@@ -178,16 +178,16 @@ fires just because it passed.
 Every model call spends money, from the account's one budget on yaks.app, so a
 builder starts small and gets looked at. Write it with `staged: {}`, then sample:
 
-    yak builder build <builder> --only <id> <id>   # these bindings only
-    yak builder build <builder> --limit 3          # the first three
-    yak builder build <builder> --only <id> --template @prompt.md
-    yak builder build <builder> --limit 3 --model <model>
-    yak builder build <builder> --only <id> --input @input.json
+    builder_build with builder <builder>, only [<id>, <id>]   # these bindings only
+    builder_build with builder <builder>, limit 3             # the first three
+    builder_build with builder <builder>, only [<id>], template "<prompt text>"
+    builder_build with builder <builder>, limit 3, model <model>
+    builder_build with builder <builder>, only [<id>], input {…}
 
-`--only` (or the ids after the builder) takes any id form, as every reference
+`only` takes any id form, as every reference
 argument does, and refuses a name in no binding. A partial run leaves every
-other build as it is. An alternate `--template`, `--model`, `--provider` or
-`--input` builds a shadow variant (`shadow:<hash>`) whose outputs no other
+other build as it is. An alternate `template`, `model`, `provider` or
+`input` builds a shadow variant (`shadow:<hash>`) whose outputs no other
 builder selects; compare them with `.build&.build.variant!=main`. Tune the
 template between runs, then remove the mark (`staged: null`): the builder
 reconciles once, and a sampled binding whose inputs are unchanged isn't asked
@@ -195,11 +195,11 @@ again.
 
 In an app's store (`workers/yak/package-tools.ts`; the store itself is `yaks-app`)
 the package's contract is the connector's `store_builder_build` tool.
-The published `builder_build` contract is translated in `published.ts`. It takes what the CLI does (`only`, `limit`, `rebuild`,
+The published `builder_build` contract is translated in `published.ts`. It takes what the box's tool does (`only`, `limit`, `rebuild`,
 `outdated`, `template`, `provider`, `model`, `input`) and reaches the store's
 `/call` runner as the caller, after checking they may edit the app; `builder_choose`
 and `builder_supply` sit beside it. From the box:
-`yak command builder_build --as <account> --space <space> --app <app> --builder <id> …`.
+`yak command builder_build --as <account> --space <space> --app <app> --builder <id> …` (`builder_build` is the box's own builder tool; `yak command` reaches an app's store).
 
 ## Chaining
 
@@ -233,7 +233,7 @@ cost times the rows the query matches is what letting it loose will cost.
 
 ## When something is wrong
 
-- `yak graph query '.build.builder=<builder>&*'`: each build's key, call and
+- `graph_query` with q `.build.builder=<builder>&*`: each build's key, call and
   whether it's stale; `.call.source=<build>&*` its calls, and the session a
   model call opened.
 - Rebuilding everything: something bound changed for every build, a shared
@@ -241,7 +241,7 @@ cost times the rows the query matches is what letting it loose will cost.
   values or an explicit redo.
 - Never building: a future `floor`, `staged`, `archived`, a builder that isn't
   `immediate` waiting for a door, or a missing tool.
-- `yak effect check` shows failed and overdue builder effects.
+- `effect_check` shows failed and overdue builder effects.
 
 When this skill is wrong or missing something, fix it in the same change.
 
@@ -255,7 +255,7 @@ and other runtime assets in `resources` globs (for example `"hud/*.css"`);
 its browser exports and source closure travel with each compiler job
 (`packages/esbuild/README.md`, "Toolkit packages"). Land the package and its
 consumer together, then wait for the main Worker release containing that catalog
-to serve production (`yak admin deploys --as admin@bot.yak.sh`), then read
+to serve production (`admin_deploys` as admin@bot.yak.sh), then read
 `https://yaks.app/_compiler/packages.json` and confirm the package's generated
 `package.json` exports and `resources` contain the new subpaths and styles before pushing
 the app from a clean main checkout. The compiler container needs no separate

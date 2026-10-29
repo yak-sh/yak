@@ -4,8 +4,8 @@ description: >
   How writing to and reading from the yaks graph works: bundles and patch
   rules, `$was`, writer stamps, deletes and tombstones, derived ids and edges,
   queries and the archetype index, scripts against ~/.yak/yak.db. Use it when
-  writing bundles (`yak graph apply`, `graph_apply`, a script, tool or rule),
-  querying (`yak graph query`, `graph_query`, a board or filter), writing db
+  writing bundles (`graph_apply`, a script, tool or rule),
+  querying (`graph_query`, a board or filter), writing db
   scripts or SQL, or surprised by a refusal, missing component, wrong count,
   wrong writer or a deleted entity returning. Value-free composed anatomy and
   causal observation are `platform-visualize`, not stored rows or returned
@@ -48,7 +48,7 @@ other. What comes back is the applied batch (one composed patch per entity, with
 whatever plugins and reference handling added), not a snapshot, so a cache that
 keeps its own copy casts it in or keeps ghosts.
 
-- `yak graph apply --bundles @file.json --check` runs every phase and rolls
+- `graph_apply` with `check: true` runs every phase and rolls
   back: the cheapest way to see what a write will do. A large check prints every
   bundle; parse the JSON to count rather than reading it.
 - An argument that starts with `@` is read as a file path on every `yak`
@@ -152,7 +152,7 @@ How a query is written is `query-grammar`. How one is answered:
 ## Scripts against the db
 
 A script writes through the graph: it opens one, or hands bundles to
-`yak graph apply`. That is what keeps the stamps, the journal, the archetype
+`graph_apply`. That is what keeps the stamps, the journal, the archetype
 pointers and the full-text and vector indexes true. SQL is @yaks/sql's AST.
 The owner, verbatim (M-39498): "nothing anywhere else should ever be writing raw sql
 strings." A raw SQL writer that has to exist calls `reclassify(driver, eids)`
@@ -176,8 +176,7 @@ write never owes the effect again. Writing them is `effects-and-rules`.
 
 ## Looking at it
 
-`yak graph show <id>`, `yak graph query '<q>' --json`, `yak graph schema
-<comp>`, `yak history <id>` (the journal), and `yak inspect` (the map, an id or a
+`graph_show` with `<id>`, `graph_query` with q `<q>`, `graph_schema` with `<comp>`, `history` with `<id>` (the journal), and `yak inspect` (the map, an id or a
 query) in a terminal, or https://tasks.yak.sh/?map in a browser.
 
 When this skill is wrong or missing something, fix it in the same change.

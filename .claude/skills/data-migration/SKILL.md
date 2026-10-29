@@ -72,7 +72,7 @@ both ends, and leave one shape behind.
 ## On the box (~/.yak/yak.db)
 
 Write through the graph wherever it can say the change: bundles through
-`yak graph apply`, or a script that opens the graph (`graph-reads-and-writes`,
+`graph_apply`, or a script that opens the graph (`graph-reads-and-writes`,
 "Scripts against the db", has how each behaves). Then stamps, the journal,
 archetype pointers and the full-text and vector indexes stay right. Raw SQL
 past the graph leaves archetype pointers stale, and filters and whole reads
@@ -140,7 +140,7 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
 
 - A mover rule is data: a query for the rows still in the old shape, and the
   patch that moves one. It lands rehearsal-only.
-- `yak admin move --rehearse --as admin@bot.yak.sh` moves every rule's rows in
+- `admin_move` with rehearse true as admin@bot.yak.sh moves every rule's rows in
   every store inside a transaction the store rolls back, and reports what each
   store found, moved and failed. A space or `space/app` narrows it.
 - A clean rule goes `live: 'apps'`, then `'all'`, the directory last; its mark
@@ -153,7 +153,7 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   translate at the graph doors (packages/lens/README.md).
 - Other migrations ship as expand, migrate, contract: the first release reads
   both shapes, the mover moves, and a later release deletes the old reader
-  once `yak admin move --as admin@bot.yak.sh` shows every store moved. Each
+  once `admin_move` as admin@bot.yak.sh shows every store moved. Each
   release rolls back one step safely.
 - A batch that fails unwinds, is reported, and the store keeps serving the
   shape it holds until the next try. That's recovery rather than a gate
@@ -178,7 +178,7 @@ the confirmed copies. Unrelated queued records keep their place.
 ## Knowing it landed
 
 The counts match what the script said, on the copy and live. A query that read
-wrong before the change reads right now. `yak admin errors --as admin@bot.yak.sh`
+wrong before the change reads right now. `admin_errors` as admin@bot.yak.sh
 and the box's logs show nothing new.
 
 When this skill is wrong or missing something, fix it in the same change.

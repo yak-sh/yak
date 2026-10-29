@@ -6,7 +6,7 @@ description: >
   `.limit` `.after` `.count` `.tally` `.distinct` `.fields` `*` `.refs` `.near`
   `.edges`), time values, reverse associations, rule matches with `;` `$vars`
   `+` and brackets, and refusing a property named without its component.
-  Use it for any query: `yak graph query`, a tool's `q`, `graph_query`, a
+  Use it for any query: `graph_query`, a tool's `q`, a
   board, filter, rule/effect `match`, builder query, `.near` search or saved
   query; and before adding syntax that may exist already. Anatomy's
   plain-text search is `platform-visualize`, not query syntax. Computation
@@ -156,7 +156,7 @@ A directive belongs to the whole line wherever it is written.
 `.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,
 `.after`) of a query with words is ranked by `search` (best match first, a
 title that is exactly the words before all); any other window is newest first,
-and a whole answer oldest first. `graph_query` (and `yak graph query`) gives a
+and a whole answer oldest first. `graph_query` gives a
 search that asks for no window its best 20.
 A trailing `~` in `.fields` mutes that property from a subscription's change
 signal.
@@ -190,7 +190,7 @@ How rules run is `effects-and-rules`.
 
 - Completion is the quickest way to look: `complete(vocab, text, caret)`
   (packages/query/complete.ts) is the engine behind every query field and
-  offers what can be typed at the caret; `yak graph schema <comp>` lists
+  offers what can be typed at the caret; `graph_schema` with `<comp>` lists
   properties.
 - Rows are what a query costs, so the best answer is the least you'll read:
   `.count` over rows, `.fields` over whole bundles.

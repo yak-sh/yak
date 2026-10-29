@@ -148,7 +148,7 @@ What any errand runner that can't lose work lives with:
   answer that question without reconstructing application state.
 - **In a Worker, work is bounded by rows,** since the clock stands still while
   code runs (`yaks-app`).
-- **A failure is seen** (M-37965): the pool reports it, and `yak effect check`
+- **A failure is seen** (M-37965): the pool reports it, and `effect_check`
   lists failed and overdue runs.
 
 A **lease** (`holding`, `take` in packages/effects/lease.ts) is for a duty
@@ -216,13 +216,13 @@ explicitly authorized.
 
 `platform-visualize` traces what ran after a write. The runs themselves:
 
-- `yak effect check`: failed and overdue runs.
+- `effect_check`: failed and overdue runs.
 - Browse's Effects page (`/?effects`): the workers up, how busy each is and
   what each is running, runs a second, and the runs owed by handler. Each
   worker says itself once a second in a `worker` row on its process entity
-  (packages/effects/worker.ts); `yak graph query '.worker&?process'` reads
+  (packages/effects/worker.ts); `graph_query` with q `.worker&?process` reads
   them.
-- `yak graph query '.effect.state=failed'`, with `effect.error`,
+- `graph_query` with q `.effect.state=failed`, with `effect.error`,
   `effect.touched` (every component the commit moved on that entity) and
   `effect.attempts`.
 - A loop: what does the handler write, and does that write match its own

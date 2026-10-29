@@ -47,7 +47,7 @@ Your recall returns a word's meaning, not its letters, so you will produce a
 synonym for something that already exists and it will feel like the same word.
 The owner, verbatim (M-12915): "it's like agents really do run on "vibes". as long
 as the vibe of the word is the same, they can't tell them apart". Look the
-string up: `grep '"<word>"' packages/*/vocab.json`, `yak graph schema`, or the
+string up: `grep '"<word>"' packages/*/vocab.json`, `graph_schema`, or the
 component list in `yak inspect`. If the codebase already has the idea under
 another name, that's the name. If two names exist for one idea, or the existing
 name is bad, propose one to the owner; he picks.

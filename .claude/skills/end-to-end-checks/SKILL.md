@@ -6,7 +6,7 @@ description: >
   `handler` called with a Request), yaks.app's kernel in memory (`kernel()`),
   a page on a linkedom document, the TUI painted by @yaks/tui's `lay`, data
   copied from the live graph; then, once landed, the live system (`yak admin
-  deploys`, `yak admin errors`, a throwaway account). Use it whenever checking
+  deploys`, `admin_errors`, a throwaway account). Use it whenever checking
   "in the browser", "in the terminal", "live", on a "probe server" or "against
   real data", taking a screenshot, auditing a screen, or verifying UI, query,
   write path or migration by hand, even if asked only "make sure it works" or
@@ -62,8 +62,8 @@ gate and the live system will.
   (`pane` in packages/browse/tui/testing.ts). Browse and inspect mount the
   browser's own App through it, so a key press and the screen after it are
   checked the same way.
-- **Data shaped like the owner's.** Read entities from the live graph (`yak
-  graph show`, `yak graph query … --json`) and apply them to your in-memory
+- **Data shaped like the owner's.** Read entities from the live graph (`graph_show`,
+  `graph_query`) and apply them to your in-memory
   graph; reading the live graph costs nothing, and a write to it lands in his
   day. For the whole of the box's data, `cp` the bench snapshot
   (`~/.cache/yak-bench/base.db`, bench/README.md) into your scratch directory
@@ -97,9 +97,9 @@ workerd kernel), `testing` says which, and T-132170 takes them away.
 ## Once it lands
 
 Every commit on main deploys the yak worker through Workers Builds and runs the
-gate. `yak admin deploys --as admin` says what is live, `yak admin errors`
+gate. `admin_deploys` as admin says what is live, `admin_errors`
 what broke, and a new failure reaches the tracker when it happens (M-37965).
-A probe of the platform runs as a test account: `yak admin throwaway` signs in
+A probe of the platform runs as a test account: `admin_throwaway` signs in
 as one, and `--as` selects that connection per command (listing accounts is
 `secrets-and-connections`). Acting as the owner is his to grant (M-31958).
 The box's own server runs main after `yak restart`. The platform itself is

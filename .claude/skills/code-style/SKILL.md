@@ -27,17 +27,17 @@ that does a lot. `runtime.js` is a complete logic language in about 700 lines.
 The memories hold the detail, and they're worth reading whole before a
 sizeable change:
 
-- `yak graph show M-4454`: the ten rules for JS/TS, from `export let` arrows to
+- `graph_show` with `M-4454`: the ten rules for JS/TS, from `export let` arrows to
   the 600-line ceiling on a module.
-- `yak graph show M-4455`: a module's shape, the whole app (platform as the
+- `graph_show` with `M-4455`: a module's shape, the whole app (platform as the
   framework, no build step, a pure core and a thin shell) and how tests are
   discovered.
-- `yak graph show M-4456`: CSS as a scaling component system.
-- `yak graph show M-4458`: the values underneath, what he deliberately leaves
+- `graph_show` with `M-4456`: CSS as a scaling component system.
+- `graph_show` with `M-4458`: the values underneath, what he deliberately leaves
   out, and which strata of his code to imitate.
-- `yak graph show M-17880`: what that means in this repo (Deno and TypeScript,
+- `graph_show` with `M-17880`: what that means in this repo (Deno and TypeScript,
   Preact, hand-written CSS, Everforest, the `anchor()` trap).
-- `yak graph show M-4457`: the Ruby and Rails counterpart, for cafe_car.
+- `graph_show` with `M-4457`: the Ruby and Rails counterpart, for cafe_car.
 
 ## The forces
 

@@ -2,7 +2,8 @@
 name: platform-visualize
 description: >
   Read the running platform's composed anatomy and bounded causal activity with
-  @yaks/visualize, its /visualize page, agent tools and yak visualize command.
+  @yaks/visualize, its /visualize page, agent tools `visualize_anatomy` and
+  `visualize_activity`, and the yak visualize command.
   Use it whenever you need to see what is wired, which package owns a part,
   whether a facet is declared, loaded or bound, what ran after a write, why a
   connection looks missing, or whether a quiet trace means nothing happened;

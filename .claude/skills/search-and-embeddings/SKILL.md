@@ -72,7 +72,7 @@ these are the words for it:
   Ollama or any OpenAI-compatible endpoint, `workersAi()` for a Worker's `AI`
   binding, an in-process Model2Vec model (@yaks/model2vec), and `hashEmbedder()`
   for a test that needs vectors without a model.
-- **`yak vector check`** says whether the box's index is built and current,
+- **`vector_check`** says whether the box's index is built and current,
   and names the cases where every search reads every vector.
 - **The benchmark**: duplicate-task MRR and comment-to-task MRR, with the
   tables, in T-45558's and T-59058's comments. It's what a candidate model is

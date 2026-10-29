@@ -156,8 +156,8 @@ too.
 This skill holds the thinking. Each venture keeps its own model (who it's for,
 its plans and prices, its pages and where its numbers live in code) in its own
 skill or design. Read it before you change anything there. Find the owner's own words on the venture
-with `yak memory recall "<topic>" --feedback`. A price, a plan or who the
+with `memory_recall` with said "<topic>" and feedback true. A price, a plan or who the
 product is for turns on preferences only the owner holds, so when one is open,
-put it to him as a decision (`yak decision new`) with the one you recommend.
+put it to him as a decision (`decision_new`) with the one you recommend.
 
 When this skill is wrong or missing something, fix it in the same change.

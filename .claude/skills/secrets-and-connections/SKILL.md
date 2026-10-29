@@ -108,7 +108,7 @@ environment to fall to. A kept `op://` reference stays unresolved.
 
 ## Writing one on the box
 
-The write doors are `graph_apply` and `yak graph apply`. Both take an optional
+The write door is `graph_apply`. It takes an optional
 `doc{title, body}` beside `secret{name, value}` in the same bundle (T-64284):
 a human title, and a body saying what the secret is for and which packages or
 services use it. `secret.name` stays the config key and the identity. The doc
@@ -137,7 +137,7 @@ takes a sign-in's return URL as masked input, `yak auth --key` takes an agent
 grant or service key the same way, and yaks.app's connections page takes a
 pasted key.
 
-To check one: `yak graph query '.secret.name=NAME&*'`. It wears `provisional`
+To check one: `graph_query` with q `.secret.name=NAME&*`. It wears `provisional`
 while its value is on the way to the vault, with `content` explaining a retry,
 and `failed{reason}` when sealing was given up on; the value is then gone and
 has to be given again. The original failure reaches the host's reporter; the

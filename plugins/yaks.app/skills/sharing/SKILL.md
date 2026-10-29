@@ -310,12 +310,10 @@ address) and itself as the session (`via`):
   `app_publish`, lists the app at once, skipping review: no request, no letter.
   It still needs a published app and a screenshot.
 
-On the platform's own machine these are
-`yak admin gallery space/app code-review --verdict approve --findings @findings.md`,
-`yak admin gallery space/app approve` (or `decline`) and
-`yak admin gallery space/app list`, each with `--as admin@bot.yak.sh`, and the
-last two with `--by <his address>`; the session is filled in from the calling
-agent.
+On the platform's own machine these are the admin_gallery tool with
+`decision: 'code-review'` (and `verdict`, `findings`), `'approve'` (or
+`'decline'`) and `'list'`, naming the account in `as`, and the last two with
+`by` set to his address; the session is filled in from the calling agent.
 
 The tool reports the listing's status, and so does the app's status pill on the
 space's own page:

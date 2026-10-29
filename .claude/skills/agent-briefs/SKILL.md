@@ -6,7 +6,7 @@ description: >
   session, relaying something the owner just said to an agent already running,
   stopping one whose task the owner reframed, and checking a report before
   telling the owner. Use it whenever you are about to call the Agent tool,
-  SendMessage a running agent, run `codex exec`, `yak session spawn` or `yak
+  SendMessage a running agent, run `codex exec`, `session_spawn` or `yak
   session new`, or file a task an agent will be pointed at, even for a one-line
   fix, and whenever an agent's report or task-notification arrives. Not for
   doing the work yourself, and not for a design the owner will read (that is
@@ -70,7 +70,7 @@ under it that would serve the agent better.
 
 **The task as the spec.** File it first: the outcome and the pointers, short
 (M-14370), with the owner's words verbatim in it. The brief then says
-"`yak graph show T-…` is the spec". The task outlives your context, and it's
+"`graph_show` with `T-…` is the spec". The task outlives your context, and it's
 where the next agent, and the owner, look (M-3715).
 
 **His words, as he said them**, wherever they set the direction. A paraphrase
@@ -118,7 +118,7 @@ with the sha on the task, close it, release the claim, and `yak restart` when it
 changed the server. A task has one writer at a time. A second agent in the same
 task finds the first one's process and kills it as a stray writer, which is how
 five Codex runs on T-63462 died of SIGTERM beside a native session already
-working it. So `yak graph show` the task for a live claim before starting
+working it. So `graph_show` the task for a live claim before starting
 anyone on it, and give a running session's task to that session.
 
 **What comes back**: "report in a few lines", plus whatever you need for the
@@ -138,7 +138,7 @@ gets in the first minute.
 A skeleton for a fresh agent, to fill in your own words:
 
 ```text
-Work T-123 in /home/yaks/code/tasks: `yak graph show T-123` is the spec, with
+Work T-123 in /home/yaks/code/tasks: `graph_show` with `T-123` is the spec, with
 the owner's words. Claim it under your session and release it when done.
 
 <what should be true when you're done, and why it matters to him; how it should

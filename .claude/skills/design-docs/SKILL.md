@@ -7,7 +7,7 @@ description: >
   whenever you are asked to pitch, propose, draft, design, "write up" or "think
   through" a change bigger than a bug fix; when a change moves code between
   packages or adds a package, a vocabulary keyword or a worker; when a design
-  needs revising, deciding (`yak design decide`) or turning into tasks; or when an agent's draft needs
+  needs revising, deciding (`design_decide`) or turning into tasks; or when an agent's draft needs
   reviewing before it goes on a D- entity. Not for a bug fix or a small feature,
   which are just done. How each proposed component is shaped is `vocabulary`,
   and making and wiring a package is `packages-and-plugins`; this one is the
@@ -90,26 +90,21 @@ history; provenance lives in the commits and the quotes.
 
 ## Filing it
 
-Bodies are long, so draft in a scratch file and file the body from it:
+Bodies are long, so give the whole body to the tool:
 
-```sh
-yak design new "<what it proposes, in one line>" @/path/to/body.md --project P-19
 ```
-
-Any argument starting with `@` is read as a file path (the @file door), so
-`yak task new "@yaks/ui …"` fails with "No such file or directory". Phrase such
-a title so it doesn't start with `@` ("The @yaks/ui style guide …").
+design_new with title "<what it proposes, in one line>", project P-19, body "<the proposal>"
+```
 
 One proposal is one design, so a revision patches its body rather than minting
 a second:
 
-```sh
-python3 -c "import json; json.dump([{'entity':{'eid':'D-…'},'doc':{'body':open('body.md').read()}}], open('bundles.json','w'))"
-yak graph apply --bundles @bundles.json
+```
+graph_apply with bundles [{"entity": {"eid": "D-…"}, "doc": {"body": "<the revised proposal>"}}]
 ```
 
 When he comments, record his words verbatim on the design
-(`yak comment new D-… '<his words>'`), fold the answers into a "Decided"
+(`comment_new` on D-… with '<his words>'), fold the answers into a "Decided"
 section of the body, and drop what he rejected.
 
 When his comment reshapes the design, the body changes in the same sitting as
@@ -118,7 +113,7 @@ the new one lives only in a chat reply that goes when your context does.
 
 ## Deciding it
 
-When a design looks good, `yak design decide D-… approved` it yourself and
+When a design looks good, `design_decide` with `D-…` it yourself and
 build: the tool stamps the caller as the decider, which is the agent's decision
 recorded as the agent's (M-31958). When he approves in conversation, put his
 approval verbatim in a comment beside it. The task tree and follow-ups are yours
@@ -127,7 +122,7 @@ too.
 A design's verdict and the owner's comments on it outrank its body. A body is
 what was proposed; it reads as settled whether or not he agreed, and his later
 words often reverse parts of it. So before you tell anyone what a design plans,
-or edit it, read `decided` and every comment (`yak graph show D-…` lists both).
+or edit it, read `decided` and every comment (`graph_show` with `D-…` lists both).
 A declined design is a record, not the plan.
 
 ## The task tree
@@ -145,10 +140,10 @@ to what it needs, and look at the dry run first:
 ]
 ```
 
-```sh
-yak graph apply --bundles @tree.json --check   # see what it would do
-yak graph apply --bundles @tree.json
-yak task list '.task .order=-created.at' --limit 20   # read back the ids
+```
+graph_apply with bundles <the tree>, check true   # see what it would do
+graph_apply with bundles <the tree>
+task_list with query '.task .order=-created.at', limit 20   # read back the ids
 ```
 
 An edge can point at an existing task by id (`"to": "T-…"`), which is how two

@@ -8,7 +8,7 @@ description: >
   its work and knowing what stops it. Use it whenever you are asked for a
   "native", "graph-native" or "harness" session, or for a model to work "in
   the harness", and whenever you are about to run `yak session new` or
-  `yak session send`. `yak session spawn` and the Codex plugin in Claude Code
+  `yak session send`. `session_spawn` and the Codex plugin in Claude Code
   (`codex:codex-rescue`, `/codex:rescue`) run outside agents, not native
   sessions. What the brief says is `agent-briefs`.
 ---
@@ -66,7 +66,7 @@ brief carries, and how a report is read when it comes back.
 Two other things here run a model on a task, and the word "codex" in them makes
 them easy to mistake for this:
 
-- **`yak session spawn --provider claude|codex`**: an outside CLI agent (Claude
+- **`session_spawn` with provider claude or codex**: an outside CLI agent (Claude
   Code, the Codex CLI) on a task, its output imported as a transcript
   (M-36709). Moving those agents into machines is T-66427.
 - **The Codex plugin in Claude Code**: the `codex:codex-rescue` agent type,
@@ -131,12 +131,11 @@ bodies or name their files. What it can't find anywhere is two things:
 
 ## While it runs
 
-- **Its S-id.** The CLI prints only the final reply. `yak session list` lists
-  sessions, each with its status; once it claims the task, `yak graph show
-  T-<n>` names it too. `yak graph show S-<n>` shows its home workspace,
+- **Its S-id.** The CLI prints only the final reply. `session_list` lists
+  sessions, each with its status; once it claims the task, `graph_show` with `T-<n>` names it too. `graph_show` with `S-<n>` shows its home workspace,
   dispatch and parent. Its command directory may not be recorded until a
   provider lends the machine.
-- **Watching**: `yak session peek S-<n>` shows its newest entries and status.
+- **Watching**: `session_peek` with `S-<n>` shows its newest entries and status.
 - **Saying more**: `yak session send S-<n> '<text>'` adds an input it reads on
   its next turn and waits for it to settle, so run it in the background too.
   When it's the owner's words, relay them verbatim.
@@ -148,7 +147,7 @@ bodies or name their files. What it can't find anywhere is two things:
   saying what is true in your own words rather than quoting its reports,
   instead of sending more into the old one.
 - **Waiting for the work, not the quiet.** `yak session new` and
-  `yak session wait` return when the session's own transcript settles
+  `session_wait` return when the session's own transcript settles
   (packages/session/status.ts reads its transcript, never its children's). A
   root that handed work to children and ended its turn reads `settled` while
   they work, and wakes when they report. So wait on the task, and on the
@@ -158,7 +157,7 @@ bodies or name their files. What it can't find anywhere is two things:
   until yak graph query '(.entity.eid=T-<n> .task.status=done,cancelled) | (.entity.eid=S-<n> .session.status=failed,stopped) .count' | grep -q '"count":1'; do sleep 60; done
   ```
 
-- **Stopping**: `yak session stop S-<n>` stops native sessions as well as
+- **Stopping**: `session_stop` with `S-<n>` stops native sessions as well as
   managed spawns. A native session reads `stopped` and admits no more model
   turns or tool calls; a step already in flight can finish recording its
   answer without reopening the transcript. No workspace is disposed when that step finishes. New input (`yak session send`) resumes it.

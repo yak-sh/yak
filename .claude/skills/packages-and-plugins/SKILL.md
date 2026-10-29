@@ -123,7 +123,7 @@ declared `start: true`, owed by a process that works the effects pool and not
 by a command passing through; there is no `./boot`.
 
 To see what a running process composed, which facets are declared, loaded and
-bound, read its anatomy: `yak visualize anatomy --group facets`
+bound, read its anatomy: `visualize_anatomy` with group facets
 (`platform-visualize`).
 
 ## Turning a plugin on
