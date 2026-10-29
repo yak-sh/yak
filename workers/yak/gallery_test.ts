@@ -108,7 +108,7 @@ test('the listing is the approved offers', async () => {
   assertEquals(install(all[0]), "app_install(name: 'recipes')")
 })
 
-test('a private listing visits and installs its public demo while keeping its approval and image', async () => {
+test('a private listing visits its public demo and installs its private source', async () => {
   let source = app({ access: 'private', gallery: live, screenshot: 'approved' })
   let demo = app({
     eid: 'demo-eid',
@@ -124,7 +124,7 @@ test('a private listing visits and installs its public demo while keeping its ap
   assertEquals(shown.length, 1)
   assertEquals(shown[0].eid, source.eid)
   assertEquals(shown[0].at, 'https://yourname.yaks.app/recipes/')
-  assertEquals(install(shown[0]), "app_install(name: 'recipes-demo')")
+  assertEquals(install(shown[0]), "app_install(name: 'recipes')")
   assertEquals(shown[0].app.screenshot, 'approved')
 })
 

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#e8e6d9"/>
+  <rect x="64" y="64" width="1072" height="672" rx="20" fill="#faf9f2"/>
+  <path d="M280 64v672" stroke="#deddd0"/>
+  <g fill="#2e4f40" font-family="Georgia,serif">
+    <text x="98" y="130" font-size="27">Bible Study</text>
+    <text x="98" y="166" font-size="27">Notes</text>
+    <text x="334" y="150" font-size="19" letter-spacing="3">READ · REFLECT · WRITE</text>
+    <text x="334" y="240" font-size="55">Abide in Christ</text>
+    <text x="360" y="325" font-size="25">John 15:1–5</text>
+    <text x="334" y="433" font-size="30">Keep your notes beside</text>
+    <text x="334" y="475" font-size="30">the passage.</text>
+  </g>
+  <rect x="98" y="215" width="146" height="44" rx="9" fill="#2e4f40"/>
+  <text x="116" y="243" fill="#faf9f2" font-family="system-ui,sans-serif" font-size="17">+ New note</text>
+  <text x="98" y="318" fill="#526256" font-family="system-ui,sans-serif" font-size="16">Sample studies</text>
+  <rect x="86" y="342" width="176" height="50" rx="8" fill="#e5eadf"/>
+  <text x="99" y="373" fill="#2e4f40" font-family="system-ui,sans-serif" font-size="16">Abide in Christ</text>
+  <text x="99" y="424" fill="#526256" font-family="system-ui,sans-serif" font-size="16">The Good Shepherd</text>
+  <path d="M336 291v65" stroke="#6d8b59" stroke-width="5"/>
+  <path d="M845 623c-20-127 35-213 121-309m-116 238c65-5 104-41 118-92-66 0-108 29-118 92m18-98c-60-17-84-56-77-106 60 17 91 51 77 106m46-70c54-5 86-36 94-81-53 3-89 32-94 81" fill="none" stroke="#6d8b59" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="334" y="652" fill="#687164" font-family="system-ui,sans-serif" font-size="18">Scripture, your writing, and room to reflect.</text>
+</svg>

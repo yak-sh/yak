@@ -72,9 +72,9 @@ for (let app of cases) {
     }
     let page = await k.at('yaks.app', '/gallery').then((r) => r.text())
     assertStringIncludes(page, `https://yourname.yaks.app/${app}/`)
-    assertStringIncludes(page, `/install?name=private-${app}-demo`)
+    assertStringIncludes(page, `/install?name=private-${app}`)
     let shown = await connector(k).tool('gallery_search', { words: app })
-    assertStringIncludes(shown, `app_install(name: 'private-${app}-demo')`)
+    assertStringIncludes(shown, `app_install(name: 'private-${app}')`)
     let original = await k.at('home.yaks.app', `/${app}/`)
     assertEquals(original.status, 303)
     await original.body?.cancel()

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bible Study Notes</title>
+  <meta property="og:image" content="https://yourname.yaks.app/bible-study/gallery.svg">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="mark">✦</span><div><strong>Bible Study Notes</strong><small>Study • reflect • write</small></div></div>
+      <button id="new-note" class="primary wide" type="button">+ New note</button>
+      <div class="side-label">Your notes</div>
+      <nav id="note-list" aria-label="Notes"></nav>
+    </aside>
+    <main>
+      <p id="demo-notice" hidden style="margin:0 0 1rem;color:#526256">Shared public demo · Sample studies only. <a href="https://yaks.app/gallery">Install your own private notebook</a> before adding personal notes.</p>
+      <script>document.getElementById("demo-notice").hidden = location.hostname !== "yourname.yaks.app"</script>
+      <span id="status" class="save-status" role="status">Loading…</span>
+      <div id="empty" class="empty" hidden>
+        <div class="empty-icon">✎</div><h1>Begin with a thought.</h1>
+        <p>Create a note, write your own words, and place ESV passages where they belong.</p>
+        <button id="empty-new" class="primary" type="button">Create a note</button>
+      </div>
+      <section id="editor" hidden>
+        <nav id="outline" class="outline" aria-label="Note outline"><button id="outline-toggle" type="button" aria-expanded="true">Outline</button><div id="outline-list" class="outline-list"></div></nav>
+        <div class="heading"><div><input id="title" aria-label="Note title" placeholder="Untitled note" maxlength="160"><div class="note-date"><input id="note-date" type="date" aria-label="Optional note date"><span id="print-date"></span></div></div><div class="heading-actions"><button id="explore-toggle" type="button">Explore Scripture</button><button id="copy" type="button">Copy Markdown</button><button id="download" type="button">Download .md</button><button id="print" type="button">Print</button><button id="publish" type="button">Publish</button><button id="delete" class="danger" type="button">Delete</button></div></div>
+        <div id="published" class="published" hidden><span>Published at <a id="published-link" target="_blank" rel="noopener"></a></span><span id="published-state" class="hint"></span><span class="published-actions"><button id="copy-link" type="button">Copy link</button><button id="republish" type="button">Update page</button><button id="unpublish" class="danger" type="button">Unpublish</button></span></div>
+        <div id="blocks" class="blocks"></div>
+        <div class="add-panel"><div class="add-title">Add to this note</div><div class="add-actions"><button id="add-prose" type="button">+ Your writing</button><form id="passage-form"><label class="sr-only" for="reference">Bible reference</label><input id="reference" placeholder="e.g. John 3:16–17" autocomplete="off"><button id="add-passage" type="submit" class="primary">Add ESV passage</button></form></div><p id="passage-message" role="status"></p></div>
+        <p class="editor-tip">Select words in a passage to replace, highlight, or underline them. Check that each omission preserves the passage’s meaning.</p>
+      </section>
+      <footer class="copyright">Unless otherwise indicated, all Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved. The ESV text may not be quoted in any publication made available to the public by a Creative Commons license. The ESV may not be translated into any other language. Users may not copy or download more than 500 verses of the ESV Bible or more than one half of any book of the ESV Bible. <a href="https://www.esv.org/">ESV.org</a></footer>
+    </main>
+  </div>
+  <aside id="explorer" class="explorer" aria-label="Scripture explorer" hidden><div class="explorer-head"><strong>Explore Scripture</strong><button id="explorer-close" type="button" aria-label="Close explorer">×</button></div><form id="search-form" class="search-form"><label for="search-query">Search words or a phrase</label><div><input id="search-query" placeholder='e.g. steadfast love or "living water"'><button id="search-button" type="submit">Search</button></div></form><form id="explore-form" class="explore-form"><label for="explore-reference">Read a passage</label><div><input id="explore-reference" placeholder="e.g. John 3" autocomplete="off"><button type="submit">Read</button></div></form><div id="explore-reader" class="explore-reader" hidden></div><div id="search-results" class="search-results"></div></aside>
+  <div id="annotation-popover" class="annotation-popover" role="menu" hidden></div>
+  <script src="./sortable.min.js"></script>
+  <script src="./markdown-it.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

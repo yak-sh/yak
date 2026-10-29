@@ -206,7 +206,6 @@ export let listed = async (
         ? {
           ...shown,
           at: url(demo.space, demo.app, env),
-          name: demo.app.published!.name,
         }
         : shown
     })
