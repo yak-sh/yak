@@ -337,7 +337,6 @@
           "cli/persona-sync",
           "cli/search",
           "cli/cites-verify",
-          "cli/cites-check",
           "cli/connection-need",
           "cli/connection-list",
           "cli/mail-send",
@@ -364,7 +363,6 @@
           "connector/persona-sync",
           "connector/search",
           "connector/cites-verify",
-          "connector/cites-check",
           "connector/connection-need",
           "connector/connection-list",
           "connector/mail-send",
@@ -373,6 +371,33 @@
           "connector/mail-check",
           "connector/visualize-anatomy",
           "connector/visualize-activity"
+        ]
+      },
+      {
+        "reference": "feb78fbfdeb05af336779f394249b923aac6bc24",
+        "kind": "derived",
+        "source": "Earliest known corrected product: feb78fbfd includes verified in the cites-check query projection. The previous reference could not perform the corrected moved-citation workload. Fixture correction retained from 3a8fa8d67.",
+        "correction": {
+          "previousReference": "9f7f792b2782529f824c14cf7c511228835aa7c9",
+          "productFix": "feb78fbfdeb05af336779f394249b923aac6bc24",
+          "fixtureFix": "3a8fa8d674e1beec730939b90ae2570bac8f06e3",
+          "reason": "The old query discarded verified and always reported never checked; its median measured missing work.",
+          "previousMedians": [
+            {
+              "name": "cli/cites-check",
+              "median": 409.77271699999983,
+              "unit": "ms"
+            },
+            {
+              "name": "connector/cites-check",
+              "median": 4.96571799999947,
+              "unit": "ms"
+            }
+          ]
+        },
+        "benches": [
+          "cli/cites-check",
+          "connector/cites-check"
         ]
       }
     ]
