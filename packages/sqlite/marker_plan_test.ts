@@ -175,8 +175,8 @@ let crowded = (() => {
   return { db, reads }
 })()
 
-test('a crowded marker is probed by the rows a reference seeks', () => {
-  for (let sql of crowded.reads) {
+for (let [i, sql] of crowded.reads.entries()) {
+  test(`a crowded marker is probed by the rows a reference seeks (${i ? 'scoped' : 'unscoped'})`, () => {
     let stmt = crowded.db.prepare(sql.sql)
     try {
       ok(stmt.all(...sql.params).length == 1)
@@ -185,5 +185,5 @@ test('a crowded marker is probed by the rows a reference seeks', () => {
     } finally {
       stmt.finalize()
     }
-  }
-})
+  })
+}
