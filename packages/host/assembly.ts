@@ -546,8 +546,10 @@ export let assemble = (
           'more than one meaning index answers search',
         )
       }
-      meant = meanings[0]
+      // A host with a reader searches through it too, where it searches at all.
+      meant = meanings[0] && (lent.reader?.meaning ?? meanings[0])
       ranked = binding.search?.(host)
+      ranked = ranked && (lent.reader?.search ?? ranked)
       // The generic tools belong to this graph, not to any transport: they are
       // declared in @yaks/graph's own vocabulary and implemented there, and a
       // host has a graph whether or not anything is listening. So the tier is

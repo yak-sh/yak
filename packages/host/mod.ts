@@ -93,9 +93,12 @@ export interface Host {
    * text — so a plugin reading SQL directly reads what the store reads */
   derived: Derived
   graph: Graph
-  /** A web role answers graph reads beside its HTTP thread: `graph` reads
-   * through it. */
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
+  /** A web role answers what only reads its store beside its HTTP thread:
+   * `graph`'s reads, `search` and `meaning` go through it. */
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
+    search?: Search
+    meaning?: Meaning
+  }
   /** the post-commit registry: what a commit owes, written down by every
    * process (@yaks/effects), and the observers a plugin registers while one of
    * its tools runs */

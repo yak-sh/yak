@@ -67,6 +67,7 @@ import { requirements, requires } from '@yaks/sqlite/meta'
 import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import { survey } from '@yaks/sqlite/survey'
 import type { Opened } from '@yaks/sqlite/db'
+import type { Search } from '@yaks/graph/tools'
 import {
   adopt,
   fields as searched,
@@ -87,7 +88,13 @@ import type { Blobs } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
 import { chosen, type Configured, facetsOf, meet } from '@yaks/host/config'
 import { facet } from './words.ts'
-import { assembly, type Facets, type Load, type MeaningHit } from '@yaks/host'
+import {
+  assembly,
+  type Facets,
+  type Load,
+  type Meaning,
+  type MeaningHit,
+} from '@yaks/host'
 export { every } from '@yaks/host/roles'
 import { declarations } from './declarations.ts'
 import { ROLES } from './roles.ts'
@@ -240,6 +247,8 @@ export type ComposeOpts = {
   thread?: Thread
   /** The web read door; this host closes an owned reader before telemetry. */
   reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
+    search?: Search
+    meaning?: Meaning
     close?: () => void | Promise<void>
     /** where the reader tells of a read that runs on */
     overrun?: (tell: (error: Error) => void) => void

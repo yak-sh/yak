@@ -54,15 +54,24 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
     try {
       if (!host) throw new Error('the reader was not started')
       activity?.say('waiting for the read-only graph to finish composing')
-      let graph = (await host).graph
+      let served = await host, graph = served.graph
       activity?.say(`entering graph.${data.op}`)
       stop = readOperations(graph, (text) => activity?.say(text))
-      let query = () =>
-        data.op == 'get'
-          ? graph.get(data.eids, data.comps, data.opts)
-          : data.op == 'read'
-          ? graph.read(data.query, data.opts)
-          : graph.rows(data.query, data.opts)
+      let call = data
+      let query = () => {
+        switch (call.op) {
+          case 'get':
+            return graph.get(call.eids, call.comps, call.opts)
+          case 'read':
+            return graph.read(call.query, call.opts)
+          case 'rows':
+            return graph.rows(call.query, call.opts)
+          case 'search':
+            return served.search?.(call.words, call.opts) ?? []
+          case 'meaning':
+            return served.meaning?.(call.words, call.opts) ?? []
+        }
+      }
       if (!data.observed) {
         let value = await query()
         activity?.say('posting the read result to the main thread')

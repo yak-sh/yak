@@ -6,15 +6,27 @@
 // its worker finishes the synchronous SQL unheard, then takes the next read.
 import { mask, parse, stringify } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
+import type { Search } from '@yaks/graph/tools'
+import type { Meaning, MeaningHit } from '@yaks/host'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 import { how, own, since, type Spent, spent } from './stall.ts'
 import { readActivity } from './read_activity.ts'
 
-export type Reader = Pick<Graph, 'read' | 'rows' | 'get'>
+/** Everything a web host asks of its store that only reads it: the graph's
+ * reads, ranked text search and search by meaning. */
+export type Reader = Pick<Graph, 'read' | 'rows' | 'get'> & {
+  search: Search
+  meaning: Meaning
+}
 
 type Call =
   | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
   | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
+  | {
+    op: 'search' | 'meaning'
+    words: string
+    opts?: { limit?: number; within?: string; signal?: AbortSignal }
+  }
 
 export type Said =
   | { start: string; activity: SharedArrayBuffer }
@@ -41,6 +53,8 @@ let later = (fn: () => void, ms: number) => {
 let asked = (call: Call): string =>
   call.op == 'get'
     ? `get of ${call.eids.length} entities`
+    : 'words' in call
+    ? `${call.op} of ${call.words.length} characters`
     : mask(typeof call.query == 'string' ? call.query : stringify(call.query))
       .slice(0, 512)
 
@@ -257,7 +271,7 @@ export let readThread = (
       }
       let job: Job = {
         id: ++next,
-        call: { ...call, opts },
+        call: { ...call, opts } as Call,
         resolve,
         reject,
         trace: context(),
@@ -275,6 +289,12 @@ export let readThread = (
       ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
     get: (eids, comps, opts) =>
       ask({ op: 'get', eids, comps, opts }).then((value) => value as Bundle[]),
+    search: (words, opts) =>
+      ask({ op: 'search', words, opts }).then((value) => value as Bundle[]),
+    meaning: (words, opts) =>
+      ask({ op: 'meaning', words, opts }).then((value) =>
+        value as MeaningHit[]
+      ),
     ready: () => ask({ op: 'read', query: parse('.limit=1') }).then(() => {}),
     overrun: (tell) => void (told = tell),
     close: () => {
