@@ -88,6 +88,10 @@ export let rebank = async (suite: string, root: string) => {
     `${root}/${path}`,
     JSON.stringify(next, null, 2) + '\n',
   )
+  let limited = (evidence.groups ?? [evidence]).some((group) =>
+    (group.current?.rounds ?? 0) <
+      Math.max(6, Math.ceil(Math.log2(20 * group.comparisons.length)))
+  )
   return {
     suite,
     baseline: path,
@@ -97,6 +101,12 @@ export let rebank = async (suite: string, root: string) => {
     revision: evidence.revision,
     rounds: evidence.current?.rounds,
     verdict: evidence.verdict,
+    status: limited && evidence.verdict == 'slower'
+      ? 'slower candidate awaiting default monitor confirmation'
+      : limited && evidence.verdict == 'same'
+      ? 'same in limited rounds'
+      : evidence.verdict,
+    confidence: limited ? 'limited rounds' : 'default monitor round count',
     slower: evidence.slower,
     error: evidence.error,
     comparisons: evidence.comparisons,
@@ -126,7 +136,7 @@ if (import.meta.main) {
     try {
       let result = await rebank(suite, root)
       results.push(result)
-      console.error(`${suite}: banked reference CPU; current ${result.verdict}`)
+      console.error(`${suite}: banked reference CPU; current ${result.status}`)
     } catch (error) {
       failed = true
       let message = error instanceof Error ? error.message : `${error}`

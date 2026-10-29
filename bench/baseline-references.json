@@ -284,10 +284,34 @@
         "source": "git history of bench/operation-diagnostics.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
           "cli/model-list-local-catalogue",
-          "cli/vector-check-populated",
-          "connector/vector-check-populated",
           "cli/session-home",
           "connector/session-home"
+        ]
+      },
+      {
+        "reference": "7243ea9398c82da4396baece8a8c3960034d74b8",
+        "kind": "derived",
+        "source": "Earliest canonical-vector check implementation: 7243ea939 replaces quantized-index health checks with checking current canonical vector rows. The previous reference does different work and cannot run the corrected workload.",
+        "correction": {
+          "previousReference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
+          "workloadChange": "7243ea9398c82da4396baece8a8c3960034d74b8",
+          "reason": "The old tool checked obsolete quantized-index construction; it did not check current canonical vector rows.",
+          "previousMedians": [
+            {
+              "name": "cli/vector-check-populated",
+              "median": 244.78631600000017,
+              "unit": "ms"
+            },
+            {
+              "name": "connector/vector-check-populated",
+              "median": 3.6759370000008857,
+              "unit": "ms"
+            }
+          ]
+        },
+        "benches": [
+          "cli/vector-check-populated",
+          "connector/vector-check-populated"
         ]
       }
     ]
