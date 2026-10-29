@@ -4,6 +4,7 @@
  * deno run -A bench/yardstick.ts coarse <spool> <db> <result.json> file|declaration
  * deno run -A bench/yardstick.ts restart <db> <file> <expected count>
  */
+import { stopwatch } from '@yaks/benchmark'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -103,6 +104,8 @@ async function command(cmd: string, args: string[], cwd?: string) {
 async function environment() {
   return {
     at: new Date().toISOString(),
+    timing: 'cpu',
+    timeUnit: 'ms',
     uptime: await command('uptime', []),
     cpu: await Deno.readTextFile('/proc/cpuinfo').then((s) =>
       s.match(/model name\s*:\s*(.*)/)?.[1]
@@ -120,24 +123,25 @@ function connect(path: string, coarse = false) {
   let g = graph({ storage: store, vocab: schema })
   return { driver, g }
 }
-let now = () => performance.now()
 function summary(samples: number[]) {
   let sorted = samples.toSorted((a, b) => a - b)
   return {
     p50: sorted[Math.floor(sorted.length * .5)],
     p95: sorted[Math.ceil(sorted.length * .95) - 1],
-    samples,
+    samples: samples.map((cpu) => ({ cpu })),
+    unit: 'ms',
+    timing: 'cpu',
   }
 }
 function timedRead(read: () => unknown, n = 21) {
-  let start = now()
+  let start = stopwatch()
   let first = read()
-  let firstMs = now() - start
+  let firstMs = start().cpu
   let samples = []
   for (let i = 0; i < n; i++) {
-    start = now()
+    start = stopwatch()
     read()
-    samples.push(now() - start)
+    samples.push(start().cpu)
   }
   return {
     firstMs,
@@ -179,9 +183,9 @@ async function parse(repo: string, spool: string) {
   let sha = await command('git', ['rev-parse', 'HEAD'], repo)
   let files = (await command('git', ['ls-files', '-z'], repo)).split('\0')
     .filter((p) => /\.(ts|tsx|js)$/.test(p)).sort()
-  let start = now()
+  let start = stopwatch()
   await init()
-  let initMs = now() - start
+  let initMs = start().cpu
   let parseMs = 0
   let spoolMs = 0
   let bytes = 0
@@ -202,9 +206,9 @@ async function parse(repo: string, spool: string) {
     let input = new TextEncoder().encode(source)
     hash.update(file + '\0').update(input)
     bytes += input.length
-    start = now()
+    start = stopwatch()
     let tree = emit(file, source)
-    parseMs += now() - start
+    parseMs += start().cpu
     nodes += tree.nodes.length
     references += tree.references.length
     errors += tree.errors
@@ -215,10 +219,10 @@ async function parse(repo: string, spool: string) {
       bytes: input.length,
       numeric: tree.nodes.some((n) => n.node.kind == 'number'),
     })
-    start = now()
+    start = stopwatch()
     await Deno.writeTextFile(`${spool}/${i}.json`, JSON.stringify(tree))
     await Deno.writeTextFile(`${spool}/${i}.source`, source)
-    spoolMs += now() - start
+    spoolMs += start().cpu
     peakRss = Math.max(peakRss, Deno.memoryUsage().rss)
     if (i % 200 == 0) {
       console.error(`parse ${i}/${files.length}, ${nodes} nodes`)
@@ -254,9 +258,9 @@ async function run(spool: string, db: string, out: string) {
   }
   let manifest = JSON.parse(await Deno.readTextFile(`${spool}/manifest.json`))
   let env = await environment()
-  let start = now()
+  let start = stopwatch()
   let { driver, g } = connect(db)
-  let openMs = now() - start
+  let openMs = start().cpu
   let pragmas = ['journal_mode', 'synchronous', 'page_size', 'cache_size'].map((
     name,
   ) => ({ name, value: driver.query({ t: 'pragma', name }) }))
@@ -267,17 +271,17 @@ async function run(spool: string, db: string, out: string) {
   // All parent targets in a preorder batch already exist or are in that batch.
   // Reference edges follow nodes; JS never retains the whole corpus.
   for (let i = 0; i < manifest.files.length; i++) {
-    start = now()
+    start = stopwatch()
     let tree: FileTree = JSON.parse(
       await Deno.readTextFile(`${spool}/${i}.json`),
     )
-    spoolReadMs += now() - start
+    spoolReadMs += start().cpu
     for (let rows of [tree.nodes, tree.references]) {
       for (let j = 0; j < rows.length; j += 1000) {
         let bundles: Bundle[] = rows.slice(j, j + 1000)
-        start = now()
+        start = stopwatch()
         await g.apply(bundles)
-        let ms = now() - start
+        let ms = start().cpu
         applyMs += ms
         batchTimes.push(ms)
         peakRss = Math.max(peakRss, Deno.memoryUsage().rss)
@@ -316,9 +320,9 @@ async function run(spool: string, db: string, out: string) {
       await Deno.readTextFile(`${spool}/${i}.json`),
     )
     let source = await Deno.readTextFile(`${spool}/${i}.source`)
-    start = now()
+    start = stopwatch()
     let diff = edit(file, source, before)
-    let diffMs = now() - start
+    let diffMs = start().cpu
     let samples = []
     let growth = []
     // Repeat identical deltas, restoring outside timing, with the real graph path.
@@ -331,9 +335,9 @@ async function run(spool: string, db: string, out: string) {
     }
     for (let n = 0; n < 7; n++) {
       let sizeBefore = (await Deno.stat(db)).size
-      start = now()
+      start = stopwatch()
       await g.apply(diff.writes)
-      samples.push(now() - start)
+      samples.push(start().cpu)
       growth.push((await Deno.stat(db)).size - sizeBefore)
       // Compare actual read content, not just timing an unanswered query.
       let actual = g.read(`.node.file=${file}&.limit=1000000`) as Bundle[]
@@ -393,7 +397,7 @@ async function run(spool: string, db: string, out: string) {
   if (forward.rows != 1) throw new Error('forward reference count')
   let rss = Deno.memoryUsage().rss
   driver.close?.()
-  let restartStart = now()
+  let restartStart = stopwatch()
   let restart = JSON.parse(
     await command(Deno.execPath(), [
       'run',
@@ -405,7 +409,7 @@ async function run(spool: string, db: string, out: string) {
       String(subtree.rows),
     ]),
   )
-  let restartProcessMs = now() - restartStart
+  let restartProcessMs = restartStart().cpu
   let report = {
     env,
     corpusSha: manifest.sha,
@@ -460,9 +464,9 @@ async function coarse(
   }
   let manifest = JSON.parse(await Deno.readTextFile(`${spool}/manifest.json`))
   let env = await environment()
-  let start = now()
+  let start = stopwatch()
   let { driver, g } = connect(db, true)
-  let openMs = now() - start
+  let openMs = start().cpu
   let applyMs = 0, prepareMs = 0, spoolReadMs = 0, entities = 0
   let peakRss = Deno.memoryUsage().rss
   let batches: number[] = []
@@ -481,15 +485,15 @@ async function coarse(
   } | undefined
   let name = 'graph'
   for (let i = 0; i < manifest.files.length; i++) {
-    start = now()
+    start = stopwatch()
     let tree: FileTree = JSON.parse(
       await Deno.readTextFile(`${spool}/${i}.json`),
     )
     let source = await Deno.readTextFile(`${spool}/${i}.source`)
-    spoolReadMs += now() - start
-    start = now()
+    spoolReadMs += start().cpu
+    start = stopwatch()
     let packed = pack(tree, source, grain)
-    prepareMs += now() - start
+    prepareMs += start().cpu
     entities += packed.length
     for (let p of packed) {
       for (let n of p.tree.value.nodes) {
@@ -524,9 +528,9 @@ async function coarse(
       }
     }
     for (let j = 0; j < packed.length; j += 1000) {
-      start = now()
+      start = stopwatch()
       await g.apply(packed.slice(j, j + 1000))
-      let ms = now() - start
+      let ms = start().cpu
       applyMs += ms
       batches.push(ms)
       peakRss = Math.max(peakRss, Deno.memoryUsage().rss)
@@ -660,14 +664,14 @@ async function coarse(
   }
   let nodeScanRead = timedRead(() => readNode(nodeScan))
   let beforeLocationBytes = size()
-  start = now()
+  start = stopwatch()
   driver.query({
     t: 'create index',
     name: 'tree_location',
     on: 'tree',
     cols: [col('file'), col('start')],
   })
-  let locationMs = now() - start
+  let locationMs = start().cpu
   let locationBytes = size() - beforeLocationBytes
   plan('nodeIndexed', nodeIndexed)
   let nodeIndexedRead = timedRead(() => readNode(nodeIndexed))
@@ -686,7 +690,7 @@ async function coarse(
     return result
   })
   let beforeIndexBytes = size()
-  start = now()
+  start = stopwatch()
   driver.query({
     t: 'create table',
     name: 'name_path',
@@ -708,16 +712,16 @@ async function coarse(
       where: refsWhere,
     }),
   })
-  let indexExtractMs = now() - start
+  let indexExtractMs = start().cpu
   let sideTableBytes = size() - beforeIndexBytes
-  start = now()
+  start = stopwatch()
   driver.query({
     t: 'create index',
     name: 'name_path_name',
     on: 'name_path',
     cols: [col('name'), col('owner'), col('path')],
   })
-  let indexBuildMs = now() - start
+  let indexBuildMs = start().cpu
   let indexBytes = size() - beforeIndexBytes - sideTableBytes
   let sideRows = Number(
     driver.query(
@@ -756,7 +760,7 @@ async function coarse(
     await Deno.readTextFile(`${spool}/${chosen.i}.json`),
   )
   let source = await Deno.readTextFile(`${spool}/${chosen.i}.source`)
-  start = now()
+  start = stopwatch()
   let diff = edit(
     chosen.packed.tree.file,
     source,
@@ -789,7 +793,7 @@ async function coarse(
       writes.push({ entity: p.entity, $delete: true })
     }
   }
-  let prepareEditMs = now() - start
+  let prepareEditMs = start().cpu
   let restore: Bundle[] = [
     ...before,
     ...after.filter((p) => !prior.has(p.entity.eid)).map((p) => ({
@@ -849,12 +853,12 @@ async function coarse(
     ...before.filter((p) => !live.has(p.entity.eid)).map((p) => p.entity.eid),
   ]
   for (let i = 0; i < 7; i++) {
-    start = now()
+    start = stopwatch()
     await g.apply(writes)
-    editGraph.push(now() - start)
-    start = now()
+    editGraph.push(start().cpu)
+    start = stopwatch()
     transaction(() => refresh(ids))
-    editIndex.push(now() - start)
+    editIndex.push(start().cpu)
     let actual = g.read(
       `.tree.file=${chosen.packed.tree.file}&.limit=1000000`,
     ) as Bundle[]
@@ -956,15 +960,17 @@ if (import.meta.main) {
   else if (mode == 'coarse') {
     await coarse(a, b, c, Deno.args[4] as 'file' | 'declaration')
   } else if (mode == 'restart') {
-    let start = now()
+    let start = stopwatch()
     let { driver, g } = connect(a)
-    let openMs = now() - start
-    start = now()
+    let openMs = start().cpu
+    start = stopwatch()
     let rows = ordered(g, b) as Bundle[]
-    let readMs = now() - start
+    let readMs = start().cpu
     if (rows.length != Number(c)) throw new Error('restart count')
     console.log(
       JSON.stringify({
+        timing: 'cpu',
+        timeUnit: 'ms',
         openMs,
         readMs,
         rows: rows.length,

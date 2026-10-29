@@ -16,6 +16,7 @@
 // and records that the store requires the journal. Never point it at the live
 // graph. Prints one JSON line per measurement.
 
+import { stopwatch } from '@yaks/benchmark'
 import { compose, facet } from '@yaks/cli/host'
 import { read as config } from '@yaks/cli'
 import { type Bundle, signed, token } from '@yaks/graph'
@@ -74,10 +75,11 @@ let host = (mode?: { at: number } | { branch: number }) =>
 let out = (o: Record<string, unknown>) =>
   console.log(JSON.stringify({ kind, ...o }))
 
-let t0 = performance.now()
+let took = stopwatch()
 let h = await host()
 let g = h.graph
-out({ m: 'compose', ms: +(performance.now() - t0).toFixed(1) })
+let sample = took()
+out({ m: 'compose', ms: sample.cpu, unit: 'ms', ...sample })
 
 // Another writer: its commit is what lets each host's memory go between timed
 // reads, as any other writer's does on the box, and it reads the file's size.
@@ -131,14 +133,21 @@ let time = async (
   cold = false,
 ) => {
   for (let i = 0; i < 3; i++) await f(-1 - i)
-  let xs: number[] = []
+  let xs: { value: number; cpu: number }[] = []
   for (let i = 0; i < n; i++) {
     if (cold) commit()
-    let s = performance.now()
+    let took = stopwatch()
     await f(i)
-    xs.push(performance.now() - s)
+    xs.push(took())
   }
-  out({ m, ...stats(xs) })
+  out({
+    m,
+    unit: 'ms',
+    timing: 'cpu',
+    ...stats(xs.map((x) => x.cpu)),
+    wall: stats(xs.map((x) => x.value)),
+    samples: xs,
+  })
 }
 let eids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
 let titleOf = async (on: typeof g, eid: string) =>
@@ -214,9 +223,10 @@ out({ m: 'bytes:per-change', bytes: Math.round((kept() - start) / 2000) })
 
 if (kind == 'versions') {
   // The past: main as of the transaction before this run's writes.
-  let s = performance.now()
+  let took = stopwatch()
   let past = await host({ at: before })
-  out({ m: 'as-of:compose', ms: +(performance.now() - s).toFixed(1) })
+  let sample = took()
+  out({ m: 'as-of:compose', ms: sample.cpu, unit: 'ms', ...sample })
   out({
     m: 'as-of:answer',
     ok: await titleOf(past.graph, probe) == prior,
@@ -238,9 +248,10 @@ if (kind == 'versions') {
   let clock = history({ versions: true })!
   await time('branch:create', () => branch(other, clock))
   let b = branch(other, clock)
-  s = performance.now()
+  took = stopwatch()
   let on = await host({ branch: b.branch })
-  out({ m: 'branch:compose', ms: +(performance.now() - s).toFixed(1) })
+  sample = took()
+  out({ m: 'branch:compose', ms: sample.cpu, unit: 'ms', ...sample })
   await time('branch:title-edit', (i) =>
     on.graph.apply(signed([{
       entity: { eid: probe },

@@ -16,6 +16,7 @@
 // spawn, and the blocks of the twenty-five chunks around it, which the frame's
 // writes never touch.
 
+import { stopwatch } from '@yaks/benchmark'
 import { type Bundle, mint } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
@@ -237,15 +238,16 @@ export function frameDistribution(
   try {
     for (let i = 0; i < warmup; i++) f.frame(shape)
     let samples = Array.from({ length: count }, () => {
-      let start = performance.now()
+      let took = stopwatch()
       f.frame(shape)
-      return performance.now() - start
+      return took()
     })
     f.verify()
-    let sorted = samples.toSorted((a, b) => a - b)
+    let sorted = samples.map((s) => s.cpu).toSorted((a, b) => a - b)
     let at = (p: number) => sorted[Math.ceil(count * p) - 1]
     return {
       unit: 'ms/frame',
+      timing: 'cpu',
       shape,
       count,
       warmup,

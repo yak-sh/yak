@@ -2,7 +2,8 @@
 // Spreads and rendering bodies are excluded: this measures selection alone,
 // not paint or a captured request mix. Pass an old mod.ts as the first arg
 // (with its relative imports resolved) to compare in a fresh process:
-// deno run --cached-only --allow-read bench/render-selection.ts [module-url]
+// deno run --cached-only --allow-read --allow-ffi bench/render-selection.ts [module-url]
+import { stopwatch } from '@yaks/benchmark'
 import { and, parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab/runtime'
 import type { Bundle, Registration } from '@yaks/render'
@@ -96,9 +97,9 @@ let cold = () => {
   checksum += api.resolve(fresh, bundles[0], 'Board.List.Tile', vocab) ? 1 : 0
 }
 let measure = (run: () => void, count: number) => {
-  let start = performance.now()
+  let took = stopwatch()
   for (let i = 0; i < count; i++) run()
-  return performance.now() - start
+  return took()
 }
 for (let run of [named, unnamed, eligible, cold]) measure(run, 500)
 let cases: [string, () => void, number][] = [
@@ -121,6 +122,8 @@ console.log(JSON.stringify({
   bundles: bundles.length,
   asks,
   answers,
+  unit: 'ms',
+  timing: 'cpu',
   times,
   checksum,
 }))

@@ -35,6 +35,7 @@
 // Never point it at the live graph: it writes into the file, and puts back
 // what it wrote to `doc` when done. Prints one JSON line per measurement.
 
+import { stopwatch } from '@yaks/benchmark'
 import {
   among,
   and,
@@ -215,11 +216,12 @@ let copied = (shape: string, comp: string): Stmt[] => {
 }
 for (let shape of Object.keys(SHAPES)) {
   for (let comp of COMPS) {
-    let s = performance.now()
+    let took = stopwatch()
     q({ t: 'begin' })
     for (let st of copied(shape, comp)) q(st)
     q({ t: 'commit' })
-    out({ m: 'copied', shape, comp, ms: Math.round(performance.now() - s) })
+    let sample = took()
+    out({ m: 'copied', shape, comp, ms: sample.cpu, unit: 'ms', ...sample })
   }
 }
 
@@ -293,14 +295,22 @@ let time = async (
   cold = false,
 ) => {
   for (let i = 0; i < 3; i++) await f(-1 - i)
-  let xs: number[] = []
+  let xs: { value: number; cpu: number }[] = []
   for (let i = 0; i < rounds; i++) {
     if (cold) commit()
-    let s = performance.now()
+    let took = stopwatch()
     await f(i)
-    xs.push(performance.now() - s)
+    xs.push(took())
   }
-  out({ layout: l, m, ...stats(xs) })
+  out({
+    layout: l,
+    m,
+    unit: 'ms',
+    timing: 'cpu',
+    ...stats(xs.map((x) => x.cpu)),
+    wall: stats(xs.map((x) => x.value)),
+    samples: xs,
+  })
 }
 
 // ---- reads ----
@@ -715,16 +725,19 @@ let big = tally.filter((t) => t.open && stored(t.comp).length)
   .sort((a, b) => b.open - a.open)[0]
 let scratch = `${big.comp}$scratch`
 let timed = (m: string, ss: Stmt[], rows: number) => {
-  let s = performance.now()
+  let took = stopwatch()
   q({ t: 'begin' })
   for (let st of ss) q(st)
   q({ t: 'commit' })
-  let ms = performance.now() - s
+  let sample = took()
+  let ms = sample.cpu
   out({
     m,
     comp: big.comp,
     rows,
+    ...sample,
     ms: Math.round(ms),
+    timing: 'cpu',
     store_s: +(ms * live / rows / 1000).toFixed(1),
   })
 }
