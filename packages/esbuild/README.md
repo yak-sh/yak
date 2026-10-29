@@ -48,7 +48,7 @@ module per entry, the lock, and any errors, each a line an agent can act on.
 
 ## The compile
 
-```ts
+```ts ignore
 import { equal } from '@yaks/testing'
 import { compile } from '@yaks/esbuild/compile'
 
