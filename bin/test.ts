@@ -421,18 +421,23 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // Each platform is idle by its runtime's own time once that runtime starts
   // (@yaks/testing/own): the wall clock less what the box kept it, and every
   // process it started, waiting for a CPU. A runtime that hangs waits for no
-  // CPU, so it is ended as soon on a busy box as on an idle one.
-  let progress = runs.map(([p]) => ({
-    now: () => Date.now(),
-    name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
-    at: Date.now(),
-    phase: 'loading' as Progress['phase'],
-    count: 0,
-    failed: [] as string[],
-    said: 0,
-    reported: Date.now(),
-    done: false,
-  }))
+  // CPU, so it is ended as soon on a busy box as on an idle one. Before then
+  // it is idle by this process's own time: the kernel starts here, and the
+  // workerd runtime waits for it.
+  let progress = runs.map(([p]) => {
+    let now = own(Deno.pid, { every: pulse / 2 })
+    return {
+      now,
+      name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
+      at: now(),
+      phase: 'loading' as Progress['phase'],
+      count: 0,
+      failed: [] as string[],
+      said: 0,
+      reported: Date.now(),
+      done: false,
+    }
+  })
   // What each platform has said, kept as it comes: one ended before its
   // closing report is said with all of it.
   let heard = runs.map(() => ({
