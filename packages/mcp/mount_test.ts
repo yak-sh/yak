@@ -53,6 +53,28 @@ let call = (name: string, args: Record<string, unknown> = {}) =>
 // Requests refused before serving a tool share an empty host.
 let emptyDoor = mcp({ graph: shopGraph() })
 
+let noticeGraph = shopGraph()
+let noticeError = new Error(
+  'internal error; reference = t1kc49n7npnl3c5r795qrlvv',
+)
+let noticeReports: unknown[] = []
+let noticeDoor = mcp({
+  graph: noticeGraph,
+  roster: () => Promise.reject(noticeError),
+  report: (error) => void noticeReports.push(error),
+})
+
+test('a failed roster notice reports its cause and keeps the committed tool answer', async () => {
+  let response = await noticeDoor(call('graph_apply', {
+    bundles: [{ entity: { eid: 'notice-book' }, book: { price: 23 } }],
+  }))
+  let answer = await response.json()
+  assertEquals((await noticeGraph.read('.book.price=23')).length, 1)
+  assertEquals(answer.error, undefined)
+  assertEquals(answer.result.isError, undefined)
+  assertEquals(noticeReports, [noticeError])
+})
+
 test('the door answers the protocol, and signs what a tool writes', async () => {
   let graph = shopGraph()
   let door = mcp({ graph, authenticate: () => ada })

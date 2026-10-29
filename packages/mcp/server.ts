@@ -503,7 +503,15 @@ export let server = (
     // A refusal carries the roster sentence too: an agent holding a stale
     // tool list is likelier to be refused than served, so that is exactly
     // the reply worth attaching it to.
-    return noting(out, await opts.roster?.(names))
+    let notice: string | undefined
+    try {
+      notice = await opts.roster?.(names)
+    } catch (err) {
+      // A notice cannot undo the tool's outcome. Report its own failure and
+      // keep the answer, so a caller never repeats a committed action for it.
+      await report(err, asked, t.name)
+    }
+    return noting(out, notice)
   }
   for (let t of tools()) {
     let meta = metaOf(t, opts.security)
