@@ -37,7 +37,13 @@
     vertical-align: middle;
   }
   /* What is drawn (tokens.css, Pencil and paper) wears its outline on
-     ::after, in --pencil where a part asks for another colour. */
+     ::after, in --pencil where a part asks for another colour. Each part
+     starts from graphite, so none takes the colour of a box it sits in. */
+  .Button,
+  .Card,
+  a.Pill {
+    --pencil: initial;
+  }
   .Button::after,
   .Card::after,
   a.Pill::after {
