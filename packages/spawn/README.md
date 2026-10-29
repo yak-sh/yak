@@ -59,8 +59,8 @@ long as it runs, and resumes monitoring active runs, so no two hosts import the
 same logs. It also takes up a run that is over but whose transcript never ended
 (its log was left unread partway), and reads it to its end. A one-shot command
 adopts no run: its tails would outlive the lease it gives back when it closes.
-Effect handlers start the long-running work without awaiting it; failures go to
-the configured `report` callback.
+Start effects await recording the child process; log following runs in the
+background, with failures sent to the configured `report` callback.
 
 <a id="how-the-child-process-is-started"></a>
 
@@ -79,9 +79,9 @@ pass that fails (a store locked past its busy timeout) is reported, and the next
 takes the log up where the transcript stands. Unrecognized and invalid JSON
 lines remain in the file and are not entries.
 
-When the process exits, the follower appends a transcript `stop` entry unless
-the provider printed one after the request it answered. A nonzero exit is
-recorded with that entry.
+After process exit and final log import, the follower appends its own `stop`
+entry as a final import receipt, even if the provider already printed a stop. A
+nonzero exit is recorded with that entry.
 
 <a id="carrying-on"></a>
 
@@ -151,12 +151,24 @@ from the graph.
     "@yaks/session",
     "@yaks/process",
     "@yaks/model",
-    { "use": "@yaks/spawn", "with": { "cwd": "/srv/work", "poll": 250 } }
+    {
+      "use": "@yaks/spawn",
+      "with": {
+        "cwd": "/srv/repo",
+        "worktrees": "/srv/runs",
+        "poll": 250
+      }
+    }
   ]
 }
 ```
 
-Effects accept `cwd`, process-file `dir`, polling interval `poll`, and kill
+`cwd` is the source checkout. With `worktrees` set, each CLI run gets
+`/srv/runs/<session-eid>` on branch `session-<session-eid>`, cut from the source
+repository's local `main`. Uncommitted source changes stay in the source
+checkout.
+
+Effects also accept process-file `dir`, polling interval `poll`, and kill
 `grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,
 and the number of `lines` shown by `peek`.
 
