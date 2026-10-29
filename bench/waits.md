@@ -4,61 +4,30 @@ A **waiting path** is an operation from a person's action to usable content or a
 complete answer. The benchmark names below identify the boundary, not every
 possible entity, query, account or third-party service.
 
-| Surface / waiting path                                | Benchmark                                                                                    | Boundary                                                                                             |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Browse home and task detail                           | `pages`                                                                                      | Cold and warm navigation to populated home / task title                                              |
-| Session list and long session transcript              | `page-content`                                                                               | Cold and warm navigation to session list / actual transcript content                                 |
-| Project task list                                     | `page-content`                                                                               | Navigation to populated list, not project heading                                                    |
-| Query and map                                         | `page-content`                                                                               | Navigation to returned rows / populated map                                                          |
-| Package, component and property inspector             | `page-content`                                                                               | Navigation to the appropriate schema content                                                         |
-| Platform anatomy                                      | `page-content`                                                                               | Navigation to populated anatomy list                                                                 |
-| CLI startup/help                                      | `person-commands:cli/help`                                                                   | Spawn through complete output and exit                                                               |
-| CLI task list, graph show and graph query             | `person-commands:cli/*`                                                                      | Spawn through populated answer and exit over 2,000 tasks                                             |
-| CLI graph write                                       | `person-commands:cli/graph-apply`                                                            | Spawn through committed write and exit                                                               |
-| UserPromptSubmit hook                                 | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup                            |
-| Box connector graph read/write                        | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write                                      |
-| Terminal startup and query navigation                 | `person-commands`                                                                            | CLI startup to terminal content; query keypress to returned content                                  |
-| Platform management page                              | `platform-waits:management/html`                                                             | Original HTML response workloads, plus populated HTML and content paint for all ten management views |
-| Platform app page                                     | `platform-waits:app/html`, `app/paint-cold`, `app/paint-warm`                                | Complete HTML and Chrome content paint over the isolated kernel                                      |
-| Platform connector app/file list and graph read/write | `platform-waits:connector/*`                                                                 | Real connector HTTP request through populated answer / saved write                                   |
-| Managed worker pressure                               | `worker-health:workers/cpu`                                                                  | CPU of all active worker cgroups, including threads and children                                     |
-| Browser local-cache update and rendering input        | `web-client`, `client-frame`, `client-rules`                                                 | Cache folds, frame/part reads, rule keystrokes                                                       |
-| Session status lookup                                 | `session-status`                                                                             | Identity and query lookup beside 2,700 calls                                                         |
-| Native session start, transcript, switch and stream   | `harness-startup`, `harness-switch`, `harness-window`, `harness-streaming`, `harness-worker` | Open/resume/mount/paint, streaming writes and event-loop delay                                       |
-| Graph storage and write throughput                    | `throughput`, `graph-activity`, `relay-admission`                                            | Seeded reads/writes/admission, SQL statements and recording overhead                                 |
-| App and platform deployment                           | `app-deploy`, `deploy`                                                                       | Deployment timing records; platform deployment is measured where it runs                             |
-| Test/check commands                                   | `suite-*`                                                                                    | Command wall/control ratio, measured where commands run                                              |
-| Person/project Inbox and expanded conversation        | `inbox-content`                                                                              | Private offered Inbox through all thread titles/newest replies; expansion through historical comment |
+| Surface / waiting path                                | Benchmark                                                                                    | Boundary                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| CLI startup/help                                      | `person-commands:cli/help`                                                                   | Spawn through complete output and exit                                           |
+| CLI task list, graph show and graph query             | `person-commands:cli/*`                                                                      | Spawn through populated answer and exit over 2,000 tasks                         |
+| CLI graph write                                       | `person-commands:cli/graph-apply`                                                            | Spawn through committed write and exit                                           |
+| UserPromptSubmit hook                                 | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup        |
+| Box connector graph read/write                        | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write                  |
+| Terminal startup and query navigation                 | `person-commands`                                                                            | CLI startup to terminal content; query keypress to returned content              |
+| Platform management page                              | `platform-waits:management/html`                                                             | Original HTML response workloads and populated HTML for all ten management views |
+| Platform app page                                     | `platform-waits:app/html`                                                                    | Complete HTML response over the isolated kernel                                  |
+| Platform connector app/file list and graph read/write | `platform-waits:connector/*`                                                                 | Real connector HTTP request through populated answer / saved write               |
+| Managed worker pressure                               | `worker-health:workers/cpu`                                                                  | CPU of all active worker cgroups, including threads and children                 |
+| Browser local-cache update and rendering input        | `web-client`, `client-frame`, `client-rules`                                                 | Cache folds, frame/part reads, rule keystrokes                                   |
+| Session status lookup                                 | `session-status`                                                                             | Identity and query lookup beside 2,700 calls                                     |
+| Native session start, transcript, switch and stream   | `harness-startup`, `harness-switch`, `harness-window`, `harness-streaming`, `harness-worker` | Open/resume/mount/paint, streaming writes and event-loop delay                   |
+| Graph storage and write throughput                    | `throughput`, `graph-activity`, `relay-admission`                                            | Seeded reads/writes/admission, SQL statements and recording overhead             |
+| App and platform deployment                           | `app-deploy`, `deploy`                                                                       | Deployment timing records; platform deployment is measured where it runs         |
+| Test/check commands                                   | `suite-*`                                                                                    | Command wall/control ratio, measured where commands run                          |
 
-The home/task titles and package microbenchmarks do not stand in for a loaded
-session, terminal paint, command startup, a connector round trip or app paint.
-Each has its own measurement. `box.ts` is a manual investigation requiring a
-snapshot/config; it is not the unattended command regression monitor.
-
-## Inbox on an isolated host
-
-`inbox-content` measures cold and warm navigation on a private starter browse
-host with `@yaks/inbox`, `@yaks/inspect`, `@yaks/notify` and `@yaks/mail`
-loaded. Only graph/web roles run; no mail sender, importer or duty worker runs.
-Its fixed fixture has 100 assigned person threads (each with an older comment
-and newest reply) and 100 project-addressed threads. Paint requires every thread
-title inside the actual Inbox frame and every newest person reply;
-`person-thread` additionally expands a thread and waits for its historical
-comment in the conversation. Empty Inbox frames, loading shells and fallback
-Show pages fail rather than producing timings. The graph, ephemeral port and
-browser profiles belong to the collection and are removed in `finally`.
-
-```sh
-deno task bench inbox-content accept
-deno task bench inbox-content check
-```
-
-Acceptance uses the shared best-of-three runner, banking the noise it measured,
-and a separate `inbox-content.baseline.json`; existing page workloads and
-references do not change. Daily and half-hour monitor lanes include this suite,
-including the monitor’s failure reporting and local moving best. This is local
-fixture coverage, not a claim that the live host offers Inbox or that a
-100-thread fixture represents every owner inbox.
+Chrome is removed from this box. The `pages`, `page-content` and `inbox-content`
+suites and all Chrome paint measurements are removed. Page behavior runs in
+process on a linkedom document in Deno; terminal paint uses @yaks/tui's `lay`.
+`box.ts` remains a manual investigation requiring a snapshot/config, outside the
+unattended command regression monitor.
 
 ## CLI, connector, hook and terminal operation families
 
@@ -222,15 +191,13 @@ reaccepted.
 
 ## Boundaries and exclusions
 
-Live browse benchmarks read only: non-GET/HEAD/OPTIONS traffic is refused.
 Terminal, CLI writes, connector writes and platform pages use isolated graphs,
 accounts and processes and delete their scratch data after each collection.
 Platform waits use the production kernel with local bindings: they do not claim
 to measure Cloudflare routing, cold Durable Objects, external OAuth or arbitrary
 app JavaScript. Provider generation, payment checkout and deployment include
 external waits and have their own tests/records; a local kernel number is not
-those waits. Inbox is benchmarkable only when its view is loaded and offered; a
-fallback detail page is never accepted as an Inbox measurement.
+those waits.
 
 The half-hour monitor screens user-facing suites and judges a screen past its
 limit by measuring the code beside the code its baseline was banked at
@@ -248,12 +215,9 @@ renderers over local Durable Object, R2, mail and vault bindings. All ten
 management views (`/manage`, `/manage/people`, `/manage/connect`,
 `/manage/connections`, `/manage/new`, `/manage/visits`, `/manage/selling`,
 `/manage/settings`, `/manage/billing`, `/manage/trash`) have populated HTML
-measurements and cold/warm Chrome content-paint measurements. Paint waits for
-visible fixture content: app cards, a saved name field, a sealed connection, a
-trashed app, a customer portal button, a connected agent, a pending invitation,
-upload controls, a visitor chart and a connected seller. A shell, empty list,
-refusal or sign-in page does not meet these predicates. The six original HTML
-measurements and their records remain separate.
+measurements. A shell, empty list, refusal or sign-in page does not meet the
+fixture predicates. The six original HTML measurements and their records remain
+separate.
 
 Submission waits include the complete response and saved-state readback:
 
@@ -269,12 +233,11 @@ Submission waits include the complete response and saved-state readback:
 | `POST /oauth/agents/disconnect`      | Remove the selected agent while retaining another agent's grant                                    |
 
 Preparation and resets run outside each timed submission. Each HTTP operation
-has seven samples per collection. Chrome owns one profile per collection; `cold`
-is the first navigation to that view, not a claim that the kernel or Cloudflare
-cache is cold. Three collections make a round-median run; acceptance banks the
-best of three runs with the noise they measured. Existing records can only fall.
-The unchanged suite workload key identifies the retained app/connector/original
-HTML fixture; added metric names identify the separate populated fixture.
+has seven samples per collection. Three collections make a round-median run;
+acceptance banks the best of three runs with the noise they measured. Existing
+records can only fall. The unchanged suite workload key identifies the retained
+app/connector/original HTML fixture; added metric names identify the separate
+populated fixture.
 
 Global fetch permits loopback and only exact authenticated local Stripe
 responses and an explicitly named local analytics response. Every other external
@@ -292,6 +255,3 @@ external payment completion are not replaced by a fast local response. The daily
 and half-hour monitor include `platform-waits` through shared `HOURLY`; a
 side-by-side slowdown or a collection that fails twice running files a tracker
 bug. A long throughput lane cannot delay it.
-
-Chrome intercepts absolute platform stylesheet and fixture icon URLs and
-rewrites them to the isolated kernel; every other browser origin is denied.

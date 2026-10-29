@@ -1,9 +1,5 @@
-// Every list in the vale, each drawn by its own module into a panel shaped
-// as the game's, with one thing picked, on one page dressed with the game's
-// stylesheets as main.ts dresses it: for a browser to lay out (lists_test.ts)
-// or a person to look at.
-import { stylesheet } from '@yaks/ui'
-import { composition } from '../ui-kit.ts'
+// Every list in the vale, each drawn by its own module into a game panel,
+// with one thing picked. lists_test.ts checks its content and selection.
 import { withDom } from '../dom_fixture.ts'
 import { seedDesigns } from '../designs_fixture.ts'
 import { pageState } from '../page-state.ts'
@@ -253,13 +249,10 @@ export let PAGES: [string, Tab | Own, Draw][] = [
   }],
 ]
 
-// The game's page: the kit's stylesheet, then the game's own, as main.ts
-// dresses it, and each list in its panel (panel.ts), open over a glass
-// filling a window of its own.
-/** The page, written to a file of its own; its path. */
-export let listsPage = async (): Promise<string> => {
+/** Every list in its live panel, sharing this process's document. */
+export let lists = async <T>(read: (document: Document) => T): Promise<T> => {
   seedDesigns()
-  let body = await withDom(async ({ document, window }) => {
+  return await withDom(async ({ document, window }) => {
     let settle = () => new Promise((ok) => setTimeout(ok))
     for (let [name, where, draw] of [...LISTS, ...PAGES]) {
       let glass = document.createElement('div')
@@ -281,17 +274,6 @@ export let listsPage = async (): Promise<string> => {
       await draw(page, pick)
       await settle()
     }
-    return document.body.innerHTML
+    return read(document)
   })
-  let file = await Deno.makeTempFile({ dir: '/tmp', suffix: '.html' })
-  await Deno.writeTextFile(
-    file,
-    `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><style>${await stylesheet(
-      composition,
-    )}</style><link rel=stylesheet href="${new URL(
-      './components.css',
-      import.meta.url,
-    )}"><style>.Case{position:relative;height:100vh;overflow:hidden}</style></head><body>${body}</body></html>`,
-  )
-  return file
 }

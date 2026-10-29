@@ -25,25 +25,9 @@ export let NAMES = [
     'new',
     'visits',
     'selling',
-  ].flatMap((view) =>
-    ['cold', 'warm'].map((mode) => `management/${view}/paint-${mode}`)
-  ),
-  ...[
-    'apps',
-    'settings',
-    'connections',
-    'trash',
-    'billing',
-    'connect',
-    'people',
-    'new',
-    'visits',
-    'selling',
   ].map((view) => `management/${view}-populated-html`),
   ...FORMS,
   'app/html',
-  'app/paint-cold',
-  'app/paint-warm',
   'connector/app-list',
   'connector/file-list',
   'connector/graph-query',
@@ -60,7 +44,7 @@ export let suite = (
     name: 'platform-waits',
     metric: 'median-of-round-medians',
     workload:
-      'v2/local-kernel-http-and-chrome/1-space/1-app/256-docs/7-samples/warm',
+      'v3/local-kernel-http/1-space/1-app/256-docs/7-samples/warm',
     benches: NAMES.map((name) => ({ name, unit: 'ms' })),
     collect: async () => {
       let child = await new Deno.Command(Deno.execPath(), {

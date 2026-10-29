@@ -21,11 +21,10 @@ Google Fonts provides optional display/handwriting fonts; local font fallbacks
 keep the page usable offline. Illustrations are CSS and emoji (appearance varies
 by platform), not production photography. No build step or dependencies.
 
-## Browser checks
+## Checks
 
-Serve the repository on port 4187, open an isolated Chrome with CDP on port
-9338, then run `node homepage-concepts/crt/browser-test.mjs`. The check asserts
-initial state, scroll-driven version changes, label strikeouts, demo switching,
-animation cleanup, and mobile overflow. It writes reference screenshots to
-`/tmp/crt-*.png`. The test expects those explicit local probe ports; it does not
-run against the production site.
+`deno test --allow-read homepage-concepts/crt` from the repository root runs the
+shipped script on a linkedom document. It checks version controls and scroll
+inputs, crossed-out versions, recipe filters, and app switching. No browser or
+server runs. Spacing, mobile layout, and disk animation are reviewed on the
+page.

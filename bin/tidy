@@ -1,8 +1,7 @@
 #!/bin/sh
-# Tidy the box: reap headless browsers that outlived their probes, remove the
-# profile directories nothing uses, and collect worktrees that can lose
-# nothing. Cron runs it every 15 minutes (T-40652, T-40654); each thing removed
-# is one line on stdout, anything that went wrong is on stderr.
+# Tidy the box: collect worktrees that can lose nothing. Cron runs it every
+# 15 minutes (T-40652, T-40654); each thing removed is one line on stdout,
+# anything that went wrong is on stderr.
 #
 # A linked worktree of the repository, wherever it was made (.claude/worktrees,
 # @yaks/spawn's ~/.yak/worktrees, a scratch directory), is collected only when
@@ -20,17 +19,7 @@
 # worktree whose agent comes back can be recreated (@yaks/git restores the
 # ones it manages); a lost commit cannot, so every doubt keeps it.
 #
-# A browser is the processes naming one `--user-data-dir` under /tmp, headless
-# when any of them says `--headless`. One older than an hour is a leftover: a
-# probe drives a page for seconds to minutes, while a forgotten one holds a
-# core in swiftshader for as long as it lives. Every process whose command line
-# names its profile directory gets TERM, then KILL, and the directory goes only
-# once pgrep finds none. A `cdp-*` directory under /tmp (or one level down,
-# where TMPDIR points) that no process names and nothing has written for an
-# hour goes too.
-#
-# YAK_TIDY_REPO, YAK_TIDY_TMP and YAK_TIDY_AGE (seconds) point it elsewhere;
-# the tests use them to keep off the live box.
+# YAK_TIDY_REPO points it elsewhere; tests keep off the live box.
 #
 # No `set -e`: one thing that fails to go must not stop the rest. Each step
 # checks what it needs, and any doubt keeps the thing.
@@ -47,8 +36,6 @@ fi
 common=$(git -C "$(dirname "$0")" rev-parse --path-format=absolute \
   --git-common-dir) || exit 1
 repo=${YAK_TIDY_REPO:-$(dirname "$common")}
-tmp=$(realpath -e "${YAK_TIDY_TMP:-/tmp}") || exit 1
-age=${YAK_TIDY_AGE:-3600}
 idle=10800
 now=$(date +%s)
 
@@ -65,58 +52,6 @@ names() {
   re=$(printf '%s' "$1" | sed 's/[][\\.*^$+?(){}|]/\\&/g')
   printf '(^|[ ="'\''])%s(/|[ "'\'']|$)' "$re"
 }
-
-# Whether any process names $1. A pgrep that fails says yes: a doubt keeps.
-named() { pgrep -f "$(names "$1")" >/dev/null && return; [ $? -ne 1 ]; }
-
-# Every process of ours naming $1 gets TERM, then KILL; true once none is left.
-kill_all() {
-  for sig in TERM KILL; do
-    pkill "-$sig" -u "$(id -u)" -f "$(names "$1")"
-    i=0
-    while named "$1"; do
-      [ $((i += 1)) -le 50 ] || continue 2
-      sleep 0.1
-    done
-    return 0
-  done
-  return 1
-}
-
-# Headless browsers under $tmp and each one's age: the oldest process that
-# names the same profile directory.
-browsers() {
-  ps -e -ww -o pid=,etimes=,args= | awk -v tmp="$tmp/" -v age="$age" '
-    {
-      dir = ""; headless = 0
-      for (i = 3; i <= NF; i++)
-        if (index($i, "--user-data-dir=") == 1) dir = substr($i, 17)
-        else if ($i == "--headless" || index($i, "--headless=") == 1)
-          headless = 1
-      if (index(dir, tmp) != 1) next
-      if ($2 + 0 >= old[dir]) old[dir] = $2 + 0
-      if (headless) seen[dir] = 1
-    }
-    END { for (d in seen) if (old[d] >= age) print old[d] " " d }'
-}
-
-# A profile directory may already be gone while its browser runs on.
-browsers | while read -r secs dir; do
-  real=$(realpath -m -- "$dir") || continue
-  case $real in "$tmp"/*) ;; *) continue ;; esac
-  n=$(pgrep -c -f "$(names "$dir")")
-  if ! kill_all "$dir"; then
-    echo "tidy: kept $dir: its processes outlived KILL" >&2
-  elif rm -rf -- "$real"; then
-    say "reaped browser $dir ($n processes, $((secs / 60)) min old)"
-  fi
-done
-
-find "$tmp" -mindepth 1 -maxdepth 2 -type d -name 'cdp-*' -user "$(id -u)" \
-  -prune 2>/dev/null | while read -r dir; do
-  old "$dir" "$age" && ! named "$dir" && rm -rf -- "$dir" &&
-    say "removed profile $dir"
-done
 
 # The linked worktrees that are neither locked nor missing, as
 # "path<TAB>branch" (an empty branch is a detached HEAD). The first one Git

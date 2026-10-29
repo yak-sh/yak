@@ -1,171 +1,48 @@
-// Every list in the vale, drawn by its own module with the game's own
-// stylesheets and laid out by Chrome at a desktop's width and a phone's:
-// each icon keeps its title's line, each end its row, each grid of squares
-// (the bag's) stays a grid, and picking or focusing a thing moves nothing.
-import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { chromeBin, withChrome } from '../chrome_fixture.ts'
-import { LISTS, listsPage } from './lists_fixture.ts'
+// Lists render their selected content on a document in this process.
+import { equal, ok, test } from '@yaks/testing'
+import { LISTS, lists } from './lists_fixture.ts'
 
-// In the page: every icon beside its words, every end beside the words it
-// ends, and every grid's cells in rows of more than one, each the same size,
-// square unless wide, inside its grid and clear of the others, where they
-// show; how many tiles and cells were seen, by list.
-let lines = () => {
-  let shown = (e: Element) => e.getClientRects().length > 0
-  let box = (e: Element) => e.getBoundingClientRect()
-  // The first words shown in `e`, if any show.
-  let words = (e: Element) => {
-    let walk = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) =>
-        n.textContent!.trim() && !n.parentElement!.closest('svg') &&
-          shown(n.parentElement!)
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT,
-    })
-    let first = walk.nextNode()
-    if (!first) return null
-    let range = document.createRange()
-    range.selectNodeContents(first)
-    return range.getBoundingClientRect()
-  }
-  let beside = (a: DOMRect, b: DOMRect) =>
-    a.top < b.bottom && b.top < a.bottom &&
-    (a.right <= b.left + 0.5 || b.right <= a.left + 0.5)
-  let near = (a: number, b: number) => Math.abs(a - b) < 1
-  let over = (a: DOMRect, b: DOMRect) =>
-    a.left < b.right - 0.5 && b.left < a.right - 0.5 &&
-    a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5
-  let wrong: string[] = [], seen: Record<string, number> = {}
-  for (let list of document.querySelectorAll<HTMLElement>('[data-list]')) {
-    let name = list.dataset.list!
-    let say = (what: string, e: Element) =>
-      wrong.push(`${name}: ${what}: ${e.textContent!.trim().slice(0, 40)}`)
-    seen[name] = 0
-    for (let tile of list.querySelectorAll('.Tile')) {
-      let icon = tile.querySelector(':scope > .Tile_Icon')
-      let title = tile.querySelector('.Tile_Title')
-      let text = tile.querySelector(':scope > .Tile_Text')
-      let end = tile.querySelector(':scope > .Tile_End')
-      let head = tile.matches('.Tile-head')
-      if (!shown(tile)) continue
-      if (icon && title) seen[name]++
-      if (icon && title && !beside(box(icon), box(title))) {
-        say("icon off its title's line", tile)
-      }
-      // A head's end, what can be done, goes under its words for room.
-      if (end && text && !head && !beside(box(text), box(end))) {
-        say('end off its row', tile)
-      }
+let cases = await lists((document) =>
+  LISTS.map(([name]) => {
+    let root = document.querySelector<HTMLElement>(`[data-list="${name}"]`)!
+    let split = root.querySelector('.Split')
+    let rows = [...root.querySelectorAll('[aria-current]')]
+    let selected = root.querySelector<HTMLElement>('[aria-current=true]')!
+    let content = root.querySelector('.Split_Content, .Craft_Detail')!
+    let detail = content.textContent!.trim()
+    let title = selected.querySelector('.Tile_Title')?.textContent?.trim()
+    if (!split) return { name, rows, selected, detail, title }
+    let picked = () =>
+      root.querySelector('.Split')!.classList.contains('Split-picked')
+    let first = picked()
+    root.querySelector<HTMLElement>('.Split_Back')!.click()
+    let back = picked()
+    root.querySelector<HTMLElement>('[aria-current=true]')!.dispatchEvent(
+      new document.defaultView!.Event('click', { bubbles: true }),
+    )
+    return {
+      name,
+      rows,
+      selected,
+      detail,
+      title,
+      panes: [first, back, picked()],
+      same: rows.every((row) => row.isConnected),
     }
-    for (let grid of list.querySelectorAll('.Grid')) {
-      let cells = [...grid.querySelectorAll(':scope > .Grid_Cell')]
-        .filter(shown).map(box)
-      let [a] = cells, g = box(grid), wide = grid.matches('.Grid-wide')
-      seen[name] += cells.length
-      if (
-        cells.length > 1 && cells.filter((c) => near(c.top, a.top)).length < 2
-      ) {
-        say('one to a row', grid)
-      }
-      cells.forEach((c, i) => {
-        if (!near(c.width, a.width) || !near(c.height, a.height)) {
-          say('cells of two sizes', grid)
-        }
-        if (!wide && !near(c.width, c.height)) say('a cell not square', grid)
-        if (c.left < g.left - 0.5 || c.right > g.right + 0.5) {
-          say('a cell out of its grid', grid)
-        }
-        if (cells.slice(i + 1).some((d) => over(c, d))) {
-          say('cells over each other', grid)
-        }
-      })
-    }
-    for (let glyph of list.querySelectorAll('svg.Glyph')) {
-      let head = glyph.closest('h1, h2, h3, summary, b, button, li, label')
-      if (!head || glyph.closest('.Tile, .Grid_Cell') || !shown(glyph)) {
-        continue
-      }
-      let near = words(head)
-      if (near && !beside(box(glyph), near)) {
-        say("icon off its words' line", head)
-      }
-    }
-  }
-  return { wrong, seen }
-}
-
-// In the page: whatever can be picked keeps its box, and its own colours
-// (its face, its frame, its rarity's), while each in turn is picked and
-// given the keyboard.
-let still = () => {
-  let wrong: string[] = []
-  let paint = (e: Element) =>
-    [
-      e,
-      ...e.querySelectorAll(
-        '.Rarity, .Tile_Icon, .Tile_Title, .Grid_Picture, .Grid_Name',
-      ),
-    ].map((x) => {
-      let c = getComputedStyle(x)
-      return [c.color, c.backgroundColor, c.boxShadow, c.borderColor].join()
-    }).join(';')
-  for (let list of document.querySelectorAll<HTMLElement>('[data-list]')) {
-    let picks = [...list.querySelectorAll<HTMLElement>('[aria-current]')]
-      .filter((e) => e.getClientRects().length)
-    let pick = (one?: Element) =>
-      picks.forEach((e) => e.setAttribute('aria-current', String(e == one)))
-    let boxes = () =>
-      picks.map((e) => JSON.stringify(e.getBoundingClientRect())).join()
-    pick()
-    let before = boxes(), paints = picks.map(paint)
-    picks.forEach((one, i) => {
-      let say = (what: string) =>
-        wrong.push(`${list.dataset.list}: ${what}: ${one.textContent!.trim()}`)
-      pick(one)
-      one.focus({ preventScroll: true })
-      if (boxes() != before) say('moves')
-      if (paint(one) != paints[i]) say('loses its own colours')
-    })
-  }
-  return wrong
-}
-
-let call = (fn: () => unknown) => `(${fn})()`
-
-test(
-  'every list keeps its icons on their lines, every grid its rows, and moves nothing when picked, on a desktop and a phone',
-  async () => {
-    let file = await listsPage()
-    try {
-      await withChrome(async (tab) => {
-        await tab.open(`file://${file}`)
-        for (let [width, height] of [[1280, 800], [390, 844]]) {
-          await tab.size(width, height)
-          // As drawn, with a thing picked, then with each list showing, as Back
-          // shows it on a phone.
-          for (let back of [false, true]) {
-            if (back) {
-              await tab.run(
-                `document.querySelectorAll('.Split').forEach((s) => s.classList.remove('Split-picked'))`,
-              )
-            }
-            let { wrong, seen } = await tab.run<ReturnType<typeof lines>>(
-              call(lines),
-            )
-            assertEquals(wrong, [], `${width}px`)
-            if (back) {
-              for (let [name] of LISTS) {
-                assertEquals(seen[name] > 0, true, `${name} at ${width}px`)
-              }
-            }
-          }
-          assertEquals(await tab.run(call(still)), [], `${width}px`)
-        }
-      })
-    } finally {
-      await Deno.remove(file)
-    }
-  },
-  { skip: !chromeBin },
+  })
 )
+
+for (let c of cases) {
+  test(`${c.name} renders its selected detail`, () => {
+    ok(c.rows.length > 0)
+    ok(c.selected)
+    ok(c.detail.length > 0)
+    if (c.panes) {
+      equal(c.panes, [true, false, true])
+      equal(c.same, true)
+    } else {
+      ok(c.title)
+      ok(c.detail.includes(c.title))
+    }
+  })
+}

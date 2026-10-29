@@ -1,7 +1,6 @@
 /** One process owns one local kernel. Nothing reaches a deployed account. */
 import type { Samples } from '@yaks/benchmark'
 import { client, connector, fresh, meta, onPlus } from '../workers/yak/probe.ts'
-import { paint, paints } from './platform-paint.ts'
 import { bindings, external, forms } from './platform-forms.ts'
 import { management, VIEWS } from './platform-management.ts'
 import { d1 } from '../packages/d1/testing.ts'
@@ -166,26 +165,6 @@ try {
     }
     result[name] = samples
   }
-  let origin = Deno.serve({
-    hostname: '127.0.0.1',
-    port: 0,
-    onListen: () => {},
-  }, (req) => {
-    let u = new URL(req.url)
-    let host = u.pathname.startsWith('/notes/')
-      ? `${space}.${k!.host}`
-      : k!.host
-    return k!.at(host, u.pathname + u.search, {
-      headers: { cookie: k!.owner.cookie },
-    })
-  })
-  let appOrigin = `http://127.0.0.1:${(origin.addr as Deno.NetAddr).port}`
-  try {
-    let values = await paint(appOrigin + '/notes/', scratch + '/chrome')
-    Object.assign(result, values)
-  } finally {
-    await origin.shutdown()
-  }
   for (let slug of ['owner', 'bench-waits']) {
     let [row] = await meta(k).query(`.space.slug=${slug}`)
     await onPlus(k, String(row.entity.eid))
@@ -215,43 +194,6 @@ try {
     if (['people', 'new', 'visits', 'selling'].includes(view)) {
       result[`management/${view}-html`] = result[name]
     }
-  }
-  let apexServer = Deno.serve({
-    hostname: '127.0.0.1',
-    port: 0,
-    onListen: () => {},
-  }, (req) => {
-    let u = new URL(req.url)
-    let spaceAsset = u.pathname.startsWith('/__bench-space/')
-    return k!.at(
-      spaceAsset ? `${dashboard.space}.${k!.host}` : k!.host,
-      (spaceAsset ? u.pathname.slice('/__bench-space'.length) : u.pathname) +
-        u.search,
-      { headers: { cookie: k!.owner.cookie } },
-    )
-  })
-  let apex = {
-    origin: `http://127.0.0.1:${(apexServer.addr as Deno.NetAddr).port}`,
-    stop: () => apexServer.shutdown(),
-  }
-
-  try {
-    Object.assign(
-      result,
-      await paints(
-        VIEWS.map((view) => ({
-          name: `management/${view}`,
-          url: apex.origin + dashboard.path(view),
-          ready:
-            `!!Array.from(document.querySelectorAll('main *')).find(el => el.getBoundingClientRect().height > 0 && el.textContent?.includes(${
-              JSON.stringify(dashboard.visible[view])
-            })) && ${dashboard.ready[view]}`,
-        })),
-        scratch + '/management-chrome',
-      ),
-    )
-  } finally {
-    await apex.stop()
   }
   for (let [name, op] of Object.entries(submissions)) {
     await op.prepare?.()

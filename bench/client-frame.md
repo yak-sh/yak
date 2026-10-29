@@ -33,14 +33,9 @@ The world and moving set are bounded. Positions wrap at the world's edge and
 health cycles; writes are not repeated noops. Final verification checks the
 stored positions of all 2,008 movers and the fixed entity count.
 
-For a throwaway browser, bundle an entry importing `frameDistribution` from the
-same file and calling it three times.
-`deno bundle --platform browser --config
-<root>/deno.json -o bundle.js entry.ts`
-produces the browser module. Serve that module from a throwaway localhost page,
-run headless Chrome with its own profile, and read the returned samples through
-CDP. The report retains the entry and commands. Deno-only benchmark registration
-and the standalone suite runner are excluded from browser execution.
+Frame measurements run in Deno in process. Chrome is removed from this box; the
+retained Chrome results below are historical measurements, not a workflow to
+reproduce here.
 
 ## Reading the result
 

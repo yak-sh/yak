@@ -20,13 +20,9 @@
  *
  * The box runs this from cron: every suite once a day, and `--hourly` every 30
  * minutes for user-facing waits, from a queue that carries what one tick could
- * not measure to the next. `--restarted` every 15 minutes measures pages only
- * when the live web unit has changed since it last looked, that is once after
- * each `yak restart`.
+ * not measure to the next.
  *
- *   deno run -A bench/monitor.ts [suite ...] [--hourly] [--restarted]
- *
- * The web unit it last saw is kept in `~/.cache/yak/bench/monitor.json`. */
+ *   deno run -A bench/monitor.ts [suite ...] [--hourly] */
 import { busy, loaded, type Regression, type Run } from '@yaks/benchmark'
 import { diagnostic } from './diagnostic.ts'
 import { drain, enqueue, type Queue } from './queue.ts'
@@ -37,9 +33,6 @@ import type { Judgement } from './paired.ts'
 /** Every suite this box measures itself; the CI suites are timed where they
  * run, and yaks.app's own deploys by the deploy catch-up (@yaks/admin). */
 export let SUITES = [
-  'pages',
-  'page-content',
-  'inbox-content',
   'person-commands',
   'hook-waits',
   'operation-commands',
@@ -71,9 +64,6 @@ export let SUITES = [
 
 /** User-facing waits are checked every half hour, independent of slow throughput. */
 export let HOURLY = [
-  'pages',
-  'page-content',
-  'inbox-content',
   'person-commands',
   'hook-waits',
   'operation-commands',
@@ -91,7 +81,7 @@ export let HOURLY = [
 
 /** Suites that measure the live box (its server, its workers, its deploys),
  * so no older code can run beside them: they report only failures. */
-export let LIVE = ['pages', 'page-content', 'worker-health', 'app-deploy']
+export let LIVE = ['worker-health', 'app-deploy']
 
 /** Deploy checks need fresh observations before comparison. */
 export let MEASURE: Record<string, string[]> = {
@@ -112,7 +102,6 @@ export type Outcome =
   }
   | { verdict: 'failed'; error: string }
   | { verdict: 'deferred' | 'loaded' | 'inconclusive' }
-export type State = { web?: string }
 export type Monitor = {
   check: (suite: string) => Promise<Outcome>
   report: (
@@ -228,40 +217,10 @@ let git = async (...args: string[]) => {
 }
 let home = Deno.env.get('HOME') ?? '/tmp'
 let CACHE = `${home}/.cache/yak/bench`
-let STATE = `${CACHE}/monitor.json`
 /** Where the monitor's app-deploy rows go, beside its state, so a scheduled run
  * leaves the checkout clean. The suite's baseline stays in the repo. */
 export let RECORDS = `${CACHE}/app-deploys.jsonl`
 let env = { APP_DEPLOY_RECORD: RECORDS }
-let load = async (): Promise<State> => {
-  try {
-    return JSON.parse(await Deno.readTextFile(STATE))
-  } catch {
-    return {}
-  }
-}
-let save = async (state: State) => {
-  await Deno.mkdir(CACHE, { recursive: true })
-  await Deno.writeTextFile(STATE, JSON.stringify(state, null, 2) + '\n')
-}
-
-/** The live web unit, as `systemctl --user` names it. */
-let web = async (): Promise<string | undefined> => {
-  let { stdout } = await new Deno.Command('systemctl', {
-    args: [
-      '--user',
-      'list-units',
-      '--state=active',
-      '--plain',
-      '--no-legend',
-      'yak-web@*.service',
-    ],
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  return new TextDecoder().decode(stdout).trim().split(/\s+/)[0] || undefined
-}
-
 /** A half-hour tick admits work for 25 minutes; what it could not reach is
  * owed to the next. */
 export let WINDOW = 25 * 60_000
@@ -393,15 +352,9 @@ let check = async (suite: string): Promise<Outcome> => {
 
 if (import.meta.main) {
   let started = Date.now()
-  let restarted = Deno.args.includes('--restarted')
   let hourly = Deno.args.includes('--hourly')
   let named = Deno.args.filter((a) => !a.startsWith('--'))
   let suites = named.length ? named : hourly ? HOURLY : SUITES
-  let restartedWeb = restarted ? await web() : undefined
-  if (restarted) {
-    if (!restartedWeb || restartedWeb == (await load()).web) Deno.exit(0)
-    suites = ['pages', 'page-content']
-  }
   let path = configPath()
   let send = reporter(path ? read(path) : {}, undefined, revision(), {
     command: 'bench',
@@ -455,13 +408,6 @@ if (import.meta.main) {
     )
   } else verdicts = await watch(suites, monitor)
   await send.close()
-  // A restart check the lock or the load kept back is owed on the next tick.
-  if (
-    restartedWeb &&
-    !Object.values(verdicts).some((v) => v == 'deferred' || v == 'loaded')
-  ) {
-    await save({ web: restartedWeb })
-  }
   for (let [suite, verdict] of Object.entries(verdicts)) {
     console.log(`${suite}: ${verdict}`)
   }

@@ -2,7 +2,7 @@
   "version": 1,
   "suite": "platform-waits",
   "metric": "median-of-round-medians",
-  "workload": "v2/local-kernel-http-and-chrome/1-space/1-app/256-docs/7-samples/warm",
+  "workload": "v3/local-kernel-http/1-space/1-app/256-docs/7-samples/warm",
   "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
   "tolerance": 0,
@@ -75,146 +75,6 @@
       "unit": "ms",
       "better": "lower",
       "median": 2.2884699999995064,
-      "tolerance": 0
-    },
-    {
-      "name": "management/apps/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 120.40000009536743,
-      "tolerance": 0
-    },
-    {
-      "name": "management/apps/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 100.2999997138977,
-      "tolerance": 0
-    },
-    {
-      "name": "management/settings/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 85.89999961853027,
-      "tolerance": 0
-    },
-    {
-      "name": "management/settings/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 103.40000009536743,
-      "tolerance": 0
-    },
-    {
-      "name": "management/connections/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 111.09999990463257,
-      "tolerance": 0
-    },
-    {
-      "name": "management/connections/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 89.10000038146973,
-      "tolerance": 0
-    },
-    {
-      "name": "management/trash/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 66,
-      "tolerance": 0
-    },
-    {
-      "name": "management/trash/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 70.19999980926514,
-      "tolerance": 0
-    },
-    {
-      "name": "management/billing/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 58.09999990463257,
-      "tolerance": 0
-    },
-    {
-      "name": "management/billing/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 64.80000019073486,
-      "tolerance": 0
-    },
-    {
-      "name": "management/connect/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 68.90000009536743,
-      "tolerance": 0
-    },
-    {
-      "name": "management/connect/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 77.2000002861023,
-      "tolerance": 0
-    },
-    {
-      "name": "management/people/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 86.40000009536743,
-      "tolerance": 0
-    },
-    {
-      "name": "management/people/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 91.30000019073486,
-      "tolerance": 0
-    },
-    {
-      "name": "management/new/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 124.7000002861023,
-      "tolerance": 0
-    },
-    {
-      "name": "management/new/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 128.5,
-      "tolerance": 0
-    },
-    {
-      "name": "management/visits/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 95.59999990463257,
-      "tolerance": 0
-    },
-    {
-      "name": "management/visits/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 94.40000009536743,
-      "tolerance": 0
-    },
-    {
-      "name": "management/selling/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 83.30000019073486,
-      "tolerance": 0
-    },
-    {
-      "name": "management/selling/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 62.69999980926514,
       "tolerance": 0
     },
     {
@@ -418,20 +278,6 @@
       "unit": "ms",
       "better": "lower",
       "median": 2.821668000000045,
-      "tolerance": 0
-    },
-    {
-      "name": "app/paint-cold",
-      "unit": "ms",
-      "better": "lower",
-      "median": 30.59999990463257,
-      "tolerance": 0
-    },
-    {
-      "name": "app/paint-warm",
-      "unit": "ms",
-      "better": "lower",
-      "median": 23,
       "tolerance": 0
     },
     {

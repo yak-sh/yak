@@ -73,13 +73,12 @@ and can be selected manually if clipboard permission is unavailable.
 
 ## Validation
 
-`deno test --allow-read state_test.ts` checks state transitions and preview
-links. `browser-test.mjs` exercises all three routes through a temporary Chrome
-CDP profile against the local server; see its header for invocation. It covers
-reservations, duplicate prevention, persistence, checklist state, computed
-answers, second-tab updates, mobile overflow, script-free input safety, and
-reduced motion. No production site, customer data, or real publication is
-involved.
+`deno test --allow-read homepage-concepts/literal` from the repository root
+checks state transitions, preview links, and the shipped scripts on linkedom
+documents. It covers all three directions, reservations, duplicate prevention,
+persistence, safe text, checklist state, computed answers, storage events, and
+walkthrough actions. No browser or server runs. Spacing, mobile layout, and
+motion are reviewed on the page.
 
 ## Additional audience evidence
 

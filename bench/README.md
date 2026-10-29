@@ -42,8 +42,8 @@ code now, at the same moment ([side by side](#side-by-side-on-a-shared-box)),
 and reports only the benches that comparison finds slower, with the commits
 between the two. A busy box slows both alike, so it files nothing. Every suite
 is judged this way and none opts in, except those that measure the live box
-(`LIVE`: pages, page-content, worker-health, app-deploy), which have no older
-code to run beside them and so never report a slowdown.
+(`LIVE`: worker-health, app-deploy), which have no older code to run beside them
+and so never report a slowdown.
 
 A check that can tell nothing reports nothing and is owed to a later tick: a
 busy box (other work over a quarter of its CPUs), a busy benchmark lock, a
@@ -53,8 +53,7 @@ once and reported only when it fails again, so a bug says the bench is broken.
 @yaks/heal sends a regression or a failure to an agent like any other bug.
 
 Cron runs it from the main checkout through bin/bench-monitor: every suite at
-02:23, user-facing suites every 30 minutes (`--hourly`), and pages after each
-web-unit change (`--restarted`, checked every 15 minutes). The user-facing
+02:23, and user-facing suites every 30 minutes (`--hourly`). The user-facing
 suites collect serially under the box-wide lock, so fixtures never measure one
 another. The hourly lane holds a persistent queue in
 `~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
@@ -66,29 +65,12 @@ starts parallel collectors, extends measurement limits or interrupts another
 lock holder. The monitor banks nothing: a baseline moves only by
 `bench:ratchet`.
 
-## Inbox content
+## Page behavior
 
-`inbox-content` runs a private browse host that actually loads the Inbox view.
-It times cold/warm person Inbox, project Inbox and an expanded person thread
-through loaded content, not a heading or Show fallback. See
-[the wait inventory](waits.md#inbox-on-an-isolated-host) for its fixed corpus,
-isolation and timed boundary. `deno task bench inbox-content accept` banks
-best-of-three with the noise it measured; `deno task bench inbox-content check`
-checks the same workload. It participates in daily and half-hour unattended
-monitoring.
-
-## Pages
-
-`pages` (bench/pages.ts) measures tasks.yak.sh as a person gets it: browse's
-home `/` and a task page, each opened cold in a new headless Chrome profile and
-then warm in the same one, against the box's live server. Each new browser opens
-a blank page on another origin first, so a cold figure times the page and not
-the browser starting its network stack, which a person's running browser never
-pays. A figure is the time from navigation to the frame where the page shows
-what it is for: home's first rows (or the owner's inbox, its threads loaded) or
-the task's title. A page that has not painted in 30 s fails the run. It only
-reads: the browser refuses every request but GET, HEAD and OPTIONS before it
-leaves. `--url=` and `--task=` after `--` point it elsewhere.
+Chrome is removed from this box. The `pages`, `page-content` and `inbox-content`
+suites and Chrome paint measurements are removed. Page behavior belongs in Deno
+on a linkedom document, and terminal paint in @yaks/tui's `lay`; neither starts
+a browser or server.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
@@ -99,14 +81,12 @@ runner and ratchet with their own baselines. yaks.app's own
 ## Waiting paths
 
 The [waiting-path inventory](waits.md) maps user-facing operations to their
-timed boundaries. `page-content` opens browse routes to actual content,
-including a long session transcript. `person-commands` measures CLI
-spawn-to-exit, the prompt hook over a one-MiB transcript, MCP responses and
-terminal paint/navigation over an isolated 2,000-task SQLite graph.
-`platform-waits` measures management HTML, app HTML and browser paint, and
-connector tools over an isolated production kernel. `worker-health` reads CPU of
-active worker cgroups, including all threads and children, without signalling
-them.
+timed boundaries. `person-commands` measures CLI spawn-to-exit, the prompt hook
+over a one-MiB transcript, MCP responses and terminal paint/navigation over an
+isolated 2,000-task SQLite graph. `platform-waits` measures management HTML, app
+HTML, and connector tools over an isolated production kernel. `worker-health`
+reads CPU of active worker cgroups, including all threads and children, without
+signalling them.
 
 ## Other suites
 
@@ -120,9 +100,9 @@ deno task bench:ratchet client-frame
 
 The suites are `client-frame`, `client-rules`, `harness-startup`,
 `harness-steps`, `harness-streaming`, `harness-worker`, `harness-window`,
-`harness-switch`, `graph-activity`, `session-status`, `web-client`,
-`relay-admission` and `pages`. Each writes `bench/<suite>.results.json` and
-checks `bench/<suite>.baseline.json` (`harness-steps` shares its reference at
+`harness-switch`, `graph-activity`, `session-status`, `web-client`, and
+`relay-admission`. Each writes `bench/<suite>.results.json` and checks
+`bench/<suite>.baseline.json` (`harness-steps` shares its reference at
 `packages/harness/steps.baseline.json` with the live overhead observer). A suite
 without a banked baseline can run; a check refuses until its baseline has been
 explicitly accepted, which takes a quiet box; review and commit its baseline.

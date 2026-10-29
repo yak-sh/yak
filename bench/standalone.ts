@@ -7,10 +7,8 @@ import { NAMES as SESSION_NAMES } from './operation-sessions.ts'
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { RELAY_ENTITIES } from './names.ts'
-import { contentSuite, suite as pages } from './pages.ts'
 import { suite as platformWaits } from './platform-waits.ts'
 import { suite as workerHealth } from './worker-health.ts'
-import { suite as inboxContent } from './inbox-content.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS, measure as hookWaits } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
@@ -87,11 +85,6 @@ let registration = (
 })
 
 export let standalone: Registration[] = [
-  {
-    baseline: 'bench/inbox-content.baseline.json',
-    suite: inboxContent,
-    floor: 0,
-  },
   {
     ...measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
     suite: (args = [], root) => ({
@@ -226,10 +219,4 @@ export let standalone: Registration[] = [
     ),
     'us/value',
   ),
-  { baseline: 'bench/pages.baseline.json', suite: pages, floor: 0 },
-  {
-    baseline: 'bench/page-content.baseline.json',
-    suite: contentSuite,
-    floor: 0,
-  },
 ]

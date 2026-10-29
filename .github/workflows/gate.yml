@@ -12,16 +12,10 @@
 # It is gh-runner (LXC 112 on the homelab's pve, beside two other repos'
 # runners), as user `yak-runner` in /opt/actions-runner/yak, under the system
 # unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
-# docs/PROXMOX.md says how it was installed. The gate reads STRIPE_KEY from
-# its environment (the runner's own .env). The tools the tests call are the
-# box's, from apt: google-chrome-stable, sqlite3, rclone (bin/backup),
-# bubblewrap and python3 (packages/process sandboxes), and cc, which builds the
-# one SQLite library every test opens, here as on the box (bin/sqlite.ts).
-# The tests select their pinned rclone package through bin/test-tools.ts;
-# apt upgrades and the box's Homebrew build do not change their timings.
-# yak-runner lingers, so its systemd user manager runs, with cpu, memory and
-# pids delegated, for the sandboxes' scopes. `runs-on` names the custom label
-# `yak`, so a workflow can never silently fall back to a hosted runner.
+# docs/PROXMOX.md says how it was installed. Tests run in process through
+# the graph and DOM abstractions, without Chrome or platform services.
+# `runs-on` names the custom label `yak`, so a workflow can never silently
+# fall back to a hosted runner.
 #
 # Timing runs on CPUs 0-3 (four physical cores). Explicit
 # lxc.cgroup2.cpuset.cpus entries in pve's LXC configs keep its balancer
@@ -74,22 +68,13 @@ jobs:
           SUITE_STEP: deno task check
         run: deno task check --verbose
 
-      # Every platform's tests (bin/test.ts), workerd's included, each test's
-      # time said beside the budget (bin/test-budget.ts), which fails nothing.
-      # The run keeps its scratch
-      # where the box's runs do, in memory under /dev/shm (bin/scratch.ts).
-      # The money paths reach Stripe's sandbox, so the runner's environment
-      # carries STRIPE_KEY. A job its system unit starts is not told where the
-      # user manager listens, and the sandboxes' scopes need it:
-      # XDG_RUNTIME_DIR.
-      # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would
-      # never see this line, the file would fail to parse.
+      # In-process logic and UI tests; timing is reported beside the budget.
       - name: tests
         env:
           SUITE_STEP: tests
         # All of it (`--all`): this machine keeps no record of what passed
         # before. Local runs leave unchanged files out using their dependency keys.
-        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all --verbose'
+        run: 'DB_PATH=:memory: deno task test --all --verbose'
 
       - name: retain suite timings
         if: always()
