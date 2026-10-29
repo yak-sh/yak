@@ -53,7 +53,7 @@ export let populate = async (
     })),
   ])
   if (entries) {
-    // A real long session in the same graph, not a phantom transcript count.
+    // The session holds every measured transcript entry.
     for (let from = 0; from < entries; from += 100) {
       await graph.apply(
         Array.from(
