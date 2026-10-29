@@ -3,11 +3,13 @@
  * graph. All databases, terminal state and owned processes go away in finally.
  * Timings include the response/paint, not merely dispatch. No detached duties.
  */
-import { type Samples, stopwatch } from '@yaks/benchmark'
+import { processCpu, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
+import { searchPath } from '../packages/browse/url.ts'
+import { selected } from './selected.ts'
 
 export let PERSON_COMMANDS = [
   'cli/help',
@@ -100,16 +102,28 @@ export async function measure(
     return decoder.decode(result.stdout)
   }
   let results: Record<string, Samples> = {}
-  let timed = async (name: string, run: () => Promise<void>) => {
+  let terminalPid = 0
+  let terminalCpu = () => {
+    if (terminalPid === 0) return 0
+    if (!Number.isSafeInteger(terminalPid) || terminalPid < 1) {
+      throw new Error('missing terminal server pid')
+    }
+    return processCpu(terminalPid)
+  }
+  let timed = async (
+    name: string,
+    run: () => Promise<void | (() => Promise<void>)>,
+    ...sources: (() => number)[]
+  ) => {
+    if (!selected(name)) return
     let samples = []
     for (let i = 0; i < n; i++) {
-      let took = stopwatch()
-      await run()
-      let { value, cpu } = took()
+      let took = stopwatch(...sources)
+      let cleanup = await run()
+      let reading = took()
+      await cleanup?.()
       samples.push({
-        // A terminal paints in a tmux pane that outlives the sample, so its
-        // CPU is not this process's: wall time is its figure.
-        ...name.startsWith('tui/') ? { value } : { value, cpu },
+        ...reading,
         source: 'end-to-end',
         counts: { tasks: TASKS },
         details: {
@@ -289,7 +303,7 @@ export async function measure(
       quote(TARGET),
     ].join(' ')
     let history = JSON.stringify({
-      entries: [{ path: '/?.task%20.count', state: null }, {
+      entries: [{ path: searchPath('.task .count'), state: null }, {
         path: '/' + TARGET + '?v=Debug',
         state: null,
       }],
@@ -298,6 +312,41 @@ export async function measure(
     await Deno.writeTextFile(env.TASKS_TUI_STATE, history)
     let capture = () => tmux('capture-pane', '-p', '-t', 'bench')
     await timed('tui/startup', async () => {
+      terminalPid = Number(
+        await tmux(
+          'new-session',
+          '-d',
+          '-s',
+          'bench',
+          '-P',
+          '-F',
+          '#{pid}',
+          '-x',
+          '160',
+          '-y',
+          '40',
+          terminal + ' 2>' + quote(dir + '/terminal.log') + ' || { cat ' +
+            quote(dir + '/terminal.log') + '; sleep 2; }',
+        ),
+      )
+      tmuxStarted = true
+      await painted(capture, 'Person benchmark target')
+      return async () => {
+        await tmux('send-keys', '-t', 'bench', 'q')
+        // Quit is the application's own shutdown; do not kill its Deno child.
+        await painted(async () => {
+          try {
+            return await tmux('list-sessions')
+          } catch {
+            return 'closed'
+          }
+        }, 'closed')
+        tmuxStarted = false
+        terminalPid = 0
+      }
+    }, terminalCpu)
+    if (selected('tui/query-navigation')) {
+      await Deno.writeTextFile(env.TASKS_TUI_STATE, history)
       await tmux(
         'new-session',
         '-d',
@@ -311,39 +360,15 @@ export async function measure(
           quote(dir + '/terminal.log') + '; sleep 2; }',
       )
       tmuxStarted = true
+      terminalPid = Number(await tmux('display-message', '-p', '#{pid}'))
       await painted(capture, 'Person benchmark target')
-      await tmux('send-keys', '-t', 'bench', 'q')
-      // Quit is the application's own shutdown; do not kill its Deno child.
-      await painted(async () => {
-        try {
-          return await tmux('list-sessions')
-        } catch {
-          return 'closed'
-        }
-      }, 'closed')
-      tmuxStarted = false
-    })
-    await Deno.writeTextFile(env.TASKS_TUI_STATE, history)
-    await tmux(
-      'new-session',
-      '-d',
-      '-s',
-      'bench',
-      '-x',
-      '160',
-      '-y',
-      '40',
-      terminal + ' 2>' + quote(dir + '/terminal.log') + ' || { cat ' +
-        quote(dir + '/terminal.log') + '; sleep 2; }',
-    )
-    tmuxStarted = true
-    await painted(capture, 'Person benchmark target')
-    await timed('tui/query-navigation', async () => {
-      await tmux('send-keys', '-t', 'bench', 'H')
-      await painted(capture, TASKS.toLocaleString('en-US'))
-      await tmux('send-keys', '-t', 'bench', 'C-f')
-      await painted(capture, 'Person benchmark target')
-    })
+      await timed('tui/query-navigation', async () => {
+        await tmux('send-keys', '-t', 'bench', 'H')
+        await painted(capture, TASKS.toLocaleString('en-US'))
+        await tmux('send-keys', '-t', 'bench', 'C-f')
+        await painted(capture, 'Person benchmark target')
+      }, terminalCpu)
+    }
     return results
   } finally {
     if (tmuxStarted) {

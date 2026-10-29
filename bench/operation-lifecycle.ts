@@ -7,6 +7,8 @@ import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { restart } from '../packages/cli/restart.ts'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { stamps } from './vocabulary.ts'
 
 export let LIFECYCLE_NAMES = [
   'lifecycle/serve-ready',
@@ -91,7 +93,6 @@ export let measure = async (
   let person = crypto.randomUUID()
   let plugins = [
     '@yaks/kernel',
-    '@yaks/provenance',
     '@yaks/id',
     '@yaks/doc',
     '@yaks/alias',
@@ -103,6 +104,9 @@ export let measure = async (
     '@yaks/api',
     '@yaks/sqlite',
   ]
+  if ((await stamps([kernelDoc])).length) {
+    plugins.splice(1, 0, '@yaks/provenance')
+  }
   let webConfig = `${dir}/web.json`, workConfig = `${dir}/work.json`
   let config = {
     db: `${dir}/yak.db`,
