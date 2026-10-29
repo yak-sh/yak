@@ -1,9 +1,10 @@
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { group, Search, searchOpen, SearchPage } from './Search.tsx'
 import { cache, config } from '../live.ts'
@@ -39,8 +40,6 @@ test('search keeps exact ids and titles above kind groups', () => {
   )
 })
 
-// Polls a real debounce window to prove only the settled query is sent — the
-// settle is the point, so it cannot be sub-ms.
 test('search sends only the settled query while typing', async () => {
   let host = config.host
   // A location-less process no longer guesses a server. This test owns its
@@ -51,7 +50,7 @@ test('search sends only the settled query while typing', async () => {
     fetch: Object.getOwnPropertyDescriptor(globalThis, 'fetch'),
   })
   let { document, window } = parseHTML('<main></main>')
-  let asked: string[] = []
+  let time = clock(), asked: string[] = []
   let finish: (r: Response) => void = () => {}
   // The line rides /query as `q`, the typed word its leading term (hits.ts).
   let term = (input: string | URL | Request) =>
@@ -69,25 +68,31 @@ test('search sends only the settled query while typing', async () => {
   })
   let root = document.querySelector('main')!
   try {
-    searchOpen.value = true
-    render(h(Search, { open: () => {} }), root)
+    act(() => {
+      fields.set('search', '')
+      searchOpen.value = true
+      render(h(Search, { open: () => {}, clock: time }), root)
+    })
     let input = root.querySelector('input')!
     for (let value of ['t', 'ty', 'type']) {
       input.value = value
-      input.dispatchEvent(new window.Event('input', { bubbles: true }))
+      act(() => {
+        input.dispatchEvent(new window.Event('input', { bubbles: true }))
+      })
     }
     assertEquals(input.value, 'type')
     assertEquals(asked, [])
-    // Poll the debounce instead of guessing its window: only the settled
-    // query is ever sent, so the first ask is the whole story.
-    await until(() => asked.length ? asked : undefined, {
-      label: 'the settled query to be sent',
-    })
+    await act(() => time.advance(149))
+    assertEquals(asked, [])
+    await act(() => time.advance(1))
     assertEquals(asked, ['type'])
     assertEquals(root.querySelector('[role=status]')?.textContent, 'Searching…')
     assertEquals(root.textContent?.includes('No results.'), false)
-    finish(Response.json([]))
-    await until(() => root.textContent?.includes('No results.'))
+    await act(async () => {
+      finish(Response.json([]))
+      await time.advance(0)
+    })
+    assertEquals(root.textContent?.includes('No results.'), true)
     assertEquals(root.querySelector('[role=status]'), null)
   } finally {
     config.host = host
@@ -117,10 +122,10 @@ test('query page draws the inspector table through the shared registry', async (
       seen.root.querySelector('[data-query]')?.getAttribute('data-query'),
       '.task',
     )
-    await until(() => seen.root.querySelector('[role=table]'), {
-      label: 'the answered query table',
-    })
-    assertEquals(seen.root.textContent?.includes('A shared task'), true)
+    await until(() => {
+      let table = seen.root.querySelector('[role=table]')
+      return table?.textContent?.includes('A shared task')
+    }, { label: 'the answered query table and its row' })
   } finally {
     seen.free()
     wire.free()

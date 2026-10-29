@@ -17,6 +17,7 @@ import { Entity } from './Entity.tsx'
 import { InspectPage } from './inspect.tsx'
 import { aggregate, hits as queryHits } from './hits.ts'
 import { parse, words } from '@yaks/query'
+import { type Clock, system } from '@yaks/fp'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -68,7 +69,10 @@ let sought = (q: string): string[] => {
   }
 }
 
-export let Search = ({ open }: { open: (eid: string) => void }) => {
+export let Search = ({ open, clock = system }: {
+  open: (eid: string) => void
+  clock?: Clock
+}) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
   let [answered, setAnswered] = useState<string | undefined>()
@@ -99,12 +103,14 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     setHits([])
     setErr('')
     let abort = new AbortController()
-    let timer = setTimeout(() => seek(q, abort.signal), 150)
+    let cancel = clock.after(150, () => {
+      void seek(q, abort.signal)
+    })
     return () => {
-      clearTimeout(timer)
+      cancel()
       abort.abort()
     }
-  }, [q, searchOpen.value])
+  }, [q, searchOpen.value, clock])
   if (!searchOpen.value) return null
 
   // The kind-grouped list, flattened: the selection index and every key
