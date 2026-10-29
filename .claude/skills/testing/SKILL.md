@@ -151,7 +151,17 @@ check our decisions by handing that boundary controlled inputs.
 In workers/yak, `kernel()` and `fresh()` from probe.ts compose in-memory
 kernels. Tests on a shared kernel keep apart through their own people, spaces
 and hostnames. Test payment decisions through the payment interface with
-controlled responses; tests never charge a sandbox or obtain credentials.
+controlled responses; tests never charge a sandbox or obtain credentials. A
+kernel answers without a network hop, so work a request leaves running (a
+deploy's post-commit effects) has not happened when the answer arrives: await
+`k.settled()` before checking it. Their npm tree and generated public/ files
+are gitignored; a run whose files import them readies both first (bin/test.ts
+`READIES`), so a fresh worktree runs them as it is.
+
+Every file of a platform shares one runtime, and so does whatever a module
+installs as it loads: defects-runtime.ts installs the Worker's fault reporter
+for every file after it. A test hears a failure through a door it installs
+itself (@yaks/api's `faults()`), never through the console.
 
 A red CI run is recovery work: read its log, fix the cause and land the fix.
 CI runs after a push; no agent waits for it or a deploy to finish work.
