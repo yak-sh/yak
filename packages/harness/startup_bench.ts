@@ -44,7 +44,7 @@ let seeded = fixture(async (path: string, count: number, depth: number) => {
   } finally {
     await seed.close()
   }
-}, 'harness-startup')
+})
 
 export async function measure(
   args: string[] = [],

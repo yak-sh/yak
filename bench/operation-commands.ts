@@ -201,7 +201,7 @@ export let scaleFixture = fixture(async (
   } finally {
     await host.close()
   }
-}, 'operation-scale')
+})
 
 async function collect(
   args: string[] = [],
