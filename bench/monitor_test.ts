@@ -146,3 +146,33 @@ test('a comparison names the benches it found slower and the time it judged', ()
     ['c3', .1, [['a (CPU)', 130], ['c (CPU)', 150]]],
   )
 })
+
+test('mixed baseline regressions report each benchmark’s revision and its commits', async () => {
+  let histories: string[] = [], message = ''
+  let current = outcome('regressed') as Extract<
+    Outcome,
+    { verdict: 'regressed' }
+  >
+  current.reference = undefined
+  current.run.regressions = ['old-a', 'old-b'].map((reference, i) => ({
+    ...current.run.regressions[0],
+    name: `work-${i}`,
+    reference,
+  }))
+  await watch(['mixed'], {
+    check: () => Promise.resolve(current),
+    since: (reference) => {
+      histories.push(reference)
+      return Promise.resolve([`${reference} commits`])
+    },
+    report: (error) => {
+      message = error.message
+      return Promise.resolve()
+    },
+  })
+  equal(histories, ['old-a', 'old-b'])
+  equal(
+    ['old-a', 'old-b'].every((reference) => message.includes(reference)),
+    true,
+  )
+})

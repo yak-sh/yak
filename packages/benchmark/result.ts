@@ -65,6 +65,7 @@ export type Result = Workload & {
   spans: readonly Event[] | null
 }
 export type Regression = {
+  reference?: string
   name: string
   unit: string
   baseline: number
@@ -106,6 +107,8 @@ export type Baseline =
     tolerance: number
     benches: (Workload & {
       better: Direction
+      /** The product revision this individual workload was banked against. */
+      reference?: string
       median: number
       /** The slack this bench measured for itself when it was banked. */
       tolerance?: number

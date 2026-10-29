@@ -33,7 +33,11 @@ export type Registration = {
   baseline: string
   /** The suite, measuring the code checked out at `root`, this checkout's by
    * default: bench/paired.ts measures an older revision's beside it. */
-  suite: (args?: string[], root?: string) => CollectedSuite
+  suite: (
+    args?: string[],
+    root?: string,
+    names?: readonly string[],
+  ) => CollectedSuite
   /** The least slack its benches bank, where its drift over a day exceeds
    * the box's usual (`FLOOR` in ./run.ts). */
   floor?: number
@@ -47,12 +51,13 @@ let registration = (
   deno: boolean,
 ): Registration => ({
   baseline: `bench/${name}.baseline.json`,
-  suite: (args = [], root) => {
+  suite: (args = [], root, selected) => {
     let worker = collector(
       deno
         ? ['bench/deno-worker.ts', file]
         : ['bench/standalone-worker.ts', file, ...args],
       root,
+      selected ? { BENCH_NAMES: JSON.stringify(selected) } : undefined,
     )
     return {
       name,
@@ -68,7 +73,8 @@ let registration = (
         : name == 'relay-admission'
         ? 2
         : 1,
-      benches: names.map((name) => ({ name, unit })),
+      benches: names.filter((name) => !selected || selected.includes(name))
+        .map((name) => ({ name, unit })),
       collect: async () => {
         let report = await worker.collect()
         if (!deno) return report as Record<string, Samples>
@@ -79,7 +85,7 @@ let registration = (
         ) {
           throw new Error('Runtime/CPU changed between samples')
         }
-        return extract(imported, names)
+        return extract(imported, selected ?? names)
       },
       close: worker.close,
     }

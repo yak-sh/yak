@@ -27,9 +27,12 @@ await serve(async () => {
     }
     sequence++
     let filter = Deno.env.get('BENCH_FILTER')
-    let selected = filter
-      ? entries.filter((entry) => new RegExp(filter).test(entry.name))
-      : entries
+    let names = Deno.env.get('BENCH_NAMES')
+    let wanted = names ? new Set<string>(JSON.parse(names)) : undefined
+    let selected = entries.filter((entry) =>
+      (!wanted || wanted.has(entry.name)) &&
+      (!filter || new RegExp(filter).test(entry.name))
+    )
     let benches = []
     for (let entry of selected) {
       benches.push({

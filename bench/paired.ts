@@ -30,23 +30,35 @@ import {
 } from '@yaks/benchmark'
 import { standalone } from './standalone.ts'
 import { throughput } from './throughput.ts'
+import { combined, grouped, references } from './references.ts'
 
 /** A suite's committed baseline and its collector over the code at `root`. */
 export let registered = (suite: string): {
   baseline: string
-  collector: (root: string) => CollectedSuite
+  collector: (root: string, names?: readonly string[]) => CollectedSuite
 } => {
   if (suite == 'throughput') {
     return {
       baseline: 'bench/throughput.baseline.json',
-      collector: (root) => throughput({ root }),
+      collector: (root, names) => throughput({ root, names }),
     }
   }
   let entry = standalone.find((b) => b.suite().name == suite)
   if (!entry) throw Error(`Unknown suite: ${suite}`)
   return {
     baseline: entry.baseline,
-    collector: (root) => entry.suite([], root),
+    collector: (root, names) => {
+      let suite = entry.suite([], root, names)
+      if (!names) return suite
+      return {
+        ...suite,
+        benches: suite.benches.filter((bench) => names.includes(bench.name)),
+        collect: async (round) => {
+          let samples = await suite.collect(round)
+          return Object.fromEntries(names.map((name) => [name, samples[name]]))
+        },
+      }
+    },
   }
 }
 
@@ -61,6 +73,7 @@ export type Comparison = {
   unit: string
   /** Every comparison judges CPU time. */
   figure: 'cpu'
+  referenceCommit?: string
   before: number[]
   current: number[]
   after: number[]
@@ -81,6 +94,8 @@ export type Evidence = {
 export type Judgement = Evidence & Partial<Pair> & {
   reference?: string
   revision?: string
+  references?: Record<string, string>
+  groups?: Judgement[]
 }
 
 /** Judge one bracketed comparison against the slack `base` banked.
@@ -130,6 +145,7 @@ export let compare = (
       name: b.name,
       unit: b.unit,
       figure: 'cpu' as const,
+      ...before.commit ? { referenceCommit: before.commit } : {},
       before: x,
       current: y,
       after: z,
@@ -241,12 +257,57 @@ let archive = async (root: string, target: string, revision: string) => {
 
 /** Both revisions run the identical present-day driver and fixture. No live
  * database is opened or copied; each probe owns and cleans its seeded graph. */
+export type Revisions = {
+  reference?: string
+  current?: string
+  rounds?: number
+  names?: readonly string[]
+  references?: Record<string, string>
+}
+
 export let collect = async (
   suite: string,
   root: string,
-  revisions: { reference?: string; current?: string; rounds?: number } = {},
+  revisions: Revisions = {},
 ): Promise<Judgement> => {
   let { baseline: path, collector } = registered(suite)
+  let base: Baseline = JSON.parse(await Deno.readTextFile(`${root}/${path}`))
+  let names = collector(root, revisions.names).benches.map((bench) =>
+    bench.name
+  )
+  let fallback = revisions.reference ?? base.reference ?? text.decode(
+    await command(root, 'git', ['log', '-1', '--format=%H', '--', path]),
+  ).trim()
+  let overrides = revisions.reference
+    ? Object.fromEntries(names.map((name) => [name, revisions.reference!]))
+    : revisions.references
+  let source = references(base, names, fallback, overrides)
+  let groups: Judgement[] = []
+  let rounds = revisions.rounds ??
+    Math.max(6, Math.ceil(Math.log2(20 * names.length)))
+  for (let [reference, selected] of grouped(source)) {
+    let judgement = await collectAt(suite, root, {
+      ...revisions,
+      reference,
+      names: selected,
+      rounds,
+    })
+    judgement.references = Object.fromEntries(selected.map((name) => [
+      name,
+      judgement.reference ?? reference,
+    ]))
+    groups.push(judgement)
+  }
+  return combined(groups, names)
+}
+
+let collectAt = async (
+  suite: string,
+  root: string,
+  revisions: Revisions = {},
+): Promise<Judgement> => {
+  let { baseline: path, collector: registeredCollector } = registered(suite)
+  let collector = (root: string) => registeredCollector(root, revisions.names)
   let git = async (...args: string[]) =>
     text.decode(await command(root, 'git', args)).trim()
   let base: Baseline = JSON.parse(await Deno.readTextFile(`${root}/${path}`))
@@ -301,6 +362,7 @@ export let collect = async (
         `${common}/objects\n`,
       )
       await command(target, 'git', ['read-tree', commit])
+      await command(target, 'git', ['update-ref', 'HEAD', commit])
       roots.push(target)
     }
     collectors = [collector(roots[0]), collector(roots[1]), collector(roots[0])]

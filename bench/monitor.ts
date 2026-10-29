@@ -94,7 +94,8 @@ export type Outcome =
     verdict: 'regressed'
     run: Run
     /** The commit the current code was measured beside. */
-    reference: string
+    reference?: string
+    references?: Record<string, string>
     evidence: string[]
   }
   | { verdict: 'failed'; error: string }
@@ -120,24 +121,35 @@ export let regressed = (
   outcome: Extract<Outcome, { verdict: 'regressed' }>,
   commits: string[],
 ): string => {
-  let { run, reference } = outcome
+  let { run } = outcome
+  let references = [
+    ...new Set(
+      run.regressions.map((r) => r.reference ?? outcome.reference)
+        .filter((reference): reference is string => !!reference),
+    ),
+  ]
+  let reference = references.map((value) => value.slice(0, 9)).join(', ')
   let describe = (r: Regression) =>
     `${r.name} ${figure(r.current, r.unit)}, ${
       figure(r.baseline, r.unit)
-    } for the code before it`
+    } for the code before it${
+      r.reference ? ` at ${r.reference.slice(0, 9)}` : ''
+    }`
   return [
     `${suite} got slower: ${describe(run.regressions[0])}`,
     ...run.regressions.slice(1).map((r) => `also ${describe(r)}`),
-    `measured side by side at ${run.commit?.slice(0, 9)} and ${
-      reference.slice(0, 9)
-    } on ${run.at}, ${
+    `measured side by side at ${
+      run.commit?.slice(0, 9)
+    } and ${reference} on ${run.at}, ${
       run.busy == null
         ? 'how busy the box was is unknown'
         : `other work used at most ${
           Math.round(run.busy * 100)
         }% of the box's CPUs`
     }`,
-    `commits since ${reference.slice(0, 9)}:`,
+    references.length > 1
+      ? 'commits since each benchmark reference:'
+      : `commits since ${reference}:`,
     ...commits.length ? commits : ['(none)'],
     ...outcome.evidence,
     `re-run: deno run -A bench/paired.ts ${suite} <evidence.json>`,
@@ -172,10 +184,21 @@ export let watch = async (
         'failed',
       )
     } else if (outcome.verdict == 'regressed') {
-      await m.report(
-        new Error(
-          regressed(suite, outcome, await m.since(outcome.reference)),
+      let references = [
+        ...new Set(
+          outcome.run.regressions
+            .map((regression) => regression.reference ?? outcome.reference)
+            .filter((reference): reference is string => !!reference),
         ),
+      ]
+      let histories = await Promise.all(references.map(async (reference) => {
+        let commits = await m.since(reference)
+        return references.length > 1
+          ? [`since ${reference.slice(0, 9)}:`, ...commits]
+          : commits
+      }))
+      await m.report(
+        new Error(regressed(suite, outcome, histories.flat())),
         suite,
         'regressed',
       )
@@ -196,6 +219,8 @@ export let judged = (run: Run, evidence: Judgement): Run => ({
     name: `${b.name} (CPU)`,
     unit: b.unit,
     baseline: b.reference,
+    reference: b.referenceCommit ?? evidence.references?.[b.name] ??
+      evidence.reference,
     limit: b.reference,
     current: b.now,
     change: b.reference == 0 ? null : Math.abs(b.now / b.reference - 1),
@@ -342,7 +367,8 @@ let check = async (suite: string): Promise<Outcome> => {
   return {
     verdict: 'regressed',
     run: judged(run, evidence),
-    reference: evidence.reference!,
+    reference: evidence.reference,
+    references: evidence.references,
     evidence: [`evidence: ${path}`],
   }
 }

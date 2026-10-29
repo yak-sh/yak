@@ -850,3 +850,35 @@ test('the runner disposes collection resources after success and failure', async
     }, f.options), 'collection failed')
   equal(closed, 2)
 })
+
+test('acceptance retains each median’s revision and stamps only changed or explicitly replaced figures', async () => {
+  let f = fixture([
+    { name: 'a', unit: 'ms', sample: () => 100 },
+    { name: 'b', unit: 'ms', sample: () => 100 },
+    { name: 'c', unit: 'ms', sample: () => 100 },
+  ])
+  let options = {
+    ...f.options,
+    mode: 'accept' as const,
+    rounds: 1,
+    tolerance: .2,
+  }
+  let refs = () =>
+    JSON.parse(f.saved.get('baseline')!).benches
+      .map((
+        bench: { name: string; reference: string },
+      ) => [bench.name, bench.reference])
+  f.context.commit = 'first'
+  await run(f.suite, options)
+  f.context.commit = 'second'
+  f.suite.benches[0].sample = () => 50
+  f.suite.benches[1].sample = () => 90
+  await run(f.suite, options)
+  equal(refs(), [['a', 'second'], ['b', 'first'], ['c', 'first']])
+  f.context.commit = 'third'
+  await run(f.suite, { ...options, slower: ['b'] })
+  equal(refs(), [['a', 'second'], ['b', 'third'], ['c', 'first']])
+  f.context.commit = 'fourth'
+  await run(f.suite, { ...options, slower: true })
+  equal(refs(), [['a', 'fourth'], ['b', 'fourth'], ['c', 'fourth']])
+})

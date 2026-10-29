@@ -188,7 +188,14 @@ export let baseline = (
       throw new Error(`No bench to bank slower: ${name}`)
     }
   }
-  let banked = new Map(previous?.benches.map((b) => [b.name, b]))
+  let banked = new Map(
+    previous?.benches.map((b) => [b.name, {
+      ...b,
+      ...(b.reference ?? previous.reference)
+        ? { reference: b.reference ?? previous.reference }
+        : {},
+    }]),
+  )
   // A choice of cost for some benches is not an acceptance of the others.
   let measuring = one.benches.filter((b) =>
     !named || named.includes(b.name) || !banked.has(b.name)
@@ -222,6 +229,9 @@ export let baseline = (
         unit: b.unit,
         better: b.better,
         median: kept?.median ?? b.median,
+        ...(kept?.reference ?? (!kept ? one.commit : undefined))
+          ? { reference: kept?.reference ?? one.commit! }
+          : {},
         ...(b.resolution !== undefined ? { resolution: b.resolution } : {}),
         tolerance: kept ? wider : measured,
       }
@@ -230,10 +240,12 @@ export let baseline = (
   if (previous) {
     let fresh = new Map(out.benches.map((b) => [b.name, b]))
     out.benches = [
-      ...previous.benches.map((b) => fresh.get(b.name) ?? b),
+      ...previous.benches.map((b) => fresh.get(b.name) ?? banked.get(b.name)!),
       ...out.benches.filter((b) => !banked.has(b.name)),
     ]
   }
+  let references = [...new Set(out.benches.map((b) => b.reference))]
+  if (references.length == 1 && references[0]) out.reference = references[0]
   validate(out)
   return out
 }
@@ -294,6 +306,9 @@ export let compare = (
         name: b.name,
         unit: b.unit,
         baseline: old.median,
+        ...(old.reference ?? base.reference)
+          ? { reference: old.reference ?? base.reference }
+          : {},
         limit: most,
         current: b.median,
         change: old.median == 0
