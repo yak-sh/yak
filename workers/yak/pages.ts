@@ -85,8 +85,6 @@ export let shell = (
   // provisioning page below, the admin's no-store on its directory.
   headers: Record<string, string> = {},
   layout = '',
-  // The look of parts only one page draws (admin.ts), after the desk's.
-  css = '',
 ) =>
   new Response(
     `<!doctype html>
@@ -101,13 +99,6 @@ export let shell = (
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="${url(env, '/controls.css')}">
 <link rel="stylesheet" href="${url(env, '/pages.css')}">
-${
-      css
-        ? `<style>@layer sections {
-${css}
-}</style>`
-        : ''
-    }
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
       lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`

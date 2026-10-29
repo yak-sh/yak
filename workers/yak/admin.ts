@@ -266,7 +266,6 @@ let desk = (
     }</h1></div></header><div class="Desk_Content Directory_Content" id="content" tabindex="-1">${body}</div></div>`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
-    css,
   )
 }
 
@@ -410,35 +409,3 @@ export let answer = async (
   }
   return await page(d, dir, r, env)
 }
-
-// The directory's own parts: a search bar, and one card of rows with
-// hairlines between them, as the style guide draws .Rows, each saying what it
-// uses, each figure under the word for it; one column on a phone.
-let css = `
-.Directory_Bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; margin: 0 0 1.5rem }
-.Directory_Find { display: flex; gap: .5rem; flex: 1 1 20rem; max-width: 30rem; margin: 0 }
-.Directory_Find .Field { flex: 1 }
-.Directory_Bar > a { font-size: .9rem }
-.Directory { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--edge); background: var(--paper); overflow: hidden }
-.Directory_Row { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); align-items: center; gap: .5rem 1.5rem; padding: .85rem 1.25rem; border-top: 1px solid var(--line) }
-.Directory_Row:first-child { border-top: 0 }
-.Directory_Row:hover { background: color-mix(in srgb, var(--ground), var(--paper) 55%) }
-.Directory_Who { display: grid; gap: .1rem; min-width: 0 }
-.Directory_Who .Apps_Tags { margin: .25rem 0 0; padding: 0 }
-.Directory_Open { color: var(--ink); text-decoration: none; overflow-wrap: anywhere }
-.Directory_Open::after { content: ''; position: absolute; inset: 0 }
-.Directory_Open:focus-visible { outline: 0 }
-.Directory_Open:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 3px }
-.Directory_Sub { color: var(--soft-ink); font-size: .85rem; overflow-wrap: anywhere }
-.Directory_Uses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem 1rem; margin: 0 }
-.Directory_Uses dt { color: var(--soft-ink); font-size: .8rem }
-.Directory_Uses dd { margin: 0; font-variant-numeric: tabular-nums }
-.Directory_Facts > div { grid-template-columns: 10rem minmax(0, 1fr) }
-.Directory_Facts dt { font-weight: 700; color: var(--soft-ink) }
-.Directory_Content .Group { margin-top: 2rem }
-@media (max-width: 700px) {
-  .Directory_Row { grid-template-columns: minmax(0, 1fr) }
-  .Directory_Uses { grid-template-columns: repeat(2, minmax(0, 1fr)) }
-  .Directory_Facts > div { grid-template-columns: 8rem minmax(0, 1fr) }
-}
-`
