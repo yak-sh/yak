@@ -195,7 +195,11 @@
               "unit": "ms",
               "median": 403.46523700000034
             },
-            { "name": "hook/SessionEnd", "unit": "ms", "median": 404.031876 }
+            {
+              "name": "hook/SessionEnd",
+              "unit": "ms",
+              "median": 404.031876
+            }
           ]
         },
         "benches": [
@@ -516,7 +520,16 @@
           "connector/graph-apply",
           "tui/startup",
           "tui/query-navigation"
-        ]
+        ],
+        "boundaryCorrection": {
+          "name": "tui/startup",
+          "driverChange": "49fddf13a6170e3ebae7466cfc140066b01ece8d",
+          "reason": "The original startup sample included graceful shutdown. Startup now measures launch through usable paint; child CPU is read while the terminal is alive and shutdown occurs after the sample. Both historical and current product code use that same corrected boundary, retaining the original product reference.",
+          "previousMedian": {
+            "unit": "ms",
+            "median": 980.026926999999
+          }
+        }
       }
     ]
   },
