@@ -21,6 +21,7 @@ import {
 import { TABLE } from '../packages/embedding/ddl.ts'
 import { service } from '../packages/embedding/service.ts'
 import { settled } from './settled.ts'
+import { selected } from './selected.ts'
 
 export let DIAGNOSTIC_NAMES = [
   'cli/model-list-local-catalogue',
@@ -161,6 +162,7 @@ export let measure = async (
       OPENAI_API_KEY: 'local-catalogue-placeholder',
     }
     for (let name of DIAGNOSTIC_NAMES) {
+      if (!selected(name)) continue
       let samples: Sample[] = []
       for (let i = 0; i < n; i++) {
         if (name.includes('session-home')) {
