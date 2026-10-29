@@ -332,12 +332,14 @@ test('CLI uses native serving config and context JSON for activity', async () =>
   equal(fallback.sent[0].url, 'http://127.0.0.1:8787/visualize/anatomy')
 })
 
+let credentialState = await accounts({
+  'https://selected.test': 'matching-key',
+  'selected.test': 'selected-host-key',
+  'default.test': 'unrelated-key',
+})
+
 test('CLI selects credentials only for the requested origin and carries provenance', async () => {
-  let state = await accounts({
-    'https://selected.test': 'matching-key',
-    'selected.test': 'selected-host-key',
-    'default.test': 'unrelated-key',
-  })
+  let state = credentialState
   let matching = await terminal(
     { url: 'https://selected.test', json: true },
     {},
