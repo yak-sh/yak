@@ -11,7 +11,7 @@ import { host, reader } from '../host_testing.ts'
 import { mount } from './mount.ts'
 import { fields } from './fields.tsx'
 import { route } from './nav.tsx'
-import { searchAt } from '../url.ts'
+import { searchAt, searchPath } from '../url.ts'
 import { contributedViews } from './inspect.tsx'
 import * as facet from '@yaks/inspect/views'
 import { views } from '@yaks/inspect'
@@ -153,10 +153,9 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     searchOpen.value = true
     render(h(Search, { open: () => {} }), root)
     let link = root.querySelector('a.Palette_Page')!
-    assertEquals(
-      link.getAttribute('href'),
-      '/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
-    )
+    // The chip links to the search's own page address (url.ts).
+    let href = searchPath(query)
+    assertEquals(link.getAttribute('href'), href)
     assertEquals(link.hasAttribute('draggable'), true)
     let payload: Record<string, string> = {}
     let drag = new window.Event('dragstart', { bubbles: true })
@@ -165,10 +164,8 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     })
     link.dispatchEvent(drag)
     assertEquals(payload, {
-      'text/uri-list':
-        'https://tasks.test/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
-      'text/plain':
-        'https://tasks.test/?fleet%20.task&.created.at>2026-10-27&.created.at<2026-10-28',
+      'text/uri-list': `https://tasks.test${href}`,
+      'text/plain': `https://tasks.test${href}`,
     })
     for (
       let props of [

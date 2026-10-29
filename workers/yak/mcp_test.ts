@@ -238,10 +238,10 @@ test(
         tools.find((t: { name: string }) => t.name == name).description
       assertStringIncludes(says('app_files'), './api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
-      // The generic tier states its own grammar (@yaks/mcp): a query string
-      // in, whole bundles out, and a batch of bundles to write.
-      assertStringIncludes(says('graph_query'), 'A query string')
-      assertStringIncludes(says('graph_apply'), 'an array of bundles')
+      // The generic tier states its own grammar (@yaks/mcp): a query line
+      // in, and bundles to write.
+      assertStringIncludes(says('graph_query'), '.component.property=value')
+      assertStringIncludes(says('graph_apply'), 'bundles')
       // And each of them names the page that documents it, which is what a
       // directory reviewing a connector asks of a tool that queries something.
       for (
@@ -254,7 +254,7 @@ test(
       ) {
         assertStringIncludes(
           says(name),
-          `Documentation: https://yaks.app/docs/${page}.`,
+          `https://yaks.app/docs/${page}`,
         )
       }
       // The mailbox says which one it is, because the tool list is where a

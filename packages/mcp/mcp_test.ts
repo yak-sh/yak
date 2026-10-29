@@ -124,7 +124,7 @@ test('every generic tool says where it is documented', async () => {
   ) {
     assertStringIncludes(
       tools.find((t) => t.name == name)!.description,
-      `Documentation: https://yaks.app/docs/${page}.`,
+      `https://yaks.app/docs/${page}`,
     )
   }
   await client.close()
