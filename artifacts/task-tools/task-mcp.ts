@@ -37,6 +37,7 @@ await g.apply([{
 let client = await connect({
   graph: g,
   tools: loadTools(taskDoc, runs()),
+  readFile: (path) => Deno.readTextFile(path),
 })
 let listed = (await client.listTools()).tools as Listed[]
 let call = async (name: string, args: Record<string, unknown>) => {
@@ -188,6 +189,32 @@ test('MCP task CLI preserves literal null text and file contents', async () => {
     title: 'Retained',
     body: 'null',
   })
+})
+
+test('MCP task creation and editing read body files through the box boundary', async () => {
+  let path = await Deno.makeTempFile({ suffix: '.md' })
+  let body = 'A task body kept in a file.\n'.repeat(100)
+  try {
+    await Deno.writeTextFile(path, body)
+    let wrote = await call('task_new', {
+      $files: true,
+      tasks: [{ id: '$file-task', title: 'File body', body: '@' + path }],
+    })
+    let task = wrote.find((b) => b.$alias == '$file-task')!
+    assertEquals(task.doc, { title: 'File body', body })
+    await Deno.writeTextFile(path, 'Replacement from disk')
+    await call('task_update', {
+      $files: true,
+      task: task.entity.eid,
+      edit: { replace: '@' + path },
+    })
+    assertEquals((await g.get([task.entity.eid]))[0].doc, {
+      title: 'File body',
+      body: 'Replacement from disk',
+    })
+  } finally {
+    await Deno.remove(path)
+  }
 })
 
 await checks

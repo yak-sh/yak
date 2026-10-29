@@ -66,6 +66,7 @@
     "npm:fake-indexeddb@^6.2.2": "6.2.5",
     "npm:fflate@0.8.3": "0.8.3",
     "npm:file-type@21.3.4": "21.3.4",
+    "npm:gpt-tokenizer@3.4.0": "3.4.0",
     "npm:highlight.js@11.11.1": "11.11.1",
     "npm:jsdom@26.1.0": "26.1.0",
     "npm:linkedom@~0.18.12": "0.18.13",
@@ -1436,6 +1437,9 @@
     },
     "gopd@1.2.0": {
       "integrity": "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="
+    },
+    "gpt-tokenizer@3.4.0": {
+      "integrity": "sha512-wxFLnhIXTDjYebd9A9pGl3e31ZpSypbpIJSOswbgop5jLte/AsZVDvjlbEuVFlsqZixVKqbcoNmRlFDf6pz/UQ=="
     },
     "has-symbols@1.1.0": {
       "integrity": "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="

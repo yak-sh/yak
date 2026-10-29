@@ -10,8 +10,8 @@ description: >
 
 # Writing to and reading from the graph
 
-Everything passes through one door. The graph is entities carrying components:
-a write applies a batch of bundles in one transaction, and a read is a query.
+Everything passes through one door. The graph is entities carrying components: a
+write applies a batch of bundles in one transaction, and a read is a query.
 Behind the door sits everything nobody wants to think about on each write: the
 stamps that say who did it, the journal that can undo it, the archetype pointers
 that answer presence filters, the full-text and vector indexes, the rules that
@@ -44,23 +44,31 @@ keeps its own copy casts it in or keeps ghosts.
 
 ## Task and document tools
 
-The tasks MCP tools accept the work directly. Their `yak` commands take the
-same arguments; arrays and objects are JSON arguments, and `@path` reads a
-whole argument from a file. `--clear blocked --clear priority` supplies JSON
-`null` for nullable fields; `--body null` keeps the literal text `null`.
-The package READMEs hold the full examples:
-packages/task/README.md ("Create a task plan", "Edit tasks") and
-packages/graph/README.md ("Field and relationship edits").
+The tasks MCP tools accept the work directly. Their `yak` commands take the same
+arguments; arrays and objects are JSON arguments, and `@path` reads a whole
+argument from a file. `--clear blocked --clear priority` supplies JSON `null`
+for nullable fields; `--body null` keeps the literal text `null`. On the box's
+MCP door, `"$files": true` expands `@/absolute/path` in declared string
+arguments, including nested task bodies and text edits. For example,
+`task_update` with `{"task":"T-12","body":"@/tmp/body.md","$files":true}` reads
+the body on the server. Omit `$files` to keep `@` text literal. The package
+READMEs hold the full examples: packages/task/README.md ("Create a task plan",
+"Edit tasks") and packages/graph/README.md ("Field and relationship edits").
 
-- `task_new` takes `tasks` to file a plan in one transaction, with shared
-  filing defaults, local `$ids`, `parent` and `requires`. The CLI is `yak task
+- `task_new` takes `tasks` to file a plan in one transaction, with shared filing
+  defaults, local `$ids`, `parent` and `requires`. The CLI is
+  `yak task
   new --project P-19 --tasks @tasks.json`.
 - `task_update` changes several fields in one call and takes `updates` for
   several tasks. `accept`, `blocked` and cancellation `reason` are ordinary
   arguments too. `edit` changes only the body text you name:
 
 ```json
-{"task":"T-12","priority":1,"edit":{"find":"old wording","replace":"revised wording"}}
+{
+  "task": "T-12",
+  "priority": 1,
+  "edit": { "find": "old wording", "replace": "revised wording" }
+}
 ```
 
 ```sh
@@ -76,8 +84,13 @@ Both arrays can be sent together atomically:
 
 ```json
 {
-  "edits":[{"id":"Q-12","text":[{"path":"content.body","append":"\nA further detail."}]}],
-  "links":[{"from":"T-12","relation":"requires","to":"T-13"}]
+  "edits": [
+    {
+      "id": "Q-12",
+      "text": [{ "path": "content.body", "append": "\nA further detail." }]
+    }
+  ],
+  "links": [{ "from": "T-12", "relation": "requires", "to": "T-13" }]
 }
 ```
 
@@ -93,27 +106,36 @@ earlier read. `graph_apply`'s `id` and `text` replace a whole `doc.body`; `path`
 selects another text property. A comment's body is `doc.body` too.
 
 A commit attaches through its existing entity, whose id is its SHA. One
-`graph_apply` edit can set `commit.target` to the task and `commit.message`
-to the full commit message:
+`graph_apply` edit can set `commit.target` to the task and `commit.message` to
+the full commit message:
 
 ```json
-{"edits":[{"id":"<sha>","set":{"commit.target":"T-12","commit.message":"The full commit message."}}]}
+{
+  "edits": [
+    {
+      "id": "<sha>",
+      "set": {
+        "commit.target": "T-12",
+        "commit.message": "The full commit message."
+      }
+    }
+  ]
+}
 ```
 
-`comment_new` files words on a `target`; `memory_save` saves or marks the
-words and accepts an `id` to revise a memory; `topic_add` files `ids` under a
-`topic`, with `drop` to take them out; `decision_answer` records a choice. Each
-has its matching CLI command, such as `yak comment new T-12 @comment.md` and
+`comment_new` files words on a `target`; `memory_save` saves or marks the words
+and accepts an `id` to revise a memory; `topic_add` files `ids` under a `topic`,
+with `drop` to take them out; `decision_answer` records a choice. Each has its
+matching CLI command, such as `yak comment new T-12 @comment.md` and
 `yak topic add Q-12 M-12 D-12`.
 
 ## Bundle patches
 
-- `graph_apply` with `check: true` runs every phase and rolls
-  back, answering what a write would do. `check` also works with `edits` and
-  `links`.
-- An argument that starts with `@` is read as a file path on every `yak`
-  command (`inflate` in packages/cli/args.ts), so a title like "@yaks/fp on jsr"
-  fails with "No such file". Phrase it so it doesn't start with `@`.
+- `graph_apply` with `check: true` runs every phase and rolls back, answering
+  what a write would do. `check` also works with `edits` and `links`.
+- An argument that starts with `@` is read as a file path on every `yak` command
+  (`inflate` in packages/cli/args.ts), so a title like "@yaks/fp on jsr" fails
+  with "No such file". Phrase it so it doesn't start with `@`.
 - `$name` as an eid is an alias local to one batch. A human id (`T-12`) is
   resolved at the door by `g.address`, and one that names nothing is refused
   rather than taken for an eid.
@@ -146,14 +168,14 @@ names the actor, one of a handful, and `via` the instrument, a session among
 them: a session's writes are `by` its persona and `via` itself (`speaking()` in
 packages/session/who.ts, with its rare fallbacks). The owner, verbatim: "the
 persona should always be the actor". A session is never in `by`. The owner,
-verbatim (M-31958): "yeah, we can't have sessions
-as actors. then it will look as if there are thousands of actors in the system
-when there is really a handful". A person is the writer only of what that
-person typed or asked for: "i think "closing the door" is probably a fleet-wide
-prompt clarifying they should only mark me as the actor if i *explicitly* ask
-them to do that exact thing. any follow-ups or later things should be marked as
-the agent". A row stamped with the wrong writer moves with `data-migration`,
-and the code that chose that writer is fixed where it chose.
+verbatim (M-31958): "yeah, we can't have sessions as actors. then it will look
+as if there are thousands of actors in the system when there is really a
+handful". A person is the writer only of what that person typed or asked for: "i
+think "closing the door" is probably a fleet-wide prompt clarifying they should
+only mark me as the actor if i _explicitly_ ask them to do that exact thing. any
+follow-ups or later things should be marked as the agent". A row stamped with
+the wrong writer moves with `data-migration`, and the code that chose that
+writer is fixed where it chose.
 
 ## Deleting
 
@@ -162,14 +184,14 @@ later write whose `$was` was read before the delete raced it and is dropped; any
 other write brings the entity back holding only what that write gives (M-17876).
 A tombstone is kept 30 days, long past any race; then the daily expiration
 prunes it (packages/effects/expire.ts) unless something still names it (the
-journal, a `keep` reference), and its eid and number name nothing.
-References follow their `death` keyword (packages/graph/cascade.ts): `cascade`
-deletes the referrer, `detach` clears the property, `release` drops the
-referencing component, `keep` leaves history. Deleting an entity also deletes
-the edges that point at it, so a delete can take more than it names, and
-`--check` counts it first. The journal's `undo` brings a deleted entity back with
-what its delete cascaded (packages/journal/README.md, "Undo"), but not its
-`created` stamp or anything written before the journal began.
+journal, a `keep` reference), and its eid and number name nothing. References
+follow their `death` keyword (packages/graph/cascade.ts): `cascade` deletes the
+referrer, `detach` clears the property, `release` drops the referencing
+component, `keep` leaves history. Deleting an entity also deletes the edges that
+point at it, so a delete can take more than it names, and `--check` counts it
+first. The journal's `undo` brings a deleted entity back with what its delete
+cascaded (packages/journal/README.md, "Undo"), but not its `created` stamp or
+anything written before the journal began.
 
 ## Ids and edges
 
@@ -202,19 +224,19 @@ How a query is written is `query-grammar`. How one is answered:
   gathers, the other `*_cost_workerd_test.ts` files for their consumers).
   Returned-row counts and a live smoke check say nothing about billed rows.
 - Computed properties (`task.status`, a component's `status` keyword,
-  `build.cost`) are derived at read, never stored, and a filter on a status binds
-  as presence.
+  `build.cost`) are derived at read, never stored, and a filter on a status
+  binds as presence.
 - Presence tests and status filters are answered from the archetype index:
-  `entity.archetype` names the set of tables an entity holds (packages/archetype,
-  `byArchetype` in packages/sql/bind.ts). It is only as true as that pointer,
-  which is why the next section matters.
+  `entity.archetype` names the set of tables an entity holds
+  (packages/archetype, `byArchetype` in packages/sql/bind.ts). It is only as
+  true as that pointer, which is why the next section matters.
 
 ## Scripts against the db
 
 A script writes through the graph: it opens one, or hands bundles to
 `graph_apply`. That is what keeps the stamps, the journal, the archetype
-pointers and the full-text and vector indexes true. SQL is @yaks/sql's AST.
-The owner, verbatim (M-39498): "nothing anywhere else should ever be writing raw sql
+pointers and the full-text and vector indexes true. SQL is @yaks/sql's AST. The
+owner, verbatim (M-39498): "nothing anywhere else should ever be writing raw sql
 strings." A raw SQL writer that has to exist calls `reclassify(driver, eids)`
 from @yaks/sqlite in the same transaction (packages/sqlite/README.md), or the
 pointers go stale and presence filters, status filters and whole-entity reads
@@ -236,9 +258,9 @@ write never owes the effect again. Writing them is `effects-and-rules`.
 
 ## Looking at it
 
-`graph_show` with ids `["<id>"]`, `graph_query` with q `<q>`,
-`graph_schema` with component `<comp>`, `history` with entity `<id>` (the
-journal), and `yak inspect` (the map, an id or a query) in a terminal, or
+`graph_show` with ids `["<id>"]`, `graph_query` with q `<q>`, `graph_schema`
+with component `<comp>`, `history` with entity `<id>` (the journal), and
+`yak inspect` (the map, an id or a query) in a terminal, or
 https://tasks.yak.sh/?page=map in a browser.
 
 When this skill is wrong or missing something, fix it in the same change.

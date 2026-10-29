@@ -6,7 +6,7 @@ import { generic } from '@yaks/graph/tools'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 
-let label = Deno.args[0] ?? 'before'
+let label = Deno.args[0] ?? 'after'
 let configured = read('/home/yaks/.yak/yak.json')
 let host = await compose(
   {
@@ -23,6 +23,7 @@ let mcp = server({
   graph: host.graph,
   tools: host.tools.filter((tool) => !tier.has(tool.name)),
   search: host.search,
+  readFile: (path) => Deno.readTextFile(path),
 })
 let [here, there] = InMemoryTransport.createLinkedPair()
 let client = new Client({ name: 'task-tools-roster', version: '0.0.0' })
