@@ -527,9 +527,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let { keys, run } = await chosen(files, all, [sqlite], changed)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
-  let verbose = flags.includes('--verbose')
-  let suite: Suite = async (more, over = run) => {
-    if (!over.length) return { code: 0 }
+  let suite: Suite = async (more) => {
+    if (!run.length) return { code: 0 }
     let bulk: TestCommand = {
       command: Deno.execPath(),
       args: [
