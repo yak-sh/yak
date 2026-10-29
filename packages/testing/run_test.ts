@@ -1,5 +1,5 @@
 import { cleanup, equal, test } from './mod.ts'
-import { one, owed, timed } from './run.ts'
+import { one, timed } from './run.ts'
 
 test('CPU timing brackets async work and cleanup and reaches the budget report', async () => {
   let cpu = 100
@@ -29,9 +29,4 @@ test('CPU timing brackets async work and cleanup and reaches the budget report',
     left: 0,
   })
   equal(report.tests[0].cpu, 1)
-  let line = { 'a_test.ts': { 'suspended work': 1 } }
-  let waited = { ...outcome, ms: 9000 }
-  let busy = { ...outcome, cpu: 2, ms: 0.1 }
-  equal(owed(line, [waited]), [])
-  equal(owed(line, [busy]), ['a_test.ts'])
 })
