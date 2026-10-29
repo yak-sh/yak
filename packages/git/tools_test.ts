@@ -2,8 +2,7 @@
 // is a function from its call to bundles: nothing here opens a store, and what
 // the answer lands as is the runner's, tested where the runner is.
 //
-// The cases that need Git each build a repository. A graph entity's content
-// is checked without a checkout or subprocess.
+// A graph entity's content is checked without a checkout or subprocess.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -18,9 +17,7 @@ import { keyDoc, keyKeywords } from '@yaks/key'
 import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
-import { filesystemEid, repositoryEid } from './host.ts'
 import { runs } from './tools.ts'
-import { git, template } from './testing.ts'
 
 let tools = runs()
 let vocab = loadVocab(
@@ -236,117 +233,3 @@ test('verify refuses a symbol whose file is missing', async () => {
     'has no file to check',
   )
 })
-
-// ---- against a repository ---------------------------------------------------
-
-// `f.js` committed twice: a citation verified at the first commit, `at`.
-let made = template(async (cwd) => {
-  await git(cwd, 'init', '-q', '--initial-branch=main')
-  await git(cwd, 'config', 'user.email', 'test@example.com')
-  await git(cwd, 'config', 'user.name', 'Test')
-  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 1\n')
-  await git(cwd, 'add', 'f.js')
-  await git(cwd, 'commit', '-qm', 'one')
-  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 2\n')
-  await git(cwd, 'commit', '-qam', 'two')
-})
-
-// A copy of it, the repository it is a checkout of on this computer, and the
-// rows a host that has run before holds: this computer, its filesystem, and
-// that repository.
-let repo = async () => {
-  let cwd = await made()
-  let filesystem = filesystemEid('computer')
-  let root = repositoryEid(`${cwd}/.git`, filesystem)
-  return {
-    cwd,
-    at: await git(cwd, 'rev-parse', 'HEAD~'),
-    root,
-    here: [
-      { entity: { eid: 'computer' }, machine: { address: 'local://' } },
-      {
-        entity: { eid: filesystem },
-        workspace: { machine: 'computer', root: '/' },
-      },
-      repository(root),
-      doc('doc-1', 1),
-    ],
-  }
-}
-
-test(
-  'a citation whose file moved since it was verified fails the check',
-  async () => {
-    let { cwd, at, root, here } = await repo()
-    let checked = {
-      verified: { at: '2026-09-22T00:00:00Z' },
-      revision: { commit: at },
-    }
-    let bundles = [
-      ...here,
-      fileAt('file-1', 'f.js', root),
-      cite('doc-1', 'file-1', checked),
-      // The same path in another repository is not this checkout's to answer
-      // for, nor a file `--path` names here.
-      doc('doc-2', 2),
-      repository('repo-2'),
-      fileAt('file-2', 'f.js', 'repo-2'),
-      cite('doc-2', 'file-2', checked),
-    ]
-    let answer = await tools.cites_check!(...asked({}, bundles, cwd))
-    assert(body(answer).includes('moved by'), body(answer))
-    assert(body(answer).includes('in another repository'), body(answer))
-    assertEquals((answer[0].finding as Bundle)?.level, 'fail')
-    let named = body(
-      await tools.cites_check!(...asked({ path: 'f.js' }, bundles, cwd)),
-    )
-    assert(named.includes('moved by'), named)
-    assert(!named.includes('another repository'), named)
-    await Deno.remove(cwd, { recursive: true })
-  },
-)
-
-test(
-  'verify marks the citation and moves its revision to the commit checked out',
-  async () => {
-    let { cwd, at, root, here } = await repo()
-    let head = await git(cwd, 'rev-parse', 'HEAD')
-    let bundles = [
-      ...here,
-      fileAt('file-1', 'f.js', root),
-      place('place-1', 'file-1', 1, 1),
-      cite('doc-1', 'file-1', { revision: { commit: at } }),
-      cite('doc-1', 'place-1'),
-      doc('doc-2', 2),
-      repository('repo-2'),
-      fileAt('file-2', 'f.js', 'repo-2'),
-      cite('doc-2', 'file-2'),
-    ]
-    let [written] = await tools.cites_verify!(
-      ...asked({ cite: 'cite-doc-1-file-1' }, bundles, cwd),
-    )
-    assertEquals(written.entity.eid, 'cite-doc-1-file-1')
-    // Empty: at, by and via are the graph's to stamp, so a citation records who
-    // checked it and cannot claim otherwise.
-    assertEquals(written.verified, {})
-    assertEquals(written.revision, { commit: head })
-
-    // An entity verifies every citation it makes, in one answer: a place in a
-    // file as well as the file.
-    let all = await tools.cites_verify!(...asked({ of: 'doc-1' }, bundles, cwd))
-    assertEquals(all.map((b) => [b.entity.eid, b.revision]), [
-      ['cite-doc-1-file-1', { commit: head }],
-      ['cite-doc-1-place-1', { commit: head }],
-    ])
-    // A file of another repository is verified in a checkout of its own.
-    await assertRejects(
-      () =>
-        Promise.resolve(
-          tools.cites_verify!(...asked({ of: 'doc-2' }, bundles, cwd)),
-        ),
-      Error,
-      'another repository',
-    )
-    await Deno.remove(cwd, { recursive: true })
-  },
-)

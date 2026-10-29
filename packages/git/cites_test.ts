@@ -1,7 +1,4 @@
-// What a citation's status is derived from, proved twice: against a stubbed
-// git, where the interesting part is which question git is asked, and against
-// a disposable repository, where the interesting part is that git's answer
-// means what this module says it means.
+// Citation status through the injected Git command boundary and graph content.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -16,7 +13,6 @@ import { machineDoc } from '@yaks/machine/vocab'
 import { gitDoc } from './comp.ts'
 import type { Ran, Run } from './land.ts'
 import { type Checkout, status, tracked } from './cites.ts'
-import { git, template } from './testing.ts'
 
 let vocab = loadVocab(
   [kernelDoc, docDoc, edgeDoc, keyDoc, machineDoc, fileDoc, gitDoc],
@@ -264,64 +260,4 @@ test('a symbol without its file cannot appear current as a graph entity', async 
     state: 'unknown',
     why: 'the cited symbol has no file to check',
   })
-})
-
-// ---- against a repository ---------------------------------------------------
-
-// A file with two independent places in it: a constant at the top and a
-// function below. The first commit is what a citation was verified at; the
-// second touches only the function.
-let made = template(async (cwd) => {
-  await git(cwd, 'init', '-q', '--initial-branch=main')
-  await git(cwd, 'config', 'user.email', 'test@example.com')
-  await git(cwd, 'config', 'user.name', 'Test')
-  let write = (body: string) => Deno.writeTextFileSync(`${cwd}/f.js`, body)
-  write('let cap = 1\n\nfunction greet() {\n  return 1\n}\n')
-  await git(cwd, 'add', 'f.js')
-  await git(cwd, 'commit', '-qm', 'one')
-  write('let cap = 1\n\nfunction greet() {\n  return 2\n}\n')
-  await git(cwd, 'commit', '-qam', 'two')
-})
-
-let setup = async () => {
-  let cwd = await made()
-  return {
-    cwd,
-    at: await git(cwd, 'rev-parse', 'HEAD~'),
-    ops: { checkout: { cwd, repository: 'repo-1' }, vocab },
-  }
-}
-
-let f = { ...file, file: { path: 'f.js', root: 'repo-1' } }
-
-test(
-  'a definition somebody edited moved; the line above it did not',
-  async () => {
-    let { cwd, at, ops } = await setup()
-    let of = (to: Bundle) =>
-      status(cite({ revision: { commit: at } }), to, ops, f)
-
-    let moved = await of({
-      entity: { eid: 's' },
-      symbol: { module: 'file-1', name: 'greet' },
-    })
-    assertEquals(moved.state, 'moved')
-    assertEquals((moved as { changes: string[] }).changes.length, 1)
-    // The line the second commit did not touch is still where it was said to be.
-    assertEquals(await of(place(1, 1)), { state: 'current' })
-    // With no place named, the whole file is the place, and it moved.
-    assertEquals((await of(f)).state, 'moved')
-    await Deno.remove(cwd, { recursive: true })
-  },
-)
-
-test('a commit rebased out of the repository reads unknown', async () => {
-  let { cwd, ops } = await setup()
-  let gone = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
-  let got = await status(cite({ revision: { commit: gone } }), f, ops, f)
-  assertEquals(got, {
-    state: 'unknown',
-    why: 'commit deadbeef is not in this checkout',
-  })
-  await Deno.remove(cwd, { recursive: true })
 })

@@ -744,9 +744,6 @@
       "a rewritten body swaps its words, and a dead one takes them away": 5.5,
       "the words are indexed on every write path, not just the plugin": 2
     },
-    "packages/browse/bundle_test.ts": {
-      "the app bundles into one browser module": 0.6
-    },
     "packages/browse/components/Canvas_test.ts": {
       "a cancelled pan forgets movement and never settles": 3.9
     },
@@ -1648,12 +1645,6 @@
     "packages/esbuild/platform_test.ts": {
       "package URLs boot in server modules and follow browser release URLs": 68.1,
       "package resources retain module-relative addresses for nested entries": 47.6
-    },
-    "packages/facets_test.ts": {
-      "a package with words exports them at ./vocab, and they load": 3.1,
-      "compose takes every facet of the plugins a config names, for every role": 12.4,
-      "every other facet a package exports is shaped the way a host reads it": 7.9,
-      "every package's words load beside every other package's": 3.5
     },
     "packages/filter/filters_test.ts": {
       "a source that answers later lands its list unless typing moved on": 3,
@@ -3328,17 +3319,6 @@
     "packages/text/parity_test.ts": {
       "one renderer preserves its document through Preact and markdown": 3
     },
-    "packages/threads/thread_test.ts": {
-      "a completed pass can be followed by live duties": 73.4,
-      "a thread claims effects from the owning RAM graph and writes through its rules": 91.3,
-      "a thread reports opening failures and forced termination releases its callers": 114.4,
-      "aborting live work during opening starts no one-shot duty": 59,
-      "closing a thread drains an effect before closing its graph port": 70.3,
-      "one pass, an early abort, and closing an unstarted thread settle without live work": 124.6,
-      "overlapping duty calls are refused while the first can still stop": 66.8,
-      "remote graph refuses writes and preserves claim conflicts across the port": 6,
-      "two threads race for one owed effect and only one handler writes": 75
-    },
     "packages/timing/README.md": {
       "packages/timing/README.md: 12365be1a8b4": 6.5
     },
@@ -3639,10 +3619,6 @@
     "packages/vocab/meta_test.ts": {
       "a tool declaration is checked as a tool": 1.4
     },
-    "packages/vocab_test.ts": {
-      "packages: every vocab.json is plain JSON that loads": 7.2,
-      "packages: every vocabulary goes through a graph as bundles and back": 98.2
-    },
     "packages/wake/README.md": {
       "packages/wake/README.md: 086e1abfb0f3": 3.8,
       "packages/wake/README.md: 5ca3570c8203": 1.3
@@ -3667,12 +3643,6 @@
     "packages/wake/while_test.ts": {
       "a pass shares match answers while each wake chooses its own cadence": 1.7,
       "a wake goes on at the first cadence that holds, and sleeps when none does": 1.9
-    },
-    "packages/web/page_test.ts": {
-      "page code mints uuids outside a secure context": 10
-    },
-    "packages/web/routes_test.ts": {
-      "a name opens the page, and a path naming nothing is the 404 page": 6.7
     },
     "packages/workerd/upgrade_test.ts": {
       "/ws through this upgrade serves subscriptions": 1.2

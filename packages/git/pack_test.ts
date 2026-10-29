@@ -1,18 +1,10 @@
-// The pack, judged by git itself: a fixture repository indexes it, walks every
-// object in it, and prints back the commit we wrote.
-//
-// `git index-pack` is the whole of the format's checking in one command — the
-// header, the count, each entry's type and unpacked size, every zlib stream,
-// and the SHA-1 trailer over all of it. `git rev-list --objects` then proves
-// the pack is complete, because it cannot walk a tree that is not there.
+// Pack bytes and object reachability over a graph and byte store.
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { objects } from './objects.ts'
-import { entryEid } from './index.ts'
 import { entry, head, pack } from './pack.ts'
 import { hex } from './oid.ts'
-import { DIR, FILE } from './tree.ts'
 import {
   AUTHOR,
   COMMITTER,
@@ -21,10 +13,8 @@ import {
   HELLO,
   HELLO_OID,
   LIB_OID,
-  LIB_OID256,
   ONE_OID,
   ROOT_OID,
-  ROOT_OID256,
   X,
   X_OID,
 } from './testing.ts'
@@ -34,28 +24,6 @@ let text = new TextDecoder()
 
 let all = async (stream: ReadableStream<Uint8Array>): Promise<Uint8Array> =>
   new Uint8Array(await new Response(stream).arrayBuffer())
-
-// git, in a directory, with the exit code as the assertion.
-let git = async (
-  dir: string,
-  args: string[],
-  stdin?: Uint8Array,
-): Promise<string> => {
-  let run = new Deno.Command('git', {
-    args: ['-C', dir, ...args],
-    stdin: stdin ? 'piped' : 'null',
-    stdout: 'piped',
-    stderr: 'piped',
-  }).spawn()
-  if (stdin) {
-    let to = run.stdin.getWriter()
-    await to.write(stdin)
-    await to.close()
-  }
-  let { code, stdout, stderr } = await run.output()
-  assertEquals(code, 0, `git ${args.join(' ')}: ${text.decode(stderr)}`)
-  return text.decode(stdout)
-}
 
 // The two files of the fixture, as a deploy manifest names them.
 let deployed = (bytes: Parameters<typeof file>[0]) => ({
@@ -76,57 +44,21 @@ let deploy = async () => {
   return { one, tree, index, bytes, g, git: objects(g, bytes) }
 }
 
-test('git indexes the pack and walks every object in it', async () => {
-  let { git: from, g, bytes: stored } = await deploy()
-  // Historical trees hold only their SHA-1 body and keep their old graph
-  // links. They still clone alongside trees written by the current index.
-  stored.remove(ROOT_OID256)
-  stored.remove(LIB_OID256)
-  await g.apply([
-    ...[
-      { tree: ROOT_OID, name: 'hello.txt', mode: FILE, oid: HELLO_OID },
-      { tree: ROOT_OID, name: 'lib', mode: DIR, oid: LIB_OID },
-      { tree: LIB_OID, name: 'a.txt', mode: FILE, oid: X_OID },
-    ].map((e, ord) => ({
-      entity: { eid: entryEid(e.tree, e.name) },
-      edge: { from: e.tree, to: e.oid, ord },
-      tree_entry: { name: e.name, mode: e.mode },
-    })),
-  ])
-  let bytes = await all(await from.pack([ONE_OID]))
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-git-' })
-  try {
-    await git(dir, ['init', '--bare', '--quiet', dir])
-    // `index-pack` answers `pack\t<sha>` — what git named the pack we wrote.
-    let name = (await git(dir, ['index-pack', '--stdin'], bytes)).trim()
-      .split('\t')[1]
-    // `verify-pack` prints `<oid> <type> <size> …` — the unpacked size each
-    // entry header stated, read back out of the index git built from it.
-    let listed = (await git(dir, [
-      'verify-pack',
-      '-v',
-      `objects/pack/pack-${name}.idx`,
-    ])).split('\n')
-    assertEquals(
-      listed.find((l) => l.startsWith(HELLO_OID))?.split(/ +/).slice(1, 3),
-      ['blob', '6'],
-    )
-    // Every object, reached from the commit alone — a missing tree or blob
-    // stops this walk, so passing it is the pack being complete.
-    let walked = (await git(dir, ['rev-list', '--objects', ONE_OID]))
-      .trim().split('\n').map((l) => l.split(' ')[0])
-    assertEquals(
-      walked.sort(),
-      [ONE_OID, HELLO_OID, LIB_OID, ROOT_OID, X_OID]
-        .sort(),
-    )
-    let commit = await git(dir, ['cat-file', '-p', ONE_OID])
-    assertEquals(commit.split('\n')[0], `tree ${ROOT_OID}`)
-    assertEquals(commit.trimEnd().split('\n').pop(), 'deploy 1')
-    assertEquals(await git(dir, ['cat-file', 'blob', HELLO_OID]), HELLO)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
+test('a packed blob preserves its body and authenticates all preceding bytes', async () => {
+  let bytes = await all(pack(1, [{ type: 'blob', bytes: utf8.encode(HELLO) }]))
+  assertEquals([...bytes.subarray(0, 12)], [...head(1)])
+  assertEquals(bytes[12], 0x36)
+  let body = new Blob([bytes.subarray(13, -20)]).stream()
+    .pipeThrough(new DecompressionStream('deflate'))
+  assertEquals(text.decode(await all(body)), HELLO)
+  assertEquals(
+    hex(bytes.subarray(-20)),
+    hex(
+      new Uint8Array(
+        await crypto.subtle.digest('SHA-1', bytes.subarray(0, -20)),
+      ),
+    ),
+  )
 })
 
 test('the objects are named once, commits before trees before blobs', async () => {

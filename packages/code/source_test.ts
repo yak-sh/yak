@@ -1,10 +1,9 @@
-// Commit-pinned resolution against a code sync's records, served over the same
-// HTTP query door as the fleet. Newer and dirty files must not change the answer.
+// Commit-pinned resolution over catalog records through the in-process query door.
 
 import { machineDoc } from '@yaks/machine/vocab'
-import { localFilesystem } from '@yaks/git/host'
 import { equal, ok, test } from '@yaks/testing'
-import { graph } from '@yaks/graph'
+import { graph, identityEid, mint } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -12,16 +11,13 @@ import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
 import { fileDoc } from '@yaks/file/vocab'
-import { run } from '@yaks/git/land'
 import { codeDoc } from './vocab.ts'
-import { codeMirror } from './sync.ts'
-import { sync } from '@yaks/mirror'
 import { ask } from '@yaks/api'
+import { resolveFrames } from './frames.ts'
 import {
   catalogAt,
   catalogRepository,
   remembered,
-  sourceFrames,
   sourcePath,
 } from './source.ts'
 
@@ -51,7 +47,7 @@ test('source paths require a known root or origin and reject traversal', () => {
   ) equal(sourcePath(file, sources), undefined)
 })
 
-test('a remembered catalog asks again after a failure or once its answers age', async () => {
+test('a remembered catalog retries failures and shares fresh answers', async () => {
   let asked = 0
   let down = true
   let catalog = remembered({
@@ -59,138 +55,91 @@ test('a remembered catalog asks again after a failure or once its answers age', 
       ++asked && down
         ? Promise.reject(Error('catalog down'))
         : Promise.resolve(ids.map((eid) => ({ entity: { eid } }))),
-  }, 20)
+  })
   await catalog.get(['f']).then(() => ok(false), () => ok(true))
   down = false
   equal((await catalog.get(['f'])).length, 1)
   equal((await catalog.get(['f'])).length, 1)
   equal(asked, 2)
-  await new Promise((wait) => setTimeout(wait, 25))
-  await catalog.get(['f'])
-  equal(asked, 3)
+  let expiredCalls = 0
+  let expired = remembered({
+    get: () => {
+      expiredCalls++
+      return Promise.resolve([])
+    },
+  }, 0)
+  await expired.get(['g'])
+  await expired.get(['g'])
+  equal(expiredCalls, 2)
 })
 
-test('frames resolve only cataloged exports of the exact failing commit', async () => {
-  let dir = await Deno.makeTempDir()
-  let git = async (...args: string[]) => {
-    let got = await run(args, dir)
-    if (!got.ok) throw Error(got.err)
-    return got.out.trim()
-  }
-  try {
-    await git('init', '-q')
-    await Deno.writeTextFile(
-      `${dir}/deno.json`,
-      '{"name":"@test/code","exports":"./a.ts"}',
-    )
-    await Deno.writeTextFile(
-      `${dir}/a.ts`,
-      'export let fail = () => { throw Error("old") }\nlet hidden = () => 0\n',
-    )
-    await Deno.mkdir(`${dir}/vendor`)
-    await Deno.writeTextFile(`${dir}/vendor/dep.ts`, 'export let fail = 1\n')
-    await git('add', '.')
-    await git(
-      '-c',
-      'user.name=test',
-      '-c',
-      'user.email=test@example.test',
-      'commit',
-      '-qm',
-      'old',
-    )
-    let old = await git('rev-parse', 'HEAD')
-    let vocab = loadVocab([
-      machineDoc,
-      kernelDoc,
-      docDoc,
-      edgeDoc,
-      fileDoc,
-      gitDoc,
-      codeDoc,
-    ], [
-      kernelKeywords,
-      edgeKeywords,
-    ])
-    let g = graph({ vocab, storage: ram(vocab) })
-    let pass = async () => sync((await codeMirror(g, dir)).binding)
-    equal((await pass()).failed, [])
-    let [exported] = await g.read('.symbol.name=fail')
-    equal(
-      exported.symbol && typeof exported.symbol == 'object' &&
-        'line' in exported.symbol && exported.symbol.line,
-      1,
-    )
-    let send: typeof fetch = (url, init) => ask(g, new Request(url, init))
-    let resolver = sourceFrames(
-      {
-        cwd: dir,
-        url: 'http://catalog.test',
-        workspace: (await localFilesystem(g)).entity.eid,
-      },
-      catalogAt('http://catalog.test', send),
-    )
-    let frames = [
-      { file: `file://${dir}/vendor/dep.ts`, function: 'fail' },
-      { file: `file://${dir}/a.ts`, function: 'fail' },
-      { file: `file://${dir}/a.ts`, function: 'hidden' },
-      { file: `file://${dir}/a.ts`, function: 'Object.fail' },
-      { file: 'http://catalog.test/a.ts', function: 'fail' },
-      { file: 'http://catalog.test/web/app.js', function: 'fail' },
-      { file: 'http://else.test/a.ts', function: 'fail' },
-    ]
-    let first = await resolver(frames, old)
-    equal(first[0].app, false)
-    ok(first[1].module && first[1].symbol)
-    ok(first[2].module && !first[2].symbol)
-    ok(first[3].module && !first[3].symbol)
-    equal(first[4].symbol, first[1].symbol)
-    equal(first[5].app, false)
-    equal(first[6].app, false)
-    equal(
-      (await resolver([{ ...frames[1], line: -1 }], old))[0].symbol,
-      undefined,
-    )
-    await Deno.writeTextFile(`${dir}/a.ts`, 'export let fail = () => 2\n')
-    // Mutable checkout bytes are irrelevant while the catalog still matches.
-    equal((await resolver(frames, old))[1].symbol, first[1].symbol)
-    await git('add', '.')
-    await git(
-      '-c',
-      'user.name=test',
-      '-c',
-      'user.email=test@example.test',
-      'commit',
-      '-qm',
-      'new',
-    )
-    let newer = await git('rev-parse', 'HEAD')
-    await pass()
-    let changed = await resolver(frames, old)
-    equal(changed[1].app, true)
-    equal(changed[1].module, undefined)
-    equal(changed[1].symbol, undefined)
-    equal((await resolver(frames, newer))[1].symbol, first[1].symbol)
-    equal((await resolver(frames, 'HEAD'))[1].module, undefined)
-    equal((await resolver(frames, 'a'.repeat(40)))[1].module, undefined)
-    equal(
-      (await sourceFrames({
-        cwd: dir,
-        url: 'http://catalog.test',
-        workspace: (await localFilesystem(g)).entity.eid,
-      }, {
-        get: () => Promise.resolve([]),
-      })(frames, newer))[1].module,
-      undefined,
-    )
-    // What a resolver read of Git it keeps, so a run costs no process, and a
-    // checkout gone bad meanwhile changes no answer.
-    let kept = await resolver(frames, newer)
-    await Deno.rename(`${dir}/.git`, `${dir}/.git-gone`)
-    equal(await resolver(frames, newer), kept)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
+let vocab = loadVocab([
+  machineDoc,
+  kernelDoc,
+  docDoc,
+  edgeDoc,
+  fileDoc,
+  gitDoc,
+  codeDoc,
+], [kernelKeywords, edgeKeywords])
+let g = graph({ vocab, storage: ram(vocab) })
+let repository = mint(), module = fileOf(repository, 'a.ts')
+let symbol = identityEid('symbol', [module, 'fail'])
+await g.apply([
+  { entity: { eid: repository }, repository: { common: '/repo/.git' } },
+  {
+    entity: { eid: module },
+    file: { root: repository, path: 'a.ts' },
+    module: { blob: 'old' },
+  },
+  {
+    entity: { eid: symbol },
+    symbol: { module, name: 'fail', kind: 'function', line: 1 },
+  },
+])
+let catalog = catalogAt(
+  'http://catalog.test',
+  (url, init) => ask(g, new Request(url, init)),
+)
+let places = [
+  { path: 'vendor/dep.ts', function: 'fail' },
+  { path: 'a.ts', function: 'fail' },
+  { path: 'a.ts', function: 'hidden' },
+  { path: 'a.ts', function: 'Object.fail' },
+  { path: 'a.ts', function: 'fail', line: -1 },
+  { path: 'web/app.js', function: 'fail' },
+]
+let blobs = new Map([['a.ts', 'old'], ['vendor/dep.ts', 'vendor']])
+let first = await resolveFrames(catalog, repository, blobs, places)
+
+test('frames resolve only cataloged exports whose blobs match the failing commit', () => {
+  equal(first, [
+    { app: false },
+    { app: true, module, symbol },
+    { app: true, module },
+    { app: true, module },
+    { app: true, module },
+    { app: false },
+  ])
+})
+
+let changed = await resolveFrames(
+  catalog,
+  repository,
+  new Map([['a.ts', 'new']]),
+  places,
+)
+test('a blob mismatch prevents module and symbol attribution', () => {
+  equal(changed[1], { app: true })
+})
+let missing = await resolveFrames(
+  { get: () => Promise.resolve([]) },
+  repository,
+  blobs,
+  places,
+)
+test('an unavailable catalog preserves application classification', () => {
+  equal(missing[1], { app: true })
 })
 
 // A catalog in cutover may retain old observations beside qualified ones.

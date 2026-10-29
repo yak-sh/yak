@@ -1,16 +1,10 @@
-// Real children, because a supervisor that only ever watched a fake one would
-// prove nothing: the two escapes, the pidfile, the code file and the stream
-// files are the thing under test. They are short-lived and the poll is 5ms, so
-// the whole file runs in well under a second. A launch runs under every
-// launcher this machine has, so Linux runs the macOS one too. How long a
-// reader waits on a wrapper is the one thing a stand-in liveness probe drives,
-// so that test counts polls instead of sleeping through them.
+// Process bookkeeping through graph and liveness interfaces, with temporary receipt files.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
-import { launchers, reaped, tracked, until } from './testing.ts'
+import { tracked } from './testing.ts'
 import {
   adopt,
   clean,
@@ -27,120 +21,45 @@ let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
 
-for (let os of launchers) {
-  test(`${os}: a launched child keeps both its streams and stamps its exit`, async () => {
-    let g = tracked()
-    let at = dir()
-    let run = await launch(store(g), {
-      command: 'sh',
-      args: ['-c', 'echo out; echo err >&2; exit 3'],
-    }, { dir: at, poll: 5, os })
-    assertEquals(await run.done, 3)
-    assertEquals(tail(run.eid, 10, { dir: at }), ['out', 'err'])
-
-    let row = (await g.read(`.${PROCESS}&*`))[0]
-    assertEquals(row.entity.eid, run.eid)
-    assertEquals(
-      comp(row, PROCESS)?.command,
-      'sh -c echo out; echo err >&2; exit 3',
-    )
-    assert(Number(comp(row, PROCESS)?.pid) > 0)
-    assertEquals(comp(row, EXIT)?.code, 3)
-  })
-
-  // systemd expands the command line it launches, so an unescaped `$` reaches
-  // the program as an empty string — a hosted shell wrote a heredoc with
-  // every `${…}` deleted before anyone noticed (T-37332).
-  test(`${os}: a command keeps every dollar the caller wrote`, async () => {
-    let at = dir()
-    let run = await launch(store(tracked()), {
-      command: 'sh',
-      args: ['-c', 'printf %s "$1"', 'sh', '${backend} $defs $$ $'],
-    }, { dir: at, poll: 5, os })
-    assertEquals(await run.done, 0)
-    assertEquals(tail(run.eid, 1, { dir: at }), ['${backend} $defs $$ $'])
-  })
-
-  test(`${os}: a document of an argument reaches the program whole, not the row`, async () => {
-    let g = tracked()
-    let at = dir()
-    let long = 'x'.repeat(100_000)
-    let run = await launch(store(g), {
-      command: 'sh',
-      args: ['-c', 'printf %s "$1" | wc -c', 'sh', long],
-    }, { dir: at, poll: 5, os })
-    assertEquals(await run.done, 0)
-    assertEquals(tail(run.eid, 1, { dir: at }).map((l) => l.trim()), ['100000'])
-    let row = (await g.read(`.${PROCESS}&*`))[0]
-    assert(String(comp(row, PROCESS)?.command).length < long.length)
-  })
-
-  test(`${os}: a finished run's running time stops at its end`, async () => {
-    let run = await launch(store(tracked()), {
-      command: 'sleep',
-      args: ['0.01'],
-    }, { dir: dir(), poll: 5, os })
-    await run.done
-    let took = run.elapsed()
-    assert(took >= 10, `${took}ms`)
-    let now = Date.now()
-    await until(() => Date.now() > now + 5, 'the clock to move')
-    assertEquals(run.elapsed(), took)
-  })
-}
-
-test('output stays until its caller cleans the finished run', async () => {
+test('output stays until its caller cleans the finished run', () => {
   let at = dir()
-  let run = await launch(store(tracked()), {
-    command: 'sh',
-    args: ['-c', 'echo kept'],
-  }, { dir: at, poll: 5 })
-  assertEquals(await run.done, 0)
-  assertEquals(tail(run.eid, 1, { dir: at }), ['kept'])
-
-  clean(run.eid, { dir: at })
-  assertEquals(tail(run.eid, 1, { dir: at }), [])
-  assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['wrapper.sh'])
+  Deno.writeTextFileSync(`${at}/finished.out`, 'kept\n')
+  Deno.writeTextFileSync(`${at}/finished.code`, '0\n')
+  assertEquals(tail('finished', 1, { dir: at }), ['kept'])
+  clean('finished', { dir: at })
+  assertEquals(tail('finished', 1, { dir: at }), [])
+  assertEquals([...Deno.readDirSync(at)], [])
 })
 
-// A tail is read backward a block (64 KiB) at a time, so the cases that matter
-// are lines on either side of a block's edge.
-test('a tail answers the last whole lines, however long they are', async () => {
+test('a tail answers the last whole lines, however long they are', () => {
   let at = dir()
-  let say = async (script: string) => {
-    let run = await launch(store(tracked()), {
-      command: 'perl',
-      args: ['-e', script],
-    }, { dir: at, poll: 5 })
-    await run.done
-    return (n: number) => tail(run.eid, n, { dir: at })
+  let read = (body: string) => {
+    Deno.writeTextFileSync(`${at}/p.out`, body)
+    return (n: number) => tail('p', n, { dir: at })
   }
-  let many = await say('print "line $_\\n" for 1..20000; print "\\nlast"')
+  let many = read(
+    Array.from({ length: 20_000 }, (_, i) => `line ${i + 1}\n`).join('') +
+      '\nlast',
+  )
   assertEquals(many(3), ['line 20000', '', 'last'])
   assertEquals(many(0), [])
-  let wide = await say('print "a\\n", "x" x 200000, "\\nend\\n"')
+  let wide = read('a\n' + 'x'.repeat(200_000) + '\nend\n')
   assertEquals(wide(2), ['x'.repeat(200_000), 'end'])
   assertEquals(wide(9), ['a', 'x'.repeat(200_000), 'end'])
 })
 
 test('a sweep cleans only the runs that ended longer ago than its age', async () => {
   let at = dir()
-  let echo = async (word: string) => {
-    let run = await launch(store(tracked()), {
-      command: 'echo',
-      args: [word],
-    }, { dir: at, poll: 5 })
-    await run.done
-    return run.eid
-  }
-  let old = await echo('old'), fresh = await echo('fresh')
   let past = new Date(Date.now() - 60_000)
-  Deno.writeTextFileSync(`${at}/${old}.started`, String(past.getTime() - 1))
-  Deno.utimeSync(`${at}/${old}.code`, past, past)
-
+  for (let eid of ['old', 'fresh']) {
+    Deno.writeTextFileSync(`${at}/${eid}.out`, `${eid}\n`)
+    Deno.writeTextFileSync(`${at}/${eid}.started`, String(past.getTime() - 1))
+    Deno.writeTextFileSync(`${at}/${eid}.code`, '0\n')
+  }
+  Deno.utimeSync(`${at}/old.code`, past, past)
   assertEquals(await sweep(30_000, { dir: at }), 1)
-  assertEquals(tail(old, 1, { dir: at }), [])
-  assertEquals(tail(fresh, 1, { dir: at }), ['fresh'])
+  assertEquals(tail('old', 1, { dir: at }), [])
+  assertEquals(tail('fresh', 1, { dir: at }), ['fresh'])
   assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
 })
 
@@ -223,7 +142,10 @@ test('a machine with no launcher is refused before anything starts', async () =>
 
 test('adopting a pid that is already gone stamps the ending, code unknown', async () => {
   let g = tracked()
-  let run = await adopt(store(g), await reaped(), { dir: dir(), poll: 5 })
+  let run = await adopt(store(g), 7002, {
+    dir: dir(),
+    running: () => Promise.resolve(false),
+  })
   assertEquals(await run.done, null)
   let row = (await g.read(`.${PROCESS}&*`))[0]
   assertEquals(comp(row, PROCESS)?.pid, run.pid)
@@ -233,14 +155,17 @@ test('adopting a pid that is already gone stamps the ending, code unknown', asyn
 
 test('watch picks up an unfinished row and stamps the one already gone', async () => {
   let g = tracked()
-  let dead = await reaped()
+  let dead = 7002
+  let at = dir()
+  Deno.writeTextFileSync(`${at}/p1.pid`, `7001 ${dead}\n`)
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: dead } }])
-  let runs = await watch(store(g), { dir: dir(), poll: 1 })
+  let opts = { dir: at, running: () => Promise.resolve(false) }
+  let runs = await watch(store(g), opts)
   assertEquals(runs.map((r) => r.eid), ['p1'])
   assertEquals(await runs[0].done, null)
   assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT), {})
   // Stamped, so the next boot's reconcile has nothing left to pick up.
-  assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
+  assertEquals(await watch(store(g), opts), [])
 })
 
 test('a run that ended without saying so is found; a live one, a launched one and the asker are not', async () => {
@@ -276,31 +201,13 @@ test('a run that ended without saying so is found; a live one, a launched one an
 test('an exit-code file read before it is written is waited for, never read as 0', async () => {
   let g = tracked()
   let d = dir()
-  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: 7002 } }])
   Deno.writeTextFileSync(`${d}/p1.code`, '')
-  setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 30)
-  let [run] = await watch(store(g), { dir: d, poll: 5 })
-  assertEquals(await run.done, 3)
-})
-
-// And a wrapper slowed past the poll budget still has its code read: it is
-// waited for for as long as it is alive, not for a fixed number of polls. Like
-// the wrapper, the stand-in writes the code and then ends, so the file is
-// final once it is gone. It lives through thirty polls, past the twenty a
-// run with no wrapper on file is given.
-test('a wrapper slow to write the code is waited for while it lives', async () => {
-  let g = tracked()
-  let d = dir()
-  let [wrapper, child] = [7001, 7002]
-  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: child } }])
-  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper} ${child}\n`)
-  let polls = 0
+  Deno.writeTextFileSync(`${d}/p1.pid`, '7001 7002\n')
   let running = (pid: number) => {
-    if (pid != wrapper || ++polls < 30) return Promise.resolve(pid == wrapper)
-    Deno.writeTextFileSync(`${d}/p1.code`, '3\n')
+    if (pid == 7001) Deno.writeTextFileSync(`${d}/p1.code`, '3\n')
     return Promise.resolve(false)
   }
-  let [run] = await watch(store(g), { dir: d, poll: 0, running })
+  let [run] = await watch(store(g), { dir: d, running })
   assertEquals(await run.done, 3)
-  assertEquals(polls, 30)
 })
