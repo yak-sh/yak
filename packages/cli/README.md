@@ -881,6 +881,9 @@ them fails, so each carries `-` (`ExecStopPost=-/usr/bin/rm -f …`). The config
 must name the spool consumed by tracker intake. Reload the user manager after
 installing the drop-ins; use `yak restart` for a ready-first handover.
 
+`bin/io-limits` runs the servers in `yak.slice` and caps the disk for everything
+else on the box, so bulk work cannot slow their reads.
+
 ```sh
 # Inside a systemd service's [Service] section:
 ExecStopPost=%h/.deno/bin/yak unit failure %n --config %h/.yak/yak.json

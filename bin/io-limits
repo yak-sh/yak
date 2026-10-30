@@ -1,0 +1,48 @@
+#!/bin/sh
+# Keep the servers' reads fast whatever bulk work runs beside them, by capping
+# the disk for everything but the servers (T-133694):
+#
+#   bin/io-limits
+#
+# Run it once per box, and again to change a number. It needs sudo.
+#
+# Any process an agent or cron starts lands in a scope under app.slice or in
+# cron.service by default, so a copy, restore or download is capped without asking
+# for it. The yak-* servers run in yak.slice, uncapped.
+#
+# Two caps, because one is not enough. The slice's bounds the sum, and so the
+# servers' reads. Each job's is lower, so one job cannot fill the slice: at a shared
+# 40 MB/s, an fsync beside a bulk job took 2.5 s and a 10 s test run 6 minutes. With
+# two bulk jobs at 30 under a slice at 80, that fsync takes 10 ms.
+#
+# Measured on this box, an LXC volume on LVM thin over a SATA SSD: a cold page read
+# from the servers' slice averages 2 ms through a whole copy beside another bulk
+# job, worst page 175 ms, against 0.25 ms idle. Uncapped writes took it to 5-22 ms. IO pressure stops being a useful
+# reading here, since a job waiting at its cap counts as pressure.
+#
+# Only a bandwidth limit does this. IOWeight needs BFQ or io.cost, and this box
+# has mq-deadline and no access to the host's root cgroup. A limit on `/` catches
+# buffered writes too, since ext4 charges writeback to the cgroup that dirtied the
+# page. The user manager re-executes to see the io controller; its units and
+# processes keep running. The servers move to yak.slice at their next `yak restart`.
+set -eu
+all="IOWriteBandwidthMax=/ 80M
+IOReadBandwidthMax=/ 150M"
+job="IOWriteBandwidthMax=/ 30M
+IOReadBandwidthMax=/ 100M"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+user="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+
+sudo mkdir -p /etc/systemd/system/user@.service.d /etc/systemd/system/cron.service.d
+printf '[Service]\nDelegate=pids memory cpu io\n' |
+  sudo tee /etc/systemd/system/user@.service.d/io.conf >/dev/null
+printf '[Service]\n%s\n' "$job" |
+  sudo tee /etc/systemd/system/cron.service.d/io.conf >/dev/null
+sudo systemctl daemon-reload
+systemctl --user daemon-reexec
+
+mkdir -p "$user/app.slice.d" "$user/scope.d" "$user/yak-.service.d"
+printf '[Slice]\n%s\n' "$all" >"$user/app.slice.d/io.conf"
+printf '[Scope]\n%s\n' "$job" >"$user/scope.d/io.conf"
+printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
+systemctl --user daemon-reload

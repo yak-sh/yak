@@ -33,17 +33,16 @@
 # A page copy by bin/copy-db, not VACUUM INTO. VACUUM INTO rebuilds every table
 # and index: on the 10 GB graph it had written 3 GB in 11 minutes, keeping the
 # WAL from resetting the whole time. A copy holds its read transaction for about
-# 5 minutes, at the pace reads on the box survive (T-133694). quick_check and the
+# 5 minutes, at the box's disk cap (bin/io-limits). quick_check and the
 # counts then read the copy, however long they take, with nothing held on the
 # live database, and the copy is what gets compressed, so the night is exactly
 # the database that passed. The disk holds one uncompressed copy at a time. A
 # page copy also keeps damage where quick_check finds it: VACUUM INTO rebuilt a
 # torn freelist into a clean snapshot (T-34578) and hid it for two days.
 #
-# The whole run is memory capped (bin/capped, from bin/backup-run.ts). Compressing
-# is paced as well, since its writes reach the same disk: 25% of a CPU writes the
-# graph's compressed copy at about 11 MB/s, under the copy's 35, and takes about
-# 4 minutes on 10 GB. A whole night to a local remote took 21 minutes.
+# The whole run is memory capped (bin/capped, from bin/backup-run.ts), and its disk
+# is capped with the rest of the box's bulk work (bin/io-limits). A whole night to
+# a local remote took 21 minutes.
 #
 # Cron-safe: fallback tool paths, no interactivity, every failure exits nonzero,
 # which the supervisor reports to the tracker.
@@ -165,7 +164,7 @@ snapshot() {
   [ "$(sq -readonly "$copy" "PRAGMA quick_check")" = ok ] ||
     die "$1 failed quick_check: the database is damaged"
   counts "$1" "$copy" >> "$work/counts"
-  kept "$z" "$here/capped" -p CPUQuota=25% zstd -q -T0 -c "$copy" ||
+  kept "$z" "$here/capped" zstd -q -T0 -c "$copy" ||
     die "$1: compressing the copy failed"
   [ "$(zstd -dcq "$z" | wc -c)" -eq "$(stat -c %s "$copy")" ] ||
     die "$1: the compressed copy is missing pages"

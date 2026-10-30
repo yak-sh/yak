@@ -74,11 +74,12 @@ then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
 Prove it on a copy first. `bin/copy-db <scratch>/copy.db` copies the pages as
-one read transaction saw them, in a scope with its memory and pace capped so the
-rest of the box keeps its page cache and its disk; about 5 minutes for 10 GB, so
-background it. Copy this way and not with `sqlite3 .backup` or
-`VACUUM INTO` directly: both run uncapped, and `VACUUM INTO` writes a compacted
-copy, not the pages as they stood. Point a
+one read transaction saw them, in a scope with its memory capped so the rest of
+the box keeps its page cache. Everything but the servers shares one disk cap
+(`bin/io-limits`), so this takes about 5 minutes for 10 GB alone and longer
+beside other bulk work; background it. Copy this way and not with `sqlite3 .backup` or
+`VACUUM INTO` directly: `.backup` has no memory cap, and `VACUUM INTO` writes a
+compacted copy, not the pages as they stood. Point a
 scratch config's `db` at the copy, run the script over it in one process (no
 server; `end-to-end-checks` has the doors), compare counts before and after,
 and run it again to show the second run changes nothing. A script that parses sqlite3's output names its
