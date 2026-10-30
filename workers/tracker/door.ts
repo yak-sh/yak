@@ -1,6 +1,7 @@
 // Authenticated tracker RPC is narrow: readers never get a general graph
 // writer. Intake and bug marks each need their own signed capability.
 
+import { regroup } from '@yaks/tracker/merge'
 import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
@@ -27,6 +28,12 @@ async (request: Request): Promise<Response> => {
   if (!access) return json({ error: 'tracker scope denied' }, 403)
   let url = new URL(request.url)
   let path = url.pathname
+  if (request.method == 'POST' && path == '/regroup') {
+    if (!access.admin || access.mark !== true) {
+      return json({ error: 'tracker regroup denied' }, 403)
+    }
+    return json(await regroup(tracker.graph))
+  }
   if (request.method == 'POST' && path == '/errors') {
     if (scope != platform || !access.admin || access.ingest !== true) {
       return json({ error: 'tracker intake denied' }, 403)

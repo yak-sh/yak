@@ -21,6 +21,7 @@ import { ingest } from '@yaks/tracker/intake'
 import { timingDoc } from '@yaks/timing/vocab'
 import { caught, origin, type Sink } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
+import { survivor } from '@yaks/tracker/merge'
 import { type Explanation, resolutions } from '@yaks/tracker/resolution'
 import {
   after,
@@ -242,10 +243,10 @@ export let store = (storage: Storage, config: Config) => {
   ): Promise<void> => {
     // A fixer's mark has no tool: only heal writes it, through this door.
     if (name == 'taken') {
-      let [row] = await g.get([bug])
+      let row = await survivor(g, bug)
       if (!row?.bug) throw new CallError('bug', `not a bug: ${bug}`)
       return void await g.apply([{
-        entity: { eid: bug },
+        entity: { eid: row.entity.eid },
         taken: said.task ? { task: said.task } : {},
       }], { trusted: true })
     }

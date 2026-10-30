@@ -19,7 +19,8 @@
     "./remote": "./remote.ts",
     "./poll": "./poll.ts",
     "./fixtime": "./fixtime.ts",
-    "./brief": "./brief.ts"
+    "./brief": "./brief.ts",
+    "./merge": "./merge.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",

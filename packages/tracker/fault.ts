@@ -3,6 +3,14 @@
 import type { Bundle } from '@yaks/graph'
 import { comp, str, title } from './model.ts'
 
+// esbuild content hashes name a release, never a failure site. Keep the
+// module name and extension, including the path when one is present.
+export let stablePlace = (text: string): string =>
+  text.replace(
+    /([\w.-]+?)(?:-[\w-]{8})+(\.(?:[cm]?js|css))(?=[:#)\s?]|$)/g,
+    '$1$2',
+  )
+
 /**
  * A message with its volatile parts replaced by `#`.
  *
@@ -14,7 +22,7 @@ import { comp, str, title } from './model.ts'
  * ```
  */
 export let normalize = (text: string): string =>
-  text
+  stablePlace(text)
     .toLowerCase()
     .replace(
       /\b(sub|cus|cs|pi|si|in|evt|pm|seti|ch|acct|price|prod)_(?:(?:test|live)_)?[a-z0-9]{12,}\b/g,
@@ -71,7 +79,7 @@ export let faultKey = (
 
 /** Reporting and grouping use the same explicit or derived fault. */
 export let faultOf = (row: Bundle): string =>
-  str(comp(row, 'error').fault) || faultKey(
+  stablePlace(str(comp(row, 'error').fault)) || faultKey(
     str(comp(row, 'during').kind),
     title(row),
     str(comp(row, 'exception').stack),

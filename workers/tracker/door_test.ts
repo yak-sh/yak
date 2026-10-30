@@ -353,3 +353,24 @@ for (let path of ['/resolve', '/archive', '/take', '/reopen']) {
 test('bug marking tickets cannot submit error captures', async () => {
   equal((await markDoor(request('/errors', marker, []))).status, 403)
 })
+
+let repairDoor = await (async () => {
+  let g = fixture()
+  let route = door(g, platform, secret)
+  let reader = await ticket(platform, true)
+  let writer = await sign({
+    scope: platform,
+    person: 'repair',
+    admin: true,
+    mark: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
+  return {
+    denied: (await route(request('/regroup', reader, {}))).status,
+    allowed: await (await route(request('/regroup', writer, {}))).json(),
+  }
+})()
+test('regroup is a narrow admin mark operation, never a reader write', () => {
+  equal(repairDoor.denied, 403)
+  equal(repairDoor.allowed, { bugs: 0, merged: 0 })
+})

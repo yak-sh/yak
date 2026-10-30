@@ -21,10 +21,11 @@ import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
 import { explanation } from './resolution.ts'
+import { survivor } from './merge.ts'
 import { occurring } from './reading.ts'
 
 let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
-  after(g.get([eid]), ([row]) => {
+  after(survivor(g, eid), (row) => {
     if (!row?.bug) throw new CallError('bug', `not a bug: ${eid}`)
     return row
   })
@@ -50,7 +51,7 @@ export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
     ([eid]) =>
       after(one(g, eid), (row) =>
         after(
-          g.read(occurring(eid)),
+          g.read(occurring(row.entity.eid)),
           (occurrences) => {
             let requests = [
               ...new Set(
@@ -89,9 +90,12 @@ export let runs = (
     async (call: Bundle, g: Graph): Promise<Bundle[]> => {
       let args = argsOf(call)
       let remote = args.source == 'yaks.app'
-      let [eid] = remote
+      let [address] = remote
         ? [str(args.bug)]
         : await referenced(g, [str(args.bug)], 'bug')
+      let eid = remote
+        ? address
+        : (await survivor(g, address))?.entity.eid ?? address
       let [bug] = remote ? [] : await g.read(and(
         eq('entity.eid', eid),
         present('bug'),

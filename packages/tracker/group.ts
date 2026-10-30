@@ -7,7 +7,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
 import { absent, and, eq, fields, limit, present, want } from '@yaks/query'
-import { faultOf } from './fault.ts'
+import { faultOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
 
@@ -72,7 +72,7 @@ let placed = (frames: Frame[]): Comp => {
   let top = frames.find((f) => f.app) ?? frames[0]
   return culprit ? { culprit, spot: null } : top
     ? {
-      spot: `${top.file}${top.line ? `:${top.line}` : ''}${
+      spot: `${stablePlace(top.file)}${top.line ? `:${top.line}` : ''}${
         top.function ? ` ${top.function}` : ''
       }`,
     }

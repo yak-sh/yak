@@ -532,6 +532,18 @@
         "exception"
       ],
       "target": ".error .exception .error.bug"
+    },
+    "merged": {
+      "component": true,
+      "type": "object",
+      "description": "An entity consolidated into another; its issued address still names the survivor.",
+      "properties": {
+        "into": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        }
+      }
     }
   }
 }

@@ -82,6 +82,12 @@ reads only those again, a page of ids at a time
 the moves reach, is answered `{"moved": null}`, and the reader reads whole. So a
 change to one bug costs each reader that bug, not every bug.
 
+`POST /regroup` requires an admin ticket with `mark: true`. It repairs existing
+bundle-hash fault keys in that scope, merging equivalent groups atomically. The
+survivor keeps its lifecycle and notification; duplicate addresses still resolve
+to it. A repeated pass makes no changes. A group changed concurrently is left
+for the next pass.
+
 `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns

@@ -281,6 +281,12 @@ thrown in an answer or transcript entry. Tracker extends it with `stack`,
 original failure separately; recording a failed call's history never creates
 another occurrence.
 
+Bundle content hashes are omitted from fault keys and the bug's fallback spot,
+including nested esbuild bundle names. Captured stacks keep their original
+bytes. `./merge` consolidates older hash-split groups, preserving historical
+counts and occurrences. Duplicate identities carry `merged{into}`; bug reads and
+marks follow them to the survivor, so issued links keep working.
+
 Groups made solely from imported historical occurrences inherit a lifecycle mark
 only when every occurrence carries it, keeping the latest historical stamp.
 Importing an unmarked occurrence clears an inherited mark. Existing reporter

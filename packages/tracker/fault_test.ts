@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { faultKey, normalize } from './fault.ts'
+import { faultKey, normalize, stablePlace } from './fault.ts'
 import { capture } from './report.ts'
 import { grouped } from './group.ts'
 import { title } from './model.ts'
@@ -103,4 +103,35 @@ test('captured provider failures group under one bug without losing their messag
     equal(bugs[0].entity.eid, bugs[1].entity.eid)
     equal(rows.map(title), [a, b])
   }
+})
+
+let bundled = (hash: string, fn = 'elapsed') => {
+  let error = Error('Subrequest depth limit exceeded')
+  error.stack =
+    `Error: ${error.message}\n    at async ${fn} (kernel-${hash}.js:82:12)`
+  return capture(error, { sink: () => {}, during: { kind: 'request' } })[0]
+}
+test('bundle content hashes keep the same bug and stable place across deploys', () => {
+  let groups = ['CMPk0h6p', 'DU4oOsHq', 'B9ofLTzq'].map((hash) => {
+    let row = bundled(hash)
+    row.exception = {
+      ...row.exception as object,
+      frames: [{ file: `kernel-${hash}.js`, line: 82, function: 'elapsed' }],
+    }
+    return grouped(row, undefined, [])[1]
+  })
+  equal(new Set(groups.map((r) => r.entity.eid)).size, 1)
+  equal(
+    groups.map((r) => (r.bug as Record<string, unknown>).spot),
+    Array(3).fill('kernel.js:82 elapsed'),
+  )
+  ok(
+    groups[0].entity.eid !=
+      grouped(bundled('CMPk0h6p', 'other'), undefined, [])[1].entity.eid,
+  )
+})
+
+test('nested build hashes disappear while module and source names remain', () => {
+  equal(stablePlace('mcp-UYAXGUQF-BwweQTu3.js:90 misfit'), 'mcp.js:90 misfit')
+  equal(stablePlace('/src/long-module.ts:20 run'), '/src/long-module.ts:20 run')
 })
