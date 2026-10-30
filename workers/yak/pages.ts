@@ -609,6 +609,9 @@ export type DeskPage = {
   connections?: Connections
   /** who is in the space and its apps, and who has yet to accept */
   people?: People
+  /** what was typed into the invitation form, when the invitation was
+   * refused and the page is drawn again */
+  invite?: { email: string; app: string; role: string; note: string }
   /** the apps of other people's spaces this person may open, each with the
    * slug of the space it lives in */
   shared?: (Listed & { space: string })[]
@@ -875,9 +878,12 @@ let trash = (at: DeskPage) =>
     }</ul></section>`
     : '<section class="Empty"><h2>Trash is empty</h2><p>A deleted app waits here for 30 days.</p></section>'
 
-// A sentence out of a lowercase line: what a failed seal wrote beside it.
+// A sentence out of a lowercase line: what a failed seal wrote beside it. An
+// email address that opens it stays as it was typed.
+/// sentence('no app x in y') -> 'No app x in y.'
+/// sentence('ana@x.test is you') -> 'ana@x.test is you.'
 export let sentence = (text: string) =>
-  text.charAt(0).toUpperCase() + text.slice(1) +
+  (/^\S+@/.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1)) +
   (/[.!?]$/.test(text) ? '' : '.')
 
 // How a connection stands, as its head says it.
@@ -1395,10 +1401,60 @@ let connections = (at: DeskPage, env: Host) => {
   }`
 }
 
+let option = (value: string, label: string, chosen: boolean) =>
+  `<option value="${esc(value)}"${chosen ? ' selected' : ''}>${label}</option>`
+
+// Inviting someone (apps.ts `saved`, which asks member_add): their address,
+// the whole space or one app, what they may do there, and a note for the
+// letter if the owner wants one.
+let inviting = (at: DeskPage) => {
+  let was = at.invite ?? { email: '', app: '', role: '', note: '' }
+  return `<section class="Card">${heading('Invite someone')}
+<form class="Form" method="post" action="${managePath('people', at.pick)}">${
+    labeled(
+      'invite-email',
+      'Email address',
+      `<input class="Field" id="invite-email" name="invite" type="email" required autocomplete="off" spellcheck="false" placeholder="friend@example.com" value="${
+        esc(was.email)
+      }">`,
+    )
+  }${
+    labeled(
+      'invite-app',
+      'Invite them to',
+      `<select class="Field" id="invite-app" name="app">${
+        option('', 'Every app here', !was.app)
+      }${
+        at.apps.map((a) =>
+          option(a.slug, esc(a.title || a.slug), was.app == a.slug)
+        ).join('')
+      }</select>`,
+      'Invited to one app, they can open that app and nothing else here.',
+    )
+  }${
+    labeled(
+      'invite-role',
+      'They can',
+      `<select class="Field" id="invite-role" name="role">${
+        option('editor', 'Change things', was.role != 'viewer')
+      }${option('viewer', 'Only look', was.role == 'viewer')}</select>`,
+    )
+  }${
+    labeled(
+      'invite-note',
+      'A note for the email <span class="Form_Optional">(optional)</span>',
+      `<textarea class="Field" id="invite-note" name="note" rows="2" maxlength="500">${
+        esc(was.note)
+      }</textarea>`,
+    )
+  }<div class="Form_Actions"><button class="Button" type="submit">Send invitation</button></div></form></section>`
+}
+
 // Who is in the space and in each of its apps, and who has yet to accept
-// (people.ts): a list for the space and one for each app anybody is a guest of
-// or invited to, each row drawn by its renderer (render/held.ts), and beside
-// an invitation the button that sends its letter again (apps.ts `saved`).
+// (people.ts): the way to invite someone, then a list for the space and one
+// for each app anybody is a guest of or invited to, each row drawn by its
+// renderer (render/held.ts), and beside an invitation the button that sends
+// its letter again (apps.ts `saved`).
 export let people = (at: DeskPage) => {
   let r = at.people
   if (!r) return ''
@@ -1422,10 +1478,12 @@ export let people = (at: DeskPage) => {
   let apps = r.apps.map((a) =>
     list(`${a.app.title} · this app only`, [...a.guests, ...a.invited])
   ).join('')
-  return `${list('Members · every app', [...r.members, ...r.invited])}${apps}${
+  return `${inviting(at)}${
+    list('Members · every app', [...r.members, ...r.invited])
+  }${apps}${
     r.members.length < 2 && !r.invited.length && !apps
-      ? '<section class="Empty"><h2>Just you so far</h2><p>Ask your assistant to invite someone by their email address, to one app or to every app here.</p></section>'
-      : '<p class="Form_Hint">To invite someone else, or take someone off, ask your assistant.</p>'
+      ? ''
+      : '<p class="Form_Hint">To take someone off, ask your assistant.</p>'
   }`
 }
 

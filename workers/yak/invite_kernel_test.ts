@@ -162,6 +162,64 @@ test('an invitation reaches nobody until its person accepts it', async () => {
   }
 })
 
+// A dashboard form, posted the way its browser posts it.
+let post = (
+  k: Kernel,
+  cookie: string,
+  view: string,
+  fields: Record<string, string>,
+) =>
+  k.at(k.host, `/manage/${view}`, {
+    method: 'POST',
+    headers: { cookie },
+    body: new URLSearchParams(fields),
+  })
+
+test('the People page invites someone the way member_add does, and keeps what was typed when refused', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    await connector(k, jeff.cookie).tool('app_new', {
+      slug: 'notes',
+      title: 'Notes',
+    })
+    let page = (q = '') =>
+      k.at(k.host, `/manage/people${q}`, { headers: { cookie: jeff.cookie } })
+        .then((r) => r.text())
+    assertStringIncludes(await page(), 'Send invitation')
+
+    let ana = await signIn(k)
+    let sent = await post(k, jeff.cookie, 'people', {
+      invite: ana.email,
+      app: 'notes',
+      role: 'viewer',
+      note: 'have a look',
+    })
+    assertEquals(sent.status, 303)
+    let back = new URL(sent.headers.get('location')!)
+    assertEquals(back.pathname, '/manage/people')
+    let l = await letter(k, ana.email, '/invite?t=')
+    assertStringIncludes(l.body, '> have a look')
+    let listed = await page(back.search)
+    assertStringIncludes(listed, 'Invitation sent.')
+    assertStringIncludes(listed, 'Notes · this app only')
+    assertStringIncludes(listed, `${ana.email} · viewer · `)
+
+    // Refused, the page says why and the address is still in the field.
+    let refused = await post(k, jeff.cookie, 'people', {
+      invite: jeff.email,
+      note: 'me again',
+    })
+    assertEquals(refused.status, 400)
+    let said = await refused.text()
+    assertStringIncludes(said, `${jeff.email} is you`)
+    assertStringIncludes(said, `value="${jeff.email}"`)
+    assertStringIncludes(said, 'me again</textarea>')
+  } finally {
+    await k.stop()
+  }
+})
+
 // The people and places of the tests below, and a directory that holds
 // them: the seams that decide what a friend and an owner are told, without a
 // kernel.

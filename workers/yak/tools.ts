@@ -5692,6 +5692,7 @@ let OURS: Row[] = [
               : space.slug) +
             ` (was ${was})`,
           space,
+          value: { invited: false },
         }
       }
       // Anyone else is invited, and nothing is theirs until they accept
@@ -5737,6 +5738,7 @@ let OURS: Row[] = [
           note,
         }),
         space,
+        value: { invited: true },
       }
     },
   },

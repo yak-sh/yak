@@ -98,6 +98,7 @@ import { batched, lined, receipt, resend } from './wire.ts'
 import {
   binned,
   desk as deskPage,
+  type DeskPage,
   invitedTo,
   nothingHere,
   sentence,
@@ -152,7 +153,7 @@ import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
 import { isVerifiedBot } from './lib/bots.ts'
-import { drafted, fullAt, hashed, recoverRelease } from './tools.ts'
+import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
@@ -2290,6 +2291,8 @@ let returned = (q: URLSearchParams) =>
     ? { say: 'Saved.', no: false }
     : q.has('sent')
     ? { say: 'Sent again.', no: false }
+    : q.has('invited')
+    ? { say: 'Invitation sent.', no: false }
     : q.has('connected')
     ? { say: 'Connected.', no: false }
     : q.has('disconnected')
@@ -2448,6 +2451,7 @@ let desk = async (
   who: Owner,
   view: ManageView,
   said?: { say: string; no: boolean },
+  invite?: DeskPage['invite'],
 ): Promise<Response> => {
   let owner = who.person
   let { here, all } = await shelf(dir, space, who)
@@ -2525,6 +2529,7 @@ let desk = async (
         new URL(req.url).searchParams.get('add') ?? undefined,
       )
       : undefined,
+    invite,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
   }, env)
@@ -2605,6 +2610,30 @@ export let again = async (
   }
 }
 
+// A dashboard control is the tool the person's assistant would call, called
+// as the person pressing it, so the page and the assistant invite, remove and
+// choose a homepage one way. What the tool refuses is what the page says.
+let pressed = async (
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  who: Owner,
+  name: string,
+  args: Record<string, unknown>,
+) => {
+  try {
+    let out = await TOOLS.find((t) => t.name == name)!.run(
+      { env, dir, person: who.person },
+      args,
+    )
+    return { out }
+  } catch (e) {
+    if (e instanceof CallError) {
+      return { said: { say: sentence(e.message), no: true } }
+    }
+    throw e
+  }
+}
+
 // Account forms return to the section that submitted them. Settings fields
 // are independent; changing an address cannot overwrite an omitted name.
 // Every space's page shares the cookie's site, so ownership alone is
@@ -2634,6 +2663,27 @@ let saved = async (
     if (said) return desk(req, env, dir, space, who, 'people', said)
     let to = sentFrom(req, env)
     to.searchParams.set('sent', '1')
+    return redirect(to.href, 303)
+  }
+  // The People page's invitation: member_add, as the assistant asks it. A
+  // refusal draws the page again with what was typed still in the form.
+  if (form.has('invite')) {
+    let asked = {
+      email: String(form.get('invite') ?? '').trim(),
+      app: String(form.get('app') ?? '').trim(),
+      role: String(form.get('role') ?? '').trim(),
+      note: String(form.get('note') ?? '').trim(),
+    }
+    let { out, said } = await pressed(env, dir, who, 'member_add', {
+      space: space.slug,
+      email: asked.email,
+      ...asked.app ? { app: asked.app } : {},
+      ...asked.role ? { role: asked.role } : {},
+      ...asked.note ? { note: asked.note } : {},
+    })
+    if (said) return desk(req, env, dir, space, who, 'people', said, asked)
+    let to = sentFrom(req, env)
+    to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
     return redirect(to.href, 303)
   }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
