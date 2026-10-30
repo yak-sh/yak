@@ -157,7 +157,7 @@ export let remember = async <T>(
   inputs: unknown,
   roots: readonly MemoRoot[],
   make: () => T | Promise<T>,
-  opts: MemoOptions = {},
+  opts: MemoOptions & { valid?: (value: T) => boolean | Promise<boolean> } = {},
 ): Promise<T> => {
   let io = opts.files ?? Deno
   let digest = opts.digest ?? sha256
@@ -336,7 +336,8 @@ export let remember = async <T>(
       known?.version == VERSION && 'value' in known &&
       JSON.stringify(known.roots) == JSON.stringify(identities) &&
       Array.isArray(known.files) && known.files.length > 0 &&
-      Array.isArray(known.stats) && known.stats.length == known.files.length
+      Array.isArray(known.stats) && known.stats.length == known.files.length &&
+      (!opts.valid || await opts.valid(known.value))
     ) {
       // A witness whose directory moved proves nothing, and its leaf is
       // stat'd instead. A hit never lists a directory or rewrites the memo:

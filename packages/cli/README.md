@@ -446,7 +446,8 @@ providers inside the source checkout follow the runtime snapshot.
 `@yaks/cli/memo` exports `remember(inputs, roots, make, options)` for derived
 JSON data. A hit validates the source files before reusing the value; failed
 derivations are never saved. `options.imports` can supply an explicit dependency
-scanner when a caller already enumerates every source.
+scanner when a caller already enumerates every source. `options.valid(value)`
+can reject a cached value whose generated outputs were lost or changed.
 
 Command declarations and vocabulary documents are data. The CLI derives them
 once and keeps an internal memo under `$XDG_CACHE_HOME/yak/cli` (otherwise

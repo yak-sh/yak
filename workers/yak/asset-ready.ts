@@ -34,12 +34,13 @@ export let materialized = async (
     await make()
     return await stamp(await outputs())
   }
-  let files = await remember(
+  await remember(
     'worker assets',
     inputs.map((p) => pathToFileURL(p).href),
     made,
     {
       dir,
+      valid: agrees,
       imports: () => Promise.resolve([]),
       files: {
         ...Deno,
@@ -50,7 +51,6 @@ export let materialized = async (
       },
     },
   )
-  if (!await agrees(files)) await made()
 }
 
 /** Inputs to the browser bundles, compiler catalog and sandbox workspace. */

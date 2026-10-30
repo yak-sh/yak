@@ -1,7 +1,7 @@
 import { cleanup, equal, test, throws } from '@yaks/testing'
 import { materialized } from './asset-ready.ts'
 
-let fixture = () => {
+let fixture = (variable = false) => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-assets-' })
   let source = `${root}/input.bin`, output = `${root}/output.bin`
   Deno.writeFileSync(source, new Uint8Array([255]))
@@ -9,7 +9,10 @@ let fixture = () => {
   let make = async () => {
     calls++
     if (fail) throw Error('generation failed')
-    await Deno.writeFile(output, await Deno.readFile(source))
+    await Deno.writeFile(
+      output,
+      variable ? new Uint8Array([calls]) : await Deno.readFile(source),
+    )
   }
   return {
     source,
@@ -75,4 +78,15 @@ test('failed asset generation is retried instead of being remembered as ready', 
   await failed.run()
   await failed.run()
   equal(failed.calls(), 2)
+})
+
+let refreshed = fixture(true)
+test('regeneration remembers the new output bytes even when identical inputs produce different bytes', async () => {
+  cleanup(refreshed.close)
+  await refreshed.run()
+  await Deno.remove(refreshed.output)
+  await refreshed.run()
+  await refreshed.run()
+  equal(refreshed.calls(), 2)
+  equal([...await Deno.readFile(refreshed.output)], [2])
 })
