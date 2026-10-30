@@ -2,7 +2,6 @@
  * Each suite declares its own baseline path and retains its timed boundaries. */
 import { CHECKOUT_NAMES } from './operation-checkout.ts'
 import { DIAGNOSTIC_NAMES } from './operation-diagnostics.ts'
-import { LIFECYCLE_NAMES } from './operation-lifecycle.ts'
 import { NAMES as SESSION_NAMES } from './operation-sessions.ts'
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
@@ -11,7 +10,6 @@ import { suite as platformWaits } from './platform-waits.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
-import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
 import { CONTROL_NAMES } from './operation-controls.ts'
 import { OPERATION_REMAINING } from './operation-remaining.ts'
@@ -100,11 +98,6 @@ export let standalone: Registration[] = [
     OPERATION_COMMANDS,
   ),
   measured(
-    'terminal-interactions',
-    'bench/terminal-interactions.ts',
-    TERMINAL_INTERACTIONS,
-  ),
-  measured(
     'operation-remaining',
     'bench/operation-remaining.ts',
     OPERATION_REMAINING,
@@ -115,11 +108,6 @@ export let standalone: Registration[] = [
     'operation-diagnostics',
     'bench/operation-diagnostics.ts',
     DIAGNOSTIC_NAMES,
-  ),
-  measured(
-    'operation-lifecycle',
-    'bench/operation-lifecycle.ts',
-    LIFECYCLE_NAMES,
   ),
   measured('operation-sessions', 'bench/operation-sessions.ts', SESSION_NAMES),
   measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),

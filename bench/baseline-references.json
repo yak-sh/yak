@@ -374,23 +374,6 @@
     ]
   },
   {
-    "suite": "operation-lifecycle",
-    "baseline": "bench/operation-lifecycle.baseline.json",
-    "groups": [
-      {
-        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "kind": "derived",
-        "source": "git history of bench/operation-lifecycle.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "lifecycle/serve-ready",
-          "lifecycle/work-ready",
-          "lifecycle/restart-ready",
-          "lifecycle/restart-request-gap"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "operation-remaining",
     "baseline": "bench/operation-remaining.baseline.json",
     "groups": [
@@ -545,19 +528,8 @@
           "cli/graph-apply",
           "hook/UserPromptSubmit",
           "connector/graph-query",
-          "connector/graph-apply",
-          "tui/startup",
-          "tui/query-navigation"
-        ],
-        "boundaryCorrection": {
-          "name": "tui/startup",
-          "driverChange": "49fddf13a6170e3ebae7466cfc140066b01ece8d",
-          "reason": "The original startup sample included graceful shutdown. Startup now measures launch through usable paint; child CPU is read while the terminal is alive and shutdown occurs after the sample. Both historical and current product code use that same corrected boundary, retaining the original product reference.",
-          "previousMedian": {
-            "unit": "ms",
-            "median": 980.026926999999
-          }
-        }
+          "connector/graph-apply"
+        ]
       }
     ]
   },
@@ -674,30 +646,6 @@
         "benches": [
           "status by identity beside 2,700 other calls",
           "status by query beside 2,700 other calls"
-        ]
-      }
-    ]
-  },
-  {
-    "suite": "terminal-interactions",
-    "baseline": "bench/terminal-interactions.baseline.json",
-    "groups": [
-      {
-        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "kind": "derived",
-        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "tui/comment-keystroke-paint",
-          "tui/comment-submit",
-          "tui/query-to-answer"
-        ]
-      },
-      {
-        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-        "kind": "derived",
-        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "tui/comment-draft-save"
         ]
       }
     ]

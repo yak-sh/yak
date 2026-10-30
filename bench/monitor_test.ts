@@ -46,7 +46,10 @@ let outcome = (v: Outcome['verdict']): Outcome =>
 
 // Each suite's checks in order; what was reported (title line) and what each
 // suite came to.
-let monitor = async (checks: Record<string, Outcome['verdict'][]>) => {
+let monitor = async (
+  checks: Record<string, Outcome['verdict'][]>,
+  busy = false,
+) => {
   let reports: string[] = [], asked: string[] = []
   let verdicts = await watch(Object.keys(checks), {
     check: (suite) => {
@@ -58,6 +61,7 @@ let monitor = async (checks: Record<string, Outcome['verdict'][]>) => {
       reports.push(`${kind} ${suite}: ${error.message.split('\n')[0]}`)
       return Promise.resolve()
     },
+    loaded: () => Promise.resolve(busy),
     since: (from) => {
       asked.push(from)
       return Promise.resolve(['c2 the change'])
@@ -85,6 +89,14 @@ test('a failure is reported only when the check at once fails again', async () =
   equal(await monitor({ s: ['failed', 'loaded'] }), {
     reports: [],
     verdicts: { s: 'loaded' },
+    asked: [],
+  })
+})
+
+test('a failure on a loaded box reports nothing and stays owed', async () => {
+  equal(await monitor({ s: ['failed', 'failed'], t: [] }, true), {
+    reports: [],
+    verdicts: { s: 'loaded', t: 'loaded' },
     asked: [],
   })
 })
@@ -160,6 +172,7 @@ test('mixed baseline regressions report each benchmark’s revision and its comm
     reference,
   }))
   await watch(['mixed'], {
+    loaded: () => Promise.resolve(false),
     check: () => Promise.resolve(current),
     since: (reference) => {
       histories.push(reference)
@@ -208,6 +221,7 @@ test('only complete paired evidence reports a screened slowdown', async () => {
     ] as const
   ) {
     await watch([label], {
+      loaded: () => Promise.resolve(false),
       check: () => Promise.resolve(assessed(screen, changed, 'paired.json')),
       report: (_error, suite) => {
         reports.push(suite)

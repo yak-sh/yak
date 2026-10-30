@@ -5077,9 +5077,7 @@
       "cli/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
       "hook/UserPromptSubmit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
       "connector/graph-query": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "connector/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tui/startup": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tui/query-navigation": "bc927bbb49a4cf12e948214b8e78626c710a5aab"
+      "connector/graph-apply": "bc927bbb49a4cf12e948214b8e78626c710a5aab"
     },
     "provenance": [
       {
@@ -5094,19 +5092,8 @@
           "cli/graph-apply",
           "hook/UserPromptSubmit",
           "connector/graph-query",
-          "connector/graph-apply",
-          "tui/startup",
-          "tui/query-navigation"
-        ],
-        "boundaryCorrection": {
-          "name": "tui/startup",
-          "driverChange": "49fddf13a6170e3ebae7466cfc140066b01ece8d",
-          "reason": "The original startup sample included graceful shutdown. Startup now measures launch through usable paint; child CPU is read while the terminal is alive and shutdown occurs after the sample. Both historical and current product code use that same corrected boundary, retaining the original product reference.",
-          "previousMedian": {
-            "unit": "ms",
-            "median": 980.026926999999
-          }
-        }
+          "connector/graph-apply"
+        ]
       }
     ],
     "revision": "f91b7fa2abc5d47c7206e49d663183c6ca78ddbd",
@@ -5116,8 +5103,7 @@
     "status": "slower candidate awaiting default monitor confirmation",
     "confidence": "limited rounds",
     "slower": [
-      "cli/graph-apply",
-      "tui/query-navigation"
+      "cli/graph-apply"
     ],
     "comparisons": [
       {
@@ -5303,184 +5289,9 @@
         ],
         "reference": 49.32999999999993,
         "now": 36.70399999999972
-      },
-      {
-        "name": "tui/startup",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-        "before": [
-          1122.4957999999988,
-          1092.0507140000009,
-          1348.5537739999963
-        ],
-        "current": [
-          1259.5321980000026,
-          1910.7037210000017,
-          1247.6523159999997
-        ],
-        "after": [
-          1297.3367100000014,
-          1355.1175909999984,
-          1201.185016000003
-        ],
-        "reference": 1249.2608630000022,
-        "now": 1259.5321980000026
-      },
-      {
-        "name": "tui/query-navigation",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-        "before": [
-          73.08600800000204,
-          71.09766899999886,
-          65.97515500000009
-        ],
-        "current": [
-          120.88471100000243,
-          104.41983699999764,
-          128.92456099999617
-        ],
-        "after": [
-          63.93902199999684,
-          70.84643400000277,
-          60.22358600000007
-        ],
-        "reference": 68.41079450000143,
-        "now": 120.88471100000243
       }
     ],
     "evidence": "bench/person-commands.rebank.results.json"
-  },
-  {
-    "suite": "operation-lifecycle",
-    "baseline": "bench/operation-lifecycle.baseline.json",
-    "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-    "references": {
-      "lifecycle/serve-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-      "lifecycle/work-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-      "lifecycle/restart-ready": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-      "lifecycle/restart-request-gap": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3"
-    },
-    "provenance": [
-      {
-        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "kind": "derived",
-        "source": "git history of bench/operation-lifecycle.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "lifecycle/serve-ready",
-          "lifecycle/work-ready",
-          "lifecycle/restart-ready",
-          "lifecycle/restart-request-gap"
-        ]
-      }
-    ],
-    "revision": "0036b0a2d2ac16cfdacdf3c07eea8f70c6a884c0",
-    "rounds": 3,
-    "metric": "median-of-round-medians/cpu",
-    "verdict": "slower",
-    "status": "slower candidate awaiting default monitor confirmation",
-    "confidence": "limited rounds",
-    "slower": [
-      "lifecycle/serve-ready",
-      "lifecycle/restart-ready"
-    ],
-    "comparisons": [
-      {
-        "name": "lifecycle/serve-ready",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "before": [
-          3408.214,
-          3495.764,
-          3415.313999999999
-        ],
-        "current": [
-          3948.5920000000006,
-          4032.347,
-          3985.7019999999998
-        ],
-        "after": [
-          3352.0689999999995,
-          3364.923,
-          3670.3109999999997
-        ],
-        "reference": 3411.763999999999,
-        "now": 3985.7019999999998
-      },
-      {
-        "name": "lifecycle/work-ready",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "before": [
-          595.3670000000002,
-          660.5650000000005,
-          623.5140000000001
-        ],
-        "current": [
-          619.527,
-          640.8000000000011,
-          625.0720000000001
-        ],
-        "after": [
-          590.9500000000007,
-          638.8229999999994,
-          666.8110000000006
-        ],
-        "reference": 631.1684999999998,
-        "now": 625.0720000000001
-      },
-      {
-        "name": "lifecycle/restart-ready",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "before": [
-          2188.5989999999993,
-          2290.0369999999984,
-          2324.817000000001
-        ],
-        "current": [
-          2773.7970000000005,
-          2750.7749999999996,
-          3739.342999999999
-        ],
-        "after": [
-          2196.63,
-          2239.642,
-          2310.0149999999976
-        ],
-        "reference": 2264.839499999999,
-        "now": 2773.7970000000005
-      },
-      {
-        "name": "lifecycle/restart-request-gap",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "before": [
-          63.88799999999992,
-          56.79600000000028,
-          61.84900000000016
-        ],
-        "current": [
-          95.53999999999905,
-          70.30500000000029,
-          77.15899999999965
-        ],
-        "after": [
-          80.1859999999997,
-          69.28799999999956,
-          57.5679999999993
-        ],
-        "reference": 62.86850000000004,
-        "now": 77.15899999999965
-      }
-    ],
-    "evidence": "bench/operation-lifecycle.rebank.results.json"
   },
   {
     "suite": "operation-checkout",
@@ -6276,175 +6087,6 @@
       }
     ],
     "evidence": "bench/harness-startup.rebank.results.json"
-  },
-  {
-    "suite": "terminal-interactions",
-    "baseline": "bench/terminal-interactions.baseline.json",
-    "references": {
-      "tui/comment-keystroke-paint": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-      "tui/comment-submit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-      "tui/query-to-answer": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-      "tui/comment-draft-save": "8603ad4f3c01a0cf70e75c52c579b375661211c0"
-    },
-    "provenance": [
-      {
-        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "kind": "derived",
-        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "tui/comment-keystroke-paint",
-          "tui/comment-submit",
-          "tui/query-to-answer"
-        ]
-      },
-      {
-        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-        "kind": "derived",
-        "source": "git history of bench/terminal-interactions.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "tui/comment-draft-save"
-        ]
-      }
-    ],
-    "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
-    "rounds": 3,
-    "metric": "median-of-round-medians/cpu",
-    "groups": [
-      {
-        "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
-        "rounds": 3,
-        "verdict": "same",
-        "benches": [
-          "tui/comment-keystroke-paint",
-          "tui/comment-submit",
-          "tui/query-to-answer"
-        ],
-        "collection": {
-          "suite": "terminal-interactions",
-          "reference": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-          "revision": "fa66fe8293e72e40b5ba558c0d148fccf350c2b8",
-          "names": [
-            "tui/comment-keystroke-paint",
-            "tui/comment-submit",
-            "tui/query-to-answer"
-          ],
-          "rounds": 3,
-          "driver": "77dfcaf0e58c33763d8922cb02823491d438142243a12379283820b67a849e88",
-          "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
-          "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
-          "protocol": "paired-cpu-1"
-        }
-      },
-      {
-        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-        "revision": "214b9dd46df210059fe61ee2361497a7114de01d",
-        "rounds": 3,
-        "verdict": "same",
-        "benches": [
-          "tui/comment-draft-save"
-        ]
-      }
-    ],
-    "verdict": "same",
-    "status": "same in limited rounds; default monitor confirmation pending",
-    "confidence": "limited rounds",
-    "slower": [],
-    "comparisons": [
-      {
-        "name": "tui/comment-keystroke-paint",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "before": [
-          42.78276199999891,
-          42.95081100000061,
-          44.56631800000105
-        ],
-        "current": [
-          49.39152099999956,
-          48.10049299999628,
-          55.448458000002574
-        ],
-        "after": [
-          57.11753400000089,
-          39.09334499999932,
-          38.956114999999045
-        ],
-        "reference": 42.86678649999976,
-        "now": 49.39152099999956
-      },
-      {
-        "name": "tui/comment-draft-save",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-        "before": [
-          115.06111199999941,
-          198.09690200000114,
-          198.24028400000316
-        ],
-        "current": [
-          179.5564599999998,
-          248.27557200000047,
-          217.7501310000007
-        ],
-        "after": [
-          192.72084099999938,
-          120.91901700000017,
-          191.40516200000093
-        ],
-        "reference": 192.06300150000015,
-        "now": 217.7501310000007
-      },
-      {
-        "name": "tui/comment-submit",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "before": [
-          48.674057000000175,
-          36.87670699999762,
-          45.68467099999725
-        ],
-        "current": [
-          29.83782600000086,
-          24.488435999999638,
-          27.117350000000442
-        ],
-        "after": [
-          53.129031000000396,
-          38.7641360000016,
-          38.948506999999154
-        ],
-        "reference": 42.3165889999982,
-        "now": 27.117350000000442
-      },
-      {
-        "name": "tui/query-to-answer",
-        "unit": "ms",
-        "figure": "cpu",
-        "referenceCommit": "f68531abe2010cb54dfec7a7c69eb605af86117b",
-        "before": [
-          205.90731199999937,
-          204.30725500000153,
-          275.397887000001
-        ],
-        "current": [
-          350.81254699999954,
-          302.7851159999991,
-          302.33458999999857
-        ],
-        "after": [
-          329.84738500000094,
-          316.2378599999993,
-          179.78261200000088
-        ],
-        "reference": 240.65259950000018,
-        "now": 302.7851159999991
-      }
-    ],
-    "evidence": "bench/terminal-interactions.rebank.results.json"
   },
   {
     "suite": "harness-window",

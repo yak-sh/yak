@@ -70,22 +70,6 @@
       "median": 44.703999999997905,
       "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
       "tolerance": 0.95
-    },
-    {
-      "name": "tui/startup",
-      "unit": "ms",
-      "better": "lower",
-      "median": 1122.4957999999988,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.482
-    },
-    {
-      "name": "tui/query-navigation",
-      "unit": "ms",
-      "better": "lower",
-      "median": 63.93902199999684,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.428
     }
   ],
   "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab"

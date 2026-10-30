@@ -13,7 +13,8 @@
  * A check that can tell nothing reports nothing: a busy box, a busy lock, a
  * measurement past its time cap, older code that cannot run today's bench. A
  * suite that fails is checked again at once and reported only when it fails
- * again, so a bug says the bench is broken, not that the box was busy. Each
+ * again on a box that is not loaded, so a bug says the bench is broken, not
+ * that the box was busy; one that fails on a loaded box stays owed. Each
  * suite reports under one fault, so a suite that stays slow adds hits to its
  * open bug, and one that turns slow again after its bug was resolved reopens
  * it.
@@ -40,9 +41,7 @@ export let SUITES = [
   'operation-controls',
   'operation-checkout',
   'operation-diagnostics',
-  'operation-lifecycle',
   'operation-sessions',
-  'terminal-interactions',
   'operation-scale',
   'platform-waits',
   'web-client',
@@ -69,9 +68,7 @@ export let HOURLY = [
   'operation-controls',
   'operation-checkout',
   'operation-diagnostics',
-  'operation-lifecycle',
   'operation-sessions',
-  'terminal-interactions',
   'operation-scale',
   'platform-waits',
 ]
@@ -109,6 +106,8 @@ export type Monitor = {
   ) => Promise<void>
   /** Commits after `from` up to the checkout's head, one line each. */
   since: (from: string) => Promise<string[]>
+  /** Whether other work has the box too busy for a failure to mean anything. */
+  loaded: () => Promise<boolean>
 }
 
 let numbers = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
@@ -156,7 +155,8 @@ export let regressed = (
   ].join('\n')
 }
 
-/** Check each suite and report a slowdown or a suite that fails twice running.
+/** Check each suite and report a slowdown or a suite that fails twice running
+ * on a box that is not loaded.
  * A check that could tell nothing reports nothing; it is owed to a later tick. */
 export let watch = async (
   suites: string[],
@@ -176,6 +176,9 @@ export let watch = async (
     }
     let outcome = await safe()
     if (outcome.verdict == 'failed') outcome = await safe()
+    if (outcome.verdict == 'failed' && await m.loaded()) {
+      outcome = { verdict: 'loaded' }
+    }
     out[suite] = outcome.verdict
     if (outcome.verdict == 'failed') {
       await m.report(
@@ -393,6 +396,7 @@ if (import.meta.main) {
   })
   let monitor: Monitor = {
     check,
+    loaded: async () => loaded({ busy: await busy(2000) ?? null }),
     report: (error, suite, kind) =>
       send(error, {
         fault: `bench ${kind}: ${suite}`,

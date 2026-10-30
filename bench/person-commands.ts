@@ -1,14 +1,13 @@
-/** Person waits through real CLI processes, the box MCP HTTP door and a PTY.
- * The fixed corpus is 2,000 tasks and a 1 MiB Claude transcript, not the live
- * graph. All databases, terminal state and owned processes go away in finally.
- * Timings include the response/paint, not merely dispatch. No detached duties.
+/** Person waits through real CLI processes and the box MCP HTTP door. The fixed
+ * corpus is 2,000 tasks and a 1 MiB Claude transcript, not the live graph. All
+ * databases and owned processes go away in finally. Timings include the
+ * response, not merely dispatch. No detached duties.
  */
-import { processCpu, type Samples, stopwatch } from '@yaks/benchmark'
+import { type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
-import { searchPath } from '../packages/browse/url.ts'
 import { selected } from './selected.ts'
 
 export let PERSON_COMMANDS = [
@@ -20,13 +19,9 @@ export let PERSON_COMMANDS = [
   'hook/UserPromptSubmit',
   'connector/graph-query',
   'connector/graph-apply',
-  'tui/startup',
-  'tui/query-navigation',
 ]
 let root = new URL('../', import.meta.url).pathname
 let decoder = new TextDecoder()
-let delay = () => new Promise((resolve) => setTimeout(resolve, 10))
-let quote = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'"
 let PERSON = '1d55ab2c-76da-4b66-9c37-e871a427f100'
 let TARGET = '1d55ab2c-76da-4b66-9c37-e871a427f101'
 export let TASKS = 2000
@@ -36,19 +31,6 @@ export let TASKS = 2000
 export let hookAnswer = (text: string): boolean =>
   text.includes('previous reply ended:') &&
   (text.includes('Prompt sent:') || text.includes('Prompt observed:'))
-
-/** Bounded waiting is for an observed terminal paint, never a fixed startup
- * sleep. tmux's capture round trip is deliberately inside the timed boundary. */
-let painted = async (capture: () => Promise<string>, mark: string) => {
-  let until = performance.now() + 60_000
-  let last = ''
-  while (performance.now() < until) {
-    last = await capture()
-    if (last.includes(mark)) return
-    await delay()
-  }
-  throw new Error(`terminal never painted ${mark}: ${last}`)
-}
 
 export async function measure(
   args: string[] = [],
@@ -65,7 +47,6 @@ export async function measure(
     HARNESS_HOME: `${dir}/harness`,
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
     PROCESS_DIR: `${dir}/process`,
-    TASKS_TUI_STATE: `${dir}/tui.json`,
     YAK_RUNTIME_CACHE: `${dir}/runtime`,
     TASKS_SESSION: '',
     CLAUDE_CODE_SESSION_ID: '',
@@ -102,23 +83,14 @@ export async function measure(
     return decoder.decode(result.stdout)
   }
   let results: Record<string, Samples> = {}
-  let terminalPid = 0
-  let terminalCpu = () => {
-    if (terminalPid === 0) return 0
-    if (!Number.isSafeInteger(terminalPid) || terminalPid < 1) {
-      throw new Error('missing terminal server pid')
-    }
-    return processCpu(terminalPid)
-  }
   let timed = async (
     name: string,
     run: () => Promise<void | (() => Promise<void>)>,
-    ...sources: (() => number)[]
   ) => {
     if (!selected(name)) return
     let samples = []
     for (let i = 0; i < n; i++) {
-      let took = stopwatch(...sources)
+      let took = stopwatch()
       let cleanup = await run()
       let reading = took()
       await cleanup?.()
@@ -127,7 +99,7 @@ export async function measure(
         source: 'end-to-end',
         counts: { tasks: TASKS },
         details: {
-          fixture: 'starter SQLite; duties disabled; own ephemeral HTTP + PTY',
+          fixture: 'starter SQLite; duties disabled; own ephemeral HTTP',
         },
       })
     }
@@ -136,19 +108,6 @@ export async function measure(
   }
   let host: Awaited<ReturnType<typeof compose>> | undefined
   let server: Deno.HttpServer<Deno.NetAddr> | undefined
-  let socket = `${dir}/tmux.sock`
-  let tmuxStarted = false
-  let tmux = async (...argv: string[]) => {
-    let out = await new Deno.Command('tmux', {
-      args: ['-f', '/dev/null', '-S', socket, ...argv],
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    if (!out.success) {
-      throw new Error(`tmux ${argv.join(' ')}: ${decoder.decode(out.stderr)}`)
-    }
-    return decoder.decode(out.stdout)
-  }
   try {
     let config = starter(PERSON)
     config.db = `${dir}/yak.db`
@@ -293,103 +252,8 @@ export async function measure(
         throw new Error(`MCP apply: ${JSON.stringify(answer)}`)
       }
     })
-    // The terminal command takes its server address from the real config.
-    config.port = server.addr.port
-    await Deno.writeTextFile(configPath, JSON.stringify(config))
-    let terminal = [
-      ...Object.entries(env).map(([k, v]) => `${k}=${quote(v)}`),
-      ...command.map(quote),
-      'inspect',
-      quote(TARGET),
-    ].join(' ')
-    let history = JSON.stringify({
-      entries: [{ path: searchPath('.task .count'), state: null }, {
-        path: '/' + TARGET + '?v=Debug',
-        state: null,
-      }],
-      at: 1,
-    })
-    await Deno.writeTextFile(env.TASKS_TUI_STATE, history)
-    let capture = () => tmux('capture-pane', '-p', '-t', 'bench')
-    await timed('tui/startup', async () => {
-      terminalPid = Number(
-        await tmux(
-          'new-session',
-          '-d',
-          '-s',
-          'bench',
-          '-P',
-          '-F',
-          '#{pid}',
-          '-x',
-          '160',
-          '-y',
-          '40',
-          terminal + ' 2>' + quote(dir + '/terminal.log') + ' || { cat ' +
-            quote(dir + '/terminal.log') + '; sleep 2; }',
-        ),
-      )
-      tmuxStarted = true
-      await painted(capture, 'Person benchmark target')
-      return async () => {
-        await tmux('send-keys', '-t', 'bench', 'q')
-        // Quit is the application's own shutdown; do not kill its Deno child.
-        await painted(async () => {
-          try {
-            return await tmux('list-sessions')
-          } catch {
-            return 'closed'
-          }
-        }, 'closed')
-        tmuxStarted = false
-        terminalPid = 0
-      }
-    }, terminalCpu)
-    if (selected('tui/query-navigation')) {
-      await Deno.writeTextFile(env.TASKS_TUI_STATE, history)
-      await tmux(
-        'new-session',
-        '-d',
-        '-s',
-        'bench',
-        '-x',
-        '160',
-        '-y',
-        '40',
-        terminal + ' 2>' + quote(dir + '/terminal.log') + ' || { cat ' +
-          quote(dir + '/terminal.log') + '; sleep 2; }',
-      )
-      tmuxStarted = true
-      terminalPid = Number(await tmux('display-message', '-p', '#{pid}'))
-      await painted(capture, 'Person benchmark target')
-      await timed('tui/query-navigation', async () => {
-        await tmux('send-keys', '-t', 'bench', 'C-o')
-        await painted(capture, TASKS.toLocaleString('en-US'))
-        await tmux('send-keys', '-t', 'bench', 'C-f')
-        await painted(capture, 'Person benchmark target')
-      }, terminalCpu)
-    }
     return results
   } finally {
-    if (tmuxStarted) {
-      await tmux('send-keys', '-t', 'bench', 'Escape').catch(() => {})
-      await tmux('send-keys', '-t', 'bench', 'q').catch(() => {})
-      await painted(async () => {
-        try {
-          return await tmux('list-sessions')
-        } catch {
-          return 'closed'
-        }
-      }, 'closed').catch(() => {})
-      // Only this run's private tmux socket, never the shared server.
-      await tmux('kill-server').catch(() => {})
-    }
-    try {
-      console.error(
-        'terminal log:',
-        await Deno.readTextFile(dir + '/terminal.log'),
-      )
-    } catch { /* no terminal yet */ }
     await server?.shutdown()
     await host?.close()
     await Deno.remove(dir, { recursive: true })

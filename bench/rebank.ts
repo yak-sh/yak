@@ -104,7 +104,7 @@ export let rebank = async (
     ),
   )
   let process = suite.startsWith('operation-') ||
-    ['person-commands', 'terminal-interactions', 'hook-waits'].includes(suite)
+    ['person-commands', 'hook-waits'].includes(suite)
   let evidence: Judgement
   try {
     let resume: Judgement | undefined

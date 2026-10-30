@@ -53,6 +53,13 @@ test('a suite is owed once, and not again within the hour it was checked', () =>
   equal(q.jobs.map((j) => j.suite), ['c'])
 })
 
+test('a suite removed from the list leaves the queue', () => {
+  let q: Queue = { jobs: [], screened: {} }
+  enqueue(q, ['gone', 'a'], 0)
+  enqueue(q, ['a'], 0)
+  equal(q.jobs.map((j) => j.suite), ['a'])
+})
+
 test('a crash before the result is saved leaves the job owed', async () => {
   let q: Queue = { jobs: [], screened: {} }
   enqueue(q, ['a'], 0)

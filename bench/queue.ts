@@ -3,8 +3,10 @@
 import type { Outcome } from './monitor.ts'
 export type Job = { suite: string; due: number }
 export type Queue = { jobs: Job[]; screened: Record<string, number> }
-/** Owe each suite not checked in the last hour, once, oldest first. */
+/** Owe each suite not checked in the last hour, once, oldest first. A suite no
+ * longer on the list is owed nothing, whatever an earlier tick left queued. */
 export let enqueue = (q: Queue, suites: string[], now: number) => {
+  q.jobs = q.jobs.filter((j) => suites.includes(j.suite))
   for (let suite of suites) {
     if (
       !q.jobs.some((j) => j.suite == suite) &&

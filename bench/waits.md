@@ -11,7 +11,6 @@ possible entity, query, account or third-party service.
 | CLI graph write                                       | `person-commands:cli/graph-apply`                                                            | Spawn through committed write and exit                                           |
 | UserPromptSubmit hook                                 | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup        |
 | Box connector graph read/write                        | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write                  |
-| Terminal startup and query navigation                 | `person-commands`                                                                            | CLI startup to terminal content; query keypress to returned content              |
 | Platform management page                              | `platform-waits:management/html`                                                             | Original HTML response workloads and populated HTML for all ten management views |
 | Platform app page                                     | `platform-waits:app/html`                                                                    | Complete HTML response over the isolated kernel                                  |
 | Platform connector app/file list and graph read/write | `platform-waits:connector/*`                                                                 | Real connector HTTP request through populated answer / saved write               |
@@ -26,6 +25,8 @@ possible entity, query, account or third-party service.
 Chrome is removed from this box. The `pages`, `page-content` and `inbox-content`
 suites and all Chrome paint measurements are removed. Page behavior runs in
 process on a linkedom document in Deno; terminal paint uses @yaks/tui's `lay`.
+No monitored suite starts a separate server process, so `operation-lifecycle`,
+`terminal-interactions` and the tmux figures of `person-commands` are removed.
 `box.ts` remains a manual investigation requiring a snapshot/config, outside the
 unattended command regression monitor.
 
@@ -54,21 +55,10 @@ main-thread HTTP hook delivers and marks pending bus work, and a subagent HTTP
 hook leaves that work pending. UserPromptSubmit remains measured by
 `person-commands`. There is no installed Stop or PreCompact hook to time.
 
-`terminal-interactions` measures real PTY comment typing to paint, typing to
-saved draft, and Enter to a saved and painted comment. Its query measurement
-opens the palette afresh for each sample, literally types `.task .count` in two
-parts with visible text checks, waits for the aggregate preview, then submits to
-the addressed query page and its populated `2,000` answer. The repeated samples
-navigate back and reopen in the same terminal process. Setup, palette opening
-and back navigation are outside the query timing; typing through the populated
-answer is inside it. The fixture owns its SQLite graph, HTTP server, tmux socket
-and terminal history; no input reaches the live graph.
-
 ```sh
 deno task bench operation-commands accept
 deno task bench operation-scale check
 deno task bench hook-waits check
-deno task bench terminal-interactions check
 ```
 
 These suites each have a half-hour monitor entry. The hourly shell dispatch
@@ -135,15 +125,6 @@ through the production effects runner. Transcript readback proves replies, spawn
 claims and stopped/idle transitions. Stop starts with a held active turn; wait
 races actual local completion. New/send are declared CLI-only, not imaginary
 HTTP doors. These are local lifecycle waits, not remote generation latency.
-
-`operation-lifecycle` banks serve readiness, work readiness, ready-first restart
-and maximum HTTP request gap. Real production CLI processes run under uniquely
-owned systemd templates against private graphs/runtime directories. Restart uses
-production `restart()` with only those templates as explicit roles. Populated
-HTTP requests continue throughout handover and any failed request fails
-collection. Runtime limits bound orphan lifetime after collector failure; normal
-cleanup stops only the owned units and removes their templates and fixture
-directories.
 
 `operation-diagnostics` banks CLI model-list local catalogue handling plus
 CLI/HTTP session-home saved workspace changes and CLI/HTTP vector-check over a
