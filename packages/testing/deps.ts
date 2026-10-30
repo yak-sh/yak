@@ -279,6 +279,22 @@ export let survey = async (
     mine,
   )
   let held = new Map<string, Promise<string>>()
+  let reverse = new Map<Map<string, string[]>, Map<string, string[]>>()
+  let incoming = (edges: Map<string, string[]>) => {
+    if (!reverse.has(edges)) {
+      let back = new Map<string, string[]>()
+      for (let [from, targets] of edges) {
+        for (let to of targets) {
+          let parents = back.get(to) ?? []
+          parents.push(from)
+          back.set(to, parents)
+        }
+      }
+      reverse.set(edges, back)
+    }
+    return reverse.get(edges)!
+  }
+  let closures = new Map<string, Set<string>>()
   return {
     of: (path, run = false) => {
       let key = `${run} ${path}`
@@ -302,18 +318,21 @@ export let survey = async (
       return Promise.resolve(hex([...reached].map(mine).sort().join('\n')))
     },
     reaches: (roots, changed, loaded = false, run = false) => {
-      let wanted = new Set(changed.flatMap((p) => [p, at(url(p))]))
-      let edges = loaded ? still : run ? runtime : next
-      let seen = new Set<string>()
-      let visit = roots.flatMap((p) => [p, at(url(p))])
-      while (visit.length) {
-        let node = visit.pop()!
-        if (wanted.has(node)) return true
-        if (seen.has(node)) continue
-        seen.add(node)
-        visit.push(...edges.get(node) ?? [])
+      let cache = JSON.stringify([loaded, run, changed])
+      if (!closures.has(cache)) {
+        let edges = incoming(loaded ? still : run ? runtime : next)
+        let seen = new Set<string>()
+        let visit = changed.flatMap((p) => [p, at(url(p))])
+        while (visit.length) {
+          let node = visit.pop()!
+          if (seen.has(node)) continue
+          seen.add(node)
+          visit.push(...edges.get(node) ?? [])
+        }
+        closures.set(cache, seen)
       }
-      return false
+      let reached = closures.get(cache)!
+      return roots.some((p) => reached.has(p) || reached.has(at(url(p))))
     },
     next: (
       path,
