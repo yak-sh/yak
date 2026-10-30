@@ -120,9 +120,13 @@
   select.Field:not(:disabled):hover {
     border-color: var(--accent);
   }
+  /* A textarea is as tall as what is typed in it, from two controls' height
+     up to most of the window, where it starts to scroll. */
   textarea.Field {
+    field-sizing: content;
     height: auto;
     min-height: calc(var(--control-height) * 2);
+    max-height: 60vh;
     padding-block: .5rem;
     vertical-align: top;
   }

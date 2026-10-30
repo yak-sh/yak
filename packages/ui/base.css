@@ -175,9 +175,11 @@
   color: var(--negative);
 }
 
-/* A textarea is as tall as what is typed in it. */
+/* A textarea is as tall as what is typed in it, up to most of the window,
+   where it starts to scroll. */
 :where(textarea) {
   field-sizing: content;
+  max-block-size: 60vh;
 }
 
 /* In-place editing: the same node and the same look, plus a caret and a
