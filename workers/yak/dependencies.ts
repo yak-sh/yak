@@ -170,16 +170,28 @@ export let dependencies = (host: Host = system) => {
     }
   }
 
+  let linked = (root: string) => {
+    try {
+      return host.link(`${root}/node_modules`) !== undefined
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return false
+      throw error
+    }
+  }
+
   /** Install only a stale tree. An atomic directory keeps simultaneous callers
    * from deleting each other's node_modules while npm ci replaces it. */
   let installed = async (root = dir, {
     timeout = 600_000,
     seed,
     cacheKey,
-  }: { timeout?: number; seed?: string; cacheKey?: string } = {}) => {
+    copy = false,
+  }: { timeout?: number; seed?: string; cacheKey?: string; copy?: boolean } =
+    {}) => {
     let lock = `${root}/node_modules.lock`
     let due = host.now() + timeout
-    while (stale(root)) {
+    let needed = () => stale(root) || (copy && linked(root))
+    while (needed()) {
       try {
         host.mkdir(lock)
       } catch (error) {
@@ -195,7 +207,7 @@ export let dependencies = (host: Host = system) => {
       }
       try {
         // Another installer may have finished between the read and the mkdir.
-        if (!stale(root)) return false
+        if (!needed()) return false
         // The restored project's content key certifies an older complete tree.
         if (cacheKey && adopted(root, cacheKey)) return false
         let seedReason = () => {
@@ -247,12 +259,15 @@ export let dependencies = (host: Host = system) => {
     return false
   }
 
-  /** Workers Builds restores npm's cache, not the checkout's node_modules.
-   * Keep the installed project in that cache and link the checkout to it. */
+  /** Share an installed project through npm's restored cache. Link by default;
+   * copy when a resolver needs module URLs to remain under the checkout. */
   let restored = async (
     cache: string,
     root = dir,
-    { timeout = 600_000 }: { timeout?: number } = {},
+    { timeout = 600_000, mode = 'link' }: {
+      timeout?: number
+      mode?: 'link' | 'copy'
+    } = {},
   ) => {
     let inputs = files(root)
     let digest = key(inputs), project = resolve(cache, 'yak-installed', digest)
@@ -271,6 +286,10 @@ export let dependencies = (host: Host = system) => {
       seed: root,
       cacheKey: legacy ? digest : undefined,
     })
+    if (mode == 'copy') {
+      await installed(root, { timeout, seed: project, copy: true })
+      return changed
+    }
     let modules = `${root}/node_modules`
     try {
       if (

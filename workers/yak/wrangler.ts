@@ -150,7 +150,7 @@ let modules = (root: string, timeout: number, quiet: boolean) =>
     let cache = Deno.env.get('XDG_CACHE_HOME') ??
       Deno.env.get('HOME')?.concat('/.cache')
     let changed = cache
-      ? await restored(join(cache, 'yak'), root, { timeout })
+      ? await restored(join(cache, 'yak'), root, { timeout, mode: 'copy' })
       : await installed(root, { timeout })
     aliased()
     return changed

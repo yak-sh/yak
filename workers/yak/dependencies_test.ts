@@ -362,3 +362,35 @@ test('a restored install keeps the caller’s lock timeout', async () => {
   assertEquals(await first, true)
   assertEquals(m.state(), [1, false])
 })
+
+test('a copied cache keeps module paths local and remains independent across checkouts', async () => {
+  let m = memory(), copy = m.host.copy
+  await m.restore()
+  assertEquals(
+    m.host.realpath(`${m.root}/node_modules`).startsWith(m.cache),
+    true,
+  )
+  await m.restored(m.cache, m.root, { mode: 'copy' })
+  assertEquals(
+    m.host.realpath(`${m.root}/node_modules`),
+    `${m.root}/node_modules`,
+  )
+  assertEquals(m.host.link(`${m.root}/node_modules`), undefined)
+  m.host.copy = () => {
+    throw Error('an unchanged local tree is not copied again')
+  }
+  await m.restored(m.cache, m.root, { mode: 'copy' })
+  m.host.copy = copy
+  m.remove(`${m.root}/node_modules/dep`)
+  assertEquals(m.stale(m.root), true)
+  let second = '/second'
+  m.inputs(second, m.root)
+  await m.restored(m.cache, second, { mode: 'copy' })
+  assertEquals(
+    m.host.realpath(`${second}/node_modules`),
+    `${second}/node_modules`,
+  )
+  assertEquals(m.stale(second), false)
+  await m.restored(m.cache, m.root, { mode: 'copy' })
+  assertEquals(m.state(), [1, false])
+})
