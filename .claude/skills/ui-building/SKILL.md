@@ -220,6 +220,14 @@ options with its default in place. A part a page lacks goes into controls.css
 with an example in the style guide (site_test checks that every one has one),
 not into one page's stylesheet.
 
+What a person does to their own account (invite someone, take someone off,
+choose the homepage, connect an agent) is a control on its dashboard page that
+calls the tool their assistant would call (apps.ts `pressed`), never a line
+telling them to ask their assistant. Building and fixing apps is still the
+assistant's. Jeff, 2026-10-30: "i guess we do need more UI after all. stuff
+like "Ask your assistant to invite someone by their email address, to one app
+or to every app here." should be replaced with real UI".
+
 ## Looking at it
 
 A screen is done when it reads well to someone using it. There is no Chrome or
