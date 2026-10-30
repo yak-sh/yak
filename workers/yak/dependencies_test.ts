@@ -344,3 +344,21 @@ test('npm diagnoses each mismatching package identity before replacing the tree'
   }
   assertEquals(m.state(), [5, false])
 })
+
+test('a restored install keeps the caller’s lock timeout', async () => {
+  let m = memory(), running = Promise.withResolvers<number>()
+  let npm = m.host.npm
+  m.host.npm = (root) => {
+    npm(root)
+    return running.promise
+  }
+  let first = m.restore()
+  await assertRejects(
+    () => m.restored(m.cache, m.root, { timeout: -1 }),
+    Error,
+    'never finished',
+  )
+  running.resolve(0)
+  assertEquals(await first, true)
+  assertEquals(m.state(), [1, false])
+})

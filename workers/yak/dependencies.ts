@@ -249,7 +249,11 @@ export let dependencies = (host: Host = system) => {
 
   /** Workers Builds restores npm's cache, not the checkout's node_modules.
    * Keep the installed project in that cache and link the checkout to it. */
-  let restored = async (cache: string, root = dir) => {
+  let restored = async (
+    cache: string,
+    root = dir,
+    { timeout = 600_000 }: { timeout?: number } = {},
+  ) => {
     let inputs = files(root)
     let digest = key(inputs), project = resolve(cache, 'yak-installed', digest)
     host.mkdir(project, true)
@@ -263,6 +267,7 @@ export let dependencies = (host: Host = system) => {
       host.rename(pending, `${project}/${file}`)
     }
     let changed = await installed(project, {
+      timeout,
       seed: root,
       cacheKey: legacy ? digest : undefined,
     })

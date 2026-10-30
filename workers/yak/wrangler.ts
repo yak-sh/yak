@@ -35,7 +35,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
-import { installed } from './dependencies.ts'
+import { installed, restored } from './dependencies.ts'
 import { sleep } from '@yaks/fp'
 export { stale } from './dependencies.ts'
 
@@ -148,7 +148,11 @@ let preparing = (root = dir, timeout = 600_000, quiet = false) =>
   readiness({
     dependencies: () =>
       timed('npm dependencies', async () => {
-        let changed = await installed(root, { timeout })
+        let cache = Deno.env.get('XDG_CACHE_HOME') ??
+          Deno.env.get('HOME')?.concat('/.cache')
+        let changed = cache
+          ? await restored(join(cache, 'yak'), root, { timeout })
+          : await installed(root, { timeout })
         aliased()
         return changed
       }, quiet),
