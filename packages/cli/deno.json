@@ -8,6 +8,7 @@
     "./host": "./host.ts",
     "./install": "./install.ts",
     "./page": "./page.ts",
+    "./memo": "./memo.ts",
     "./release": "./release.ts",
     "./grammar": "./grammar.ts"
   },

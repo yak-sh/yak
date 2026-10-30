@@ -443,6 +443,11 @@ the web command while reusing its runtime snapshot. The graph config, database
 and working directory retain their caller's paths; file plugins and machine
 providers inside the source checkout follow the runtime snapshot.
 
+`@yaks/cli/memo` exports `remember(inputs, roots, make, options)` for derived
+JSON data. A hit validates the source files before reusing the value; failed
+derivations are never saved. `options.imports` can supply an explicit dependency
+scanner when a caller already enumerates every source.
+
 Command declarations and vocabulary documents are data. The CLI derives them
 once and keeps an internal memo under `$XDG_CACHE_HOME/yak/cli` (otherwise
 `$HOME/.cache/yak/cli`). Each command checks the configured plugins and the

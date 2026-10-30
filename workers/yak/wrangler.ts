@@ -36,6 +36,7 @@ import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
 import { installed, restored } from './dependencies.ts'
+import { assets } from './asset-ready.ts'
 import { sleep } from '@yaks/fp'
 export { stale } from './dependencies.ts'
 
@@ -144,18 +145,24 @@ export let readiness = (
   return { dependencies, web, catalog, all }
 }
 
-let preparing = (root = dir, timeout = 600_000, quiet = false) =>
+let modules = (root: string, timeout: number, quiet: boolean) =>
+  timed('npm dependencies', async () => {
+    let cache = Deno.env.get('XDG_CACHE_HOME') ??
+      Deno.env.get('HOME')?.concat('/.cache')
+    let changed = cache
+      ? await restored(join(cache, 'yak'), root, { timeout })
+      : await installed(root, { timeout })
+    aliased()
+    return changed
+  }, quiet)
+
+let preparing = (
+  root = dir,
+  quiet = false,
+  dependencies: () => Promise<boolean> = () => modules(root, 600_000, quiet),
+) =>
   readiness({
-    dependencies: () =>
-      timed('npm dependencies', async () => {
-        let cache = Deno.env.get('XDG_CACHE_HOME') ??
-          Deno.env.get('HOME')?.concat('/.cache')
-        let changed = cache
-          ? await restored(join(cache, 'yak'), root, { timeout })
-          : await installed(root, { timeout })
-        aliased()
-        return changed
-      }, quiet),
+    dependencies,
     web: () =>
       timed('Web assets', () =>
         generated('Web asset', [
@@ -194,11 +201,20 @@ export let READIED = 'YAK_WORKER_READIED'
  * says only what failed: a test run's reader acts on nothing else. */
 export let ready = async (quiet = false, root = dir, timeout = 600_000) => {
   if (Deno.env.get(READIED) == root) return false
-  let made = preparing(root, timeout, quiet)
-  await made.all
-  let installed = await made.dependencies
+  let dependencies = modules(root, timeout, quiet)
+  let make = async () => {
+    await preparing(root, quiet, () => dependencies).all
+  }
+  let completed = await Promise.allSettled([
+    dependencies,
+    assets(repo, root, make),
+  ])
+  for (let result of completed) {
+    if (result.status == 'rejected') throw result.reason
+  }
+  let changed = await dependencies
   Deno.env.set(READIED, root)
-  return installed
+  return changed
 }
 
 // Wrangler accepts --env on either side of the command. Both forms need
