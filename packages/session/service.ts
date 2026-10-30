@@ -201,7 +201,11 @@ let opened = async (
   signal?: AbortSignal,
 ): Promise<Tail | null> => {
   if (f.runner == 'codex') {
-    let s = await sessionFor(g, f.id, ['session.id'])
+    let s = await sessionFor(g, f.id, [
+      'session.id',
+      'session.actor',
+      'session.persona',
+    ])
     if (s && await managed(g, s.entity.eid)) return null
     let version = f.path.endsWith('.zst') ? versionOf(stat(f.path)) : undefined
     let read = version ? await transcriptOf(g, f.path) : undefined
@@ -233,13 +237,26 @@ let opened = async (
       f.parent = source?.subagent?.thread_spawn?.parent_thread_id
       let eid = sessionEid(f.id)
       let parent = f.parent && sessionEid(f.parent)
+      // `codex exec` is a program's run, so its first words are a brief, not a
+      // person's. A session wears what its checkout carries, as a hook says it
+      // does for Claude Code (./tools.ts); Codex has no hook to say it.
+      let automatic = !!parent || meta.source == 'exec'
+      let named = s?.[SESSION] as Comp | undefined
+      let worn = !parent && !named?.actor && !named?.persona &&
+          typeof meta.cwd == 'string'
+        ? await (await import('@yaks/persona')).carried(g, meta.cwd)
+        : undefined
       let missing = await lacking(g, [
         ...(parent
           ? [{ entity: { eid: parent }, session: { id: f.parent } }]
           : []),
         {
           entity: { eid },
-          session: { id: f.id, ...(parent ? { operator: false } : {}) },
+          session: {
+            id: f.id,
+            ...(automatic ? { operator: false } : {}),
+            ...(worn ? { persona: worn.persona.entity.eid } : {}),
+          },
           ...(parent ? { spawned: { parent } } : {}),
         },
       ])

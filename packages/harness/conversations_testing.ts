@@ -146,5 +146,16 @@ export let conversationFixture = async () => {
       ),
     )
   }
-  return { h, handler, run, request, call, owner, other, project, elsewhere }
+  return {
+    h,
+    handler,
+    run,
+    request,
+    call,
+    owner,
+    other,
+    project,
+    elsewhere,
+    persona,
+  }
 }

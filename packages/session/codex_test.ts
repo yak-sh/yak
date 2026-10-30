@@ -101,6 +101,25 @@ let rows = async (graph: typeof g) =>
   await graph.read(`.entry.session=${id} .order=entry.seq *`)
 let body = (b: Bundle) => (b.content as Comp | undefined)?.body
 
+let execRun = await (async () => {
+  let run = crypto.randomUUID(), graph = locked(store())
+  Deno.writeTextFileSync(
+    path(run),
+    encode(
+      event('session_meta', { id: run, cwd: '/work', source: 'exec' }),
+      message('user', 'Work T-1 in your own checkout', 'user.text'),
+    ),
+  )
+  await read(graph, seen(), { person: ids.ada })
+  Deno.removeSync(path(run))
+  let [session] = await graph.read(`.session.id=${run} ?session`)
+  let said = await graph.read(`.entry.session=${session.entity.eid} .content *`)
+  return {
+    session,
+    owners: said.filter((b) => (b.created as Comp).by == ids.ada),
+  }
+})()
+
 // Prepare the resumable case outside its timed operation.
 let first = seen()
 await read(resumed, first, { person: ids.ada, slice: 0 })
@@ -224,6 +243,11 @@ let backfill = seen(), later = Date.now() + 30 * 86400000
 await read(history, backfill, { now: later })
 await read(history, backfill, { now: later })
 let old = await rows(history)
+
+test('a codex exec run is not a person: its brief is a notice and its session no operator', () => {
+  assertEquals((execRun.session.session as Comp).operator, false)
+  assertEquals(execRun.owners, [])
+})
 
 test('Codex children retain thread identities and never attribute a delegated prompt to the owner', () => {
   assertEquals((childRow.session as Comp)?.id, child)

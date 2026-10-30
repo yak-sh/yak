@@ -73,6 +73,16 @@ let projectAt = async (g: Graph, args: Record<string, unknown>) => {
   }
   return row
 }
+// A session works for a project by filing, by the actor it names, or by the
+// persona it wears (@yaks/session actorOf). Most sessions say so only one way.
+let worksFor = (projects: string, at = '') =>
+  `(.${at}filed.project=${projects} | .${at}session.actor=${projects} | .${at}session.persona.persona.home=${projects})`
+// Who created a session says little: a harness writes that row, as its agent or
+// its door. The conversation is the owner's where the owner's words are in it.
+let conversation = (owner: string, project: string) =>
+  `.session.operator=true .entries.created.by=${quote(owner)} ${
+    worksFor(quote(project))
+  }`
 let sessionAt = async (
   g: Graph,
   args: Record<string, unknown>,
@@ -81,11 +91,10 @@ let sessionAt = async (
 ) => {
   let said = required(args, 'session')
   let id = (await g.address([said], 'session')).get(said) ?? said
-  let [s] = await g.get([id], ['session', 'created', 'filed', 'doc', 'updated'])
-  if (
-    !s?.session || part(s, 'session').operator !== true ||
-    part(s, 'created').by != owner || part(s, 'filed').project != project
-  ) {
+  let [s] = await g.read(
+    `.entity.eid=${quote(id)} ${conversation(owner, project)}`,
+  )
+  if (!s) {
     throw new Refused('Conversation not found for this owner and project')
   }
   return s
@@ -117,7 +126,7 @@ let contextAt = async (g: Graph, owner: string, project: Bundle) => {
   // Across conversation, terminal, mail and comments, bounded before reading
   // prose. Agent-authored entries are never presented as the owner's words.
   let scopes = [
-    `.entry.session.filed.project=${projects}`,
+    worksFor(projects, 'entry.session.'),
     `.filed.project=${projects}`,
     ...g.vocab.comp('comment')
       ? [`.comment.target.filed.project=${projects}`]
@@ -255,9 +264,9 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
     let owner = await conversationOwner(call, g, host)
     let p = (await projectAt(g, args)).entity.eid
     let rows = await g.read(
-      `.session.operator=true .created.by=${quote(owner)} .filed.project=${
-        quote(p)
-      } ?doc ?updated .order=-updated.at .limit=${limit(args, 20)}`,
+      `${conversation(owner, p)} ?doc ?updated .order=-updated.at .limit=${
+        limit(args, 20)
+      }`,
     )
     return answer(call, {
       conversations: rows.map((s) => ({

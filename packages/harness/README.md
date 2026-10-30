@@ -1265,8 +1265,9 @@ No caller-supplied actor, machine or model is accepted.
 page of visible user/assistant messages, status, and `nextBefore` for older
 entries. Poll the current tail to receive same-id text revisions; preserve older
 loaded pages. `conversation_recent({project,limit?})` reopens owned project
-sessions. `conversation_inbox({limit?})` uses the shared inbox reader for that
-owner.
+sessions, newest first: operator sessions holding the owner's words that work
+for the project by filing, by `session.actor` or by the persona they wear.
+`conversation_inbox({limit?})` uses the shared inbox reader for that owner.
 
 These tools require an authenticated human principal. An owner-only box that
 already trusts its network perimeter may resolve only its **exact host process**

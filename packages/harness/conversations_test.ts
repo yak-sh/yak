@@ -86,6 +86,76 @@ test('project conversations start immediately through MCP with exact input and s
   assertEquals(recent.conversations[0].status, 'pending')
 })
 
+// The rows other doors leave: a harness creates the session as its own agent,
+// says its project in one of three ways, and stamps the owner on the owner's
+// words alone.
+let listed = await (async () => {
+  let { h, call, owner, other, project, elsewhere, persona } = await fixture()
+  let agent = crypto.randomUUID()
+  let session = async (
+    title: string,
+    at: string,
+    named: Comp,
+    by = owner,
+    rest: Partial<Bundle> = {},
+  ) => {
+    let s = crypto.randomUUID()
+    await h.g.apply([{
+      entity: { eid: s },
+      session: { id: s, operator: true, ...named },
+      doc: { title },
+      created: { by: agent, via: agent, at },
+      updated: { at },
+      ...rest,
+    }, {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: s },
+      content: { body: 'words' },
+      created: { by, via: s, at },
+    }], { trusted: true, stamp: false })
+    return s
+  }
+  try {
+    let actor = await session('by actor', '2026-10-01T00:00:00Z', {
+      actor: project,
+    })
+    let worn = await session('by persona', '2026-10-03T00:00:00Z', { persona })
+    let filed = await session('by filing', '2026-10-02T00:00:00Z', {}, owner, {
+      filed: { project },
+    })
+    let foreign = await session('elsewhere', '2026-10-04T00:00:00Z', {
+      actor: elsewhere,
+    })
+    let silent = await session('not his', '2026-10-05T00:00:00Z', {
+      actor: project,
+    }, other)
+    let agents = await session('an agent', '2026-10-06T00:00:00Z', {
+      actor: project,
+      operator: false,
+    })
+    let { conversations } = await call('conversation_recent', { project })
+    let read = await call('conversation_read', { project, session: actor })
+    let refusals = await Promise.all(
+      [foreign, silent, agents].map((s) =>
+        rejection(() => call('conversation_read', { project, session: s }))
+      ),
+    )
+    return frozen({
+      order: conversations.map((c: { session: string }) => c.session),
+      expected: [worn, filed, actor],
+      read: read.messages.map((m: { text: string }) => m.text),
+      refusals: refusals.map((r) => r.rejected),
+    })
+  } finally {
+    await h.close()
+  }
+})()
+test("a project conversation is an operator session with the owner's words, however it says its project", () => {
+  assertEquals(listed.order, listed.expected)
+  assertEquals(listed.read, ['words'])
+  assertEquals(listed.refusals, [true, true, true])
+})
+
 let isolation = await (async () => {
   let { h, run, call, request, project, elsewhere, owner, other } =
     await fixture()
