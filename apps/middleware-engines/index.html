@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="An interactive case study: middleware can intercept actions. Engines preserve the dispatch path while keeping side-effects flexible.">
+    <meta name="theme-color" content="#f5f3ec">
+    <title>From middleware to engines · An interactive case study</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="main.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#comparison">Skip to the comparison</a>
+    <main>
+      <header class="intro">
+        <p
+          class="eyebrow"><span class="mark" aria-hidden="true">↳</span> An architectural case study <span class="read-time">About one minute</span></p>
+        <h1>From middleware<br>to <em>engines.</em></h1>
+        <p
+          class="lede">Keep the side-effects. <strong>Remove the power to intercept actions.</strong></p>
+        <p
+          class="context">Middleware can watch state, too. The architectural change is what an engine cannot do: delay, rename, or swallow an action on its way to the reducer. It watches committed state and can dispatch new actions, each through the same direct path.</p>
+      </header>
+
+      <section class="experiment" aria-labelledby="experiment-title">
+        <div class="experiment-head">
+          <div>
+            <p class="eyebrow">The experiment</p>
+            <h2 id="experiment-title">One action. Two interfaces.</h2>
+          </div>
+          <p class="file"><span aria-hidden="true">▤</span> architecture.pdf</p>
+        </div>
+        <div
+          class="configuration"><label for="mode">Middleware behavior</label><select id="mode"><option value="intercept">Intercept: delay → rename → consume</option><option value="observe">Watch state: preserve the action</option></select><p>Try both. Middleware can behave like an engine; its interface still permits interception.</p></div>
+        <p
+          class="input-action">Both dispatch <code>UPLOAD_QUEUED</code> with the same file and scheduled start.</p>
+        <div class="controls">
+          <button id="start"
+            class="primary">Queue an upload <span aria-hidden="true">→</span></button>
+          <button id="step" disabled>Next step</button>
+          <button id="play">Play walkthrough</button>
+          <button id="reset" class="quiet" disabled>Reset</button>
+          <span id="clock" class="clock">Ready</span>
+        </div>
+        <div class="milestones"
+          aria-hidden="true"><span data-phase="0">Queue</span><span data-phase="1">Wait</span><span data-phase="2">Start</span><span data-phase="3">33%</span><span data-phase="4">67%</span><span data-phase="5">Done</span></div>
+        <div class="insight" role="status" aria-live="polite"
+          aria-atomic="true"><span class="insight-mark" aria-hidden="true">◎</span><p id="insight">Queue an upload and compare the original action’s receipt. Then try the other middleware behavior.</p></div>
+        <div class="comparison" id="comparison">
+          <article class="lane middleware" aria-labelledby="middleware-title">
+            <div
+              class="lane-title"><span class="number">01</span><div><h3 id="middleware-title">Middleware</h3><p>May intercept the dispatch path.</p></div></div>
+            <div class="flow"
+              aria-label="Action flows through delay, rename, and transport middleware before lifecycle actions reach the reducer"><span>Action</span><b>→</b><span class="effect" id="middleware-flow">Delay · rename · send</span><b>→</b><span>Store</span></div>
+            <p
+              class="capability"><code>next(action)</code> decides what reaches the reducer.</p>
+            <p class="receipt"
+              data-receipt="left">Original action: not dispatched</p>
+            <div
+              class="widget"><span>Upload widget <small>reads the store</small></span><strong data-widget="left">No upload in state</strong><progress data-progress="left" max="100" value="0" aria-label="Middleware upload progress"></progress></div>
+            <div
+              class="store-head"><h4>Central store</h4><span data-count="left">0 uploads</span></div>
+            <pre class="state" data-state="left"
+              aria-label="Middleware central store">{ "uploads": [] }</pre>
+            <div
+              class="runtime"><span>Effect runtime <small>outside the store</small></span><p data-runtime="left">No pending work.</p></div>
+            <div
+              class="log-head"><h4>Actions reaching the reducer</h4><span data-total="left">0</span></div>
+            <ol class="actions" data-actions="left">
+              <li class="empty">No actions yet.</li>
+            </ol>
+            <details class="trace">
+              <summary>Full pipeline trace <span data-traces="left">0 events</span></summary>
+              <ol data-trace="left"></ol>
+            </details>
+          </article>
+          <article class="lane engines" aria-labelledby="engine-title">
+            <div
+              class="lane-title"><span class="number">02</span><div><h3 id="engine-title">Engine</h3><p>No interception point in its interface.</p></div></div>
+            <div class="flow"
+              aria-label="Action reaches the store, an engine watches the state, and sends result actions back"><span>Action</span><b>→</b><span>Store</span><b>⇄</b><span class="effect">Engine · send</span></div>
+            <p
+              class="capability"><code>read · subscribe · dispatch</code> — no <code>next</code>.</p>
+            <p class="receipt"
+              data-receipt="right">Original action: not dispatched</p>
+            <div
+              class="widget"><span>Upload widget <small>reads the store</small></span><strong data-widget="right">No upload in state</strong><progress data-progress="right" max="100" value="0" aria-label="Engine upload progress"></progress></div>
+            <div
+              class="store-head"><h4>Central store</h4><span data-count="right">0 uploads</span></div>
+            <pre class="state" data-state="right"
+              aria-label="Engine central store">{ "uploads": [] }</pre>
+            <div
+              class="runtime"><span>Effect runtime <small>outside the store</small></span><p data-runtime="right">No pending work.</p></div>
+            <div
+              class="log-head"><h4>Actions reaching the reducer</h4><span data-total="right">0</span></div>
+            <ol class="actions" data-actions="right">
+              <li class="empty">No actions yet.</li>
+            </ol>
+            <details class="trace">
+              <summary>Full pipeline trace <span data-traces="right">0 events</span></summary>
+              <ol data-trace="right"></ol>
+            </details>
+          </article>
+        </div>
+        <div class="second-view">
+          <div>
+            <h3>Another view, same state.</h3>
+            <p>This compact status bar reads each store independently. No upload-specific wiring to either widget.</p>
+          </div>
+          <div
+            class="status-pair"><span>Middleware <strong data-status="left">Nothing queued</strong></span><span>Engine <strong data-status="right">Nothing queued</strong></span></div>
+        </div>
+        <p
+          class="simulation-note">A deterministic simulation: both paths share the same transfer implementation and two-tick delay. No file is uploaded. Each visitor gets an independent run; reset or refresh starts over.</p>
+      </section>
+
+      <section class="lesson" aria-labelledby="lesson-title">
+        <p class="eyebrow">What I would change</p>
+        <h2
+          id="lesson-title">Constrain the interface.<br>Keep the behavior traceable.</h2>
+        <div class="principles">
+          <div><span>01 / The mistake</span><p>Giving side-effect code control over dispatch meant an action could be delayed, renamed, or swallowed before the reducer saw it. Tracing a name was no longer enough.</p></div>
+          <div><span>02 / The change</span><p>Remove the interception interface. Dispatch goes straight to the reducer. Engines observe committed state and dispatch separate actions to report their work.</p></div>
+          <div><span>03 / The payoff</span><p>Side-effects stay flexible: timers, uploads, retries, and result actions. Pending intent and progress can live in shared state, while the original action remains traceable.</p></div>
+        </div>
+      </section>
+
+      <details class="source" id="source">
+        <summary><span>The implementation</span><span>Read the functions running this demo ↗</span></summary>
+        <p>These are the running functions, displayed from the module itself. The middleware chain receives next and the action. The engine receives only state access, subscription, and dispatch. Its dispatch is the store’s own function; an observer cannot replace or withhold the action it is reacting to.</p>
+        <div class="code-pair">
+          <div>
+            <h3>Middleware</h3>
+            <pre><code id="middleware-code"></code></pre>
+          </div>
+          <div>
+            <h3>Engine</h3>
+            <pre><code id="engine-code"></code></pre>
+          </div>
+        </div>
+        <h3>The direct store dispatch</h3>
+        <pre><code id="store-code"></code></pre>
+        <h3>The shared transfer</h3>
+        <pre><code id="transfer-code"></code></pre>
+        <p><a href="model.js">Open the full model source</a> · <a href="main.js">Open the view source</a></p>
+      </details>
+      <aside class="nuance">
+        <h2>State observation is shared. Interception is the difference.</h2>
+        <p>Switch the middleware to “Watch state” and both runs have the same state and action history. That behavior is possible with middleware, but it depends on choosing not to intercept. The engine interface removes that capability. Engines can still dispatch new actions; they cannot change an action already being dispatched. This small example omits production concerns such as retries, cancellation, and duplicate-effect handling.</p>
+        <p><a href="https://redux.js.org/usage/side-effects-approaches">Redux: side-effect approaches ↗</a></p>
+      </aside>
+      <footer><span>From middleware to engines</span><span>An interactive architectural case study · <a href="#">Back to top ↑</a></span></footer>
+    </main>
+    <noscript><p class="noscript">Turn on JavaScript to run the interactive comparison. The explanation above is available without it.</p></noscript>
+  </body>
+</html>
