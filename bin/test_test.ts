@@ -37,9 +37,9 @@ for (let file of ['bin/test.ts', ...helpers]) {
   })
 }
 
-test('a runtime change still selects unrelated tests', () => {
+test('an executor change still selects unrelated tests', () => {
   equal(
-    affected(graph, ['packages/fp/mod.ts'], RUNS, ['bin/test-runtime.ts']),
+    affected(graph, ['packages/fp/mod.ts'], RUNS, ['packages/testing/run.ts']),
     true,
   )
 })
@@ -97,4 +97,14 @@ test('local selection checks changed sources and consumers and propagates failur
   equal(local.checked, [[['a.ts'], ['a_test.ts', 'a.ts', 'a.ts']]])
   equal(local.plan.ok, true)
   equal(failed.plan.ok, false)
+})
+
+test('dependency bookkeeping changes select their consumers without selecting unrelated tests', () => {
+  for (let path of ['packages/testing/main.ts', 'packages/testing/reads.ts']) {
+    equal(affected(graph, ['packages/fp/mod.ts'], RUNS, [path]), false)
+  }
+  equal(
+    affected(graph, ['packages/fp/mod.ts'], RUNS, ['bin/test-runtime.ts']),
+    true,
+  )
 })

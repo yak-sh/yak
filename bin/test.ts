@@ -290,10 +290,11 @@ export let ALSO = [
   rel(new URL('./test.gitconfig', import.meta.url)),
 ]
 
-/** What loads in every test runtime: its runner and preload. The
- * coordinator and its helpers launch tests; tests do not depend on them. */
+/** Execution and assertions are shared test dependencies. Selection, loading
+ * and pass bookkeeping have their own consumers; editing them does not change
+ * the behavior each product test checks. */
 export let RUNS = [
-  rel(import.meta.resolve('@yaks/testing/main')),
+  rel(new URL('../packages/testing/run.ts', import.meta.url)),
   rel(new URL('./test-runtime.ts', import.meta.url)),
 ]
 

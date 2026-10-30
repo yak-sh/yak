@@ -25,11 +25,12 @@
 // closing report says every failure again; each error is cut short (./run.ts
 // `brief`) unless `--verbose`. The exit code is 1 when a test failed.
 import { choose } from './choose.ts'
+import { drive } from './drive.ts'
 import { note, proof, remember, survey } from './deps.ts'
 import { find, tested } from './find.ts'
 import { examples } from './load.ts'
 import { observe } from './reads.ts'
-import { file, type Outcome, summary, timed } from './run.ts'
+import { summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
 // Before anything a test could start inherits it.
@@ -73,7 +74,7 @@ let chosen = given
     kind: () => platform,
     also: () => ['deno.json', 'deno.jsonc', 'deno.lock', ...flag('also')],
     runner: [
-      new URL('./main.ts', import.meta.url).pathname.replace(
+      new URL('./run.ts', import.meta.url).pathname.replace(
         `${Deno.cwd()}/`,
         '',
       ),
@@ -86,37 +87,26 @@ let pages = shown.filter((p) => running.has(p))
 let left = found.length + shown.length - running.size
 
 let planned = performance.now() - started
-let loading = 0
-let loads: Record<string, number> = {}
-
 let collected = collect()
 let picked = (t: Test) => tags.every((tag) => t.tags.includes(tag))
-let outcomes: Outcome[] = []
-let run = async (path: string, load: () => Promise<unknown>) => {
+let load = async (path: string) => {
   let at = collected.length
-  let begun = performance.now()
-  console.log(`loading ${path}`)
   observation.mark(path)
   from(path)
   try {
-    await load()
+    await (tested(path) ? import(here(path)) : examples(path))
   } catch (error) {
     test(`${path} loads`, () => {
       throw error
     })
   }
-  let loaded = performance.now() - begun
-  loading += loaded
-  loads[path] = loaded
-  // Executed bodies own fixtures; retain only report metadata after the file.
-  let tests = collected.splice(at).filter(picked)
-  outcomes.push(...await file(path, tests, timeout, loaded, verbose))
+  return collected.splice(at).filter(picked)
 }
-// Pages first: Deno's dynamic import costs more the larger the graph already
-// loaded, and every example is a module of its own. After the test modules'
-// graphs, the examples took 33 s to load; before them, 8 s.
-for (let p of pages) await run(p, () => examples(p))
-for (let m of modules) await run(m, () => import(here(m)))
+// Examples load before test modules, while the runtime's import graph is small.
+let { outcomes, loading, loads } = await drive([...pages, ...modules], load, {
+  timeout,
+  verbose,
+})
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some. Its pass is kept by its proof: its key, and
