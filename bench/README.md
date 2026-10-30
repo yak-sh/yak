@@ -391,22 +391,26 @@ residual and create-scaling investigation.
 
 bench/paired.ts groups benchmarks by the reference commit of their banked
 median, then measures each group at that revision and HEAD under the same
-driver: this checkout's bench files and @yaks/benchmark, copied into an archive
-of each revision. It holds the box-wide lock across one unmeasured run of each,
-so no round times one tree's cold compile caches against the other's warm ones.
-Separate collectors keep the before, current and after sequences equally warm
-through rounds of reference, current, reference (at least six, more with more
-benches, for the within-round sign comparison); each probe owns its seeded graph
-and no live database is copied. A bench is slower when every round's current
-figure is past both references beside it (or every current figure past every
-reference one) and its median is past the reference's by more than the slack its
-baseline banked. The figure is CPU time in every suite (@yaks/benchmark
-`stopwatch`); missing CPU never falls back to wall time. Collectors include CPU
-from long-lived processes through external counters or server reports. Other
-work on the box during the bracket is recorded; reference rounds that drift
-apart make the whole comparison inconclusive. So does older code that cannot run
-today's driver; a failure of the current code's bench is a failure. The
-comparison banks nothing.
+driver: this checkout's bench files, @yaks/benchmark and the fixture runtimes
+listed in `bench/driver.ts`, copied into an archive of each revision. Product
+modules keep their revision's code. The driver identity includes its fixture
+sources, so a resumed collection cannot mix fixture versions. It holds the
+box-wide lock across one unmeasured run of each, so no round times one tree's
+cold compile caches against the other's warm ones. Separate collectors keep the
+before, current and after sequences equally warm through rounds of reference,
+current, reference (at least six, more with more benches, for the within-round
+sign comparison); each probe owns its seeded graph and no live database is
+copied. A bench is slower when every round's current figure is past both
+references beside it (or every current figure past every reference one) and its
+median is past the reference's by more than the slack its baseline banked. The
+figure is CPU time in every suite (@yaks/benchmark `stopwatch`); missing CPU
+never falls back to wall time. Collectors include CPU from long-lived processes
+through external counters or server reports. Other work on the box during the
+bracket is recorded; reference rounds that drift apart make the whole comparison
+inconclusive. So does older code that cannot run today's driver; a failure of
+the current code's bench is a failure. The comparison banks nothing. The monitor
+reports a slowdown only after every reference group completes under the same
+collection contract.
 
 To inspect one directly while holding the shared measurement lock:
 
