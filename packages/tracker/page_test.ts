@@ -28,7 +28,9 @@ type El = { tagName: string; href?: string; src?: string; type?: string }
 
 // A page whose server answers each address with the status `files` gives it,
 // or drops the connection for any other.
-let page = (files: Record<string, number>, scripts: string[] = []) => {
+type Script = { src: string; type?: string; crossOrigin?: string }
+
+let page = (files: Record<string, number>, scripts: Script[] = []) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
@@ -61,7 +63,7 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
     document: {
       currentScript: { dataset: { yakAt: '/cookbook/', yakVersion: '5' } },
       baseURI: at,
-      scripts: scripts.map((src) => ({ src })),
+      scripts,
       readyState: 'complete',
       body: {
         innerText: 'A cookbook with plenty on the page. '.repeat(4),
@@ -77,7 +79,7 @@ let page = (files: Record<string, number>, scripts: string[] = []) => {
       }),
     },
     location: new URL(at),
-    navigator: {},
+    navigator: { userAgent: 'Test Browser/1.0' },
     self: win,
     globalThis: win,
     fetch: (url: string, init?: RequestInit) => win.fetch(url, init),
@@ -154,21 +156,35 @@ test('an error logged to the console is filed with what it was wrapped around', 
 })
 
 // A script from another origin throws, and the browser hides all but this.
-let muted = async (scripts: string[]) => {
+let muted = async (scripts: Script[]) => {
   let p = page({}, scripts)
   let message = 'Script error.'
   p.heard.get('error')!({ target: p.win, error: null, message, lineno: 0 })
   return (await p.bodies()).map((b) => [b.message, b.stack])
 }
 
-test('a muted script error names the page and the scripts from elsewhere', async () =>
-  equal(await muted([`${at}main.js`, 'https://cdn.test/lib.js', '']), [[
+test('a muted script error keeps its browser and script loading modes', async () => {
+  let scripts = [
+    { src: `${at}main.js`, type: 'module' },
+    { src: 'https://cdn.test/lib.js', crossOrigin: 'anonymous' },
+    { src: '' },
+  ]
+  equal(await muted(scripts), [[
     'Script error.',
-    `    at ${at}\n    at https://cdn.test/lib.js`,
-  ]]))
+    `    at ${at}\n    at https://cdn.test/lib.js\n` +
+    'Browser: Test Browser/1.0\n' +
+    `Scripts: [{"src":"${at}main.js","type":"module","crossOrigin":""},` +
+    '{"src":"https://cdn.test/lib.js","type":"classic","crossOrigin":"anonymous"},' +
+    '{"src":"","type":"classic","crossOrigin":""}]',
+  ]])
+})
 
-test('a muted script error in a page of only its own scripts names the page', async () =>
-  equal(await muted([`${at}main.js`]), [['Script error.', `    at ${at}`]]))
+test('a muted error with no foreign script remains reported without guessing its origin', async () =>
+  equal(await muted([{ src: `${at}main.js`, type: 'module' }]), [[
+    'Script error.',
+    `    at ${at}\nBrowser: Test Browser/1.0\n` +
+    `Scripts: [{"src":"${at}main.js","type":"module","crossOrigin":""}]`,
+  ]]))
 
 let link = { tagName: 'LINK', href: file }
 

@@ -94,12 +94,25 @@
   // A script from another origin that throws is muted by the browser: the
   // event says "Script error." with no file, line or error. What the page can
   // still say is where it was and which scripts from elsewhere it held, as the
-  // frames of its stack. None at all points outside the page: an extension, or
-  // the browser itself.
+  // frames of its stack. The inventory is evidence of what the page held,
+  // not proof of which script threw: injected scripts may already be gone.
   let muted = (e) => e.error == null && !e.filename && !e.lineno
-  let strangers = () =>
-    Array.from(document.scripts || [], (s) => s.src)
+  let scripts = () =>
+    Array.from(document.scripts || [], (s) => ({
+      src: s.src || '',
+      type: s.type || 'classic',
+      crossOrigin: s.crossOrigin || '',
+    }))
+  let mutedStack = () => {
+    let all = scripts()
+    let from = all.map((s) => s.src)
       .filter((src) => src && !mine(at(src) || location))
+    return [
+      ...[location.href, ...from].map((u) => `    at ${u}`),
+      `Browser: ${navigator.userAgent || 'unknown'}`,
+      `Scripts: ${JSON.stringify(all)}`,
+    ].join('\n')
+  }
 
   // The page's own fetch, from before the wrapper below.
   let plain = globalThis.fetch
@@ -170,12 +183,9 @@
     if (foreign(e) || decided(e.error)) return
     // A notice the browser raises itself, such as a ResizeObserver loop, has
     // no error: its own message is the one that says what happened.
-    let from = muted(e) ? strangers() : []
     broke({
       message: (e.error == null && e.message) || said(e.error),
-      stack: muted(e)
-        ? [location.href, ...from].map((u) => `    at ${u}`).join('\n')
-        : e.error && e.error.stack,
+      stack: muted(e) ? mutedStack() : e.error && e.error.stack,
       url: e.filename || location.href,
       line: e.lineno,
       mechanism: 'onerror',
