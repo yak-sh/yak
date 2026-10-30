@@ -614,3 +614,41 @@ test('skill per-pass lease release errors reject the awaited effect and retry', 
     undefined,
   )
 })
+
+test('a skill failure a retry did not clear is reported once until it clears', async () => {
+  let reasons: string[][] = [
+    ['raced'],
+    [],
+    ['stuck'],
+    ['stuck'],
+    ['stuck'],
+    [],
+    ['stuck'],
+    ['stuck'],
+  ]
+  let told: [string, unknown][] = []
+  let handlers = skillEffects(
+    {
+      graph,
+      report: (error, context) => {
+        told.push([(error as Error).message, context?.tags?.root])
+      },
+    },
+    { skills: true },
+    {
+      roots: () => Promise.resolve(['/repo']),
+      sync: () =>
+        Promise.resolve({ ...report(), conflicts: reasons.shift() ?? [] }),
+    },
+  )
+  let warn = console.warn
+  console.warn = () => {}
+  try {
+    for (let round = 0; round < 5; round++) await invoke(handlers)
+    assertEquals(told, [['skills at /repo: conflict: stuck', '/repo']])
+    for (let round = 0; round < 3; round++) await invoke(handlers)
+    assertEquals(told.length, 2)
+  } finally {
+    console.warn = warn
+  }
+})

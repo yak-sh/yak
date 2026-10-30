@@ -3,10 +3,12 @@
 // The pool owns these promises, including polling and shutdown cleanup. Imports
 // and exports share a bounded queue and a per-pass lease; the watcher has its
 // own lease so graph edits need not wait for the polling duty to finish. A
-// poll stats the files a sync would read and syncs only when they moved.
+// poll stats the files a sync would read and syncs only when they moved. What a
+// pass could not do is retried, so one a retry did not clear reaches the tracker.
 
 import { type Handlers, holding, sleep } from '@yaks/effects'
 import type { Eid, Graph } from '@yaks/graph'
+import type { Context } from '@yaks/tracker/report'
 import { derivedEid } from '@yaks/graph/identity'
 import { dirname, join, resolve } from 'node:path'
 import { skillRoots, syncSkills } from './skill-mirror.ts'
@@ -22,6 +24,7 @@ export type SkillHost = {
   stopping?: AbortSignal
   me?: Eid
   gone?: (holder: Eid) => Promise<boolean>
+  report?: (error: unknown, context?: Partial<Context>) => void | Promise<void>
 }
 
 /** Injectable boundaries for tests; production uses the mirror and timers. */
@@ -136,6 +139,27 @@ export let skillEffects = (
     }
     return false
   }
+  // What each root's last pass could not do, and whether it has been reported.
+  // A race clears on the next pass; one that survives a retry is a failure, told
+  // once however often it is retried, and told again if it clears and returns.
+  let unsettled = new Map<string, Map<string, boolean>>()
+  let unresolved = async (root: string, reasons: string[]): Promise<void> => {
+    let was = unsettled.get(root)
+    let now = new Map<string, boolean>()
+    for (let reason of new Set(reasons)) {
+      let told = was?.get(reason)
+      now.set(reason, told != undefined)
+      if (told == undefined) {
+        console.warn('@yaks/persona skills —', root, reason)
+      } else if (!told) {
+        await host.report?.(new Error(`skills at ${root}: ${reason}`), {
+          tags: { step: 'skill_files', root },
+        })
+      }
+    }
+    if (now.size) unsettled.set(root, now)
+    else unsettled.delete(root)
+  }
   let pass = async (): Promise<void> => {
     if (host.stopping?.aborted) return
     await leased(
@@ -145,6 +169,9 @@ export let skillEffects = (
         seen = await roots(host.graph)
         for (let root of settled.keys()) {
           if (!seen.includes(root)) settled.delete(root)
+        }
+        for (let root of unsettled.keys()) {
+          if (!seen.includes(root)) unsettled.delete(root)
         }
         for (let root of seen) {
           if (signal.aborted) break
@@ -157,12 +184,10 @@ export let skillEffects = (
           if (!result.conflicts.length && !result.failed.length) {
             settled.set(root, before)
           }
-          for (let path of result.conflicts) {
-            console.warn(`@yaks/persona skills — conflict: ${path}`)
-          }
-          for (let reason of result.failed) {
-            console.warn('@yaks/persona skills —', root, reason)
-          }
+          await unresolved(root, [
+            ...result.conflicts.map((path) => `conflict: ${path}`),
+            ...result.failed,
+          ])
         }
       },
     )

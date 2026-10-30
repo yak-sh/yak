@@ -87,12 +87,18 @@ export let effects = (
       let m = await personaMirror(host.graph, remembered(db))
       said = m.said
       let done = await sync(m.binding)
-      for (let f of done.failed) console.warn('@yaks/persona files —', f)
+      for (let f of done.failed) {
+        console.warn('@yaks/persona files —', f)
+        await host.report?.(new Error(`persona files: ${f}`), {
+          tags: { step: 'persona_files' },
+        })
+      }
       for (let p of done.conflicts) {
         console.warn(`@yaks/persona files — ${p} was edited by hand, left`)
       }
     } catch (error) {
       console.warn('@yaks/persona files —', error)
+      await host.report?.(error, { tags: { step: 'persona_files' } })
     }
   }
   let soon = () => {

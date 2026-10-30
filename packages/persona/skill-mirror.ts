@@ -1,7 +1,7 @@
 // Skills import from the primary checkout. Graph exports are proposals in a
 // dedicated linked worktree: no mirror write is allowed to touch main.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
+import { edgeEid } from '@yaks/edge'
 import { fileOf } from '@yaks/file'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -29,8 +29,6 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (b: Bundle | undefined, name: string, prop: string): string =>
   String(comp(b, name)[prop] ?? '')
-let linkId = (skill: string, file: string) =>
-  derivedEid(`skill-file|${skill}|${file}`)
 let skillPath = (title: string) => `.claude/skills/${title}/SKILL.md`
 let covered = (path: string) =>
   /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/.+/i.test(path) &&
@@ -152,6 +150,19 @@ let syncRepository = async (
       b.entity.eid,
       b,
     ]))
+    // A locator is known by its ends. The row holding them may predate the id
+    // @yaks/edge derives, and an old id can be a name for it (@yaks/alias), so
+    // a guard read from a computed id would refuse that row on every pass.
+    let located = (skill: string, file: string): Bundle => {
+      let held = edges.find((b) =>
+        str(b, 'edge', 'from') == skill && str(b, 'edge', 'to') == file
+      )
+      return guarded(held, {
+        entity: { eid: held?.entity.eid ?? edgeEid(skill, 'references', file) },
+        edge: { from: skill, to: file },
+        references: {},
+      })
+    }
     let values = renderFiles(skills, places, files)
     for (let path of values.keys()) {
       if (!covered(path)) throw new Refused(`skills: unsafe path ${path}`)
@@ -282,11 +293,7 @@ let syncRepository = async (
           entity: { eid: fid },
           file: { path, root: repository },
         }))
-        bundles.push(guarded(before.get(linkId(eid, fid)), {
-          entity: { eid: linkId(eid, fid) },
-          edge: { from: eid, to: fid },
-          references: {},
-        }))
+        bundles.push(located(eid, fid))
         pending.set(d.path, {
           blob: blobs.get(d.path)!,
           hash: await blobOf(renderSkill(parsed)),
@@ -543,11 +550,7 @@ let syncRepository = async (
               }),
             )
           }
-          moves.push(guarded(undefined, {
-            entity: { eid: linkId(skill.entity.eid, fid) },
-            edge: { from: skill.entity.eid, to: fid },
-            references: {},
-          }))
+          moves.push(located(skill.entity.eid, fid))
         }
       }
     }
