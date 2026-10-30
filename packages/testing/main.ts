@@ -124,7 +124,7 @@ let s = await survey([
 let remembered: Record<string, string> = s
   ? Object.fromEntries(
     await Promise.all(
-      passing.map(async (p) => [p, await proof(s, key.get(p)!, read(p))]),
+      passing.map(async (p) => [p, await proof(s, key.get(p)!, read(p), true)]),
     ),
   )
   : {}
