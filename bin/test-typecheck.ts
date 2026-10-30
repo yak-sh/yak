@@ -3,6 +3,7 @@
 // holds the alias still while Deno reads, including when the command fails.
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { Check } from './test-checks.ts'
+import { anchors } from './test-typecheck-anchors.ts'
 
 let cache = Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
 
@@ -21,7 +22,12 @@ export let typecheck = async (
   let alias = join(directory, 'typecheck')
   let anchor = join(directory, 'typecheck-anchor.ts')
   let next = `${alias}.next.${Deno.pid}`
+  let members: string[] = []
   try {
+    members = await anchors(root)
+    await Promise.all(
+      members.map((p) => Deno.writeTextFile(join(root, p), 'export {}\n')),
+    )
     await Deno.writeTextFile(anchor, 'export {}\n')
     await Deno.symlink(resolve(root), next)
     await Deno.rename(next, alias)
@@ -40,10 +46,18 @@ export let typecheck = async (
         join(alias, 'deno.json'),
         ...args.filter((a) => a.startsWith('--')),
         anchor,
+        ...members.map((p) => join(alias, p)),
         ...args.filter((a) => !a.startsWith('--')).map(at),
       ],
     }, (text) => text.replaceAll(alias, root))
   } finally {
+    await Promise.all(
+      members.map((p) =>
+        Deno.remove(join(root, p)).catch((error) => {
+          if (!(error instanceof Deno.errors.NotFound)) throw error
+        })
+      ),
+    )
     await Deno.remove(next).catch((error) => {
       if (!(error instanceof Deno.errors.NotFound)) throw error
     })

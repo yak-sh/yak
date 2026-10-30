@@ -8,6 +8,15 @@ let second = join(directory, 'second')
 for (let root of [first, second]) {
   await Deno.mkdir(root)
   await Deno.writeTextFile(join(root, 'source.ts'), root)
+  await Deno.writeTextFile(
+    join(root, 'deno.json'),
+    JSON.stringify({ workspace: ['./portable'] }),
+  )
+  await Deno.mkdir(join(root, 'portable'))
+  await Deno.writeTextFile(
+    join(root, 'portable/deno.json'),
+    JSON.stringify({ compilerOptions: { lib: ['dom', 'esnext'] } }),
+  )
 }
 let cache = join(directory, 'cache')
 let check = { name: 'types', args: ['check', '--doc', 'source.ts'] }
@@ -20,6 +29,10 @@ let run = async (check: { args: string[] }) => {
   called.push(check.args)
   equal(await Deno.readTextFile(check.args.at(-1)!), [first, second][index])
   equal(await Deno.readTextFile(check.args.at(-2)!), 'export {}\n')
+  equal(
+    check.args.at(-2),
+    join(cache, 'typecheck/portable/.typecheck-anchor.ts'),
+  )
   opened[index]()
   await new Promise<void>((go) => releases.push(go))
   equal(await Deno.readTextFile(check.args.at(-1)!), [first, second][index])
@@ -34,15 +47,22 @@ let whileFirst = await probe.tryLock(true)
 let b = typecheck(check, run, { root: second, directory: cache })
 releases[0]()
 let failure = await a
+let cleanedFirst = await Deno.stat(join(first, 'portable/.typecheck-anchor.ts'))
+  .then(() => false, () => true)
 await entered[1]
 let whileSecond = await probe.tryLock(true)
 releases[1]()
 let success = await b
+let cleanedSecond = await Deno.stat(
+  join(second, 'portable/.typecheck-anchor.ts'),
+).then(() => false, () => true)
 let released = await probe.tryLock(true)
 await probe.unlock()
 await Deno.remove(directory, { recursive: true })
 
 test('type checks hold stable module URLs until completion and release a failed reader', () => {
+  equal(cleanedFirst, true)
+  equal(cleanedSecond, true)
   equal(whileFirst, false)
   equal(whileSecond, false)
   equal(released, true)

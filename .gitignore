@@ -65,3 +65,6 @@ node_modules.lock/
 
 # Browser binary wire codec, generated from @yaks/vocab.
 /workers/yak/public/_wire.js
+
+# Empty workspace roots used while checking types.
+.typecheck-anchor.ts
