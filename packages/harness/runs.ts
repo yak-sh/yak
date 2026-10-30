@@ -20,7 +20,7 @@ import { BEST, type Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
-import { conjoin } from '@yaks/query'
+import { and, conjoin, parse, stringify } from '@yaks/query'
 import { transcript, usingBefore } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
@@ -160,13 +160,19 @@ let sessionList: Runs[string] = async (call, graph) => {
   )
   if (rows.length <= size) return rows
   let page = rows.slice(0, size)
-  let next = conjoin(query, `.after=${page[size - 1].entity.eid}`)
+  // The first `.after` of a query is the one it reads from, so the next page's
+  // query replaces the cursor this one arrived with.
+  let rest = parse(query).clauses.filter((c) => c.kind != 'after')
+  let next = conjoin(
+    stringify(and(...rest)),
+    `.after=${page[size - 1].entity.eid}`,
+  )
   return [...page, {
     entity: { eid: '$said' },
     content: {
-      body: `${size} sessions shown and more match. Query \`${next}\` reads ` +
-        `the next page, a larger limit a longer one, and query \`.session\` ` +
-        `every status.`,
+      body: `More sessions match than this page of ${size}. Query ` +
+        `\`${next}\` reads the next page, a larger limit a longer one, and ` +
+        `query \`.session\` every status.`,
     },
     output: { source: call.entity.eid },
   }]

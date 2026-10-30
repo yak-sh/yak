@@ -118,11 +118,24 @@ test('session_list answers a page of live sessions, newest first, and says how t
     assertEquals(stamps, stamps.toSorted().toReversed())
     assert(page.said?.includes(`.after=${page.ids.at(-1)}`), page.said)
 
-    let next = page.said!.match(/`([^`]*\.after=[^`]*)`/)![1]
-    let rest = await list({ query: next })
+    let next = (said?: string) => said?.match(/`([^`]*\.after=[^`]*)`/)?.[1]
+    let rest = await list({ query: next(page.said) })
     assertEquals(rest.ids.length, 2)
-    assertEquals(new Set([...page.ids, ...rest.ids]).size, BEST + 2)
     assertEquals(rest.said, undefined)
+
+    // Walking short pages reaches every live session once and then stops.
+    let seen: string[] = []
+    let query: string | undefined
+    do {
+      let step: Awaited<ReturnType<typeof list>> = await list({
+        limit: 8,
+        ...query ? { query } : {},
+      })
+      seen.push(...step.ids)
+      query = next(step.said)
+    } while (query && seen.length <= BEST + 2)
+    assertEquals(seen.length, BEST + 2)
+    assertEquals(new Set(seen).size, BEST + 2)
 
     assertEquals((await list({ limit: 2 })).ids.length, 2)
     let longer = await list({ limit: BEST + 2 })
