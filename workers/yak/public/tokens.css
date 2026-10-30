@@ -52,7 +52,8 @@
     --room: 4px;
     --rule: linear-gradient(var(--graphite) 0 0) center / 100% var(--stroke)
       no-repeat;
-    --rim: color-mix(in srgb, var(--paper), white 65%);
+    /* A tab not chosen: a sheet behind the one in front. */
+    --behind: color-mix(in srgb, var(--ground), var(--line) 40%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
 
     /* Type. */
@@ -89,7 +90,6 @@
       --ink: var(--oat);
       --soft-ink: var(--taupe);
       --line: var(--bark);
-      --rim: color-mix(in srgb, var(--paper), var(--soft-ink) 18%);
       --accent: var(--moss);
       --warn: var(--rose);
       --mine: var(--ember);
@@ -104,7 +104,6 @@
     --ink: var(--oat);
     --soft-ink: var(--taupe);
     --line: var(--bark);
-    --rim: color-mix(in srgb, var(--paper), var(--soft-ink) 18%);
     --accent: var(--moss);
     --warn: var(--rose);
     --mine: var(--ember);

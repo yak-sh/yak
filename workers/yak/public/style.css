@@ -932,11 +932,11 @@
   }
 
   /* The sidebar leans against nothing here — the document beside it is not a
-     panel — so the control's edge and the notch its current row cuts in that
-     edge are both pointed at nothing. */
+     panel — so it has no edge, and its current row is a closed pencil box. */
   .Docs_Nav {
     --nav-panel: transparent;
     --nav-edge: transparent;
+    --nav-shut: var(--graphite);
   }
 
   .Docs_Contents {

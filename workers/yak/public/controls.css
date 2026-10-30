@@ -654,7 +654,10 @@
   }
 
   /* One row of physical tabs meets one sheet. Native radios own selection,
-     including arrow keys, so the component works without JavaScript. */
+     including arrow keys, so the component works without JavaScript. Each
+     tab is drawn in pencil on its top and sides; the panel's own top line is
+     every tab's foot, and the selected tab covers it, so tab and panel are
+     one sheet. */
   .Tabs {
     display: flex;
     flex-wrap: wrap;
@@ -691,19 +694,28 @@
     min-width: 0;
     min-height: 3rem;
     overflow-wrap: normal;
-    margin: .35rem 0 -1px;
+    margin: .35rem 0 0;
     padding: .55rem .45rem;
-    border: 1px solid var(--edge);
-    background: linear-gradient(var(--ground), color-mix(in srgb, var(--ground),
-      var(--line) 60%));
-    box-shadow: inset 0 1px var(--rim);
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: var(--corner) var(--corner) 0 0;
+    background: var(--behind);
     color: var(--soft-ink);
     font-size: .85rem;
     font-weight: 700;
     line-height: 1.25;
     text-align: center;
     cursor: pointer;
-    z-index: 1;
+  }
+  .Tabs_Tab::after {
+    content: '';
+    position: absolute;
+    inset: -1px -1px 0;
+    border: var(--stroke) solid var(--graphite);
+    border-bottom: 0;
+    border-radius: var(--corner) var(--corner) 0 0;
+    filter: url(pencil.svg#line);
+    pointer-events: none;
   }
   @media (max-width: 480px) {
     .Tabs_Tab {
@@ -722,24 +734,23 @@
     position: relative;
     margin: 0;
     text-align: left;
+    z-index: 1;
   }
   .Tabs_Item > input:checked ~ .Tabs_Tab {
     margin-top: 0;
     padding-top: .9rem;
-    border-bottom-color: var(--paper);
-    background: linear-gradient(var(--accent) 4px, var(--paper) 4px)
-      padding-box;
+    background: var(--paper);
     color: var(--ink);
-    box-shadow: inset 0 1px var(--rim);
     z-index: 2;
   }
-  .Tabs_Item > input:checked ~ .Tabs_Tab::after {
-    position: absolute;
+  /* The gap the selected tab opens in the panel's line. It stops short of the
+     tab's sides, so they meet the line, and the first tab's meets the panel's
+     corner. */
+  .Tabs_Item > input:checked ~ .Tabs_Tab::before {
     content: '';
-    right: 0;
-    bottom: -2px;
-    left: 0;
-    height: 3px;
+    position: absolute;
+    inset: auto 2px calc(-1.5 * var(--room));
+    height: calc(3 * var(--room));
     background: var(--paper);
   }
   .Tabs_Item > input:checked ~ .Tabs_Panel {
@@ -763,75 +774,85 @@
     stroke-linejoin: round;
   }
 
-  /* --nav-panel is the panel this nav leans against: the current row merges
-     into it, which is what makes it read as the page you are on. A nav with
-     nothing beside it points both at transparent (.Docs_Nav). */
+  /* A column of links beside an edge, the edge between this nav and the
+     panel it leans against. The current link is a tab drawn in pencil and
+     filled with the panel, and it covers the edge, so it opens into the panel,
+     which is what makes it read as the page you are on. A nav with no panel
+     beside it points --nav-edge and --nav-panel at nothing, and --nav-shut at
+     graphite to close the tab's open side, so its current link is a pencil
+     box (.Docs_Nav, and every nav on a phone). */
   .SideNav {
     --nav-panel: var(--paper);
-    --nav-edge: var(--edge);
+    --nav-edge: var(--graphite);
+    --nav-shut: transparent;
+    position: relative;
     display: grid;
     gap: .4rem;
-    border-right: 1px solid var(--nav-edge);
+  }
+  .SideNav::after {
+    content: '';
+    position: absolute;
+    inset: 0 calc(-1 * var(--room)) 0 auto;
+    width: calc(var(--stroke) + 2 * var(--room));
+    background: linear-gradient(var(--nav-edge) 0 0) center / var(--stroke)
+      100% no-repeat;
+    filter: url(pencil.svg#line);
+    pointer-events: none;
   }
   .SideNav a {
     position: relative;
     display: flex;
     align-items: center;
     gap: .65rem;
-    margin: 0 -1px 0 .35rem;
     padding: .6rem .8rem;
-    border: 1px solid var(--edge);
-    background: linear-gradient(to right, var(--ground), color-mix(in srgb,
-      var(--ground), var(--line) 35%));
+    border: 1px solid transparent;
+    border-radius: var(--corner);
     color: var(--soft-ink);
     font-size: .95rem;
     text-decoration: none;
   }
   .SideNav a:hover {
     color: var(--ink);
-    background: var(--paper);
   }
   .SideNav a[aria-current='page'] {
-    margin-left: 0;
-    background: linear-gradient(to right, var(--accent) 4px, var(--paper) 4px)
-      padding-box;
-    border-right-color: var(--nav-panel);
+    background: var(--nav-panel);
     color: var(--ink);
     font-weight: 800;
     z-index: 1;
   }
   .SideNav a[aria-current='page']::after {
-    position: absolute;
     content: '';
-    inset: 0 -2px 0 auto;
-    width: 3px;
+    position: absolute;
+    inset: -1px 0 -1px -1px;
+    border: var(--stroke) solid var(--graphite);
+    border-right-color: var(--nav-shut);
+    border-radius: var(--corner);
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
+  /* The gap the current tab opens in the edge. */
+  .SideNav a[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    inset: 2px calc(-1.5 * var(--room)) 2px auto;
+    width: calc(3 * var(--room));
     background: var(--nav-panel);
   }
+  /* A rule between groups of links, stopping short of the edge. */
   .SideNav hr {
-    width: 100%;
+    height: calc(var(--stroke) + 2 * var(--room));
+    margin: calc(1rem - var(--room)) .8rem;
     border: 0;
-    border-top: 1px solid var(--edge);
-    box-shadow: 0 1px var(--rim);
-    margin: 1rem 0;
+    background: var(--rule);
+    filter: url(pencil.svg#line);
   }
   @media (max-width: 700px) {
     .SideNav {
+      --nav-panel: transparent;
+      --nav-edge: transparent;
+      --nav-shut: var(--graphite);
       display: flex;
       flex-wrap: wrap;
-      border: 0;
-    }
-    .SideNav a {
-      margin: 0;
-      border-color: transparent;
-      background: none;
-    }
-    .SideNav a[aria-current='page'] {
-      border-color: transparent;
-      background: color-mix(in srgb, var(--accent) 10%, transparent);
-      box-shadow: inset 3px 0 var(--accent);
-    }
-    .SideNav a[aria-current='page']::after {
-      display: none;
     }
   }
 

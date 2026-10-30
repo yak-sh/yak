@@ -312,7 +312,17 @@
     gap: 2rem;
     min-height: 100vh;
     padding: 2rem 1.25rem;
-    border-right: 1px solid var(--line);
+  }
+  /* The edge between the side and the body, which the current tab opens. */
+  .Desk_Side::after {
+    content: '';
+    position: absolute;
+    inset: 0 calc(-1 * var(--room)) 0 auto;
+    width: calc(var(--stroke) + 2 * var(--room));
+    background: linear-gradient(var(--graphite) 0 0) center / var(--stroke)
+      100% no-repeat;
+    filter: url(pencil.svg#line);
+    pointer-events: none;
   }
   .Desk_Brand {
     display: flex;
@@ -336,7 +346,8 @@
     font-size: var(--fine);
   }
   .Desk .SideNav {
-    margin-right: calc(-1.25rem - 1px);
+    --nav-edge: transparent;
+    margin-right: -1.25rem;
   }
   .Desk_Body {
     min-width: 0;
@@ -507,12 +518,16 @@
       display: block;
     }
     .Desk_Side {
-      position: static;
+      position: relative;
       min-height: 0;
       gap: 1rem;
       padding: 1rem;
-      border-right: 0;
-      border-bottom: 1px solid var(--line);
+    }
+    .Desk_Side::after {
+      inset: auto 0 calc(-1 * var(--room));
+      width: auto;
+      height: calc(var(--stroke) + 2 * var(--room));
+      background: var(--rule);
     }
     .Desk_Brand {
       font-size: 1.1rem;
