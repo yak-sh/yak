@@ -222,7 +222,7 @@ let observed = (at: Collection): Judgement => {
   }
 }
 
-test('a later group failure checkpoints completed CPU observations and resumes only unfinished work', async () => {
+let checkpointed = await (async () => {
   let plan = [collection('read'), collection('write')]
   let checkpoints: Judgement[] = []
   let failed = await collectGroups(plan, (at) => {
@@ -236,6 +236,11 @@ test('a later group failure checkpoints completed CPU observations and resumes o
       return Promise.resolve()
     },
   })
+  return { plan, checkpoints, failed }
+})()
+
+test('a later group failure checkpoints completed CPU observations', () => {
+  let { plan, checkpoints, failed } = checkpointed
   equal(failed.verdict, 'failed')
   equal(failed.complete, false)
   equal(checkpoints.map((c) => c.groups?.length), [1, 1])
@@ -245,6 +250,10 @@ test('a later group failure checkpoints completed CPU observations and resumes o
     110,
     105,
   ])
+})
+
+test('resuming completed CPU observations measures only unfinished work', async () => {
+  let { plan, failed } = checkpointed
   let measured: string[] = []
   let completed = await collectGroups(plan, (at) => {
     measured.push(at.names[0])
