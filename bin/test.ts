@@ -31,16 +31,19 @@ let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
-let { find, tested, walk } = await import('@yaks/testing/find')
+let { find, tested } = await import('@yaks/testing/find')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
 let { library } = await import('./sqlite.ts')
 
-export let SOURCES = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
 export let ROOTS = [
-  ...SOURCES.filter((path) => path != 'plugins'),
+  'apps',
+  'bench',
+  'bin',
+  'packages',
+  'workers',
   'homepage-concepts',
 ]
 
@@ -335,7 +338,6 @@ export let prepare = async (
     changes,
     format,
     find,
-    walk,
     chosen,
     check,
     ready: async (quiet: boolean) => {
@@ -356,24 +358,23 @@ export let prepare = async (
   let changedPaths = all ? [] : await effects.changes()
   let changedFiles = await effects.format(changedPaths)
   let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
-  let sources = await effects.walk(paths.length ? paths : SOURCES)
   let files = [
     ...tests.filter((f) => on(platform(f))),
     ...on('deno') ? pages : [],
   ]
   // Choose files before starting runtimes; hand each its dependency keys.
   let changed = !paths.length && !all ? changedPaths : undefined
-  let { keys, run, reaches, affected, sources: typed } = await effects.chosen(
+  let { keys, run, reaches } = await effects.chosen(
     files,
     all,
     [sqlite],
     changed,
-    sources.filter((f) =>
+    changedFiles.filter((f) =>
       /\.[mc]?[jt]sx?$/.test(f) &&
       !config.exclude.some((p) => matchesGlob(f, p) || f.startsWith(`${p}/`))
     ),
   )
-  if ((affected.length || typed.length) && reaches(READIES)) {
+  if (reaches(READIES)) {
     await effects.ready(!flags.includes('--verbose'))
   }
   let ok = all || await effects.check(changedFiles)

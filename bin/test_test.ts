@@ -47,7 +47,7 @@ test('an executor change still selects unrelated tests', () => {
 let planned = async (args: string[], shallow = false, pass = true) => {
   let git: string[][] = []
   let checked: string[][] = []
-  let selected: { all: boolean; changed?: string[] }[] = []
+  let selected: { all: boolean; changed?: string[]; sources: string[] }[] = []
   let files = ['a_test.ts', 'a.ts']
   let plan = await prepare(args, '/sqlite.so', {
     changes: () =>
@@ -61,9 +61,8 @@ let planned = async (args: string[], shallow = false, pass = true) => {
       }),
     format: (paths) => Promise.resolve(paths),
     find: () => Promise.resolve({ tests: [files[0]], pages: [files[1]] }),
-    walk: () => Promise.resolve([files[1]]),
-    chosen: (files, all, _also, changed) => {
-      selected.push({ all, changed })
+    chosen: (files, all, _also, changed, sources = []) => {
+      selected.push({ all, changed, sources })
       return Promise.resolve({
         keys: new Map(files.map((f) => [f, f])),
         run: files,
@@ -87,13 +86,13 @@ let failed = await planned([], false, false)
 test('--all in a shallow checkout runs every file without git history or duplicate source checks', () => {
   equal(whole.plan.run, ['a_test.ts', 'a.ts'])
   equal(whole.plan.ok, true)
-  equal(whole.selected, [{ all: true, changed: undefined }])
+  equal(whole.selected, [{ all: true, changed: undefined, sources: [] }])
   equal(whole.git, [])
   equal(whole.checked, [])
 })
 
 test('local selection keeps consumer tests, checks changed sources and propagates failures', () => {
-  equal(local.selected, [{ all: false, changed: ['a.ts'] }])
+  equal(local.selected, [{ all: false, changed: ['a.ts'], sources: ['a.ts'] }])
   equal(local.checked, [['a.ts']])
   equal(local.plan.run, ['a_test.ts', 'a.ts'])
   equal(local.plan.ok, true)
@@ -108,4 +107,30 @@ test('dependency bookkeeping changes select their consumers without selecting un
     affected(graph, ['packages/fp/mod.ts'], RUNS, ['bin/test-runtime.ts']),
     true,
   )
+})
+
+test('a changed source can ready its generated imports without consumer tests or a source walk', async () => {
+  let readied = false
+  let plan = await prepare([], '/sqlite.so', {
+    changes: () => Promise.resolve(['worker.ts', 'guide.md']),
+    format: (files) => Promise.resolve(files),
+    find: () => Promise.resolve({ tests: [], pages: [] }),
+    chosen: (files, _all, _also, _changed, sources) => {
+      equal(files, [])
+      equal(sources, ['worker.ts'])
+      return Promise.resolve({
+        keys: new Map(),
+        run: [],
+        affected: [],
+        sources: ['worker.ts'],
+        reaches: (paths) => paths.includes('workers/yak/testing.ts'),
+      })
+    },
+    check: () => Promise.resolve(readied),
+    ready: () => {
+      readied = true
+      return Promise.resolve()
+    },
+  })
+  equal(plan.ok, true)
 })
