@@ -28,6 +28,8 @@ import { Pending, said } from './writes.ts'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
+  /** The same transport for reads whose response carries serving metadata. */
+  door?: Door
   /** A filter line → the entities it selects, whole. A listing asks the Store
    * to screen platform bookkeeping using its authoritative vocabulary. */
   query: (
@@ -104,6 +106,7 @@ export let metaOf = (
   store: Door,
   base: Record<string, string> = {},
 ): Meta => ({
+  door: store,
   query: (line, opts) => {
     return store.consume(
       `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}${

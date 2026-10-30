@@ -10,8 +10,38 @@ import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
-import { answered, type Meta } from './meta.ts'
+import { answered, type Meta, metaOf } from './meta.ts'
+import { doorOf, PLATFORM_STORE, STATIC_QUERY } from './door.ts'
+import { EPOCH } from './directory-copy.ts'
 import { Pending } from './writes.ts'
+
+test('a typed directory read keeps the local transport and its revision', async () => {
+  let requests: Request[] = []
+  let META = metaOf(doorOf((req) => {
+    requests.push(req)
+    return Promise.resolve(Response.json([], { headers: { [EPOCH]: '17' } }))
+  }, PLATFORM_STORE))
+  let env = {
+    META,
+    STORE: {
+      idFromName: (name: string) => name,
+      get: () => {
+        throw new Error('the directory called its own stub')
+      },
+    },
+  }
+  let via = { fetch: (req: Request) => dirPart.fetch(req, env) }
+  assertEquals(await directory(via, true).all(), [])
+  let answer = await via.fetch(
+    new Request('http://directory/query?q=.space', {
+      headers: { [EPOCH]: '1', [STATIC_QUERY]: '1' },
+    }),
+  )
+  assertEquals(await answer.json(), [])
+  assertEquals(answer.headers.get(EPOCH), '17')
+  assertEquals(requests.length, 2)
+  assert(requests.every((req) => req.headers.get(STATIC_QUERY) == '1'))
+})
 
 let space: Space = {
   eid: 's1',

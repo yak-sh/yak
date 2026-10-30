@@ -787,7 +787,8 @@ export let fetch = (
     (req.headers.get(EPOCH) == '1' || req.headers.get(STATIC_QUERY) == '1')
   ) {
     let q = new URL(req.url).searchParams.get('q') ?? ''
-    return storeOf(env.STORE, PLATFORM_STORE)(
+    let door = metaStore(env).door ?? storeOf(env.STORE, PLATFORM_STORE)
+    return door(
       `/query?q=${encodeURIComponent(q)}${
         req.headers.has(MEND) ? '&mend=1' : ''
       }`,
