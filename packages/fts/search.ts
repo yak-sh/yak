@@ -18,6 +18,7 @@ import {
   as,
   at,
   type BindOpts,
+  catalogue,
   col,
   type Cte,
   desc,
@@ -47,7 +48,8 @@ import {
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { type Field, type Index, indexes, indexName } from './fields.ts'
-import { CLOSE, excerpt, match, named, OPEN } from './term.ts'
+import { excerpt, match, named } from './term.ts'
+import { cut } from './snippet.ts'
 
 // One search hit: the entity, its rank, and a snippet marking the matches.
 export type Hit = {
@@ -70,6 +72,8 @@ export type SearchOpts = {
   screens?: Record<string, Raw>
   // how many words of context a snippet carries (default 10)
   context?: number
+  // External-content sources, keyed by index. find() reads these from the schema.
+  content?: Record<string, string>
   // the words as a name is written (./term.ts `named`): a hit whose stored
   // text is exactly this ranks before every other. `hits()` reads it off its
   // text; `ranked()` is handed it beside the match it ranks by
@@ -127,33 +131,55 @@ export let hits = (
   // terms unmarked, so FTS5 does less work cutting large matching texts.
   let marked = excerpt(text)
   let b = at('best')
-  let snippet = when(
-    indexes(fields).map(({ name }, i) => {
-      let fts = indexName(name)
-      return [
-        lit(i),
-        sub(select({
-          cols: [fn(
-            'snippet',
-            col(fts),
-            lit(-1),
-            val(OPEN),
-            val(CLOSE),
-            lit('…'),
-            lit(context),
-          )],
-          from: table(fts),
-          where: and(
-            op('match', col(fts), val(marked)),
-            eq(col('rowid'), b('owner')),
+  let snippets = indexes(fields).map(({ name, props }, i) => {
+    let fts = indexName(name)
+    return {
+      name: `__snippets${i}`,
+      materialized: true,
+      q: select({
+        cols: [
+          as(col('rowid', fts), 'owner'),
+          as(cut(fts, props, marked, context, opts.content?.[name]), 'snippet'),
+        ],
+        from: table(fts),
+        where: and(
+          op('match', col(fts), val(marked)),
+          exists(
+            select({
+              cols: [lit(1)],
+              from: table('best'),
+              where: and(
+                eq(b('arm'), lit(i)),
+                eq(b('owner'), col('rowid', fts)),
+              ),
+            }),
           ),
-        })),
-      ]
-    }),
+        ),
+      }),
+    }
+  })
+  let snippet = when(
+    indexes(fields).map((
+      _,
+      i,
+    ) => [
+      lit(i),
+      sub(
+        select({
+          cols: [col('snippet')],
+          from: table(`__snippets${i}`),
+          where: eq(col('owner'), b('owner')),
+        }),
+      ),
+    ]),
     undefined,
     b('arm'),
   )
-  return render({ ...best, cols: [...best.cols!, as(snippet, 'snippet')] })
+  return render({
+    ...best,
+    with: [...best.with!, ...snippets],
+    cols: [...best.cols!, as(snippet, 'snippet')],
+  })
 }
 
 // The same ranking over a match expression already built from the words
@@ -467,7 +493,13 @@ export let find = (
   text: string,
   opts: SearchOpts = {},
 ): Hit[] => {
-  let stmt = hits(fields, text, opts)
+  let content = Object.fromEntries(
+    catalogue(db).filter((o) => o.type == 'table').flatMap((o) => {
+      let source = /content='([^']*)'/.exec(o.sql ?? '')?.[1]
+      return source ? [[o.name.replace(/_fts$/, ''), source]] : []
+    }),
+  )
+  let stmt = hits(fields, text, { content, ...opts })
   if (!stmt) return []
   return db.query(stmt).map((r) => ({
     entity: String(r.entity),

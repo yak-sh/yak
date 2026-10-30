@@ -143,8 +143,16 @@ store bills the rows a cursor hands back, so a word in a thousand rows costs
 about as much as one in twenty. `limit` defaults to 20 and snippet `context`
 defaults to 10 words. An optional `screen` is SQL selecting the ids of the
 permitted entities, such as the statement `screen()` returns above. Ranking
-reads only the index; a snippet is cut afterwards, for the rows returned,
-because FTS5 reads a row's whole text back to cut one.
+reads only the index. Snippets are cut afterwards in one scan per matching
+index, for the rows returned. FTS5 retokenizes a whole row to cut a snippet, so
+rows over 64 KiB instead get a short excerpt around a literal search phrase in
+their first MiB, or the beginning when that preview has no literal match. This
+bounds display work without changing membership or rank; the excerpt may mark
+only that phrase. Smaller rows keep FTS5's token, phrase and Unicode
+highlighting. `find()` reads each index's declared content source from the
+schema so a preview can be sliced before it reaches the full-text virtual table.
+An asynchronous caller of `hits()` can supply the same index-to-source map as
+`content`; omitting it reads through the index as before.
 
 Snippets mark matches with `OPEN` (`\x01`) and `CLOSE` (`\x02`), not HTML.
 Renderers must escape the text and add their own highlighting.
