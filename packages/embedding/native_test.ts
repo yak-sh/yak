@@ -360,3 +360,20 @@ test(
     assertEquals(names(db, q, opts)[0], 'v-100')
   }),
 )
+
+test(
+  'deleted leading vectors leave the same tied nearest pool',
+  await scene(() => {
+    let db = fresh()
+    let q = Float32Array.from({ length: DIM }, (_, i) => i == 0 ? 1 : 0)
+    store(db, 1, Array.from({ length: 600 }, () => q))
+    for (let id = 1; id <= 300; id++) bury(db, id)
+    install(db)
+    assert(prepare(db))
+    assertEquals(names(db, q), names(plain(db), q))
+    assertEquals(
+      names(db, q),
+      Array.from({ length: 8 }, (_, i) => `v-${301 + i}`),
+    )
+  }),
+)

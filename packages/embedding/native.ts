@@ -194,22 +194,39 @@ export let candidates = (
   if (!c || (opts.within && few(db, opts.within))) return null
   if (only(db) != opts.model || !init(db, c, query.length)) return null
   let v = (name: string) => col(name, 'v')
-  return db.query(select({
-    cols: [as(v('id'), 'owner')],
+  let scan = {
+    cols: [as(v('id'), 'owner'), as(v('distance'), 'distance')],
     from: call('vector_full_scan', [
       lit(TABLE),
       lit('vec'),
       val(pack(query)),
     ], 'v'),
-    where: and(
-      not(exists(select({
-        cols: [lit(1)],
-        from: table('tombstone', 't'),
-        where: eq(col('entity', 't'), v('id')),
-      }))),
-      ...opts.within ? [admitted(opts.within, v('id'))] : [],
-    ),
+    where: opts.within ? admitted(opts.within, v('id')) : undefined,
     order: [v('distance'), v('id')],
     limit: val(pool(opts.need)),
+  }
+  let alive = (owner: ReturnType<typeof col>) =>
+    not(exists(select({
+      cols: [lit(1)],
+      from: table('tombstone', 't'),
+      where: eq(col('entity', 't'), owner),
+    })))
+  // Most nearest pools contain no deleted entity. Probe their tombstones
+  // after the cut, instead of seeking a tombstone for every stored vector.
+  let first = db.query(select({
+    cols: [col('owner', 'r')],
+    from: from(select(scan), 'r'),
+    where: alive(col('owner', 'r')),
+    order: [col('distance', 'r'), col('owner', 'r')],
+  }))
+  if (first.length == pool(opts.need)) {
+    return first.map((r) => Number(r.owner))
+  }
+  // A deleted neighbour (or a short corpus) takes the complete screened
+  // scan, so deletion never changes recall, the final cut or tie ordering.
+  return db.query(select({
+    ...scan,
+    cols: [as(v('id'), 'owner')],
+    where: and(alive(v('id')), ...scan.where ? [scan.where] : []),
   })).map((r) => Number(r.owner))
 }
