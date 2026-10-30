@@ -102,7 +102,10 @@ export let choose = async (
     )
     let keys = new Map<string, string>()
     for (let f of files) {
-      keys.set(f, await key(s, common.get(kind(f))!, plans.get(f) ?? f, f))
+      keys.set(
+        f,
+        await key(s, common.get(kind(f))!, plans.get(f) ?? f, f, true),
+      )
     }
     // What each file read as it last passed, and a survey of the modules it
     // imported by a computed specifier, each sealed with its graph.
@@ -132,7 +135,20 @@ export let choose = async (
         )
       ) continue
       reached.push(f)
-      if (!(t && await proof(t, keys.get(f)!, reads(f)) in before)) run.push(f)
+      if (
+        changed && !affected(
+          s,
+          [f, plans.get(f) ?? f, ...also(kind(f))],
+          runner,
+          changed,
+          reads(f),
+          t ?? s,
+          true,
+        )
+      ) continue
+      if (!(t && await proof(t, keys.get(f)!, reads(f), true) in before)) {
+        run.push(f)
+      }
     }
     let typed = sources.filter((f) => !changed || s.reaches([f], changed))
     let roots = [...reached.map((f) => plans.get(f) ?? f), ...typed]
@@ -159,7 +175,9 @@ export let affected = (
   changed: string[],
   reads: string[] = [],
   observed: Survey = s,
+  runtime = false,
 ): boolean =>
-  s.reaches(roots, changed) || s.reaches(runner, changed, true) ||
-  observed.reaches(reads, changed) ||
+  s.reaches(roots, changed, false, runtime) ||
+  s.reaches(runner, changed, true) ||
+  observed.reaches(reads, changed, false, runtime) ||
   reads.some((path) => changed.some((file) => file.startsWith(`${path}/`)))

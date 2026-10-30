@@ -201,3 +201,26 @@ let typed = (await survey([at('a_test.ts')], () =>
 test('relevance includes type-only consumers', () => {
   equal(affected(typed, [at('a_test.ts')], [], [at('types.ts')]), true)
 })
+
+test('erased type dependencies reach checks but do not reach execution or its pass key', async () => {
+  equal(typed.reaches([at('a_test.ts')], [at('types.ts')]), true)
+  equal(typed.reaches([at('a_test.ts')], [at('types.ts')], false, true), false)
+  let before = await key(typed, '', at('a_test.ts'), at('a_test.ts'), true)
+  write('types.ts', 'export type Input = number')
+  let changed = (await survey([at('a_test.ts')], () =>
+    Promise.resolve({
+      modules: [
+        {
+          specifier: `file://${at('a_test.ts')}`,
+          dependencies: [{ type: { specifier: `file://${at('types.ts')}` } }],
+        },
+        { specifier: `file://${at('types.ts')}` },
+      ],
+      redirects: {},
+    })))!
+  equal(await key(changed, '', at('a_test.ts'), at('a_test.ts'), true), before)
+  ok(
+    await key(changed, '', at('a_test.ts')) !=
+      await key(typed, '', at('a_test.ts')),
+  )
+})

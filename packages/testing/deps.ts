@@ -183,10 +183,15 @@ export let seal = (
  * data is its bytes whether or not a module there imports it (a config read
  * as JSON), so it holds the same in every survey. */
 export type Survey = {
-  of: (path: string) => Promise<string>
+  of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
-  next: (path: string) => string[]
-  reaches: (roots: string[], changed: string[], loaded?: boolean) => boolean
+  next: (path: string, runtime?: boolean) => string[]
+  reaches: (
+    roots: string[],
+    changed: string[],
+    loaded?: boolean,
+    runtime?: boolean,
+  ) => boolean
 }
 
 /** The survey of `paths`, their modules' graph from `info` (`deno info`), or
@@ -225,6 +230,7 @@ export let survey = async (
   // none, by its path. A remote module is its versioned specifier.
   let next = new Map<string, string[]>()
   let still = new Map<string, string[]>()
+  let runtime = new Map<string, string[]>()
   let own = new Map<string, string>()
   for (let m of local) {
     let path = rel(m.specifier)
@@ -232,7 +238,13 @@ export let survey = async (
     own.set(m.specifier, `${path} ${d}`)
     let deps = (m.dependencies ?? []).flatMap((d) =>
       [d.code?.specifier, d.type?.specifier].flatMap((specifier) =>
-        specifier ? [{ to: at(specifier), asked: d.isDynamic }] : []
+        specifier
+          ? [{
+            to: at(specifier),
+            asked: d.isDynamic,
+            typed: specifier != d.code?.specifier,
+          }]
+          : []
       )
     )
     let beside: string[] = []
@@ -245,8 +257,12 @@ export let survey = async (
       }
     }
     next.set(m.specifier, [...deps.map((d) => d.to), ...beside])
+    runtime.set(m.specifier, [
+      ...deps.flatMap((d) => d.typed ? [] : [d.to]),
+      ...beside,
+    ])
     still.set(m.specifier, [
-      ...deps.flatMap((d) => d.asked ? [] : [d.to]),
+      ...deps.flatMap((d) => d.asked || d.typed ? [] : [d.to]),
       ...beside,
     ])
   }
@@ -258,14 +274,19 @@ export let survey = async (
   }
   let mine = (n: string) => own.get(n) ?? n
   let seals = seal(next, mine)
+  let executed = seal(
+    new Map([...next].map(([n]) => [n, runtime.get(n) ?? []])),
+    mine,
+  )
   let held = new Map<string, Promise<string>>()
   return {
-    of: (path) => {
-      if (!held.has(path)) {
-        let s = code(path) && seals.get(at(url(path)))
-        held.set(path, s ? Promise.resolve(s) : digest(path))
+    of: (path, run = false) => {
+      let key = `${run} ${path}`
+      if (!held.has(key)) {
+        let s = code(path) && (run ? executed : seals).get(at(url(path)))
+        held.set(key, s ? Promise.resolve(s) : digest(path))
       }
-      return held.get(path)!
+      return held.get(key)!
     },
     loads: (path) => {
       let root = at(url(path))
@@ -280,9 +301,9 @@ export let survey = async (
       }
       return Promise.resolve(hex([...reached].map(mine).sort().join('\n')))
     },
-    reaches: (roots, changed, loaded = false) => {
+    reaches: (roots, changed, loaded = false, run = false) => {
       let wanted = new Set(changed.flatMap((p) => [p, at(url(p))]))
-      let edges = loaded ? still : next
+      let edges = loaded ? still : run ? runtime : next
       let seen = new Set<string>()
       let visit = roots.flatMap((p) => [p, at(url(p))])
       while (visit.length) {
@@ -294,7 +315,12 @@ export let survey = async (
       }
       return false
     },
-    next: (path) => (next.get(at(url(path))) ?? []).map((n) => seals.get(n)!),
+    next: (
+      path,
+      run = false,
+    ) => (((run ? runtime : next).get(at(url(path))) ?? []).map((n) =>
+      (run ? executed : seals).get(n)!
+    )),
   }
 }
 
@@ -327,14 +353,15 @@ export let key = async (
   common: string,
   root: string,
   name = root,
+  runtime = false,
 ): Promise<string> =>
   hex(
     [
       common,
       name,
       ...name == root
-        ? [await s.of(root)]
-        : [...s.next(root), await s.of(name)].sort(),
+        ? [await s.of(root, runtime)]
+        : [...s.next(root, runtime), await s.of(name, runtime)].sort(),
     ].join('\n'),
   )
 
@@ -345,13 +372,14 @@ export let proof = async (
   s: Survey,
   key: string,
   reads?: string[],
+  runtime = false,
 ): Promise<string> =>
   reads
     ? hex(
       [
         key,
         ...(await Promise.all(
-          reads.map(async (p) => `${p} ${await s.of(p)}`),
+          reads.map(async (p) => `${p} ${await s.of(p, runtime)}`),
         )).sort(),
       ].join('\n'),
     )
