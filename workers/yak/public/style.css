@@ -224,9 +224,9 @@
   .Window_Bar::after {
     content: '';
     position: absolute;
-    inset: auto -1px 0;
-    height: var(--stroke);
-    background: var(--graphite);
+    inset: auto -1px calc(-1 * var(--room));
+    height: calc(var(--stroke) + 2 * var(--room));
+    background: var(--rule);
     filter: url(pencil.svg#line);
   }
 
@@ -789,14 +789,14 @@
   .Yours::after {
     content: '';
     position: absolute;
-    inset: 0 0 auto;
-    height: var(--stroke);
-    background: var(--graphite);
+    inset: calc(-1 * var(--room)) 0 auto;
+    height: calc(var(--stroke) + 2 * var(--room));
+    background: var(--rule);
     filter: url(pencil.svg#line);
   }
 
   .Yours::after {
-    inset: auto 0 0;
+    inset: auto 0 calc(-1 * var(--room));
   }
 
   .Yours_List {

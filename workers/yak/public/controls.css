@@ -251,9 +251,9 @@
   .Card_Head::after {
     content: '';
     position: absolute;
-    inset: auto -1px 0;
-    height: var(--stroke);
-    background: var(--graphite);
+    inset: auto -1px calc(-1 * var(--room));
+    height: calc(var(--stroke) + 2 * var(--room));
+    background: var(--rule);
     filter: url(pencil.svg#line);
   }
   .Card_Head:last-child {

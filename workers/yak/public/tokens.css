@@ -47,6 +47,11 @@
     --lift: 4px; /* how far what can be pressed sits off its hatch */
     --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
       transparent 1px 3px);
+    /* A drawn rule is a line through the middle of a box --room taller on
+       each side, so the pencil's wander stays inside what it draws. */
+    --room: 4px;
+    --rule: linear-gradient(var(--graphite) 0 0) center / 100% var(--stroke)
+      no-repeat;
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
 

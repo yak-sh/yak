@@ -1,18 +1,92 @@
 <svg xmlns="http://www.w3.org/2000/svg">
   <!-- The pencil every drawn line goes through (tokens.css, Pencil and
-       paper): a slow, slight wander, so a straight line reads as drawn
-       against a ruler rather than set by a machine, then the paper's tooth
-       as an alpha mask, so the graphite breaks where the paper is rough. A
-       browser that cannot load this draws the same lines clean. -->
-  <filter id="line">
-    <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="1"
-      seed="2" result="wander" />
-    <feDisplacementMap in="SourceGraphic" in2="wander" scale="3"
-      xChannelSelector="R" yChannelSelector="G" result="drawn" />
-    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"
+       paper). The line is drawn twice: once firmly, with a slow, slight
+       wander, so a straight line reads as drawn against a ruler rather than
+       set by a machine, and once faintly, a little further off true. The
+       paper's tooth then thins the graphite where the paper is rough.
+
+       A displacement moves each pixel by a whole pixel, the nearest, so a
+       line that wanders by a pixel or two steps from row to row, and where
+       the wander changes across the line a row of it is moved out from under
+       itself and leaves a hole. So each line is displaced four times (the
+       faint one twice), each a quarter of a pixel further along, and the
+       copies averaged: a step becomes a slope in four shades, and no row is
+       lost from all four. A blur of a third of a pixel softens what is left,
+       and a gain on the alpha gives the line back its weight.
+
+       A browser that cannot load this draws the same lines clean. -->
+  <filter id="line" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".015" numOctaves="2"
+      seed="2" />
+    <feColorMatrix type="matrix" result="wander"
+      values="1 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1" />
+    <!-- The firm line: scale 3, so a pixel is a third of the map. -->
+    <feComponentTransfer in="wander" result="w1">
+      <feFuncR type="linear" intercept="-.125" />
+      <feFuncG type="linear" intercept="-.125" />
+    </feComponentTransfer>
+    <feComponentTransfer in="wander" result="w2">
+      <feFuncR type="linear" intercept="-.0417" />
+      <feFuncG type="linear" intercept="-.0417" />
+    </feComponentTransfer>
+    <feComponentTransfer in="wander" result="w3">
+      <feFuncR type="linear" intercept=".0417" />
+      <feFuncG type="linear" intercept=".0417" />
+    </feComponentTransfer>
+    <feComponentTransfer in="wander" result="w4">
+      <feFuncR type="linear" intercept=".125" />
+      <feFuncG type="linear" intercept=".125" />
+    </feComponentTransfer>
+    <feDisplacementMap in="SourceGraphic" in2="w1" scale="3"
+      xChannelSelector="R" yChannelSelector="G" result="d1" />
+    <feDisplacementMap in="SourceGraphic" in2="w2" scale="3"
+      xChannelSelector="R" yChannelSelector="G" result="d2" />
+    <feDisplacementMap in="SourceGraphic" in2="w3" scale="3"
+      xChannelSelector="R" yChannelSelector="G" result="d3" />
+    <feDisplacementMap in="SourceGraphic" in2="w4" scale="3"
+      xChannelSelector="R" yChannelSelector="G" result="d4" />
+    <feComposite in="d1" in2="d2" operator="arithmetic" k2=".5" k3=".5"
+      result="d12" />
+    <feComposite in="d3" in2="d4" operator="arithmetic" k2=".5" k3=".5"
+      result="d34" />
+    <feComposite in="d12" in2="d34" operator="arithmetic" k2=".5" k3=".5"
+      result="firm" />
+
+    <!-- The faint line: its own wander, scale 7, half a pixel apart. -->
+    <feTurbulence type="fractalNoise" baseFrequency=".02" numOctaves="2"
+      seed="41" />
+    <feColorMatrix type="matrix" result="stray"
+      values="1 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1" />
+    <feComponentTransfer in="stray" result="s1">
+      <feFuncR type="linear" intercept="-.0357" />
+      <feFuncG type="linear" intercept="-.0357" />
+    </feComponentTransfer>
+    <feComponentTransfer in="stray" result="s2">
+      <feFuncR type="linear" intercept=".0357" />
+      <feFuncG type="linear" intercept=".0357" />
+    </feComponentTransfer>
+    <feDisplacementMap in="SourceGraphic" in2="s1" scale="7"
+      xChannelSelector="R" yChannelSelector="G" result="e1" />
+    <feDisplacementMap in="SourceGraphic" in2="s2" scale="7"
+      xChannelSelector="R" yChannelSelector="G" result="e2" />
+    <feComposite in="e1" in2="e2" operator="arithmetic" k2=".5" k3=".5"
+      result="loose" />
+    <feComponentTransfer in="loose" result="faint">
+      <feFuncA type="linear" slope=".45" />
+    </feComponentTransfer>
+
+    <feMerge result="both">
+      <feMergeNode in="faint" />
+      <feMergeNode in="firm" />
+    </feMerge>
+    <feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="2"
       seed="9" result="tooth" />
     <feColorMatrix in="tooth" type="matrix" result="grain"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 2.5 -.3" />
-    <feComposite in="drawn" in2="grain" operator="in" />
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.2 .35" />
+    <feComposite in="both" in2="grain" operator="in" />
+    <feGaussianBlur stdDeviation=".3" />
+    <feComponentTransfer>
+      <feFuncA type="linear" slope="1.3" />
+    </feComponentTransfer>
   </filter>
 </svg>
