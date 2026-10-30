@@ -153,7 +153,8 @@ test('an upgraded socket response is handed back intact rather than streamed', (
 // Deno aborts the successful upgrade's HTTP request. Cancellation must not
 // replace its opaque 101 while the request wrapper unwinds.
 let abortUpgrade = new AbortController()
-let upgrades = requests(served(() => {
+let upgrades = requests(served(async () => {
+  await Promise.resolve()
   abortUpgrade.abort()
   return upgraded
 }, {}))
