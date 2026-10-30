@@ -12,8 +12,12 @@ export let checks = (changed: string[]): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
   return [
-    ...fmt.length ? [{ name: 'format', args: ['fmt', ...fmt] }] : [],
-    ...lint.length ? [{ name: 'lint', args: ['lint', ...lint] }] : [],
+    ...fmt.length
+      ? [{ name: 'format', args: ['fmt', '--permit-no-files', ...fmt] }]
+      : [],
+    ...lint.length
+      ? [{ name: 'lint', args: ['lint', '--permit-no-files', ...lint] }]
+      : [],
   ]
 }
 

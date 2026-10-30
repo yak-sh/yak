@@ -239,7 +239,7 @@ strings." A raw SQL writer that has to exist calls `reclassify(driver, eids)`
 from @yaks/sqlite in the same transaction (packages/sqlite/README.md), or the
 pointers go stale and presence filters, status filters and whole-entity reads
 answer wrong; `archetype_check` finds the drift. The live ~/.yak/yak.db is the
-owner's working graph, so experiments run on a copy made with `VACUUM INTO`
+owner's working graph, so experiments run on a copy made with `bin/copy-db`
 behind a scratch config, in your own process (`end-to-end-checks`,
 `data-migration`).
 

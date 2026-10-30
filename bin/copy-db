@@ -1,0 +1,20 @@
+#!/bin/sh
+# Copy a live SQLite database to a scratch file for a rehearsal:
+#
+#   bin/copy-db <scratch>/copy.db [database, default ~/.yak/yak.db]
+#
+# The pages as one read transaction saw them. Without the BEGIN, `.backup`
+# starts over each time another process commits, which on the box is several
+# times a second.
+#
+# In a scope of its own whose memory is capped, because the copy's cost to
+# everyone else is memory: a whole database read and written again goes through
+# the page cache, and uncapped that pushed the servers' idle heaps into swap, so
+# reads stalled 10 s paging their own workers back in (T-133666). Capped, the
+# copy reclaims its own pages and leaves the rest of the box alone.
+set -eu
+[ $# -ge 1 ] || { echo "usage: bin/copy-db <dest> [database]" >&2; exit 2; }
+exec systemd-run --user --scope --quiet --collect \
+  -p MemoryHigh=512M -p MemorySwapMax=0 \
+  sqlite3 -batch -init /dev/null -readonly "${2:-$HOME/.yak/yak.db}" \
+  BEGIN "select count(*) from sqlite_schema" ".backup $1" COMMIT

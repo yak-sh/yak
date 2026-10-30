@@ -73,17 +73,11 @@ past the graph leaves archetype pointers stale, and filters and whole reads
 then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
-Prove it on a copy first. This copies the pages as one read transaction saw
-them, in about six and a half minutes for the 14 GB file:
-
-```sh
-sqlite3 -readonly ~/.yak/yak.db BEGIN "select count(*) from sqlite_schema" \
-  ".backup <scratch>/copy.db" COMMIT
-```
-
-Without the BEGIN, `.backup` starts over each time another process commits,
-which on the box is several times a second; `VACUUM INTO` takes about as long
-(425 s) and writes a compacted copy, not the pages as they stood. Point a
+Prove it on a copy first. `bin/copy-db <scratch>/copy.db` copies the pages as
+one read transaction saw them, in a memory-capped scope so the rest of the box
+keeps its page cache. Copy this way and not with `sqlite3 .backup` or
+`VACUUM INTO` directly: both run uncapped, and `VACUUM INTO` writes a compacted
+copy, not the pages as they stood. Point a
 scratch config's `db` at the copy, run the script over it in one process (no
 server; `end-to-end-checks` has the doors), compare counts before and after,
 and run it again to show the second run changes nothing. A script that parses sqlite3's output names its

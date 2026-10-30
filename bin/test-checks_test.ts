@@ -5,8 +5,11 @@ let planned = checks(['a.ts', 'doc.md', 'data.json', 'image.png'])
 
 test('source checks format and lint the change', () => {
   equal(planned, [
-    { name: 'format', args: ['fmt', 'a.ts', 'doc.md', 'data.json'] },
-    { name: 'lint', args: ['lint', 'a.ts'] },
+    {
+      name: 'format',
+      args: ['fmt', '--permit-no-files', 'a.ts', 'doc.md', 'data.json'],
+    },
+    { name: 'lint', args: ['lint', '--permit-no-files', 'a.ts'] },
   ])
   equal(checks([]), [])
 })

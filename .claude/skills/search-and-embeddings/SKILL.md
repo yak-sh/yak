@@ -140,7 +140,7 @@ a caller may read. The `search` tool merges it with full-text hits.
   vector is made again. On the box, while two models share the table no index
   is built and every search reads every vector; in a store, `.near` answers
   only from what is done until the sweep finishes. Back up ~/.yak/yak.json
-  first and prove it on a `VACUUM INTO` copy.
+  first and prove it on a `bin/copy-db` copy.
 - **A page of a search reads a page.** A store bills each row a cursor hands
   back, not FTS5's own reads, so `order by rank limit N` inside the index
   costs about N where materializing every hit's bm25 costs every hit. Ranking
