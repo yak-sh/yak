@@ -13,6 +13,7 @@ import { modelDoc } from '@yaks/model/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
 import { processDoc } from '@yaks/process/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { sessionDoc } from './comp.ts'
 import { attemptComputed } from './attempt.ts'
 import { statusComputed } from './state.ts'
@@ -41,6 +42,7 @@ let vocab = loadVocab([
   fileDoc,
   machineDoc,
   processDoc,
+  provenanceDoc,
 ])
 let store = () =>
   ram(vocab, {
@@ -136,7 +138,7 @@ test('a claim counts as owing, whatever the transcript says', async () => {
   assertEquals(await sweep(g), [ids.run1])
 })
 
-test('a settled session holding nothing is left as it is', async () => {
+test('a settled session whose process is gone is marked and still reads settled', async () => {
   let s = store(), g = locked(s)
   await session(s, g, ids.run1, 'gone', log(3))
   await seed(s, {
@@ -145,7 +147,45 @@ test('a settled session holding nothing is left as it is', async () => {
     content: { body: 'done' },
     output: { source: `${ids.run1}-input` },
   })
-  assertEquals(await sweep(g), [])
+  assertEquals(await sweep(g), [ids.run1])
+  assertEquals(await ended(g, ids.run1), true)
+  assertEquals(
+    ((await g.get([ids.run1]))[0].session as Comp).status,
+    'settled',
+  )
+})
+
+test('a session with no process to ask about ends quiet, owing and holding nothing', async () => {
+  let s = store(), g = locked(s)
+  let said = (session: string, seq: number, more: object = {}) => ({
+    entity: { eid: `${session}-${seq}` },
+    entry: { session, seq },
+    content: { body: 'hi' },
+    ...more,
+  })
+  await seed(
+    s,
+    { entity: { eid: 'empty' }, session: { id: 'empty' } },
+    { entity: { eid: 'rested' }, session: { id: 'rested' } },
+    said('rested', 1),
+    said('rested', 2, { output: { source: 'rested-1' } }),
+    { entity: { eid: 'failed' }, session: { id: 'failed' } },
+    said('failed', 1, { exception: { type: 'x', value: 'no' } }),
+    { entity: { eid: 'owes' }, session: { id: 'owes' } },
+    said('owes', 1),
+    { entity: { eid: 'holds' }, session: { id: 'holds' } },
+    { entity: { eid: 'work' }, claim: { session: 'holds' } },
+  )
+  let later = { now: Date.now() + 3 * HOUR }
+  assertEquals(await endGone(g), [])
+  assertEquals((await endGone(g, later)).sort(), ['empty', 'failed', 'rested'])
+  let status = async (eid: string) =>
+    ((await g.get([eid]))[0].session as Comp).status
+  assertEquals(await status('empty'), 'empty')
+  assertEquals(await status('rested'), 'settled')
+  assertEquals(await status('failed'), 'failed')
+  assertEquals(await ended(g, 'owes'), false)
+  assertEquals(await endGone(g, later), [])
 })
 
 test('a log just written waits for its process to list itself', async () => {
@@ -215,4 +255,25 @@ test('a managed run is ended by its exit, never by the process files', async () 
     exit: { code: 1 },
   })
   assertEquals(await sweep(g), ['off'])
+})
+
+test('a managed run that exited and rests is marked unless it is parked on a claim', async () => {
+  let s = store(), g = locked(s)
+  let rested = (eid: string, id: string) =>
+    session(s, g, eid, id, log(3), {
+      entity: { eid },
+      process: { pid: 9 },
+      exit: { code: 0 },
+    }).then(() =>
+      seed(s, {
+        entity: { eid: `${eid}-said` },
+        entry: { session: eid, seq: 2 },
+        content: { body: 'done' },
+        output: { source: `${eid}-input` },
+      })
+    )
+  await rested('free', 'p3')
+  await rested('parked', 'p4')
+  await seed(s, { entity: { eid: 'work' }, claim: { session: 'parked' } })
+  assertEquals(await sweep(g), ['free'])
 })

@@ -998,9 +998,9 @@ continues independently. For example, `session_new` with
 `{ "prompt": "Reply with ok", "wait": false }` returns the new session id.
 `model_list` is offered on a command line only (`surfaces`), because it reads
 that machine's model credentials. `session_list` is offered everywhere. With no
-arguments it answers the 20 newest live sessions (status pending, running or
-queued) and, when more match, a last row saying how to read on; `query` and
-`limit` ask for others (`.session` is every status). Both word orders
+arguments it answers the 20 newest live sessions (no `session.ended` mark), each
+with its status, and, when more match, a last row saying how to read on; `query`
+and `limit` ask for others (`.session` is every status). Both word orders
 (`session list`, `list
 session`) derive from the same noun and verb, without
 alias declarations. See

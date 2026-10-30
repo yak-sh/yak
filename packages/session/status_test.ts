@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { col, eq, render, select, table, val } from '@yaks/sql'
 import { and as all, eq as qeq, fields, list } from '@yaks/query'
@@ -1058,11 +1058,47 @@ test('passive notices do not change settled, stopped or empty status', () => {
   assertEquals(statusOf([entry(3, { stop: {} }), notice]), 'stopped')
 })
 
+test('the ended mark stops what its entries leave unfinished, and nothing else', () => {
+  assertEquals(statusOf([input(1)], true), 'stopped')
+  assertEquals(statusOf([input(1), said(2, S)], true), 'settled')
+  assertEquals(statusOf([], true), 'empty')
+  assertEquals(
+    statusOf([entry(1, { exception: {}, content: { body: 'x' } })], true),
+    'failed',
+  )
+})
+
+test('the SQL rule reads the ended mark as the rule over bundles does', () => {
+  let shapes: [Bundle[], string][] = [
+    [[], 'empty'],
+    [[input(1)], 'stopped'],
+    [[input(1), said(2, S)], 'settled'],
+    [[input(1), entry(2, { exception: {}, content: { body: 'x' } })], 'failed'],
+  ]
+  for (let [entries, status] of shapes) {
+    let g = store()
+    g.apply([{ entity: { eid: S }, session: { ended: true } }])
+    if (entries.length) g.apply(entries, { trusted: true })
+    assertEquals(statusOf(entries, true), status)
+    assertEquals(((g.get([S]) as Bundle[])[0].session as Comp).status, status)
+    for (let word of ['stopped', 'failed', 'settled', 'empty', 'running']) {
+      let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
+      let want = word == status ? [S] : []
+      assertEquals(eids(`.session.status=${word}`), want, word)
+      assertEquals(
+        eids(`.session .session.status=${word} .entity.eid=${S}`),
+        want,
+        word,
+      )
+    }
+  }
+})
+
 test('a harness ending stays ended while its importer catches up, then clears on resume', () => {
   let g = store()
   g.apply([{ entity: { eid: S }, session: { ended: true } }])
-  g.apply([input(1), said(2, S)], { trusted: true })
-  assertEquals(statusOf([input(1), said(2, S)], true), 'stopped')
+  g.apply([input(1)], { trusted: true })
+  assertEquals(statusOf([input(1)], true), 'stopped')
   assertEquals((g.read('.session.status=stopped') as Bundle[]).length, 1)
   g.apply([{ entity: { eid: S }, session: { ended: null } }])
   g.apply([input(3)], { trusted: true })

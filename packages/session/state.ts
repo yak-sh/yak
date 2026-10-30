@@ -168,9 +168,17 @@ export let served = (entries: Bundle[]): boolean =>
 export let live =
   '.session.status=pending,running,queued (.entries.using|.entries.ask)'
 
+/** What the entries leave owing. `session.ended` turns only these into `stopped`:
+ * a transcript that settled, failed or never began keeps reading that way. */
+export let UNFINISHED = ['pending', 'running', 'queued']
+
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
-  if (ended) return 'stopped'
+  let status = entriesSay(entries)
+  return ended && UNFINISHED.includes(status) ? 'stopped' : status
+}
+
+let entriesSay = (entries: Bundle[]): TranscriptStatus => {
   let all = ordered(entries).filter((b) => !b.notice || stoppedNotice(b))
   let newest = all.at(-1)
   if (!newest) return 'empty'

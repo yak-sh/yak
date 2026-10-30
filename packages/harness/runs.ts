@@ -137,9 +137,10 @@ export let windows = async (
   return models.map((m, i) => ({ name: m.name, context: own(i) ?? m.context }))
 }
 
-// The sessions in progress, the ones a caller most likely means: a graph holds
-// tens of thousands of finished ones, more than one answer may hold.
-let LIVE = '.session.status=pending,running,queued'
+// The sessions not over, the ones a caller most likely means: a graph holds
+// tens of thousands of finished ones, more than one answer may hold. The mark
+// answers this without reading an entry (@yaks/session/ended).
+let LIVE = '.session !session.ended'
 
 // One page of sessions, newest first unless the query orders them, and a last
 // row saying how to read on when more match. The page reads one row past its
@@ -256,13 +257,24 @@ export let runs = (host?: Host): Runs => ({
         ),
       }
     }
-    await graph.apply([{
-      entity: { eid: crypto.randomUUID() },
-      entry: { session: s },
-      content: { body: String(args.text) },
-      ...using ? { using } : {},
-      $actor: through(s, caller(call)),
-    }])
+    // A session marked over would read this message stopped and never run it.
+    let [row] = await graph.rows(`.entity.eid=${s}&.fields=session.ended`)
+    await graph.apply([
+      ...row?.['session.ended'] === true
+        ? [{
+          entity: { eid: s },
+          session: { ended: null },
+          $actor: through(s, caller(call)),
+        }]
+        : [],
+      {
+        entity: { eid: crypto.randomUUID() },
+        entry: { session: s },
+        content: { body: String(args.text) },
+        ...using ? { using } : {},
+        $actor: through(s, caller(call)),
+      },
+    ])
     return args.wait === false
       ? await graph.get([s])
       : await settled(graph, s, host?.stopping)

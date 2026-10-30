@@ -94,7 +94,10 @@ test('session_list answers a page of live sessions, newest first, and says how t
       },
     ]
     for (let n = 0; n < BEST + 2; n++) await h.graph.apply(live(n))
-    await h.graph.apply([{ entity: { eid: 'idle' }, session: { id: 'idle' } }])
+    await h.graph.apply([{
+      entity: { eid: 'over' },
+      session: { id: 'over', ended: true },
+    }])
     let list = async (args: Record<string, unknown> = {}) => {
       let id = mint()
       let rows = answerOf(
@@ -141,7 +144,7 @@ test('session_list answers a page of live sessions, newest first, and says how t
     let longer = await list({ limit: BEST + 2 })
     assertEquals(longer.ids.length, BEST + 2)
     assertEquals(longer.said, undefined)
-    assert((await list({ query: '.session', limit: 99 })).ids.includes('idle'))
+    assert((await list({ query: '.session', limit: 99 })).ids.includes('over'))
   } finally {
     await h.close()
   }

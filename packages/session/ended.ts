@@ -1,13 +1,17 @@
-// A session an outside harness runs has no entry to say it is over when its
-// process dies: a crash writes no SessionEnd, and a log read again can leave a
-// model request newest, which reads `running` for good. So `session.ended` is
-// written for it here, from what the computer says runs now. Its status follows
-// from that mark, and so does the release of its claims (`session_release`).
+// A session is live until it has `session.ended`, so a page of live sessions is
+// a presence test and never reads an entry. An outside harness's session has no
+// entry to say it is over when its process dies: a crash writes no SessionEnd,
+// and a log read again can leave a model request newest, which reads `running`
+// for good. So the mark is written here, from what the computer says runs now.
+// Only what its entries leave unfinished reads `stopped` for it (`statusOf`),
+// and its claims go with it (`session_release`).
 //
 // A session the harness moved on from reads as gone too, since the running
 // process no longer names it; resuming it clears the mark (`session_context`).
-// A managed run is left to its own `exit` (@yaks/process), and a session with
-// no transcript file has no process here to ask about.
+// A managed run is left to its own `exit` (@yaks/process). A session with no
+// transcript file has no process here to ask about, so it is over once it has
+// been quiet, owes nothing and holds nothing; a message clears the mark
+// (`session_send`).
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
@@ -15,6 +19,7 @@ import { absolute } from '@yaks/file/local'
 import { runs } from '@yaks/process'
 import { CLAIM, SESSION } from './comp.ts'
 import { versionOf } from './files.ts'
+import { UNFINISHED } from './state.ts'
 
 // A log this recent may belong to a process that has yet to list itself.
 let SETTLING = 5 * 60 * 1000
@@ -88,33 +93,29 @@ let endedFile = (path: string, read: Comp, cutoff: number): boolean => {
   }
 }
 
-/**
- * Write `session.ended` on every session with something outstanding or a claim
- * whose process is gone, and answer with their eids. `projects` is where
- * Claude's transcripts are and `running` where it lists its processes.
- *
- * ```ts
- * import { endGone } from '@yaks/session/ended'
- *
- * // await endGone(graph, { projects, running })
- * ```
- */
-export let endGone = async (
-  g: Graph,
-  o: {
-    projects?: string
-    running?: string
-    alive?: (pid: number) => Promise<boolean>
-    now?: number
-  } = {},
-): Promise<Eid[]> => {
+// Nothing has been written to this session since `cutoff`.
+let quiet = async (g: Graph, b: Bundle, cutoff: number): Promise<boolean> => {
+  let [last] = await g.rows(
+    `.entry.session=${b.entity.eid}&.order=-entry.seq&.limit=1&.fields=created.at`,
+  )
+  let at = last?.['created.at'] ?? comp(b, 'created').at
+  return Date.parse(String(at)) <= cutoff
+}
+
+type Sweep = {
+  projects?: string
+  running?: string
+  alive?: (pid: number) => Promise<boolean>
+  now?: number
+}
+
+/** The sessions {@link endGone} would mark, without marking them. */
+export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
   let now = o.now ?? Date.now()
   let live = o.running && await runningSessions(o.running, o.alive)
-  let owing = await g.read(
-    `.session.status=pending,running .${SESSION}.transcript .fields=entity.eid`,
-  )
+  let open = await g.read(`.${SESSION} !${SESSION}.ended .fields=entity.eid`)
   let held = await g.read(`.${CLAIM}.session .fields=${CLAIM}.session`)
-  let parts = [SESSION, 'spawned', 'process', 'exit']
+  let parts = [SESSION, 'spawned', 'process', 'exit', 'created']
   let rows = new Map<string, Bundle>()
   let read = async (eids: string[]) => {
     let wanted = eids.filter((eid) => !rows.has(eid))
@@ -123,10 +124,8 @@ export let endGone = async (
       if (b && b[TOMBSTONE] == null) rows.set(b.entity.eid, b)
     }
   }
-  let busy = new Set<string>(owing.map((b) => b.entity.eid))
-  await read([
-    ...new Set([...busy, ...held.map((b) => String(comp(b, CLAIM).session))]),
-  ])
+  let holding = new Set(held.map((b) => String(comp(b, CLAIM).session)))
+  await read([...new Set([...open.map((b) => b.entity.eid), ...holding])])
   // A subagent runs in the process of the session at the top of its line.
   let root = async (b: Bundle): Promise<Bundle> => {
     let seen = new Set<string>()
@@ -142,10 +141,16 @@ export let endGone = async (
   let gone: Eid[] = []
   for (let b of [...rows.values()]) {
     let s = comp(b, SESSION)
-    if (!b[SESSION] || s.ended == true || !s.transcript) continue
+    if (!b[SESSION] || s.ended == true) continue
     let eid = b.entity.eid
+    let owes = UNFINISHED.includes(String(s.status))
+    let rests = !owes && !holding.has(eid)
     if (b.process) {
-      if (b.exit && busy.has(eid)) gone.push(eid)
+      if (b.exit && (rests || (owes && s.transcript))) gone.push(eid)
+      continue
+    }
+    if (!s.transcript) {
+      if (rests && await quiet(g, b, now - QUIET)) gone.push(eid)
       continue
     }
     let [file] = await g.get([String(s.transcript)])
@@ -159,6 +164,23 @@ export let endGone = async (
       endedFile(path, comp(file, 'transcript'), now - QUIET)
     ) gone.push(eid)
   }
+  return gone
+}
+
+/**
+ * Write `session.ended` on every session whose process is gone or, with no
+ * process to ask about, that has come to rest, and answer with their eids.
+ * `projects` is where Claude's transcripts are and `running` where it lists its
+ * processes.
+ *
+ * ```ts
+ * import { endGone } from '@yaks/session/ended'
+ *
+ * // await endGone(graph, { projects, running })
+ * ```
+ */
+export let endGone = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
+  let gone = await goneSessions(g, o)
   for (let i = 0; i < gone.length; i += BATCH) {
     await g.apply(
       gone.slice(i, i + BATCH).map((eid) => ({

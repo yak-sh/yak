@@ -77,7 +77,7 @@ import type { Derived, DerivedScope } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
 
 export * from './state.ts'
-import { RETRIES } from './state.ts'
+import { RETRIES, UNFINISHED } from './state.ts'
 import { claudeStops } from './claude-control.ts'
 
 // Old servers still write state during the marks expansion. A non-null state
@@ -192,15 +192,18 @@ export let sessionStatus = {
       order: [desc(col('seq', 'recent'))],
       limit: lit(1),
     }))
+    let stopped = wanted.includes('stopped')
+    // Nothing ended owes anything, so the mark answers before any entry is read.
     let candidates = select({
       cols: [col('entity', 's'), col('ended', 's'), as(latest, 'latest')],
       from: table('session', 's'),
+      ...stopped ? {} : {
+        where: not(fn('coalesce', col('ended', 's'), lit(false))),
+      },
     })
-    let stopped = wanted.includes('stopped')
     let actionable = wanted.some((v) => v != 'stopped')
     let newest = col('latest', 'candidate')
     let ended = fn('coalesce', col('ended', 'candidate'), lit(false))
-    let quickStop = or(ended, wears('stop', newest))
     // A stopped transcript must either be ended or contain a stop/control.
     // Historical controls are candidates, never an alternative status rule.
     let tableOwners = (name: string) =>
@@ -425,7 +428,11 @@ export let sessionStatus = {
     )
     let eligible = or(
       stopped
-        ? or(quickStop, among(owner, tableOwners('__status_controls')))
+        ? or(
+          wears('stop', newest),
+          among(owner, tableOwners('__status_controls')),
+          and(ended, notNull(newest), not(atRest)),
+        )
         : lit(false),
       actionable
         ? and(
@@ -448,7 +455,7 @@ export let sessionStatus = {
             q: controlOwners,
           }]
           : [],
-        ...actionable && declared('tool_async') && declared('result')
+        ...declared('tool_async') && declared('result')
           ? [{
             name: '__status_waiting',
             materialized: true,
@@ -481,10 +488,7 @@ export let sessionStatus = {
       from: table('__status_candidates', 'chosen'),
       where: among(
         iff(
-          or(
-            fn('coalesce', col('ended', 'chosen'), lit(false)),
-            wears('stop', col('latest', 'chosen')),
-          ),
+          wears('stop', col('latest', 'chosen')),
           lit('stopped'),
           sessionStatus.expr(col('entity', 'chosen'), dispatch, declared, text),
         ),
@@ -1137,78 +1141,84 @@ export let sessionStatus = {
     )
     // Once these branches decline, only nonterminal answers remain. A test
     // for stopped/failed needs none of the historical progress census below.
-    let verdict = when(
-      [
+    let verdict = (rest: Expr) =>
+      when(
         [
-          or(n('stop'), and(notNull(f('stop_seq')), not(after(f('stop_seq'))))),
-          lit('stopped'),
-        ],
-        [f('abandoned'), lit('running')],
-        [n('exception'), lit('failed')],
-        [
-          and(n('interrupted'), n('failed'), not(n('ask')), not(n('call'))),
-          lit('failed'),
-        ],
-        [f('inflight'), lit('running')],
-        [eq(dispatch.expr(owner), lit('queued')), lit('queued')],
-        [n('refusal'), iff(after(refused), lit('pending'), lit('failed'))],
-        [
-          and(a('interrupted'), a('failed'), not(after(col('a_seq', 'f')))),
-          lit('failed'),
-        ],
-        [and(a('interrupted'), after(col('a_seq', 'f'))), lit('pending')],
-        [and(a('interrupted'), a('provisional')), lit('pending')],
-        [
-          a('interrupted'),
-          iff(ge(retries, lit(RETRIES)), lit('failed'), lit('pending')),
-        ],
-      ],
-      terminal ? lit('') : when([
-        [f('open'), lit('running')],
-        [
-          and(
+          [
             or(
-              after(boundary),
-              and(eq(f('unheard'), lit(0)), gt(f('ready_seq'), boundary)),
+              n('stop'),
+              and(notNull(f('stop_seq')), not(after(f('stop_seq')))),
             ),
-            notNull(background(false)),
+            lit('stopped'),
+          ],
+          [f('abandoned'), lit('running')],
+          [n('exception'), lit('failed')],
+          [
+            and(n('interrupted'), n('failed'), not(n('ask')), not(n('call'))),
+            lit('failed'),
+          ],
+          [f('inflight'), lit('running')],
+          [eq(dispatch.expr(owner), lit('queued')), lit('queued')],
+          [n('refusal'), iff(after(refused), lit('pending'), lit('failed'))],
+          [
+            and(a('interrupted'), a('failed'), not(after(col('a_seq', 'f')))),
+            lit('failed'),
+          ],
+          [and(a('interrupted'), after(col('a_seq', 'f'))), lit('pending')],
+          [and(a('interrupted'), a('provisional')), lit('pending')],
+          [
+            a('interrupted'),
+            iff(ge(retries, lit(RETRIES)), lit('failed'), lit('pending')),
+          ],
+        ],
+        rest,
+      )
+    let nonterminal = when([
+      [f('open'), lit('running')],
+      [
+        and(
+          or(
+            after(boundary),
+            and(eq(f('unheard'), lit(0)), gt(f('ready_seq'), boundary)),
           ),
+          notNull(background(false)),
+        ),
+        lit('pending'),
+      ],
+      [notNull(background(true)), lit('running')],
+      [
+        and(
+          n('ask'),
+          n('attempt'),
+          isNull(col('n_attempt_by', 'f')),
+          not(n('interrupted')),
+        ),
+        lit('settled'),
+      ],
+      [or(n('ask'), n('call')), lit('running')],
+      [
+        and(
+          n('output'),
+          not(n('result')),
+          not(n('tool_progress')),
+          not(n('interrupted')),
+        ),
+        iff(
+          after(col('n_boundary_seq', 'f')),
           lit('pending'),
-        ],
-        [notNull(background(true)), lit('running')],
-        [
-          and(
-            n('ask'),
-            n('attempt'),
-            isNull(col('n_attempt_by', 'f')),
-            not(n('interrupted')),
-          ),
           lit('settled'),
-        ],
-        [or(n('ask'), n('call')), lit('running')],
-        [
-          and(
-            n('output'),
-            not(n('result')),
-            not(n('tool_progress')),
-            not(n('interrupted')),
-          ),
-          iff(
-            after(col('n_boundary_seq', 'f')),
-            lit('pending'),
-            lit('settled'),
-          ),
-        ],
-      ], owed),
-    )
+        ),
+      ],
+    ], owed)
     // Keep the expression below workerd's depth limit, including the runner's
     // enclosing union. FROM subqueries and common table expressions don't add
     // to expression height.
-    let decision = select({
-      cols: [as(verdict, 'v')],
-      from: from(facts, 'f'),
-      where: notNull(col('any', 'f')),
-    })
+    let decision = (rest: Expr) =>
+      select({
+        cols: [as(verdict(rest), 'v')],
+        from: from(facts, 'f'),
+        where: notNull(col('any', 'f')),
+      })
     let ended = sub(
       select({
         cols: [col('ended', 's')],
@@ -1218,9 +1228,7 @@ export let sessionStatus = {
     )
     // A transcript whose newest entry is a stop is stopped, whatever its
     // turn: that reads neither its asks nor its turn.
-    return iff(
-      ended,
-      lit('stopped'),
+    let said = (verdict: Select) =>
       fn(
         'coalesce',
         sub(select({
@@ -1238,13 +1246,35 @@ export let sessionStatus = {
                 where: col('stop', 'l'),
               })),
               lit('stopped'),
-              sub(select({ cols: [col('v', 'x')], from: from(decision, 'x') })),
+              sub(select({ cols: [col('v', 'x')], from: from(verdict, 'x') })),
             ),
           ],
         })),
         lit('empty'),
+      )
+    // The mark ends only what its entries leave unfinished. The limit keeps the
+    // status one column here, or flattening would work it out once per mention.
+    let whole = sub(select({
+      cols: [
+        iff(
+          and(
+            fn('coalesce', col('ended', 'r'), lit(false)),
+            among(col('v', 'r'), UNFINISHED.map(lit)),
+          ),
+          lit('stopped'),
+          col('v', 'r'),
+        ),
+      ],
+      from: from(
+        select({
+          cols: [as(said(decision(nonterminal)), 'v'), as(ended, 'ended')],
+          limit: lit(-1),
+        }),
+        'r',
       ),
-    )
+    }))
+    if (!terminal) return whole
+    return iff(ended, whole, said(decision(lit(''))))
   },
 }
 

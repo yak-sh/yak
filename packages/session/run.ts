@@ -667,7 +667,10 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
   if (live && !await isSession(g, session)) return
   let row = await one(g, session, ['process', 'exit', STOP_ENTRY])
   if (live && row?.process && !row.exit) return
-  if (live) {
+  let [mark] = live
+    ? await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+    : []
+  if (live && mark?.['session.ended'] !== true) {
     let status: TranscriptStatus | undefined
     try {
       status = await currentStatus(g, session)

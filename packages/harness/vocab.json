@@ -24,13 +24,13 @@
     },
     "session_list": {
       "tool": true,
-      "description": "List agent work sessions as whole bundles, newest first. With no arguments, answers the 20 newest live sessions (status pending, running or queued). When more match, a last row says how to read the next page. Pass query for other sessions (.session for every status), limit for a longer page.",
+      "description": "List agent work sessions as whole bundles, newest first. With no arguments, answers the 20 newest live sessions (no session.ended mark), each with its status. When more match, a last row says how to read the next page. Pass query for other sessions (.session for every status), limit for a longer page.",
       "noun": "session",
       "verb": "list",
       "input": {
         "query": {
           "type": "string",
-          "description": "Query narrowed by .session. Without one, selects .session.status=pending,running,queued."
+          "description": "Query narrowed by .session. Without one, selects sessions with no session.ended mark."
         },
         "limit": {
           "type": "number",

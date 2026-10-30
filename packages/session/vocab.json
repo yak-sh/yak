@@ -507,7 +507,7 @@
         },
         "ended": {
           "type": "boolean",
-          "description": "the caller observed the outside harness end this session; equivalent to a stop entry and cleared if that harness resumes it"
+          "description": "this session is over: its harness ended it, its process is gone, or it came to rest with no process to ask about. What its entries leave unfinished reads stopped; settled, failed and empty read as they are. A resume or a message clears it"
         },
         "standing": {
           "type": "string",

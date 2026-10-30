@@ -394,11 +394,10 @@ export let runs = (
     )
     let over = new Map<string, string>()
     for (let eid of held.keys()) {
-      let state = statusOf(
-        await transcript(graph, eid),
-        comp(held.get(eid), SESSION).ended == true,
-      )
+      let mark = comp(held.get(eid), SESSION).ended == true
+      let state = statusOf(await transcript(graph, eid), mark)
       if (ENDED.includes(state)) over.set(eid, state)
+      else if (mark) over.set(eid, 'ended')
     }
     let found = locks.flatMap((b): Finding[] => {
       let eid = holderOf(b)

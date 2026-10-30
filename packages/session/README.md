@@ -195,14 +195,19 @@ transaction. Claims do not expire. Deleting a session releases its claims
 through the graph cascade. `reapLeases(storage)` releases claims whose holder is
 no longer a session; the `/service` duty runs it when it starts.
 `endGone(graph, options)` (`@yaks/session/ended`), run hourly by the same duty,
-writes `session.ended` on an outside harness's session whose process is gone:
-Claude's by its running-process files, where a subagent runs in its root
-session's process, and Codex's by a fully imported log quiet for two hours. Its
-status then reads `stopped`, and `session_release` frees what it held.
-`session_release` records work when a transcript ends or receives a claim after
-ending, so a later worker releases those claims through the ordinary queue. A
-managed run that ended cleanly keeps the claims it is parked on (see below), and
-lets each go once its task finishes or nothing is left to wait for.
+writes `session.ended` on a session that is over, which is what makes a page of
+live sessions a presence test (`.session !session.ended`). An outside harness's
+session is over when its process is gone: Claude's by its running-process files,
+where a subagent runs in its root session's process, and Codex's by a fully
+imported log quiet for two hours. A session with no transcript file is over once
+it has been quiet for two hours, owes nothing and holds no claim, and
+`session_send` clears the mark. What its entries leave unfinished then reads
+`stopped`; settled, failed and empty keep reading that way. `session_release`
+frees what a marked session held. `session_release` records work when a
+transcript ends or receives a claim after ending, so a later worker releases
+those claims through the ordinary queue. A managed run that ended cleanly keeps
+the claims it is parked on (see below), and lets each go once its task finishes
+or nothing is left to wait for.
 
 ## Parking on a task
 
