@@ -26,7 +26,11 @@ export let path = (value: string, root: string): string | undefined => {
 
 /** Observe only reads, retaining one path per file. Restore the runtime's doors
  * after the run; wrappers preserve arguments, receiver, result and exceptions. */
-export let observe = (root = Deno.cwd()) => {
+export let observe = (root: string = Deno.cwd()): {
+  mark: (name: string) => void
+  reads: () => Map<string, string[]>
+  close: () => void
+} => {
   let out = new Map<string, Set<string>>()
   let current: Set<string> | undefined
   let file = ''
