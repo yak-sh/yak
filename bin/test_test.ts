@@ -46,7 +46,7 @@ test('an executor change still selects unrelated tests', () => {
 
 let planned = async (args: string[], shallow = false, pass = true) => {
   let git: string[][] = []
-  let checked: string[][][] = []
+  let checked: string[][] = []
   let selected: { all: boolean; changed?: string[] }[] = []
   let files = ['a_test.ts', 'a.ts']
   let plan = await prepare(args, '/sqlite.so', {
@@ -72,8 +72,8 @@ let planned = async (args: string[], shallow = false, pass = true) => {
         reaches: () => false,
       })
     },
-    check: (changed, affected) => {
-      checked.push([changed, affected])
+    check: (changed) => {
+      checked.push(changed)
       return Promise.resolve(pass)
     },
     ready: () => Promise.resolve(),
@@ -92,9 +92,10 @@ test('--all in a shallow checkout runs every file without git history or duplica
   equal(whole.checked, [])
 })
 
-test('local selection checks changed sources and consumers and propagates failures', () => {
+test('local selection keeps consumer tests, checks changed sources and propagates failures', () => {
   equal(local.selected, [{ all: false, changed: ['a.ts'] }])
-  equal(local.checked, [[['a.ts'], ['a_test.ts', 'a.ts', 'a.ts']]])
+  equal(local.checked, [['a.ts']])
+  equal(local.plan.run, ['a_test.ts', 'a.ts'])
   equal(local.plan.ok, true)
   equal(failed.plan.ok, false)
 })

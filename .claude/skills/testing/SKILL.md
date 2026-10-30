@@ -118,9 +118,10 @@ stronger.
 
 `deno task test` with no paths uses the dependency graph to select tests and
 doctests the branch and working changes reach, including consumers. It applies
-formatting to changed files, lints them, and checks types in affected source and
-test modules and their doc comment fences. Markdown examples and custom `///`
-doctests run through the example runner without a separate type check. Package
+formatting to changed files, lints them, and checks types in changed modules and
+their doc comment fences. Full consumer type checking runs in main's CI after
+the push; local runtime tests still follow dependencies to consumers. Markdown
+examples and custom `///` doctests run through the example runner without a separate type check. Package
 compiler libraries can differ from the Deno runtime these examples use.
 Cached passing dependencies can narrow execution further.
 

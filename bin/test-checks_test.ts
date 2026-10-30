@@ -1,22 +1,18 @@
 import { equal, test } from '@yaks/testing'
 import { type Check, check, checks, format } from './test-checks.ts'
 
-let planned = checks(['a.ts', 'doc.md', 'data.json', 'image.png'], [
-  'a_test.ts',
-  'a.ts',
-  'README.md',
-])
+let planned = checks(['a.ts', 'doc.md', 'data.json', 'image.png'])
 
-test('source checks format and lint the change and type check its consumers once', () => {
+test('source checks format, lint and type check the change', () => {
   equal(planned, [
     { name: 'format', args: ['fmt', 'a.ts', 'doc.md', 'data.json'] },
     { name: 'lint', args: ['lint', 'a.ts'] },
     {
       name: 'types',
-      args: ['check', '--quiet', '--frozen', '--doc', 'a.ts', 'a_test.ts'],
+      args: ['check', '--quiet', '--frozen', '--doc', 'a.ts'],
     },
   ])
-  equal(checks([], []), [])
+  equal(checks([]), [])
 })
 
 let file = Deno.makeTempFileSync({ suffix: '.ts' })
@@ -25,7 +21,7 @@ let files = await format([file, `${file}.deleted`], (c) => {
   called.push(c)
   return Promise.resolve(true)
 })
-let failed = await check(files, ['consumer_test.ts'], (c) => {
+let failed = await check(files, (c) => {
   called.push(c)
   return Promise.resolve(c.name != 'types')
 })

@@ -113,7 +113,7 @@ export let runtime = (shared: string = denoDir()) => ({
   args: [
     'run',
     '--frozen',
-    // The coordinator checks affected sources before running tests.
+    // The coordinator checks changed modules before running tests.
     '--no-check',
     '-A',
     // Every function compiled as its module loads. A test runs once, so V8's
@@ -376,7 +376,7 @@ export let prepare = async (
   if ((affected.length || typed.length) && reaches(READIES)) {
     await effects.ready(!flags.includes('--verbose'))
   }
-  let ok = all || await effects.check(changedFiles, [...affected, ...typed])
+  let ok = all || await effects.check(changedFiles)
   return { flags, paths, tags, files, keys, run, ok }
 }
 

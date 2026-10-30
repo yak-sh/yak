@@ -1,5 +1,5 @@
-// The change's source checks accompany its selected tests. Passing test
-// caches never stand in for a type check, and formatting is applied first.
+// Local source checks cover the change; runtime tests follow consumers.
+// Main CI checks all consumer types after the push.
 
 import { typecheck } from './test-typecheck.ts'
 
@@ -9,13 +9,11 @@ let formatted = (path: string) =>
 
 export type Check = { name: string; args: string[] }
 
-/** Commands for existing changed files and affected tests, including cached
- * passes. Only the change is formatted and linted; types follow consumers. */
-export let checks = (changed: string[], affected: string[]): Check[] => {
+/** Format, lint and type-check existing changed files. */
+export let checks = (changed: string[]): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
-  let files = [...new Set([...changed, ...affected])]
-  let types = files.filter(code)
+  let types = [...new Set(changed.filter(code))]
   return [
     ...fmt.length ? [{ name: 'format', args: ['fmt', ...fmt] }] : [],
     ...lint.length ? [{ name: 'lint', args: ['lint', ...lint] }] : [],
@@ -60,7 +58,7 @@ export let format = async (
       await Deno.stat(path).then((s) => s.isFile, () => false) ? [path] : []
     ),
   )).flat()
-  let fmt = checks(files, []).find((c) => c.name == 'format')
+  let fmt = checks(files).find((c) => c.name == 'format')
   if (fmt && !await run(fmt)) throw new Error('Formatting failed')
   return files
 }
@@ -68,9 +66,8 @@ export let format = async (
 /** Lint and type checks run alongside one another after formatting. */
 export let check = async (
   changed: string[],
-  affected: string[],
   run = command,
 ) =>
   (await Promise.all(
-    checks(changed, affected).filter((c) => c.name != 'format').map(run),
+    checks(changed).filter((c) => c.name != 'format').map(run),
   )).every(Boolean)
