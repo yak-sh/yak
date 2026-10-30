@@ -132,10 +132,13 @@ export let ACCEPTED = 'x-yak-accepted'
 /** The words an app uses from other homes (its `/uses`), said beside the
  * answer to a page's query (graph.ts `#paged`, page-graph.ts `queried`). */
 export let USES = 'x-yak-uses'
+/** Typed directory reads depend on stored data, never the clock or caller code. */
+export let STATIC_QUERY = 'x-yak-static-query'
 
 let VOUCH = [
   IDEMPOTENCY,
   ACCEPTED,
+  STATIC_QUERY,
   'x-store',
   'x-yak-app',
   'x-yak-space',

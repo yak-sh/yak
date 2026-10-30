@@ -35,6 +35,7 @@ import {
   type Fetcher,
   type Namespace,
   PLATFORM_STORE,
+  STATIC_QUERY,
   storeOf,
 } from './door.ts'
 import { ADMIN } from './lib/bots.ts'
@@ -781,12 +782,17 @@ export let fetch = (
 ): Promise<Response> => {
   // The serving-copy reader needs the revision captured beside the actual
   // directory read, not a revision fetched after the answer. Bypass part's TTL.
-  if (req.method == 'GET' && req.headers.get(EPOCH) == '1') {
+  if (
+    req.method == 'GET' &&
+    (req.headers.get(EPOCH) == '1' || req.headers.get(STATIC_QUERY) == '1')
+  ) {
     let q = new URL(req.url).searchParams.get('q') ?? ''
     return storeOf(env.STORE, PLATFORM_STORE)(
       `/query?q=${encodeURIComponent(q)}${
         req.headers.has(MEND) ? '&mend=1' : ''
       }`,
+      {},
+      req.headers.get(STATIC_QUERY) == '1' ? { [STATIC_QUERY]: '1' } : {},
     )
   }
   return over(metaStore(env))(req)
@@ -1291,7 +1297,7 @@ let remote = (via: Fetcher): Part => ({
     let r = await via.fetch(
       new Request(
         `http://directory/query?q=${encodeURIComponent(q)}`,
-        fresh ? { headers: { [FRESH]: '1' } } : {},
+        { headers: { [STATIC_QUERY]: '1', ...fresh ? { [FRESH]: '1' } : {} } },
       ),
     )
     if (!r.ok) throw await answered(r)
@@ -1316,7 +1322,7 @@ let revised = async (via: Fetcher, q: string): Promise<string> => {
   let answer = await via.fetch(
     new Request(
       `http://directory/query?q=${encodeURIComponent(q)}`,
-      { headers: { [FRESH]: '1' } },
+      { headers: { [FRESH]: '1', [STATIC_QUERY]: '1' } },
     ),
   )
   if (!answer.ok) throw await answered(answer)

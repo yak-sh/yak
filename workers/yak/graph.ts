@@ -8,6 +8,7 @@ import {
   signedDirectory,
   Unfenced,
 } from './directory-copy.ts'
+import { queryCache } from './query-cache.ts'
 import {
   sessionLens,
   sessionMove,
@@ -138,6 +139,7 @@ import {
   notNull,
   type Raw,
   render,
+  revision,
   select,
   type Statements,
   type Stmt,
@@ -295,6 +297,7 @@ import {
   IDEMPOTENCY,
   type Namespace,
   PLATFORM_STORE,
+  STATIC_QUERY,
   USES,
 } from './door.ts'
 import { borrows } from './reach.ts'
@@ -4833,12 +4836,24 @@ export class Store {
       await mend(copy, this.#committed)
     }
     let revision = copy ? this.#get('directory-revision') ?? '0' : null
-    let answer = await this.#directoryAsked(request)
-    if (revision == null) return answer
+    let answer = await (this.#get('name') == PLATFORM_STORE &&
+        request.headers.get(STATIC_QUERY) == '1'
+      ? this.#directoryRead(request)
+      : this.#directoryAsked(request))
+    if (revision == null) {
+      return answer
+    }
     let headers = new Headers(answer.headers)
     headers.set(EPOCH, revision)
     return new Response(answer.body, { status: answer.status, headers })
-  }, { route: () => '/query' })
+  }, {
+    route: () => '/query',
+  })
+
+  #directoryRead = queryCache(
+    () => revision(this.#sql, 'data'),
+    (request) => this.#directoryAsked(request),
+  )
 
   #directoryAsked = async (request: Request): Promise<Response> => {
     let url = new URL(request.url)
