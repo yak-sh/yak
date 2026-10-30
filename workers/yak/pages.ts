@@ -783,13 +783,26 @@ let preferences = (at: DeskPage, env: Host) => {
       MOVES,
     )
   }</form></section>
-<section class="Card">${heading('Homepage')}<p>${
-    home
-      ? `${esc(home.title || home.slug)} opens at your address.`
-      : 'Your address opens your app library.'
-  }</p><p class="Form_Hint">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="${
-    url(env, MANAGE)
-  }">${apex(env)}${MANAGE}</a>.</p></section>`
+<section class="Card">${heading('Homepage')}${
+    at.apps.length
+      ? `<form class="Form" method="post" action="${to}">${
+        labeled(
+          'your-home',
+          `What ${esc(spaceHost(env, at.space))} opens`,
+          `<div class="Form_Line"><select class="Field" id="your-home" name="home">${
+            option('', 'Your app library', !home)
+          }${
+            at.apps.map((a) =>
+              option(a.slug, esc(a.title || a.slug), a.slug == home?.slug)
+            ).join('')
+          }</select><button class="Button" type="submit">Save homepage</button></div>`,
+          `Manage your apps anytime at <a href="${url(env, MANAGE)}">${
+            apex(env)
+          }${MANAGE}</a>.`,
+        )
+      }</form>`
+      : '<p>Your address opens your app library.</p>'
+  }</section>`
 }
 
 let selling = (at: DeskPage, env: Host) => {

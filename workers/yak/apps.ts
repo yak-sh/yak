@@ -2702,6 +2702,24 @@ let saved = async (
     to.searchParams.set('removed', '1')
     return redirect(to.href, 303)
   }
+  // Settings' homepage: app_set's `home`, as the assistant asks it. The
+  // library is no app at all, so choosing it takes the word off the app that
+  // has it.
+  if (form.has('home')) {
+    let want = String(form.get('home') ?? '').trim()
+    let now = await dir.home(space)
+    let { said } = want == (now?.slug ?? '')
+      ? {}
+      : await pressed(env, dir, who, 'app_set', {
+        space: space.slug,
+        app: want || now!.slug,
+        home: !!want,
+      })
+    if (said) return desk(req, env, dir, space, who, 'settings', said)
+    let to = sentFrom(req, env)
+    to.searchParams.set('saved', '1')
+    return redirect(to.href, 303)
+  }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
   if (form.get('billing') == 'portal') return portal(env, req, space)
   // The other button on this page: one app out of the trash (erase.ts,

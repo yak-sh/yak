@@ -176,6 +176,34 @@ test('management separates app creation from agent setup', async () => {
   }
 })
 
+test('Settings chooses the homepage the way app_set home does', async () => {
+  let k = await kernel()
+  let slug = unique('homing')
+  try {
+    let { cookie } = await seed(k, [{ slug, apps: ['site', 'garden'] }])
+    let at = managePath('settings', slug)
+    let chosen = async () =>
+      /<option value="([^"]*)" selected>/.exec(
+        await (await k.at(k.host, at, { headers: { cookie } })).text(),
+      )?.[1]
+    let choose = (home: string) =>
+      k.at(k.host, at, {
+        method: 'POST',
+        headers: { cookie },
+        body: new URLSearchParams({ home }),
+      })
+    assertEquals(await chosen(), '')
+    assertEquals((await choose('garden')).status, 303)
+    assertEquals(await chosen(), 'garden')
+    await choose('site')
+    assertEquals(await chosen(), 'site')
+    await choose('')
+    assertEquals(await chosen(), '')
+  } finally {
+    await k.stop()
+  }
+})
+
 test('the front page is served at the space root', async () => {
   let k = await kernel()
   let jeff23 = unique('jeff23')
