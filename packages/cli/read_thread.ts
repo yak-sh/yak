@@ -68,8 +68,8 @@ let blocked = (thread: string): string => {
   }
 }
 
-/** Independent reads share at most two workers, started only when needed and
- * kept for the reader's life. Each worker owns one read at a time. A read
+/** Independent reads share at most two workers, started when needed or by
+ * `ready`, and kept for the reader's life. Each worker owns one read at a time. A read
  * cancelled while it runs is rejected at once and its answer dropped when it
  * comes; only one still running `grace` ms after its caller left (a runaway
  * query) ends its worker, so it cannot hold a lane for good. A read still
@@ -298,7 +298,12 @@ export let readThread = (
       ask({ op: 'meaning', words, opts }).then((value) =>
         value as MeaningHit[]
       ),
-    ready: () => ask({ op: 'read', query: parse('.limit=1') }).then(() => {}),
+    // Both lanes, so no read waits on a worker starting: one started once the
+    // web's stack sampler runs waits in its inspector before it hears anything.
+    ready: () =>
+      Promise.all(
+        [1, 2].map(() => ask({ op: 'read', query: parse('.limit=1') })),
+      ).then(() => {}),
     overrun: (tell) => void (told = tell),
     close: () => {
       closed = true

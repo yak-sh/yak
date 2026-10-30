@@ -74,8 +74,9 @@ then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
 Prove it on a copy first. `bin/copy-db <scratch>/copy.db` copies the pages as
-one read transaction saw them, in a memory-capped scope so the rest of the box
-keeps its page cache. Copy this way and not with `sqlite3 .backup` or
+one read transaction saw them, in a scope with its memory and pace capped so the
+rest of the box keeps its page cache and its disk; about 4 minutes for 10 GB, so
+background it. Copy this way and not with `sqlite3 .backup` or
 `VACUUM INTO` directly: both run uncapped, and `VACUUM INTO` writes a compacted
 copy, not the pages as they stood. Point a
 scratch config's `db` at the copy, run the script over it in one process (no

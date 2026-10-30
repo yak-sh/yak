@@ -39,9 +39,10 @@ test('closing a busy web reader terminates it and rejects its waiting reads', as
 })
 
 // Readiness must exercise the reader's query path, not an empty identity seek.
-test('reader readiness waits for a bounded read and propagates its refusal', async () => {
+test('reader readiness waits for a bounded read on both workers and propagates a refusal', async () => {
   let Original = globalThis.Worker
-  let answer: (failed: boolean) => void = () => {}
+  let answers: ((failed: boolean) => void)[] = []
+  let answer = (failed: boolean) => answers.splice(0).forEach((a) => a(failed))
   class Reader {
     onmessage: ((event: { data: unknown }) => void) | null = null
     onerror = null
@@ -50,7 +51,7 @@ test('reader readiness waits for a bounded read and propagates its refusal', asy
       if (data.op == 'get') {
         this.onmessage?.({ data: { id: data.id, value: [] } })
       } else {
-        answer = (failed) =>
+        answers.push((failed) =>
           this.onmessage?.({
             data: failed
               ? {
@@ -63,6 +64,7 @@ test('reader readiness waits for a bounded read and propagates its refusal', asy
               }
               : { id: data.id, value: [] },
           })
+        )
       }
     }
     terminate() {}
@@ -77,6 +79,7 @@ test('reader readiness waits for a bounded read and propagates its refusal', asy
     await Promise.resolve()
     await Promise.resolve()
     assertEquals(settled, false)
+    assertEquals(answers.length, 2)
     answer(false)
     await waiting
     assertEquals(settled, true)
