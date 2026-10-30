@@ -4,9 +4,16 @@ import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
 import { close as closeCli, opened } from '../cli/local.ts'
 import { commands as localCommands } from '../cli/subcommands.ts'
-import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
+import {
+  argsOf,
+  type Bundle,
+  type Comp,
+  mint,
+  namedTool,
+  offered,
+} from '@yaks/graph'
 import { answerOf, keeps, toolEid, worded } from '@yaks/tools'
-import { loadTools } from '@yaks/graph/tools'
+import { BEST, loadTools } from '@yaks/graph/tools'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
@@ -30,6 +37,8 @@ let host = () =>
       '@yaks/doc',
       '@yaks/task',
       '@yaks/session',
+      '@yaks/provenance',
+      '@yaks/model',
       '@yaks/harness',
     ],
   }, ['graph'])
@@ -60,11 +69,66 @@ test('the harness composes as a plugin, and its words reach a command line and M
     let said = worded(answerOf(
       await h.runner.call({
         entity: { eid: id },
-        call: { to: toolEid(namedTool(found.verb).name), args: {} },
+        call: {
+          to: toolEid(namedTool(found.verb).name),
+          args: { query: '.session' },
+        },
       }),
       id,
     ))
     assertEquals(said.includes('one'), true)
+  } finally {
+    await h.close()
+  }
+})
+
+test('session_list answers a page of live sessions, newest first, and says how to read on', async () => {
+  let h = await host()
+  try {
+    let live = (n: number): Bundle[] => [
+      { entity: { eid: `s${n}` }, session: { id: `s${n}` } },
+      {
+        entity: { eid: mint() },
+        entry: { session: `s${n}`, seq: 1 },
+        content: { body: 'go' },
+      },
+    ]
+    for (let n = 0; n < BEST + 2; n++) await h.graph.apply(live(n))
+    await h.graph.apply([{ entity: { eid: 'idle' }, session: { id: 'idle' } }])
+    let list = async (args: Record<string, unknown> = {}) => {
+      let id = mint()
+      let rows = answerOf(
+        await h.runner.call({
+          entity: { eid: id },
+          call: { to: toolEid('session_list'), args },
+        }),
+        id,
+      ) as Bundle[]
+      return {
+        ids: rows.map((b) => b.entity.eid).filter((e) => e != '$said'),
+        said: (rows.find((b) => b.entity.eid == '$said')?.content as Comp)
+          ?.body as string | undefined,
+      }
+    }
+    let page = await list()
+    assertEquals(page.ids.length, BEST)
+    let at = async (id: string) =>
+      ((await h.graph.get([id]))[0].created as Comp).at as string
+    let stamps = await Promise.all(page.ids.map(at))
+    assertEquals(stamps, stamps.toSorted().toReversed())
+    assert(page.said?.includes(`.after=${page.ids.at(-1)}`), page.said)
+
+    let next = page.said!.match(/`([^`]*\.after=[^`]*)`/)![1]
+    let rest = await list({ query: next })
+    assertEquals(rest.ids.length, 2)
+    assertEquals(new Set([...page.ids, ...rest.ids]).size, BEST + 2)
+    assertEquals(rest.said, undefined)
+
+    assertEquals((await list({ limit: 2 })).ids.length, 2)
+    let longer = await list({ limit: BEST + 2 })
+    assertEquals(longer.ids.length, BEST + 2)
+    assertEquals(longer.said, undefined)
+    assert((await list({ query: '.session', limit: 99 })).ids.includes('idle'))
   } finally {
     await h.close()
   }

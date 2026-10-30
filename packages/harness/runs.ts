@@ -16,11 +16,11 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { identityEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
-import type { Runs } from '@yaks/graph/tools'
+import { BEST, type Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
-import { parse } from '@yaks/query'
+import { conjoin } from '@yaks/query'
 import { transcript, usingBefore } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
@@ -137,6 +137,41 @@ export let windows = async (
   return models.map((m, i) => ({ name: m.name, context: own(i) ?? m.context }))
 }
 
+// The sessions in progress, the ones a caller most likely means: a graph holds
+// tens of thousands of finished ones, more than one answer may hold.
+let LIVE = '.session.status=pending,running,queued'
+
+// One page of sessions, newest first unless the query orders them, and a last
+// row saying how to read on when more match. The page reads one row past its
+// size to learn that; a query with a `.limit` of its own has chosen its window
+// and comes back as it asked.
+let sessionList: Runs[string] = async (call, graph) => {
+  let args = argsOf(call)
+  let query = String(args.query ?? '').trim() || LIVE
+  let size = Number(args.limit) > 0 ? Math.floor(Number(args.limit)) : BEST
+  let rows = await graph.read(
+    conjoin(
+      '.session',
+      query,
+      '.order=-created.at',
+      `.limit=${size + 1}`,
+      '*',
+    ),
+  )
+  if (rows.length <= size) return rows
+  let page = rows.slice(0, size)
+  let next = conjoin(query, `.after=${page[size - 1].entity.eid}`)
+  return [...page, {
+    entity: { eid: '$said' },
+    content: {
+      body: `${size} sessions shown and more match. Query \`${next}\` reads ` +
+        `the next page, a larger limit a longer one, and query \`.session\` ` +
+        `every status.`,
+    },
+    output: { source: call.entity.eid },
+  }]
+}
+
 /** The functions behind the tools the harness declares (./vocab.json). */
 export let runs = (host?: Host): Runs => ({
   ...conversations(host),
@@ -149,7 +184,7 @@ export let runs = (host?: Host): Runs => ({
       word(args, 'cwd'),
     )
   },
-  session_list: (_, graph) => graph.read(parse('.session&*')),
+  session_list: sessionList,
   session_new: async (call, graph) => {
     let args = argsOf(call)
     let prompt = word(args, 'prompt')

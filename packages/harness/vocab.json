@@ -24,11 +24,24 @@
     },
     "session_list": {
       "tool": true,
-      "description": "List every agent work-session record in the connected graph, as bundles: JSON objects with entity ids and their named groups of fields (components). Takes no arguments; includes sessions regardless of their status.",
+      "description": "List agent work sessions as whole bundles, newest first. With no arguments, answers the 20 newest live sessions (status pending, running or queued). When more match, a last row says how to read the next page. Pass query for other sessions (.session for every status), limit for a longer page.",
       "noun": "session",
       "verb": "list",
-      "input": {},
+      "input": {
+        "query": {
+          "type": "string",
+          "description": "Query narrowed by .session. Without one, selects .session.status=pending,running,queued."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum results (default 20).",
+          "short": "n"
+        }
+      },
       "readOnly": true,
+      "positional": [
+        "query"
+      ],
       "title": "List sessions"
     },
     "session_new": {
