@@ -47,3 +47,33 @@ test('MCP starts a native session and sends input without waiting for a runner',
     await host.close()
   }
 })
+
+test('a message to a session marked over clears the mark, so it runs', async () => {
+  let host = await harness()
+  let client = await connect({ graph: host.g, tools: loadTools(docs, runs()) })
+  let status = async (eid: string) => {
+    let [row] = await host.g.get([eid])
+    return row.session as { ended?: boolean; status: string }
+  }
+  try {
+    let [session] = result(
+      await client.callTool({
+        name: 'session_new',
+        arguments: { prompt: 'First input', wait: false },
+      }),
+    ) as Bundle[]
+    let eid = session.entity.eid
+    await host.g.apply([{ entity: { eid }, session: { ended: true } }])
+    equal((await status(eid)).status, 'stopped')
+    let sent = await client.callTool({
+      name: 'session_send',
+      arguments: { session: eid, text: 'Second input', wait: false },
+    })
+    equal(sent.isError, undefined)
+    equal((await status(eid)).ended, undefined)
+    equal((await status(eid)).status, 'pending')
+  } finally {
+    await client.close()
+    await host.close()
+  }
+})
