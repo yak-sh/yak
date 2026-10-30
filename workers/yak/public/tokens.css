@@ -14,6 +14,7 @@
     --bark: #4d3d34; /* the hairline, on a dark ground */
     --cocoa: #372c26; /* cards and bubbles, on a dark ground */
     --night: #2b231f; /* the dark ground itself */
+    --soot: #1d1714; /* a shadow, on a dark ground */
     --meadow: #4c773e; /* readable on both light backgrounds */
     --moss: #a7c080; /* the accent, lit for the dark */
     --blush: #f8e0c8; /* what you said */
@@ -36,15 +37,18 @@
     --mine: var(--blush); /* the person's bubble */
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
+    --well: color-mix(in srgb, var(--paper), var(--line) 45%); /* a field */
+    --shade: color-mix(in srgb, var(--coffee) 16%, transparent);
 
     /* Pencil and paper. A part worth outlining is drawn: a graphite line
        around it with slightly rounded corners, given the paper's tooth by
-       pencil.svg. What can be pressed sits on a hatch it slides onto. A
-       surface is flat. */
+       pencil.svg. What can be pressed sits on a hatch it slides onto. What
+       is typed into is a well pressed into the paper. A surface is flat. */
     --graphite: color-mix(in srgb, var(--ink) 88%, transparent);
     --stroke: 1.5px; /* the weight of a drawn line */
     --corner: 4px; /* how round a drawn box's corners are */
     --lift: 4px; /* how far what can be pressed sits off its hatch */
+    --hollow: inset 0 1px 3px var(--shade); /* how deep a well sits */
     --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
       transparent 1px 3px);
     /* A drawn rule is a line through the middle of a box --room taller on
@@ -94,6 +98,8 @@
       --warn: var(--rose);
       --mine: var(--ember);
       --theirs: var(--dusk);
+      --well: color-mix(in srgb, var(--paper), var(--ground) 65%);
+      --shade: color-mix(in srgb, var(--soot) 70%, transparent);
     }
   }
 
@@ -108,5 +114,7 @@
     --warn: var(--rose);
     --mine: var(--ember);
     --theirs: var(--dusk);
+    --well: color-mix(in srgb, var(--paper), var(--ground) 65%);
+    --shade: color-mix(in srgb, var(--soot) 70%, transparent);
   }
 }

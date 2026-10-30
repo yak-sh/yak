@@ -106,13 +106,23 @@
     --button-fill: var(--paper);
     --button-ink: var(--ink);
   }
+  /* A field is a well: darker than the paper, a little hollow, its edge
+     drawn in pencil. The pencil keeps what lies inside the edge as it is,
+     so what is typed stays crisp. Focus draws the edge in the accent. */
   .Field {
     min-width: 0;
     max-width: 100%;
     border: var(--stroke) solid var(--graphite);
     border-radius: var(--corner);
-    background: var(--paper);
+    background: var(--well);
+    box-shadow: var(--hollow);
     color: var(--ink);
+    filter: url(pencil.svg#line);
+  }
+  .Field:focus-visible {
+    outline: 0;
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent), var(--hollow);
   }
   select.Field {
     cursor: pointer;
