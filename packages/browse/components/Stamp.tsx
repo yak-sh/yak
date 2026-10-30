@@ -11,8 +11,11 @@ import { pretty } from '../time.ts'
 let tick = signal(Date.now())
 if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)
 
-/** How long ago `iso` was, read off the minute tick. */
-export let ago = (iso?: string | null, now = tick.value) => relative(iso, now)
+/** How long ago `iso` is; the minute tick refreshes mounted views. */
+export let ago = (iso?: string | null, now = Date.now()) => {
+  tick.value
+  return relative(iso, now)
+}
 
 export let Stamp = (
   { e, at, label, by }: {
