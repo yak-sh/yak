@@ -85,6 +85,15 @@ made of other parts holds them, the way `Say` holds a `Field` and a `Button`: an
 `input` a part styles itself is a second text box beside `Field`, with its own
 look in both hosts.
 
+A textarea is as tall as what is typed in it: `field-sizing: content`, set once
+for every textarea in packages/ui/base.css and for yaks.app's `textarea.Field`
+in controls.css, under a ceiling past which it scrolls. Never size one with
+`rows` or grow it from script; a part sets a floor where an empty one would be
+a sliver, and only a textarea sized on purpose, like an editor that fills its
+pane, sets its own height. Jeff, 2026-10-30: "can all typical textareas be made
+`field-sizing: content;`? put this in the ui skill or something; i always have
+to ask."
+
 Colors are **roles**, not hues: `--positive`, `--negative`, `--number`,
 `--time`, `--link`, `--accent`, `--heading` and the rest of `Colors` in
 packages/ui/theme.ts. A part that says `--green` because it means "done" breaks
