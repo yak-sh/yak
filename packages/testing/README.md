@@ -53,7 +53,7 @@ tier.
 | `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                |
 | `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                                     |
 | `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`; the pass record: `passed`, `remember`, `forget`, `recall`, `note`                    |
-| `@yaks/testing/reads`  | `AUDIT`, `audit`, `mark`, `reads`, `audited`, `path`: what each file read as it ran                                                                          |
+| `@yaks/testing/reads`  | `observe`, `path`: file reads and computed module loads seen at their boundaries                                                                             |
 | `@yaks/testing/main`   | The Deno runner entry point                                                                                                                                  |
 
 ## Declaring tests
@@ -285,14 +285,15 @@ resolved by `deno info`, files named with a literal
 not a module it imports only when a run asks for it), config, lock, Deno version
 and paths supplied by `--also`. A directory named this way is a place, not its
 contents, and a directory's listing leaves out what the runner writes beside a
-page while it runs. Started with `DENO_AUDIT_PERMISSIONS` naming a file, the
-runner also sees what each file reads as it runs: a directory it walks (its
-listing), a file at a path it computes, a module it imports by a computed
-specifier (with that module's whole graph). A pass is then kept by its
-**proof**: the key, and what each of those holds. The runner takes the variable
-out of its environment before any test runs, since a Deno child that inherited
-it would empty the file; what a child process reads is not seen. The pass record
-is `$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
+page while it runs. The runner also observes Deno file reads: a directory it
+walks (its listing) and a file at a computed path. Computed module loaders use
+`importing` from `@yaks/host/imports`; their resolved specifiers are retained
+with each module's whole graph, including cached loads. Prefer static imports in
+tests, or supply statically imported modules at an injected loading boundary. A
+pass is kept by its **proof**: the key and what each observed path holds.
+Observation retains unique paths in memory; it produces no permission audit and
+never observes FFI calls. The pass record is
+`$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
 when `XDG_CACHE_HOME` is unset, shared by checkouts on the machine, and what
 each key's file read is kept beside it in `tests-read.json`. `--all` bypasses
 the record; a run filtered by tag records no passes. `--keys` names a JSON file
@@ -301,7 +302,7 @@ holding the key of each file given, from a caller that chose them already
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that
-runs (deno and terminal), each auditing into a file of its own.
+runs (deno and terminal), each observing its own reads.
 
 ## Controlling time
 
@@ -340,7 +341,7 @@ equal([expired, time.now()], [true, 120])
 Assertions and waiting work in runtimes with timers. Without `Deno.test` or the
 runner, declaring tests does not execute them. The runner and discovery
 functions need Deno. The runner uses `deno info` for dependencies and `/proc` to
-identify temporary examples left by ended processes. Without the audit, files
-read in ways other than the dependency forms above are not tracked; with it,
-what a child process reads still is not: include those with `--also` or use
-`--all`.
+identify temporary examples left by ended processes. Native code, child
+processes, Node filesystem APIs and a raw computed `import()` are outside read
+observation. Keep those dependencies static, supply them through a generic
+boundary, or name additional inputs with `--also`.

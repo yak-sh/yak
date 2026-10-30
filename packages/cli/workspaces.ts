@@ -1,3 +1,4 @@
+import { importing } from '@yaks/host/imports'
 // Bind explicitly configured computer transports to existing workspace records.
 // No connector is enabled by the graph server's own launch directory.
 import type { Config, Host } from '@yaks/host'
@@ -32,7 +33,7 @@ export let workspaceCapabilities = (
         } else if (source.use == '@yaks/machine/ssh') {
           connectors[name] = sshConnector(source.with)
         } else {
-          let loaded = await import(source.use)
+          let loaded = await importing(import.meta.resolve(source.use))
           if (typeof loaded.connector != 'function') {
             throw new Error(
               'Connector module must export connector: ' + source.use,

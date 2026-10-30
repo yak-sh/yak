@@ -1,3 +1,4 @@
+import { importing } from '@yaks/host/imports'
 // Remote account credentials come from the configured graph, or a small
 // personal graph beside the CLI's other state. Nothing reads a token file.
 import type { Served } from './host.ts'
@@ -194,7 +195,9 @@ let command: Accounts<Served> = accounts({
     return compose(read(path), ['graph'])
   },
   credential: async (...args) => {
-    let { accountCredential } = await import(located('@yaks/connections'))
+    let { accountCredential } = await importing(
+      import.meta.resolve(located('@yaks/connections')),
+    )
     return accountCredential(...args)
   },
 })

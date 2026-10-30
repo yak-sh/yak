@@ -1,67 +1,67 @@
-import { equal, test } from './mod.ts'
-import { reads } from './reads.ts'
+import { importing } from '@yaks/host/imports'
+import { equal, test, throws } from './mod.ts'
+import { observe } from './reads.ts'
+import { affected } from './choose.ts'
+import { proof, survey } from './deps.ts'
 
-// An audit's lines, as a runtime writes them under -A.
-let log = (...checks: [string, string | null][]) =>
-  checks.map(([permission, value]) =>
-    JSON.stringify({ v: 1, datetime: '', permission, value })
-  )
+let dir = Deno.makeTempDirSync({ prefix: 'yaks-reads-' })
+let fixture = `${dir}/fixture.json`
+Deno.writeTextFileSync(fixture, '{}')
+let module = new URL('../host/imports.ts', import.meta.url)
+let original = Deno.readTextFileSync
+let observed = observe(dir)
+observed.mark('one_test.ts')
+let contents = Deno.readTextFileSync(new URL(`file://${fixture}`))
+let missing = `${dir}/missing`
+let error = await throws(() => Deno.readTextFileSync(missing))
+observed.mark('two_test.ts')
+await Deno.readFile(fixture)
+let reads = observed.reads()
+observed.close()
 
-test('each read after a file is marked is that file’s, until the next mark, but the file itself', () => {
-  equal(
-    reads(
-      log(
-        ['read', '/r/planned.json'],
-        ['env', '@yaks/testing a_test.ts'],
-        ['read', 'file:///r/a_test.ts'],
-        ['read', '/r/data.json'],
-        ['write', '/r/data.json'],
-        ['env', 'HOME'],
-        ['env', '@yaks/testing b_test.ts'],
-        ['read', '/r/pkg/'],
-        ['read', 'file:///r/plugin.ts'],
-        ['read', 'pkg/vocab.json'],
-      ),
-      '/r',
-    ),
-    new Map([
-      ['a_test.ts', ['data.json']],
-      ['b_test.ts', ['pkg', 'pkg/vocab.json', 'plugin.ts']],
-    ]),
-  )
+let modules = observe(
+  new URL('../../', import.meta.url).pathname.replace(/\/$/, ''),
+)
+modules.mark('one_test.ts')
+await importing(module.href)
+modules.mark('unrelated_test.ts')
+modules.mark('two_test.ts')
+await importing(module.href)
+let loaded = modules.reads()
+modules.close()
+let fixtureSurvey = (await survey(
+  [fixture],
+  () => Promise.resolve({ modules: [], redirects: {} }),
+))!
+let recorded = reads.get('one_test.ts')!.map((path) => `${dir}/${path}`)
+let beforeFixture = await proof(fixtureSurvey, 'key', recorded)
+Deno.writeTextFileSync(fixture, '[]')
+let afterFixture = await proof(
+  (await survey(
+    [fixture],
+    () => Promise.resolve({ modules: [], redirects: {} }),
+  ))!,
+  'key',
+  recorded,
+)
+let selectedFixture = affected(fixtureSurvey, [], [], [fixture], recorded)
+Deno.removeSync(dir, { recursive: true })
+
+test('observed reads retain fixture paths per file and preserve values and errors', () => {
+  equal(contents, '{}')
+  equal(error instanceof Deno.errors.NotFound, true)
+  equal(reads.get('one_test.ts'), ['fixture.json', 'missing'])
+  equal(reads.get('two_test.ts'), ['fixture.json'])
+  equal(Deno.readTextFileSync, original)
 })
 
-test('a read outside the checkout, or of an example the runner wrote, is no source', () => {
-  equal(
-    reads(
-      log(
-        ['env', '@yaks/testing a.md'],
-        ['read', '/tmp/x'],
-        ['read', '/proc/self/stat'],
-        ['read', 'file:///r/.a.md.3.99.example.ts'],
-        ['read', '/r'],
-      ),
-      '/r',
-    ),
-    new Map([['a.md', ['.']]]),
-  )
+test('computed and cached module loads retain dependency paths for both consumers', () => {
+  equal(loaded.get('one_test.ts'), ['packages/host/imports.ts'])
+  equal(loaded.get('unrelated_test.ts'), [])
+  equal(loaded.get('two_test.ts'), ['packages/host/imports.ts'])
 })
 
-test('a file marked again read what both passes did; a check of no path, or a torn line, names nothing', () => {
-  equal(
-    reads(
-      [
-        ...log(
-          ['env', '@yaks/testing a_test.ts'],
-          ['read', '/r/x'],
-          ['read', null],
-          ['env', '@yaks/testing a_test.ts'],
-          ['read', '/r/y'],
-        ),
-        '{"v":1,"permission":"read","val',
-      ],
-      '/r',
-    ),
-    new Map([['a_test.ts', ['x', 'y']]]),
-  )
+test('an observed fixture edit invalidates its pass and selects its consumer', () => {
+  equal(beforeFixture == afterFixture, false)
+  equal(selectedFixture, true)
 })

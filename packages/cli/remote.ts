@@ -1,3 +1,4 @@
+import { importing } from '@yaks/host/imports'
 // Account selection and delivery belong to the concrete host. Domain tools
 // forward ordinary arguments and never handle credentials or MCP envelopes.
 import type { Bundle } from '@yaks/graph'
@@ -110,7 +111,9 @@ export let delivery = (
     if (explicit) return explicit
     let owner = await person(host)
     if (!owner || !host.graph.vocab.comp('connection')) return null
-    let { accountCredential } = await import(located('@yaks/connections'))
+    let { accountCredential } = await importing(
+      import.meta.resolve(located('@yaks/connections')),
+    )
     let url = new URL(doorUrl(name))
     let integration = url.hostname == 'yaks.app' ? 'yaks.app' : url.href
     return (await accountCredential(host, owner, integration, as))?.bearer ??

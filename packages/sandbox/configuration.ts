@@ -1,3 +1,4 @@
+import { importing } from '@yaks/host/imports'
 // JSON configuration binds adapters to explicit computer rows. A module may
 // supply backend-specific SDK bindings without putting SDKs in generic lifecycle.
 import type { Comp, Graph } from '@yaks/graph'
@@ -99,7 +100,7 @@ export let resolveOptions = async (
       }
     } else {
       // Module factories also serve Cloudflare bindings and local jail options.
-      let module = await import(entry.use)
+      let module = await importing(import.meta.resolve(entry.use))
       if (typeof module.sandboxProvider != 'function') {
         throw new Error(
           'Sandbox module must export sandboxProvider: ' + entry.use,

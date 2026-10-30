@@ -1,3 +1,4 @@
+import { imported as observed, importing } from '@yaks/host/imports'
 // The config file, read. It is the one statement of where a graph IS: the
 // SQLite file, the plugins that read and write it, and how the host behaves.
 //
@@ -146,9 +147,10 @@ export let located = (
  * again costs an import that throws. */
 export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
   let key = `${plugin}/${name}`
+  observed(dependencies.get(key) ?? [])
   let known = imported.get(key) as Promise<M | null> | undefined
   if (known) return known
-  let asked = importing<M>(key)
+  let asked = optional<M>(key)
   imported.set(key, asked)
   asked.catch(() => imported.delete(key))
   return asked
@@ -167,10 +169,12 @@ export let subpaths = async (
   let pending: { key: string; spec: string; slot: string }[] = []
   for (let [plugin, name] of requests) {
     let key = `${plugin}/${name}`
+    observed(dependencies.get(key) ?? [])
     if (imported.has(key) || pending.some((p) => p.key == key)) continue
     try {
       let spec = import.meta.resolve(key)
       if (!spec.startsWith('file:') || !/\.[cm]?[jt]sx?$/.test(spec)) continue
+      dependencies.set(key, [spec])
       pending.push({ key, spec, slot: `m${pending.length}` })
     } catch (error) {
       if (unexported(error, key)) imported.set(key, Promise.resolve(null))
@@ -186,8 +190,9 @@ export let subpaths = async (
     let source = [...pending, ...roots].map(({ spec, slot }) =>
       `export * as ${slot} from ${JSON.stringify(spec)};`
     ).join('\n')
-    let loading: Promise<Record<string, unknown>> = import(
-      `data:application/javascript,${encodeURIComponent(source)}`
+    let loading: Promise<Record<string, unknown>> = importing(
+      `data:application/javascript,${encodeURIComponent(source)}`,
+      [...pending, ...roots].map(({ spec }) => spec),
     )
     for (let { key, slot } of pending) {
       // The batch cannot distinguish an absent file facet from a broken one.
@@ -195,7 +200,7 @@ export let subpaths = async (
       // optional-export semantics and leaving unrelated modules usable.
       let asked = loading.then(
         (modules) => modules[slot],
-        () => importing(key),
+        () => optional(key),
       )
       imported.set(key, asked)
       asked.catch(() => imported.delete(key))
@@ -203,7 +208,7 @@ export let subpaths = async (
     required = roots.map(({ spec, slot }) =>
       loading.then(
         (modules) => modules[slot],
-        () => import(spec),
+        () => importing(spec),
       )
     )
   }
@@ -213,13 +218,15 @@ export let subpaths = async (
 }
 
 let imported = new Map<string, Promise<unknown>>()
-let importing = async <M>(key: string): Promise<M | null> => {
+let dependencies = new Map<string, string[]>()
+let optional = async <M>(key: string): Promise<M | null> => {
   let spec = located(key)
   try {
     // Missing-module errors name the resolved URL, including for a plugin
     // whose declaring package is an absolute path in a remote vocabulary.
     spec = import.meta.resolve(spec)
-    return await import(spec)
+    dependencies.set(key, [spec])
+    return await importing(spec)
   } catch (error) {
     if (unexported(error, spec)) return null
     throw error

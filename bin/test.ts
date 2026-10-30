@@ -33,7 +33,6 @@ let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
 let { find, tested, walk } = await import('@yaks/testing/find')
 let { own } = await import('@yaks/testing/own')
-let { AUDIT } = await import('@yaks/testing/reads')
 let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
 let { SHARED } = await import('./test-runtime.ts')
@@ -408,11 +407,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   ).filter(([, files]) => files.length)
   let children: Deno.ChildProcess[] = []
   let host = runtime()
-  // Each runtime audits into a file of its own, so the runner sees what each
-  // test file reads (@yaks/testing/reads).
-  let audit = (p: string) => ({
-    [AUDIT]: Deno.makeTempFileSync({ prefix: `test-${p}-`, suffix: '.jsonl' }),
-  })
   let spawn = (
     p: string,
     files: readonly string[],
@@ -420,7 +414,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   ) => {
     let child = new Deno.Command(Deno.execPath(), {
       args: [...host.args, RUNNER, `--platform=${p}`, ...flags, ...files],
-      env: { ...env, ...host.env, ...audit(p) },
+      env: { ...env, ...host.env },
       stdin: 'inherit',
       // Keep each reporter intact: platforms running at once would
       // interleave their half-lines. Drain concurrently below.

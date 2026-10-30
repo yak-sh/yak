@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./imports": "./imports.ts",
     "./assembly": "./assembly.ts",
     "./roles": "./roles.ts",
     "./senders": "./senders.ts",

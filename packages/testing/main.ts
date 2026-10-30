@@ -12,8 +12,8 @@
 // (./deps.ts), is left out unless `--all` is given; `--also` names what every
 // file depends on beside its own graph. `--keys` names a JSON file holding
 // the key of each file given, from a caller that chose them already
-// (./choose.ts): every file given runs. Started with DENO_AUDIT_PERMISSIONS
-// naming a file, the runner sees what each file reads as it runs
+// (./choose.ts): every file given runs. The runner observes file reads and
+// module-loading boundaries as it runs
 // (./reads.ts), and keeps a pass by that too.
 //
 // A test that has not ended within `--timeout` of its own time fails, and the
@@ -28,12 +28,13 @@ import { choose } from './choose.ts'
 import { note, proof, remember, survey } from './deps.ts'
 import { find, tested } from './find.ts'
 import { examples } from './load.ts'
-import { audit, audited, mark } from './reads.ts'
+import { observe } from './reads.ts'
 import { file, type Outcome, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
 // Before anything a test could start inherits it.
-let log = audit()
+Deno.env.delete('DENO_AUDIT_PERMISSIONS')
+let observation = observe()
 
 let FLAGS = /^--(tag|platform|also|keys|timeout|times)=(.*)$|^--(all|verbose)$/
 let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
@@ -68,7 +69,7 @@ let chosen = given
   }
   : await choose([...found, ...shown], {
     all,
-    observed: !!log,
+    observed: true,
     kind: () => platform,
     also: () => ['deno.json', 'deno.jsonc', 'deno.lock', ...flag('also')],
     runner: [
@@ -95,7 +96,7 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   let at = collected.length
   let begun = performance.now()
   console.log(`loading ${path}`)
-  mark(path)
+  observation.mark(path)
   from(path)
   try {
     await load()
@@ -124,7 +125,8 @@ let failed = new Set(outcomes.filter((o) => !o.ok).map((o) => o.test.file))
 let passing = tags.length
   ? []
   : [...modules, ...pages].filter((p) => !failed.has(p) && key.has(p))
-let seen = log ? await audited(log, Deno.cwd()) : undefined
+let seen = observation.reads()
+observation.close()
 let read = (p: string) => seen && (seen.get(p) ?? [])
 let s = await survey([
   ...new Set(passing.flatMap((p) => read(p) ?? []).filter(code)),
