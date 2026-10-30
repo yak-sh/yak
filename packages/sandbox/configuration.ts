@@ -1,4 +1,4 @@
-import { importing } from '@yaks/host/imports'
+import { importing } from '@yaks/fp/imports'
 // JSON configuration binds adapters to explicit computer rows. A module may
 // supply backend-specific SDK bindings without putting SDKs in generic lifecycle.
 import type { Comp, Graph } from '@yaks/graph'

@@ -1,4 +1,4 @@
-import { importing } from '@yaks/host/imports'
+import { importing } from '@yaks/fp/imports'
 // Account selection and delivery belong to the concrete host. Domain tools
 // forward ordinary arguments and never handle credentials or MCP envelopes.
 import type { Bundle } from '@yaks/graph'

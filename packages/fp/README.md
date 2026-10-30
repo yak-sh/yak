@@ -29,6 +29,14 @@ equal(tally('status')([{ status: 'open' }, { status: 'open' }]), { open: 2 })
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)) and `Clock`, with `system` (see [Waits](#waits)) |
 
+| `@yaks/fp/imports` | `importing`, `imported`, `watchImports`: observable
+module loading |
+
+`@yaks/fp/imports` supplies the module-loading boundary: `importing(specifier)`
+notifies `watchImports(listener)` observers before delegating to the runtime,
+including cached loads. `imported(specifiers)` reports a loader's own cache
+hits. The function returned by `watchImports` removes that observer.
+
 ## Composition and values
 
 `compose` applies functions right to left. Given one function, it waits for

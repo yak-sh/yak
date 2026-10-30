@@ -1,7 +1,10 @@
 {
   "name": "@yaks/fp",
   "version": "0.2.10",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./imports": "./imports.ts"
+  },
   "license": "Apache-2.0",
   "description": "Small functions for composition, object copies, lists, comparison and waits, with no dependencies. Pipes and sequential steps stay synchronous until an input or a step returns a promise.",
   "publish": {

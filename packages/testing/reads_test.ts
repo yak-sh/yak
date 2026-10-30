@@ -1,4 +1,4 @@
-import { importing } from '@yaks/host/imports'
+import { importing } from '@yaks/fp/imports'
 import { equal, test, throws } from './mod.ts'
 import { observe } from './reads.ts'
 import { affected } from './choose.ts'
@@ -7,7 +7,7 @@ import { proof, survey } from './deps.ts'
 let dir = Deno.makeTempDirSync({ prefix: 'yaks-reads-' })
 let fixture = `${dir}/fixture.json`
 Deno.writeTextFileSync(fixture, '{}')
-let module = new URL('../host/imports.ts', import.meta.url)
+let module = new URL('../fp/imports.ts', import.meta.url)
 let original = Deno.readTextFileSync
 let observed = observe(dir)
 observed.mark('one_test.ts')
@@ -56,9 +56,9 @@ test('observed reads retain fixture paths per file and preserve values and error
 })
 
 test('computed and cached module loads retain dependency paths for both consumers', () => {
-  equal(loaded.get('one_test.ts'), ['packages/host/imports.ts'])
+  equal(loaded.get('one_test.ts'), ['packages/fp/imports.ts'])
   equal(loaded.get('unrelated_test.ts'), [])
-  equal(loaded.get('two_test.ts'), ['packages/host/imports.ts'])
+  equal(loaded.get('two_test.ts'), ['packages/fp/imports.ts'])
 })
 
 test('an observed fixture edit invalidates its pass and selects its consumer', () => {

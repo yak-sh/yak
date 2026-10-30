@@ -2,7 +2,7 @@
 // pass through either boundary, and no permission audit is produced.
 import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { watchImports } from '@yaks/host/imports'
+import { watchImports } from '@yaks/fp/imports'
 import { written } from './find.ts'
 
 /// path('file:///r/a%20b.ts', '/r') -> 'a b.ts'

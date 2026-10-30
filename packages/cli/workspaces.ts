@@ -1,4 +1,4 @@
-import { importing } from '@yaks/host/imports'
+import { importing } from '@yaks/fp/imports'
 // Bind explicitly configured computer transports to existing workspace records.
 // No connector is enabled by the graph server's own launch directory.
 import type { Config, Host } from '@yaks/host'

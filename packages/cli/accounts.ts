@@ -1,4 +1,4 @@
-import { importing } from '@yaks/host/imports'
+import { importing } from '@yaks/fp/imports'
 // Remote account credentials come from the configured graph, or a small
 // personal graph beside the CLI's other state. Nothing reads a token file.
 import type { Served } from './host.ts'

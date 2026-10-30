@@ -287,8 +287,8 @@ and paths supplied by `--also`. A directory named this way is a place, not its
 contents, and a directory's listing leaves out what the runner writes beside a
 page while it runs. The runner also observes Deno file reads: a directory it
 walks (its listing) and a file at a computed path. Computed module loaders use
-`importing` from `@yaks/host/imports`; their resolved specifiers are retained
-with each module's whole graph, including cached loads. Prefer static imports in
+`importing` from `@yaks/fp/imports`; their resolved specifiers are retained with
+each module's whole graph, including cached loads. Prefer static imports in
 tests, or supply statically imported modules at an injected loading boundary. A
 pass is kept by its **proof**: the key and what each observed path holds.
 Observation retains unique paths in memory; it produces no permission audit and

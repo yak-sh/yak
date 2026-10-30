@@ -1,4 +1,4 @@
-import { imported as observed, importing } from '@yaks/host/imports'
+import { imported as observed, importing } from '@yaks/fp/imports'
 // The config file, read. It is the one statement of where a graph IS: the
 // SQLite file, the plugins that read and write it, and how the host behaves.
 //
