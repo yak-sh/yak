@@ -103,7 +103,7 @@ let listed = await (async () => {
     await h.g.apply([{
       entity: { eid: s },
       session: { id: s, operator: true, ...named },
-      doc: { title },
+      ...title ? { doc: { title } } : {},
       created: { by: agent, via: agent, at },
       updated: { at },
       ...rest,
@@ -133,6 +133,7 @@ let listed = await (async () => {
       actor: project,
       operator: false,
     })
+    let untitled = await session('', '2026-09-01T00:00:00Z', { actor: project })
     let { conversations } = await call('conversation_recent', { project })
     let read = await call('conversation_read', { project, session: actor })
     let refusals = await Promise.all(
@@ -142,7 +143,8 @@ let listed = await (async () => {
     )
     return frozen({
       order: conversations.map((c: { session: string }) => c.session),
-      expected: [worn, filed, actor],
+      expected: [worn, filed, actor, untitled],
+      titles: conversations.map((c: { title: string }) => c.title),
       read: read.messages.map((m: { text: string }) => m.text),
       refusals: refusals.map((r) => r.rejected),
     })
@@ -152,6 +154,7 @@ let listed = await (async () => {
 })()
 test("a project conversation is an operator session with the owner's words, however it says its project", () => {
   assertEquals(listed.order, listed.expected)
+  assertEquals(listed.titles, ['by persona', 'by filing', 'by actor', 'words'])
   assertEquals(listed.read, ['words'])
   assertEquals(listed.refusals, [true, true, true])
 })

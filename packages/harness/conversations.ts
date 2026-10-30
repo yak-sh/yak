@@ -99,6 +99,19 @@ let sessionAt = async (
   }
   return s
 }
+let headline = (words: string) =>
+  words.trim().split(/\r?\n/, 1)[0].slice(0, 160)
+// Most transcripts are never titled: they read as what the owner said first.
+let titleOf = async (g: Graph, s: Bundle, owner: string) => {
+  let title = String(part(s, 'doc').title ?? '')
+  if (title) return title
+  let [first] = await g.read(
+    `.entry.session=${quote(s.entity.eid)} .created.by=${
+      quote(owner)
+    } .content !prompt !output !notice .order=created.at .limit=1 .fields=content.body`,
+  )
+  return headline(String(part(first, 'content').body ?? ''))
+}
 let summary = (s: Bundle, project: string) => ({
   session: s.entity.eid,
   project,
@@ -203,7 +216,7 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
       files,
       using,
       project: project.entity.eid,
-      title: prompt.split(/\r?\n/, 1)[0].slice(0, 160),
+      title: headline(prompt),
     })
     let [s] = await g.get([id], ['session'])
     return answer(call, summary(s, project.entity.eid))
@@ -269,11 +282,11 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
       }`,
     )
     return answer(call, {
-      conversations: rows.map((s) => ({
+      conversations: await Promise.all(rows.map(async (s) => ({
         ...summary(s, p),
-        title: String(part(s, 'doc').title ?? ''),
+        title: await titleOf(g, s, owner),
         updatedAt: part(s, 'updated').at,
-      })),
+      }))),
     })
   },
   conversation_inbox: async (call, g) => {
