@@ -31,7 +31,17 @@ export type MeaningOpts = {
 
 /** A short piece of the text that made an entity's vector. */
 export let excerpt = (text: string, size = 180): string => {
-  let line = text.replace(/\s+/g, ' ').trim()
+  let line = '', gap = false
+  for (let i = 0; i < text.length; i++) {
+    if (/\s/.test(text[i])) {
+      gap = !!line
+      continue
+    }
+    if (gap) line += ' '
+    gap = false
+    line += text[i]
+    if (line.length > size) break
+  }
   if (line.length <= size) return line
   let cut = line.slice(0, size).replace(/\s+\S*$/, '')
   return `${cut || line.slice(0, size)}…`

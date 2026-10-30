@@ -88,3 +88,17 @@ test('an excerpt keeps a short, single line from long text', () => {
   assert(said.length < 200)
   assert(!said.includes('\n'))
 })
+
+test('excerpts preserve whitespace, word boundaries and an exact length', () => {
+  for (
+    let [text, size, want] of [
+      ['  one\n two\tthree ', 7, 'one…'],
+      ['  one\n two\t ', 7, 'one two'],
+      ['   ', 4, ''],
+      ['abcdefghij', 4, 'abcd…'],
+      ['\u00a0one\u2003two\nthree', 8, 'one two…'],
+      ['1234567' + ' '.repeat(200) + '8', 7, '1234567…'],
+      ['1234567' + ' '.repeat(200), 7, '1234567'],
+    ] as [string, number, string][]
+  ) assertEquals(excerpt(text, size), want)
+})
