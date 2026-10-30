@@ -679,6 +679,39 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
   }
 })
 
+// A word asked for whole is its declaration as written, in keywords the
+// authoring meta-schema never names: over every word in reach, the platform's
+// and an app's own, the probe's client holds the answer to its listing, and the
+// Worker's own check reports nothing as it leaves.
+let unfit = (k: Awaited<ReturnType<typeof kernel>>) =>
+  k.reported!.filter((row) => JSON.stringify(row).includes('does not fit'))
+test('graph_schema answers every word whole within its output schema', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'cookbook', title: 'Cookbook' })
+    await agent.tool('app_files', {
+      app: 'cookbook',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile({ recipe: { serves: { ...num, minimum: 1 } } }),
+    })
+    await agent.tool('app_deploy', { app: 'cookbook' })
+    let words = async (args: Record<string, unknown>) =>
+      (await agent.call('tools/call', {
+        name: 'graph_schema',
+        arguments: args,
+      })).structuredContent.$defs as Record<string, unknown>
+    let names = Object.keys(await words({}))
+    assert(names.includes('recipe'))
+    assertEquals(Object.keys(await words({ component: names })), names)
+    assertEquals(unfit(k), [])
+  } finally {
+    await k.stop()
+  }
+})
+
 // The write door's schema is the generic bundle, whatever the caller's
 // vocabulary, and graph_schema is where the words are read. A client checking a
 // call against the listed schema passes the letter the guide teaches

@@ -35,7 +35,10 @@ export let docs: VocabDoc[] = [graphDoc]
 // client checking an answer needs its shape, and every tool listing carries
 // it, so the answer's schema is the shape alone: each `description` keyword
 // goes, and what a value holds (`const`, `enum`, `default`, `examples`) is left
-// as written.
+// as written. The authoring schema's closed entries open too: an answer gives a
+// declaration as it was written, in any JSON Schema keyword (`minimum`,
+// `$comment`) or a package's own (`governed`), and the meta-schema names only
+// the keywords the loader reads.
 let DATA = new Set(['const', 'enum', 'default', 'examples'])
 let bare = (s: unknown): unknown =>
   Array.isArray(s)
@@ -44,6 +47,7 @@ let bare = (s: unknown): unknown =>
     ? Object.fromEntries(
       Object.entries(s)
         .filter(([k, v]) => k != 'description' || typeof v != 'string')
+        .filter(([k, v]) => k != 'additionalProperties' || v !== false)
         .map(([k, v]) => [k, DATA.has(k) ? v : bare(v)]),
     )
     : s
