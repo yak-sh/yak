@@ -141,18 +141,23 @@ A ranking reads a page, not every match: each index hands back only its own best
 index, and the names through `^`, newest first, until it has `limit`. A yaks.app
 store bills the rows a cursor hands back, so a word in a thousand rows costs
 about as much as one in twenty. `limit` defaults to 20 and snippet `context`
-defaults to 10 words. An optional `screen` is SQL selecting the ids of the
-permitted entities, such as the statement `screen()` returns above. Ranking
-reads only the index. Snippets are cut afterwards in one scan per matching
-index, for the rows returned. FTS5 retokenizes a whole row to cut a snippet, so
-rows over 64 KiB instead get a short excerpt around a literal search phrase in
-their first MiB, or the beginning when that preview has no literal match. This
-bounds display work without changing membership or rank; the excerpt may mark
-only that phrase. Smaller rows keep FTS5's token, phrase and Unicode
-highlighting. `find()` reads each index's declared content source from the
-schema so a preview can be sliced before it reaches the full-text virtual table.
-An asynchronous caller of `hits()` can supply the same index-to-source map as
-`content`; omitting it reads through the index as before.
+defaults to 10 words. `plan: 'index'` keeps these bounded index pages for stores
+that bill rows read; `plan: 'sort'` orders relevance and newest-first ties in
+one SQL scan, avoiding a second prefix expansion at a tied page boundary.
+`find()` and the query extension choose the sort plan for a shared file driver;
+`hits()` and `ranked()` keep the index plan unless requested otherwise. An
+optional `screen` is SQL selecting the ids of the permitted entities, such as
+the statement `screen()` returns above. Ranking reads only the index. Snippets
+are cut afterwards in one scan per matching index, for the rows returned. FTS5
+retokenizes a whole row to cut a snippet, so rows over 64 KiB instead get a
+short excerpt around a literal search phrase in their first MiB, or the
+beginning when that preview has no literal match. This bounds display work
+without changing membership or rank; the excerpt may mark only that phrase.
+Smaller rows keep FTS5's token, phrase and Unicode highlighting. `find()` reads
+each index's declared content source from the schema so a preview can be sliced
+before it reaches the full-text virtual table. An asynchronous caller of
+`hits()` can supply the same index-to-source map as `content`; omitting it reads
+through the index as before.
 
 Snippets mark matches with `OPEN` (`\x01`) and `CLOSE` (`\x02`), not HTML.
 Renderers must escape the text and add their own highlighting.

@@ -64,6 +64,9 @@ export type Hit = {
 export type SearchOpts = {
   // how many hits at most (default 20)
   limit?: number
+  // Index-order pages minimize billed rows; a single SQL sort minimizes CPU
+  // when reopening a prefix match to refill tied ranks would cost more.
+  plan?: 'index' | 'sort'
   // a statement selecting the ids of the entities a hit must be among — pass
   // @yaks/sql's `screen` of the rest of the query, and only rows the filters
   // already allow are ranked
@@ -236,6 +239,7 @@ let chosen = (
   let arms = indexes(fields)
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
+  let sorting = opts.plan == 'sort'
   let e = at('entity')
   let c = at('__candidate')
   let b = at('best')
@@ -264,8 +268,10 @@ let chosen = (
   // each kind of candidate takes one term per index, nested to fit however
   // many indexes the vocabulary has, and the kinds are joined above them.
   let kinds = [
-    arms.map((_, i) => placed(i, limit)),
-    arms.map(({ name }, i) => newest(name, i, t, limit, admitted)),
+    arms.map((_, i) => placed(i, limit, sorting)),
+    sorting
+      ? []
+      : arms.map(({ name }, i) => newest(name, i, t, limit, admitted)),
     opts.name
       ? arms.map((arm, i) => exactly(arm, i, t, opts.name!, limit, admitted))
       : [],
@@ -310,7 +316,9 @@ let chosen = (
           materialized: false,
         }]
         : [],
-      ...arms.flatMap(({ name }, i) => placing(name, i, t, limit, admitted)),
+      ...arms.flatMap(({ name }, i) =>
+        placing(name, i, t, limit, admitted, sorting)
+      ),
       { name: 'best', q: best, materialized: true },
     ],
     cols: [
@@ -347,14 +355,15 @@ let placing = (
   t: string,
   limit: number,
   admitted: Admitted,
+  sorting: boolean,
 ): Cte[] => [{
   name: top(i),
   q: select({
     cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
     from: table(indexName(name)),
     where: admitted(name, t),
-    order: [col('rank')],
-    limit: lit(limit + 1),
+    order: [col('rank'), ...sorting ? [desc(col('rowid'))] : []],
+    limit: lit(sorting ? limit : limit + 1),
   }),
   materialized: true,
 }, {
@@ -380,11 +389,11 @@ let full = (i: number, limit: number) =>
 
 // Index `i`'s places ranking better than its worst, or all of them when it
 // holds no row past its last place.
-let placed = (i: number, limit: number): Select =>
+let placed = (i: number, limit: number, sorting: boolean): Select =>
   select({
     cols: candidate(col('owner'), col('rank'), i, 0),
     from: table(top(i)),
-    where: not(exists(select({
+    where: sorting ? lit(true) : not(exists(select({
       cols: [lit(1)],
       from: table(edge(i)),
       where: and(full(i, limit), eq(col('rank', edge(i)), col('rank', top(i)))),
@@ -499,7 +508,11 @@ export let find = (
       return source ? [[o.name.replace(/_fts$/, ''), source]] : []
     }),
   )
-  let stmt = hits(fields, text, { content, ...opts })
+  let stmt = hits(fields, text, {
+    plan: db.file ? 'sort' : 'index',
+    content,
+    ...opts,
+  })
   if (!stmt) return []
   return db.query(stmt).map((r) => ({
     entity: String(r.entity),

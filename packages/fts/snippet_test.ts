@@ -56,3 +56,14 @@ test('external-content excerpts read through the declared resolved text source',
     find(away, text, 'burglar')[0].snippet.includes(`${OPEN}burglar${CLOSE}`),
   )
 })
+
+test('both ranking plans preserve rank, ties, names and excerpts', () => {
+  for (let words of ['dragon', 'the hobbit', 'namespace docs check README']) {
+    for (let limit of [1, 2, 20]) {
+      assertEquals(
+        find(db, text, words, { limit, plan: 'sort' }),
+        find(db, text, words, { limit, plan: 'index' }),
+      )
+    }
+  }
+})

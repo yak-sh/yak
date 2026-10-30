@@ -117,6 +117,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       screen: asked?.() ?? undefined,
       screens: sources,
       limit: page ?? RANKED,
+      plan: db!.file ? 'sort' : 'index',
       name: named(said.join(' ')),
     })
     ranking = true
