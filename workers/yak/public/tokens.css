@@ -38,7 +38,7 @@
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
     --well: color-mix(in srgb, var(--paper), var(--line) 45%); /* a field */
-    --shade: color-mix(in srgb, var(--coffee) 16%, transparent);
+    --shade: color-mix(in srgb, var(--coffee) 24%, transparent);
 
     /* Pencil and paper. A part worth outlining is drawn: a graphite line
        around it with slightly rounded corners, given the paper's tooth by
@@ -48,7 +48,7 @@
     --stroke: 1.5px; /* the weight of a drawn line */
     --corner: 4px; /* how round a drawn box's corners are */
     --lift: 4px; /* how far what can be pressed sits off its hatch */
-    --hollow: inset 0 1px 3px var(--shade); /* how deep a well sits */
+    --hollow: inset 0 2px 4px var(--shade); /* how deep a well sits */
     --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
       transparent 1px 3px);
     /* A drawn rule is a line through the middle of a box --room taller on
