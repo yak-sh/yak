@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
-import { graph } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
 import {
   among,
   col,
@@ -302,6 +302,40 @@ test('a wide archetype catalog still answers a component query', () => {
 
 // What a search beside the graph is narrowed by (a store's `/meaning`), read
 // through the archetype index as the store's own reads are.
+// An absence beside a value test reads only the archetypes wearing what the
+// value needs, not every archetype short of the absent component: on a store
+// of 7M entities that list walked all of them to find a few letters.
+test('an absence beside a value test binds only the archetypes wearing its component', () => {
+  let reads: string[] = []
+  let s = storage(
+    spy(mem(), (sql) => {
+      if (sql.startsWith('select') && sql.includes('"price" >=')) {
+        reads.push(sql)
+      }
+    }),
+    vocab,
+  )
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'kept' }, product: { price: 5 } },
+    { entity: { eid: 'cheap' }, product: { price: 1 } },
+    { entity: { eid: 'marked' }, product: { price: 9 }, marker: {} },
+    ...Array.from({ length: 3 }, (_, i) => ({
+      entity: { eid: `other-${i}` },
+      doc: {},
+      ...i ? { t: {} } : {},
+    })),
+  ])
+  let eids = (g.read('!marker .product.price>=2') as Bundle[]).map((b) =>
+    b.entity.eid
+  )
+  assertEquals(eids, ['kept'])
+  // The one archetype wearing `product` and not `marker`, not a list of every
+  // archetype short of `marker`.
+  assert(reads.at(-1)?.includes('"entity"."archetype" = ?'), reads.at(-1))
+})
+
 test('a screen the store compiles admits what its query selects, by archetype', () => {
   let driver = mem()
   let s = storage(driver, vocab)

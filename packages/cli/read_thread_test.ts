@@ -250,16 +250,19 @@ let watched = async (...steps: string[]) => {
 
 // A read whose own time passes `slow` while it runs is told once, by its
 // masked query, with how its worker spent the time. Its own time leaves out
-// what the box kept its worker waiting for a CPU, and a check the main thread
-// ran late looks again before it tells, since the answer may be waiting.
+// what the box kept its worker waiting for a CPU, and no first look tells,
+// since the answer may be waiting behind the main thread that just came free.
 test('a read is told when its own time passes slow', async () => {
   let slow = 'a read has run 10 s and is still running: .memory.scope=? '
   let cases: [string[], string[]][] = [
     [['5000', 'answer', '30000'], []],
-    [['10000 9 0.5', '30000'], [
-      slow + '(in 10.0 s its worker ran 9.0 s on a CPU, waited 0.5 s for one ' +
-      'and was off one 0.5 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
+    [['10000 9 0.5', '11000 9.5 0.5', '30000'], [
+      slow + '(in 11.0 s its worker ran 9.5 s on a CPU, waited 0.5 s for one ' +
+      'and was off one 1.0 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
     ]],
+    // The main thread came free just before an on-time check; the answer was
+    // waiting behind it.
+    [['10500 0 0', 'answer', '30000'], []],
     // The main thread was held past the check; the answer was waiting.
     [['15800 0 0', 'answer', '30000'], []],
     [['15800 9 0', '16800 9.5 0'], [

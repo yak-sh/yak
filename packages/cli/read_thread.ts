@@ -211,20 +211,23 @@ export let readThread = (
       ),
       waiting.length ? `${waiting.length} reads waited behind it` : '',
     ].filter(Boolean).join('; ')
-  // A check the main thread ran late may have the answer waiting behind it,
-  // unheard: it looks again a second later, once the thread is free
-  // (./stall.ts tells of what held it). One that finds the read short of
-  // `slow` on its own, because the box kept its worker waiting for a CPU,
-  // looks again when it could pass it. A second either way is close enough.
-  let check = (lane: Lane, job: Job, due: number) => () => {
+  // A timer can run first in the very turn the main thread comes free, with
+  // the answer already waiting behind it, so no first look tells: a second
+  // one follows a turn later (./stall.ts tells of what held the thread). A
+  // look the thread ran late looks again too, and one that finds the read
+  // short of `slow` on its own, because the box kept its worker waiting for a
+  // CPU, looks again when it could pass it. A second either way is close
+  // enough.
+  let check = (lane: Lane, job: Job, due: number, looked = false) => () => {
     if (lane.job !== job) return
     let at = now()
     let again = (ms: number) =>
-      void (lane.long = timer(check(lane, job, at + ms), ms))
+      void (lane.long = timer(check(lane, job, at + ms, true), ms))
     if (at - due >= 1000) return again(1000)
     let ran = at - job.sent!, s = since(job.spent, spentBy(lane))
     let left = slow - own(ran, s)
     if (left >= 1000) return again(left)
+    if (!looked) return again(1000)
     told(Object.assign(
       new Error(
         `a read has run ${slow / 1000} s and is still running: ` +
