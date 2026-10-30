@@ -155,7 +155,12 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
       ...s.doc ? {} : doc,
       ...linked.call ? { spawned: linked } : {},
     }
-    if (Object.keys(more).length) await g.apply([{ entity: { eid }, ...more }])
+    if (Object.keys(more).length) {
+      await g.apply([{ entity: { eid }, ...more }], {
+        trusted: true,
+        stamp: false,
+      })
+    }
     return eid
   }
   await g.apply([
@@ -172,26 +177,33 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
   return eid
 }
 
-// The bundles whose components the graph does not already hold as given. A
-// write stamps `updated` even when it changes nothing, so a transcript opened
+// Write what the graph does not already hold as given. A row it holds is being
+// corrected, which is no edit to it, so its `updated` stays; only a new row is
+// stamped. A write stamps even when it changes nothing, so a transcript opened
 // again by each new process would otherwise rewrite every session it names.
-let lacking = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
+let correct = async (g: Graph, bundles: Bundle[]) => {
   let held = new Map(
     (await g.get(bundles.map((b) => b.entity.eid))).map((b) => [
       b.entity.eid,
       b,
     ]),
   )
-  return bundles.filter((b) => {
+  let isNew = (b: Bundle) => {
     let had = held.get(b.entity.eid)
-    if (!had || had[TOMBSTONE] != null) return true
-    return Object.entries(b).some(([c, comp]) =>
+    return !had || had[TOMBSTONE] != null
+  }
+  let lacking = bundles.filter((b) =>
+    isNew(b) || Object.entries(b).some(([c, comp]) =>
       c != 'entity' &&
       Object.entries(comp as Comp).some(([p, v]) =>
-        (had[c] as Comp | undefined)?.[p] !== v
+        (held.get(b.entity.eid)![c] as Comp | undefined)?.[p] !== v
       )
     )
-  })
+  )
+  let fresh = lacking.filter(isNew)
+  let known = lacking.filter((b) => !isNew(b))
+  if (fresh.length) await g.apply(fresh, { trusted: true })
+  if (known.length) await g.apply(known, { trusted: true, stamp: false })
 }
 
 // A tail on a transcript, or null where its session is a managed run.
@@ -246,7 +258,7 @@ let opened = async (
           typeof meta.cwd == 'string'
         ? await (await import('@yaks/persona')).carried(g, meta.cwd)
         : undefined
-      let missing = await lacking(g, [
+      await correct(g, [
         ...(parent
           ? [{ entity: { eid: parent }, session: { id: f.parent } }]
           : []),
@@ -260,7 +272,6 @@ let opened = async (
           ...(parent ? { spawned: { parent } } : {}),
         },
       ])
-      if (missing.length) await g.apply(missing, { trusted: true })
       return await tail(g, f.path, {
         session: eid,
         id: f.id,
@@ -724,7 +735,10 @@ let natives = async (
       bundles.push(...made.filter((m) => !m.fixed || !held?.fixed))
     }
     for (let i = 0; i < bundles.length; i += BATCH) {
-      await g.apply(bundles.slice(i, i + BATCH), { trusted: true })
+      await g.apply(bundles.slice(i, i + BATCH), {
+        trusted: true,
+        stamp: false,
+      })
     }
     wrote += bundles.filter((b) => b.context_parts).length
   }

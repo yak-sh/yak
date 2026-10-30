@@ -177,6 +177,13 @@ follow-ups or later things should be marked as the agent". A row stamped with
 the wrong writer moves with `data-migration`, and the code that chose that
 writer is fixed where it chose.
 
+A process's own writes carry its `process` row in both `by` and `via`
+(packages/cli/host.ts). `updated` says someone edited the row, so a pass that
+corrects or observes rows it did not create writes with `stamp: false`, or every
+row it touches sorts to the top of any list ordered by `updated.at`. A new row
+still needs its stamps, so split the batch (`correct` in
+packages/session/service.ts).
+
 ## Deleting
 
 `$delete` tombstones the entity: `tombstone: {}` keeps its eid and number. A

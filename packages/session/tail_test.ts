@@ -180,6 +180,22 @@ test('a tail reads on from where the transcript stands, and never twice', async 
   }
 })
 
+test('a log compressed moves its session to the new file and leaves its updated stamp', async () => {
+  let { g, log, path, free } = fixture()
+  log(typed('hello'))
+  let t = await tail(g, path)
+  await pull(g, t, claude)
+  let eid = t.session!
+  let updated = { at: '2026-01-01T00:00:00.000Z', by: ids.ada }
+  await g.apply([{ entity: { eid }, updated }], { trusted: true, stamp: false })
+  let was = c((await g.get([eid]))[0], 'session')?.transcript
+  await tail(g, `${path}.zst`)
+  let [s] = await g.get([eid])
+  assertEquals(s.updated, updated)
+  assertEquals(c(s, 'session')?.transcript != was, true)
+  free()
+})
+
 test('a pull told to stop stops between lines, and the rest is read after', async () => {
   let { g, t, free } = stopping
   try {

@@ -338,15 +338,17 @@ let compressed = async (
       `.entity.eid=${JSON.stringify(session)} .fields=session.transcript`,
     )
     : []
+  // Compressing a log is no edit to its session, so `updated` stays. The session
+  // moves first: stopped between the two, the next read moves the file.
+  if (comp(s, 'session')?.transcript == from) {
+    await g.apply([{
+      entity: { eid: session! },
+      session: { transcript: file.entity.eid },
+    }], { trusted: true, stamp: false })
+  }
   await g.apply([
     { ...file, transcript: held },
     { entity: { eid: from }, transcript: null },
-    ...comp(s, 'session')?.transcript == from
-      ? [{
-        entity: { eid: session! },
-        session: { transcript: file.entity.eid },
-      }]
-      : [],
   ], { trusted: true })
   return held
 }

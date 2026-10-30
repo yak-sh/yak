@@ -120,6 +120,26 @@ let execRun = await (async () => {
   }
 })()
 
+// A session the graph already holds, which a restarted door then learns was an
+// exec run all along.
+let corrected = await (async () => {
+  let run = crypto.randomUUID(), graph = locked(store())
+  let updated = { at: '2026-01-01T00:00:00.000Z', by: ids.ada }
+  await graph.apply([{
+    entity: { eid: run },
+    session: { id: run },
+    updated,
+  }], { trusted: true, stamp: false })
+  Deno.writeTextFileSync(
+    path(run),
+    encode(event('session_meta', { id: run, cwd: '/work', source: 'exec' })),
+  )
+  await read(graph, seen())
+  Deno.removeSync(path(run))
+  let [session] = await graph.get([run])
+  return { session, updated }
+})()
+
 // Prepare the resumable case outside its timed operation.
 let first = seen()
 await read(resumed, first, { person: ids.ada, slice: 0 })
@@ -247,6 +267,11 @@ let old = await rows(history)
 test('a codex exec run is not a person: its brief is a notice and its session no operator', () => {
   assertEquals((execRun.session.session as Comp).operator, false)
   assertEquals(execRun.owners, [])
+})
+
+test('correcting a session the door already holds leaves its updated stamp alone', () => {
+  assertEquals((corrected.session.session as Comp).operator, false)
+  assertEquals(corrected.session.updated, corrected.updated)
 })
 
 test('Codex children retain thread identities and never attribute a delegated prompt to the owner', () => {
