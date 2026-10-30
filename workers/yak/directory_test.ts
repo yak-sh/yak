@@ -10,7 +10,7 @@ import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
-import { answered, type Meta, metaOf } from './meta.ts'
+import { answered, type Meta, meta, metaOf } from './meta.ts'
 import { doorOf, PLATFORM_STORE, STATIC_QUERY } from './door.ts'
 import { EPOCH } from './directory-copy.ts'
 import { Pending } from './writes.ts'
@@ -136,7 +136,7 @@ let stub = () => {
   } as unknown as Env
   return {
     at,
-    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }),
+    dir: directory(dirPart.part(meta(env))),
   }
 }
 
