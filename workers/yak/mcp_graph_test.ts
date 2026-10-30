@@ -75,6 +75,19 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     await held('graph_query', { q: '.actor' })
     await held('graph_show', { ids: [eid] })
     await held('search', { words: 'Root' })
+    let admin = connector(k, k.owner.cookie)
+    let directory = await admin.call('tools/call', {
+      name: 'graph_query',
+      arguments: { app: 'yak/platform', q: '.space .limit=1' },
+    })
+    let row = directory.structuredContent.result[0]
+    assertEquals(typeof row.space, 'object')
+    assert(row.space.slug)
+    let shown = await admin.call('tools/call', {
+      name: 'graph_show',
+      arguments: { app: 'yak/platform', ids: [row.entity.eid] },
+    })
+    assertEquals(shown.structuredContent.result[0].space, row.space)
   } finally {
     await k.stop()
   }

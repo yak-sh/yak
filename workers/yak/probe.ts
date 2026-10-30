@@ -12,6 +12,7 @@ import type { Env } from './env.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
 import { endpoints } from './endpoints.ts'
+import { Ajv } from 'ajv'
 
 let logs = new Map<string, string>()
 let transport = endpoints(globalThis)
@@ -325,7 +326,9 @@ export let connector = (
   // later request, the way a client does — it names this client's stream and
   // the tool list it cached (mcp.ts).
   let session = ''
-  let call = async (method: string, params: unknown = {}) => {
+  let ajv = new Ajv({ strict: false })
+  let schemas = new Map<string, ReturnType<typeof ajv.compile>>()
+  let ask = async (method: string, params: unknown = {}) => {
     let r = await k.at(k.host, '/mcp', {
       method: 'POST',
       headers: {
@@ -343,6 +346,24 @@ export let connector = (
       throw new Error(`mcp ${reply.error.code}: ${reply.error.message}`)
     }
     return reply.result
+  }
+  let call = async (method: string, params: unknown = {}) => {
+    let out = await ask(method, params)
+    if (method == 'tools/call' && out.structuredContent !== undefined) {
+      let { name } = params as { name: string }
+      if (!schemas.has(name)) {
+        let { tools } = await ask('tools/list')
+        for (let t of tools) {
+          if (t.outputSchema) schemas.set(t.name, ajv.compile(t.outputSchema))
+        }
+      }
+      let fits = schemas.get(name)
+      if (!fits) throw new Error(`${name}: no listed output schema`)
+      if (!fits(out.structuredContent)) {
+        throw new Error(`${name}: ${ajv.errorsText(fits.errors)}`)
+      }
+    }
+    return out
   }
   // A reply's two readers: the words a person reads, and the same answer as
   // data (@yaks/tools `valueIn`), which is what a program reads — the words

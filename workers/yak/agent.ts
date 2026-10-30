@@ -541,11 +541,13 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
  * entity is, on every row a store or the composing read answers (graph.ts
  * `#kind`, reach.ts `composed`); `space` is the space a row answers for where
  * two spaces mean two things by one word (T-32728). Both are documented on the
- * rows graph_query answers (public/docs/querying.md, entities.md).
+ * rows graph_query answers (public/docs/querying.md, entities.md). The
+ * directory also stores `space` as a component, so that name can carry the
+ * ordinary component object or its cleared value too.
  */
 export let ROWS = answerWith({
   kind: { type: 'string' },
-  space: { type: 'string' },
+  space: { type: ['string', 'object', 'null'] },
 })
 
 /** Ranked search over everything in reach, as the package's `search` seam. */
