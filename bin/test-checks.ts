@@ -1,6 +1,8 @@
 // The change's source checks accompany its selected tests. Passing test
 // caches never stand in for a type check, and formatting is applied first.
 
+import { typecheck } from './test-typecheck.ts'
+
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
@@ -27,7 +29,10 @@ export let checks = (changed: string[], affected: string[]): Check[] => {
 }
 
 /** A check's effect boundary. Tests supply this with controlled results. */
-export let command = async ({ name, args }: Check): Promise<boolean> => {
+let execute = async (
+  { name, args }: Check,
+  display = (text: string) => text,
+): Promise<boolean> => {
   let result = await new Deno.Command(Deno.execPath(), {
     args,
     stdout: 'piped',
@@ -35,11 +40,15 @@ export let command = async ({ name, args }: Check): Promise<boolean> => {
   }).output()
   if (!result.success) {
     console.error(`FAILED ${name}`)
-    console.error(new TextDecoder().decode(result.stdout))
-    console.error(new TextDecoder().decode(result.stderr))
+    console.error(display(new TextDecoder().decode(result.stdout)))
+    console.error(display(new TextDecoder().decode(result.stderr)))
   }
   return result.success
 }
+
+/** Type checks reuse Deno's incremental program across worktrees. */
+export let command = (check: Check): Promise<boolean> =>
+  check.name == 'types' ? typecheck(check, execute) : execute(check)
 
 /** Format before selecting: the files' keys must describe the bytes tested. */
 export let format = async (
