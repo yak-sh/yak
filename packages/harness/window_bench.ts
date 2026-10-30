@@ -14,6 +14,7 @@ export let corpus = (count: number, length: number): Bundle[] => [
   ...Array.from({ length: count }, (_, i) => ({
     entity: { eid: 'e' + i },
     entry: { session: 'session', seq: i + 1 },
+    output: {},
     content: { body: String(i) + 'x'.repeat(length) },
   })),
 ]
