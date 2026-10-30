@@ -59,7 +59,7 @@ let toolRow = (name, line, ok) => {
 }
 
 let built = (url) => {
-  let card = el('div', 'Chat_Built')
+  let card = el('div', 'Card Chat_Built')
   let at = el('p', 'Url')
   let a = el('a', null, null)
   a.href = url

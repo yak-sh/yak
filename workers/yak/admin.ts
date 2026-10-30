@@ -217,7 +217,7 @@ let ordered = (d: Reading, rows: Row[]) =>
 
 let rows = (d: Reading, all: Row[]) =>
   all.length
-    ? `<ul class="Directory">${
+    ? `<ul class="Card Directory">${
       ordered(d, all).map((r) =>
         `<li>${drawn(r, 'Directory.List.Tile', around(d, r))}</li>`
       ).join('')

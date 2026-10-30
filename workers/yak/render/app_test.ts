@@ -53,7 +53,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     view: 'apps',
   }).text()
   let expected = card(
-    `<div class="Apps_Item">
+    `<div class="Card Apps_Item">
 <img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt="">
 <a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span>
 <span class="Apps_Tags"><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,

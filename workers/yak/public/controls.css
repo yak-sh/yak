@@ -37,20 +37,26 @@
     vertical-align: middle;
   }
   /* What is drawn (tokens.css, Pencil and paper) wears its outline on
-     ::after, in --pencil where a part asks for another colour. Each part
-     starts from graphite, so none takes the colour of a box it sits in. */
+     ::after, in --pencil where a part asks for another colour and dashed
+     where --pencil-style says so. Each part starts from a solid graphite
+     line, so none takes the line of a box it sits in. A page's own surface
+     is drawn by being a .Card. */
   .Button,
   .Card,
-  a.Pill {
+  a.Pill,
+  .Empty {
     --pencil: initial;
+    --pencil-style: initial;
   }
   .Button::after,
   .Card::after,
-  a.Pill::after {
+  a.Pill::after,
+  .Empty::after {
     content: '';
     position: absolute;
     inset: -1px;
-    border: var(--stroke) solid var(--pencil, var(--graphite));
+    border: var(--stroke) var(--pencil-style, solid)
+      var(--pencil, var(--graphite));
     border-radius: var(--corner);
     filter: url(pencil.svg#line);
     pointer-events: none;
@@ -562,13 +568,18 @@
     font-size: var(--fine);
   }
 
-  /* Nothing here yet: what will be, and how to start. */
+  /* Nothing here yet: what will be, and how to start. Its pencil line is
+     dashed and light, a place for something rather than a thing. */
   .Empty {
+    --pencil: var(--edge);
+    --pencil-style: dashed;
+    position: relative;
     display: grid;
     justify-items: center;
     gap: .5rem;
     padding: 2rem 1.25rem;
-    border: 1px dashed var(--edge);
+    border: 1px solid transparent;
+    border-radius: var(--corner);
     color: var(--soft-ink);
     text-align: center;
   }

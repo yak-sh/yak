@@ -126,18 +126,20 @@
     justify-content: center;
     margin: 0 0 1.25rem;
   }
+  /* A card whose dashed line is a place to drop a file. */
   .Drop_Zone {
+    --pencil: var(--edge);
+    --pencil-style: dashed;
     display: grid;
     place-items: center;
     gap: .5rem;
     padding: 1.25rem 1rem;
-    border: 2px dashed var(--edge);
     background: var(--ground);
     text-align: center;
     cursor: pointer;
   }
   .Drop_Zone-over {
-    border-color: var(--accent);
+    --pencil: var(--accent);
     background: var(--paper);
   }
   .Drop_File {
@@ -205,9 +207,9 @@
     white-space: nowrap;
   }
   .Chat_Built {
+    --pencil: var(--accent);
     margin: .4rem 0;
     padding: 1rem;
-    border: 1px solid var(--accent);
     background: var(--ground);
     text-align: center;
   }
@@ -416,13 +418,11 @@
     min-width: 0;
     min-height: 10.5rem;
     padding: 1rem 1.1rem;
-    border: 1px solid var(--edge);
-    background: var(--paper);
     color: var(--ink);
     overflow-wrap: anywhere;
   }
   .Apps_Item:hover {
-    border-color: var(--accent);
+    --pencil: var(--accent);
   }
   .Apps_Item img {
     width: 40px;
@@ -595,14 +595,25 @@
   .Directory_Bar > a {
     font-size: .9rem;
   }
+  /* A card of rows edge to edge, a hairline between each. Each row sits in
+     its own <li>, and the end rows round off with the card. */
   .Directory {
     display: grid;
+    gap: 0;
     margin: 0;
     padding: 0;
     list-style: none;
-    border: 1px solid var(--edge);
-    background: var(--paper);
-    overflow: hidden;
+  }
+  .Directory > li + li {
+    border-top: 1px solid var(--line);
+  }
+  .Directory > li:first-child > .Directory_Row {
+    border-top-left-radius: var(--corner);
+    border-top-right-radius: var(--corner);
+  }
+  .Directory > li:last-child > .Directory_Row {
+    border-bottom-left-radius: var(--corner);
+    border-bottom-right-radius: var(--corner);
   }
   .Directory_Row {
     position: relative;
@@ -611,10 +622,6 @@
     align-items: center;
     gap: .5rem 1.5rem;
     padding: .85rem 1.25rem;
-    border-top: 1px solid var(--line);
-  }
-  .Directory_Row:first-child {
-    border-top: 0;
   }
   .Directory_Row:hover {
     background: color-mix(in srgb, var(--ground), var(--paper) 55%);

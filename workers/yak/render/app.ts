@@ -23,7 +23,7 @@ export let app: Renderer = {
     let tag = (text: string) => h('span', { class: 'Apps_Tag' }, text)
     return h(
       'div',
-      { class: 'Apps_Item' },
+      { class: 'Card Apps_Item' },
       '\n',
       h('img', {
         src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,

@@ -195,7 +195,7 @@ let dropZone = (slug?: string, to = '/deploy') =>
   `<form class="Drop" method="post" action="${
     esc(to)
   }" enctype="multipart/form-data">
-<label class="Drop_Zone">
+<label class="Card Drop_Zone">
 <input class="Drop_File" type="file" name="file" required aria-label="Website files">
 <span class="Drop_Say">A .zip of your website files, or a single index.html</span>
 </label>
