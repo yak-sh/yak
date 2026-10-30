@@ -291,19 +291,11 @@ export let ALSO = [
   rel(new URL('./test.gitconfig', import.meta.url)),
 ]
 
-/** What runs every file: the runner, this file starting it, the preload, and
- * the scratch directory `deno task test` gives them (./scratch.ts). Each is
- * keyed by what loads with it. Imports delayed until after the nested-run
- * refusal are explicit roots here too, so budget records participate in
- * every key. */
+/** What loads in every test runtime: its runner and preload. The
+ * coordinator and its helpers launch tests; tests do not depend on them. */
 export let RUNS = [
   rel(import.meta.resolve('@yaks/testing/main')),
-  rel(import.meta.url),
-  rel(new URL('./phases.ts', import.meta.url)),
-  rel(new URL('./test-budget.ts', import.meta.url)),
-  rel(new URL('./sqlite.ts', import.meta.url)),
   rel(new URL('./test-runtime.ts', import.meta.url)),
-  rel(new URL('./scratch.ts', import.meta.url)),
 ]
 
 /** What the Worker's `ready` makes (workers/yak/wrangler.ts) is read by these:
@@ -333,6 +325,60 @@ export let chosen = async (
     also: () => [...ALSO, ...also],
     runner: RUNS,
   })
+
+/** Plan and check a run before starting runtimes. A whole run needs no git
+ * history or source checks: the gate has already checked the sources. */
+export let prepare = async (
+  args: string[],
+  sqlite: string,
+  effects = {
+    changes,
+    format,
+    find,
+    walk,
+    chosen,
+    check,
+    ready: async (quiet: boolean) => {
+      let { ready } = await import('../workers/yak/wrangler.ts')
+      await ready(quiet)
+    },
+  },
+) => {
+  let flags = args.filter((a) => a.startsWith('--') && !OWN.test(a))
+  let paths = args.filter((a) => !a.startsWith('--'))
+  let tags = flags.filter((a) => a.startsWith('--tag='))
+    .flatMap((a) => a.slice(6).split(','))
+  let named = PLATFORMS.filter((p) => tags.includes(p))
+  let on = (p: string) => !named.length || named.includes(p)
+  // A whole run has no change to find, and main's gate checks out one commit,
+  // with no parent for git to compare it with.
+  let all = flags.includes('--all')
+  let changedPaths = all ? [] : await effects.changes()
+  let changedFiles = await effects.format(changedPaths)
+  let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
+  let sources = await effects.walk(paths.length ? paths : SOURCES)
+  let files = [
+    ...tests.filter((f) => on(platform(f))),
+    ...on('deno') ? pages : [],
+  ]
+  // Choose files before starting runtimes; hand each its dependency keys.
+  let changed = !paths.length && !all ? changedPaths : undefined
+  let { keys, run, reaches, affected, sources: typed } = await effects.chosen(
+    files,
+    all,
+    [sqlite],
+    changed,
+    sources.filter((f) =>
+      /\.[mc]?[jt]sx?$/.test(f) &&
+      !config.exclude.some((p) => matchesGlob(f, p) || f.startsWith(`${p}/`))
+    ),
+  )
+  if ((affected.length || typed.length) && reaches(READIES)) {
+    await effects.ready(!flags.includes('--verbose'))
+  }
+  let ok = all || await effects.check(changedFiles, [...affected, ...typed])
+  return { flags, paths, tags, files, keys, run, ok }
+}
 
 // `--bulk` gives each document environment its selected files and their keys.
 if (import.meta.main && Deno.args[0] === '--bulk') {
@@ -531,40 +577,11 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let b = await budget()
   let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
   if (from) Deno.exit(await say(b, await read(from), Deno.args))
-  let flags = Deno.args.filter((a) => a.startsWith('--') && !OWN.test(a))
-  let paths = Deno.args.filter((a) => !a.startsWith('--'))
-  let tags = flags.filter((a) => a.startsWith('--tag='))
-    .flatMap((a) => a.slice(6).split(','))
-  let named = PLATFORMS.filter((p) => tags.includes(p))
-  let on = (p: string) => !named.length || named.includes(p)
-  // A whole run has no change to find, and main's gate checks out one commit,
-  // with no parent for git to compare it with.
-  let all = flags.includes('--all')
-  let changedPaths = all ? [] : await changes()
-  let changedFiles = await format(changedPaths)
-  let { tests, pages } = await find(paths.length ? paths : ROOTS)
-  let sources = await walk(paths.length ? paths : SOURCES)
-  let files = [
-    ...tests.filter((f) => on(platform(f))),
-    ...on('deno') ? pages : [],
-  ]
-  // Choose files before starting runtimes; hand each its dependency keys.
-  let changed = !paths.length && !all ? changedPaths : undefined
-  let { keys, run, reaches, affected, sources: typed } = await chosen(
-    files,
-    all,
-    [sqlite],
-    changed,
-    sources.filter((f) =>
-      /\.[mc]?[jt]sx?$/.test(f) &&
-      !config.exclude.some((p) => matchesGlob(f, p) || f.startsWith(`${p}/`))
-    ),
+  let { flags, paths, tags, files, keys, run, ok } = await prepare(
+    Deno.args,
+    sqlite,
   )
-  if ((affected.length || typed.length) && reaches(READIES)) {
-    let { ready } = await import('../workers/yak/wrangler.ts')
-    await ready(!flags.includes('--verbose'))
-  }
-  if (!await check(changedFiles, [...affected, ...typed])) Deno.exit(1)
+  if (!ok) Deno.exit(1)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   let suite: Suite = async (more) => {
