@@ -7,16 +7,13 @@
 # starts over each time another process commits, which on the box is several
 # times a second.
 #
-# In a scope of its own with its memory and its CPU capped, because a copy costs
-# everyone else two things. Memory: a whole database read and written again goes
-# through the page cache, and uncapped that pushed the servers' idle heaps into
-# swap. The disk: writing the copy as fast as it can took a cold page read from
-# 0.3 ms to 5-22 ms on average, and a read needing a thousand of them to 10 s
-# (T-133694). The CPU cap is the pace: 5% writes about 35 MB/s, where a page read
-# averages 3.5 ms, so 10 GB takes about 5 minutes. Run it in the background.
+# In a scope with its memory capped (bin/capped) and its CPU capped too, because
+# writing the copy as fast as it can took a cold page read from 0.3 ms to 5-22 ms
+# on average, and a read needing a thousand of them to 10 s (T-133694). The CPU
+# cap is the pace: 5% writes about 35 MB/s, where a page read averages 3.5 ms, so
+# 10 GB takes about 5 minutes. Run it in the background.
 set -eu
 [ $# -ge 1 ] || { echo "usage: bin/copy-db <dest> [database]" >&2; exit 2; }
-exec systemd-run --user --scope --quiet --collect \
-  -p MemoryHigh=512M -p MemorySwapMax=0 -p CPUQuota=5% \
+exec "$(dirname -- "$0")/capped" -p CPUQuota=5% \
   sqlite3 -batch -init /dev/null -readonly "${2:-$HOME/.yak/yak.db}" \
-  BEGIN "select count(*) from sqlite_schema" ".backup $1" COMMIT
+  BEGIN ".output /dev/null" "select count(*) from sqlite_schema" ".backup $1" COMMIT

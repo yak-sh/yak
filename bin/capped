@@ -1,0 +1,14 @@
+#!/bin/sh
+# Run a command in a scope of its own with its memory capped, so reading or
+# writing a whole database cannot cost everyone else theirs:
+#
+#   bin/capped [-p <systemd property>]... <command> [argument]...
+#
+# Everything read or written goes through the page cache and is charged to the
+# scope. Uncapped, one copy of the graph pushed the servers' idle heaps into
+# swap (T-133666). cron sets no XDG_RUNTIME_DIR, and systemd-run needs it to find
+# the user's manager.
+set -eu
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+exec systemd-run --user --scope --quiet --collect \
+  -p MemoryHigh=512M -p MemorySwapMax=0 "$@"

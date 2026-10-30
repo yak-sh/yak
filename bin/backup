@@ -30,16 +30,20 @@
 # integrity_check. A backup that can be quietly incomplete is worse than one a
 # night old.
 #
-# A page copy inside one read transaction, not VACUUM INTO. VACUUM INTO
-# rebuilds every table and index: on the 10 GB graph it had written 3 GB in 11
-# minutes, keeping the WAL from resetting the whole time. The same transaction
-# runs quick_check, counts the rows and streams every page (sqlite_dbpage)
-# into zstd, so the night is exactly the database that passed, and no
-# uncompressed copy ever lands on disk: the disk holds one compressed database
-# at a time (4.1 GB for the 14.3 GB graph, in 8 minutes from its first read to
-# its last page). A page copy also keeps damage where quick_check finds it:
-# VACUUM INTO rebuilt a torn freelist into a clean snapshot (T-34578) and hid
-# it for two days.
+# A page copy by bin/copy-db, not VACUUM INTO. VACUUM INTO rebuilds every table
+# and index: on the 10 GB graph it had written 3 GB in 11 minutes, keeping the
+# WAL from resetting the whole time. A copy holds its read transaction for about
+# 5 minutes, at the pace reads on the box survive (T-133694). quick_check and the
+# counts then read the copy, however long they take, with nothing held on the
+# live database, and the copy is what gets compressed, so the night is exactly
+# the database that passed. The disk holds one uncompressed copy at a time. A
+# page copy also keeps damage where quick_check finds it: VACUUM INTO rebuilt a
+# torn freelist into a clean snapshot (T-34578) and hid it for two days.
+#
+# The whole run is memory capped (bin/capped, from bin/backup-run.ts). Compressing
+# is paced as well, since its writes reach the same disk: 25% of a CPU writes the
+# graph's compressed copy at about 11 MB/s, under the copy's 35, and takes about
+# 4 minutes on 10 GB. A whole night to a local remote took 21 minutes.
 #
 # Cron-safe: fallback tool paths, no interactivity, every failure exits nonzero,
 # which the supervisor reports to the tracker.
@@ -53,8 +57,8 @@ export PATH="${PATH:+$PATH:}$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/
 # (a night took 25 minutes, the first 37 with every image to upload), and
 # reports a failure. A restore is a person's, and runs unbounded and
 # unreported.
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if [ -z "${YAK_BACKUP_BOUND:-}" ]; then
-  here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   exec deno run -A --config "$here/../deno.json" "$here/backup-run.ts" "$@"
 fi
 
@@ -120,26 +124,6 @@ counts() {
   sq -separator "$tab" "$2" "$sql"
 }
 
-# Database $1 as one read transaction sees it, its pages compressed on
-# stdout. The transaction's first read fixes the moment; the same moment is
-# checked into $work/$1.check, counted into $work/$1.counts, and measured in
-# bytes into $work/$1.bytes. quick_check walks every page's structure: with
-# the counts, 5 minutes on the 14.3 GB graph. integrity_check also matches
-# every index against its table, and took 26 minutes on 10 GB for nothing a
-# backup needs.
-pages() {
-  w="$work/$1"
-  sq -readonly -separator "$tab" "$data/$1" ".output /dev/null" "BEGIN" \
-    ".once '$w.sql'" "$(counter "$1")" \
-    ".output '$w.check'" "PRAGMA quick_check" \
-    ".output '$w.counts'" ".read '$w.sql'" \
-    ".output '$w.bytes'" \
-    "select page_count * page_size from pragma_page_count, pragma_page_size" \
-    ".output /dev/null" \
-    "select writefile('/dev/stdout', data) from sqlite_dbpage" \
-    "COMMIT" | zstd -q -T0 -c
-}
-
 # KiB free in the snapshot directory above the reserve. With none, the run
 # is refused.
 room() {
@@ -166,18 +150,26 @@ kept() {
   return 1
 }
 
-# A database's night: refused when the copy failed or the database is
-# damaged, and proved whole (every page decompresses back) before it counts.
+# A database's night: copied, refused when the copy is damaged, and proved whole
+# (every page decompresses back) before it counts. quick_check walks every
+# page's structure: with the counts, about 7 minutes on the 10 GB graph.
+# integrity_check also matches every index against its table, and took 26
+# minutes on 10 GB for nothing a backup needs.
 snapshot() {
+  copy="$work/$1"
   z="$work/night/$1.zst"
-  copied=yes
-  kept "$z" pages "$1" || copied=no
-  [ "$(cat "$work/$1.check" 2>/dev/null)" = ok ] ||
+  left=$(room) || exit 1
+  [ "$(stat -c %s "$data/$1")" -lt $(( left * 1024 )) ] ||
+    die "$1 will not fit in the $left KiB free above the reserve"
+  "$here/copy-db" "$copy" "$data/$1"
+  [ "$(sq -readonly "$copy" "PRAGMA quick_check")" = ok ] ||
     die "$1 failed quick_check: the database is damaged"
-  [ "$copied" = yes ] || die "$1: the page copy failed"
-  [ "$(zstd -dcq "$z" | wc -c)" -eq "$(cat "$work/$1.bytes")" ] ||
+  counts "$1" "$copy" >> "$work/counts"
+  kept "$z" "$here/capped" -p CPUQuota=25% zstd -q -T0 -c "$copy" ||
+    die "$1: compressing the copy failed"
+  [ "$(zstd -dcq "$z" | wc -c)" -eq "$(stat -c %s "$copy")" ] ||
     die "$1: the compressed copy is missing pages"
-  cat "$work/$1.counts" >> "$work/counts"
+  rm -f "$copy" "$copy-wal" "$copy-shm"
 }
 
 restore() {

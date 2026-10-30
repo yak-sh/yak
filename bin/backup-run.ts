@@ -10,6 +10,7 @@ import { reveal } from '@yaks/secrets'
 import { fileURLToPath } from 'node:url'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
+let capped = fileURLToPath(new URL('./capped', import.meta.url))
 let restoring = Deno.args[0] == 'restore'
 let data = Deno.env.get('YAK_DATA') || `${Deno.env.get('HOME')}/.yak`
 
@@ -31,6 +32,7 @@ try {
       '-k',
       '30',
       Deno.env.get('YAK_BACKUP_TIMEOUT') || '3600',
+      capped,
       script,
       ...Deno.args,
     ],
