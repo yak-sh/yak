@@ -126,8 +126,10 @@ replay that finds no mark for the bug's current opening, so the bug's letter
 thread hears a fixer started. Terminal native sessions do not mark bugs taken.
 [Tracker](../tracker/README.md) owns these marks: resolution allows a later
 regression to reopen the bug; archival stops its notifications. A regression
-newer than completion stays open even while a fixer gate holds the task
-completed.
+newer than completion reopens its task immediately, even while fixer starts are
+paused. Each new bug and each regression writes one `knock{target}` for the home
+project. The knock identifies the opening, so a replay or restart sends no
+second knock; another regression sends a new one.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are

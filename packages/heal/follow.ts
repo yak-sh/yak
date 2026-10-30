@@ -54,23 +54,29 @@ let mark = (mutate: Client['mutate'], rows: Bundle[], opening?: unknown) =>
     key: `outbox:heal:${token([rows, opening ?? null])}`,
   })
 
-// A new bug is news for whoever works for the project: a knock at it, which a
-// session of the project hears on its bus (@yaks/session). It lands with the
-// task, so a replay that finds the task knocks no second time.
+// Each opening is news for the project, including a regression while fixer
+// starts are paused. Its knock is the receipt a replay reads before sending.
+let knockEid = (bug: Bundle) =>
+  identityEid('heal_knock', [
+    bug.entity.eid,
+    ...bug.regressed ? [str(comp(bug, 'regressed')?.at)] : [],
+  ])
+
 let knock = (
   g: Graph,
   project: string | undefined,
-  bug: string,
+  bug: Bundle,
   title: string,
   where: string,
 ): Bundle[] =>
   project && g.vocab.comp('knock')
     ? [{
-      entity: { eid: identityEid('heal_knock', [bug]) },
+      entity: { eid: knockEid(bug) },
+      $was: { knock: { target: null } },
       knock: { target: project },
       doc: {
         title: '',
-        body: `New bug: ${
+        body: `${bug.regressed ? 'Regressed bug' : 'New bug'}: ${
           title.length > 240 ? `${title.slice(0, 240)}…` : title
         } (${where})`,
       },
@@ -187,6 +193,30 @@ export let follow = (
       }
       return eids.map((eid) => known.get(eid)).find((row) => row?.task)
     }
+    let announced = new Set(
+      (await g.get(bugs.filter((bug) => bug.regressed).map(knockEid), [
+        'knock',
+      ]))
+        .filter((row) => row.knock).map((row) => row.entity.eid),
+    )
+    let news = async (bug: Bundle) => {
+      let project = await home()
+      let evidence = bug.entity.eid
+      let page = /^https?:/.test(url)
+        ? `${base(url)}/${encodeURIComponent(evidence)}`
+        : web && `${base(web)}${remoteBug(url, evidence)}`
+      let where = page
+        ? `[the tracker](${page})`
+        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
+      let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
+        'Fix tracker bug'
+      return {
+        project,
+        where,
+        title,
+        knocks: knock(g, project, bug, title, where),
+      }
+    }
     // Whether the decision wrote the box.
     let reconcile = async (bug: Bundle, eids: string[]) => {
       let closed = false
@@ -242,20 +272,28 @@ export let follow = (
             task,
             bug: evidence,
             reopen,
+            opening: str(comp(bug, 'regressed')?.at),
             open: true,
             last: last(evidence, url),
+            writes: [
+              ...reopen
+                ? [{
+                  entity: task.entity,
+                  completed: null,
+                  $was: {
+                    completed: { at: token(comp(task, 'completed')?.at) },
+                    cancelled: { at: token(comp(task, 'cancelled')?.at) },
+                  },
+                }]
+                : [],
+              ...bug.regressed && !announced.has(knockEid(bug))
+                ? (await news(bug)).knocks
+                : [],
+            ],
           }
         }
         if (bug.resolved || bug.archived) return
-        let project = await home()
-        let page = /^https?:/.test(url)
-          ? `${base(url)}/${encodeURIComponent(evidence)}`
-          : web && `${base(web)}${remoteBug(url, evidence)}`
-        let where = page
-          ? `[the tracker](${page})`
-          : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
-        let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
-          'Fix tracker bug'
+        let { project, where, title, knocks } = await news(bug)
         task = {
           entity: { eid },
           task: {},
@@ -275,7 +313,7 @@ export let follow = (
           writes: [
             task,
             link(eid, 'about', evidence),
-            ...knock(g, project, evidence, title, where),
+            ...knocks,
           ],
         }
       }) || closed
@@ -293,6 +331,7 @@ export let follow = (
       let wrote = true
       try {
         wrote = await reconcile(bug, eids)
+        if (wrote) announced.add(knockEid(bug))
       } finally {
         if (wrote) { for (let eid of eids) known.delete(eid) }
       }

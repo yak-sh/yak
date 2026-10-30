@@ -372,6 +372,7 @@ test('a tracker regression starts a new fixer on its completed task', async () =
   equal(regressed.commits.length, 1)
   equal(await count(regressed.g, 'task'), 1)
   equal(await count(regressed.g, 'fixer'), 2)
+  equal(await count(regressed.g, 'knock'), 2)
   let [task] = await rows(regressed.g, 'task')
   ok(!task.completed)
   let held = (await regressed.g.get([String(comp(task, 'claim').session)]))[0]
@@ -386,6 +387,7 @@ test('a tracker regression starts its new fixer once', async () => {
   await restarted.replay()
   equal(restarted.commits, [])
   equal(await count(restarted.g, 'fixer'), 2)
+  equal(await count(restarted.g, 'knock'), 2)
   restarted.close()
 })
 
@@ -676,10 +678,11 @@ let cooling = async () => {
 }
 
 let cooled = await cooling()
-test('cooldown leaves regressed work done', async () => {
+test('cooldown leaves regressed work open and announces it', async () => {
   await cooled.run()
-  equal(cooled.commits, [])
-  ok((await cooled.g.get([taskEid(bug)]))[0].completed)
+  equal(cooled.commits.length, 1)
+  ok(!(await cooled.g.get([taskEid(bug)]))[0].completed)
+  equal(await count(cooled.g, 'knock'), 2)
   cooled.close()
 })
 
@@ -934,10 +937,11 @@ await put(heldRegression.tracker, [{
   regressed: { at: '2026-10-02T00:00:03Z' },
 }])
 heldRegression.trackerCommits.length = 0
-test('a fixer gate leaves a regressed task completed and its bug open', async () => {
+test('a fixer gate reopens regressed work and announces its bug', async () => {
   await heldRegression.run()
   equal(heldRegression.trackerCommits, [])
-  ok((await heldRegression.g.get([taskEid(bug)]))[0].completed)
+  ok(!(await heldRegression.g.get([taskEid(bug)]))[0].completed)
+  equal(await count(heldRegression.g, 'knock'), 2)
   heldRegression.close()
 })
 
@@ -1188,11 +1192,11 @@ await put(nativeCooling.f.tracker, [{
   entity: { eid: bug },
   regressed: { at: '2026-10-02T00:00:00Z' },
 }])
-test('a stopped native fixer still cools down its regressed bug', async () => {
+test('a stopped native fixer cools down while its regressed work reopens', async () => {
   let { f } = nativeCooling
   await f.replay()
   equal(await count(f.g, 'fixer'), 1)
-  ok((await f.g.get([taskEid(bug)]))[0].completed)
+  ok(!(await f.g.get([taskEid(bug)]))[0].completed)
   f.close()
 })
 for (let ended of [false, true]) {
@@ -1741,4 +1745,64 @@ let switched = await (async () => {
 test('unmuting the home project resumes pending bugs without duplicating work', () => {
   equal(switched.paused, { tasks: 1, fixers: 0, entries: 0 })
   equal(switched.resumed, { tasks: 1, fixers: 1, entries: 1 })
+})
+
+// Each regression has its own receipt, even when work is already open and
+// starts are muted. A restarted follower reads the receipt from the graph.
+let mutedRegression = await regression()
+await put(mutedRegression.g, [{ entity: { eid: project }, nofix: {} }])
+test('successive regressions each knock once while fixer starts are muted', async () => {
+  let { g, tracker } = mutedRegression
+  await mutedRegression.replay()
+  equal(await count(g, 'fixer'), 1)
+  ok(!(await g.get([taskEid(bug)]))[0].completed)
+  let knocks = await rows(g, 'knock')
+  equal(knocks.length, 2)
+  ok(
+    knocks.some((row) =>
+      String(comp(row, 'doc').body).startsWith('Regressed bug:')
+    ),
+  )
+  await mutedRegression.replay()
+  equal(await count(g, 'knock'), 2)
+  await put(tracker, [{
+    entity: { eid: bug },
+    regressed: { at: '2026-10-02T00:00:04Z' },
+  }])
+  await mutedRegression.replay()
+  equal(await count(g, 'knock'), 3)
+  await mutedRegression.replay()
+  equal(await count(g, 'knock'), 3)
+  await put(g, [{ entity: { eid: project }, nofix: null }])
+  await mutedRegression.replay()
+  equal(await count(g, 'fixer'), 2)
+  equal(await count(g, 'knock'), 3)
+  mutedRegression.close()
+})
+
+let pausedNativeRegression = await settledCase()
+await put(pausedNativeRegression.f.g, [
+  {
+    entity: { eid: pausedNativeRegression.holder },
+    created: { at: '2026-01-01T00:00:00Z' },
+  },
+  { entity: { eid: project }, nofix: {} },
+  { entity: { eid: taskEid(bug) }, completed: { at: '2026-10-01T00:00:00Z' } },
+])
+await put(pausedNativeRegression.f.tracker, [{
+  entity: { eid: bug },
+  regressed: { at: '2026-10-02T00:00:00Z' },
+}])
+await pausedNativeRegression.f.replay()
+await put(pausedNativeRegression.f.g, [{
+  entity: { eid: project },
+  nofix: null,
+}])
+test('unmuting reopened regression starts a fresh fixer instead of continuing its previous opening', async () => {
+  let { f, holder } = pausedNativeRegression
+  await f.replay()
+  equal(await count(f.g, 'fixer'), 2)
+  let [task] = await f.g.get([taskEid(bug)])
+  ok(comp(task, 'claim').session != holder)
+  f.close()
 })

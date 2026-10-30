@@ -75,6 +75,8 @@ export type Work = {
   bug: string
   writes?: Bundle[]
   reopen?: boolean
+  /** The tracker opening a new fixer belongs to. */
+  opening?: string
   /** The tracker still reports this bug open, regardless of local completion. */
   open?: boolean
   last?: string
@@ -170,7 +172,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
   }
 
   let request = async (work: Work, pass: Pass): Promise<Bundle[]> => {
-    let { task, bug, reopen, open, last } = work
+    let { task, bug, reopen, opening, open, last } = work
     if (task.cancelled || (!reopen && !open && task.completed)) return []
     let history = await pass.fixers(bug)
     let latest =
@@ -194,7 +196,9 @@ export let fixing = (g: Graph, options: Options = {}) => {
       ) return []
     }
     if (history.some((f) => active(f))) return []
-    let continuing = !reopen && latest?.native && !latest.exit &&
+    let continuing = !reopen &&
+      (!opening || str(comp(latest, 'created')?.at) >= opening) &&
+      latest?.native && !latest.exit &&
       !latest.stop &&
       !comp(latest, 'session')?.ended &&
       comp(latest, 'session')?.status == 'settled'
