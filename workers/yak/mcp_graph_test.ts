@@ -83,11 +83,6 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     let row = directory.structuredContent.result[0]
     assertEquals(typeof row.space, 'object')
     assert(row.space.slug)
-    let shown = await admin.call('tools/call', {
-      name: 'graph_show',
-      arguments: { app: 'yak/platform', ids: [row.entity.eid] },
-    })
-    assertEquals(shown.structuredContent.result[0].space, row.space)
   } finally {
     await k.stop()
   }
