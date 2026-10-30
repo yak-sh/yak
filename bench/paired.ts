@@ -30,6 +30,7 @@ import {
   type Samples,
 } from '@yaks/benchmark'
 import { standalone } from './standalone.ts'
+import { configured, support } from './driver.ts'
 import { throughput } from './throughput.ts'
 import { combined, grouped, references } from './references.ts'
 
@@ -421,6 +422,7 @@ let captureDriver = async (root: string): Promise<Driver> => {
   let target = await Deno.makeTempDir({ prefix: 'bench-driver-' })
   try {
     await command(root, 'cp', ['-R', 'bench', target + '/bench'])
+    await Deno.copyFile(`${root}/deno.json`, `${target}/deno.json`)
     await Deno.mkdir(target + '/packages')
     await command(root, 'cp', [
       '-R',
@@ -430,9 +432,13 @@ let captureDriver = async (root: string): Promise<Driver> => {
     let files = text.decode(
       await command(root, 'git', [
         'ls-files',
-        '*_bench.ts',
+        '--cached',
+        '--others',
+        '--exclude-standard',
       ]),
-    ).trim().split('\n').filter(Boolean)
+    ).trim().split('\n').filter((file) =>
+      file.endsWith('_bench.ts') || support(file)
+    )
     for (let file of files) {
       await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
         recursive: true,
@@ -455,13 +461,17 @@ let driverIdentity = async (root: string, snapshot: string) => {
       '--others',
       '--exclude-standard',
       '--',
+      'deno.json',
       'bench',
-      'packages/benchmark',
-      '*_bench.ts',
+      'packages',
+      'workers',
     ]),
   ).split('\0').filter((file) =>
-    (/\.tsx?$/.test(file) && !/_test\.tsx?$/.test(file)) ||
-    file == 'packages/benchmark/deno.json'
+    file == 'deno.json' || support(file) ||
+    ((file.startsWith('bench/') || file.startsWith('packages/benchmark/') ||
+      file.endsWith('_bench.ts')) &&
+      ((/\.tsx?$/.test(file) && !/_test\.tsx?$/.test(file)) ||
+        file == 'packages/benchmark/deno.json'))
   ).sort()
   let sources = await Promise.all(files.map(async (file) => {
     try {
@@ -511,8 +521,8 @@ let collectAt = async (
       let target = `${scratch}/${i}`
       await Deno.mkdir(target)
       await archive(root, target, commit)
-      // The driver is this checkout's: its bench files and the library they
-      // measure with. The product under them is the revision's own.
+      // The current driver includes its test runtime and fixtures. The
+      // product imported through those fixtures is the revision's own.
       await command(driver.root, 'cp', ['-R', 'bench/.', `${target}/bench/`])
       await command(driver.root, 'cp', [
         '-R',
@@ -522,13 +532,13 @@ let collectAt = async (
       // The timing library is part of the driver overlay, including on
       // revisions whose workspace predates the benchmark package.
       let config = JSON.parse(await Deno.readTextFile(`${target}/deno.json`))
-      config.workspace = [
-        ...new Set([
-          ...config.workspace ?? [],
-          './packages/benchmark',
-        ]),
-      ]
-      await Deno.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
+      let driverConfig = JSON.parse(
+        await Deno.readTextFile(`${driver.root}/deno.json`),
+      )
+      await Deno.writeTextFile(
+        `${target}/deno.json`,
+        JSON.stringify(configured(config, driverConfig)),
+      )
       for (let file of driver.files) {
         await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
           recursive: true,
