@@ -23,9 +23,9 @@
 // did not come from this handler.
 
 import {
+  classifyInboundRequest,
   createMcpHandler,
   InMemoryTransport,
-  isLegacyRequest,
   PROTOCOL_VERSION_META_KEY,
   readRequestBody,
 } from '@modelcontextprotocol/server'
@@ -362,7 +362,15 @@ export let mcp = (opts: MountOptions): Handler => {
         }
       }
       let actor = await who(body)
-      if (await isLegacyRequest(request, body)) {
+      let route = classifyInboundRequest({
+        httpMethod: request.method,
+        protocolVersionHeader: request.headers.get('mcp-protocol-version') ??
+          undefined,
+        mcpMethodHeader: request.headers.get('mcp-method') ?? undefined,
+        mcpNameHeader: request.headers.get('mcp-name') ?? undefined,
+        body,
+      })
+      if (route.kind == 'legacy') {
         return await legacy(request, actor, body)
       }
       // Preserve the pre-envelope door's 400 for bodies that cannot be a
@@ -371,6 +379,24 @@ export let mcp = (opts: MountOptions): Handler => {
         if (!body || typeof body != 'object' || Array.isArray(body)) {
           return await legacy(request, actor, body)
         }
+      }
+      // The SDK's classifier distinguishes the caller's invalid input from
+      // failures. Answer its typed rejection here; its onerror callback mixes
+      // both together as plain Errors and cannot make that distinction.
+      if (route.kind == 'reject') {
+        let id = body && typeof body == 'object' && 'id' in body &&
+            (typeof body.id == 'string' || typeof body.id == 'number')
+          ? body.id
+          : null
+        return json({
+          jsonrpc: '2.0',
+          id,
+          error: {
+            code: route.code,
+            message: route.message,
+            ...route.data === undefined ? {} : { data: route.data },
+          },
+        }, route.httpStatus)
       }
       // No connection transcript or clientInfo-derived principal in this era.
       let exchange = body && typeof body == 'object' && 'method' in body &&

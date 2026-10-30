@@ -774,7 +774,7 @@ test('modern header without its envelope is refused by the SDK after authenticat
 })
 
 // ChatGPT names the protocol in the body's envelope and sends none of the
-// standard headers that mirror it. What the SDK still refuses is reported.
+// standard headers that mirror it. Invalid input is refused without a defect.
 test('a modern request without its standard headers is answered from its body', async () => {
   let reported: unknown[] = []
   let door = mcp({
@@ -819,7 +819,19 @@ test('a modern request without its standard headers is answered from its body', 
   let lying = modern('tools/list')
   lying.headers.set('mcp-method', 'tools/call')
   assertEquals((await answer(lying)).error.code, -32020)
-  assertEquals(reported.length, 1)
+  assertEquals(reported, [])
+  let broke = new Error(
+    'Rejected inbound request (method-header-mismatch): a server failure',
+  )
+  let broken = mcp({
+    graph: shopGraph(),
+    skills: () => {
+      throw broke
+    },
+    report: (err) => reported.push(err),
+  })
+  assertEquals((await broken(modern('tools/list'))).status, 500)
+  assertEquals(reported, [broke])
 })
 
 test('stdio selects modern or legacy using the same attributed tool factory', async () => {

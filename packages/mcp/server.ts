@@ -86,9 +86,9 @@ export type Options = {
    * `graph`. */
   calls?: Graph
   /** where a defect goes (default: the console): a tool's, with the call and
-   * the tool's name, and a request the SDK refused or failed on the modern
-   * leg, with neither, since a client this server cannot answer is a failure
-   * of ours. A tool's refusal (`CallError`) is never reported. */
+   * the tool's name, and an SDK error on the modern leg, with neither.
+   * The classifier's input rejections and tool refusals (`CallError`) are
+   * answered without reporting a defect. */
   report?: (err: unknown, call?: Bundle, tool?: string) => unknown
   /** what a call is owed beside its tool's answer (@yaks/tools `Reply`): the
    * host's, so a caller over MCP reads what a caller at the command line
