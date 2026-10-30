@@ -537,7 +537,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     .flatMap((a) => a.slice(6).split(','))
   let named = PLATFORMS.filter((p) => tags.includes(p))
   let on = (p: string) => !named.length || named.includes(p)
-  let changedPaths = await changes()
+  // A whole run has no change to find, and main's gate checks out one commit,
+  // with no parent for git to compare it with.
+  let all = flags.includes('--all')
+  let changedPaths = all ? [] : await changes()
   let changedFiles = await format(changedPaths)
   let { tests, pages } = await find(paths.length ? paths : ROOTS)
   let sources = await walk(paths.length ? paths : SOURCES)
@@ -546,7 +549,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     ...on('deno') ? pages : [],
   ]
   // Choose files before starting runtimes; hand each its dependency keys.
-  let all = flags.includes('--all')
   let changed = !paths.length && !all ? changedPaths : undefined
   let { keys, run, reaches, affected, sources: typed } = await chosen(
     files,
