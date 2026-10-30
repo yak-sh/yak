@@ -25,6 +25,11 @@ export let codexSessions = (): string | undefined => {
   return root && `${root}/sessions`
 }
 
+/** What a compressed transcript is at a moment: its size and when it was
+ * written. A read that reached its end records this as `transcript.finished`. */
+export let versionOf = (file: Deno.FileInfo | undefined): string =>
+  file ? `${file.size}:${file.mtime?.getTime() ?? 0}` : ''
+
 /** One transcript on disk: the harness's id for the session, and the file. */
 export type Found = {
   id: string

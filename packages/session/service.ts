@@ -66,6 +66,7 @@ import {
   header,
   rollouts,
   transcripts,
+  versionOf,
 } from './files.ts'
 export {
   claudeProjects,
@@ -296,9 +297,6 @@ let stat = (path: string) => {
     return undefined
   }
 }
-
-let versionOf = (file: Deno.FileInfo | undefined) =>
-  file ? `${file.size}:${file.mtime?.getTime() ?? 0}` : ''
 
 let pending = (t: Tail, size: number) =>
   behind(t) || (t.stream ? !t.stream.done : t.at < size)

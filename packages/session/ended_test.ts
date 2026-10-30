@@ -17,6 +17,7 @@ import { sessionDoc } from './comp.ts'
 import { attemptComputed } from './attempt.ts'
 import { statusComputed } from './state.ts'
 import { endGone, runningSessions } from './ended.ts'
+import { versionOf } from './files.ts'
 
 let root = Deno.makeTempDirSync()
 let projects = `${root}/projects`, running = `${root}/sessions`
@@ -176,6 +177,30 @@ test('a log with no process to ask about ends quiet and fully read', async () =>
   await session(s, g, 'recent', 'y', log(1, '{}\n', other))
   await session(s, g, 'unread', 'z', log(3, '{}\n{}\n', other))
   assertEquals(await sweep(g), ['quiet'])
+})
+
+test('a compressed log ends once its importer reached the end of it', async () => {
+  let other = Deno.makeTempDirSync()
+  let zst = (name: string) => {
+    let path = `${other}/${name}.jsonl.zst`
+    Deno.writeTextFileSync(path, 'compressed')
+    let at = new Date(Date.now() - 3 * HOUR)
+    Deno.utimeSync(path, at, at)
+    return path
+  }
+  let s = store(), g = locked(s)
+  for (let name of ['read', 'unread']) {
+    let path = zst(name)
+    await session(s, g, name, name, path)
+    let [file] = await onDisk(g, path)
+    if (name == 'read') {
+      await seed(s, {
+        entity: file.entity,
+        transcript: { finished: versionOf(Deno.statSync(path)) },
+      })
+    }
+  }
+  assertEquals(await sweep(g), ['read'])
 })
 
 test('a managed run is ended by its exit, never by the process files', async () => {

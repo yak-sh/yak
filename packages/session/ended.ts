@@ -14,6 +14,7 @@ import { TOMBSTONE } from '@yaks/graph/bundle'
 import { absolute } from '@yaks/file/local'
 import { runs } from '@yaks/process'
 import { CLAIM, SESSION } from './comp.ts'
+import { versionOf } from './files.ts'
 
 // A log this recent may belong to a process that has yet to list itself.
 let SETTLING = 5 * 60 * 1000
@@ -61,14 +62,17 @@ let mtime = (path: string): number | undefined => {
   }
 }
 
-// Quiet since `cutoff`, and every line of it imported. The second stat closes a
-// race with a harness appending during the read.
-let endedFile = (path: string, consumed: number, cutoff: number): boolean => {
+// Quiet since `cutoff`, and every line of it imported. A compressed log's lines
+// can't be counted here: the importer says it reached the end of this version.
+// The second stat closes a race with a harness appending during the read.
+let endedFile = (path: string, read: Comp, cutoff: number): boolean => {
   try {
     let before = Deno.statSync(path)
     if (!before.isFile || (before.mtime?.getTime() ?? Infinity) > cutoff) {
       return false
     }
+    if (path.endsWith('.zst')) return read.finished == versionOf(before)
+    let consumed = Number(read.consumed)
     let bytes = Deno.readFileSync(path)
     let after = Deno.statSync(path)
     if (
@@ -152,7 +156,7 @@ export let endGone = async (
       let id = String(comp(await root(b), SESSION).id ?? '')
       if (!live.has(id)) gone.push(eid)
     } else if (
-      endedFile(path, Number(comp(file, 'transcript').consumed), now - QUIET)
+      endedFile(path, comp(file, 'transcript'), now - QUIET)
     ) gone.push(eid)
   }
   for (let i = 0; i < gone.length; i += BATCH) {
