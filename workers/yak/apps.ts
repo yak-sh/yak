@@ -2293,6 +2293,8 @@ let returned = (q: URLSearchParams) =>
     ? { say: 'Sent again.', no: false }
     : q.has('invited')
     ? { say: 'Invitation sent.', no: false }
+    : q.has('removed')
+    ? { say: 'Removed.', no: false }
     : q.has('connected')
     ? { say: 'Connected.', no: false }
     : q.has('disconnected')
@@ -2684,6 +2686,20 @@ let saved = async (
     if (said) return desk(req, env, dir, space, who, 'people', said, asked)
     let to = sentFrom(req, env)
     to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
+    return redirect(to.href, 303)
+  }
+  // A People row's Remove, or Withdraw for an invitation: member_remove, as
+  // the assistant asks it.
+  if (form.has('remove')) {
+    let app = String(form.get('app') ?? '').trim()
+    let { said } = await pressed(env, dir, who, 'member_remove', {
+      space: space.slug,
+      email: String(form.get('remove')).trim(),
+      ...app ? { app } : {},
+    })
+    if (said) return desk(req, env, dir, space, who, 'people', said)
+    let to = sentFrom(req, env)
+    to.searchParams.set('removed', '1')
     return redirect(to.href, 303)
   }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)

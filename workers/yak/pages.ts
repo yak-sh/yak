@@ -1453,37 +1453,55 @@ let inviting = (at: DeskPage) => {
 // Who is in the space and in each of its apps, and who has yet to accept
 // (people.ts): the way to invite someone, then a list for the space and one
 // for each app anybody is a guest of or invited to, each row drawn by its
-// renderer (render/held.ts), and beside an invitation the button that sends
-// its letter again (apps.ts `saved`).
+// renderer (render/held.ts) beside what the owner may do to it (apps.ts
+// `saved`): send an invitation's letter again, and take anyone but an owner
+// off, which for an invitation withdraws it (member_remove).
 export let people = (at: DeskPage) => {
   let r = at.people
   if (!r) return ''
-  let again = (p: Person) =>
-    p.held == 'invite'
-      ? `<form class="Rows_Actions" method="post" action="${
-        managePath('people', at.pick)
-      }"><input type="hidden" name="again" value="${
-        esc(p.eid)
-      }"><button class="Button Button-quiet" type="submit" aria-label="Send the invitation to ${
-        esc(p.email ?? p.name)
-      } again">Send again</button></form>`
+  let hidden = (name: string, value: string) =>
+    `<input type="hidden" name="${name}" value="${esc(value)}">`
+  let press = (fields: string, label: string, aria: string) =>
+    `<form method="post" action="${
+      managePath('people', at.pick)
+    }">${fields}<button class="Button Button-quiet" type="submit" aria-label="${aria}">${label}</button></form>`
+  let actions = (p: Person, app?: string) => {
+    let them = esc(p.email ?? p.name)
+    let waits = p.held == 'invite'
+    let again = waits
+      ? press(
+        hidden('again', p.eid),
+        'Send again',
+        `Send the invitation to ${them} again`,
+      )
       : ''
-  let list = (title: string, all: Person[]) =>
+    let off = p.email && (p.held != 'seat' || p.role != 'owner')
+      ? press(
+        hidden('remove', p.email) + (app ? hidden('app', app) : ''),
+        waits ? 'Withdraw' : 'Remove',
+        waits ? `Withdraw the invitation to ${them}` : `Remove ${them}`,
+      )
+      : ''
+    return again || off ? `<div class="Rows_Actions">${again}${off}</div>` : ''
+  }
+  let list = (title: string, all: Person[], app?: string) =>
     all.length
       ? `<section class="Card">${heading(esc(title))}<ul class="Rows">${
-        all.map((p) => `<li class="Rows_Item">${holder(p)}${again(p)}</li>`)
-          .join('')
+        all.map((p) =>
+          `<li class="Rows_Item">${holder(p)}${actions(p, app)}</li>`
+        ).join('')
       }</ul></section>`
       : ''
-  let apps = r.apps.map((a) =>
-    list(`${a.app.title} · this app only`, [...a.guests, ...a.invited])
-  ).join('')
   return `${inviting(at)}${
     list('Members · every app', [...r.members, ...r.invited])
-  }${apps}${
-    r.members.length < 2 && !r.invited.length && !apps
-      ? ''
-      : '<p class="Form_Hint">To take someone off, ask your assistant.</p>'
+  }${
+    r.apps.map((a) =>
+      list(
+        `${a.app.title} · this app only`,
+        [...a.guests, ...a.invited],
+        a.app.slug,
+      )
+    ).join('')
   }`
 }
 

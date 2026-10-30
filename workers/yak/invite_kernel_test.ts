@@ -175,7 +175,7 @@ let post = (
     body: new URLSearchParams(fields),
   })
 
-test('the People page invites someone the way member_add does, and keeps what was typed when refused', async () => {
+test('the People page invites and takes people off the way member_add and member_remove do', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -204,6 +204,27 @@ test('the People page invites someone the way member_add does, and keeps what wa
     assertStringIncludes(listed, 'Invitation sent.')
     assertStringIncludes(listed, 'Notes · this app only')
     assertStringIncludes(listed, `${ana.email} · viewer · `)
+
+    // Withdrawn from its row, the invitation is gone from the page.
+    let gone = await post(k, jeff.cookie, 'people', {
+      remove: ana.email,
+      app: 'notes',
+    })
+    assertEquals(gone.status, 303)
+    let after = await page(new URL(gone.headers.get('location')!).search)
+    assertStringIncludes(after, 'Removed.')
+    assert(!after.includes(ana.email))
+
+    // A member who accepted is taken off the same way.
+    let bo = await signIn(k)
+    await post(k, jeff.cookie, 'people', { invite: bo.email })
+    await accepted(k, bo.email, bo.cookie)
+    assertStringIncludes(await page(), `aria-label="Remove ${bo.email}"`)
+    await post(k, jeff.cookie, 'people', { remove: bo.email })
+    assert(!(await page()).includes(bo.email))
+    assert(
+      !(await connector(k, bo.cookie).tool('app_list')).includes('notes'),
+    )
 
     // Refused, the page says why and the address is still in the field.
     let refused = await post(k, jeff.cookie, 'people', {
