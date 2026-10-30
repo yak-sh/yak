@@ -654,6 +654,67 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
 ]
 
+// The selector proves most transcripts at rest from their last few entries and
+// leaves the rest to the rule: the two have to agree on both sides of that line,
+// including when what decides lies further down than it walks.
+let prose = (from: number, n: number) =>
+  Array.from({ length: n }, (_, i) => said(from + i, 'e2'))
+let asked = (n: number, through: string, more: Record<string, unknown> = {}) =>
+  entry(n, { ask: { to: M, through }, attempt: { by: null }, ...more })
+let quiet: [string, Bundle[]][] = [
+  ['prose in a transcript that asked nothing', [input(1), said(2, S)]],
+  ['prose far above an ask', [request(1), asked(2, 'e1'), ...prose(3, 200)]],
+  ['prose far above an input, no ask', [input(1), ...prose(2, 200)]],
+  ['prose far above an open background call', [
+    entry(1, { call: { to: T }, tool_async: {} }),
+    ...prose(2, 200),
+  ]],
+  ['an open background call below a finished ask', [
+    request(1),
+    entry(2, { call: { to: T }, tool_async: {} }),
+    asked(3, 'e2'),
+    said(4, 'e3'),
+  ]],
+  ['an input above the ask', [
+    request(1),
+    asked(2, 'e1'),
+    input(3),
+    said(4, 'e2'),
+  ]],
+  ['an input between what the ask read and the ask', [
+    request(1),
+    input(2),
+    asked(3, 'e1'),
+    said(4, 'e3'),
+  ]],
+  ['a result between what the ask read and the ask', [
+    request(1),
+    entry(2, { call: { to: T } }),
+    entry(3, { result: { call: 'e2' }, content: { body: 'ok' } }),
+    asked(4, 'e2'),
+    said(5, 'e4'),
+  ]],
+  ['a refusal naming no request after an input', [
+    request(1),
+    asked(2, 'e1'),
+    said(3, 'e2'),
+    input(4),
+    entry(5, { refusal: { code: 'limit' }, content: { body: 'no' } }),
+  ]],
+  ['a turn given up on', [
+    request(1),
+    asked(2, 'e1', { interrupted: {}, failed: {} }),
+  ]],
+  ['an ask running above prose', [
+    request(1),
+    asked(2, 'e1', { attempt: { by: M } }),
+    said(3, 'e2'),
+  ]],
+]
+for (let [name, entries] of quiet) {
+  shapes.push([`at rest or not: ${name}`, entries, statusOf(entries)])
+}
+
 // Output is not exclusive: a reply can carry work or a control mark too.
 for (let [name, entries] of shapes.slice()) {
   if (

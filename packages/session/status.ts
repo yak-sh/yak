@@ -107,6 +107,8 @@ export let dispatchStatus = {
   },
 }
 
+// How far down a transcript the status selector walks to prove a turn at rest.
+let TAIL = 128
 // The common table expressions the SQL rule names, apart from any component.
 let LATEST = '__latest'
 let ANCHOR = '__anchor'
@@ -219,9 +221,13 @@ export let sessionStatus = {
     let controlOwners = controls.length
       ? unionAll(...controls)
       : select({ cols: [lit(null)], where: lit(false) })
-    // A transcript with no asks has no runner boundary. Only outstanding
-    // legacy work can keep its latest output running. Read those owners once
-    // from the much smaller mark tables, never scan entry history per owner.
+    // Whether a transcript's newest turn is at rest, read walking down from its
+    // newest entry: the first entry holding work or an ask ends the walk. An ask
+    // with nothing unread above it proves it, and so does reaching the start of
+    // a transcript that asked nothing, whose inputs no runner owes. A longer
+    // transcript is left to the exact rule. What ends the walk is worked out in
+    // FROM subqueries, which add nothing to this expression's height (workerd's
+    // depth limit, as below).
     let inputKinds = [
       'output',
       'notice',
@@ -234,151 +240,188 @@ export let sessionStatus = {
       'stop',
       'interrupted',
     ].filter(declared)
-    let asks = select({
-      cols: [
-        col('entity', 'qa'),
-        col('session', 'qe'),
-        col('seq', 'qe'),
-        as(col('seq', 'qb'), 'boundary'),
-      ],
-      from: table('ask', 'qa'),
-      joins: [
-        {
-          ...cross(table('entry', 'qe')),
-          on: eq(col('entity', 'qe'), col('entity', 'qa')),
-        },
-        left(
-          table('entry', 'qb'),
-          eq(col('entity', 'qb'), col('through', 'qa')),
-        ),
-      ],
-    })
-    let unseen = exists(select({
-      cols: [lit(1)],
-      from: table('entry', 'qi'),
-      where: and(
-        eq(col('session', 'qi'), col('session', 'qa')),
-        gt(col('seq', 'qi'), col('boundary', 'qa')),
-        or(
-          wears('result', col('entity', 'qi')),
-          declared('tool_progress') && declared('call')
-            ? exists(select({
-              cols: [lit(1)],
-              from: table('tool_progress', 'qp'),
-              joins: [join(
-                table('call', 'qc'),
-                eq(col('entity', 'qc'), col('call', 'qp')),
-              )],
-              where: and(
-                eq(col('entity', 'qp'), col('entity', 'qi')),
-                eq(col('source', 'qc'), col('entity', 'qa')),
+    let inflight = (entry: Expr) =>
+      declared('attempt')
+        ? exists(select({
+          cols: [lit(1)],
+          from: table('attempt', 'flight'),
+          where: and(
+            eq(col('entity', 'flight'), entry),
+            notNull(col('by', 'flight')),
+          ),
+        }))
+        : lit(false)
+    // An input arriving above what the newest ask read. Any other reply there
+    // would have ended the walk, or lies between the two and is read here too.
+    let unread = (ask: Expr, seq: Expr) =>
+      exists(select({
+        cols: [lit(1)],
+        from: from(
+          select({
+            cols: [
+              as(
+                or(
+                  wears('result', col('entity', 'gap')),
+                  wears('tool_progress', col('entity', 'gap')),
+                  and(
+                    wears('content', col('entity', 'gap')),
+                    ...inputKinds.map((name) =>
+                      not(wears(name, col('entity', 'gap')))
+                    ),
+                  ),
+                ),
+                'heard',
               ),
-            }))
-            : lit(false),
-          and(
-            wears('content', col('entity', 'qi')),
-            ...inputKinds.map((name) => not(wears(name, col('entity', 'qi')))),
-          ),
-        ),
-      ),
-    }))
-    let riskyAsks = select({
-      cols: [col('session', 'qa')],
-      from: table('__status_asks', 'qa'),
-      joins: [
-        join(
-          table('__status_ask_bounds', 'qm'),
-          eq(col('session', 'qm'), col('session', 'qa')),
-        ),
-      ],
-      where: or(
-        isNull(col('seq', 'qa')),
-        and(
-          eq(col('seq', 'qa'), col('seq', 'qm')),
-          or(
-            wears('interrupted', col('entity', 'qa')),
-            and(notNull(col('boundary', 'qa')), unseen),
-          ),
-        ),
-      ),
-    })
-    // Only the newest ask can affect a plain output. Ordinary completed asks
-    // do not make every historical transcript a candidate for an exact turn
-    // evaluation. Unknown sequences, interrupted asks and unacknowledged input
-    // remain candidates. All exceptional work is retained conservatively.
-    let currentWork = declared('ask')
-      ? or(
-        isNull(col('seq', 'we')),
-        ge(
-          col('seq', 'we'),
-          fn(
-            'coalesce',
-            sub(
-              select({
-                cols: [col('seq', 'wb')],
-                from: table('__status_ask_bounds', 'wb'),
-                where: eq(col('session', 'wb'), col('session', 'we')),
-              }),
+            ],
+            from: table('entry', 'gap'),
+            where: and(
+              eq(col('session', 'gap'), owner),
+              gt(
+                col('seq', 'gap'),
+                fn(
+                  'coalesce',
+                  sub(select({
+                    cols: [col('seq', 'read')],
+                    from: table('ask', 'request'),
+                    joins: [
+                      join(
+                        table('entry', 'read'),
+                        eq(col('entity', 'read'), col('through', 'request')),
+                      ),
+                    ],
+                    where: eq(col('entity', 'request'), ask),
+                  })),
+                  seq,
+                ),
+              ),
             ),
-            lit(0),
-          ),
+          }),
+          'above',
         ),
-      )
-      : lit(true)
-    let work = ['call', 'attempt', 'tool_async', 'stop', 'notice'].filter(
-      declared,
-    ).map((name) =>
-      select({
-        cols: [col('session', 'we')],
-        from: table(name, 'wm'),
-        joins: [{
-          ...cross(table('entry', 'we')),
-          on: eq(col('entity', 'we'), col('entity', 'wm')),
-        }],
-        where: name == 'call'
-          ? and(
-            currentWork,
-            declared('result')
-              ? not(exists(select({
-                cols: [lit(1)],
-                from: table('result', 'answer'),
-                where: eq(col('call', 'answer'), col('entity', 'wm')),
-              })))
-              : lit(true),
+        where: col('heard', 'above'),
+      }))
+    // In a store keeping archetypes, one joined row answers for every component
+    // an entry wears, the way the exact rule reads it (`archetype`), where a
+    // probe of each table costs a seek per component per entry.
+    let typed = declared('archetype')
+    let shapes: Join[] = typed
+      ? [
+        {
+          ...cross(table('entity', 'owner')),
+          on: eq(col('id', 'owner'), col('entity', 'e')),
+        },
+        {
+          ...cross(table('archetype', 'shape')),
+          on: eq(col('entity', 'shape'), col('archetype', 'owner')),
+        },
+      ]
+      : []
+    let walks = (name: string, entry: Expr) =>
+      typed
+        ? declared(name)
+          ? gt(
+            fn('instr', col('tables', 'shape'), lit(JSON.stringify(name))),
+            lit(0),
           )
-          : name == 'attempt'
-          ? and(
-            currentWork,
-            notNull(col('by', 'wm')),
-            not(wears('interrupted', col('entity', 'wm'))),
-          )
-          : name == 'notice'
-          ? cancelled(col('entity', 'wm'))
-          : lit(true),
-      })
-    )
-    if (declared('ask')) work.push(riskyAsks)
-    let simpleOutput = and(
-      wears('output', newest),
-      ...[
+          : lit(false)
+        : wears(name, entry)
+    let resting = (inputs: boolean) => {
+      let e = col('entity', 'e')
+      let work = [
         'stop',
-        'exception',
-        'refusal',
-        'interrupted',
-        'ask',
         'call',
         'result',
         'tool_progress',
-      ].map((name) => not(wears(name, newest))),
-      work.length
-        ? not(
-          among(
-            owner,
-            select({ cols: [col('session')], from: table('__status_work') }),
+        'tool_async',
+        'exception',
+        'interrupted',
+      ]
+      return fn(
+        'coalesce',
+        sub(select({
+          cols: [col('clean', 'tail')],
+          from: from(
+            select({
+              cols: [
+                col('seq', 'e'),
+                as(
+                  or(
+                    walks('ask', e),
+                    isNull(col('seq', 'e')),
+                    ...work.map((name) => walks(name, e)),
+                    and(walks('attempt', e), inflight(e)),
+                    and(walks('notice', e), cancelled(e)),
+                  ),
+                  'ends',
+                ),
+                as(
+                  and(
+                    walks('ask', e),
+                    notNull(col('seq', 'e')),
+                    ...work.map((name) => not(walks(name, e))),
+                    not(and(walks('attempt', e), inflight(e))),
+                    ...inputs ? [not(unread(e, col('seq', 'e')))] : [],
+                  ),
+                  'clean',
+                ),
+              ],
+              from: table('entry', 'e'),
+              joins: shapes,
+              where: eq(col('session', 'e'), owner),
+              order: [desc(col('seq', 'e'))],
+              limit: lit(TAIL),
+            }),
+            'tail',
           ),
-        )
-        : lit(true),
-      not(eq(fn('coalesce', dispatch.expr(owner), lit('')), lit('queued'))),
+          where: col('ends', 'tail'),
+          order: [desc(col('seq', 'tail'))],
+          limit: lit(1),
+        })),
+        not(exists(select({
+          cols: [lit(1)],
+          from: table('entry', 'beyond'),
+          where: eq(col('session', 'beyond'), owner),
+          order: [desc(col('seq', 'beyond'))],
+          limit: lit(1),
+          offset: lit(TAIL - 1),
+        }))),
+      )
+    }
+    let notQueued = not(
+      eq(fn('coalesce', dispatch.expr(owner), lit('')), lit('queued')),
+    )
+    let marked = (entry: Expr, names: string[]) =>
+      names.map((name) => not(wears(name, entry)))
+    // Three last turns the rule can only read as finished: prose that asks for
+    // nothing, a refusal naming no request, and a turn given up on. Nothing
+    // about them needs the exact rule, and they are nearly every transcript.
+    let waiting = declared('tool_async') && declared('result')
+      ? among(
+        owner,
+        select({ cols: [col('session')], from: table('__status_waiting') }),
+      )
+      : lit(false)
+    let atRest = or(
+      and(
+        wears('output', newest),
+        ...marked(newest, ['ask', 'refusal']),
+        resting(true),
+        not(waiting),
+        notQueued,
+      ),
+      and(
+        wears('refusal', newest),
+        ...marked(newest, ['output', 'ask', 'result']),
+        resting(false),
+        notQueued,
+      ),
+      and(
+        wears('ask', newest),
+        wears('interrupted', newest),
+        wears('failed', newest),
+        ...marked(newest, ['call', 'result', 'refusal', 'exception']),
+        notQueued,
+      ),
     )
     let eligible = or(
       stopped
@@ -389,7 +432,7 @@ export let sessionStatus = {
           not(ended),
           notNull(newest),
           not(wears('stop', newest)),
-          not(simpleOutput),
+          not(atRest),
         )
         : lit(false),
     )
@@ -405,34 +448,23 @@ export let sessionStatus = {
             q: controlOwners,
           }]
           : [],
-        ...declared('ask') && actionable
-          ? [
-            { name: '__status_asks', materialized: true, q: asks },
-            {
-              name: '__status_ask_bounds',
-              materialized: true,
-              q: select({
-                cols: [col('session'), as(fn('max', col('seq')), 'seq')],
-                from: table('__status_asks'),
-                group: [col('session')],
-              }),
-            },
-          ]
-          : [],
-        ...work.length && actionable
+        ...actionable && declared('tool_async') && declared('result')
           ? [{
-            name: '__status_work',
+            name: '__status_waiting',
             materialized: true,
-            q: unionAll(
-              ...work.slice(0, 4),
-              select({
-                cols: [col('session')],
-                from: from(
-                  { ...unionAll(...work.slice(4)), limit: lit(-1) },
-                  'rest',
-                ),
-              }),
-            ),
+            q: select({
+              cols: [col('session', 'pe')],
+              from: table('tool_async', 'p'),
+              joins: [{
+                ...cross(table('entry', 'pe')),
+                on: eq(col('entity', 'pe'), col('entity', 'p')),
+              }],
+              where: not(exists(select({
+                cols: [lit(1)],
+                from: table('result', 'answer'),
+                where: eq(col('call', 'answer'), col('entity', 'p')),
+              }))),
+            }),
           }]
           : [],
         {

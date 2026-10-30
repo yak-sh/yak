@@ -297,7 +297,8 @@ export async function measure(
             }
           }
           let pending: typeof hold
-          if (family == 'wait' || family == 'stop') {
+          // session_list answers live sessions, so the one it must find is mid-turn.
+          if (family == 'wait' || family == 'stop' || family == 'list') {
             pending = {
               entered: Promise.withResolvers<void>(),
               released: Promise.withResolvers<void>(),
@@ -331,6 +332,10 @@ export async function measure(
             await bounded(runner!.idle(session), 'session completion')
           }
           let elapsed = took()
+          if (family == 'list') {
+            pending!.released.resolve()
+            await bounded(runner!.idle(session), 'session completion')
+          }
           if (family == 'new' || family == 'spawn') {
             let made = (await graph.read('.session')).filter((row) =>
               !before.has(row.entity.eid)
