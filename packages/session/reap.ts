@@ -11,7 +11,9 @@
 // reliable answer is available: start-up.
 //
 // A session that is merely over — its transcript settled — still holds what it
-// holds. Letting go is the rewind's business (D-35040), not a sweep's.
+// holds. Letting go is the rewind's business (D-35040), not a sweep's. A session
+// an outside harness ran, whose process is gone, is ended by ./ended.ts, and its
+// claims go with that.
 //
 // What is read here is exactly the locks and the sessions holding them, never
 // the whole graph: locks are few by nature, since only work in progress holds

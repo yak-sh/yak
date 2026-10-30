@@ -194,6 +194,11 @@ rows. After rollback, the `audit` phase records the conflict in a separate
 transaction. Claims do not expire. Deleting a session releases its claims
 through the graph cascade. `reapLeases(storage)` releases claims whose holder is
 no longer a session; the `/service` duty runs it when it starts.
+`endGone(graph, options)` (`@yaks/session/ended`), run hourly by the same duty,
+writes `session.ended` on an outside harness's session whose process is gone:
+Claude's by its running-process files, where a subagent runs in its root
+session's process, and Codex's by a fully imported log quiet for two hours. Its
+status then reads `stopped`, and `session_release` frees what it held.
 `session_release` records work when a transcript ends or receives a claim after
 ending, so a later worker releases those claims through the ordinary queue. A
 managed run that ended cleanly keeps the claims it is parked on (see below), and

@@ -45,6 +45,7 @@ import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude, codexRollout, type Reader, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
+import { endGone } from './ended.ts'
 import {
   behind,
   callOf,
@@ -59,6 +60,7 @@ import { step, walker } from './parts.ts'
 import { archive } from './archive.ts'
 import {
   claudeProjects,
+  claudeRunning,
   codexSessions,
   type Found,
   header,
@@ -86,6 +88,9 @@ export type Options = {
   /** Codex sessions directory (default `$CODEX_HOME/sessions` or
    * `~/.codex/sessions`). */
   codex?: string
+  /** the directory naming Claude's running processes (default
+   * `~/.claude/sessions`) */
+  running?: string
   /** how long a session keeps its full depth after it was last written, in
    * milliseconds (default 14 days) */
   full?: number
@@ -519,8 +524,9 @@ export let strip = async (g: Graph, eids: Eid[]): Promise<void> => {
 // How often the duty looks for sessions to strip.
 let HOUR = 60 * 60 * 1000
 
-/** Free the locks whose holder is gone, then read transcripts in and strip
- * the stale sessions until `signal` aborts. A pass that fails is logged and
+/** Free the locks whose holder is gone, then read transcripts in, end the
+ * sessions whose process is gone and strip the stale sessions until `signal`
+ * aborts. A pass that fails is logged and
  * made again on the next, where the transcript stands. What the config's
  * `person` typed is signed with them. */
 export let service = async (
@@ -537,6 +543,7 @@ export let service = async (
   let seen: Seen = { tails: new Map(), done: new Set() }
   let trimming: AsyncGenerator<Eid[]> | undefined
   let due = 0
+  let reconcile = 0
   try {
     while (!signal.aborted) {
       try {
@@ -547,6 +554,13 @@ export let service = async (
             ...(person ? { person: person as Eid } : {}),
             full: options.full,
             signal,
+          })
+        }
+        if (Date.now() >= reconcile) {
+          reconcile = Date.now() + HOUR
+          await endGone(host.graph, {
+            projects: dir,
+            running: options.running ?? claudeRunning(),
           })
         }
         if (!trimming && Date.now() >= due) {

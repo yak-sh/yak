@@ -817,9 +817,9 @@
       "noun": "session",
       "verb": "check",
       "title": "Check for stalled sessions",
-      "description": "Reconcile exited processes and fully imported ended transcripts; report sessions waiting beyond the stall threshold (default two hours) in content.body. Uncertain endings remain warnings.",
+      "description": "Report sessions waiting beyond the stall threshold (default two hours) in content.body. Does not repair: the transcripts duty ends a session whose process is gone.",
       "input": {},
-      "readOnly": false
+      "readOnly": true
     },
     "session_input": {
       "effect": true,

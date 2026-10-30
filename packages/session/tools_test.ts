@@ -12,7 +12,6 @@ import { hooked, type Options, runs } from './tools.ts'
 import { sessionEid } from './who.ts'
 import { fleet, said as personas } from '../persona/testing.ts'
 import { edgeKeywords } from '@yaks/edge'
-import { onDisk } from '@yaks/file/local'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 
@@ -468,50 +467,6 @@ test('a settled transcript is never stalled, however old', async () => {
     }),
   )
   assertEquals((await checkup('session_check', g)).level, undefined)
-})
-
-// A harness log last written nine minutes ago, its first line imported into
-// an operator's transcript: made when the file loads, so a case times only
-// the check.
-let quiet = async (text: string) => {
-  let path = Deno.makeTempFileSync()
-  Deno.writeTextFileSync(path, text)
-  let at = new Date(ago(9))
-  Deno.utimeSync(path, at, at)
-  let s = store(), g = locked(s)
-  let [file] = await onDisk(g, path), { eid } = file.entity
-  seed(
-    s,
-    { entity: { eid: ids.run1 }, session: { operator: true, transcript: eid } },
-    { ...file, transcript: { session: ids.run1, consumed: 1 } },
-    line(1, ago(9), {
-      entity: { eid: 'l1' },
-      content: { body: 'go' },
-      lines: { file: eid, start: 1 },
-    }),
-  )
-  return g
-}
-let whole = await quiet('{"type":"user"}\n')
-let partial = await quiet('{"type":"user"}\nmore\n')
-let check = (g: Graph) =>
-  runs({ vocab: pages }).session_check!(
-    { entity: { eid: 'c1' }, call: { args: {} } },
-    g,
-  ) as Promise<Bundle[]>
-
-test('session check reconciles a quiet, fully imported harness log', async () => {
-  let answer = await check(whole)
-  assertEquals(answer.length, 2)
-  assertEquals(comp(answer[1], 'session').ended, true)
-  await whole.apply(answer.slice(1))
-  assertEquals(comp((await whole.get([ids.run1]))[0]!, 'session').ended, true)
-})
-
-test('session check leaves an incomplete imported log for inspection', async () => {
-  let answer = await check(partial)
-  assertEquals(answer.length, 1)
-  assertEquals(comp(answer[0], 'finding').level, 'warn')
 })
 
 // The prompt event is read-only and needs no session lookup or claim read.

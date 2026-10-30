@@ -9,6 +9,14 @@ export let claudeProjects = (): string | undefined => {
   return root && `${root}/projects`
 }
 
+/** Where Claude keeps one file per running process, naming its session. */
+export let claudeRunning = (): string | undefined => {
+  let env = globalThis.Deno?.env
+  let root = env?.get('CLAUDE_CONFIG_DIR') ??
+    (env?.get('HOME') ? `${env.get('HOME')}/.claude` : undefined)
+  return root && `${root}/sessions`
+}
+
 /** Where Codex keeps its rollout files. */
 export let codexSessions = (): string | undefined => {
   let env = globalThis.Deno?.env

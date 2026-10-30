@@ -383,8 +383,11 @@ let kill = async (target: number, sig: string) =>
     stderr: 'null',
   }).output()).success
 
-// Whether a pid runs, asked the way the caller looks, or with `kill -0`.
-let alive = (o: Opts) => o.running ?? ((pid: number) => kill(pid, '0'))
+/** Whether a pid runs on this computer, asked with `kill -0`. */
+export let runs = (pid: number): Promise<boolean> => kill(pid, '0')
+
+// Whether a pid runs, asked the way the caller looks.
+let alive = (o: Opts) => o.running ?? runs
 
 /**
  * Send a signal to a tracked run: to its process group where we launched it —
