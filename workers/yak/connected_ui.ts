@@ -77,7 +77,7 @@ let template=root?.querySelector('[data-agent-row]');
 let disconnected=document.querySelector('[data-disconnected]');
 if(!list&&!disconnected)return;
 let destinations=${JSON.stringify(destinations)};
-let connected=disconnected?disconnected.hidden:!list.hidden, busy=false;
+let busy=false;
 let refresh=async()=>{
   if(busy||document.hidden)return;
   busy=true;
@@ -112,8 +112,6 @@ let refresh=async()=>{
     let any=data.agents.length>0;
     document.querySelectorAll('[data-connected]').forEach(el=>{el.hidden=!any});
     document.querySelectorAll('[data-disconnected]').forEach(el=>{el.hidden=any});
-    if(any!==connected)document.querySelectorAll('details[data-agent-setup]').forEach(el=>{el.toggleAttribute('open',!any)});
-    connected=any;
   }catch{}finally{busy=false}
 };
 window.addEventListener('focus',refresh);

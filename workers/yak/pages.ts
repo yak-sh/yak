@@ -2441,11 +2441,9 @@ let agentSetup = (agents: Agent[], env: Host, back: string) =>
 <p ${
     state(false, !agents.length)
   }>Connect once, then build and keep improving your apps in your usual chats.</p>
-<details class="More Connect_Setup" data-agent-setup${
-    agents.length ? '' : ' open'
-  }>
-<summary ${state(true, !!agents.length)}>Connect another agent</summary>
-${doors(env)}</details>`
+<section class="Connect_Setup">
+<h2 class="Group" ${state(true, !!agents.length)}>Connect another agent</h2>
+${doors(env)}</section>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the chosen one in the address, so a
@@ -2457,11 +2455,7 @@ if (tabs) {
   let all = [...tabs.querySelectorAll('input[name=agent]')]
   let pick = () => {
     let want = all.find((r) => r.value == decodeURIComponent(location.hash.slice(1)))
-    if (want) {
-      want.checked = true
-      let setup = tabs.closest('details')
-      if (setup) setup.open = true
-    }
+    if (want) want.checked = true
   }
   pick()
   addEventListener('hashchange', pick)

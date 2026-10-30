@@ -271,9 +271,6 @@
     margin: 0 0 1.5rem;
     text-align: left;
   }
-  .Connect_Setup > summary {
-    margin: 0 0 .75rem;
-  }
   .Connect_Path {
     margin: .25rem 0 0;
     font-size: var(--small);

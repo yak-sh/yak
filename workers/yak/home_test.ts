@@ -142,7 +142,7 @@ test('connected empty library offers a copyable request', async () => {
   }
 })
 
-test('connected pages show the named client and put setup behind a disclosure', async () => {
+test('connected pages show the named client and keep the way to connect another in view', async () => {
   let agents = [{
     id: 'chatgpt',
     brand: 'chatgpt' as const,
@@ -162,17 +162,17 @@ test('connected pages show the named client and put setup behind a disclosure', 
       assert(el.hasAttribute('hidden'))
     }
     if (view == 'connect') {
-      assert(
-        !document.querySelector('[data-agent-setup]')!.hasAttribute(
-          'open',
-        ),
-      )
+      let another = document.querySelector('.Connect_Setup .Group')!
+      assertEquals(another.textContent, 'Connect another agent')
+      assert(!another.hasAttribute('hidden'))
+      assert(!document.querySelector('details .Tabs'))
     }
   }
   let { document } = parseHTML(await block({ view: 'connect' }))
   assert(
-    document.querySelector('[data-agent-setup]')!.hasAttribute('open'),
+    document.querySelector('.Connect_Setup .Group')!.hasAttribute('hidden'),
   )
+  assert(document.querySelector('.Connect_Setup .Tabs'))
 })
 
 test('new app tells an agent with no web link what to ask, not an empty list', async () => {

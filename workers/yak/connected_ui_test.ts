@@ -29,9 +29,7 @@ let mount = (
   let { document } = parseHTML(`<html><body>
 <p data-disconnected${initial.length ? ' hidden' : ''}>Connect your agent</p>
 <p data-connected${initial.length ? '' : ' hidden'}>Your agents</p>
-<details data-agent-setup${
-    initial.length ? '' : ' open'
-  }><input value="draft"></details>
+<div><input value="draft"></div>
 ${view ? agentList(initial, view, '/manage/connect') : ''}
 </body></html>`)
   let events: Record<string, () => Promise<void>> = {}
@@ -61,7 +59,6 @@ ${view ? agentList(initial, view, '/manage/connect') : ''}
       next = () => Promise.resolve(Response.json({ agents }))
     },
     list: document.querySelector<HTMLElement>('.Agents')!,
-    setup: document.querySelector('details')!,
   }
 }
 
@@ -165,7 +162,7 @@ test('compact agents render launch links and refresh without replacing drafts or
   assertEquals(mount([local], 'links').list.hidden, true)
 })
 
-test('agent refresh preserves drafts and changes setup only when an agent connects or leaves', async () => {
+test('agent refresh preserves drafts as an agent connects or leaves', async () => {
   let m = mount()
   let draft = m.document.querySelector('input')!
   assertEquals(m.list.hidden, true)
@@ -185,19 +182,11 @@ test('agent refresh preserves drafts and changes setup only when an agent connec
     m.document.querySelector<HTMLElement>('[data-disconnected]')!.hidden,
     true,
   )
-  assertEquals(m.setup.hasAttribute('open'), false)
   assertEquals(m.document.querySelector('input'), draft)
   assertEquals(draft.value, 'draft')
   let row = m.list.firstElementChild
-  m.setup.setAttribute('open', '')
   await m.run('visibilitychange')
   assertEquals(m.list.firstElementChild, row, 'unchanged rows retain focus')
-  assertEquals(
-    m.setup.hasAttribute('open'),
-    true,
-    'manual disclosure stays open',
-  )
-  m.setup.removeAttribute('open')
   m.show([])
   await m.run()
   assertEquals(m.list.hidden, true)
@@ -205,7 +194,6 @@ test('agent refresh preserves drafts and changes setup only when an agent connec
     m.document.querySelector<HTMLElement>('[data-disconnected]')!.hidden,
     false,
   )
-  assertEquals(m.setup.hasAttribute('open'), true)
   assertEquals(m.calls[0], {
     url: '/oauth/agents',
     options: {
