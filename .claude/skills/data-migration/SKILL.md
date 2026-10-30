@@ -117,6 +117,10 @@ file and the drop-in go (then `systemctl --user daemon-reload` and
 pause between those ticks files no false regression. Letters wait at the edge
 and are pulled after it; one that waited past a minute is reported as late.
 
+A patch keeps what it omits. A repair that puts a component back to an older
+value names every property, `null` for one the older value lacks, or what the
+bad write added stays.
+
 The script is deleted in the next commit. Its commit is the record, and the
 message says what moved, with counts.
 
