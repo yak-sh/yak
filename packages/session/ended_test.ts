@@ -18,6 +18,7 @@ import { sessionDoc } from './comp.ts'
 import { attemptComputed } from './attempt.ts'
 import { statusComputed } from './state.ts'
 import { endGone, runningSessions } from './ended.ts'
+import { sessions } from './plugin.ts'
 import { versionOf } from './files.ts'
 
 let root = Deno.makeTempDirSync()
@@ -43,6 +44,20 @@ let vocab = loadVocab([
   machineDoc,
   processDoc,
   provenanceDoc,
+  {
+    $defs: {
+      knock: {
+        component: true,
+        type: 'object',
+        properties: { target: { type: 'string' } },
+      },
+      deliver: {
+        component: true,
+        type: 'object',
+        properties: { to: { type: 'string' } },
+      },
+    },
+  },
 ])
 let store = () =>
   ram(vocab, {
@@ -111,7 +126,7 @@ test('a subagent lives and dies with the session at the top of its line', async 
   let s = store(), g = locked(s)
   await session(s, g, 'top-on', 'on', log(3))
   await session(s, g, 'top-off', 'gone', log(3))
-  await session(s, g, 'kid-on', 'a1', log(3), {
+  await session(s, g, 'kid-on', 'a1', log(1), {
     entity: { eid: 'kid-on' },
     spawned: { parent: 'top-on' },
   })
@@ -120,6 +135,85 @@ test('a subagent lives and dies with the session at the top of its line', async 
     spawned: { parent: 'top-off' },
   })
   assertEquals((await sweep(g)).sort(), ['kid-off', 'top-off'])
+})
+
+test('a subagent quiet under a running session ends, unless it holds a claim', async () => {
+  let s = store(), g = locked(s)
+  let kid = (eid: string, path: string) =>
+    session(s, g, eid, eid, path, {
+      entity: { eid },
+      spawned: { parent: 'top' },
+    })
+  await session(s, g, 'top', 'on', log(3))
+  await kid('quiet', log(3))
+  await kid('busy', log(1))
+  await kid('holder', log(3))
+  await seed(s, { entity: { eid: 'work' }, claim: { session: 'holder' } })
+  assertEquals(await sweep(g), ['quiet'])
+})
+
+test('an unfinished turn with no log gets a day, then ends and reads stopped', async () => {
+  let s = store(), g = locked(s)
+  let at = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString()
+  let owing = (eid: string, hours: number): Bundle[] => [
+    { entity: { eid }, session: {}, created: { at: at(hours) } },
+    {
+      entity: { eid: `${eid}-input` },
+      entry: { session: eid, seq: 1 },
+      created: { at: at(hours) },
+      content: { body: 'go' },
+      using: {},
+    },
+  ]
+  await g.apply([...owing('hours', 3), ...owing('days', 25)], {
+    trusted: true,
+    stamp: false,
+  })
+  assertEquals(await sweep(g), ['days'])
+  let [row] = await g.get(['days'])
+  assertEquals((row.session as Comp).status, 'stopped')
+})
+
+test('marking a session over leaves its updated stamp alone', async () => {
+  let s = store(), g = locked(s)
+  await session(s, g, ids.run1, 'gone', log(3))
+  await seed(s, {
+    entity: { eid: ids.run1 },
+    updated: { at: '2026-01-01T00:00:00.000Z' },
+  })
+  let was = (await g.get([ids.run1]))[0].updated
+  assertEquals(await sweep(g), [ids.run1])
+  assertEquals((await g.get([ids.run1]))[0].updated, was)
+})
+
+test('something said to an ended session clears the mark, whatever door it came through', async () => {
+  let s = store()
+  let g = graph({ storage: s, vocab, plugins: [sessions()] })
+  let spoken = ['spoken', 'knocked', 'sent'], kept = ['imported', 'replied']
+  for (let eid of [...spoken, ...kept]) {
+    await g.apply([{ entity: { eid }, session: { ended: true } }], {
+      trusted: true,
+    })
+  }
+  let input = (eid: string, more = {}) => ({
+    entity: { eid: `${eid}-said` },
+    entry: { session: eid },
+    content: { body: 'again' },
+    ...more,
+  })
+  let [file] = await onDisk(g, log(1))
+  await g.apply([
+    input('spoken'),
+    { entity: { eid: 'k' }, knock: { target: 'knocked' } },
+    { entity: { eid: 'd' }, deliver: { to: 'sent' } },
+  ], { trusted: true })
+  await g.apply([
+    file,
+    input('imported', { lines: { file: file.entity.eid, start: 1 } }),
+    input('replied', { output: { source: 'spoken-said' } }),
+  ], { trusted: true })
+  for (let eid of spoken) assertEquals(await ended(g, eid), false)
+  for (let eid of kept) assertEquals(await ended(g, eid), true)
 })
 
 test('a claim counts as owing, whatever the transcript says', async () => {

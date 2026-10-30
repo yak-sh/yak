@@ -19,6 +19,7 @@ import { SESSION, sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
+import { reopening } from './reopen.ts'
 import { runners, sessionEid } from './who.ts'
 
 /** The plugin's two injection points: a clock for both stamps, and the eid a
@@ -61,7 +62,11 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
             after(
               sequencing(joined, tx, err),
               (placed) =>
-                weighing(placed, tx, err),
+                after(
+                  weighing(placed, tx, err),
+                  (weighed) =>
+                    reopening(weighed, tx, err),
+                ),
             ))),
     )
   return {

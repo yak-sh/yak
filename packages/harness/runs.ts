@@ -257,24 +257,13 @@ export let runs = (host?: Host): Runs => ({
         ),
       }
     }
-    // A session marked over would read this message stopped and never run it.
-    let [row] = await graph.rows(`.entity.eid=${s}&.fields=session.ended`)
-    await graph.apply([
-      ...row?.['session.ended'] === true
-        ? [{
-          entity: { eid: s },
-          session: { ended: null },
-          $actor: through(s, caller(call)),
-        }]
-        : [],
-      {
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: s },
-        content: { body: String(args.text) },
-        ...using ? { using } : {},
-        $actor: through(s, caller(call)),
-      },
-    ])
+    await graph.apply([{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: s },
+      content: { body: String(args.text) },
+      ...using ? { using } : {},
+      $actor: through(s, caller(call)),
+    }])
     return args.wait === false
       ? await graph.get([s])
       : await settled(graph, s, host?.stopping)

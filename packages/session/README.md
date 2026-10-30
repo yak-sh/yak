@@ -198,16 +198,19 @@ no longer a session; the `/service` duty runs it when it starts.
 writes `session.ended` on a session that is over, which is what makes a page of
 live sessions a presence test (`.session !session.ended`). An outside harness's
 session is over when its process is gone: Claude's by its running-process files,
-where a subagent runs in its root session's process, and Codex's by a fully
-imported log quiet for two hours. A session with no transcript file is over once
-it has been quiet for two hours, owes nothing and holds no claim, and
-`session_send` clears the mark. What its entries leave unfinished then reads
-`stopped`; settled, failed and empty keep reading that way. `session_release`
-frees what a marked session held. `session_release` records work when a
-transcript ends or receives a claim after ending, so a later worker releases
-those claims through the ordinary queue. A managed run that ended cleanly keeps
-the claims it is parked on (see below), and lets each go once its task finishes
-or nothing is left to wait for.
+where a subagent runs in its root session's process and also ends once its log
+has been quiet for two hours, and Codex's by a fully imported log quiet for two
+hours. A session with no transcript file is over once it has been quiet for two
+hours, a day if its turn is unfinished, and holds no claim. The mark leaves
+`updated` as it was. Input on the transcript, or a knock or letter addressed to
+the session, clears it in the same batch, whatever door it came through
+(`./reopen.ts`). What its entries leave unfinished then reads `stopped`;
+settled, failed and empty keep reading that way. `session_release` frees what a
+marked session held. `session_release` records work when a transcript ends or
+receives a claim after ending, so a later worker releases those claims through
+the ordinary queue. A managed run that ended cleanly keeps the claims it is
+parked on (see below), and lets each go once its task finishes or nothing is
+left to wait for.
 
 ## Parking on a task
 

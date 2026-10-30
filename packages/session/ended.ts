@@ -8,10 +8,11 @@
 //
 // A session the harness moved on from reads as gone too, since the running
 // process no longer names it; resuming it clears the mark (`session_context`).
-// A managed run is left to its own `exit` (@yaks/process). A session with no
-// transcript file has no process here to ask about, so it is over once it has
-// been quiet, owes nothing and holds nothing; a message clears the mark
-// (`session_send`).
+// A subagent also ends once its log has been quiet, while the session it ran
+// under goes on. A managed run is left to its own `exit` (@yaks/process). A
+// session with no transcript file has no process here to ask about, so it is
+// over once it has been quiet and holds nothing, a day if its turn is
+// unfinished. Anything new said to it clears the mark (./reopen.ts).
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
@@ -25,6 +26,8 @@ import { UNFINISHED } from './state.ts'
 let SETTLING = 5 * 60 * 1000
 // A log with no process to ask about counts as over when this quiet.
 let QUIET = 2 * 60 * 60 * 1000
+// A turn still owed an answer may be a long tool call, so it waits longer.
+let STALLED = 24 * 60 * 60 * 1000
 let BATCH = 50
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
@@ -149,17 +152,22 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
       if (b.exit && (rests || (owes && s.transcript))) gone.push(eid)
       continue
     }
-    if (!s.transcript) {
-      if (rests && await quiet(g, b, now - QUIET)) gone.push(eid)
+    let [file] = s.transcript ? await g.get([String(s.transcript)]) : []
+    let path = file && await absolute(g, file)
+    // No log to ask about: quiet says it, and a claim is work it is parked on.
+    if (!path) {
+      if (
+        !holding.has(eid) && await quiet(g, b, now - (owes ? STALLED : QUIET))
+      ) gone.push(eid)
       continue
     }
-    let [file] = await g.get([String(s.transcript)])
-    let path = file && await absolute(g, file)
-    if (!path) continue
     if (o.projects && path.startsWith(`${o.projects}/`)) {
       if (!live || (mtime(path) ?? 0) > now - SETTLING) continue
       let id = String(comp(await root(b), SESSION).id ?? '')
-      if (!live.has(id)) gone.push(eid)
+      // A subagent finishes long before the process it ran in.
+      let finished = comp(b, 'spawned').parent && !holding.has(eid) &&
+        (mtime(path) ?? 0) <= now - QUIET
+      if (!live.has(id) || finished) gone.push(eid)
     } else if (
       endedFile(path, comp(file, 'transcript'), now - QUIET)
     ) gone.push(eid)
@@ -171,7 +179,7 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
  * Write `session.ended` on every session whose process is gone or, with no
  * process to ask about, that has come to rest, and answer with their eids.
  * `projects` is where Claude's transcripts are and `running` where it lists its
- * processes.
+ * processes. It is an observation, not an edit, so `updated` stays as it was.
  *
  * ```ts
  * import { endGone } from '@yaks/session/ended'
@@ -187,7 +195,7 @@ export let endGone = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
         entity: { eid },
         [SESSION]: { ended: true },
       })),
-      { trusted: true },
+      { trusted: true, stamp: false },
     )
   }
   return gone
