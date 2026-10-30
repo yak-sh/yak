@@ -302,3 +302,11 @@ test('a resumed group remeasures insufficient CPU observations', async () => {
   equal(called, 1)
   equal(resumed.verdict, 'same')
 })
+
+test('separated rounds need the same sample count as paired rounds', () => {
+  for (let count of [3, 4, 5, 6]) {
+    let reference = run(Array(count).fill(1))
+    let current = run(Array(count).fill(3))
+    equal(verdict(reference, current), count < 6 ? 'same' : 'slower')
+  }
+})

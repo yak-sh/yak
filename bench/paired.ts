@@ -267,11 +267,11 @@ export let compare = (
     if (!steady(b)) return false
     let lower = current.benches[i].better == 'lower'
     let worse = (x: number, y: number) => lower ? x > y : x < y
-    let paired = b.current.length >=
-        Math.max(6, Math.ceil(Math.log2(20 * comparisons.length))) &&
-      b.current.every((n, round) =>
-        worse(n, b.before[round]) && worse(n, b.after[round])
-      )
+    let enough = b.current.length >=
+      Math.max(6, Math.ceil(Math.log2(20 * comparisons.length)))
+    let paired = b.current.every((n, round) =>
+      worse(n, b.before[round]) && worse(n, b.after[round])
+    )
     let reference = [...b.before, ...b.after]
     let apart = lower
       ? Math.min(...b.current) > Math.max(...reference)
@@ -284,7 +284,7 @@ export let compare = (
       median: b.reference,
       tolerance: Math.max(SLOWER, banked?.tolerance ?? base?.tolerance ?? 0),
     })
-    return (paired || apart) && worse(b.now, most)
+    return enough && (paired || apart) && worse(b.now, most)
   }).map((b) => b.name)
   return {
     verdict: slower.length

@@ -2,7 +2,7 @@
  * it. */
 import type { Run } from '@yaks/benchmark'
 import { equal, test } from '@yaks/testing'
-import { judged, type Outcome, watch } from './monitor.ts'
+import { assessed, judged, type Outcome, watch } from './monitor.ts'
 import type { Judgement } from './paired.ts'
 
 let run = (verdict: Run['verdict'], busy: number | null = null): Run => ({
@@ -174,5 +174,61 @@ test('mixed baseline regressions report each benchmark’s revision and its comm
   equal(
     ['old-a', 'old-b'].every((reference) => message.includes(reference)),
     true,
+  )
+})
+
+test('only complete paired evidence reports a screened slowdown', async () => {
+  let screen = run('regressed')
+  let evidence: Judgement = {
+    verdict: 'slower',
+    complete: true,
+    slower: ['work'],
+    comparisons: [{
+      name: 'work',
+      unit: 'ms',
+      figure: 'cpu',
+      before: [1, 1, 1, 1, 1, 1],
+      current: [3, 3, 3, 3, 3, 3],
+      after: [1, 1, 1, 1, 1, 1],
+      reference: 1,
+      now: 3,
+    }],
+  }
+  let reports: string[] = []
+  for (
+    let [label, changed] of [
+      ['complete', evidence],
+      ['partial', {
+        ...evidence,
+        complete: false,
+        error: 'Collection incomplete',
+      }],
+      ['legacy', { ...evidence, complete: undefined }],
+      ['broken', { ...evidence, error: 'Missing observations' }],
+    ] as const
+  ) {
+    await watch([label], {
+      check: () => Promise.resolve(assessed(screen, changed, 'paired.json')),
+      report: (_error, suite) => {
+        reports.push(suite)
+        return Promise.resolve()
+      },
+      since: () => Promise.resolve([]),
+    })
+  }
+  equal(reports, ['complete'])
+  equal(
+    assessed(screen, { ...evidence, verdict: 'same', complete: false }, '')
+      .verdict,
+    'inconclusive',
+  )
+  equal(
+    assessed(screen, { ...evidence, verdict: 'same' }, '').verdict,
+    'passed',
+  )
+  equal(
+    assessed(screen, { ...evidence, verdict: 'failed', complete: false }, '')
+      .verdict,
+    'failed',
   )
 })

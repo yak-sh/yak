@@ -227,6 +227,31 @@ export let judged = (run: Run, evidence: Judgement): Run => ({
   })),
 })
 
+/** Only a completed comparison can turn a screen into a reported slowdown. */
+export let assessed = (
+  run: Run,
+  evidence: Judgement,
+  path: string,
+): Outcome => {
+  if (evidence.verdict == 'failed') {
+    return { verdict: 'failed', error: `${evidence.error}\nevidence: ${path}` }
+  }
+  if (evidence.complete !== true || evidence.error) {
+    return { verdict: 'inconclusive' }
+  }
+  if (evidence.verdict == 'same') {
+    return { verdict: 'passed', run: { ...run, verdict: 'passed' } }
+  }
+  if (evidence.verdict != 'slower') return { verdict: 'inconclusive' }
+  return {
+    verdict: 'regressed',
+    run: judged(run, evidence),
+    reference: evidence.reference,
+    references: evidence.references,
+    evidence: [`evidence: ${path}`],
+  }
+}
+
 let root = new URL('../', import.meta.url).pathname
 let git = async (...args: string[]) => {
   let { stdout, success } = await new Deno.Command('git', {
@@ -350,28 +375,11 @@ let check = async (suite: string): Promise<Outcome> => {
   let paired = await measured(suite, ['bench/paired.ts', suite, path])
   if (paired.unjudged) return { verdict: paired.unjudged }
   let evidence: Judgement = JSON.parse(await Deno.readTextFile(path))
-  if (evidence.verdict == 'failed') {
-    return {
-      verdict: 'failed',
-      error: `${evidence.error}\nevidence: ${path}`,
-    }
-  }
-  if (evidence.verdict == 'same') {
+  let outcome = assessed(run, evidence, path)
+  if (outcome.verdict == 'passed' || outcome.verdict == 'inconclusive') {
     await Deno.remove(path)
-    return { verdict: 'passed', run: { ...run, verdict: 'passed' } }
   }
-  if (evidence.verdict != 'slower') {
-    console.log(`${suite}: ${evidence.verdict}: ${evidence.error ?? ''}`)
-    await Deno.remove(path)
-    return { verdict: evidence.verdict }
-  }
-  return {
-    verdict: 'regressed',
-    run: judged(run, evidence),
-    reference: evidence.reference,
-    references: evidence.references,
-    evidence: [`evidence: ${path}`],
-  }
+  return outcome
 }
 
 if (import.meta.main) {
