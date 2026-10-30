@@ -116,7 +116,7 @@ export let runtime = (shared: string = denoDir()) => ({
   args: [
     'run',
     '--frozen',
-    // The coordinator checks changed modules before running tests.
+    // Main CI checks source types; local runs execute consumer behavior.
     '--no-check',
     '-A',
     // Every function compiled as its module loads. A test runs once, so V8's
