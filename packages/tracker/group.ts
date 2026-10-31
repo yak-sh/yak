@@ -136,7 +136,14 @@ export let grouped = (
         ? {
           resolved: null,
           notified: null,
-          regressed: { at: null, by: null, via: null, error: row.entity.eid },
+          regressed: {
+            at: null,
+            by: null,
+            via: null,
+            error: row.entity.eid,
+            message: title(row) || null,
+            commit: e.commit ?? null,
+          },
         }
         : {},
     },

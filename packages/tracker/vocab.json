@@ -247,6 +247,16 @@
           "death": "keep",
           "stamped": true,
           "description": "The occurrence that brought the bug back."
+        },
+        "message": {
+          "type": "string",
+          "stamped": true,
+          "description": "What that occurrence said, which the bug's title, its first occurrence's, does not."
+        },
+        "commit": {
+          "type": "string",
+          "stamped": true,
+          "description": "The commit that occurrence ran."
         }
       }
     },

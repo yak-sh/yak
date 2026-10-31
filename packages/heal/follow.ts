@@ -9,7 +9,7 @@ import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { human } from '@yaks/id'
 import { absent, and, eq, fields, list, present } from '@yaks/query'
-import { remoteBug } from '@yaks/tracker'
+import { remoteBug, reopened } from '@yaks/tracker'
 import { active, fixing, type Options } from './fix.ts'
 
 // Only the platform's tracker records failures in people's apps (tagged
@@ -55,23 +55,26 @@ let mark = (mutate: Client['mutate'], rows: Bundle[], opening?: unknown) =>
   })
 
 // Each opening is news for the project, including a regression while fixer
-// starts are paused. Its knock is the receipt a replay reads before sending.
-let knockEid = (bug: Bundle) =>
-  identityEid('heal_knock', [
-    bug.entity.eid,
-    ...bug.regressed ? [str(comp(bug, 'regressed')?.at)] : [],
-  ])
-
+// starts are paused. It knocks in the write that files or reopens the bug's
+// task, so the task is the receipt: a replay, a second tracker holding the same
+// bug and a stamp that moved all find the work already open. A reopening is
+// named by the completion it undid.
 let knock = (
   g: Graph,
   project: string | undefined,
   bug: Bundle,
   title: string,
   where: string,
+  undid?: unknown,
 ): Bundle[] =>
   project && g.vocab.comp('knock')
     ? [{
-      entity: { eid: knockEid(bug) },
+      entity: {
+        eid: identityEid('heal_knock', [
+          bug.entity.eid,
+          ...undid ? [str(undid)] : [],
+        ]),
+      },
       $was: { knock: { target: null } },
       knock: { target: project },
       doc: {
@@ -193,13 +196,7 @@ export let follow = (
       }
       return eids.map((eid) => known.get(eid)).find((row) => row?.task)
     }
-    let announced = new Set(
-      (await g.get(bugs.filter((bug) => bug.regressed).map(knockEid), [
-        'knock',
-      ]))
-        .filter((row) => row.knock).map((row) => row.entity.eid),
-    )
-    let news = async (bug: Bundle) => {
+    let news = async (bug: Bundle, undid?: unknown) => {
       let project = await home()
       let evidence = bug.entity.eid
       let page = /^https?:/.test(url)
@@ -214,7 +211,14 @@ export let follow = (
         project,
         where,
         title,
-        knocks: knock(g, project, bug, title, where),
+        knocks: knock(
+          g,
+          project,
+          bug,
+          bug.regressed ? reopened(bug) : title,
+          where,
+          undid,
+        ),
       }
     }
     // Whether the decision wrote the box.
@@ -286,8 +290,8 @@ export let follow = (
                   },
                 }]
                 : [],
-              ...bug.regressed && !announced.has(knockEid(bug))
-                ? (await news(bug)).knocks
+              ...reopen
+                ? (await news(bug, comp(task, 'completed')?.at)).knocks
                 : [],
             ],
           }
@@ -331,7 +335,6 @@ export let follow = (
       let wrote = true
       try {
         wrote = await reconcile(bug, eids)
-        if (wrote) announced.add(knockEid(bug))
       } finally {
         if (wrote) { for (let eid of eids) known.delete(eid) }
       }

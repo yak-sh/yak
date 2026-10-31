@@ -3,7 +3,7 @@
 import type { Bundle } from '@yaks/graph'
 import { type And, and, eq, every, order, querySearch } from '@yaks/query'
 import { comp, type Frame, str, title } from './model.ts'
-import { place, spot } from './brief.ts'
+import { place, sha, spot } from './brief.ts'
 
 /** Worst first is historical occurrence count, not the retained sample size. */
 export let openBugs = '.bug.status=open * .order=-bug.hits'
@@ -46,6 +46,20 @@ export let remoteBug = (side: string, bug: string, error?: string): string =>
 /** The whole message a bug or an error says. */
 export let said = (e: Bundle): string =>
   e.bug ? str(comp(e, 'doc').title) : title(e)
+
+/// let bug = { entity: { eid: 'b' }, bug: {}, doc: { title: 'Error: first' } }
+/// let back = (regressed: object) => ({ ...bug, regressed })
+/// reopened(back({ message: 'Error: again\n  at f', commit: 'a'.repeat(40) })) -> 'Error: again (aaaaaaa)'
+/// reopened(back({ message: 'Error: red (aaaaaaa1b) https://ci/1', commit: 'a'.repeat(7) + '1b' + 'c'.repeat(31) })) -> 'Error: red (aaaaaaa1b) https://ci/1'
+/// reopened(back({})) -> 'Error: first'
+/** The hit that reopened a bug, in a line: its message and its commit. A bug
+ * reopened before its mark said so reads as its title. */
+export let reopened = (bug: Bundle): string => {
+  let back = comp(bug, 'regressed')
+  let line = (str(back.message) || said(bug)).split('\n')[0]
+  let commit = sha(str(back.commit))
+  return commit && !line.includes(commit) ? `${line} (${commit})` : line
+}
 
 /** Where a bug is open, resolved or archived; regressed is open again. */
 export let standing = (e: Bundle): string =>

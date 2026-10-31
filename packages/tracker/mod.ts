@@ -16,4 +16,4 @@ export {
 export { type Crumb, type Frame, type Level } from './model.ts'
 
 export { enrichFrames, type Resolve, stackFrames } from './frames.ts'
-export { remoteBug } from './reading.ts'
+export { remoteBug, reopened } from './reading.ts'

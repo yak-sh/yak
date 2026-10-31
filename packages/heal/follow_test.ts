@@ -1747,8 +1747,8 @@ test('unmuting the home project resumes pending bugs without duplicating work', 
   equal(switched.resumed, { tasks: 1, fixers: 1, entries: 1 })
 })
 
-// Each regression has its own receipt, even when work is already open and
-// starts are muted. A restarted follower reads the receipt from the graph.
+// Each reopening has its own knock, even when starts are muted. A restarted
+// follower finds the work already open.
 let mutedRegression = await regression()
 await put(mutedRegression.g, [{ entity: { eid: project }, nofix: {} }])
 test('successive regressions each knock once while fixer starts are muted', async () => {
@@ -1767,6 +1767,13 @@ test('successive regressions each knock once while fixer starts are muted', asyn
   equal(await count(g, 'knock'), 2)
   await put(tracker, [{
     entity: { eid: bug },
+    resolved: { at: '2026-10-02T00:00:03.500Z' },
+  }])
+  await mutedRegression.replay()
+  equal(await count(g, 'knock'), 2)
+  await put(tracker, [{
+    entity: { eid: bug },
+    resolved: null,
     regressed: { at: '2026-10-02T00:00:04Z' },
   }])
   await mutedRegression.replay()
@@ -1778,6 +1785,47 @@ test('successive regressions each knock once while fixer starts are muted', asyn
   equal(await count(g, 'fixer'), 2)
   equal(await count(g, 'knock'), 3)
   mutedRegression.close()
+})
+
+// The Worker stamps the same opening with its own clock, and its follower
+// answers the bug too: neither is another opening.
+let restamped = await regression()
+await restamped.replay()
+test('one reopening knocks once, however many stamps it is told with', async () => {
+  let { g, tracker, config } = restamped
+  equal(await count(g, 'knock'), 2)
+  let [row] = await tracker.get([bug])
+  let moved = {
+    ...row,
+    regressed: { ...comp(row, 'regressed'), at: '2026-10-02T00:00:20Z' },
+  }
+  await alone(g, config)(moved, url, (rows) => put(tracker, rows))
+  await alone(g, config)(moved, PLATFORM, (rows) => put(tracker, rows))
+  equal(await count(g, 'knock'), 2)
+  restamped.close()
+})
+
+// The bug's title is its first occurrence; the knock tells the hit that
+// reopened it, by message and commit.
+let told = await regression()
+await put(told.tracker, [{
+  entity: { eid: bug },
+  regressed: {
+    at: '2026-10-02T00:00:03Z',
+    error: 'occurrence',
+    message: 'Error: gate failed (4941ab6c4) https://ci.test/runs/2',
+    commit: '4941ab6c4'.padEnd(40, '0'),
+  },
+}])
+await told.replay()
+let toldBodies = (await rows(told.g, 'knock'))
+  .map((row) => String(comp(row, 'doc').body))
+  .filter((body) => body.startsWith('Regressed bug:'))
+told.close()
+test('a reopening knock names the hit that reopened it, not the first occurrence', () => {
+  equal(toldBodies.length, 1)
+  ok(toldBodies[0].includes('(4941ab6c4) https://ci.test/runs/2'))
+  ok(!toldBodies[0].includes('missing row'))
 })
 
 let pausedNativeRegression = await settledCase()
