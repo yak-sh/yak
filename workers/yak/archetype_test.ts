@@ -41,7 +41,7 @@ test(
         app: 'recipes',
       })
       // The deploy's commit is minted by an effect after it answers.
-      await k.settled!()
+      await k.settled()
       let wrote = await app.post([{
         entity: { eid: 'cake' },
         doc: { title: 'Cake' },

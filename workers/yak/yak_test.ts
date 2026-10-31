@@ -339,7 +339,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
 
     // The app's own page failure crosses the tracker queue with its catch
     // context; it writes no exception or error into the app's graph.
-    let beforeReport = k.reported!.length
+    let beforeReport = k.reported.length
     let filed = await k.at(`${jeff69}.yaks.app`, '/recipes/api/report', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -351,7 +351,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       }),
     })
     assertEquals(filed.status, 204)
-    let [broken] = k.reported!.slice(beforeReport)
+    let [broken] = k.reported.slice(beforeReport)
     assert(broken, 'a tracker occurrence')
     let ex = broken.exception as { value: string; stack: string }
     assertEquals(

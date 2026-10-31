@@ -255,7 +255,7 @@ export const forms = async (
   let pending = ''
   const email = 'forms-invite@benchmark.invalid'
   await agent.tool('member_add', { space, email, role: 'viewer' })
-  await k.deliveries?.()
+  await k.deliveries()
   // The page is the public source of the invitation eid, independent of how
   // invitation component names are qualified in the directory vocabulary.
   const people = await page(path('people'), email)
@@ -286,7 +286,7 @@ export const forms = async (
     'form/restore': {
       prepare: async () => {
         await agent.tool('app_delete', { space, app: 'restored' })
-        await k.settled?.()
+        await k.settled()
         await page(path('trash'), 'name="restore" value="restored"')
       },
       act: async () => {
@@ -309,7 +309,7 @@ export const forms = async (
           await post(path('people'), { again: pending }),
           'Sent again.',
         )
-        await k.deliveries?.()
+        await k.deliveries()
         insist(
           letters(k, email).length == before + 1,
           'resend must deliver another local letter',

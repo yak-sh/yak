@@ -91,7 +91,7 @@ test('a command that throws still ends the connection', async () => {
   let { host, accounts, go } = await box()
   try {
     await assertRejects(
-      () => go(() => Promise.reject(new Error('boom')), {}),
+      async () => await go(() => Promise.reject(new Error('boom')), {}),
       Error,
       'boom',
     )

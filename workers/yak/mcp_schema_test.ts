@@ -684,7 +684,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
 // and an app's own, the probe's client holds the answer to its listing, and the
 // Worker's own check reports nothing as it leaves.
 let unfit = (k: Awaited<ReturnType<typeof kernel>>) =>
-  k.reported!.filter((row) => JSON.stringify(row).includes('does not fit'))
+  k.reported.filter((row) => JSON.stringify(row).includes('does not fit'))
 test('graph_schema answers every word whole within its output schema', async () => {
   let k = await kernel()
   try {

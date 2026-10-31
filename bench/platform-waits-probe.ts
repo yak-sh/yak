@@ -82,7 +82,7 @@ try {
       doc: { title: `Note ${i}` },
     })),
   })
-  await k.deliveries?.()
+  await k.deliveries()
   let revision = 0
   let acts: Record<string, () => Promise<unknown>> = {
     'management/html': async () =>

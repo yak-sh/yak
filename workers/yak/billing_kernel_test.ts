@@ -108,7 +108,7 @@ test(
 test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   let k = await kernel()
   let jeff3 = unique('jeff3')
-  let before = k.reported!.length
+  let before = k.reported.length
   try {
     await seed(k, [{ slug: jeff3, apps: ['recipes'] }])
     let raw = '{"type":"customer.subscription.updated"}'
@@ -156,8 +156,8 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
 
     // Authentication failures reach the platform tracker even though the
     // webhook answers them. A foreign Origin stays the caller's refusal.
-    await k.flushReports!()
-    let reports = k.reported!.slice(before).filter((row) => row.error)
+    await k.flushReports()
+    let reports = k.reported.slice(before).filter((row) => row.error)
     assert(
       reports.some((row) =>
         (row.exception as { value: string }).value.includes(

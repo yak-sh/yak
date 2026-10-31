@@ -80,13 +80,16 @@ export type Kernel = Door & {
   owner: Person
   stop: () => Promise<void>
   // In-process HTTP probes can inspect what crossed the tracker queue door.
-  reported?: Bundle[]
-  flushReports?: () => Promise<void>
+  reported: Bundle[]
+  flushReports: () => Promise<void>
   // And wait for what a request left running after it answered: the
   // effects a write owed, run by the store's pool.
-  settled?: () => Promise<void>
-  deliveries?: () => Promise<void>
+  settled: () => Promise<void>
+  deliveries: () => Promise<void>
 }
+
+/** What reading a letter needs: the log, and what to wait on when there is one. */
+type Mailbox = Pick<Kernel, 'log'> & Partial<Pick<Kernel, 'deliveries'>>
 
 let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => ({
   ...k,
@@ -203,7 +206,7 @@ let boot = async (
   try {
     return {
       ...door,
-      owner: await signIn({ ...door, settled }, `owner@${apex()}`),
+      owner: await signIn(door, `owner@${apex()}`),
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,
@@ -409,7 +412,7 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
 // A mover or an in-flight request elsewhere can remain active after this
 // letter was delivered; its lifetime cannot gate reading the receipt.
 let posted = async <T>(
-  k: Pick<Kernel, 'settled' | 'deliveries'>,
+  k: Partial<Pick<Kernel, 'deliveries'>>,
   find: () => T,
   label: string,
 ) => {
@@ -420,7 +423,7 @@ let posted = async <T>(
 // The latest letter to an address that says a thing, waited for: the one the
 // latest request sent.
 export let letter = (
-  k: Pick<Kernel, 'log' | 'settled' | 'deliveries'>,
+  k: Mailbox,
   to: string,
   saying: string,
   after = 0,
@@ -437,7 +440,7 @@ export let letter = (
 // The code in the latest letter to an address, past the letters already
 // received before requesting another sign-in.
 export let mailed = (
-  k: Pick<Kernel, 'log' | 'settled' | 'deliveries'>,
+  k: Mailbox,
   to: string,
   after = 0,
 ) =>
@@ -504,7 +507,7 @@ export let unique = (name: string) =>
 // how any directory row comes to be written at all (identity.ts).
 // A person, signed in through the address and the code, as anyone signs in.
 export let signIn = async (
-  k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret' | 'settled' | 'deliveries'>,
+  k: Pick<Kernel, 'at' | 'host' | 'secret'> & Mailbox,
   email = `${unique('probe')}@${k.host}`,
 ): Promise<Person> => {
   let form = (path: string, fields: Record<string, string>) =>
