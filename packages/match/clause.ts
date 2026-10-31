@@ -611,6 +611,26 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
     // vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return arm(reverse(ctx, c.path[0], assoc, c), [], false)
+    let back = c.path.findIndex((name) => !!ctx.v.assoc(name))
+    if (back > 0) {
+      let hops = ctx.v.aim(
+        [...c.path.slice(0, back), 'entity', 'eid'].join('.'),
+      )
+      chained(ctx.v, hops)
+      let reach = follow(hops)
+      let hit = reverse(ctx, c.path[back], ctx.v.assoc(c.path[back])!, {
+        ...c,
+        path: c.path.slice(back),
+      })
+      return arm(
+        (b, among) => {
+          let target = reach(b, among)
+          return !!target && hit(target, among)
+        },
+        wearing(hops[0].comp),
+        false,
+      )
+    }
     if (c.not || c.where) {
       throw new Unsupported('a reverse association', c.path.join('.'), BY)
     }

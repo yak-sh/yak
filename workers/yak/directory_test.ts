@@ -5,6 +5,8 @@ import { assert, assertEquals } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { matcher } from '@yaks/match'
+import type { Bundle } from '@yaks/graph'
 import { platformVocab } from './vocab.ts'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
@@ -356,25 +358,9 @@ let held = () => {
     }
     return row
   }
-  // A filter is ANDed terms; a `?` term only asks for a component to ride
-  // along, so it screens nothing.
-  let answer = (search: string) => {
-    // The graph's own read door: the whole filter line as one parameter.
-    let line = new URLSearchParams(search).get('q') ?? ''
-    let terms = line.split('&').filter((t) => t && !t.startsWith('?'))
-    return rows.filter((row) =>
-      terms.every((t) => {
-        let [key, want] = t.split('=')
-        if (key == '.entity.eid') {
-          return want.split(',').includes(row.entity.eid)
-        }
-        if (key == '.limit' || key == '.after') return true
-        let [, name, prop] = key.split('.')
-        let comp = row[name] as Record<string, unknown> | undefined
-        return prop ? comp?.[prop] == want : !!comp
-      })
-    )
-  }
+  let vocab = platformVocab()
+  let answer = (search: string) =>
+    matcher(new URLSearchParams(search).get('q') ?? '', vocab)(rows as Bundle[])
   let apply = (body: string) => {
     let entities = JSON.parse(body) as Record<string, unknown>[]
     let alias: Record<string, string> = {}
@@ -505,7 +491,7 @@ test('signing in asks the directory a bounded number of questions', async () => 
   // spaces, in one read however many, and who they are again as above.
   m.hops.length = 0
   assertEquals((await m.dir.own(them)).eid, mine.eid)
-  assertEquals(m.hops.length, 3, m.hops.join('\n'))
+  assertEquals(m.hops.length, 2, m.hops.join('\n'))
 })
 
 test('directory caches belong to a store, not the shared isolate', async () => {

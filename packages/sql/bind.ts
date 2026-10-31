@@ -1603,10 +1603,16 @@ let COUNT_OPS: Record<string, string> = {
 // of the entity table declines outright: inside the subquery, `entity` is the
 // correlation with the outer row, so compiling it there would silently ask a
 // different question.
-let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
+let reverse = (
+  ctx: Ctx,
+  name: string,
+  a: Assoc,
+  p: Pred,
+  target = ctx.d.ownerKey('entity'),
+): Cond => {
   if (ctx.owner) throw new Unsupported('a nested reverse association')
   let child = ctx.d.table(a.comp)
-  let corr = `${refKey(ctx, a.comp, a.prop)} = ${ctx.d.ownerKey('entity')}`
+  let corr = `${refKey(ctx, a.comp, a.prop)} = ${target}`
   let rest = p.path.slice(1)
   let value = flat(p.value)
   // A reference that lands on the other spine never points at an entity on
@@ -2250,6 +2256,32 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     // far side; anything else routes forward through the vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
+    let back = c.path.findIndex((name) => !!ctx.v.assoc(name))
+    if (back > 0) {
+      let hops = ctx.v.aim(
+        [...c.path.slice(0, back), 'entity', 'eid'].join('.'),
+      )
+      chained(ctx.v, hops)
+      let root = hops[0]
+      ctx.tables.add(root.comp)
+      let start =
+        `(select "__forward"."${root.prop}" from ${
+          source(ctx, root.comp)
+        } as "__forward"` +
+        ` where "__forward"."entity" = ${ctx.d.ownerKey('entity')})`
+      let target = chain(ctx, hops, start)
+      return and(
+        cond(ctx.d.presence(root.comp)),
+        notNull(raw(target)),
+        reverse(
+          ctx,
+          c.path[back],
+          ctx.v.assoc(c.path[back])!,
+          { ...c, path: c.path.slice(back) },
+          target,
+        ),
+      )
+    }
     if (c.not || c.where) throw new Unsupported('a reverse hop', c.path[0])
     let hops: Hop[]
     try {

@@ -6148,13 +6148,13 @@ let OURS: Row[] = [
     run: async (ctx) =>
       ctx.person
         ? {
-          text: [
-            await whoami(ctx),
+          text: (await Promise.all([
+            whoami(ctx),
             what(ctx.env),
             NARROW,
-            await said(ctx),
+            said(ctx),
             rostered(ctx),
-          ].filter(Boolean).join('\n\n'),
+          ])).filter(Boolean).join('\n\n'),
           ...ctx.roster ? { value: { roster: ctx.roster } } : {},
         }
         : { text: publics(ctx.env).find((one) => one.name == t.name)!.text },

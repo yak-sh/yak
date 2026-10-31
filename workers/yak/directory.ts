@@ -1412,7 +1412,8 @@ export let directory = (via: Fetcher | Part, now = false) => {
         ? `((${at}&.app.slug=${app})|(${at}&.home))`
         : `${at}&.home`
       let seat = person
-        ? `|(.member.space.space.slug=${slug}&.member.person=${person})`
+        ? `|(.member.space.space.slug=${slug}&.member.person=${person})` +
+          `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})`
         : ''
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
@@ -1429,7 +1430,17 @@ export let directory = (via: Fetcher | Part, now = false) => {
         space: space ? spaceOf(space) : null,
         app: apps.find((one) => one.slug == app) ?? null,
         home: apps.find((one) => one.home && !one.trashed) ?? null,
-        ...person ? { role: member?.role ?? null } : {},
+        ...person
+          ? {
+            role: member?.role ?? null,
+            grants: new Map(
+              rows.filter((row) => row.grant).map((row) => [
+                idOf(row.grant!.app),
+                row.grant!.access as Role,
+              ]),
+            ),
+          }
+          : {},
       }
     },
     // A subdomain the space has left, still pointing at it (T-34658) — what
@@ -1967,13 +1978,19 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // whether this person may address the platform's own store (agent.ts
     // `spoken`), which is a seat in `yak` like any other.
     seated: async (person: string, role?: Role): Promise<Seat[]> => {
-      let held = await self.sitting(person)
-      if (!held.size) return []
-      // Bare `.entity.eid=` and nothing else: naming components would project the row
-      // down to them, and a space is read whole ({@link spaceOf}).
-      let rows = await query(`.entity.eid=${[...held.keys()].join(',')}`)
-      return rows
-        .filter((r) => r.space && (!role || held.get(r.entity.eid) == role))
+      if (!person) return []
+      let rows = await query(
+        `(.member.person=${person})|(.space&.members_space.member.person=${person})&*`,
+      )
+      let held = new Map(
+        rows.filter((r) => r.member).map((
+          r,
+        ) => [idOf(r.member!.space), r.member!.role as Role]),
+      )
+      return rows.filter((r) =>
+        r.space && held.has(r.entity.eid) &&
+        (!role || held.get(r.entity.eid) == role)
+      )
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
     },
     // The eid of each space this person sits in, with their role there: all
@@ -1985,6 +2002,36 @@ export let directory = (via: Fetcher | Part, now = false) => {
           m.member ? [[idOf(m.member.space), m.member.role]] : []
         ),
       ),
+    // Membership, spaces and apps are one question at the connector door.
+    // Reverse associations let the directory answer it without waiting for
+    // ids learned from an earlier read.
+    reachable: async (
+      person: string,
+    ): Promise<{ space: Space; app: App; role: Role }[]> => {
+      if (!person) return []
+      let mine = `.members_space.member.person=${person}`
+      let rows = await query(
+        `(.member.person=${person})|(.space&${mine})|(.app.space${mine}&${ABOUT})&*`,
+        true,
+      )
+      let spaces = new Map(
+        rows.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
+      )
+      let roles = new Map(
+        rows.filter((r) => r.member).map((
+          r,
+        ) => [idOf(r.member!.space), r.member!.role as Role]),
+      )
+      let apps = rows.filter((r) => r.app).map(appOf)
+      return [...spaces.values()].flatMap((space) => {
+        let eid = space.eid, role = roles.get(eid)
+        return role && space.slug != META.space && !space.trashed
+          ? apps.filter((app) => app.space == eid && !app.trashed).map((
+            app,
+          ) => ({ space, app, role }))
+          : []
+      })
+    },
     // Every app this person is a guest of, by a grant rather than a seat
     // (T-37615), with its space and what the grant lets them do: what their
     // dashboard lists as shared with them (apps.ts `shared`). Fresh, because

@@ -3019,7 +3019,14 @@ let served = async (
   // The space, the app at the address, the front page and the seat of the
   // person the cookie names, in one read of the directory: every rung below
   // asks one of them, and asking each in turn was a round trip apiece.
-  let person = edge ? null : await sessionPerson(req, env.SESSION_SECRET)
+  let [cookied, authenticated] = await Promise.all([
+    edge ? null : sessionPerson(req, env.SESSION_SECRET),
+    !edge && req.headers.has('authorization') && !bearing(req) &&
+      url.pathname.includes('/api/')
+      ? asking(env, req)
+      : null,
+  ])
+  let person = authenticated?.who?.person ?? cookied
   let routing = c.time('route', () => dir.page(r.space!, r.app, person))
   let reading = routing.then((route) => route.space)
   // A seat, from that read for the person it asked about, else the directory.
@@ -3294,7 +3301,7 @@ let served = async (
     !itself && !pageBearer && path.startsWith('/api/') &&
     req.headers.has('authorization')
   ) {
-    let { who: caller } = await asking(env, req)
+    let { who: caller } = authenticated ?? await asking(env, req)
     if (
       !caller ||
       (caller.spaceEid
@@ -3375,7 +3382,10 @@ let served = async (
   // another app's worker wearing a level. Asked only of a signed-in caller
   // with no seat, so a member pays nothing for it and a stranger nothing.
   if (who.person && !who.role) {
-    let held = await c.time('guest', () => dir.grant(app!, who.person!))
+    let { grants } = await routing
+    let held = who.person == person && grants
+      ? grants.has(app.eid) ? { access: grants.get(app.eid)! } : null
+      : await c.time('guest', () => dir.grant(app!, who.person!))
     if (held) who = { ...who, role: held.access, guest: true }
   }
   if (webPath(path)) {

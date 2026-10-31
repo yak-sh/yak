@@ -71,6 +71,12 @@ test(
         ) {
           let res = await call('tools/list', modern, headers)
           assertEquals(res.status, 200)
+          if (auth) {
+            assertStringIncludes(
+              res.headers.get('server-timing')!,
+              'hops;dur=0',
+            )
+          }
           let text = await res.text()
           let data = text.split('\n').find((line) => line.startsWith('data:'))
           assert(

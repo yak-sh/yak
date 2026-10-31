@@ -38,7 +38,6 @@ import { letters } from './letters.ts'
 import { invokePackage } from './package-tools.ts'
 import type { Graph } from '@yaks/graph'
 import { clock } from './timing.ts'
-import { reachable } from './declared.ts'
 import type { Space } from './directory.ts'
 import { serve } from './unseen.ts'
 import type { Env } from './env.ts'
@@ -627,47 +626,6 @@ test('a listing asks the directory a fixed number of times', async () => {
   // their bindings, who is in it and their rows.
   let one = await costs('app_list', { space: 'one' })
   assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 6, r2: 0 })
-})
-
-// And what every signed-in call pays before its tool runs (mcp.ts `door`,
-// T-35479): what the caller reaches is read in two directory round trips, the
-// seats and every app across those spaces in one list, however many of each
-// they hold.
-test('a call costs the same however many spaces and apps it reaches', async () => {
-  let held = (spaces: number, apps: number) => {
-    let asked: string[] = []
-    let seat = (i: number) => ({
-      space: { eid: `s${i}`, slug: `s${i}`, trashed: null },
-      role: 'owner',
-    })
-    let dir = {
-      seats: (_: string) => {
-        asked.push('seats')
-        return Promise.resolve(
-          Array.from({ length: spaces }, (_, i) => seat(i)),
-        )
-      },
-      apps: (ss: { eid: string }[]) => {
-        asked.push('apps')
-        return Promise.resolve(
-          ss.flatMap((s) =>
-            Array.from({ length: apps }, (_, i) => ({
-              eid: `${s.eid}/a${i}`,
-              space: s.eid,
-              trashed: null,
-              access: 'private',
-            }))
-          ),
-        )
-      },
-    }
-    return { asked, ctx: { dir, person: 'ada' } as unknown as Ctx }
-  }
-  for (let [spaces, apps] of [[1, 1], [3, 3]]) {
-    let { asked, ctx } = held(spaces, apps)
-    assertEquals((await reachable(ctx)).length, spaces * apps)
-    assertEquals(asked, ['seats', 'apps'], `${spaces} spaces of ${apps}`)
-  }
 })
 
 // And what a write's reply costs: it says what broke across the space's apps

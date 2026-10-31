@@ -373,13 +373,24 @@ let instrumentOf = async (
 // It returns the handler and the tool list it is about to serve (T-34277): the
 // tool names, and the version naming them, which `initialize` records for this
 // session and every later call is compared against.
-let door = async (ctx: Ctx, session: string) => {
+let needsReach = (
+  rpc: Rpc,
+) => (rpc.method == 'initialize' ||
+  reads({ method: rpc.method }, 'resources') ||
+  reads({ method: rpc.method }, 'prompts') ||
+  rpc.method == 'tools/call' &&
+    ['graph_apply', 'graph_query', 'graph_show', 'graph_schema', 'search']
+      .includes(String(rpc.params?.name)))
+
+let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // Each read made before any tool runs is a named stage on the call's
   // `Server-Timing` (timing.ts): this runs on every call, so what it costs is
   // the floor under every write (T-34986). The reach is a fixed number of
   // directory reads however many spaces and apps it holds (T-35479).
   let c = ctx.clock ?? clock()
-  let reach = await c.time('reach', () => inReach(ctx))
+  let reach = needsReach(rpc)
+    ? await c.time('reach', () => inReach(ctx))
+    : undefined
   // What the apps in reach report about themselves (standing.ts, T-34425):
   // every one of them named, with what it holds and its own commands. That
   // list is carried in the instructions, which is what a model reads before it
@@ -397,7 +408,7 @@ let door = async (ctx: Ctx, session: string) => {
   ctx.standing = stood.notes
   // The caller's reach as one graph. A store's vocabulary is read once per
   // request (hops.ts `recall`), and the roster reads the same declarations.
-  let graph = await c.time('reaching', () => reaching(ctx, reach))
+  let graph = await c.time('reaching', () => reaching(ctx, reach ?? []))
   let opts = {
     graph,
     // Where the call about to be served is recorded (ledger.ts): its own
@@ -432,7 +443,7 @@ let door = async (ctx: Ctx, session: string) => {
         ? `${instructions(ctx.env)}\n\n---\n\n${apps}`
         : instructions(ctx.env)
     },
-    search: searching(ctx, reach),
+    search: searching(ctx, reach ?? []),
     // What a row here is, `kind` beside its components (agent.ts `ROWS`), so
     // a client checking an answer against its tool's listing finds it fits.
     answer: ROWS,
@@ -812,7 +823,7 @@ let answered = async (
   for (let attempt = 0; !built; attempt++) {
     ctx.dir = reopen()
     try {
-      built = await c.time('door', () => door(ctx, session))
+      built = await c.time('door', () => door(ctx, session, rpc))
     } catch (error) {
       if (
         attempt >= 2 || error == null || typeof error != 'object' ||

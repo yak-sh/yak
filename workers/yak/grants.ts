@@ -233,6 +233,8 @@ export let narrowed = (
       (await dir.spaces(person, role)).filter(matches),
     seats: async (person: string, role?: Role) =>
       (await dir.seats(person, role)).filter((s) => matches(s.space)),
+    reachable: async (person: string) =>
+      (await dir.reachable(person)).filter((r) => matches(r.space)),
     seated: async (person: string, role?: Role) =>
       (await dir.seated(person, role)).filter((s) => matches(s.space)),
     role: async (space: Parameters<Directory['role']>[0], person: string) =>

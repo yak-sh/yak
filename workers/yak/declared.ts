@@ -28,7 +28,7 @@
 // in is reachable on the web and not here, because a call names an app by slug
 // and has no space to resolve it against — the door would have to remember
 // which apps this session has opened, and it remembers nothing (mcp.ts).
-import { type App, type Directory, type Role, type Space } from './directory.ts'
+import { type App, type Directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
@@ -57,29 +57,9 @@ export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 // slug, and then one name means two things: the first is the one that
 // answers, and a call for the other says which spaces have it.
 //
-// Three directory reads however many spaces and apps there are (T-35479):
-// the person's seats, their spaces, and every app across those spaces in one
-// list, each read once per request (directory.ts `directory`). This is the
-// first thing every signed-in call does (mcp.ts `door`), so a read per space
-// here was a round trip per space under every tool. The answer keeps the
-// seats' order, each space's apps oldest first, and the role the seat holds.
-export let reachable = async (
-  ctx: Pick<Ctx, 'dir' | 'person'>,
-): Promise<{ space: Space; app: App; role: Role }[]> => {
-  // A space in the trash is out of reach whole (erase.ts, T-34431): every
-  // app in it leaves every list at once, and none is asked about, which is
-  // also why `about` and the door's own instructions stop naming them.
-  // An app in the trash declares nothing (erase.ts, T-34430): its tools and
-  // its views leave every list the day it is deleted, which is the same
-  // move a delete has always made — and they come back on a restore.
-  let seats = (await ctx.dir.seats(ctx.person)).filter((s) => !s.space.trashed)
-  let apps = (await ctx.dir.apps(seats.map((s) => s.space)))
-    .filter((app) => !app.trashed)
-  return seats.flatMap(({ space, role }) =>
-    apps.filter((app) => app.space == space.eid)
-      .map((app) => ({ space, app, role }))
-  )
-}
+// The directory answers membership, spaces and apps together.
+export let reachable = (ctx: Pick<Ctx, 'dir' | 'person'>) =>
+  ctx.dir.reachable(ctx.person)
 
 // Every store the caller reaches: every app in every space they belong to,
 // since an entity spans apps and only the whole set can compose it (T-32698).
