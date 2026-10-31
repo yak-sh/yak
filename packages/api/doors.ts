@@ -25,7 +25,10 @@ import { admit } from './requests.ts'
 import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
 
 /** The HTTP write options, checked before a body or stream can commit. */
-export let writeOptions = (request: Request, extra: string[] = []) => {
+export let writeOptions = (
+  request: Request,
+  extra: string[] = [],
+): { check: boolean } => {
   let params = new URL(request.url).searchParams
   knownOptions(Object.fromEntries(params), ['check', ...extra])
   return { check: params.has('check') }

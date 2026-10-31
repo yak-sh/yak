@@ -547,7 +547,8 @@ test('a revoked kernel mirror cannot grant a private read or write', async () =>
 
 test('the hosted apply shortcut refuses unknown options before writes', async () => {
   let { store, head } = await cookbook()
-  for (let extra of [{}, { 'x-yak-kernel': '1' }]) {
+  let extras: Record<string, string>[] = [{}, { 'x-yak-kernel': '1' }]
+  for (let extra of extras) {
     let response = await post(store, '/apply?dry=1', [{
       entity: { eid: '$new' },
       doc: { title: 'Must not land' },
