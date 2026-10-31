@@ -12,6 +12,7 @@ import * as dirPart from './directory.ts'
 import { DEMOS, LIST } from './gallery.ts'
 import { seal, verify } from './lib/token.ts'
 import { browserOf } from './session.ts'
+import { KEPT } from './page-cache.ts'
 import { ServingCopy } from './serving-copy.ts'
 import * as site from './site.ts'
 import { ADA, ADA_OWNS, as, platform, seeded } from './serving-probe.ts'
@@ -187,7 +188,10 @@ for (let path of ['/', '/gallery']) {
   })()
   test(`directory listings: signed-out ${path} survives a stalled directory within the stall deadline without recaching`, () => {
     equal(observed.first, 200)
-    equal(observed.fresh, 'public, max-age=30, must-revalidate')
+    equal(
+      observed.fresh,
+      path == '/' ? KEPT : 'public, max-age=30, must-revalidate',
+    )
     ok(observed.etag.startsWith('W/"'))
     ok(observed.beforeDeadline)
     equal(observed.elapsed, STALL)

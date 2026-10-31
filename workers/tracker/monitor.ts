@@ -12,8 +12,10 @@ export type Probe = { name: string; url: string }
 // The connector's door answers before any store is asked. An app's `api/me`
 // reads its app row from the directory on every request (workers/yak
 // directory.ts) and wakes no app store, so it fails when the directory
-// stalls, which holds every page and tool waiting with it.
+// stalls, which holds every page and tool waiting with it. The home page is
+// the door a stranger comes to, and it has hung with both of those answering.
 export let PROBES: Probe[] = [
+  { name: 'home', url: 'https://yaks.app/' },
   { name: 'MCP', url: 'https://yaks.app/mcp' },
   { name: 'app', url: 'https://yourname.yaks.app/recipes/api/me' },
 ]

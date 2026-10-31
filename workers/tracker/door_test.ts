@@ -258,7 +258,7 @@ test('uptime and heartbeat failures group, and stay open once healthy, without a
   await monitor(outage, downAt, healthy, downAt)
   equal(
     [opened, (await outage.bugs(undefined, '.bug.status=open')).length],
-    [3, 3],
+    [4, 4],
   )
 })
 

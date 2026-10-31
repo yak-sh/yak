@@ -36,6 +36,7 @@ test('healthy doors and a fresh heartbeat file nothing and resolve nothing', asy
 
 test('each door that fails files the bug of that door', async () => {
   equal(await filed(answer(500)), [
+    ['tracker|platform-uptime|home', 'home probe: 500 from https://yaks.app/'],
     ['tracker|platform-uptime|MCP', 'MCP probe: 500 from https://yaks.app/mcp'],
     [
       'tracker|platform-uptime|app',

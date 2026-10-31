@@ -874,11 +874,13 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
       caught(e, { request: 'home showcase' })
       return { demos: [] as Shown[], feature: '' }
     })
-  // The headers the assets door set, minus the two that describe the bytes:
-  // the body just changed length, and it is no longer the file that etag names.
+  // The headers the assets door set, minus those that describe the bytes: the
+  // body just changed length, it is no longer the file that etag names, and the
+  // assets' cache did not answer this page.
   let headers = new Headers(file.headers)
   headers.delete('content-length')
   headers.delete('etag')
+  headers.delete('cf-cache-status')
   if (failed) headers.set('cache-control', 'private, no-store')
   return new Response(showcase(html, shown, feature), {
     status: file.status,

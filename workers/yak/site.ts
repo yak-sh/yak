@@ -1,12 +1,12 @@
 import { anonymousPage, copyOf, publicDirectory } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
-// the apex's pages drawn from directory listings (the home page, the gallery
-// and the integration directory), each for at most thirty
-// seconds, and every public page an app serves (page-cache.ts), keyed by the
-// address it answers. The uncached gateway sends only canonical,
+// the apex's pages drawn from directory listings (the gallery and the
+// integration directory for at most thirty seconds, the home page fresh for
+// thirty and answered stale while it renders again), and every public page an
+// app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged } from './apps.ts'
-import { kept, visitor } from './page-cache.ts'
+import { KEPT, kept, visitor } from './page-cache.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -55,14 +55,17 @@ export let forward = async (req: Request, env: Env, path: string) => {
       : bound(undefined, fetch, env)).fetch(
         new Request(at(env, path), { headers }),
       )
-  // A hit carries the old render's timing, not work done for this view.
-  if (
-    ['HIT', 'UPDATING', 'STALE'].includes(
-      shown.headers.get('cf-cache-status') ?? '',
-    )
-  ) {
+  // A hit carries the old render's timing, not work done for this view, and
+  // the home page's lifetime is its edge's: a browser still revalidates it.
+  let hit = ['HIT', 'UPDATING', 'STALE'].includes(
+    shown.headers.get('cf-cache-status') ?? '',
+  )
+  if (hit || shown.headers.get('cache-control') == KEPT) {
     shown = new Response(shown.body, shown)
-    shown.headers.delete('server-timing')
+    if (hit) shown.headers.delete('server-timing')
+    if (shown.headers.get('cache-control') == KEPT) {
+      shown.headers.set('cache-control', FRESH)
+    }
   }
   if (req.method == 'GET') {
     return shown
@@ -145,7 +148,10 @@ export let validated = async (
   let body = await page.text()
   let headers = new Headers(page.headers)
   headers.delete('content-length')
-  headers.set('cache-control', FRESH)
+  // No deploy or quiet hour makes a visitor wait on the home page's render: the
+  // edge answers from the page it holds and renders the next behind them. The
+  // gallery and integrations stay short: a person looks there for their listing.
+  headers.set('cache-control', path == '/' ? KEPT : FRESH)
   if (path == '/' && env.CF_VERSION_METADATA) {
     headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
   }
