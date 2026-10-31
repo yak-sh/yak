@@ -216,6 +216,26 @@ test('a reverse hop reads the children pointing back', () => {
   assertEquals(sel('.books'), ['a1', 'a2'])
 })
 
+test('a property named like a reverse association stays a property', () => {
+  let counted = loadVocab({
+    $defs: {
+      tally: { component: true, properties: { reviews: { type: 'number' } } },
+      review: {
+        component: true,
+        properties: { book: { type: 'string', ref: 'entity' } },
+      },
+    },
+  })
+  let rows = [0, 1].map((reviews) => ({
+    entity: { eid: `t${reviews}` },
+    tally: { reviews },
+  }))
+  assertEquals(
+    matcher('.tally.reviews=0', counted)(rows).map((b) => b.entity.eid),
+    ['t0'],
+  )
+})
+
 test('.refs= gathers the backlinks of an entity', () => {
   assertEquals(sel('.refs=a1'), ['b1', 'b4'])
   assertEquals(sel('.refs=b1'), ['r1', 'r2'])

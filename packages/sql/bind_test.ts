@@ -197,6 +197,18 @@ test('a reverse hop compiles to a correlated EXISTS', () => {
   assert(compile(parse('!notes'), v).sql.includes('not exists'), 'absence')
 })
 
+test('a property named like a reverse association stays a property', () => {
+  let counted = loadVocab({
+    $defs: {
+      ...doc.$defs,
+      tally: { component: true, properties: { notes: { type: 'number' } } },
+    },
+  })
+  let { sql, params } = compile(parse('.tally.notes=0'), counted)
+  assertEquals(params, [0])
+  assert(!sql.includes('"note"'), sql)
+})
+
 // The step relation a chained walk composes: the hops joined on each other, so
 // one rung of the CTE crosses the whole chain. `.fork.from.entry.session` is the
 // session a session forked out of.

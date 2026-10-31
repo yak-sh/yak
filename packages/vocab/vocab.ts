@@ -461,6 +461,11 @@ export type Vocab = {
    * is then a component too, since a presence test needs no schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
+  /** Where a path walked forward turns back: the index of the first reverse
+   * association standing where a hop's component would (`.grant.app.members`
+   * → 2), or -1. The name after a component is that component's property, so
+   * `.effect.attempts` never turns back, whatever else is called `attempts`. */
+  turn: (path: readonly string[]) => number
   /** Every reverse association, by name. */
   assocs: () => [string, Assoc][]
   kindOf: (has: Record<string, unknown>) => string
@@ -992,6 +997,12 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
     // A plural name → the reverse association it names, or undefined when the
     // name is no association (a caller then reads the name its own way).
     assoc: (name) => assocs.get(name),
+    turn: (path) => {
+      for (let i = 2; i < path.length; i += 2) {
+        if (assocs.has(path[i])) return i
+      }
+      return -1
+    },
     assocs: () => [...assocs],
     // The most specific kind an entity carries names it — first present in
     // kindOrder, else the bare spine component.

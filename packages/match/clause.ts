@@ -611,7 +611,7 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
     // vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return arm(reverse(ctx, c.path[0], assoc, c), [], false)
-    let back = c.path.findIndex((name) => !!ctx.v.assoc(name))
+    let back = ctx.v.turn(c.path)
     if (back > 0) {
       let hops = ctx.v.aim(
         [...c.path.slice(0, back), 'entity', 'eid'].join('.'),

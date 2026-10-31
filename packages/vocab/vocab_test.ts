@@ -265,6 +265,10 @@ test('an association names the property when a comp has several refs', () => {
   assertEquals(w.assoc('loans_book'), { comp: 'loan', prop: 'book' })
   assertEquals(w.assoc('loans_member'), { comp: 'loan', prop: 'member' })
   assertEquals(w.assoc('loans'), undefined)
+  // A path turns back only where a hop's component would stand.
+  assertEquals(w.turn(['loan', 'book', 'reviews', 'review', 'stars']), 2)
+  assertEquals(w.turn(['review', 'reviews']), -1)
+  assertEquals(w.turn(['reviews', 'review', 'stars']), -1)
 })
 
 test('kindOf takes the most specific kind, entity as the floor', () => {
