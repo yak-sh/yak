@@ -300,14 +300,24 @@ export let FILED = 'x-yak-filed'
 // fetch wrapper says it (`<path>: <message>`) in the words of the browser that
 // asked: Chrome, Safari, Firefox. That is the connection dropping or the person
 // leaving, never a break, and the wrapper has let it go since T-124729. But the
-// reporter is woven into each page as it loads, and a tab opened before then
-// still runs the one that filed it, untagged: the judgment is kept here too,
-// where every reporter's report arrives.
+// reporter is woven into each page as it loads, and a tab opened before then,
+// or a copy the browser reopened from its cache, still runs the one that filed
+// it: untagged, or as the app logged or dropped the same rejection, where the
+// message is the browser's bare words and the wrapper's last crumb says which
+// request had no answer. The judgment is kept here too, where every reporter's
+// report arrives. An answer of any status is not this, and neither is a fetch
+// of another origin, which leaves no crumb.
 let NO_ANSWER =
   /^\/\S*: (?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.)$/
-let unanswered = (b: Record<string, unknown>) =>
-  (b.mechanism == null || b.mechanism == 'wrapper') &&
-  NO_ANSWER.test(String(b.message ?? ''))
+let unanswered = (b: Record<string, unknown>) => {
+  let message = String(b.message ?? '')
+  if (b.mechanism == null || b.mechanism == 'wrapper') {
+    return NO_ANSWER.test(message)
+  }
+  let last = crumbs(b.breadcrumbs)?.findLast((c) => c.category == 'fetch')
+  return !!last && NO_ANSWER.test(last.message) &&
+    last.message.endsWith(`: ${message.replace(/^unhandled rejection: /, '')}`)
+}
 
 /** A no the page was answered on purpose: a 4xx status. */
 export let meant = (_answer: string, status: number): boolean =>
@@ -320,8 +330,8 @@ export let meant = (_answer: string, status: number): boolean =>
  * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
  * a break in the page. An answer the reporter saw that `refusal` calls a no
  * somebody meant (default {@link meant}) is the page working, not a break,
- * and so is a fetch of the page's own origin that had no answer, which the
- * reporter in a tab opened before T-124729 still sends.
+ * and so is a fetch of the page's own origin that had no answer, which an older
+ * reporter, in a tab left open or a copy reopened from the cache, still sends.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -352,6 +362,16 @@ export let meant = (_answer: string, status: number): boolean =>
  *   fetched('/app/api/release: Load failed'),
  *   fetched('/app/api/query: signal timed out'),
  * ], [0, 0, 1])
+ * let logged = (asked: string) =>
+ *   broken(JSON.stringify({
+ *     message: 'Failed to fetch',
+ *     mechanism: 'console',
+ *     breadcrumbs: [{ at: '2026-10-31', category: 'fetch', message: asked }],
+ *   })).length
+ * equal([
+ *   logged('/app/api/query: Failed to fetch'),
+ *   logged('200 /app/api/query'),
+ * ], [0, 1])
  * equal(broken('not json'), [])
  * ```
  */

@@ -2,6 +2,7 @@ import { equal, ok, test, throws } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { type Bundle, Refused } from '@yaks/graph'
 import {
+  broken,
   capture,
   caught,
   origin,
@@ -17,6 +18,60 @@ import { intake } from './service.ts'
 import { runs as mail } from '@yaks/mail/tools'
 
 let g = fixture()
+
+let crumb = (category: string, message: string) => ({
+  at: '2026-10-31T16:13:13.864Z',
+  category,
+  message,
+})
+let filed = (report: Record<string, unknown>) =>
+  broken(JSON.stringify(report)).length
+
+test('an old reporter is not filed for a fetch of its page with no answer', () => {
+  let query = crumb('fetch', '/flavors/api/query: Failed to fetch')
+  let me = crumb('fetch', '/flavors/api/me: Failed to fetch')
+  // Bug dfce5b87: a cached copy's console hook, as a page logged the rejection.
+  equal(
+    filed({
+      message: 'Failed to fetch',
+      stack: 'TypeError: Failed to fetch\n    at globalThis.fetch (x:246:21)',
+      mechanism: 'console',
+      breadcrumbs: [query, me, crumb('console', 'Failed to fetch')],
+    }),
+    0,
+  )
+  equal(
+    filed({
+      message: 'Failed to fetch',
+      mechanism: 'onerror',
+      breadcrumbs: [query],
+    }),
+    0,
+  )
+  equal(
+    filed({
+      message: 'unhandled rejection: Load failed',
+      mechanism: 'onunhandledrejection',
+      breadcrumbs: [crumb('fetch', '/a/api/me: Load failed')],
+    }),
+    0,
+  )
+})
+
+test('a failure with an answer or off the page is still filed', () => {
+  let down = crumb('fetch', '/flavors/api/query: Failed to fetch')
+  let says = (message: string, breadcrumbs: unknown[]) =>
+    filed({ message, mechanism: 'console', breadcrumbs })
+  // A fetch elsewhere leaves no crumb, and a later answer means it was not this.
+  equal(says('Failed to fetch', []), 1)
+  equal(
+    says('Failed to fetch', [down, crumb('fetch', '200 /flavors/api/me')]),
+    1,
+  )
+  equal(says('x is undefined', [down]), 1)
+  equal(filed({ message: '500 /flavors/api/query: boom', status: 500 }), 1)
+  equal(filed({ message: '/a/api/query: signal timed out' }), 1)
+})
 test('a tool refusing bad input does not report a failure', async () => {
   let error = await throws(() =>
     mail().mail_send({
