@@ -81,7 +81,7 @@ import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { deriving, identified } from './identity.ts'
 import { mint as fresh, minted } from './mint.ts'
 import { admit, formed, known, unstamped } from './admit.ts'
-import { Refused } from './errors.ts'
+import { knownOptions, Refused } from './errors.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import {
@@ -184,6 +184,24 @@ export type ApplyOpts = {
   /** Hold observers until an enclosing transaction commits. */
   deferEffects?: (run: () => void | Promise<void>) => void
 }
+
+let applyKeys = {
+  parent: true,
+  trusted: true,
+  stamp: true,
+  replica: true,
+  expiring: true,
+  now: true,
+  check: true,
+  deferEffects: true,
+} satisfies Record<keyof ApplyOpts, true>
+
+/** Check apply's options before a local or remote graph starts its write. */
+export let applyOptions = (opts: ApplyOpts = {}, admission = false): void =>
+  knownOptions(opts, [
+    ...Object.keys(applyKeys),
+    ...(admission ? ['overlay'] : []),
+  ])
 
 /** Data options for a write, also usable across a thread boundary.
  * Deferred effects belong to a local graph. */
@@ -1392,6 +1410,7 @@ export let graph = (opts: Options): Graph => {
     o: AdmitOpts = {},
     admission = false,
   ): Bundle[] | Promise<Bundle[]> => {
+    applyOptions(o, admission)
     let c = peek(g)
     if (!c) return applying(bundles, o, undefined, admission)
     let epoch = recording(c)

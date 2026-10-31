@@ -1,3 +1,4 @@
+import { refuse as refusedOptions, writeOptions } from '@yaks/api'
 import { decodedPath } from './request-path.ts'
 import { BINARY } from '@yaks/vocab/wire'
 import { copyOf, publicDirectory, signedDirectory } from './directory-copy.ts'
@@ -2050,13 +2051,19 @@ let api = async (
     }
   }
   if (path == '/apply') {
+    let check: boolean
+    try {
+      check = writeOptions(req).check
+    } catch (e) {
+      return refusedOptions(e)
+    }
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
     if (req.headers.get('content-type')?.split(';')[0].trim() == BINARY) {
       let body = await req.arrayBuffer()
       let stopped = await full(env, space, body.byteLength)
       if (stopped) return json(413, 'space_full', stopped)
-      return store('/apply', {
+      return store(`/apply${check ? '?check=1' : ''}`, {
         method: 'POST',
         body,
         headers: { 'content-type': BINARY },
@@ -2074,7 +2081,7 @@ let api = async (
     // the page's envelope is a shape for one batch, and this is a file. So this
     // door only counts the bytes, which is the one thing the store cannot.
     if ((req.headers.get('content-type') ?? '').includes('ndjson')) {
-      return store('/apply', {
+      return store(`/apply${check ? '?check=1' : ''}`, {
         method: 'POST',
         body,
         headers: { 'content-type': 'application/x-ndjson' },
@@ -2094,13 +2101,14 @@ let api = async (
         ...(await named(env, who, app)),
         ...resend(req),
       }
-      let applied = graph.reach.length > 1
+      let applied = graph.reach.length > 1 || check
         ? (await written(
           env,
           graph.reach,
           graph.reach[0],
           batched(sent),
           as,
+          check,
         )).bundles
         : await metaOf(store).apply(batched(sent), { ...headers, ...as })
       return Response.json(

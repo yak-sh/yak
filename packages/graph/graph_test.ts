@@ -1128,3 +1128,35 @@ for (let async of [false, true]) {
     assertEquals([entries, normalized, bodies], [2, 1, 1])
   })
 }
+
+for (let door of ['apply', 'admit'] as const) {
+  test(`${door} refuses unknown options before hooks, transactions or effects`, async () => {
+    let seen: string[] = []
+    let one = g([{
+      name: 'observer',
+      hooks: {
+        prepare: (bs) => (seen.push('prepare'), bs),
+        effect: (bs) => (seen.push('effect'), bs),
+      },
+    }])
+    let row = { entity: { eid: 'b1' }, book: { pages: 7 } }
+    for (let bad of ['dry', 'constructor', 'overlay']) {
+      if (door == 'admit' && bad == 'overlay') continue
+      let error = assertThrows(
+        () => one[door]([row], { [bad]: true } as never),
+        Refused,
+      )
+      assert(error.message.includes(JSON.stringify(bad)))
+      assert(error.message.includes('check'))
+      assert(!error.message.includes('\n'))
+      assertEquals(await one.get(['b1']), [])
+      assertEquals(seen, [])
+    }
+    await one.apply([row], { check: true })
+    assertEquals(await one.get(['b1']), [])
+    assert(!seen.includes('effect'))
+    await one.apply([row])
+    assertEquals((await one.get(['b1']))[0].book, { pages: 7 })
+    assert(seen.includes('effect'))
+  })
+}

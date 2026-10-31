@@ -1,4 +1,5 @@
 import type { Who } from './session.ts'
+import { applyOptions } from '@yaks/graph'
 import { reacquire } from './tool.ts'
 // The agent door's two halves (T-33812), so mcp.ts is a mount and nothing
 // else: the caller's reach as one `Graph`, and the platform's own tools as a
@@ -602,8 +603,10 @@ export let reaching = async (
   // is not there. One roster, one order, whoever is asking (`platform`,
   // T-34541).
   let plugins = [platform(ctx), post(ctx)]
-  let writing = (bundles: Bundle[], opts?: ApplyOpts) =>
-    fresh(() => writes(bundles, opts))
+  let writing = (bundles: Bundle[], opts?: ApplyOpts, admission = false) => {
+    applyOptions(opts, admission)
+    return fresh(() => writes(bundles, opts))
+  }
   let writes = async (bundles: Bundle[], opts?: ApplyOpts) => {
     let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
     let { batch, where } = await aimed(ctx, asked)
@@ -646,7 +649,7 @@ export let reaching = async (
     // this caller can see answers.
     address: (ids) => addressed(detached(storage), ids),
     apply: writing,
-    admit: (bundles, opts) => writing(bundles, { ...opts, check: true }),
+    admit: (bundles, opts) => writing(bundles, { ...opts, check: true }, true),
   }
   return self
 }

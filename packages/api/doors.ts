@@ -12,7 +12,7 @@
 
 import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { aggregate, reduced } from '@yaks/graph/read'
-import { Refused } from '@yaks/graph/errors'
+import { knownOptions, Refused } from '@yaks/graph/errors'
 import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
@@ -23,6 +23,13 @@ import { published } from './publish.ts'
 import { received } from './receipts.ts'
 import { admit } from './requests.ts'
 import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
+
+/** The HTTP write options, checked before a body or stream can commit. */
+export let writeOptions = (request: Request, extra: string[] = []) => {
+  let params = new URL(request.url).searchParams
+  knownOptions(Object.fromEntries(params), ['check', ...extra])
+  return { check: params.has('check') }
+}
 
 /** Context the application gives each incoming write before authentication
  * signs it. Streaming imports call it once per chunk, including checks. */
@@ -139,10 +146,11 @@ export let pour = (
   activity: object = graph,
   context?: WriteContext,
   opts?: ReadOpts,
+  params: string[] = [],
 ): Response => {
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
-  let check = new URL(request.url).searchParams.has('check')
+  let { check } = writeOptions(request, params)
   let cause: string | undefined
   let out = new TransformStream<Uint8Array, Uint8Array>()
   let writer = out.writable.getWriter()
@@ -253,13 +261,15 @@ export let write = async (
   activity: object = graph,
   context?: WriteContext,
   opts?: ReadOpts,
+  params: string[] = [],
 ): Promise<Response> => {
+  let { check } = writeOptions(request, params)
   let key = request.headers.get('idempotency-key')
   if (poured(request)) {
     if (key?.startsWith('outbox:')) {
       throw new Refused('Durable outbox keys require a JSON apply')
     }
-    return pour(graph, request, who, activity, context, opts)
+    return pour(graph, request, who, activity, context, opts, params)
   }
   let text: string
   let body: unknown
@@ -275,7 +285,6 @@ export let write = async (
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
-  let check = new URL(request.url).searchParams.has('check')
   let cause = peek(activity) ? parent(activity, request) : undefined
   let batch = signed(context ? context(request, body) : body, who)
   let options = { check, ...(cause && { parent: cause }) }

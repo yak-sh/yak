@@ -59,6 +59,7 @@ for (let stream of [false, true]) {
       })
       let handler = api({
         graph: g,
+        writeParams: ['version'],
         authenticate: () => ({ by: ADA }),
         read: (request) =>
           Promise.resolve(

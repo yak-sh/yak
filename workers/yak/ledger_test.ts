@@ -1,7 +1,7 @@
 // App-addressed patches pass through the invocation ledger before routing.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { assertEquals, assertRejects } from '@std/assert'
+import { type Bundle, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
@@ -96,4 +96,15 @@ test('admission checks both the caller’s data and its invocation without keepi
   )
   assertEquals(await host.get(['data']), [])
   assertEquals(await door.get(['invocation']), [])
+})
+
+test('an empty ledger apply still refuses an unknown option', async () => {
+  let door = ledger(app())
+  for (let method of ['apply', 'admit'] as const) {
+    await assertRejects(
+      async () => await door[method]([], { dry: true } as never),
+      Refused,
+      'unknown option "dry"',
+    )
+  }
 })

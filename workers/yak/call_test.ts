@@ -313,3 +313,31 @@ test('a command that takes an argument runs in its store', async () => {
   assertStringIncludes(String((await answer(automated)).body), 'editor')
   assertEquals(dispatched.at(-1)?.headers.get('x-yak-person'), app.eid)
 })
+
+test('the app apply door refuses unknown options and preserves rehearsals', async () => {
+  await using p = platform()
+  let { env } = p
+  let { space, app } = await seeded(env, 'private')
+  let store = appStore(env.STORE, space, app)
+  let patch = [{ entity: { eid: '$new' }, doc: { title: 'A rehearsal' } }]
+  let ask = (options: string) =>
+    apps.fetch(
+      visit(`/cookbook/api/apply?${options}`, {
+        method: 'POST',
+        headers: { cookie: cookie, 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+      env,
+    )
+  let cookie = await as(ADA)
+  let no = await ask('dry=1')
+  assertEquals(no.status, 400)
+  assertEquals(
+    (await no.json() as { message: string }).message,
+    'unknown option "dry"; options: check',
+  )
+  let checked = await ask('check=1')
+  assertEquals(checked.status, 200, await checked.text())
+  let rows = await store('/query?q=.doc.title="A rehearsal"', {}, ADA_OWNS)
+  assertEquals(await rows.json(), [])
+})

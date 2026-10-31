@@ -20,7 +20,7 @@ import { stringify } from '@yaks/vocab/wire'
 // the ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
 import type { Bundle } from '@yaks/graph'
-import { Stale } from '@yaks/graph/errors'
+import { knownOptions, Stale } from '@yaks/graph/errors'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { jittered } from '@yaks/durable-object'
 import type { Clock } from '@yaks/fp'
@@ -121,6 +121,7 @@ export let metaOf = (
     )
   },
   apply: (bundles, headers = {}, opts = {}) => {
+    knownOptions(opts, ['stamp'])
     return store.consume(
       opts.stamp === false ? '/apply?stamp=0' : '/apply',
       written,

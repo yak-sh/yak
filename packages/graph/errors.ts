@@ -35,6 +35,18 @@ export class Refused extends Error {
   }
 }
 
+/** Refuse a caller's unknown options before any work starts. */
+export let knownOptions = (value: object, names: readonly string[]): void => {
+  let unknown = Object.keys(value).filter((key) => !names.includes(key))
+  if (unknown.length) {
+    throw new Refused(
+      `unknown option ${
+        unknown.map((key) => JSON.stringify(key)).join(', ')
+      }; options: ${names.join(', ')}`,
+    )
+  }
+}
+
 /** A write that does not fit what the graph keeps: a component or property its
  * vocabulary does not declare, a value of the wrong type, a server-owned
  * property, a bundle of the wrong shape. The writer's code is wrong about the

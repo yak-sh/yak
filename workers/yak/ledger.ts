@@ -32,7 +32,7 @@
 
 import type { AdmitOpts, Bundle, Graph } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
-import { graph } from '@yaks/graph'
+import { applyOptions, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -116,6 +116,7 @@ export let ledger = (host: Graph): Graph => {
     bundles: Bundle[],
     opts?: AdmitOpts,
   ) => {
+    applyOptions(opts, method == 'admit')
     let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
     let here = batch.filter(mine)
     let there = batch.filter((b) => !mine(b))

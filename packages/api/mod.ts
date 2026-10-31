@@ -66,7 +66,15 @@ export {
 export { type Authenticate, signed } from './actor.ts'
 export type { PeerWriter } from './save.ts'
 export type { Timer } from './relay.ts'
-export { ask, CHUNK, pour, poured, write, type WriteContext } from './doors.ts'
+export {
+  ask,
+  CHUNK,
+  pour,
+  poured,
+  write,
+  type WriteContext,
+  writeOptions,
+} from './doors.ts'
 export { published } from './publish.ts'
 export { readBody } from './body.ts'
 export {

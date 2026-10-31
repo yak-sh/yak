@@ -3,6 +3,7 @@
 // door's own actor on every write, and each refusal at its own status.
 
 import { test } from '@yaks/testing'
+import { BINARY } from '@yaks/vocab/wire'
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph'
@@ -427,3 +428,32 @@ test('HTTP refuses stamped properties atomically, including dry runs', async () 
     assertEquals(await graph.get(['b1', 'b2']), [])
   }
 })
+
+for (
+  let type of [
+    'application/json',
+    'application/x-ndjson',
+    BINARY,
+  ]
+) {
+  test(`/apply refuses unknown options before reading ${type}`, async () => {
+    let graph = shopGraph()
+    let calls = 0
+    graph.apply = () => {
+      calls++
+      return []
+    }
+    let handler = api({ graph })
+    let response = await handler(req('/apply?dry=1', {
+      method: 'POST',
+      body: '{',
+      headers: { 'content-type': type },
+    }))
+    assertEquals(response.status, 400)
+    assertEquals(await response.json(), {
+      error: 'Refused',
+      message: 'unknown option "dry"; options: check',
+    })
+    assertEquals(calls, 0)
+  })
+}

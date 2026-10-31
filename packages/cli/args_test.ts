@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   appGrammar,
   argsFor,
@@ -448,4 +448,18 @@ test('graph apply accepts a query line, a leading address or bundles', async () 
       bundles: [{ entity: { eid: '$new' }, book: {} }],
     },
   )
+})
+
+test('graph apply refuses a mistyped rehearsal flag with the available arguments', async () => {
+  let { declared } = await import('@yaks/graph/vocab')
+  let apply = declared().find((tool) => tool.name == 'graph_apply')!
+  try {
+    await argsFor(apply, ['--bundles', '[]', '--dry'])
+    throw new Error('accepted dry')
+  } catch (e) {
+    assert(e instanceof Usage)
+    assert(e.message.includes('dry'))
+    assert(e.message.includes('check'))
+    assert(!e.message.includes('\n'))
+  }
 })

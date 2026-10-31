@@ -835,3 +835,16 @@ test('a read-only tool request performs no bookkeeping writes, including refusal
     await client.close()
   }
 })
+
+test('a mistyped apply option refuses the batch instead of committing it', async () => {
+  let g = shopGraph()
+  let client = await connect({ graph: g, actor: ada })
+  let out = await called(client, 'graph_apply', {
+    bundles: [{ entity: { eid: '$new' }, doc: { title: 'Must not land' } }],
+    dry: true,
+  })
+  assertEquals(out.isError, true)
+  assert(text(out).includes('dry'))
+  assert(text(out).includes('check'))
+  assertEquals(await g.read('.doc.title="Must not land"&*'), [])
+})

@@ -24,6 +24,7 @@ import { EPOCH, MEND } from './directory-copy.ts'
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
+import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Actor, Bundle } from '@yaks/graph'
@@ -809,14 +810,16 @@ export let fetch = (
 export let stamp = async (
   env: { STORE: Namespace },
   mutation: { entities: Bundle[] },
-  opts?: { stamp?: boolean; actor?: Actor },
+  opts: { stamp?: boolean; actor?: Actor } = {},
 ) => {
+  knownOptions(opts, ['stamp', 'actor'])
+  let { actor, ...apply } = opts
   let headers = {
     ...KERNEL,
-    ...(opts?.actor?.by ? { 'x-yak-person': opts.actor.by } : {}),
-    ...(opts?.actor?.via ? { 'x-yak-via': opts.actor.via } : {}),
+    ...(actor?.by ? { 'x-yak-person': actor.by } : {}),
+    ...(actor?.via ? { 'x-yak-via': actor.via } : {}),
   }
-  let applied = await metaStore(env).apply(mutation.entities, headers, opts)
+  let applied = await metaStore(env).apply(mutation.entities, headers, apply)
   cached(metaStore(env)).clear()
   return applied
 }

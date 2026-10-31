@@ -127,6 +127,7 @@ import {
   subscriptions,
   type Timer,
   Unauthorized,
+  writeOptions,
 } from '@yaks/api'
 import { blobRead, blobSchema, sqliteBlobs } from '@yaks/blob'
 import {
@@ -223,7 +224,7 @@ import type {
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { comps, dead as deleted } from '@yaks/graph/bundle'
-import { graph, identityEid } from '@yaks/graph'
+import { applyOptions, graph, identityEid } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
 import { DELIVER, MAIL } from '@yaks/mail'
@@ -1701,6 +1702,7 @@ export class Store {
         }
         let apply = g.apply, admit = g.admit
         g.apply = (bundles, opts) => {
+          applyOptions(opts)
           let under = (revision: number) =>
             this.#copyWrite.run(
               revision,
@@ -3787,6 +3789,13 @@ export class Store {
     await behind(request.headers, this.#bind.CF_VERSION_METADATA, this.#ctx)
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    if (path == '/apply' && request.method == 'POST') {
+      try {
+        writeOptions(request, ['stamp'])
+      } catch (e) {
+        return refuse(e)
+      }
+    }
     if (kernel && path == '/dormant' && request.method == 'POST') {
       await this.#sleep()
       return json({ ok: true })
@@ -4233,6 +4242,11 @@ export class Store {
     opts: ApplyOpts = {},
     spans?: Event[],
   ) {
+    try {
+      writeOptions(request, ['stamp'])
+    } catch (e) {
+      return refuse(e)
+    }
     if (poured(request)) {
       if (opts.check) {
         return refuse(new Refused('streaming writes cannot be dry-run'))

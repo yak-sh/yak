@@ -26,7 +26,11 @@ test('API reads and writes descend from HTTP requests and streaming imports stay
   let g = shopGraph()
   let events: Event[] = []
   let off = channel(g).subscribe((e) => events.push(e))
-  let serve = api({ graph: g, authenticate: () => null })
+  let serve = api({
+    graph: g,
+    authenticate: () => null,
+    writeParams: ['token'],
+  })
   let sent = await serve(post('/apply?token=private', [
     {
       entity: { eid: 'book-private' },

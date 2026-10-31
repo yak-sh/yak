@@ -59,6 +59,8 @@ export type Options = {
   ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
   /** Caller write context, applied to JSON batches and every import chunk. */
   write?: WriteContext
+  /** Additional apply query parameters interpreted by this host. */
+  writeParams?: string[]
   /** Runtime activity stays keyed by the composed graph, not a read overlay. */
   activity?: object
   /** who is writing (default: nobody — writes are stored unattributed) */
@@ -118,6 +120,7 @@ export let api = (opts: Options): Handler => {
           opts.activity ?? graph,
           opts.write,
           readOpts,
+          opts.writeParams,
         )
         : no('/apply takes POST', 405)
     }
