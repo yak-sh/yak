@@ -1696,15 +1696,21 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // writes nothing on the row (erase.ts), so the offer is screened here and
     // a restore puts it back as it was.
     offers: async (): Promise<{ space: Space; app: App }[]> => {
-      let rows = (await query(`.published&.app&${ABOUT}`)).map(appOf)
-        .filter((a) => a.published && !a.trashed)
+      let rows = await query(
+        `(.published&.app&${ABOUT})|(.space&.apps.published&${SPACE_ABOUT})`,
+      )
+      let spaces = new Map(
+        rows.filter((row) => row.space).map((
+          row,
+        ) => [row.entity.eid, spaceOf(row)]),
+      )
+      return rows.filter((row) => row.app).map(appOf)
+        .filter((app) => app.published && !app.trashed)
         .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
-      let out: { space: Space; app: App }[] = []
-      for (let app of rows) {
-        let space = await self.at(app.space)
-        if (space && !space.trashed) out.push({ space, app })
-      }
-      return out
+        .flatMap((app) => {
+          let space = spaces.get(app.space)
+          return space && !space.trashed ? [{ space, app }] : []
+        })
     },
     // The integration directory (T-132636): every built integration and every
     // custom one its owner listed, which anyone may read, signed in or not

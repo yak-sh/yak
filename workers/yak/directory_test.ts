@@ -624,3 +624,56 @@ test("the directory door answers a refusal in the store's terms and throws a fau
     broke,
   )
 })
+
+let offersGraph = graph({ storage: ram(routingVocab), vocab: routingVocab })
+await offersGraph.apply([
+  {
+    entity: { eid: 'offers-space' },
+    space: { slug: 'offers', store: 'offers' },
+    doc: { title: 'Offers' },
+    plan: { tier: 'plus' },
+  },
+  {
+    entity: { eid: 'offers-trash' },
+    space: { slug: 'trash', store: 'trash' },
+    trashed: { at: '2026-10-31' },
+  },
+  ...[
+    ['offer-old', 'offers-space', '2026-10-29', false],
+    ['offer-new', 'offers-space', '2026-10-31', false],
+    ['offer-trashed', 'offers-space', '2026-10-30', true],
+    ['offer-space-trashed', 'offers-trash', '2026-10-30', false],
+  ].map(([eid, space, at, trashed]) => ({
+    entity: { eid: String(eid) },
+    app: {
+      space: String(space),
+      slug: String(eid),
+      access: 'public',
+      version: 1,
+    },
+    published: { name: String(eid), version: 1, at: String(at) },
+    ...trashed ? { trashed: { at: String(at) } } : {},
+  })),
+], { trusted: true })
+
+test('offers reads its apps and spaces together and screens both trash marks', async () => {
+  let reads = 0
+  let dir = directory({
+    query: async (q) => {
+      reads++
+      return JSON.stringify(await offersGraph.read(q))
+    },
+    apply: () => Promise.resolve([]),
+  })
+  let found = await dir.offers()
+  assertEquals(
+    found.map((
+      { app, space },
+    ) => [app.eid, space.slug, space.title, space.tier]),
+    [
+      ['offer-new', 'offers', 'Offers', 'plus'],
+      ['offer-old', 'offers', 'Offers', 'plus'],
+    ],
+  )
+  assertEquals(reads, 1)
+})
