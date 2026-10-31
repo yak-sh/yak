@@ -203,14 +203,15 @@ let said = (rows: Seen[], b: Budget) =>
 
 /** What a run of the suite measured: each platform's times, the run's exit
  * code, what kind of run it was, what it took in milliseconds, and how many
- * files it left out as unchanged since they passed, where it chose them
- * before any platform ran. */
+ * files it left out as unchanged since they passed and as `beyond` what the
+ * run had time for, where it chose them before any platform ran. */
 export type Measured = {
   code: number
   runs: Record<string, Times>
   whole: boolean
   ms?: number
   left?: number
+  beyond?: number
 }
 
 /** A set of times kept in `dir`: bench/test-times/, or CI's, with the
@@ -288,11 +289,14 @@ let seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 ///   -> 'ok | 1 passed | 0 failed | 2 ignored | 3 unchanged since they passed | 0 over budget (2.3s)'
 /// closing(1, { deno: { wall: 9, tests: [{ file: 'a', name: 'x', ms: 1, ok: false }] } }, 2)
 ///   -> 'FAILED | 0 passed | 1 failed | 2 over budget'
+/// closing(0, {}, 0, 1000, 0, 4)
+///   -> 'ok | 0 passed | 0 failed | 4 farther consumers left to CI | 0 over budget (1.0s)'
 /**
  * The run in one line: its verdict by its exit code, the tests that passed
  * and failed on every platform, those skipped and the files left out as
- * unchanged since they passed (`left`, or as each platform says), the tests
- * the budget flags, and what the run took.
+ * unchanged since they passed (`left`, or as each platform says), the files
+ * `beyond` what it had time for, the tests the budget flags, and what the run
+ * took.
  */
 export let closing = (
   exit: number,
@@ -300,6 +304,7 @@ export let closing = (
   flagged: number,
   ms?: number,
   left?: number,
+  beyond = 0,
 ) => {
   let all = Object.values(runs)
   let tests = all.flatMap((r) => r.tests)
@@ -312,6 +317,7 @@ export let closing = (
       `${failed} failed`,
       ...sum('ignored') ? [`${sum('ignored')} ignored`] : [],
       ...unchanged ? [`${unchanged} unchanged since they passed`] : [],
+      ...beyond ? [`${beyond} farther consumers left to CI`] : [],
       `${flagged} over budget`,
     ].join(' | ')
   }${ms == null ? '' : ` (${seconds(ms)})`}`
@@ -324,7 +330,7 @@ export let closing = (
  * would shrink. */
 export let say = async (
   b: Budget,
-  { code, runs, whole, ms, left }: Measured,
+  { code, runs, whole, ms, left, beyond }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
@@ -387,7 +393,14 @@ export let say = async (
   }
   // A run a signal stopped measured nothing to sum.
   if (!code || Object.keys(runs).length) {
-    let line = closing(code, runs, j.over.length + j.slower.length, ms, left)
+    let line = closing(
+      code,
+      runs,
+      j.over.length + j.slower.length,
+      ms,
+      left,
+      beyond,
+    )
     lines.push(verbose ? `\n${line}` : line)
   }
   if (lines.length) console.log(lines.join('\n'))

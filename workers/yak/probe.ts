@@ -15,6 +15,16 @@ import { endpoints } from './endpoints.ts'
 import { Ajv } from 'ajv'
 
 let logs = new Map<string, string>()
+
+// Compiling a tool's output schema took a quarter of an MCP test's time; every
+// client of every kernel lists the same schemas.
+let ajv = new Ajv({ strict: false })
+let compiled = new Map<string, ReturnType<typeof ajv.compile>>()
+let fitting = (schema: unknown) => {
+  let text = JSON.stringify(schema)
+  if (!compiled.has(text)) compiled.set(text, ajv.compile(schema as object))
+  return compiled.get(text)!
+}
 let transport = endpoints(globalThis)
 export let endpoint = transport.open
 
@@ -326,7 +336,6 @@ export let connector = (
   // later request, the way a client does — it names this client's stream and
   // the tool list it cached (mcp.ts).
   let session = ''
-  let ajv = new Ajv({ strict: false })
   let schemas = new Map<string, ReturnType<typeof ajv.compile>>()
   let ask = async (method: string, params: unknown = {}) => {
     let r = await k.at(k.host, '/mcp', {
@@ -354,7 +363,7 @@ export let connector = (
       if (!schemas.has(name)) {
         let { tools } = await ask('tools/list')
         for (let t of tools) {
-          if (t.outputSchema) schemas.set(t.name, ajv.compile(t.outputSchema))
+          if (t.outputSchema) schemas.set(t.name, fitting(t.outputSchema))
         }
       }
       let fits = schemas.get(name)

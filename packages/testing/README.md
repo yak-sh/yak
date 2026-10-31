@@ -35,14 +35,16 @@ suite('sum', ({ it, equal }) => {
 ```
 
 From this repository, `deno task test` selects tests through the dependency
-graph, including consumers and examples. It applies formatting to changed files,
-lints changed code, and checks the public API of each changed package for slow
-types. Runtime tests retain consumer coverage. Full source and doc comment type
-checking runs in main CI after the push, or explicitly with
-`deno task check:types`. Paths and tags narrow a run while iterating; the
-finished change uses the no-path command to include its consumers. Tests run in
-process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's
-`lay`. There are no browser tests or slow platform tier.
+graph, including consumers and examples, the nearest to the change first, as
+many as about eight seconds hold. The rest of its consumers run in main CI after
+the push, and the closing line counts them. It applies formatting to changed
+files, lints changed code, and checks the public API of each changed package for
+slow types. Full source and doc comment type checking runs in main CI after the
+push, or explicitly with `deno task check:types`. Paths and tags narrow a run
+while iterating; the finished change uses the no-path command to include its
+consumers. Tests run in process; page behavior uses linkedom, and terminal
+behavior uses @yaks/tui's `lay`. There are no browser tests or slow platform
+tier.
 
 ## Exports
 
@@ -299,6 +301,14 @@ each key's file read is kept beside it in `tests-read.json`. `--all` bypasses
 the record; a run filtered by tag records no passes. `--keys` names a JSON file
 holding the key of each file given, from a caller that chose them already
 (`choose` from `@yaks/testing/choose`): every file given runs.
+
+`choose` given a `budget` and what each file is expected to `cost` keeps a
+narrowed run to it. A file's rank is its **distance**: imports from a changed
+module to the file, never through a module that loads more than `WIDE` others.
+Such a module composes a platform, so nearly every change reaches its importers
+and that path says nothing about them. A changed file always runs, and others
+run nearest and cheapest first. A file with no distance runs only when no file
+has one (a change to the lock, say). What does not run is counted as `beyond`.
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that

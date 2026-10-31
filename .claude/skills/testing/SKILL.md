@@ -41,8 +41,10 @@ ability to see the platform_" (15ce9bf9). He would rather recover than gate
 breaks live, and a failure is fixed forward.
 
 Run `deno task test` without paths on your finished change, then land with
-`yak land`. The command follows dependencies to consumers and checks the changed
-files; a package-only run can miss a consumer outside that package. There is no
+`yak land`. The command follows dependencies to the nearest consumers, as many
+as about eight seconds hold, and checks the changed files; a package-only run
+can miss a consumer outside that package. Main's CI runs every test after the
+push, and the closing line counts the consumers left to it. There is no
 pre-land gate. A check or landing wait must take less
 than ten seconds; a multi-minute command is a problem to remove, not a ritual to
 repeat. Main's CI runs after the push and files a bug when it goes red. Nobody
@@ -117,10 +119,11 @@ stronger.
 ## Running
 
 `deno task test` with no paths uses the dependency graph to select tests and
-doctests the branch and working changes reach, including consumers. It applies
+doctests the branch and working changes reach, including consumers, the nearest
+first and the rest of them left to main's CI (`--all` runs them here). It applies
 formatting to changed files, lints them, and checks the public API of each
 changed package for slow types (`deno publish --dry-run`, a fifth of a second a
-package). Runtime tests follow dependencies to consumers. Full source and doc comment type checking runs in main's CI after
+package). Full source and doc comment type checking runs in main's CI after
 the push; `deno task check:types` runs it explicitly when needed. Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.

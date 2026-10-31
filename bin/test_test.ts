@@ -68,6 +68,7 @@ let planned = async (args: string[], shallow = false, pass = true) => {
         run: files,
         affected: files,
         sources: ['a.ts'],
+        beyond: 0,
         reaches: () => false,
       })
     },
@@ -123,6 +124,7 @@ test('a changed source can ready its generated imports without consumer tests or
         run: [],
         affected: [],
         sources: ['worker.ts'],
+        beyond: 0,
         reaches: (paths) => paths.includes('workers/yak/testing.ts'),
       })
     },

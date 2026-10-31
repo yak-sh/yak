@@ -25,7 +25,34 @@ export type Chosen = {
   run: string[]
   affected: string[]
   sources: string[]
+  beyond: number
   reaches: (paths: string[]) => boolean
+}
+
+/// let rank = (f: string) => ({ own: 0, near: 1, slow: 1, far: Infinity })[f]!
+/// let cost = (f: string) => ({ own: 1, near: 1, slow: 5, far: 1 })[f]!
+/// within(['far', 'slow', 'near', 'own'], rank, cost, 3) -> ['far', 'near', 'own']
+/// within(['far', 'slow', 'near', 'own'], rank, cost, 0) -> ['own']
+/** Of `files`, what fits `budget`: the change's own files whatever they cost
+ * (rank 0), then the nearest and cheapest first. A file that does not fit is
+ * passed over for a cheaper one behind it. Their order is kept. */
+export let within = (
+  files: string[],
+  rank: (file: string) => number,
+  cost: (file: string) => number,
+  budget: number,
+): string[] => {
+  let left = budget
+  let kept = new Set<string>()
+  let order = files.toSorted((a, b) =>
+    rank(a) == rank(b) ? cost(a) - cost(b) : rank(a) - rank(b)
+  )
+  for (let f of order) {
+    if (rank(f) && cost(f) > left) continue
+    left -= cost(f)
+    kept.add(f)
+  }
+  return files.filter((f) => kept.has(f))
 }
 
 /**
@@ -35,6 +62,10 @@ export type Chosen = {
  * (./deps.ts `shared`); when a run is `observed` its runtimes see what each
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
+ * A narrowed run with a `budget` runs what fits it by what each file is
+ * expected to `cost`, the nearest to the change first (./deps.ts `distance`,
+ * `within`), and only those a distance reaches unless none is, and counts the
+ * rest `beyond`: a run elsewhere with all of its files covers those.
  * When deno cannot say what a module imports, a narrowed run reports that
  * selection is unavailable; an explicit run has no keys and runs its files.
  */
@@ -48,6 +79,8 @@ export let choose = async (
     runner = [],
     sources = [],
     changed,
+    budget,
+    cost = () => 0,
   }: {
     all?: boolean
     observed?: boolean
@@ -56,6 +89,8 @@ export let choose = async (
     runner?: string[]
     sources?: string[]
     changed?: string[]
+    budget?: number
+    cost?: (file: string) => number
   } = {},
 ): Promise<Chosen> => {
   if (changed && !changed.length) {
@@ -64,6 +99,7 @@ export let choose = async (
       run: [],
       affected: [],
       sources: [],
+      beyond: 0,
       reaches: () => false,
     }
   }
@@ -90,6 +126,7 @@ export let choose = async (
         run: files,
         affected: files,
         sources,
+        beyond: 0,
         reaches: () => true,
       }
     }
@@ -150,13 +187,21 @@ export let choose = async (
         run.push(f)
       }
     }
+    let far = changed && s.distance(changed)
+    let rank = (f: string) =>
+      far ? Math.min(far(f), far(plans.get(f) ?? f)) : Infinity
+    let near = run.filter((f) => rank(f) < Infinity)
+    let kept = changed && budget != null
+      ? within(near.length ? near : run, rank, cost, budget)
+      : run
     let typed = sources.filter((f) => !changed || s.reaches([f], changed))
-    let roots = [...reached.map((f) => plans.get(f) ?? f), ...typed]
+    let roots = [...kept.map((f) => plans.get(f) ?? f), ...typed]
     return {
       keys,
-      run,
+      run: kept,
       affected: reached,
       sources: typed,
+      beyond: run.length - kept.length,
       reaches: (paths) => s.reaches(roots, paths),
     }
   } finally {

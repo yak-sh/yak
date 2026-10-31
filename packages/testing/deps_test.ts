@@ -11,6 +11,7 @@ import {
   remember,
   shared,
   survey,
+  WIDE,
 } from './deps.ts'
 
 // A directory of files, and the graph deno would say of its modules: each
@@ -223,4 +224,28 @@ test('erased type dependencies reach checks but do not reach execution or its pa
     await key(changed, '', at('a_test.ts')) !=
       await key(typed, '', at('a_test.ts')),
   )
+})
+
+test('distance counts imports from a change, and stops at a module that loads a whole platform', async () => {
+  let fixture = Array.from({ length: WIDE }, (_, i) => `world${i}.ts`)
+  let s = (await survey(
+    [at('near_test.ts'), at('far_test.ts'), at('kernel_test.ts')],
+    deno({
+      'near_test.ts': ['subject.ts'],
+      'far_test.ts': ['caller.ts'],
+      'caller.ts': ['subject.ts'],
+      'kernel_test.ts': ['kernel.ts'],
+      'kernel.ts': ['subject.ts', ...fixture],
+      'subject.ts': [],
+      ...Object.fromEntries(fixture.map((m) => [m, []])),
+    }),
+  ))!
+  let far = s.distance([at('subject.ts')])
+  equal(far(at('subject.ts')), 0)
+  equal(far(at('near_test.ts')), 1)
+  equal(far(at('far_test.ts')), 2)
+  equal(far(at('kernel.ts')), 1)
+  equal(far(at('kernel_test.ts')), Infinity)
+  equal(s.distance([at('kernel.ts')])(at('kernel_test.ts')), 1)
+  ok(s.reaches([at('kernel_test.ts')], [at('subject.ts')]))
 })

@@ -192,7 +192,14 @@ export type Survey = {
     loaded?: boolean,
     runtime?: boolean,
   ) => boolean
+  distance: (changed: string[]) => (root: string) => number
 }
+
+/** How many modules a module may load and still say something about what its
+ * importers depend on. Past it, a module composes a whole platform (a kernel,
+ * a test fixture over one): nearly every change reaches its importers, so that
+ * path does not make them relevant to the change. */
+export const WIDE = 200
 
 /** The survey of `paths`, their modules' graph from `info` (`deno info`), or
  * undefined when it cannot say what they import. */
@@ -295,6 +302,22 @@ export let survey = async (
     return reverse.get(edges)!
   }
   let closures = new Map<string, Set<string>>()
+  let breadths = new Map<string, number>()
+  let breadth = (node: string) => {
+    if (!breadths.has(node)) {
+      let seen = new Set([node])
+      let go = [node]
+      while (go.length) {
+        for (let n of runtime.get(go.pop()!) ?? []) {
+          if (seen.has(n)) continue
+          seen.add(n)
+          go.push(n)
+        }
+      }
+      breadths.set(node, seen.size)
+    }
+    return breadths.get(node)!
+  }
   return {
     of: (path, run = false) => {
       let key = `${run} ${path}`
@@ -333,6 +356,20 @@ export let survey = async (
       }
       let reached = closures.get(cache)!
       return roots.some((p) => reached.has(p) || reached.has(at(url(p))))
+    },
+    distance: (changed) => {
+      let edges = incoming(runtime)
+      let far = new Map<string, number>()
+      for (let p of changed) far.set(p, 0).set(at(url(p)), 0)
+      for (let node of far.keys()) {
+        let d = far.get(node)!
+        if (d && breadth(node) > WIDE) continue
+        for (let from of edges.get(node) ?? []) {
+          if (!far.has(from)) far.set(from, d + 1)
+        }
+      }
+      return (root) =>
+        Math.min(far.get(root) ?? Infinity, far.get(at(url(root))) ?? Infinity)
     },
     next: (
       path,

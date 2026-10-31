@@ -1,6 +1,7 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects only tests reached by branch and working changes; cached passes
+// selects tests reached by branch and working changes, nearest first, as many
+// as a few seconds hold; main's CI runs the rest after the push. Cached passes
 // leave out tests already passed unchanged. Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).
@@ -311,7 +312,20 @@ export let READIES = [
   'workers/yak/testing.ts',
 ]
 
-/** Relevant files, leaving out sources and observed dependencies already passed. */
+/** What a change's own run may expect its tests to take, in milliseconds: the
+ * rest of its consumers run in main's CI after the push. */
+export let SECONDS = 8_000
+
+/// expected({ 'a_test.ts': { x: 100, y: 5 } })('a_test.ts') -> 125
+/// expected({})('a_test.ts') -> 20
+/** What a file is expected to take: what its tests over the budget last took
+ * (bench/test-budget.json), and its load. */
+export let expected =
+  (list: Record<string, Record<string, number>>) => (file: string) =>
+    Object.values(list[file] ?? {}).reduce((sum, ms) => sum + ms, 20)
+
+/** Relevant files, leaving out sources and observed dependencies already
+ * passed, and those past what a change's own run has time for. */
 export let chosen = async (
   files: string[],
   all: boolean,
@@ -320,6 +334,8 @@ export let chosen = async (
   sources: string[] = [],
 ) =>
   await choose(files, {
+    budget: SECONDS,
+    cost: expected((await budget()).tests),
     all,
     changed,
     sources,
@@ -364,7 +380,7 @@ export let prepare = async (
   ]
   // Choose files before starting runtimes; hand each its dependency keys.
   let changed = !paths.length && !all ? changedPaths : undefined
-  let { keys, run, reaches } = await effects.chosen(
+  let { keys, run, beyond, reaches } = await effects.chosen(
     files,
     all,
     [sqlite],
@@ -378,7 +394,7 @@ export let prepare = async (
     await effects.ready(!flags.includes('--verbose'))
   }
   let ok = all || await effects.check(changedFiles)
-  return { flags, paths, tags, files, keys, run, ok }
+  return { flags, paths, tags, files, keys, run, beyond, ok }
 }
 
 // `--bulk` gives each document environment its selected files and their keys.
@@ -573,7 +589,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let b = await budget()
   let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
   if (from) Deno.exit(await say(b, await read(from), Deno.args))
-  let { flags, paths, tags, files, keys, run, ok } = await prepare(
+  let { flags, paths, tags, files, keys, run, beyond, ok } = await prepare(
     Deno.args,
     sqlite,
   )
@@ -599,7 +615,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     return await runTestCommands([bulk])
   }
   let whole = !paths.length && !tags.length && flags.includes('--all')
-  let left = files.length - run.length
+  let left = files.length - run.length - beyond
   let measured = await measure(suite, whole)
-  Deno.exit(await say(b, { ...measured, left }, Deno.args))
+  Deno.exit(await say(b, { ...measured, left, beyond }, Deno.args))
 }
