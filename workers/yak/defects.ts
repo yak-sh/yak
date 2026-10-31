@@ -10,6 +10,7 @@ import {
   capture,
   coalesce,
   type Coalesced,
+  normalize,
   type origin,
   queue,
   refused as refusal,
@@ -208,7 +209,9 @@ export let redone = (error: unknown, replaced?: () => boolean): boolean =>
  * names the commit it concerns. What an instance the runtime moved meets in
  * its own invocations is no defect: its work is run again by whoever owns it
  * (@yaks/durable-object `moved`). The same words met by a live object, or by
- * the Worker, are a call that ran out of retries, and are reported. */
+ * the Worker, are a call that ran out of retries, and are reported, one bug
+ * for each wording: the deploy it names and the caller it reached are the
+ * occurrence's, not the failure's. */
 export let defect = (
   error: unknown,
   tags: Tags,
@@ -230,7 +233,10 @@ export let defect = (
     ...invocation.origin,
     sink,
     commit: details.commit ?? env.CF_VERSION_METADATA?.id,
-    fault: details.fault,
+    fault: details.fault ??
+      (moved(error)
+        ? `reset:${normalize((error as Error).message)}`
+        : undefined),
     environment: env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
     tags: Object.fromEntries(
       Object.entries({

@@ -270,6 +270,11 @@ export let fetchOf =
       wait,
     )
 
+/** An answer read whole, for a door to hand on through `consume`: a restart
+ * that cuts it off is sent again instead of reaching the caller. */
+export let whole = async (r: Response): Promise<Response> =>
+  r.body ? new Response(await r.arrayBuffer(), r) : r
+
 let stamped = (req: Request) => (stamp(req.headers), req)
 
 // A request can be built twice from its init only while the body is a value:

@@ -192,7 +192,16 @@ export let callStored = async (
     {},
 ): Promise<Bundle[]> => {
   let id = crypto.randomUUID()
-  let res = await store('/call', {
+  return await store.consume('/call', async (res) => {
+    let answer = await res.json() as Bundle[] | { message?: string }
+    if (!res.ok) {
+      throw rejected(
+        res.status,
+        !Array.isArray(answer) ? answer.message ?? '' : '',
+      )
+    }
+    return answer as Bundle[]
+  }, {
     method: 'POST',
     body: JSON.stringify({
       name,
@@ -202,14 +211,6 @@ export let callStored = async (
       source: options.source ?? id,
     }),
   }, { ...KERNEL, ...vouched(who), ...options.title })
-  let answer = await res.json() as Bundle[] | { message?: string }
-  if (!res.ok) {
-    throw rejected(
-      res.status,
-      !Array.isArray(answer) ? answer.message ?? '' : '',
-    )
-  }
-  return answer as Bundle[]
 }
 
 /** The declared package tools, bound to this connector caller. */

@@ -5,7 +5,7 @@ import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
 import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
-import { PLATFORM_STORE, storeOf } from './door.ts'
+import { IDEMPOTENCY, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
 import { Store } from './graph.ts'
@@ -385,4 +385,45 @@ test('a query in a retired spelling records its app and spelling once', () => {
     { app: spoken.app, spelling: '.pulse!' },
   ])
   equal(spoken.refused, [400, 400])
+})
+
+// A restart for a newer deploy can cut off the answer while it is being read:
+// the receipt is sent again, one write, and nothing is reported.
+test('a receipt whose answer a deploy cuts off is sent again and reported nowhere', async () => {
+  let reports: unknown[] = [], sends: Request[] = []
+  let cut = () =>
+    new Response(
+      new ReadableStream({
+        pull: (c) =>
+          c.error(
+            Error('Durable Object reset because a newer deploy reached it: b'),
+          ),
+      }),
+    )
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => ({
+      fetch: (request: Request) => {
+        sends.push(request)
+        return Promise.resolve(
+          sends.length == 1 ? cut() : Response.json({ at: 'the hour' }),
+        )
+      },
+    }),
+  } as unknown as Namespace
+  let env = {
+    ERRORS: {
+      send: (rows: unknown) => Promise.resolve(void reports.push(rows)),
+    },
+  } as unknown as Parameters<typeof within>[0]
+  equal(
+    await within(env, {}, () => recordUse(ns, 'cut-off-app')),
+    'the hour',
+  )
+  equal(sends.length, 2)
+  equal(
+    sends[0].headers.get(IDEMPOTENCY),
+    sends[1].headers.get(IDEMPOTENCY),
+  )
+  equal(reports, [])
 })

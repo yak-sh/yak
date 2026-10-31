@@ -5,6 +5,7 @@ import type { Actor, Bundle } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { comp, type Crumb, type Level, str } from './model.ts'
 import { faultOf } from './fault.ts'
+export { normalize } from './fault.ts'
 
 export type Sink = (rows: Bundle[]) => void | Promise<void>
 export type Context = {

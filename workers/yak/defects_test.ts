@@ -220,3 +220,31 @@ test('an internal buffered response keeps native cache clone cancellation', asyn
   await answer.body!.cancel()
   equal(await cached.text(), 'not found')
 })
+
+test('a reset out of retries is one fault per wording, whichever caller and deploy it names', async () => {
+  let { rows, env } = recorded()
+  let fails = (words: string, stack: string) =>
+    within(env, {}, () => defect(Object.assign(Error(words), { stack }), {}))
+  let NEWER = 'Durable Object reset because a newer deploy reached it: '
+  fails(
+    `${NEWER}8dc1d4c1-345c-411d-b0e7-75100d6a8236`,
+    'Error\n    at async kernel-dSEYHG67.js:1233:7484',
+  )
+  fails(
+    `${NEWER}7dde2b40-bcb0-4118-899b-859f59b93666`,
+    'Error\n    at fetch (kernel-aaaaaaaa.js:9:9)',
+  )
+  fails(CODE, 'Error\n    at async kernel-dSEYHG67.js:1:1')
+  fails('boom', 'Error\n    at async kernel-dSEYHG67.js:1:1')
+  await Promise.resolve()
+  equal(
+    rows.flat().filter((row) => row.exception).map((row) =>
+      (row.error as { fault?: string }).fault
+    ),
+    [
+      'reset:durable object reset because a newer deploy reached it: #',
+      'reset:durable object reset because its code was updated.',
+      undefined,
+    ],
+  )
+})

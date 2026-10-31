@@ -2,7 +2,13 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { ACCEPTED, doorOf, type Namespace, storeOf as door } from './door.ts'
+import {
+  ACCEPTED,
+  doorOf,
+  type Namespace,
+  storeOf as door,
+  whole,
+} from './door.ts'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
@@ -265,4 +271,29 @@ test('Store policy is carried only from Served, never visitor headers', async ()
     incoming(),
   )
   assertEquals(seen, [null, '12'])
+})
+
+test('a door handing on an answer a restart cuts off sends it again; an empty answer stands', async () => {
+  let sent = 0
+  let cut = new ReadableStream({
+    pull: (c) =>
+      c.error(
+        Error('Durable Object reset because a newer deploy reached it: b'),
+      ),
+  })
+  let answers = [
+    () => new Response(cut, { status: 200 }),
+    () => new Response('kept', { status: 201, headers: { 'x-said': 'yes' } }),
+    () => new Response(null, { status: 204 }),
+  ]
+  let store = storeOf({
+    idFromName: (name: string) => name,
+    get: () => ({ fetch: () => Promise.resolve(answers[sent++]()) }),
+  } as unknown as Namespace, 'ada')
+  let kept = await store.consume('/storage', whole)
+  assertEquals(
+    [kept.status, kept.headers.get('x-said'), await kept.text(), sent],
+    [201, 'yes', 'kept', 2],
+  )
+  assertEquals((await store.consume('/storage', whole)).status, 204)
 })

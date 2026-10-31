@@ -59,12 +59,18 @@ let receipt = (ns: Namespace, r: Receipt): Promise<string | null> => {
   if (!waiting) pending.set(ns, waiting = new Map())
   let work = (async () => {
     try {
-      let response = await storeOf(ns, PLATFORM_STORE)(r.door, {
-        method: 'POST',
-        body: JSON.stringify(r.body),
-      }, KERNEL)
-      if (!response.ok) throw await answered(response)
-      at = (await response.json() as { at: string }).at
+      at = await storeOf(ns, PLATFORM_STORE).consume(
+        r.door,
+        async (response) => {
+          if (!response.ok) throw await answered(response)
+          return (await response.json() as { at: string }).at
+        },
+        {
+          method: 'POST',
+          body: JSON.stringify(r.body),
+        },
+        KERNEL,
+      )
       if (held.size >= 1000) {
         for (let [key, at] of held) {
           if (Date.parse(at) <= Date.now()) held.delete(key)

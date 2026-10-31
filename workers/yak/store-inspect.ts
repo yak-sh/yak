@@ -57,8 +57,14 @@ export let inspect = async (
     query.set('until', deletions.until)
     if (deletions.after != null) query.set('after', String(deletions.after))
   }
-  let r = await store(`/inspect?${query}`, {}, KERNEL)
-  let result = await r.json() as Inspection & { message?: string }
-  if (!r.ok) throw rejected(r.status, result.message ?? '')
-  return result
+  return await store.consume(
+    `/inspect?${query}`,
+    async (r) => {
+      let result = await r.json() as Inspection & { message?: string }
+      if (!r.ok) throw rejected(r.status, result.message ?? '')
+      return result
+    },
+    {},
+    KERNEL,
+  )
 }

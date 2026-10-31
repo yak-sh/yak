@@ -3976,14 +3976,16 @@ let OURS: Row[] = [
       ) {
         throw refuse('arguments', 'next must be 0..100 and rate must be 0..1')
       }
-      let response = await store('/trace', {
+      let value = await store.consume('/trace', async (response) => {
+        let value = await response.json() as Record<string, unknown>
+        if (!response.ok) {
+          throw rejected(response.status, String(value.message ?? ''))
+        }
+        return value
+      }, {
         method: 'POST',
         body: JSON.stringify({ next, rate }),
       }, KERNEL)
-      let value = await response.json() as Record<string, unknown>
-      if (!response.ok) {
-        throw rejected(response.status, String(value.message ?? ''))
-      }
       return { text: JSON.stringify(value), value, space }
     },
   },

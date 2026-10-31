@@ -149,7 +149,7 @@ import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
-import { type Door, USES } from './door.ts'
+import { type Door, USES, whole } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import {
@@ -2071,7 +2071,7 @@ let api = async (
       let body = await req.arrayBuffer()
       let stopped = await full(env, space, body.byteLength)
       if (stopped) return json(413, 'space_full', stopped)
-      return store(`/apply${check ? '?check=1' : ''}`, {
+      return store.consume(`/apply${check ? '?check=1' : ''}`, whole, {
         method: 'POST',
         body,
         headers: { 'content-type': BINARY },
@@ -2160,7 +2160,7 @@ let api = async (
     if (req.method != 'GET' && req.method != 'POST') {
       return json(405, 'method_not_allowed')
     }
-    return store('/storage', {
+    return store.consume('/storage', whole, {
       method: req.method,
       body: req.method == 'POST' ? await req.text() : undefined,
     }, headers)
