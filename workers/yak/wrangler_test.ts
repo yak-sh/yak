@@ -1513,7 +1513,14 @@ test('a kernel upload uses its prepared bundle and retains source maps and modul
     )
     assertEquals(config.compatibility_flags, ['nodejs_compat'])
     assertEquals(config.upload_source_maps, true)
-    assertEquals(config.assets, { directory: 'public' })
+    assertEquals(config.assets, {
+      directory: 'public',
+      run_worker_first: [
+        '/*',
+        '!/_yak/style.5f546eb460.css',
+        '!/_yak/pages.5f546eb460.css',
+      ],
+    })
     assertEquals(
       Deno.readTextFileSync(config.main as string),
       'export default {};\n//# sourceMappingURL=index.js.map',
