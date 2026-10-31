@@ -67,7 +67,12 @@ let fixture = () => {
     let transport = signedDirectory(
       {
         fetch: (request) => {
-          let key = new URL(request.url).searchParams.get('q')!
+          let url = new URL(request.url)
+          // This seam reads a line at a time.
+          if (url.pathname != '/query') {
+            return Promise.resolve(new Response(null, { status: 404 }))
+          }
+          let key = url.searchParams.get('q')!
           let value = key == 'space'
             ? state.space
             : key == 'app'

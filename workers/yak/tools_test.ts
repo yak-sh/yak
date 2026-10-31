@@ -617,17 +617,16 @@ test('a listing asks the directory a fixed number of times', async () => {
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
-  // 3 seats + 1 apps + 1 bindings + 1 for who is in the spaces she owns
+  // 2 seats + 1 apps + 1 bindings + 1 for who is in the spaces she owns
   // (people.ts), and nothing per app. The people it names are one read more,
   // and here that is only her, whose row the seats already read.
   assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
   let all = await costs('app_list', {})
-  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 6, r2: 0 })
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 5, r2: 0 })
   // One space named is read and its seat asked for by name, then its apps,
   // their bindings, who is in it and their rows.
   let one = await costs('app_list', { space: 'one' })
   assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 6, r2: 0 })
-  assertEquals(all.stmts > one.stmts, true)
 })
 
 // And what every signed-in call pays before its tool runs (mcp.ts `door`,

@@ -247,6 +247,9 @@ class PublicDirectoryStore extends DurableObject<Env> {
   publish(revision: number, key: string, body: string) {
     return this.#copy.publish(revision, key, body)
   }
+  publishes(answers: [number, string, string][]) {
+    return this.#copy.publishes(answers)
+  }
   read(key: string) {
     try {
       return this.#copy.read(key)

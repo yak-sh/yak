@@ -4,6 +4,8 @@ import {
   FENCE_WAIT,
   fenced,
   mend,
+  type ReadAnswer,
+  READS,
   released,
   signedDirectory,
   Unfenced,
@@ -942,6 +944,7 @@ let routes = new Set([
   '/ws',
   '/apply',
   '/query',
+  READS,
 ])
 let routeKind = (request: Request): string => {
   let path = new URL(request.url).pathname
@@ -4809,7 +4812,31 @@ export class Store {
       })
     }
     if (path == '/query') return await this.#paged(request)
+    if (path == READS && this.#get('name') == PLATFORM_STORE) {
+      return await this.#reads(request)
+    }
     return await this.#route(request)
+  }
+
+  // The directory's reads a request asked together, in one trip (directory-copy.ts
+  // `gathered`): each line answered as `/query` answers it, a refusal or a
+  // failure staying that line's own.
+  async #reads(request: Request): Promise<Response> {
+    let url = new URL(request.url)
+    let answers: ReadAnswer[] = []
+    for (let q of url.searchParams.getAll('q')) {
+      let line = new URL('/query', url)
+      line.searchParams.set('q', q)
+      let answer = await this.#asked(
+        new Request(line, { headers: request.headers }),
+      )
+      answers.push({
+        status: answer.status,
+        epoch: answer.headers.get(EPOCH),
+        body: await answer.text(),
+      })
+    }
+    return Response.json(answers)
   }
 
   // A page's query asks with `uses=1` (page-graph.ts `queried`), so the one

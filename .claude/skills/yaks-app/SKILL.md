@@ -60,7 +60,14 @@ and setup; this is the map and the feel.
   kernel's word at the revision it read, and rereads the directory only for a
   request older than one it already acted on. Every call on a request's path is
   a round trip someone waits for: the copy once cost more than the directory
-  reads it checked (T-132705), so keep its calls behind the answer.
+  reads it checked (T-132705), so keep its calls behind the answer, and ask it
+  only after a read has gone `STALL` without one.
+- **Asking the directory**: the reads a request starts in one turn travel as one
+  trip (directory-copy.ts `gathered`, the store's `/reads`), each answered its
+  own line. So a page starts everything it needs at once and awaits it together
+  (apps.ts `desk`, `foresee`), and only a read that needs another's answer comes
+  after it: a second read waited on in turn is a wait, a second read started
+  beside the first costs nothing.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts` hands
   the store the caller's standing, including its access mode (`x-yak-access`).
   Every HTML page leaving for a browser is woven the platform's inline scripts

@@ -9,6 +9,7 @@ import {
   EPOCH,
   publicDirectory,
   type ServingCopyDoor,
+  STALL,
 } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { pageAt } from './page-cache.ts'
@@ -44,7 +45,11 @@ let copyFixture = () => {
 // Exhaust only promise continuations, never a wall-clock sleep. A failed
 // fallback is observed as a pending answer rather than hanging the test.
 let continuations = async () => {
-  for (let n = 0; n < 64; n++) await Promise.resolve()
+  // A turn apart: gathered reads leave on the next one (directory-copy.ts).
+  for (let turns = 0; turns < 3; turns++) {
+    await new Promise((turned) => setTimeout(turned, 0))
+    for (let n = 0; n < 64; n++) await Promise.resolve()
+  }
 }
 let watching = (work: Promise<Response>) => {
   let answer: Response | undefined
@@ -129,10 +134,10 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
       wrap()
     },
     // Both sequential reads share one request deadline. Once space resumes,
-    // run the routing timer at the same instant, without another 25ms wait.
+    // run the routing timer at the same instant, without another wait.
     deadlines: async () => {
       await continuations()
-      await time.advance(25)
+      await time.advance(STALL)
       await continuations()
       await time.advance(0)
       await continuations()
@@ -168,7 +173,7 @@ let publicPage = await (async () => {
     files: f.fileReads(),
   }
 })()
-test('directory serving: a known public page answers within 25ms when DIRECTORY never does', () => {
+test('directory serving: a known public page answers within the stall deadline when DIRECTORY never does', () => {
   equal(publicPage.fills, 1)
   ok(publicPage.waited)
   equal([publicPage.status, publicPage.got], [200, publicPage.body])
@@ -291,7 +296,7 @@ for (
   )
   let read = watching(f.page())
   await continuations()
-  await time.advance(25)
+  await time.advance(STALL)
   await continuations()
   let pending = read.pending()
   // A fresh read after the write publishes the new declaration, not old rows.

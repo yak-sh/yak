@@ -5,6 +5,7 @@ import {
   anonymousPage,
   publicDirectory,
   type ServingCopyDoor,
+  STALL,
 } from './directory-copy.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -16,7 +17,11 @@ import * as site from './site.ts'
 import { ADA, ADA_OWNS, as, platform, seeded } from './serving-probe.ts'
 
 let continuations = async () => {
-  for (let n = 0; n < 128; n++) await Promise.resolve()
+  // A turn apart: gathered reads leave on the next one (directory-copy.ts).
+  for (let turns = 0; turns < 3; turns++) {
+    await new Promise((turned) => setTimeout(turned, 0))
+    for (let n = 0; n < 128; n++) await Promise.resolve()
+  }
 }
 let watching = (work: Promise<Response>) => {
   let answer: Response | undefined
@@ -148,13 +153,13 @@ for (let path of ['/', '/gallery']) {
       // Revalidation must not turn a stale rendering into a cacheable 304.
       let read = watching(f.request(path, etag))
       await continuations()
-      await f.time.advance(24)
+      await f.time.advance(STALL - 1)
       await continuations()
       let beforeDeadline = read.pending()
       await f.time.advance(1)
       await continuations()
       // Later listing reads inherit the same request deadline. Drain them at
-      // this instant, not another 25ms per space/app query.
+      // this instant, not another stall per space/app query.
       for (let n = 0; n < 8; n++) {
         await f.time.advance(0)
         await continuations()
@@ -180,12 +185,12 @@ for (let path of ['/', '/gallery']) {
       await f.close()
     }
   })()
-  test(`directory listings: signed-out ${path} survives a stalled directory within 25ms without recaching`, () => {
+  test(`directory listings: signed-out ${path} survives a stalled directory within the stall deadline without recaching`, () => {
     equal(observed.first, 200)
     equal(observed.fresh, 'public, max-age=30, must-revalidate')
     ok(observed.etag.startsWith('W/"'))
     ok(observed.beforeDeadline)
-    equal(observed.elapsed, 25)
+    equal(observed.elapsed, STALL)
     equal([observed.status, observed.got], [200, observed.body])
     equal(observed.cache, 'private, no-store')
     equal(observed.staleEtag, null)

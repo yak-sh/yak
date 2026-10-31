@@ -9,6 +9,7 @@ import {
   MEND,
   type ServingCopyDoor,
   signedDirectory,
+  STALL,
 } from './directory-copy.ts'
 import { GRANT } from './dispatch.ts'
 import { PLATFORM_STORE } from './door.ts'
@@ -23,7 +24,11 @@ import {
 import { ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 let flush = async () => {
-  for (let n = 0; n < 128; n++) await Promise.resolve()
+  // A turn apart: gathered reads leave on the next one (directory-copy.ts).
+  for (let turns = 0; turns < 3; turns++) {
+    await new Promise((turned) => setTimeout(turned, 0))
+    for (let n = 0; n < 128; n++) await Promise.resolve()
+  }
 }
 let observing = <T>(work: Promise<T>) => {
   let value: T | undefined, error: unknown, settled = false
@@ -132,7 +137,7 @@ await proof(
 )
 
 await proof(
-  'stalled reads share 25ms and check current independent authority',
+  'stalled reads share one stall deadline and check current independent authority',
   async () => {
     let f = independent(), time = clock()
     f.core().publish(0, 'first', 'one')
@@ -143,7 +148,7 @@ await proof(
       time,
     )
     let first = observing(transport.fetch(query('first')))
-    await time.advance(24)
+    await time.advance(STALL - 1)
     await flush()
     let waited = first.pending()
     await time.advance(1)
@@ -183,7 +188,7 @@ await proof(
       time,
     )
     let answer = observing(transport.fetch(query('page')))
-    await time.advance(25)
+    await time.advance(STALL)
     await flush()
     return () => ok(answer.pending(), 'a fenced copy must not answer')
   },
@@ -345,7 +350,7 @@ let deadline = async (
   // Crypto and Store continuations can register sequential directory reads.
   // No sleep/polling: only explicitly scheduled virtual deadlines are run.
   for (let n = 0; n < 32 && work.pending(); n++) {
-    await time.advance(25)
+    await time.advance(STALL)
     await flush()
     // WebCrypto completes on the runtime's task queue, not a promise turn.
     await tick()

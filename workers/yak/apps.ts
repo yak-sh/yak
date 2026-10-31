@@ -122,6 +122,7 @@ import {
   paged as pagePath,
   route,
   signInAt,
+  SLUG,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import {
@@ -151,7 +152,14 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, USES } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
-import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
+import {
+  brokenIn,
+  fault,
+  noted,
+  refusal,
+  serving,
+  trackedIn,
+} from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
 import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
@@ -2385,7 +2393,14 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   )
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
   let slug = url.searchParams.get('space')
-  let space = slug ? await dir.space(slug) : await dir.own(person)
+  if (slug && !SLUG.test(slug)) return nothingHere(env)
+  if (req.method == 'GET' || req.method == 'HEAD') {
+    foresee(dir, person, view, !slug)
+  }
+  // The one a person gets with no address named is one they own.
+  let { space, role } = slug
+    ? await dir.page(slug, null, person)
+    : { space: await dir.own(person), role: 'owner' as const }
   if (!space && slug) {
     // A link written before the space moved to another name (T-34658).
     let was = await dir.formerly(slug)
@@ -2395,7 +2410,7 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     return moved(req, to.href)
   }
   if (!space || space.slug == META.space) return nothingHere(env)
-  let who: Owner = { person, role: await dir.role(space, person), until }
+  let who: Owner = { person, role: role ?? null, until }
   if (who.role != 'owner') return nothingHere(env)
   // A space in the trash is brought back from its own address (`closed`).
   if (space.trashed) {
@@ -2404,6 +2419,35 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   if (req.method == 'POST') return saved(req, env, dir, space, who)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
   return desk(req, env, dir, space, who, view)
+}
+
+// What a dashboard page will ask the directory, asked at once so it travels
+// with whatever else this moment asks (directory-copy.ts `gathered`): each is
+// answered again from this reading when the page comes to it (hops.ts
+// `recall`), and a failure is the page's to meet when it does. A seat names its
+// space, so the apps of the spaces a person owns are read beside those spaces'
+// own rows rather than a trip after them, whichever of them is theirs.
+let foresee = (
+  dir: ReturnType<typeof directory>,
+  person: string,
+  view: ManageView,
+  own: boolean,
+) => {
+  void Promise.allSettled([
+    feeOf(dir),
+    dir.nameAt(person),
+    ...view == 'apps' ? [dir.seats(person), dir.granted(person)] : [],
+    ...own
+      ? [
+        dir.sitting(person).then((held) =>
+          Promise.all(
+            [...held].filter(([, role]) => role == 'owner')
+              .map(([eid]) => dir.apps({ eid })),
+          )
+        ),
+      ]
+      : [],
+  ])
 }
 
 // Who a dashboard page is drawn for: a person signed in, who owns the space.
@@ -2464,22 +2508,74 @@ let desk = async (
   invite?: DeskPage['invite'],
 ): Promise<Response> => {
   let owner = who.person
-  let { here, all } = await shelf(dir, space, who)
   let q = new URL(req.url).searchParams
-  // What is broken in each app (unseen.ts `brokenIn`), read only for the page
-  // that lists them: one read of the space's tracker, no app's store woken.
-  // A read that fails is reported and the apps are drawn without it.
-  let broken = view == 'apps' && all.length
-    ? await brokenIn(env, space, who, all).catch((e) => {
-      caught(e, { request: 'read open errors', space: space.slug })
-      return undefined
-    })
-    : undefined
-  return deskPage({
+  // Everything a page shows, asked at once: nothing here waits on anything but
+  // the apps it says something about.
+  if (view == 'apps') void trackedIn(env, space, who, true).catch(() => {})
+  let shelved = shelf(dir, space, who)
+  let [
+    { here, all },
+    broken,
+    views,
+    fee,
+    name,
+    agents,
+    theirs,
+    people,
+    connections,
+  ] = await Promise.all([
+    shelved,
+    // What is broken in each app (unseen.ts `brokenIn`), read only for the
+    // page that lists them: one read of the space's tracker, no app's store
+    // woken. A read that fails is reported and the apps are drawn without it.
+    view == 'apps'
+      ? shelved.then(({ all }) =>
+        all.length
+          ? brokenIn(env, space, who, all).catch((e) => {
+            caught(e, { request: 'read open errors', space: space.slug })
+            return undefined
+          })
+          : undefined
+      )
+      : undefined,
     // Who visited (views.ts, T-34497). `null` is the platform with no
     // analytics token set, and a read that fails is `null` too: the page
     // does not go down because Cloudflare's analytics did.
-    views: view == 'visits' && all.length ? await visits(env, all) : undefined,
+    view == 'visits'
+      ? shelved.then(({ all }) => all.length ? visits(env, all) : undefined)
+      : undefined,
+    feeOf(dir),
+    dir.nameAt(owner),
+    identity().then((part) => part.agents(env, owner)),
+    // What other people's spaces let this person open, read only for the
+    // page that lists apps.
+    view == 'apps' ? shared(dir, owner) : undefined,
+    // Who is in the space and its apps (people.ts), read only for the page
+    // that shows it.
+    view == 'people'
+      ? shelved.then(({ all }) => peopleIn(dir, [space], all))
+      : undefined,
+    // What the person connected for themselves and what each space of
+    // theirs calls out through (connections.ts), read only for the page that
+    // shows it: this space first, which a new connection is made for.
+    view == 'connections'
+      ? Promise.all([
+        dir.spaces(owner, 'owner'),
+        identity().then((part) => part.services(env, owner)),
+      ]).then(([spaces, services]) =>
+        connectionsOf(
+          env,
+          [space, ...spaces.filter((s) => s.eid != space.eid)],
+          owner,
+          services,
+          enabled(req),
+          q.get('add') ?? undefined,
+        )
+      )
+      : undefined,
+  ])
+  return deskPage({
+    views,
     viewDays: DAYS,
     viewsOff: NOT_ON,
     space: space.slug,
@@ -2510,35 +2606,12 @@ let desk = async (
       known: !!space.plan?.customer,
     },
     paid: q.get('paid') == '1',
-    fee: rate(await feeOf(dir)),
-    name: await dir.nameAt(owner) ?? '',
-    agents: await (await identity()).agents(env, owner),
-    // What other people's spaces let this person open, read only for the
-    // page that lists apps.
-    shared: view == 'apps' ? await shared(dir, owner) : undefined,
-    // Who is in the space and its apps (people.ts), read only for the page
-    // that shows it.
-    people: view == 'people'
-      ? (await peopleIn(dir, [space], all))[0]
-      : undefined,
-    // What the person connected for themselves and what each space of
-    // theirs calls out through (connections.ts), read only for the page that
-    // shows it: this space first, which a new connection is made for.
-    connections: view == 'connections'
-      ? await connectionsOf(
-        env,
-        [
-          space,
-          ...(await dir.spaces(owner, 'owner')).filter((s) =>
-            s.eid != space.eid
-          ),
-        ],
-        owner,
-        await (await identity()).services(env, owner),
-        enabled(req),
-        new URL(req.url).searchParams.get('add') ?? undefined,
-      )
-      : undefined,
+    fee: rate(fee),
+    name: name ?? '',
+    agents,
+    shared: theirs,
+    people: people?.[0],
+    connections,
     invite,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,

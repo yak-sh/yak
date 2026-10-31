@@ -1,4 +1,4 @@
-import { EPOCH, MEND } from './directory-copy.ts'
+import { EPOCH, gathered, MEND, READS } from './directory-copy.ts'
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
 // yak/platform, a graph on the platform's own vocabulary (vocab.ts
@@ -787,12 +787,15 @@ export let fetch = (
     req.method == 'GET' &&
     (req.headers.get(EPOCH) == '1' || req.headers.get(STATIC_QUERY) == '1')
   ) {
-    let q = new URL(req.url).searchParams.get('q') ?? ''
+    let url = new URL(req.url)
+    let q = url.searchParams.get('q') ?? ''
     let door = metaStore(env).door ?? storeOf(env.STORE, PLATFORM_STORE)
     return door(
-      `/query?q=${encodeURIComponent(q)}${
-        req.headers.has(MEND) ? '&mend=1' : ''
-      }`,
+      url.pathname == READS
+        ? READS + url.search
+        : `/query?q=${encodeURIComponent(q)}${
+          req.headers.has(MEND) ? '&mend=1' : ''
+        }`,
       {},
       req.headers.get(STATIC_QUERY) == '1' ? { [STATIC_QUERY]: '1' } : {},
     )
@@ -1356,7 +1359,7 @@ let revised = async (via: Fetcher, q: string): Promise<string> => {
 export let directory = (via: Fetcher | Part, now = false) => {
   let versioned = ('signed' in via && !!via.signed) ||
     ('versioned' in via && !!via.versioned)
-  let door = 'fetch' in via ? remote(via) : via
+  let door = 'fetch' in via ? remote(versioned ? via : gathered(via)) : via
   let query = async (q: string, fresh = now): Promise<Row[]> =>
     JSON.parse(
       versioned && 'fetch' in via
@@ -1571,7 +1574,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // listing is one question (tools.ts `app_list`, T-35431); the answer is
     // still one flat list, and a caller wanting them per space groups by
     // `app.space`.
-    apps: async (space: Space | Space[]): Promise<App[]> => {
+    apps: async (
+      space: Pick<Space, 'eid'> | Pick<Space, 'eid'>[],
+    ): Promise<App[]> => {
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`, true))
@@ -1956,22 +1961,24 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // whether this person may address the platform's own store (agent.ts
     // `spoken`), which is a seat in `yak` like any other.
     seated: async (person: string, role?: Role): Promise<Seat[]> => {
-      let members = await theirs(
-        person,
-        `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
-      )
-      let held = new Map<string, Role>()
-      for (let m of members) {
-        if (m.member) held.set(idOf(m.member.space), m.member.role)
-      }
+      let held = await self.sitting(person)
       if (!held.size) return []
       // Bare `.entity.eid=` and nothing else: naming components would project the row
       // down to them, and a space is read whole ({@link spaceOf}).
       let rows = await query(`.entity.eid=${[...held.keys()].join(',')}`)
       return rows
-        .filter((r) => r.space)
+        .filter((r) => r.space && (!role || held.get(r.entity.eid) == role))
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
     },
+    // The eid of each space this person sits in, with their role there: all
+    // of them whatever a caller goes on to keep, so that every question about
+    // a person's seats is the one line, asked once.
+    sitting: async (person: string): Promise<Map<string, Role>> =>
+      new Map(
+        (await theirs(person, `.member.person=${person}`)).flatMap((m) =>
+          m.member ? [[idOf(m.member.space), m.member.role]] : []
+        ),
+      ),
     // Every app this person is a guest of, by a grant rather than a seat
     // (T-37615), with its space and what the grant lets them do: what their
     // dashboard lists as shared with them (apps.ts `shared`). Fresh, because

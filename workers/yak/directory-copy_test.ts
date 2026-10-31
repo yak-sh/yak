@@ -3,8 +3,11 @@ import { assertEquals } from '@std/assert'
 import {
   anonymousPage,
   EPOCH,
+  gathered,
   publicDirectory,
+  READS,
   type ServingCopyDoor,
+  STALL,
 } from './directory-copy.ts'
 import { ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
@@ -31,7 +34,11 @@ let fixture = () => {
 }
 let req = () => new Request('https://directory/query?q=page')
 let flush = async () => {
-  for (let n = 0; n < 12; n++) await Promise.resolve()
+  // A turn apart: gathered reads leave on the next one (directory-copy.ts).
+  for (let turns = 0; turns < 3; turns++) {
+    await new Promise((turned) => setTimeout(turned, 0))
+    for (let n = 0; n < 12; n++) await Promise.resolve()
+  }
 }
 
 let warmRead = await (async () => {
@@ -46,7 +53,7 @@ let warmRead = await (async () => {
 test('directory deadline: no copy hop on a warm authoritative request', () => {
   assertEquals(warmRead, { body: 'current', reads: 0 })
 })
-test('directory deadline: stale answer is used at 25ms, never before', async () => {
+test('directory deadline: stale answer is used at the stall deadline, never before', async () => {
   let f = fixture(), time = clock()
   f.state.put(0, 'page', 'public')
   let door = publicDirectory(
@@ -58,7 +65,7 @@ test('directory deadline: stale answer is used at 25ms, never before', async () 
   let done = door.fetch(req()).then(async (r) => {
     got = await r.text()
   })
-  await time.advance(24)
+  await time.advance(STALL - 1)
   assertEquals(got, null)
   await time.advance(1)
   await done
@@ -79,7 +86,7 @@ test('directory deadline: cold and fenced copies do not shorten authoritative wa
       done = door.fetch(req()).then(() => {
         got = true
       })
-    await time.advance(25)
+    await time.advance(STALL)
     await flush()
     assertEquals(got, false)
     resolve(new Response('authoritative'))
@@ -97,6 +104,7 @@ test('directory deadline: a late directory result cannot refill a fenced revisio
   let done = door.fetch(req())
   let revision = f.state.begin()
   f.state.finish(revision)
+  await flush()
   resolve(new Response('old', { headers: { [EPOCH]: '0' } }))
   await done
   await flush()
@@ -166,7 +174,7 @@ let directWinner = await (async () => {
     },
   )
   let reading = door.fetch(req())
-  await time.advance(25)
+  await time.advance(STALL)
   direct.resolve(new Response('authority'))
   let answer = await reading
   copy.resolve('late copy')
@@ -210,7 +218,7 @@ let publicPolicies = await (async () => {
     true,
   )
     .app({ eid: 'space', slug: 'space' } as never, 'page')
-  await time.advance(25)
+  await time.advance(STALL)
   let held = await copied
   delete f.copy.read
   let legacy = directory(
@@ -220,7 +228,7 @@ let publicPolicies = await (async () => {
     }, time),
     true,
   ).app({ eid: 'space', slug: 'space' } as never, 'page')
-  await time.advance(25)
+  await time.advance(STALL)
   return {
     current: current?.policy,
     copied: held?.policy,
@@ -237,4 +245,69 @@ test('public directory stamps current and copied Apps but never invents legacy a
     reads: 0,
     validations: 0,
   })
+})
+
+// What a door behind `gathered` is sent, and a store that answers each line
+// with the line itself.
+let reading = (
+  door = (lines: string[]) =>
+    Response.json(lines.map((q) => ({ status: 200, epoch: '7', body: q }))),
+) => {
+  let trips: string[][] = []
+  let via = gathered({
+    fetch: (r) => {
+      let url = new URL(r.url)
+      let lines = url.searchParams.getAll('q')
+      trips.push(lines)
+      return Promise.resolve(
+        url.pathname == READS ? door(lines) : new Response(lines[0]),
+      )
+    },
+  })
+  let ask = (q: string, headers: HeadersInit = {}) =>
+    via.fetch(
+      new Request(`http://directory/query?q=${encodeURIComponent(q)}`, {
+        headers,
+      }),
+    )
+  let answers = (rs: Response[]) => Promise.all(rs.map((r) => r.text()))
+  return { trips, ask, answers }
+}
+test('reads asked in one turn are one trip, each answered its own line', async () => {
+  let { trips, ask, answers } = reading()
+  let rs = await Promise.all([ask('.a'), ask('.b'), ask('.c')])
+  assertEquals(await answers(rs), ['.a', '.b', '.c'])
+  assertEquals(trips, [['.a', '.b', '.c']])
+  assertEquals(rs[0].headers.get(EPOCH), '7')
+  // A read alone asks as it always did.
+  assertEquals(await (await ask('.d')).text(), '.d')
+  assertEquals(trips.at(-1), ['.d'])
+})
+test('a store on the code before the door is read one line at a time', async () => {
+  let { trips, ask, answers } = reading(() =>
+    new Response('no route', { status: 404 })
+  )
+  let rs = await Promise.all([ask('.a'), ask('.b')])
+  assertEquals(await answers(rs), ['.a', '.b'])
+  assertEquals(trips, [['.a', '.b'], ['.a'], ['.b']])
+})
+test("one refused line stays that line, and a failed trip is every line's", async () => {
+  let { ask } = reading((lines) =>
+    Response.json(lines.map((q) => ({
+      status: q == '.bad' ? 400 : 200,
+      epoch: null,
+      body: q,
+    })))
+  )
+  let [good, bad] = await Promise.all([ask('.good'), ask('.bad')])
+  assertEquals([good.status, bad.status], [200, 400])
+  let failing = reading(() => new Response('down', { status: 503 }))
+  let down = await Promise.all([failing.ask('.a'), failing.ask('.b')])
+  assertEquals(down.map((r) => r.status), [503, 503])
+})
+test('a long list of reads takes the trips its addresses need', async () => {
+  let { trips, ask } = reading()
+  let long = '.x'.repeat(1500)
+  await Promise.all(['a', 'b', 'c'].map((n) => ask(long + n)))
+  assertEquals(trips.map((t) => t.length), [2, 1])
 })

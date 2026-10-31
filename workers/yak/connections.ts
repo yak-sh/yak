@@ -443,11 +443,11 @@ export let connectionsOf = async (
   let named = new Map<string, string>()
   let available = new Map<string, { app: string; title: string }[]>()
   let dir = dirOf(env)
+  let kept = (await dir.apps(spaces)).filter((app) => !app.trashed)
   for (let space of spaces) {
     available.set(
       space.eid,
-      (await dir.apps(space))
-        .filter((app) => !app.trashed)
+      kept.filter((app) => app.space == space.eid)
         .map((app) => ({ app: app.eid, title: app.title || app.slug })),
     )
   }

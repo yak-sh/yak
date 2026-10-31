@@ -362,3 +362,23 @@ test('the front page is served at the space root', async () => {
     await k.stop()
   }
 })
+
+// Every trip to the directory is a wait from wherever the request landed, so a
+// dashboard page asks everything it can at once: who the person is and where
+// they sit first, then the rows those name.
+test('a dashboard page reads the directory in two trips', async () => {
+  let k = await kernel()
+  let slug = unique('trips')
+  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
+  let trips = async (path: string) => {
+    await k.settled()
+    let page = await k.at('yaks.app', path, { headers: { cookie } })
+    await page.body?.cancel()
+    assertEquals(page.status, 200)
+    return /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1]
+  }
+  for (let view of ['apps', 'settings', 'billing'] as const) {
+    assertEquals(await trips(managePath(view, slug)), '2', view)
+  }
+  assertEquals(await trips(managePath('apps')), '2', 'their own space')
+})

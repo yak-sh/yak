@@ -16,6 +16,8 @@ export type ServingCopyDoor = {
   read?(key: string): Promise<{ revision: number; body: string } | null>
   valid?(revision: number): Promise<boolean>
   publish?(revision: number, key: string, body: string): Promise<boolean>
+  /** Many answers in one trip, each said as `publish` says it. */
+  publishes?(answers: Filled[]): Promise<boolean[]>
   begin(): Promise<number>
   /** The newest fence raised, committed or not. */
   revision?(): Promise<number>
@@ -25,6 +27,8 @@ export type ServingCopyDoor = {
   put(revision: number, key: string, body: string): Promise<boolean>
   get(key: string): Promise<string | null>
 }
+/** One answer for the copy: its revision, its key and its body. */
+export type Filled = [revision: number, key: string, body: string]
 export type ServingCopies = {
   idFromName(name: string): unknown
   get(id: unknown): ServingCopyDoor
@@ -38,12 +42,15 @@ export let copyOf = (env: Pick<Env, 'SERVING_COPY'>) => {
 // request's tally as `copy_wait` (timing.ts).
 let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
   let timed = <T>(call: () => Promise<T>) => elapsed('copy_wait', call)
-  let { read, valid, publish, revision, settle } = copy
+  let { read, valid, publish, publishes, revision, settle } = copy
   return {
     ...read && { read: (key) => timed(() => copy.read!(key)) },
     ...valid && { valid: (at) => timed(() => copy.valid!(at)) },
     ...publish && {
       publish: (at, key, body) => timed(() => copy.publish!(at, key, body)),
+    },
+    ...publishes && {
+      publishes: (answers) => timed(() => copy.publishes!(answers)),
     },
     ...revision && { revision: () => timed(() => copy.revision!()) },
     ...settle && {
@@ -152,6 +159,104 @@ export let EPOCH = 'x-yak-directory-revision'
 export let MEND = 'x-yak-mend'
 /** How long a signed read waits for a directory write to release its fence. */
 export let FENCE_WAIT = 15_000
+/** How long a read waits on the directory before asking the copy as well. A
+ * far colo's healthy read takes 100 ms and more, so this sits beyond it: every
+ * ask of the copy is trips of its own. Once a read of a request has gone this
+ * long, the request's later reads ask at once. */
+export let STALL = 250
+/** The directory's door for many reads in one trip (Store `#reads`). */
+export let READS = '/reads'
+// What fits in one trip's address; what doesn't fit goes in another.
+let ROOM = 8_000
+
+// A task's worth of work, in which everything a page asks together is asked:
+// callers that split on a shared answer resume at different depths of the
+// same turn, so a microtask would see only the first of them.
+let turn = (then: () => void) => void setTimeout(then, 0)
+
+/** The directory door with reads gathered: the reads asked in one turn travel
+ * as one trip, however many callers asked them, and each caller is answered
+ * its own lines. A store still on the code before the door answers 404 while
+ * a deploy moves it, and the reads then go one at a time. Never share across
+ * requests. */
+export let gathered = (via: Fetcher): Fetcher => {
+  type Asked = {
+    req: Request
+    q: string
+    answer: (r: Response) => void
+    fail: (e: unknown) => void
+  }
+  let waiting: Asked[][] = [[], []]
+  let single = ({ req, answer, fail }: Asked) =>
+    via.fetch(req).then(answer, fail)
+  let send = async (asked: Asked[]) => {
+    if (asked.length == 1) return await single(asked[0])
+    let url = new URL(READS, asked[0].req.url)
+    for (let { q } of asked) url.searchParams.append('q', q)
+    try {
+      let r = await via.fetch(
+        new Request(url, { headers: asked[0].req.headers }),
+      )
+      if (r.status == 404) {
+        await r.body?.cancel()
+        return void await Promise.all(asked.map(single))
+      }
+      if (!r.ok) {
+        let body = await r.text()
+        for (let { answer } of asked) answer(new Response(body, r))
+        return
+      }
+      let answers = await r.json() as ReadAnswer[]
+      asked.forEach(({ answer }, n) => {
+        let { status, epoch, body } = answers[n]
+        answer(
+          new Response(body, {
+            status,
+            headers: {
+              'content-type': 'application/json',
+              ...epoch == null ? {} : { [EPOCH]: epoch },
+            },
+          }),
+        )
+      })
+    } catch (e) {
+      for (let { fail } of asked) fail(e)
+    }
+  }
+  let flush = (asked: Asked[]) => {
+    let trip: Asked[] = [], room = ROOM
+    for (let one of asked) {
+      let size = encodeURIComponent(one.q).length + 3
+      if (trip.length && size > room) {
+        void send(trip)
+        trip = [], room = ROOM
+      }
+      trip.push(one)
+      room -= size
+    }
+    void send(trip)
+  }
+  return {
+    fetch: (req) => {
+      let url = new URL(req.url)
+      let q = url.searchParams.get('q')
+      if (
+        req.method != 'GET' || url.pathname != '/query' || q == null ||
+        req.headers.has(MEND)
+      ) return via.fetch(req)
+      let at = waiting[req.headers.has(EPOCH) ? 1 : 0]
+      return new Promise<Response>((answer, fail) => {
+        if (!at.length) {
+          turn(() => flush(at.splice(0)))
+        }
+        at.push({ req, q, answer, fail })
+      })
+    },
+  }
+}
+
+/** One line of a READS answer: what `/query` would have answered it. */
+export type ReadAnswer = { status: number; epoch: string | null; body: string }
 
 /** The real directory wins normally. Only a successful copy ends a stall. */
 export let publicDirectory = (
@@ -161,7 +266,8 @@ export let publicDirectory = (
   used: () => void = () => {},
 ): Fetcher & { stale?: boolean; versioned?: boolean } => {
   if (!copy) return via
-  let began = time.now()
+  let reads = gathered(via)
+  let late = false
   let door: Fetcher & { stale?: boolean; versioned?: boolean } = {
     versioned: true,
     fetch: (req) => {
@@ -169,10 +275,11 @@ export let publicDirectory = (
       let key = new URL(req.url).searchParams.get('q') ?? ''
       let headers = new Headers(req.headers)
       headers.set(EPOCH, '1')
-      let direct = via.fetch(new Request(req, { headers }))
+      let direct = reads.fetch(new Request(req, { headers }))
       return new Promise<Response>((resolve, reject) => {
         let settled = false
-        let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
+        let cancel = time.after(late ? 0 : STALL, () => {
+          late = true
           void (copy.read
             ? copy.read(key)
             : copy.get(key).then((body) =>
@@ -254,7 +361,8 @@ export let signedDirectory = (
   time: Clock = system,
 ): Fetcher & { signed?: boolean } => {
   if (!copy) return via
-  let began = time.now()
+  let reads = gathered(via)
+  let late = false
   // What the last look saw is what the request is told, and what its report
   // says: a give-up that names no cause cannot be fixed.
   let unavailable = (why: string) =>
@@ -267,13 +375,32 @@ export let signedDirectory = (
   // its committed revision lowers a fence whose finish was lost. One it
   // refuses while still fenced at that revision is a fence no write may hold
   // any more, so the directory is asked to mend it.
+  let filling: { answer: Filled; said: (kept: boolean) => void }[] = []
+  let published = (answer: Filled) =>
+    new Promise<boolean>((said, fail) => {
+      if (!copy.publishes) {
+        return void (copy.publish?.(...answer) ?? Promise.resolve(true))
+          .then(said, fail)
+      }
+      if (!filling.length) {
+        turn(() => {
+          let held = filling.splice(0)
+          void copy.publishes!(held.map((h) => h.answer)).then(
+            (kept) => held.forEach((h, n) => h.said(kept[n])),
+            // A copy that cannot take them is filled by the next reads.
+            () => held.forEach((h) => h.said(true)),
+          )
+        })
+      }
+      filling.push({ answer, said })
+    })
   let fill = async (
     req: Request,
     revision: number,
     key: string,
     body: string,
   ) => {
-    if (await copy.publish?.(revision, key, body) !== false) return
+    if (await published([revision, key, body])) return
     if (await current(copy, revision) === true) return
     let headers = new Headers(req.headers)
     headers.set(EPOCH, '1')
@@ -308,7 +435,8 @@ export let signedDirectory = (
           } catch { /* Wait for the directory on a cold or fenced miss. */ }
           return false
         }
-        let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
+        let cancel = time.after(late ? 0 : STALL, () => {
+          late = true
           void fallback()
         })
         let headers = new Headers(req.headers)
@@ -321,7 +449,7 @@ export let signedDirectory = (
           // Read whole: a deploy that restarts the directory cuts off the
           // answer it was sending as well as the call it was taking.
           try {
-            answer = await via.fetch(new Request(req, { headers }))
+            answer = await reads.fetch(new Request(req, { headers }))
             body = await answer.text()
           } catch (e) {
             await fallback()

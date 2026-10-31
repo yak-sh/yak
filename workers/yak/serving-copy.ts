@@ -149,6 +149,13 @@ export class ServingCopy {
     return this.put(revision, key, body)
   }
 
+  /** Many answers, each said as {@link publish} says it. */
+  publishes(answers: [number, string, string][]): boolean[] {
+    return answers.map(([revision, key, body]) =>
+      this.publish(revision, key, body)
+    )
+  }
+
   #trim(answers: Map<string, string>): void {
     let bytes = () =>
       [...answers].reduce((n, [k, b]) => n + k.length + b.length, 0)

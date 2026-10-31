@@ -9,6 +9,7 @@ import { platformVocab } from './vocab.ts'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
+import { READS } from './directory-copy.ts'
 import { tallying } from './lib/hops.ts'
 import { answered, type Meta, meta, metaOf } from './meta.ts'
 import { doorOf, PLATFORM_STORE, STATIC_QUERY } from './door.ts'
@@ -364,7 +365,9 @@ let held = () => {
     return rows.filter((row) =>
       terms.every((t) => {
         let [key, want] = t.split('=')
-        if (key == '.entity.eid') return row.entity.eid == want
+        if (key == '.entity.eid') {
+          return want.split(',').includes(row.entity.eid)
+        }
         if (key == '.limit' || key == '.after') return true
         let [, name, prop] = key.split('.')
         let comp = row[name] as Record<string, unknown> | undefined
@@ -416,6 +419,15 @@ let held = () => {
           let url = new URL(r.url)
           hops.push(`${r.method} ${url.pathname}${url.search}`)
           if (url.pathname == '/apply') return apply(await r.text())
+          if (url.pathname == READS) {
+            return Response.json(
+              url.searchParams.getAll('q').map((q) => ({
+                status: 200,
+                epoch: null,
+                body: JSON.stringify(answer(`?q=${encodeURIComponent(q)}`)),
+              })),
+            )
+          }
           return Response.json(answer(url.search))
         },
       }),
@@ -475,26 +487,25 @@ test('signing in asks the directory a bounded number of questions', async () => 
   m.put(first, { person: {}, email: { address: 'first@yaks.app' } })
   await m.dir.own(first)
 
-  // What a later person's first sign-in costs: who they are (asked twice —
-  // once by `spaces()` to know the person exists at all, once here for the
-  // address their slug is derived from; the read cache answers the second on
-  // the deploy), what they own, whether that slug is free, whether it still
-  // redirects for a space that left it (which the mint takes from that space,
-  // D-131924: one read over the handful of spaces that ever moved), the
-  // write, and the space read back afterwards.
+  // What a later person's first sign-in costs: who they are and where they sit,
+  // in one trip; who they are again for the address their slug is derived from
+  // (the request's memory answers it on the deploy), whether that slug is free,
+  // whether it still redirects for a space that left it (which the mint takes
+  // from that space, D-131924: one read over the handful of spaces that ever
+  // moved), the write, and the space read back afterwards.
   let them = crypto.randomUUID()
   m.put(them, { person: {}, email: { address: 'dana@yaks.app' } })
   m.hops.length = 0
   let mine = await m.dir.own(them)
   assertEquals(mine.slug, 'dana')
-  assertEquals(m.hops.length, 7, m.hops.join('\n'))
+  assertEquals(m.hops.length, 6, m.hops.join('\n'))
 
   // And what it costs once they have one: the ordinary sign-in, which is
-  // every sign-in after the first. Their memberships resolve to a space each,
-  // so this one grows with the number of spaces they own.
+  // every sign-in after the first: who they are and where they sit, then those
+  // spaces, in one read however many, and who they are again as above.
   m.hops.length = 0
   assertEquals((await m.dir.own(them)).eid, mine.eid)
-  assertEquals(m.hops.length, 4, m.hops.join('\n'))
+  assertEquals(m.hops.length, 3, m.hops.join('\n'))
 })
 
 test('directory caches belong to a store, not the shared isolate', async () => {
