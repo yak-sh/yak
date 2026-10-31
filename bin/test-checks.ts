@@ -1,16 +1,23 @@
 // Local source checks cover the change; runtime tests follow consumers.
 // Main CI checks all consumer types after the push.
 
+import { publishing } from './release.ts'
+
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 
 export type Check = { name: string; args: string[] }
 
-/** Format and lint existing changed files. */
-export let checks = (changed: string[]): Check[] => {
+/** Format and lint existing changed files, and check the public API of each
+ * package in `configs` that holds one. */
+export let checks = (changed: string[], configs: string[] = []): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
+  let touched = configs.filter((config) => {
+    let dir = config.replace(/^\.\//, '').replace(/deno\.json$/, '')
+    return changed.some((path) => path.startsWith(dir))
+  })
   return [
     ...fmt.length
       ? [{ name: 'format', args: ['fmt', '--permit-no-files', ...fmt] }]
@@ -18,6 +25,17 @@ export let checks = (changed: string[]): Check[] => {
     ...lint.length
       ? [{ name: 'lint', args: ['lint', '--permit-no-files', ...lint] }]
       : [],
+    ...touched.map((config) => ({
+      name: `publish ${config}`,
+      args: [
+        'publish',
+        '--dry-run',
+        '--allow-dirty',
+        '--no-check',
+        '--config',
+        config,
+      ],
+    })),
   ]
 }
 
@@ -51,11 +69,13 @@ export let format = async (
   return files
 }
 
-/** Lint the change after formatting. */
+/** Lint the change and check its packages' public APIs after formatting. */
 export let check = async (
   changed: string[],
   run = command,
+  packages = publishing,
 ) =>
   (await Promise.all(
-    checks(changed).filter((c) => c.name != 'format').map(run),
+    checks(changed, (await packages()).map((p) => p.config))
+      .filter((c) => c.name != 'format').map(run),
   )).every(Boolean)

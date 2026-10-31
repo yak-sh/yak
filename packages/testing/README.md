@@ -35,9 +35,10 @@ suite('sum', ({ it, equal }) => {
 ```
 
 From this repository, `deno task test` selects tests through the dependency
-graph, including consumers and examples. It applies formatting to changed files
-and lints changed code. Runtime tests retain consumer coverage. Full source and
-doc comment type checking runs in main CI after the push, or explicitly with
+graph, including consumers and examples. It applies formatting to changed files,
+lints changed code, and checks the public API of each changed package for slow
+types. Runtime tests retain consumer coverage. Full source and doc comment type
+checking runs in main CI after the push, or explicitly with
 `deno task check:types`. Paths and tags narrow a run while iterating; the
 finished change uses the no-path command to include its consumers. Tests run in
 process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's

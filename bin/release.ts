@@ -57,11 +57,15 @@ export let configs = async (root = '.') => {
 }
 
 // The members `deno publish` publishes: a name, and no `"publish": false`.
-let publishing = async (root = '.'): Promise<string[]> => {
-  let out: string[] = []
+export let publishing = async (
+  root = '.',
+): Promise<{ name: string; config: string }[]> => {
+  let out: { name: string; config: string }[] = []
   for (let path of await configs(root)) {
     let config = JSON.parse(await Deno.readTextFile(path))
-    if (config.name && config.publish !== false) out.push(config.name)
+    if (config.name && config.publish !== false) {
+      out.push({ name: config.name, config: path })
+    }
   }
   return out
 }
@@ -79,7 +83,7 @@ export let unlisted = async (
   root = '.',
   get: typeof fetch = fetch,
 ): Promise<string[]> => {
-  let names = await publishing(root)
+  let names = (await publishing(root)).map((p) => p.name)
   let pages = await Promise.all(names.map((name) => read(get, name)))
   return names.filter((_, i) => pages[i] == null)
 }
@@ -104,7 +108,10 @@ export let release = async (version: string, root = '.') => {
   for (let path of paths) {
     await Deno.writeTextFile(path, bump(await Deno.readTextFile(path), version))
   }
-  await Deno.writeTextFile(`${root}/${LIST}`, list(await publishing(root)))
+  await Deno.writeTextFile(
+    `${root}/${LIST}`,
+    list((await publishing(root)).map((p) => p.name)),
+  )
   await run('-C', root, 'add', ...paths, `${root}/${LIST}`)
   await run('-C', root, 'commit', '-m', `Release v${version}`)
   await run('-C', root, 'tag', `v${version}`)

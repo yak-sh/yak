@@ -118,8 +118,9 @@ stronger.
 
 `deno task test` with no paths uses the dependency graph to select tests and
 doctests the branch and working changes reach, including consumers. It applies
-formatting to changed files and lints them. Runtime tests follow dependencies to
-consumers. Full source and doc comment type checking runs in main's CI after
+formatting to changed files, lints them, and checks the public API of each
+changed package for slow types (`deno publish --dry-run`, a fifth of a second a
+package). Runtime tests follow dependencies to consumers. Full source and doc comment type checking runs in main's CI after
 the push; `deno task check:types` runs it explicitly when needed. Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.
