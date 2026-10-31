@@ -251,13 +251,12 @@ for (let cookie of ['yak_session=person-one', 'yak_session=person-two']) {
   )
 }
 
-for (
-  let init of [
-    { headers: { authorization: 'Bearer person' } },
-    { headers: { range: 'bytes=0-2' } },
-    { headers: { 'x-yak-caller': 'person' } },
-  ]
-) {
+let bypasses: RequestInit[] = [
+  { headers: { authorization: 'Bearer person' } },
+  { headers: { range: 'bytes=0-2' } },
+  { headers: { 'x-yak-caller': 'person' } },
+]
+for (let init of bypasses) {
   test(
     'credentials and ranges keep their own gateway answer: ' +
       JSON.stringify(init),
