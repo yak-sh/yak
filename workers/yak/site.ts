@@ -15,6 +15,7 @@ import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
+import { sheeted } from './sheets.ts'
 import { clock, timed } from './timing.ts'
 
 let FRESH = 'public, max-age=30, must-revalidate'
@@ -139,6 +140,18 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 }
 
 // Validators include the deployment even when two releases render equal bytes.
+// A static page as it leaves: its head's links swapped, and validated by the
+// bytes it answers with.
+export let worn = async (req: Request, page: Response, env: Host) => {
+  let body = sheeted(await page.text(), env)
+  let headers = new Headers(page.headers)
+  headers.delete('content-length')
+  headers.set('etag', `W/"${await checksum(body)}"`)
+  return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
+    ? new Response(null, { status: 304, headers })
+    : new Response(body, { headers })
+}
+
 export let validated = async (
   req: Request,
   page: Response,

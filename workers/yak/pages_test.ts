@@ -59,7 +59,7 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
     ]
   ) {
     await staged(response, [
-      'https://yaks.fyi/controls.css',
+      'https://yaks.fyi/pages.css',
       'https://yaks.fyi/',
     ])
   }

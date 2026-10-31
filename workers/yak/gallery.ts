@@ -73,6 +73,7 @@ import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
+import { sheeted } from './sheets.ts'
 import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
@@ -862,7 +863,7 @@ export let showcase = (file: string, all: Shown[], feature = '') => {
 // from the apps' chosen screenshots. The file remains the fallback when the
 // directory does not answer.
 export let made = async (env: Env, dir: Directory, file: Response) => {
-  let html = hosted(await file.text(), env)
+  let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
   let { demos: shown, feature } = await examples(dir, env)
     .then(async ({ demos, feature }) => ({

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { join } from 'node:path'
+import { from, plan } from './sheet-assets.ts'
 
 let hash = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
@@ -58,7 +59,7 @@ export let assetInputs = (paths: string[]) =>
   paths.filter((path) =>
     /^(?:packages\/|workers\/yak\/public\/)/.test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&
@@ -91,6 +92,7 @@ let outputs = async (root: string) => {
       '_cli/current.json',
       '_cli/launch.ts',
       url,
+      ...Object.values(plan(from(publicDir)).names),
     ]
       .map((name) => join(publicDir, name)),
   ]

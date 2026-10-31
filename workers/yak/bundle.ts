@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from '@std/toml'
+import { from, plan } from './sheet-assets.ts'
 
 /** The entry's static imports, leaving every dynamic door unopened. */
 export let closure = (meta: Metafile, entry: string): Set<string> => {
@@ -64,7 +65,10 @@ export let bundle = async (root: string, output: string, meta: string) => {
       keepNames: true,
       sourcemap: true,
       metafile: true,
-      define: { 'process.env.NODE_ENV': '"production"' },
+      define: {
+        'process.env.NODE_ENV': '"production"',
+        YAK_SHEETS: JSON.stringify(plan(from(join(root, 'public'))).names),
+      },
     })
     let source = built.metafile!
     let entry = Object.keys(source.outputs).find((file) =>

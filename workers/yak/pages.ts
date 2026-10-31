@@ -36,6 +36,7 @@ import {
 } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { links } from './sheets.ts'
 import { count, FREE, PLUS, PRICE, size } from './meter.ts'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
@@ -94,11 +95,7 @@ export let shell = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="${url(env, '/controls.css')}">
-<link rel="stylesheet" href="${url(env, '/pages.css')}">
+${links(env, 'pages.css')}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
       lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`

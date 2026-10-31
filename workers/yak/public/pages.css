@@ -2,6 +2,8 @@
    a notice or a drop is drawn in, and the dashboard's frame. Everything a
    page holds is the style guide's (controls.css, /style-guide); this is only
    what no other page draws. */
+@import url('controls.css');
+
 @layer base {
   * {
     box-sizing: border-box;

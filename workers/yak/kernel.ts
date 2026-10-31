@@ -99,7 +99,8 @@ import * as gallery from './gallery.ts'
 import { call } from './tools.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { HANDOFF } from './handoff.ts'
-import { apex, hosted } from './host.ts'
+import { apex, hosted, url } from './host.ts'
+import { named } from './sheets.ts'
 import { sprite } from './icons.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import { callback, hook } from './connections.ts'
@@ -136,6 +137,12 @@ let identity: Handler = async (req, env) =>
   (await import('./identity.ts')).fetch(req, env)
 let mcp: Handler = async (req, env) =>
   (await import('./mcp.ts')).fetch(req, env)
+
+let unconditional = (req: Request) => {
+  let headers = new Headers(req.headers)
+  headers.delete('if-none-match')
+  return new Request(req, { headers })
+}
 
 let serve = async (req: Request, env: Env, r: Route) => {
   let asked = new URL(req.url).pathname
@@ -260,8 +267,16 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // addresses — the whole rule (T-37793).
   let read = await docs.answer(req, env, path)
   if (read) return read
-  let page = await env.ASSETS.fetch(req)
-  if (page.status == 404) return lost(env)
+  // A page's bytes are this file's with the head's links swapped (sheets.ts), so
+  // the file's etag says nothing about them: `worn` below answers for a page.
+  let page = await env.ASSETS.fetch(
+    /\.\w+$/.test(path) ? req : unconditional(req),
+  )
+  if (page.status == 404) {
+    // A page held from before a deploy names the sheet that deploy replaced.
+    let was = named(path)
+    return was ? Response.redirect(url(env, was), 302) : lost(env)
+  }
   let type = page.headers.get('content-type')?.split(';')[0].trim() ?? ''
   if (
     apex(env) != apex() && page.status == 200 && page.body &&
@@ -285,8 +300,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return new Response(page.body, { status: page.status, headers })
   }
   // Pricing is the other static page with a dynamic splice.
-  if (path == '/pricing') return await sell.priceAt(dir, page)
-  return page
+  if (path == '/pricing') page = await sell.priceAt(dir, page)
+  return type == 'text/html' && page.status == 200
+    ? await site.worn(req, page, env)
+    : page
 }
 
 // A foreign host that has reached the Worker (route.ts origin, T-33036) but

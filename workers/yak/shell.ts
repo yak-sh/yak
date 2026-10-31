@@ -9,6 +9,7 @@
 // exactly as the files say them.
 import { esc } from './html.ts'
 import { type Host, url } from './host.ts'
+import { links } from './sheets.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
 // (public/*.html, site_test.ts): the title and the line, the canonical, the
@@ -42,10 +43,7 @@ ${
 <meta name="twitter:image" content="${url(env, '/og.png')}">
 <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="/style.css">`
+${links(env, 'style.css')}`
 
 export let top = `<header class="Top">
 <a class="Top_Name" href="/" aria-label="yaks.app, home"><img class="Yak Yak-small" src="/yak.png" alt="" /><span>yaks.app</span></a>
