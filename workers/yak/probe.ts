@@ -16,8 +16,8 @@ import { Ajv } from 'ajv'
 
 let logs = new Map<string, string>()
 
-// Compiling a tool's output schema took a quarter of an MCP test's time; every
-// client of every kernel lists the same schemas.
+// Compiling tools' output schemas took a sixth of mcp_graph_test.ts's profile;
+// every client of every kernel lists the same schemas.
 let ajv = new Ajv({ strict: false })
 let compiled = new Map<string, ReturnType<typeof ajv.compile>>()
 let fitting = (schema: unknown) => {
