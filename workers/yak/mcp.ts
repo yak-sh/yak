@@ -1,3 +1,4 @@
+import { CallError } from '@yaks/tools/errors'
 import { copyOf, signedDirectory } from './directory-copy.ts'
 // The connector (D-32318 §The agent door): `POST /mcp` at the apex, an MCP
 // server over Streamable HTTP — one JSON-RPC request in, one JSON reply out,
@@ -84,7 +85,13 @@ import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
 import { translated } from '@yaks/mcp/tools'
-import { reaching, ROWS, searching } from './agent.ts'
+import {
+  named,
+  reaching,
+  ROWS,
+  scope as queryScope,
+  searching,
+} from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
@@ -388,7 +395,19 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // the floor under every write (T-34986). The reach is a fixed number of
   // directory reads however many spaces and apps it holds (T-35479).
   let c = ctx.clock ?? clock()
-  let reach = needsReach(rpc)
+  let args = rpc.params?.arguments as Record<string, unknown> | undefined
+  let selected =
+    rpc.method == 'tools/call' && rpc.params?.name == 'graph_query' &&
+      typeof args?.q == 'string'
+      ? queryScope(
+        [args.q, ...(Array.isArray(args.filters) ? args.filters : [])].join(
+          '&',
+        ),
+      ).said
+      : undefined
+  let reach = selected
+    ? [await c.time('reach', () => named(ctx, selected))]
+    : needsReach(rpc)
     ? await c.time('reach', () => inReach(ctx))
     : undefined
   // What the apps in reach report about themselves (standing.ts, T-34425):
@@ -825,6 +844,7 @@ let answered = async (
     try {
       built = await c.time('door', () => door(ctx, session, rpc))
     } catch (error) {
+      if (error instanceof CallError) return timed(erred(rpc.id, error), c)
       if (
         attempt >= 2 || error == null || typeof error != 'object' ||
         !('status' in error) || error.status != 503

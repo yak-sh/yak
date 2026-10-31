@@ -229,6 +229,18 @@ export let narrowed = (
       let space = await dir.space(want)
       return space && matches(space) ? space : null
     },
+    page: async (want, app, person) => {
+      let got = await dir.page(want, app, person)
+      return {
+        ...got,
+        ...person
+          ? {
+            role: got.space && matches(got.space) ? got.role : null,
+            administrative: false,
+          }
+          : {},
+      }
+    },
     spaces: async (person: string, role?: Role) =>
       (await dir.spaces(person, role)).filter(matches),
     seats: async (person: string, role?: Role) =>

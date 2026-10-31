@@ -121,3 +121,19 @@ test('the stored directory and memory agree on the caller’s reach', () => {
     reach.map(({ space, app, role }) => [space.eid, app.eid, role]).sort(),
   )
 })
+
+let elevated = await dir.page('other', 'recipes', person, true)
+let ordinary = await dir.page('one', 'recipes', 'guest', true)
+let confinedPage = await narrowed(dir, 'one').page(
+  'other',
+  'recipes',
+  person,
+  true,
+)
+test('a named snapshot distinguishes a platform admin from an app guest', () => {
+  equal(elevated.role, null)
+  equal(elevated.administrative, true)
+  equal(ordinary.administrative, false)
+  equal(confinedPage.role, null)
+  equal(confinedPage.administrative, false)
+})

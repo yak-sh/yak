@@ -1,6 +1,6 @@
 import type { Who } from './session.ts'
 import { applyOptions } from '@yaks/graph'
-import { reacquire } from './tool.ts'
+import { inRead, reacquire } from './tool.ts'
 // The agent door's two halves (T-33812), so mcp.ts is a mount and nothing
 // else: the caller's reach as one `Graph`, and the platform's own tools as a
 // `Plugin` on it.
@@ -56,6 +56,7 @@ import { packageTools } from './package-tools.ts'
 import { PUBLISHED, sending } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
 import { queried } from './page-graph.ts'
+import { META } from './directory.ts'
 import { titling } from './session.ts'
 import {
   type Ctx,
@@ -286,7 +287,11 @@ export let post = (ctx: Ctx): Plugin => ({
  * door is how the platform's admin reaches any app's rows: named by space and
  * app, they stand there as its owner (tool.ts `roleIn`).
  */
-export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
+export let named = async (
+  ctx: Ctx,
+  said: string,
+  write = false,
+): Promise<Reach> => {
   // Naming an app is asking about a membership, so a caller with no identity
   // cannot do it: signed out, the app a read answers for is the one the call
   // names and the door resolved (anon.ts `opened`), never a rider on the line.
@@ -298,7 +303,12 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
     )
   }
   let [one, two] = said.split('/')
-  return inApp(ctx, two ? { space: one, app: two } : { app: one }, write, true)
+  if (!two && !write) {
+    let found = (await inReach(ctx)).filter((r) => r.app.slug == one)
+    if (found.length == 1) return found[0]
+  }
+  let args = two ? { space: one, app: two } : { app: one }
+  return write ? inApp(ctx, args, true, true) : inRead(ctx, args)
 }
 
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,
@@ -393,7 +403,14 @@ let held = (
   // translated again.
   let asked = async (q: Query) => {
     let { said, line } = scope(stringify(q))
-    let where = said ? [await named(ctx, said)] : reach
+    let matches = said
+      ? reach.filter((r) =>
+        said == `${r.space.slug}/${r.app.slug}` ||
+        !said.includes('/') && said == r.app.slug
+      )
+      : []
+    let known = matches.length == 1 ? matches[0] : undefined
+    let where = said ? [known || await named(ctx, said)] : reach
     if (said && !line) {
       let { space, app } = where[0]
       let defs = (await vocabAt(ctx.env, space, app)).$defs ?? {}
@@ -463,8 +480,11 @@ let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
   // Each store's words as the document it keeps, read once per request
   // (reach.ts `vocabAt`): the roster already asked for them (standing.ts
   // `kindsOf`).
+  // The directory's vocabulary belongs to the directory, not an app's
+  // declaration; the store applies its own vocabulary to the query.
   let said = await Promise.all(
-    reach.map((r) => vocabAt(ctx.env, r.space, r.app)),
+    reach.filter((r) => r.space.slug != META.space || r.app.slug != META.app)
+      .map((r) => vocabAt(ctx.env, r.space, r.app)),
   )
   let defs: Record<string, PropSchema> = {}
   let core = appVocab()

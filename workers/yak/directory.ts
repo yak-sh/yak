@@ -1406,14 +1406,22 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // avoids an earlier trip just to learn the space eid; the same
     // authoritative snapshot answers the whole route. `role` is said only
     // when a person was asked about: their role, or null for no seat.
-    page: async (slug: string, app?: string | null, person?: string | null) => {
+    page: async (
+      slug: string,
+      app?: string | null,
+      person?: string | null,
+      over = false,
+    ) => {
       let at = `.app.space.space.slug=${slug}`
       let which = app
         ? `((${at}&.app.slug=${app})|(${at}&.home))`
         : `${at}&.home`
       let seat = person
         ? `|(.member.space.space.slug=${slug}&.member.person=${person})` +
-          `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})`
+          `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})` +
+          (over
+            ? `|(.member.space.space.slug=${META.space}&.member.person=${person})`
+            : '')
         : ''
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
@@ -1433,6 +1441,17 @@ export let directory = (via: Fetcher | Part, now = false) => {
         ...person
           ? {
             role: member?.role ?? null,
+            ...(over
+              ? {
+                administrative: rows.some((row) =>
+                  row.member &&
+                  idOf(row.member.person) == person &&
+                  row.member.role == 'owner' &&
+                  idOf(row.member.space) != space?.entity.eid
+                ) ||
+                  slug == META.space && member?.role == 'owner',
+              }
+              : {}),
             grants: new Map(
               rows.filter((row) => row.grant).map((row) => [
                 idOf(row.grant!.app),

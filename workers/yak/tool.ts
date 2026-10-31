@@ -330,6 +330,7 @@ let callerIn = async (
   write: boolean,
   over: boolean,
   seat?: Role | null,
+  administrative?: boolean,
 ) => {
   if (
     ctx.who?.spaceEid
@@ -338,8 +339,15 @@ let callerIn = async (
   ) {
     throw refuse('access', 'this credential does not open that space')
   }
-  let who = asCaller(ctx, await roleIn(ctx, space, over, seat))
-  if (over && await admin(ctx)) who.administrative = true
+  let who = asCaller(
+    ctx,
+    administrative === undefined
+      ? await roleIn(ctx, space, over, seat)
+      : administrative
+      ? 'owner'
+      : seat ?? null,
+  )
+  if (administrative ?? (over && await admin(ctx))) who.administrative = true
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)
@@ -515,4 +523,34 @@ let reached = async (
       if (!ctx.reopen || attempt >= 2 || !unavailable(error)) throw error
     }
   }
+}
+
+// A named read asks the same snapshot as an app page, including the admin's
+// seat when it may open an app outside its ordinary reach.
+export let inRead = async (ctx: Ctx, args: Args) => {
+  if (typeof args.space != 'string') return inApp(ctx, args, false, true)
+  let scope = { ...ctx, dir: ctx.dir }
+  let page = await scope.dir.page(
+    args.space,
+    text(args.app, 'app'),
+    ctx.person,
+    true,
+  )
+  let space = page.space
+  if (!space) {
+    await named(scope, args.space)
+    throw refuse('missing', `no space ${args.space}`)
+  }
+  let who = await callerIn(
+    scope,
+    space,
+    false,
+    true,
+    page.role,
+    page.administrative,
+  )
+  let app = page.app
+  if (!app) throw refuse('missing', `no app ${args.app} in ${space.slug}`)
+  awake(space, app)
+  return { space, app, who }
 }

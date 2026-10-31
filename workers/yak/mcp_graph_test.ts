@@ -40,7 +40,8 @@ import { asking, screened } from './listing.ts'
 test('the reads answer rows that fit the schema their tools are listed with', async () => {
   let k = await kernel()
   try {
-    let agent = connector(k, (await signIn(k)).cookie)
+    let owner = await signIn(k)
+    let agent = connector(k, owner.cookie)
     let made = await agent.tool('app_new', { slug: 'merge', title: 'Merge' })
     let at = `${/https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]}/merge`
     await agent.tool('app_files', {
@@ -71,10 +72,46 @@ test('the reads answer rows that fit the schema their tools are listed with', as
       assertEquals(out.structuredContent.result[0]?.kind, 'actor', name)
       assert(fits(out.structuredContent), JSON.stringify(fits.errors))
     }
+    let readNamed = async (cookie: string, args: Record<string, unknown>) => {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'graph_query', arguments: args },
+        }),
+      })
+      assertEquals(r.status, 200)
+      let result = (await r.json()).result
+      assertEquals(result.isError, undefined, JSON.stringify(result))
+      assertStringIncludes(r.headers.get('server-timing')!, 'hops;dur=2,')
+      assertEquals(
+        result.structuredContent.result[0]?.actor?.name,
+        'Root actor',
+      )
+    }
+    let space = at.split('/')[0]
+    for (
+      let args of [
+        { q: `.actor&.in=${at}` },
+        { query: '.actor', app: 'merge', space },
+        { q: '.actor', filters: [`.in=${at}`] },
+        { q: '.actor&.in=merge' },
+      ]
+    ) await readNamed(owner.cookie, args)
     await held('graph_query', { q: `.actor&.in=${at}` })
     await held('graph_query', { q: '.actor' })
     await held('graph_show', { ids: [eid] })
     await held('search', { words: 'Root' })
+    await readNamed(k.owner.cookie, { q: `.actor&.in=${at}` })
+    let outsider = connector(k, (await signIn(k)).cookie)
+    await assertRejects(
+      () => outsider.tool('graph_query', { q: `.actor&.in=${at}` }),
+      Error,
+      'not a member',
+    )
     let admin = connector(k, k.owner.cookie)
     let directory = await admin.call('tools/call', {
       name: 'graph_query',
