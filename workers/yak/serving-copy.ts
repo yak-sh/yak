@@ -58,12 +58,15 @@ export class ServingCopy {
   /**
    * Persist the fence before the directory commits a mutation with this revision.
    * A persistence failure must abort that mutation; this instance stays blocked.
+   * The fence is newer than what the directory says it has committed too, so a
+   * copy left behind it still grants a fence the commit accepts.
    */
-  begin(): number {
-    if (!Number.isSafeInteger(this.#revision + 1)) {
+  begin(committed = 0): number {
+    let revision = Math.max(this.#revision, committed) + 1
+    if (!Number.isSafeInteger(revision)) {
       throw new RangeError('Serving copy revision exhausted')
     }
-    this.#revision++
+    this.#revision = revision
     this.#blocked = true
     this.#answers.clear()
     this.#persist(this.#revision, true, this.#answers)

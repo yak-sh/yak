@@ -54,7 +54,8 @@ and setup; this is the map and the feel.
   own answer stands as read and is copied behind it, off the request's path; a
   copied body answers only while the copy holds its revision current. A
   directory write raises a fence on the copy until it commits, so a copied body
-  from before it never answers. A directory that can't answer for a moment (a
+  from before it never answers, and asks for it above the revision it holds
+  committed, so a copy that fell behind costs the write nothing. A directory that can't answer for a moment (a
   throw, a 5xx, no revision) is waited out, at most `FENCE_WAIT`, never refused,
   and a read that gives up says what its last look saw. A store takes the
   kernel's word at the revision it read, and rereads the directory only for a

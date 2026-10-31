@@ -32,8 +32,8 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
   let beforeFinish = (_revision: number) => Promise.resolve()
   let beforeRevision = () => Promise.resolve()
   let rpc: ServingCopyDoor = {
-    begin: async () => {
-      let revision = core.begin()
+    begin: async (floor) => {
+      let revision = core.begin(floor)
       begins.push(revision)
       await beforeBegin()
       return offered(revision)
@@ -324,6 +324,31 @@ await proof(
       equal((rows[0].app as { access: string }).access, 'public')
       equal(f.finishes, [])
       equal(blocked, true)
+    }
+  },
+)
+
+// An instance the runtime has replaced can still reach the copy, and mends it
+// from what that instance last knew (T-134025): the copy drops behind what the
+// directory has committed, and its next fences would all be older.
+await proof(
+  'a copy behind the directory costs a write no race',
+  async () => {
+    let f = await fixture()
+    for (let title of ['One', 'Two', 'Three', 'Four', 'Five', 'Six']) {
+      await f.at.apply([{ entity: { eid: 'app' }, doc: { title } }], KERNEL)
+    }
+    let ahead = Number(f.committed().epoch)
+    f.core().settle(f.core().revision, f.initial)
+    f.begins.length = f.finishes.length = 0
+    let error = await refusal(() => f.at.apply(patch, KERNEL))
+    let rows = await f.at.query('.entity.eid=app&.app')
+    return () => {
+      equal(error, '')
+      equal(f.begins, [ahead + 1])
+      equal(f.finishes, [ahead + 1])
+      equal(f.committed().epoch, String(ahead + 1))
+      equal((rows[0].app as { access: string }).access, 'private')
     }
   },
 )

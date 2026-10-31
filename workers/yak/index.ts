@@ -258,8 +258,8 @@ class PublicDirectoryStore extends DurableObject<Env> {
       throw e
     }
   }
-  begin() {
-    return this.#copy.begin()
+  begin(committed?: number) {
+    return this.#copy.begin(committed)
   }
   revision() {
     return this.#copy.revision

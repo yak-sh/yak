@@ -18,7 +18,8 @@ export type ServingCopyDoor = {
   publish?(revision: number, key: string, body: string): Promise<boolean>
   /** Many answers in one trip, each said as `publish` says it. */
   publishes?(answers: Filled[]): Promise<boolean[]>
-  begin(): Promise<number>
+  /** A fence newer than the copy's revision and than `committed`. */
+  begin(committed?: number): Promise<number>
   /** The newest fence raised, committed or not. */
   revision?(): Promise<number>
   finish(revision: number): Promise<boolean>
@@ -56,7 +57,7 @@ let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
     ...settle && {
       settle: (at, committed) => timed(() => copy.settle!(at, committed)),
     },
-    begin: () => timed(() => copy.begin()),
+    begin: (at) => timed(() => copy.begin(at)),
     finish: (at) => timed(() => copy.finish(at)),
     put: (at, key, body) => timed(() => copy.put(at, key, body)),
     get: (key) => timed(() => copy.get(key)),
@@ -74,7 +75,10 @@ export class Unfenced extends Error {
 // The copy grants fences in order, but their answers resume the directory in
 // any order, so a write can come back holding a revision older than one a
 // concurrent write already committed under. Its commit refuses it, and it
-// takes a fresh fence; only a write that keeps losing the race fails.
+// takes a fresh fence; only a write that keeps losing the race fails. A fence
+// is asked for above the revision the directory holds committed: a copy can
+// fall behind it, when an instance the runtime has replaced mends it from what
+// it last knew, and a write never pays for that (T-134025).
 //
 // A write that dies leaves its fence up with nobody to lower it: the write
 // failed at `begin` itself (the copy raised the fence, the answer was lost),
@@ -124,7 +128,12 @@ export let fenced = async <T>(
       raising++
       let revision: number
       try {
-        revision = await retried(() => copy.begin(), true, moving, wait)
+        revision = await retried(
+          () => copy.begin(committed()),
+          true,
+          moving,
+          wait,
+        )
         held.add(revision)
       } finally {
         raising--
