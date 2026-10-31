@@ -15,6 +15,7 @@ import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
+import { clock, timed } from './timing.ts'
 
 let FRESH = 'public, max-age=30, must-revalidate'
 let uncached = (page: Response) => {
@@ -54,6 +55,15 @@ export let forward = async (req: Request, env: Env, path: string) => {
       : bound(undefined, fetch, env)).fetch(
         new Request(at(env, path), { headers }),
       )
+  // A hit carries the old render's timing, not work done for this view.
+  if (
+    ['HIT', 'UPDATING', 'STALE'].includes(
+      shown.headers.get('cf-cache-status') ?? '',
+    )
+  ) {
+    shown = new Response(shown.body, shown)
+    shown.headers.delete('server-timing')
+  }
   if (req.method == 'GET') {
     return shown
   }
@@ -88,6 +98,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     !path.startsWith(`${root}/`)
   ) return uncached(lost(env))
   path = path.slice(root.length)
+  let c = clock()
   let serving = publicDirectory(
     bound(env.DIRECTORY, dirPart.fetch, env),
     req.headers.has('x-yak-no-copy') ? undefined : copyOf(env),
@@ -103,17 +114,25 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   } else if (path == INTEGRATIONS.path) {
     page = await integrations(await dir.integrations(), env)
   } else {
-    let file = await env.ASSETS.fetch(new Request(url(env, '/')))
-    page = file.status == 404 ? lost(env) : await gallery.made(env, dir, file)
+    let file = await c.time(
+      'assets',
+      () => env.ASSETS.fetch(new Request(url(env, '/'))),
+    )
+    page = file.status == 404
+      ? lost(env)
+      : await c.time('showcase', () => gallery.made(env, dir, file))
   }
   if (
     page.status != 200 || page.headers.has('set-cookie') ||
     page.headers.get('cache-control')?.includes('no-store')
   ) {
-    return uncached(page)
+    return timed(uncached(page), c, 'site_')
   }
-  if ('stale' in serving && serving.stale) return uncached(page)
-  return validated(req, page, env, path)
+  if ('stale' in serving && serving.stale) {
+    c.include('copied;dur=1')
+    return timed(uncached(page), c, 'site_')
+  }
+  return timed(await validated(req, page, env, path), c, 'site_')
 }
 
 // Validators include the deployment even when two releases render equal bytes.
