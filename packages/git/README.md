@@ -451,6 +451,12 @@ caller can rerun tests and land again. The `--ff-only` merge is the
 compare-and-swap that serializes concurrent landers. No test suite is run here,
 and this operation knows of none.
 
+Before merging, landing runs `deno fmt` on changed regular files, using the
+checkout's formatting configuration and Deno's supported file types. Formatting
+edits amend the branch's last commit with its message preserved. Deleted files,
+symlinks and submodules are skipped. A formatter error is printed and landing
+continues, keeping any files it formatted successfully.
+
 Before the fast-forward, `reverts` detects a rebase that restores earlier base
 content. It finds files changed by `base...HEAD` that no branch commit touched,
 and added lines whose content appeared earlier at the same path in base history.

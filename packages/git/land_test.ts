@@ -7,6 +7,7 @@ type Answer = Partial<Ran>
 let fixture = (answers: Record<string, Answer> = {}) => {
   let calls: { args: string[]; cwd: string }[] = []
   let said: string[] = []
+  let formats: { files: string[]; cwd: string }[] = []
   let moved = false
   let values: Record<string, Answer> = {
     'rev-parse --show-toplevel': { out: '/work' },
@@ -27,16 +28,28 @@ let fixture = (answers: Record<string, Answer> = {}) => {
     let code = value.code ?? 0
     return Promise.resolve({ out: '', err: '', ...value, code, ok: code == 0 })
   }
-  let invoke = (allow?: string[]) =>
+  let invoke = (allow?: string[], formatted: Answer = {}) =>
     land({
       cwd: '/work',
       run,
+      format: (files, cwd) => {
+        formats.push({ files, cwd })
+        let code = formatted.code ?? 0
+        return Promise.resolve({
+          out: '',
+          err: '',
+          ...formatted,
+          code,
+          ok: code == 0,
+        })
+      },
       allow,
       write: (text) => said.push(text),
     })
   return {
     invoke,
     calls,
+    formats,
     said,
     commands: () => calls.map((c) => c.args.join(' ')),
   }
@@ -270,3 +283,74 @@ test(
     assertEquals(found, [{ file: 'a.png', rewound: true }])
   },
 )
+
+let formatting = {
+  'diff --raw -z --no-renames --diff-filter=ACMT main...HEAD': {
+    out: [
+      ':100644 100644 old new M',
+      'apps/icon.svg',
+      ':000000 100644 zero new A',
+      'page with spaces.html',
+      ':000000 100755 zero new A',
+      '-script.ts',
+      ':000000 100644 zero new A',
+      'image.png',
+      ':120000 100644 old new T',
+      'was-link.ts',
+      ':100644 000000 old zero D',
+      'gone.ts',
+      ':000000 120000 zero new A',
+      'link.ts',
+      ':160000 160000 old new M',
+      'module',
+      '',
+    ].join('\0'),
+  },
+}
+let files = [
+  'apps/icon.svg',
+  'page with spaces.html',
+  '-script.ts',
+  'image.png',
+  'was-link.ts',
+]
+
+test('landing formats only changed regular files and amends before merging', async () => {
+  let f = fixture({
+    ...formatting,
+    [`--literal-pathspecs diff --quiet -- ${files.join(' ')}`]: { code: 1 },
+  })
+  await f.invoke()
+  assertEquals(f.formats, [{ files: files.map((p) => `./${p}`), cwd: '/work' }])
+  let commands = f.commands()
+  let add = commands.indexOf(`--literal-pathspecs add -- ${files.join(' ')}`)
+  let amend = commands.indexOf('commit --amend --no-edit --allow-empty')
+  assert(add >= 0 && add < amend)
+  assert(amend < commands.indexOf('merge --ff-only work'))
+})
+
+test('formatted files land without rewriting the commit', async () => {
+  let f = fixture(formatting)
+  await f.invoke()
+  assertEquals(f.formats.length, 1)
+  assert(!f.commands().some((c) => c.startsWith('commit ')))
+})
+
+test('a landing without changed regular files never starts the formatter', async () => {
+  let f = fixture()
+  await f.invoke()
+  assertEquals(f.formats, [])
+})
+
+test('a formatter error reports its reason and still lands its partial edits', async () => {
+  let f = fixture({
+    ...formatting,
+    [`--literal-pathspecs diff --quiet -- ${files.join(' ')}`]: { code: 1 },
+  })
+  assertEquals(await f.invoke(undefined, { code: 1, err: 'syntax error' }), {
+    landed: 'sha',
+    root: '/repo',
+  })
+  assert(f.commands().includes('commit --amend --no-edit --allow-empty'))
+  assert(f.said.join('\n').includes('syntax error'))
+})

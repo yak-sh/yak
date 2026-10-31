@@ -74,14 +74,20 @@ let quiet = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' }
 // load) is returned as a failed run carrying the reason, never thrown: every
 // caller here already handles a git that failed, and none handles an
 // exception.
-/** How this package runs git: one subprocess, output raw, never throwing. */
-export let run: Run = async (args, cwd) => {
+// One generic process boundary for Git and the formatter; output stays raw.
+let execute = async (
+  command: string,
+  args: string[],
+  cwd: string,
+): Promise<Ran> => {
   try {
-    let out = await new Deno.Command('git', {
+    let out = await new Deno.Command(command, {
       args,
       cwd,
       // Publishing must not hold the local landing behind the network.
-      signal: args[0] == 'push' ? AbortSignal.timeout(5_000) : undefined,
+      signal: command == 'git' && args[0] == 'push'
+        ? AbortSignal.timeout(5_000)
+        : undefined,
       env: quiet,
       stdout: 'piped',
       stderr: 'piped',
@@ -97,10 +103,16 @@ export let run: Run = async (args, cwd) => {
       ok: false,
       code: -1,
       out: '',
-      err: `git ${args.join(' ')} in ${cwd}: ${e}`,
+      err: `${command} ${args.join(' ')} in ${cwd}: ${e}`,
     }
   }
 }
+
+/** Run git without a terminal prompt. */
+export let run: Run = (args, cwd) => execute('git', args, cwd)
+
+let format: Run = (files, cwd) =>
+  execute(Deno.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
 
 /** Landed carries the merged commit sha and the shared checkout's path, so
  * the caller can clean up whatever the merge left behind. */
@@ -118,6 +130,8 @@ export type Outcome = Landed | Diverged
 export type LandOps = {
   cwd?: string
   run?: Run
+  /** Format changed paths; Deno selects file types and honors checkout config. */
+  format?: Run
   write?: (text: string, error?: boolean) => void
   /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
@@ -290,6 +304,17 @@ let refusal = async (
   ].join('\n')
 }
 
+// Raw, NUL-delimited diff records keep unusual names intact. Only regular
+// files go to fmt: a symlink or submodule must never lead it outside the diff.
+let regular = (raw: string) => {
+  let fields = raw.split('\0')
+  let files: string[] = []
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    if (/^:\d+ 100(?:644|755) /.test(fields[i])) files.push(fields[i + 1])
+  }
+  return files
+}
+
 /** Land the branch you are standing on: fast-forward it into the base, or
  * rebase onto a base that moved and return, for the caller to re-run its tests
  * and land again. */
@@ -386,6 +411,51 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     if (refuse.length) throw new LandError(await refusal(read, base, refuse))
     for (let r of found) {
       write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
+    }
+    let files = regular(
+      await read([
+        'diff',
+        '--raw',
+        '-z',
+        '--no-renames',
+        '--diff-filter=ACMT',
+        `${base}...HEAD`,
+      ]),
+    )
+    if (files.length) {
+      let formatted = await (ops.format ?? format)(
+        files.map((f) => `./${f}`),
+        tree,
+      )
+      write(formatted.out)
+      write(formatted.err, true)
+      // A parser failure can still leave other files formatted. Keep those
+      // changes and land; formatting is an edit, never a new gate.
+      if (formatted.code) write(message('land: format', formatted), true)
+      let diff = await git(tree, [
+        '--literal-pathspecs',
+        'diff',
+        '--quiet',
+        '--',
+        ...files,
+      ], false)
+      if (diff.code != 0 && diff.code != 1) {
+        must('read formatting changes', diff)
+      }
+      if (diff.code == 1) {
+        await need('stage formatting', tree, [
+          '--literal-pathspecs',
+          'add',
+          '--',
+          ...files,
+        ])
+        await need('commit formatting', tree, [
+          'commit',
+          '--amend',
+          '--no-edit',
+          '--allow-empty',
+        ])
+      }
     }
     // The shared checkout need not be spotless: Git leaves unrelated edits
     // alone. `read-tree` runs the same two-tree/worktree safety check as the
