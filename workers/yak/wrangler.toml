@@ -170,13 +170,13 @@ namespace = "yak-apps"
 # import (served back to them at <space>.yaks.app/<app>/api/client.js), and
 # the guide the MCP door offers as its one resource. run_worker_first: the
 # Worker decides what an asset answers for, so a space's hostname never
-# serves the apex's page. Except /_yak/*, the content-named files public/_headers
-# marks immutable: they answer without waking the Worker, and one that isn't
-# there still reaches it (kernel.ts).
+# serves the apex's page. A deploy excepts the content-named files it holds
+# (wrangler.ts `direct`), which answer as public/_headers says without waking the
+# Worker; any other name under /_yak still reaches it (kernel.ts).
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/*", "!/_yak/*"]
+run_worker_first = true
 
 [[durable_objects.bindings]]
 name = "STORE"
@@ -618,7 +618,7 @@ namespace = "yak-apps-staging"
 [env.staging.assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/*", "!/_yak/*"]
+run_worker_first = true
 
 [[env.staging.durable_objects.bindings]]
 name = "STORE"

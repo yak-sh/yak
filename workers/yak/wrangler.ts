@@ -37,6 +37,7 @@ import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
 import { installed, restored } from './dependencies.ts'
 import { assets } from './asset-ready.ts'
+import { from as sources, plan } from './sheet-assets.ts'
 import { sleep } from '@yaks/fp'
 export { stale } from './dependencies.ts'
 
@@ -729,11 +730,29 @@ let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   return { entry, output }
 }
 
+/** Every environment's assets answer this deploy's content-named files without
+ * the Worker. Exact names, because an excepted path that misses never reaches
+ * it, and a page held from before a deploy names the sheet it replaced. */
+export let direct = (
+  config: Record<string, unknown>,
+  names: Record<string, string>,
+) => {
+  let first = ['/*', ...Object.values(names).map((name) => `!/${name}`)]
+  let environments = Object.values(config.env ?? {}) as typeof config[]
+  for (let { assets } of [config, ...environments]) {
+    if (assets) Object.assign(assets, { run_worker_first: first })
+  }
+  return config
+}
+
 // Keep relative bindings, assets and image paths beside their original config.
 // These modules already contain the pin's transforms and source maps.
 let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
   let path = join(root, from)
   let parsed = parse(Deno.readTextFileSync(path))
+  if (parsed.assets) {
+    direct(parsed, plan(sources(join(dirname(path), 'public'))).names)
+  }
   Object.assign(parsed, {
     main: entry,
     base_dir: output,

@@ -143,9 +143,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // A static page as it leaves: its head's links swapped, and validated by the
 // bytes it answers with.
 export let worn = async (req: Request, page: Response, env: Host) => {
-  let body = sheeted(await page.text(), env)
   let headers = new Headers(page.headers)
   headers.delete('content-length')
+  // A HEAD has no bytes here to name; only a GET's etag means anything.
+  headers.delete('etag')
+  if (req.method == 'HEAD') return new Response(null, { headers })
+  let body = sheeted(await page.text(), env)
   headers.set('etag', `W/"${await checksum(body)}"`)
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
     ? new Response(null, { status: 304, headers })

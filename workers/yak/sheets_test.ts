@@ -6,6 +6,7 @@ import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
 import { from, plan } from './sheet-assets.ts'
 import { links, named, sheeted } from './sheets.ts'
+import { direct } from './wrangler.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
 let { files, names } = plan(from(PUBLIC))
@@ -88,6 +89,23 @@ test('sheets: a static page answers 304 to the bytes it last answered with', asy
     headers: { 'if-none-match': etag },
   })
   assertEquals(again.status, 304)
+})
+
+test('sheets: a HEAD names no etag of bytes it did not send', async () => {
+  let k = await kernel()
+  let head = await k.at('yaks.app', '/terms', { method: 'HEAD' })
+  assertEquals(head.status, 200)
+  assertEquals(head.headers.get('etag'), null)
+})
+
+test('sheets: a deploy excepts exactly the files it holds, in every environment', () => {
+  let config = direct(
+    { assets: {}, env: { staging: { assets: {} }, bare: {} } },
+    { 'style.css': '_yak/style.0123456789.css' },
+  ) as { assets: unknown; env: { staging: { assets: unknown } } }
+  let first = { run_worker_first: ['/*', '!/_yak/style.0123456789.css'] }
+  assertEquals(config.assets, first)
+  assertEquals(config.env.staging.assets, first)
 })
 
 test('sheets: an address no longer deployed goes to its source', async () => {
