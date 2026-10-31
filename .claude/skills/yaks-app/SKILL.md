@@ -377,9 +377,9 @@ through the connector's graph tier (tool.ts `roleIn`).
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.
-- `admin_throwaway` with an optional name signs this box in as
-  `<name>@bot.yak.sh`, a test account for probes, to name per command with
-  `--as`.
+- `yak admin throwaway '<command>' [--name <name>]` runs one shell command as a
+  test account, `<name>@bot.yak.sh`, and signs out when it ends. `yak auth
+  yaks.app --as <address>` keeps a test account across commands.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
 - A hang reports nothing from inside. Cloudflare's own record of every

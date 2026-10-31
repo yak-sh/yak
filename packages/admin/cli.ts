@@ -15,6 +15,28 @@ export let globals: CliFacet['globals'] = Object.fromEntries(
 
 export let commands: CliCommand[] = [{
   noun: 'admin',
+  verb: 'throwaway',
+  title: 'Run one command as a throwaway test account',
+  description:
+    "Sign in as a test account, <name>@bot.yak.sh, run one shell command as it, and sign out. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph. The box's own account never changes; a test account to keep signing in as is `yak auth yaks.app --as <address>`.\n\n  yak admin throwaway 'yak about && yak app_list' --name cookbook",
+  positional: ['command'],
+  name: 'admin_throwaway',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      command: {
+        type: 'string',
+        description: 'the shell command to run as the account',
+      },
+      name: { type: 'string', description: 'the local part of the address' },
+    },
+    required: ['command'],
+    additionalProperties: false,
+  },
+  run: async (args, host, context) =>
+    (await import('./throwaway.ts')).throwaway()(args, host, context),
+}, {
+  noun: 'admin',
   verb: 'client',
   title: 'Keep an OAuth client',
   description:

@@ -54,23 +54,6 @@
         }
       }
     },
-    "admin_throwaway": {
-      "tool": true,
-      "noun": "admin",
-      "verb": "throwaway",
-      "title": "Sign in as a throwaway test account",
-      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph. The current account stays as it was: name the new one per command with --as.\n\n  yak admin throwaway cookbook",
-      "input": {
-        "name": {
-          "type": "string",
-          "description": "the local part of the address"
-        }
-      },
-      "openWorld": true,
-      "positional": [
-        "name"
-      ]
-    },
     "admin_accept": {
       "tool": true,
       "surfaces": [
@@ -103,7 +86,7 @@
       "noun": "admin",
       "verb": "link",
       "title": "Make a standing sign-in link",
-      "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak admin throwaway reviewer && yak admin link --days=90 --as=reviewer\n  yak admin link --revoke=3f2a --as=reviewer\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none.",
+      "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak auth yaks.app --as=reviewer@bot.yak.sh && yak admin link --days=90 --as=reviewer\n  yak admin link --revoke=3f2a --as=reviewer\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none.",
       "input": {
         "days": {
           "type": "number",

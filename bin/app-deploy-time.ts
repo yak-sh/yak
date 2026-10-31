@@ -10,7 +10,7 @@
 //
 //   deno task app-deploy:time
 //
-// It signs in as a throwaway account (`yak admin throwaway`, NAME) and mints a
+// It signs in as a test account (`yak auth yaks.app --as`, NAME) and mints a
 // one-hour grant narrowed to that account's own space for the run: never the
 // owner's account, never an account key. The grant is read from `yak grant`'s
 // answer, kept in memory, never printed, and revoked at the end. HOST defaults
@@ -47,7 +47,7 @@ let grant = ''
 let mint = async () => {
   let said = await yak('grant', '--space', space).catch(async () => {
     await new Deno.Command('yak', {
-      args: ['admin', 'throwaway', who],
+      args: ['auth', 'yaks.app', '--as', `${who}@bot.yak.sh`],
       stdout: 'null',
       stderr: 'null',
     }).output()

@@ -96,9 +96,9 @@ Every commit on main deploys the yak worker through Workers Builds and runs CI
 asynchronously. Work is done when its affected tests pass and it lands; no agent
 waits for those background runs. `admin_deploys` as admin says what is live,
 `admin_errors` what broke, and a new failure reaches the tracker when it happens
-(M-37965). A probe of the platform runs as a test account: `admin_throwaway`
-signs in as one, and `--as` selects that connection per command (listing
-accounts is `secrets-and-connections`). Acting as the owner is his to grant
+(M-37965). A probe of the platform runs as a test account: `yak admin throwaway
+'<command>'` runs that command as one and signs out (listing accounts is
+`secrets-and-connections`). Acting as the owner is his to grant
 (M-31958). The box's own server runs main after `yak restart`. The platform
 itself is `yaks-app`.
 

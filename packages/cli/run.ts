@@ -338,7 +338,9 @@ export let globals = (
   let duties = true
   let help = false
   let config: string | undefined
-  let as: string | undefined
+  // A whole process tree runs as one account with YAK_AS (`yak admin
+  // throwaway`); one command asks with the flag.
+  let as = env('YAK_AS') || undefined
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
   let timing = env('YAKS_TIMING') == '1'

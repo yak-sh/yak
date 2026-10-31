@@ -19,6 +19,7 @@ import {
   cli,
   type Command,
   commandFor,
+  globals,
   helpTool,
   type Opts,
   unique,
@@ -188,6 +189,13 @@ test('admin tools explicitly receive the account selector', async () => {
     0,
   )
   assertEquals(received, { as: 'installer' })
+})
+
+test('YAK_AS selects the account for a process, and --as outranks it', () => {
+  let env = harness({ YAK_AS: 'probe@bot.yak.sh' })
+  assertEquals(globals([], env).as, 'probe@bot.yak.sh')
+  assertEquals(globals(['--as', 'admin'], env).as, 'admin')
+  assertEquals(globals([], harness({ YAK_AS: '' })).as, undefined)
 })
 
 test('one list is the registry, and the first to name a word wins', async () => {

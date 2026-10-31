@@ -50,18 +50,25 @@ yak admin errors --since 14d --resolved --as admin
 
 ## A throwaway without a browser
 
-`throwaway` creates a random `@bot.yak.sh` address, or uses the name supplied,
-and calls the same OAuth authorization as `yak auth`. Its sign-in code arrives
-in this graph's mail. It never reads terminal input or stores a separate cookie
-secret.
+`throwaway` runs one shell command as a test account. It creates a random
+`@bot.yak.sh` address, or uses the name supplied, signs in through the same
+OAuth authorization as `yak auth`, runs the command with `YAK_AS` naming the
+account, and removes the connection when the command ends. Its sign-in code
+arrives in this graph's mail. It answers the command's exit code. Nothing
+outside that command's process tree runs as the account.
 
 ```sh
-yak admin throwaway reviewer
-yak admin query reviewer/notes '.doc' --as reviewer
+yak admin throwaway 'yak admin query reviewer/notes .doc' --name reviewer
 ```
 
-Name the throwaway with `--as` for probes; a new sign-in is not a stored
-selection.
+A name that already has a connection uses it and leaves it in place. A process
+killed before it ends can leave its connection behind, which selects nothing
+without `--as`. A test account to keep across commands is an ordinary sign-in:
+
+```sh
+yak auth yaks.app --as reviewer@bot.yak.sh
+yak admin query reviewer/notes '.doc' --as reviewer
+```
 
 ## Browser-only operations
 

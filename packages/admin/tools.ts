@@ -13,11 +13,8 @@ import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
-import { authorize } from '@yaks/connections'
 import { type Account, account } from './account.ts'
-import { authorizeCLI } from '@yaks/connections/authorize-cli'
-import { yaksApp } from '@yaks/connections/yaks-app'
-import { ADMIN, BOT } from '../../workers/yak/lib/bots.ts'
+import { ADMIN } from '../../workers/yak/lib/bots.ts'
 
 import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
@@ -239,25 +236,6 @@ export let runs = (
   }
 
   return {
-    admin_throwaway: verb(async (call) => {
-      let name = word(argsOf(call), 'name')
-      let address = name
-        ? `${name}${BOT}`
-        : `probe-${crypto.randomUUID().slice(0, 6)}${BOT}`
-      let auth = authorize(
-        { ...host, owner: await person(host) },
-        yaksApp(host),
-      )
-      try {
-        await authorizeCLI(auth, 'yaks.app', undefined, address)
-      } finally {
-        await auth.close()
-      }
-      return [
-        said(call, `signed in as ${address} — act as it with --as=${address}`),
-      ]
-    }),
-
     admin_gallery: verb(async (call) => {
       let at = await acting(argsOf(call))
       return [said(call, await review(at.bearer, call))]

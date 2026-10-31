@@ -8,8 +8,8 @@ deno task app-deploy:time          # on the box; signs in a throwaway, records
 deno task bench:check app-deploy   # reports the latest recorded waits
 ```
 
-`app-deploy:time` signs in as a throwaway account (`NAME`, default
-`app-deploy-bench`; `yak admin throwaway`) on `HOST` (default `yaks.app`) and
+`app-deploy:time` signs in as a test account (`NAME`, default
+`app-deploy-bench`; `yak auth yaks.app --as`) on `HOST` (default `yaks.app`) and
 mints a one-hour grant narrowed to that account's own space, so it never touches
 the owner's account or an account key. The grant stays in memory, is never
 printed, and is revoked at the end. Then `RUNS` (default 5) times it ships three
