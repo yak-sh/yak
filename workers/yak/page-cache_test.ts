@@ -233,3 +233,58 @@ for (let status of ['MISS', 'EXPIRED', 'BYPASS', 'HIT', 'UPDATING', 'STALE']) {
     )
   })
 }
+
+for (let cookie of ['yak_session=person-one', 'yak_session=person-two']) {
+  test(
+    'a signed-in visitor shares the anonymous public page: ' + cookie,
+    async () => {
+      let g = gateway((visitor) => {
+        assertEquals(visitor.headers.get('cookie'), null)
+        assertEquals(visitor.headers.get('authorization'), null)
+        return keep(page('public shell'), space, app)
+      })
+      let anonymous = await (await g.get())!.text()
+      let signed = await g.get(undefined, { headers: { cookie } })
+      assertEquals(await signed!.text(), anonymous)
+      assertEquals(g.site.held.size, 1)
+    },
+  )
+}
+
+for (
+  let init of [
+    { headers: { authorization: 'Bearer person' } },
+    { headers: { range: 'bytes=0-2' } },
+    { headers: { 'x-yak-caller': 'person' } },
+  ]
+) {
+  test(
+    'credentials and ranges keep their own gateway answer: ' +
+      JSON.stringify(init),
+    async () => {
+      let g = gateway(() => keep(page('public shell'), space, app))
+      assertEquals(await g.get(undefined, init), null)
+      assertEquals(g.site.asks(), 0)
+    },
+  )
+}
+
+test('a signed-in API read and a private page never receive a shared page', async () => {
+  let g = gateway(() => passed())
+  let init = { headers: { cookie: 'yak_session=person-one' } }
+  assertEquals(await g.get('https://ada.yaks.app/cookbook/api/me', init), null)
+  assertEquals(g.site.asks(), 0)
+  assertEquals(await g.get(undefined, init), null)
+  assertEquals(g.site.held.size, 1) // Only the pass is kept, never a private body.
+})
+
+test('listing changes purge the apex through the same tagged cache', async () => {
+  for (
+    let part of ['gallery', 'published', 'screenshot', 'integration', 'listed']
+  ) {
+    assertStringIncludes(
+      (await owes({ entity: { eid: 'a' }, [part]: {} })).join(','),
+      'site',
+    )
+  }
+})

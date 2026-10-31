@@ -234,7 +234,7 @@ let forwardingEnv = {
     },
   },
 } as Env
-let forwarded = ['/', '/gallery'].flatMap((path) =>
+let forwarded = ['/', '/gallery', '/integrations'].flatMap((path) =>
   ['GET', 'HEAD'].map((method) => ({
     path,
     method,
@@ -244,6 +244,7 @@ let forwarded = ['/', '/gallery'].flatMap((path) =>
         'Cloudflare-Workers-Version-Overrides': override,
         'cache-control': 'no-cache',
         'if-none-match': '"site-validator"',
+        cookie: 'yak_session=person-one',
       },
     }),
   }))
@@ -256,7 +257,7 @@ test('the anonymous site subrequest preserves deployment version overrides witho
     assertEquals(response.headers.get('x-yak-version'), wanted)
     assertEquals(await response.text(), method == 'HEAD' ? '' : 'site')
   }
-  assertEquals(seen.length, 4)
+  assertEquals(seen.length, 6)
   for (let headers of seen) {
     assertEquals(headers.get('Cloudflare-Workers-Version-Overrides'), override)
     assertEquals(headers.get('cache-control'), 'no-cache')

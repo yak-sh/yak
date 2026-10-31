@@ -31,6 +31,7 @@ export type Purged = {
 export type Purges = { purge(tags: string[]): Promise<Purged> }
 
 /** The tag on every answer an app gave, and on every answer in a space. */
+export let SITE_TAG = 'site'
 export let appTag = (eid: string) => `app:${eid}`
 export let spaceTag = (eid: string) => `space:${eid}`
 

@@ -1,5 +1,4 @@
 import { decodedPath } from './request-path.ts'
-import { possiblePerson } from './directory-copy.ts'
 // An app's public pages, kept in Cloudflare's cache at the Site entrypoint
 // (T-124419). Every page view used to read the directory twice before a byte
 // was sent; a kept page is answered with none of that.
@@ -111,11 +110,11 @@ export let visitor = (url: string): Request | null => {
 }
 
 /** Whether a request could be answered by a kept page: a read with nothing
- * that makes it one visitor's (a grant, a bearer, a byte range), and not an
+ * that requires the gateway (a grant, a bearer, a byte range), and not an
  * app's `/api/` or a sandboxed page's token path, which never are. */
 export let shareable = (req: Request, path = new URL(req.url).pathname) => {
   return (req.method == 'GET' || req.method == 'HEAD') &&
-    !possiblePerson(req) && !req.headers.has('authorization') &&
+    !req.headers.has('authorization') && !req.headers.has('x-yak-caller') &&
     !req.headers.has('range') &&
     !req.headers.has('upgrade') && !bearing(req) &&
     !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path) && !path.includes('/~')

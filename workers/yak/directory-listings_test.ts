@@ -190,7 +190,7 @@ for (let path of ['/', '/gallery']) {
     equal(observed.first, 200)
     equal(
       observed.fresh,
-      path == '/' ? KEPT : 'public, max-age=30, must-revalidate',
+      KEPT,
     )
     ok(observed.etag.startsWith('W/"'))
     ok(observed.beforeDeadline)

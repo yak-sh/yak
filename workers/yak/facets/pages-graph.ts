@@ -20,7 +20,7 @@ import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, SPACE_PARTS, spaceOf } from '../directory.ts'
 import { overVisits } from '../meter.ts'
-import { appTag, purge, spaceTag } from '../purge.ts'
+import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
 // these: an app's draft, its counters and its gallery listing, and a space's
@@ -30,6 +30,7 @@ let UNSEEN = ['meter', 'gallery', 'screenshot', 'notified', 'stripe', 'fee']
 let DRAFT = ['draft', 'fence']
 // A space's routing: which app answers which path, and whether any does.
 let ROUTING = ['home', 'trashed', 'former']
+let LISTED = ['gallery', 'screenshot', 'integration', 'listed']
 let PARTS = [...new Set(['app', 'space', ...APP_PARTS, ...SPACE_PARTS])]
 let SHOWN = PARTS.filter((part) => !UNSEEN.includes(part))
 
@@ -90,6 +91,7 @@ export let owed = async (
   rows: (eids: string[]) => Promise<Bundle[]>,
 ): Promise<string[]> => {
   let tags = new Set<string>()
+  if (applied.some((b) => has(b, LISTED) || b.tombstone)) tags.add(SITE_TAG)
   for (let b of applied) {
     if (!b.tombstone) continue
     tags.add(appTag(b.entity.eid))
@@ -105,11 +107,13 @@ export let owed = async (
   for (let b of touched) {
     let row = now.get(b.entity.eid)
     if (row?.app) {
+      if (row.published || 'published' in b) tags.add(SITE_TAG)
       let app = row.app as { space: string | { eid: string } }
       if (has(b, ROUTING) || sets(b.app, ['slug', 'space'])) {
         tags.add(spaceTag(idOf(app.space)))
       } else if (shows(b) && !lowers(b)) tags.add(appTag(b.entity.eid))
     } else if (row?.space) {
+      if (sets(b.space, ['slug']) || has(b, ROUTING)) tags.add(SITE_TAG)
       // The hourly reading is what moves a space past its quota, and a page
       // kept for a stranger must not outlive that. Said again every hour while
       // over, which is one purge an hour for a space nobody is served in.
@@ -129,7 +133,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       await purge(env, await owed(applied, async (eids) => await tx.get(eids)))
       return applied
     },
-    { keys: [...PARTS, 'tombstone'] },
+    { keys: [...PARTS, ...LISTED, 'tombstone'] },
   )
   return [{ name: 'yak/pages', admission: () => true, hooks: { effect } }]
 }

@@ -1,12 +1,12 @@
-import { anonymousPage, copyOf, publicDirectory } from './directory-copy.ts'
+import { copyOf, publicDirectory } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's pages drawn from directory listings (the gallery and the
-// integration directory for at most thirty seconds, the home page fresh for
-// thirty and answered stale while it renders again), and every public page an
+// integration directory and the home page fresh for thirty seconds, then
+// answered stale while they render again), and every public page an
 // app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged } from './apps.ts'
-import { KEPT, kept, visitor } from './page-cache.ts'
+import { KEPT, kept, shareable, visitor } from './page-cache.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -15,6 +15,7 @@ import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
+import { SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { clock, timed } from './timing.ts'
 
@@ -48,7 +49,7 @@ export let forward = async (req: Request, env: Env, path: string) => {
     let value = req.headers.get(name)
     if (value) headers.set(name, value)
   }
-  let anonymous = anonymousPage(req)
+  let anonymous = shareable(req)
   if (!anonymous) headers.set('x-yak-no-copy', '1')
   let shown =
     await (anonymous
@@ -165,9 +166,10 @@ export let validated = async (
   let headers = new Headers(page.headers)
   headers.delete('content-length')
   // No deploy or quiet hour makes a visitor wait on the home page's render: the
-  // edge answers from the page it holds and renders the next behind them. The
-  // gallery and integrations stay short: a person looks there for their listing.
-  headers.set('cache-control', path == '/' ? KEPT : FRESH)
+  // edge answers from the page it holds and renders the next behind them. A
+  // listing change purges these pages through the directory's usual hook.
+  headers.set('cache-control', KEPT)
+  headers.set('cache-tag', SITE_TAG)
   if (path == '/' && env.CF_VERSION_METADATA) {
     headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
   }
