@@ -563,6 +563,18 @@
         }
       }
     },
+    "woken": {
+      "component": true,
+      "type": "object",
+      "description": "on a wake's input, the task it woke its transcript for: what finds the run already on a task once its claim was let go",
+      "properties": {
+        "task": {
+          "type": "string",
+          "ref": "task",
+          "death": "keep"
+        }
+      }
+    },
     "stop": {
       "component": true,
       "type": "object",

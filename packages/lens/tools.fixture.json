@@ -133,7 +133,7 @@
       "noun": "session",
       "verb": "spawn",
       "title": "Start an agent on a task",
-      "description": "Start an agent on a task. Creates a session record for the run, an initial log entry naming the provider (agent runner), model and reasoning effort, and a claim reserving the task for that session; committing that starts the agent, so a task another session already holds refuses the whole request. With wait, returns how the run ended (its brief or final output, and its exit code when recorded) instead of the session id. Returns text in content.body. A wait timeout reports that the run is still running and does not kill it.",
+      "description": "Start an agent on a task. Creates a session record for the run, an initial log entry naming the provider (agent runner), model and reasoning effort, and a claim reserving the task for that session; committing that starts the agent, so a task a run still going holds refuses the whole request. A task a parked run is waiting on, or whose run a wake has asked for or started, starts nothing: that run gets the instruction, on its own provider, and the answer says so. With wait, returns how the run ended (its brief or final output, and its exit code when recorded) instead of the session id. Returns text in content.body. A wait timeout reports that the run is still running and does not kill it.",
       "input": {
         "task": {
           "type": "string",

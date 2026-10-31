@@ -10,9 +10,9 @@ import { graph, identityEid, mint } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab } from '@yaks/vocab'
-import { idDoc, idKeywords } from '@yaks/id'
+import { human, idDoc, idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
-import { kernelKeywords, spineDoc } from '@yaks/kernel'
+import { kernelDoc, kernelKeywords, spineDoc } from '@yaks/kernel'
 import { ids } from '@yaks/id/graph'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
@@ -20,7 +20,14 @@ import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
-import { actorOf, sessionDoc, sessions, statusOf } from '@yaks/session'
+import {
+  actorOf,
+  carrying,
+  sessionDoc,
+  sessions,
+  statusOf,
+  wake,
+} from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
@@ -46,7 +53,7 @@ let comp = (b: Bundle | undefined, name: string) =>
 let host = () => {
   let vocab = loadVocab(
     [
-      spineDoc,
+      kernelDoc,
       idDoc,
       sessionDoc,
       toolsDoc,
@@ -274,6 +281,121 @@ test('a run is reached by its graph id or its provider id', async () => {
   let ended = body(await tools.session_wait!(...asked(g, { session: 's' })))
   assertStringIncludes(ended, 'stopped')
   assertStringIncludes(ended, 'shipped it')
+})
+
+// A managed run asked to work `y`, which requires the decision `x`: over and
+// parked there, as a run that asked a question ends.
+let parkedRun = async () => {
+  let { g, fx } = host()
+  await g.apply([
+    ...shelf,
+    { entity: { eid: 'x' }, task: {}, doc: { title: 'which?' } },
+    { entity: { eid: 'y' }, task: {}, doc: { title: 'do it' } },
+    link('y', 'requires', 'x'),
+    { entity: { eid: 'run' }, session: { id: 'run' }, process: { pid: 1 } },
+    {
+      entity: { eid: 'in' },
+      entry: { session: 'run' },
+      content: { body: 'work y' },
+      using: { provider: P, model: M },
+    },
+    { entity: { eid: 'y' }, claim: { session: 'run' } },
+    {
+      entity: { eid: 'end' },
+      entry: { session: 'run' },
+      ask: { through: 'in' },
+      stop: {},
+    },
+    { entity: { eid: 'run' }, exit: { code: 0 } },
+  ])
+  return { g, fx }
+}
+
+let requests = async (g: Graph) => await g.read('.using&.order=entry.seq&*')
+
+// The run the request went to, checked to have no second run beside it.
+let spawnGoesTo = async (g: Graph, run: string) => {
+  let said = body(
+    await through(g, 'session_spawn', {
+      task: 'y',
+      provider: P,
+      instruction: 'also this',
+    }),
+  )
+  assertStringIncludes(said, 'no second run')
+  let told = (await requests(g)).at(-1)
+  assertEquals(comp(told, 'entry')?.session, run)
+  assertEquals(comp(told, 'content')?.body, 'also this')
+  assertEquals(comp(told, 'using'), { provider: P, model: M })
+  assertEquals((await g.read('.session')).length, 1)
+  assertEquals(comp((await g.get(['y']))[0], 'claim')?.session, run)
+}
+
+test('a spawn on a task a run is parked on gives that run the work', async () => {
+  let { g } = await parkedRun()
+  await spawnGoesTo(g, 'run')
+})
+
+test('a spawn on a task whose run a wake asked for gives it the work', async () => {
+  let { g } = await parkedRun()
+  await g.apply([{ entity: { eid: 'x' }, completed: {} }])
+  await wake(g, 'x')
+  await spawnGoesTo(g, 'run')
+})
+
+test('a woken run whose claim was let go still gets the work, and the claim', async () => {
+  let { g } = await parkedRun()
+  await g.apply([{ entity: { eid: 'x' }, completed: {} }])
+  await wake(g, 'x')
+  // Its next run started, as @yaks/spawn starts one, and the claim was released.
+  await g.apply([
+    { entity: { eid: 'run' }, exit: null, process: { pid: 2 } },
+    {
+      entity: { eid: 'next' },
+      entry: { session: 'run' },
+      ask: { through: (await requests(g)).at(-1)!.entity.eid },
+    },
+    { entity: { eid: 'y' }, claim: null },
+  ])
+  await spawnGoesTo(g, 'run')
+})
+
+test('a spawn starts its own run past one stopped, failed or simply done', async () => {
+  for (
+    let after of [
+      [{ entity: { eid: 'run' }, stop: {} }],
+      [{ entity: { eid: 'run' }, exit: { code: 1 } }],
+      [{ entity: { eid: 'x' }, completed: {} }, {
+        entity: { eid: 'y' },
+        claim: null,
+      }],
+    ]
+  ) {
+    let { g } = await parkedRun()
+    await g.apply(after as Bundle[])
+    assertEquals(await carrying(g, 'y'), undefined)
+  }
+})
+
+test('a run going on a task it was not woken for still refuses a spawn', async () => {
+  let { g } = await parkedRun()
+  await g.apply([{ entity: { eid: 'run' }, exit: null, process: { pid: 2 } }])
+  assertEquals(await carrying(g, 'y'), undefined)
+})
+
+test('a peek and a wait say a parked run is parked, and on what', async () => {
+  let { g } = await parkedRun()
+  let id = human(g.vocab)
+  let [y, x] = await g.get(['y', 'x'])
+  let line = `parked on ${id(y)}, waiting on ${id(x)}`
+  assertStringIncludes(
+    body(await tools.session_peek!(...asked(g, { session: 'run' }))),
+    line,
+  )
+  assertStringIncludes(
+    body(await tools.session_wait!(...asked(g, { session: 'run' }))),
+    line,
+  )
 })
 
 test('a peek shows the last lines, and refuses what is not a session', async () => {

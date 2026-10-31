@@ -22,15 +22,19 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
+import { Stale } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { EXIT, PROCESS } from '@yaks/process'
 import {
+  carrying,
   CONTENT,
   ENTRY,
+  handing,
   ordered,
   OUTPUT,
+  parkedLine,
   SESSION,
   sessionFor,
   sessionViews,
@@ -177,9 +181,15 @@ export let runs = (host: Host, options: Options = {}): Runs => {
 
   // How a run ended, in a form a person reads: where it stands, the exit code
   // it ended on, and its own account of itself.
-  let ending = (graph: Graph, row: Bundle, entries: Bundle[]): string => {
+  let ending = async (
+    graph: Graph,
+    row: Bundle,
+    entries: Bundle[],
+  ): Promise<string> => {
     let code = comp(row, EXIT)?.code
-    let head = `${human(graph.vocab)(row)} — ${statusOf(entries)}` +
+    let stands = await parkedLine(graph, row.entity.eid, row) ??
+      statusOf(entries)
+    let head = `${human(graph.vocab)(row)} — ${stands}` +
       (code == null ? '' : `, exited ${code}`)
     return [head, briefOf(row, entries)].filter(Boolean).join('\n')
   }
@@ -203,7 +213,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let row = (await one(graph, session))!
       let entries = await entriesOf(graph, session)
       if (over(row, entries) || await cleaned(graph, row, entries)) {
-        return ending(graph, row, entries)
+        return await ending(graph, row, entries)
       }
       let still = `${human(graph.vocab)(row)} — ${
         statusOf(entries)
@@ -236,11 +246,49 @@ export let runs = (host: Host, options: Options = {}): Runs => {
           `${str(args.provider)} does not serve ${str(args.model)}`,
         )
       }
+      // A run already on this task gets the instruction: a new one would be a
+      // second writer. Only the run starting under the write refuses it, and
+      // it is then still the run on this task.
+      let name = human(graph.vocab)(on)
+      let handed = async (): Promise<string | undefined> => {
+        let run = await carrying(graph, task)
+        if (!run) return
+        try {
+          await graph.apply(
+            signed(
+              await handing(
+                graph,
+                run,
+                task,
+                str(args.instruction) || `Carry on with ${name}.`,
+              ),
+              who(call),
+            ),
+          )
+          return run
+        } catch (err) {
+          if (!(err instanceof Stale)) throw err
+          return await handed()
+        }
+      }
+      let run = await handed()
+      if (run) {
+        let line =
+          `${
+            human(graph.vocab)((await one(graph, run))!)
+          } carries on ${name}: it got this instruction, on its own provider, ` +
+          'and no second run started'
+        return [said(
+          call,
+          args.wait
+            ? `${line}\n${await watched(graph, run, patience(args.timeout))}`
+            : line,
+        )]
+      }
       let effort = str(args.effort)
       let session = uuid()
       let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)
       let owner = parent ? await one(graph, parent) : undefined
-      let name = human(graph.vocab)(on)
       // Snapshot the task body into the request: the task is the brief, even
       // for a provider that has no graph tools in its own context.
       let instruction = [
@@ -251,7 +299,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         str(args.instruction),
       ].filter(Boolean).join('\n\n')
       // The request, plus the lease recording who is doing the work. The
-      // lease is guarded, so handing an agent work somebody else already holds
+      // lease is guarded, so handing an agent work a run still going holds
       // rejects the whole transaction rather than starting a second run on
       // it.
       await graph.apply(
@@ -286,12 +334,11 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         ], who(call)),
       )
       let row = (await one(graph, session))!
-      name = human(graph.vocab)(row)
       return [said(
         call,
         args.wait
           ? await watched(graph, session, patience(args.timeout))
-          : `${name} spawned`,
+          : `${human(graph.vocab)(row)} spawned`,
       )]
     },
 
@@ -330,8 +377,9 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let args = argsOf(call)
       let row = await sessionAt(call, graph)
       let shown = await recent(graph, row.entity.eid, lines(args.lines))
-      let status = str(comp(row, SESSION)?.status) ||
-        statusOf(await entriesOf(graph, row.entity.eid))
+      let status = await parkedLine(graph, row.entity.eid, row) ??
+        (str(comp(row, SESSION)?.status) ||
+          statusOf(await entriesOf(graph, row.entity.eid)))
       return [said(
         call,
         [

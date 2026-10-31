@@ -15,6 +15,10 @@
 // the same news is told once, and a wake that lands while a run is starting is
 // refused rather than lost: it is written beside the precondition that the run
 // is still over, and the run starting clears that first (@yaks/spawn).
+//
+// A wake records the task it woke the transcript for (`woken`), so a spawn on a
+// task finds the run already on it even after its claim was let go
+// ({@link carrying}), and gives that run the instruction.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -45,6 +49,11 @@ let holds = (g: Graph) =>
  * and nobody asked it to stop. */
 export let cleanEnd = (row: Bundle | undefined): boolean =>
   !!row?.process && comp(row, 'exit')?.code === 0 && !row[STOP_ENTRY]
+
+// A wake's record of the task it woke its transcript for.
+const WOKEN = 'woken'
+// How a native transcript reads when it will take no next turn by itself.
+let ENDED = ['stopped', 'failed']
 
 // What says whether a transcript's run is over: a managed one's process, how
 // it exited, and whether it was asked to stop.
@@ -94,17 +103,18 @@ let given = async (g: Graph, session: Eid): Promise<number> => {
  * ```
  */
 export let unanswered = async (g: Graph, session: Eid): Promise<Bundle[]> =>
-  await g.read(
-    `.entry.session=${session}&.entry.seq>${await given(g, session)}` +
-      `&.content&!output&!${STOP_ENTRY}&!notice` +
-      (g.vocab.comp('lines') ? '&!lines' : '') +
-      '&.order=entry.seq&*',
-  )
+  await g.read(`${await saidSince(g, session)}&.order=entry.seq&*`)
+
+// The query for what a transcript was told that it was not given.
+let saidSince = async (g: Graph, session: Eid): Promise<string> =>
+  `.entry.session=${session}&.entry.seq>${await given(g, session)}` +
+  `&.content&!output&!${STOP_ENTRY}&!notice` +
+  (g.vocab.comp('lines') ? '&!lines' : '')
 
 /** Whether a request waits in a transcript for its next turn or run: an input
  * asking for one that its newest ask was not given. */
 export let requested = async (g: Graph, session: Eid): Promise<boolean> =>
-  (await unanswered(g, session)).some((b) => b.using)
+  (await g.read(`${await saidSince(g, session)}&.using&.limit=1`)).length > 0
 
 let finished = (b: Bundle): Comp | undefined =>
   comp(b, 'cancelled') ?? comp(b, 'completed')
@@ -191,13 +201,151 @@ export let waits = async (
  * Whether a transcript whose run is over is parked: a request waits for its
  * next run, or a task it holds {@link waits}.
  */
-export let parked = async (g: Graph, session: Eid): Promise<boolean> => {
-  if (await requested(g, session)) return true
-  let held = holds(g) ? await g.read(`.task&.${CLAIM}.session=${session}`) : []
+export let parked = async (g: Graph, session: Eid): Promise<boolean> =>
+  await requested(g, session) || (await parkedOn(g, session)).length > 0
+
+/** The tasks a transcript holds that {@link waits} says it is parked on. */
+export let parkedOn = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+  let held = holds(g)
+    ? await g.read(`.task&.${CLAIM}.session=${session}&*`)
+    : []
+  let on: Bundle[] = []
   for (let b of held) {
-    if (await waits(g, session, b.entity.eid)) return true
+    if (await waits(g, session, b.entity.eid)) on.push(b)
   }
-  return false
+  return on
+}
+
+/**
+ * Where a transcript whose run is over stands, for a person: the tasks it is
+ * parked on and what each still waits on, or that its next run is asked for.
+ * Nothing where its run is not over or it is not parked.
+ *
+ * ```ts
+ * import { parkedLine } from '@yaks/session'
+ *
+ * // await parkedLine(graph, session) // 'parked on T-2, waiting on T-1'
+ * ```
+ */
+export let parkedLine = async (
+  g: Graph,
+  session: Eid,
+  seen?: Bundle,
+): Promise<string | undefined> => {
+  let row = seen ?? await one(g, session, SEEN)
+  let over = row?.process
+    ? cleanEnd(row)
+    : await currentStatus(g, session) == 'settled'
+  if (!over) return
+  let id = human(g.vocab)
+  let lines = await Promise.all(
+    (await parkedOn(g, session)).map(async (task) => {
+      let ids = await dependencies(g, task.entity.eid)
+      let open = (ids.length ? await g.get(ids) : [])
+        .filter((b) => !settled(taskStatus(g.vocab, b)))
+      return `parked on ${id(task)}` +
+        (open.length ? `, waiting on ${open.map(id).join(', ')}` : '')
+    }),
+  )
+  if (lines.length) return lines.join('; ')
+  return await requested(g, session)
+    ? 'parked, its next run asked for'
+    : undefined
+}
+
+// Whether a transcript stands to carry on `task` without anyone starting a
+// run: nobody stopped it and it did not fail, and it is parked there, a request
+// waits for its next run or turn, or a wake for the task is what it is running.
+let onward = async (g: Graph, session: Eid, task: Eid): Promise<boolean> => {
+  let row = await one(g, session, SEEN)
+  let managed = !!row?.process
+  if (managed && (row?.[STOP_ENTRY] || (comp(row, 'exit') && !cleanEnd(row)))) {
+    return false
+  }
+  if (await resting(g, session, row)) return await waits(g, session, task)
+  if (!managed && ENDED.includes(await currentStatus(g, session))) return false
+  if (await requested(g, session)) return true
+  return (await g.read(
+    `.entry.session=${session}&.${WOKEN}.task=${task}&.limit=1`,
+  )).length > 0
+}
+
+/**
+ * The transcript already on `task`, where a new run would be a second writer:
+ * its holder where that {@link onward stands to carry on}, or, its claim let
+ * go, a transcript still running the wake it was given for the task. Nothing
+ * where it can be given no next turn, having asked for none.
+ *
+ * ```ts
+ * import { carrying } from '@yaks/session'
+ *
+ * // let run = await carrying(graph, task) // give it the work, not a new run
+ * ```
+ */
+export let carrying = async (g: Graph, task: Eid): Promise<Eid | undefined> => {
+  if (!holds(g)) return
+  let holder = comp(await one(g, task, [CLAIM]), CLAIM)?.session
+  let them = holder ? [String(holder)] : [
+    ...new Set(
+      (await g.read(`.${WOKEN}.task=${task}&*`))
+        .map((b) => String(comp(b, 'entry')?.session)),
+    ),
+  ]
+  for (let session of them) {
+    if (await onward(g, session, task) && await inForce(g, session)) {
+      return session
+    }
+  }
+}
+
+// The `using` a transcript's newest request carries.
+let inForce = async (g: Graph, session: Eid): Promise<Comp | undefined> =>
+  comp(
+    (await g.read(
+      `.entry.session=${session}&.using&.order=-entry.seq&.limit=1`,
+    ))[0],
+    'using',
+  )
+
+// A managed run's ending, as a precondition: the write is refused where a run
+// started under it, which reads the news itself.
+let underEnding = (session: Eid, row: Bundle | undefined): Bundle[] =>
+  row?.exit
+    ? [{
+      entity: { eid: session },
+      $was: { exit: { code: token(comp(row, 'exit')?.code) } },
+    }]
+    : []
+
+/**
+ * The writes that give a transcript {@link carrying} a task an instruction: an
+ * input carrying the `using` in force, the claim where it was let go, and,
+ * while its run is over, the precondition that it still is. A run starting
+ * under them refuses the write with `Stale`, and asking again answers.
+ *
+ * ```ts
+ * import { handing } from '@yaks/session'
+ *
+ * // await graph.apply(await handing(graph, session, task, 'also do this'))
+ * ```
+ */
+export let handing = async (
+  g: Graph,
+  session: Eid,
+  task: Eid,
+  body: string,
+): Promise<Bundle[]> => {
+  let held = comp(await one(g, task, [CLAIM]), CLAIM)?.session
+  return [
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session },
+      content: { body },
+      using: (await inForce(g, session))!,
+    },
+    ...held ? [] : [{ entity: { eid: task }, [CLAIM]: { session } }],
+    ...underEnding(session, await one(g, session, SEEN)),
+  ]
 }
 
 // The line a wake says: what finished, what it waits on no more, and how many
@@ -240,10 +388,7 @@ export let rouse = async (
   if (!holds(g)) return
   let row = await one(g, session, SEEN)
   if (!await resting(g, session, row)) return
-  let [asked] = await g.read(
-    `.entry.session=${session}&.using&.order=-entry.seq&.limit=1`,
-  )
-  let using = comp(asked, 'using')
+  let using = await inForce(g, session)
   if (!using) return
   let held = await g.read(`.task&.${CLAIM}.session=${session}&*`)
   let wakes: Bundle[] = []
@@ -257,20 +402,13 @@ export let rouse = async (
       entry: { session },
       content: { body: telling(g, task, told, deps.left) },
       using,
+      [WOKEN]: { task: task.entity.eid },
       $was: { entry: { session: null } },
     })
   }
   if (!wakes.length) return
   try {
-    await g.apply([
-      ...wakes,
-      ...row?.exit
-        ? [{
-          entity: { eid: session },
-          $was: { exit: { code: token(comp(row, 'exit')?.code) } },
-        }]
-        : [],
-    ], { trusted: true })
+    await g.apply([...wakes, ...underEnding(session, row)], { trusted: true })
   } catch (err) {
     // Told already, or a run started under it, which reads the news itself
     // and is roused again as it ends.

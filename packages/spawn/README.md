@@ -96,10 +96,14 @@ when that one ends. A run that ends cleanly while the task it holds waits on a
 dependency is **parked**: it keeps its claim, its checkout and its log, and the
 dependency finishing asks for its next run through `@yaks/session`'s
 `session_wake`; a dependency that finished while it ran is told as it ends.
-Every other run's files are taken back when it ends, and its checkout once its
-work is landed. Writing `stop` on the session entity requests termination:
-SIGTERM to the process group, then SIGKILL after the configured grace period. A
-`stop` on an entry only ends the transcript.
+`session_spawn` on a task such a run is parked on, or whose run a wake has asked
+for or started (even with its claim let go since), starts nothing: that run gets
+the instruction on its own provider, and the answer says so. A peek or wait at a
+parked run says it is parked and on what. Every other run's files are taken back
+when it ends, and its checkout once its work is landed. Writing `stop` on the
+session entity requests termination: SIGTERM to the process group, then SIGKILL
+after the configured grace period. A `stop` on an entry only ends the
+transcript.
 
 <a id="stopping-a-run"></a>
 

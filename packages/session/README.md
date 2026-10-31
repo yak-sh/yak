@@ -235,6 +235,11 @@ dependency that finished while it ran is told at once.
 `waits(graph, session, task)` says whether a held task still waits on something
 the holder is to be woken for, and `unanswered(graph, session)` lists what a
 transcript was told that its last turn or run was not given.
+`parkedLine(graph, session)` says where a parked transcript stands, for a
+person. A wake records the task it woke its transcript for (`woken{task}`), so
+`carrying(graph, task)` finds the transcript already on a task, its claim held
+or let go, and `handing(graph, session, task, body)` gives it an instruction
+instead of a second run starting (`@yaks/spawn`).
 
 When `x` finishes, a transcript parked on `y` which requires `x` receives that
 news and a request for another turn, carrying its previous provider choice. The
