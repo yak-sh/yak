@@ -384,8 +384,9 @@ through the connector's graph tier (tool.ts `roleIn`).
   (`unseen.ts`).
 - A hang reports nothing from inside. Cloudflare's own record of every
   invocation (outcome, wall and CPU time, the object it ran in) is Workers
-  observability, read with the cloudflare-api MCP's `telemetry/query`; an
-  event's timestamp is when the invocation ended. Calls to a store that wait
+  observability, read with the cloudflare-api MCP's `telemetry/query` or the
+  box's own token (`secrets-and-connections`); an event's timestamp is when the
+  invocation ended. Calls to a store that wait
   with 0 ms CPU, ended by resets saying "instance is no longer active" or
   "internal error; reference = …", are the runtime stalling that object, not our
   code. Every app door reads its app row from the directory, so a stalled

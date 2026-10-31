@@ -232,6 +232,24 @@ with the child it was handed to.
   skill), `JSR_TOKEN` for `deno task jsr`. Local Worker secrets go in
   `workers/yak/.dev.vars`, which git ignores.
 
+## Reading Cloudflare telemetry and traces
+
+The box has its own token for this: the secret `CLOUDFLARE_WORKERS_LOGS_TOKEN`
+in its vault, which the secret's doc describes as read-only Workers
+Observability on the yaks account. A local script reads it with
+`reveal(fileVault('<home>/.yak/secrets'), 'CLOUDFLARE_WORKERS_LOGS_TOKEN')`
+(packages/cli/vault.ts) and sends it as a Bearer token in a POST to
+`/accounts/<id>/workers/observability/telemetry/query`; the account id is in
+workers/yak/wrangler.toml. A body with `view: 'events'` and a filter on
+`$metadata.service` = `yak` returns events, `view: 'traces'` returns traces, and
+a filter on `$metadata.traceId` returns one trace's events.
+
+Wrangler's sign-in gets a 403 from this API. That refusal sends you here, not
+hunting for a token that might work. A token in another project's `.env` was
+minted for that project's job, so another project's `.env` is never read, not
+even to try a key without printing it. Wrangler's OAuth token stays in wrangler's
+config, for wrangler.
+
 ## Whose keys these are
 
 - **The repo is public, and stays that way** (M-37867: security never rests on
