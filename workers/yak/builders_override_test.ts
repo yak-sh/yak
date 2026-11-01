@@ -64,6 +64,13 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let mainId = String((mainOutput.built as Comp).build)
   let before = await g.get([builder, mainId, output])
   let sent: Record<string, unknown> = {}
+  let app = () =>
+    Promise.resolve({
+      eid: 'app',
+      space: 'space',
+      slug: 'music',
+      access: 'private',
+    })
   let ctx = {
     person,
     source,
@@ -71,13 +78,8 @@ test('hosted provider, model and native input override keeps supplied main outpu
       space: () => Promise.resolve({ eid: 'space', slug: 'fixture' }),
       role: () => Promise.resolve('owner'),
       nameAt: () => Promise.resolve('Ada'),
-      app: () =>
-        Promise.resolve({
-          eid: 'app',
-          space: 'space',
-          slug: 'music',
-          access: 'private',
-        }),
+      app,
+      binned: app,
     },
     env: {
       STORE: {

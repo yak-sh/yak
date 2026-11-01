@@ -1,3 +1,4 @@
+import { operatorTools } from './operator-tools.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
@@ -6262,6 +6263,7 @@ let OURS: Row[] = [
 export let TOOLS: Tool[] = [
   ...previewTools,
   ...OURS.map(worded),
+  ...operatorTools.map(worded),
   ...viewsTools,
   ...connectionTools,
 ]

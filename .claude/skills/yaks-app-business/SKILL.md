@@ -70,8 +70,9 @@ the plan is one sentence: each space is free or on the Plus plan.
 - **The space's owner hears about a limit**, in a sentence that names the
   space, the limit and the one thing to do. A guest who finds an app paused is
   a recommendation we won't get.
-- **Today's code still pools.** meter.ts pools emails, builds and the model
-  budget across an owner's spaces; T-131890 moves all of it onto the space.
+- **Today's code still pools some allowances.** meter.ts pools emails, builds
+  and build seconds across an owner's free spaces; T-131890 moves these onto
+  the space. Model and voice spend already use each space's own budget.
 
 ## Upgrades by pull
 

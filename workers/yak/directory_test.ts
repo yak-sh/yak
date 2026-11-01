@@ -553,8 +553,17 @@ test('the directory part shares its cache, refreshes and clears it after a write
   assertEquals(await second.query('app'), before)
   assertEquals(reads, 1)
   assertEquals(JSON.parse(await second.query('app', true))[0].app.version, 2)
-  await first.apply([], { 'x-yak-person': 'person', extra: 'private' })
-  assertEquals(headers, { 'x-yak-person': 'person' })
+  await first.apply([], {
+    'x-yak-person': 'person',
+    'x-yak-actor': 'writer',
+    'x-yak-via': 'session',
+    extra: 'private',
+  })
+  assertEquals(headers, {
+    'x-yak-person': 'person',
+    'x-yak-actor': 'writer',
+    'x-yak-via': 'session',
+  })
   assertEquals(JSON.parse(await second.query('app'))[0].app.version, 3)
   assertEquals(reads, 3)
 })
@@ -575,13 +584,20 @@ test('the directory HTTP door carries only admitted write headers to its part', 
       body: JSON.stringify({ entities: rows }),
       headers: {
         'x-yak-person': 'person',
+        'x-yak-actor': 'writer',
+        'x-yak-via': 'session',
         'x-yak-kernel': '1',
         cookie: 'private',
       },
     }),
   )
   assertEquals(await result.json(), rows)
-  assertEquals(headers, { 'x-yak-person': 'person', 'x-yak-kernel': '1' })
+  assertEquals(headers, {
+    'x-yak-person': 'person',
+    'x-yak-actor': 'writer',
+    'x-yak-via': 'session',
+    'x-yak-kernel': '1',
+  })
 })
 
 test("the directory door answers a refusal in the store's terms and throws a fault on", async () => {

@@ -87,8 +87,8 @@ and setup; this is the map and the feel.
   are `ui-building`'s.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
-- **Spending**: `models.ts` and its allowance, the one budget per account
-  (M-42105). An app's builders are `builders-and-builds`.
+- **Spending**: `models.ts` and `meter.ts`, one model and voice budget per
+  space (D-131886). An app's builders are `builders-and-builds`.
 - **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an app's
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the
@@ -336,7 +336,7 @@ from that:
 - **Input is precious** (M-59093). The owner, verbatim: "everything they input
   into a computer is precious and should be preserved". A draft, an unsent
   message or a form gets no short lifetime.
-- **Money spends from one budget per account** (M-42105), whatever the source.
+- **Money spends from one budget per space** (D-131886), whatever the source.
   Something new that costs money spends from it rather than growing an allowance
   of its own; embedding calls don't count yet (T-59279).
 

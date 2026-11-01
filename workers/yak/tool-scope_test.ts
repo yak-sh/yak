@@ -147,8 +147,8 @@ let fixture = () => {
     }
     let checked: Pick<
       Directory,
-      'at' | 'appAt' | 'space' | 'app' | 'role' | 'target'
-    > = dir
+      'at' | 'appAt' | 'space' | 'app' | 'binned' | 'role' | 'target'
+    > = { ...dir, binned: dir.app }
     return checked as unknown as Directory
   }
   let env = {

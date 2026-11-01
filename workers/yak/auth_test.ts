@@ -108,6 +108,46 @@ test('the kernel vouched, so the batch is signed by that person', async () => {
   assertEquals(grant.grant.access, 'owner')
 })
 
+test('a delegated writer keeps its author while permission belongs to the caller', async () => {
+  let { store, head } = await cookbook('private')
+  let actor = crypto.randomUUID(), via = crypto.randomUUID()
+  let author = vouch({ ...ada, actor, via }, 'private')
+  let wrote = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { title: 'Written by the operator' },
+  }], author)
+  assertEquals(wrote.status, 200)
+  let rows = await wrote.json() as Bundle[]
+  let row = rows.find((b) => b.entity.eid == CAKE)!
+  assertEquals(by(row), actor)
+  assertEquals(idOf((row.created as { via: unknown }).via), via)
+  let people = await (await get(store, '/query?q=.person', head)).json()
+  assertEquals(people.map((b: Bundle) => b.entity.eid), [ADA])
+  let grants = await (await get(store, '/query?q=.grant', head)).json()
+  assertEquals(
+    grants.map((b: Bundle) => idOf((b.grant as { person: unknown }).person)),
+    [ADA],
+  )
+  let denied = await post(
+    store,
+    '/apply',
+    [{
+      entity: { eid: CAKE },
+      doc: { title: 'A viewer cannot borrow the author’s authority' },
+    }],
+    vouch(
+      { person: MALLORY, role: 'viewer', actor, via: crypto.randomUUID() },
+      'private',
+    ),
+  )
+  assertEquals(denied.status, 403)
+  let changed = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { title: 'The authorized writer can continue' },
+  }], author)
+  assertEquals(changed.status, 200)
+})
+
 test('a caller’s x-via supplies neither an instrument nor a person', () => {
   let said = vouchOf(
     new Request('http://store/apply', {
@@ -148,6 +188,7 @@ test('a visitor cannot ride their own vouch into a store', async () => {
     headers: {
       upgrade: 'websocket',
       'x-yak-person': MALLORY,
+      'x-yak-actor': MALLORY,
       'x-yak-role': 'owner',
       'x-yak-kernel': '1',
       'x-via': MALLORY,
@@ -158,6 +199,7 @@ test('a visitor cannot ride their own vouch into a store', async () => {
   let sent = seen[0].headers
   assertEquals(sent.get('upgrade'), 'websocket')
   assertEquals(sent.get('x-yak-person'), null)
+  assertEquals(sent.get('x-yak-actor'), null)
   assertEquals(sent.get('x-yak-role'), null)
   assertEquals(sent.get('x-yak-kernel'), null)
   assertEquals(sent.get('x-via'), null)

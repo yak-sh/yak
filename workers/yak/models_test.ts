@@ -2,7 +2,7 @@
 // entry asking for a turn and the answer lands beside it, a typed question is
 // answered as an entry of its own, a model calls the commands the app marks
 // for it and no others, as the person who asked, a visitor asks only an app
-// that opens its models, and the account's budget moves by what a call cost
+// that opens its models, and the space's budget moves by what a call cost
 // until, past it, the transcript rests on the ceiling's sentence. Workers AI
 // is a fake binding here; the directory and the stores are the platform's own.
 
@@ -814,20 +814,20 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
   assertEquals((await sent(line(ada))).status, 403)
 })
 
-test('an account past its budget is told so, and the transcript rests', async () => {
+test('a space past its budget is told so, and the transcript rests', async () => {
   let v = await vale(() => ({ response: 'never' }), { models: BUDGET.free })
   let s = crypto.randomUUID()
   await v.send('/apply', asking(s, FLASH))
   let [stopped] = await v.landed(`.entry.session=${s}&.refusal&*`)
   assertEquals((stopped.refusal as Comp).code, 'limit')
-  assert(String(said(stopped)).includes('account budget of $0.20'))
+  assert(String(said(stopped)).includes("ada's budget of $0.20"))
   assertEquals(v.asked.length, 0)
   let [session] = await v.read(`.entity.eid=${s}&*`)
   assertEquals((session.session as Comp).status, 'failed')
   // And a call asked outright is answered with the same sentence.
   let { status, said: no } = await v.run({ model: FLASH, input: {} })
   assertEquals(status, 429)
-  assert(no.error.message.includes('account budget of $0.20'))
+  assert(no.error.message.includes("ada's budget of $0.20"))
   assertEquals(v.asked.length, 0)
 })
 
@@ -1092,7 +1092,7 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
   assertAlmostEquals((await p.spent()).meter!.models, cost)
 })
 
-test('raw Workers AI audio debits its tariff once and refuses at the account limit', async () => {
+test('raw Workers AI audio debits its tariff once and refuses at the space limit', async () => {
   let v = await vale(() => ({ audio: 'https://media.example/song.mp3' }), {
     models: BUDGET.free - 0.15,
   })

@@ -247,6 +247,7 @@ export type Env = {
   OPENAI_API?: string
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string
+  OPERATOR_MODEL?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
   // one build compiles in, bound as a Durable Object namespace
   // (wrangler.toml `[[containers]]`). Absent in a test run and the

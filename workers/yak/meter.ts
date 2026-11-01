@@ -143,9 +143,7 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// One monthly dollar budget belongs to an account. Each Plus subscription
-// contributes the $3 its space was previously allowed, on top of the free
-// $0.20. Space meters still say where the dollars went.
+// Each space's models and voice spend its one monthly dollar budget.
 export let BUDGET: Record<Tier, number> = { free: 0.2, plus: 3 }
 
 // Build seconds a month: the sandbox container's (sandbox.ts) and the compile
@@ -177,9 +175,8 @@ export let CURRENCY = 'USD'
 //
 // A person owns at most {@link SPACES} free spaces. Their letter, build and
 // second allowances pool over those free spaces; a Plus space has its own.
-// Dollar costs pool across all spaces the person owns, including Plus spaces.
-// Every spend stays on its source space's meter, so changing a plan or moving
-// through a month never requires moving a balance between rows.
+// Model and voice dollars belong to each space independently of its owners.
+// Every spend stays on its source space's meter.
 
 /** The free spaces one person may own. */
 export let SPACES = 5
@@ -241,36 +238,19 @@ export let pooled = async (
 export let over = (space: Space, m: Meter, what: Limited, more = 0) =>
   used(m, what) + more >= allowance(what, space.tier)
 
-/** One person's budget this month, over every space they own: what models
- * and voice cost in all of them, against the free budget and each Plus
- * space's. */
+/** Models and voice spent across these spaces, with their independent limits
+ * summed for an administrative total. */
 export let budget = (owned: Space[], now = new Date()): Budget => ({
   spent: owned.reduce((n, s) => n + used(spent(s, now), 'models'), 0),
-  limit: BUDGET.free +
-    owned.filter((s) => s.tier == 'plus').length * BUDGET.plus,
+  limit: owned.reduce((n, s) => n + BUDGET[s.tier ?? 'free'], 0),
 })
 
-/** Each owner pays from one budget across every space they own. A shared
- * space must fit every owner's budget, as its free allowances already do. */
-export let budgets = async (
-  dir: Owned,
+/** The selected space's budget, shared by every source of model spend. */
+export let budgets = (
+  _dir: Owned,
   space: Space,
   now = new Date(),
-): Promise<Budget[]> => {
-  let owners = await dir.owners(space)
-  if (!owners.length) {
-    return [{
-      spent: used(spent(space, now), 'models'),
-      limit: BUDGET[space.tier ?? 'free'],
-    }]
-  }
-  return await Promise.all(owners.map(async (person) =>
-    budget([
-      space,
-      ...(await dir.spaces(person, 'owner')).filter((s) => s.eid != space.eid),
-    ], now)
-  ))
-}
+): Promise<Budget[]> => Promise.resolve([budget([space], now)])
 
 /** What stops this spend here, or null to go ahead. */
 export let refusedSpend = async (
@@ -492,7 +472,7 @@ let asOf = (at: string) => {
 }
 
 /** Where a space stands, as data: each ceiling it answers to, what models and
- * voice cost here from the owner's account budget, and when the hourly sweep
+ * voice cost here from its budget, and when the hourly sweep
  * last read it (null before the month's first reading). */
 export let standingOf = (
   space: Space,
@@ -544,10 +524,9 @@ let SWEPT: Ceiling[] = ['requests']
 
 /**
  * Where a space stands this month, in one line: every ceiling it answers to,
- * what models and voice cost here from the owner's account budget, and, at
+ * what models and voice cost here from its budget, and, at
  * four fifths of a ceiling or past it, which ones and where the plan is
- * settled. The account's budget is shared by its owner's spaces, so the line
- * says what this one spent and no ceiling of its own.
+ * settled.
  */
 export let gauged = (
   space: Space,
@@ -571,7 +550,7 @@ export let gauged = (
     shown.map(([what, g]) => READ[what](g)).join(', ')
   }${shown.length < all.length ? ', request units not read yet' : ''}, and ${
     dollars(used(m, 'models'))
-  } of model use and voice${voice} from the owner's account budget${
+  } of model use and voice${voice} from ${space.slug}'s budget${
     close.length
       ? ` — ${state} the limit for ${
         close.map(([what]) => NAME[what]).join(', ')
@@ -626,12 +605,12 @@ export let atCeiling = (
     // alike, so it names neither: models answer again on the 1st. Voice
     // spends the same dollars, so each sentence says both.
     models: () =>
-      `the account budget of ${dollars(budget)} for models and voice ` +
+      `${space.slug}'s budget of ${dollars(budget)} for models and voice ` +
       `this month is spent — ` +
       `models answer again on the 1st, and a connected agent can keep ` +
       `building`,
     realtime: () =>
-      `the account budget of ${dollars(budget)} for models and voice ` +
+      `${space.slug}'s budget of ${dollars(budget)} for models and voice ` +
       `this month is spent — ` +
       `voices go quiet until the 1st`,
     seconds: () =>
@@ -1027,7 +1006,7 @@ export let metered = (
   },
 })
 
-/** A hosted provider spends from the same account budget as every other door.
+/** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. */
 export let accounted = (
   bind: Host & Partial<Pick<Env, 'STORE'>>,

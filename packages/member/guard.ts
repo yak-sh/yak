@@ -42,7 +42,7 @@
 // `open` app, refused everywhere else — which is what an anonymous visitor
 // should get.
 
-import type { Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
+import type { Actor, Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { comps, dead } from '@yaks/graph/bundle'
@@ -76,7 +76,7 @@ export type Guard = Where & {
   within?: Record<string, string>
   /** Current standing vouched by the receiving boundary. Null is an
    * authoritative absence; undefined asks the stored roster. */
-  level?: (who: Viewer) => Level | null | undefined
+  level?: (who: Viewer, writer: Actor) => Level | null | undefined
   /** Canonical identity of a vouched instrument, including stored identities
    * retained while a host migrates its attribution. Defaults to exact eids. */
   instrument?: Instrument
@@ -244,7 +244,7 @@ let adding = (
 export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
   if (!bundles.length) return []
   let who = actorOf(bundles)
-  let level = where.level?.(who)
+  let level = where.level?.(who, writerOf(bundles))
   let eids = bundles.map((b) => b.entity.eid)
   if (!writes(level ?? null)) eids.push(where.app)
   if (level !== undefined) return [{ eids }]
@@ -272,7 +272,7 @@ export let guarding = (where: Guard): Hook => {
   return (bundles, tx) => {
     if (!bundles.length) return bundles
     let who = actorOf(bundles)
-    let vouched = where.level?.(who)
+    let vouched = where.level?.(who, writerOf(bundles))
     return after(
       vouched === undefined ? levelOn(tx, who, where.app, where) : vouched,
       (level) =>

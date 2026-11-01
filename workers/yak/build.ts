@@ -87,7 +87,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
 import type { Who } from './session.ts'
-import { caught } from './defects.ts'
+import { caught, refusing } from './defects.ts'
 
 /**
  * The slice of a `DurableObjectState` this object needs: its SQLite, and its
@@ -228,6 +228,9 @@ export class Builder {
   // Whether a build is running in this object right now. In memory on purpose:
   // an object that was evicted has no build running, and a flag in storage
   // would outlive the loop it stands for and lock the space forever.
+  #operator?: Promise<
+    ReturnType<typeof import('./operator-store.ts').operatorStore>
+  >
   #building = false
 
   constructor(ctx: State, env: Env) {
@@ -279,6 +282,7 @@ export class Builder {
   async wipe() {
     await this.#ctx.storage.deleteAll()
     this.#sql.query(SAID)
+    this.#operator = undefined
   }
 
   // Everyone watching this space, including the socket the frame came in on: a
@@ -395,6 +399,16 @@ export class Builder {
       await this.wipe()
       return Response.json({ ok: true })
     }
+    if (url.pathname.startsWith('/operator/')) {
+      try {
+        return await this.#operate(request)
+      } catch (e) {
+        return no(
+          refusing(e, { request: 'operator' }),
+          e instanceof Error ? e.message : String(e),
+        )
+      }
+    }
     if (url.pathname != '/ws' && url.pathname != '/say') {
       return no(404, 'no route')
     }
@@ -417,6 +431,48 @@ export class Builder {
     return url.pathname == '/say'
       ? await this.#round(request, held)
       : this.#accept(held)
+  }
+
+  async #operate(request: Request): Promise<Response> {
+    let person = request.headers.get('x-yak-person')
+    let spaceId = request.headers.get(SPACE)
+    if (!person || !spaceId) return no(401, NOBODY)
+    let space = await this.#space(spaceId)
+    if (!space) return no(404, 'that space is gone')
+    let dir = directory({
+      fetch: (req: Request) => dirPart.fetch(req, this.#env),
+    }, true)
+    let role = await dir.role(space, person)
+    if (!writes(role)) return no(403, NOT_A_WRITER)
+    let store =
+      await (this.#operator ??= import('./operator-store.ts').then((m) =>
+        m.operatorStore(this.#ctx.storage)
+      ))
+    let { readOperator, runOperator } = await import('./operator.ts')
+    let args = await request.json() as Record<string, unknown>
+    if (new URL(request.url).pathname == '/operator/read') {
+      return Response.json(
+        await readOperator(
+          store,
+          typeof args.task == 'string' ? args.task : undefined,
+        ),
+      )
+    }
+    if (this.#building) return no(409, WAIT)
+    this.#building = true
+    try {
+      return Response.json(
+        await runOperator(
+          store,
+          this.#env,
+          { person, role, space: spaceId },
+          space,
+          args,
+        ),
+      )
+    } finally {
+      this.#building = false
+    }
   }
 
   /**

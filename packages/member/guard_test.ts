@@ -520,3 +520,26 @@ test('vouched standing governs both writes and admission without reviving old gr
   level = undefined
   g.admit([b])
 })
+
+test('one author can write through instruments with different authority', () => {
+  let s = store()
+  let g = graph({
+    storage: s,
+    vocab: club,
+    plugins: [members({
+      app: ids.notes,
+      vocab: club,
+      level: (_who, writer) =>
+        writer.via == browsers.owner ? 'owner' : 'viewer',
+    })],
+  })
+  let b = (via: string): Bundle => ({
+    entity: { eid: 'delegated' },
+    pick: { title: 'Piranesi' },
+    $actor: { by: ids.club, via },
+  })
+  equal(sync(g.apply([b(browsers.owner)]))[0].created?.by, ids.club)
+  for (let write of [g.admit, g.apply]) {
+    denied(() => write([b(browsers.other)]))
+  }
+})

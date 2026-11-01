@@ -1,0 +1,60 @@
+import type { Args, Ctx, Tool } from './tool.ts'
+import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
+import { builderOf, SPACE as HEADER } from './build.ts'
+import { writes } from '@yaks/member'
+import { vouched } from './session.ts'
+
+let ask = async (ctx: Ctx, args: Args, path: string) => {
+  let { space, who } = await inSpace(ctx, args, path == '/operator/run')
+  if (!writes(who.role)) {
+    throw refuse('access', 'only a member who writes can read operator work')
+  }
+  let response = await builderOf(ctx.env, space.eid)(() =>
+    new Request(`https://builder${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        [HEADER]: space.eid,
+        ...vouched(who),
+      },
+      body: JSON.stringify(args),
+    })
+  )
+  let value = await response.json() as Record<string, unknown>
+  if (!response.ok) {
+    throw rejected(response.status, String(value.message ?? value.error))
+  }
+  return { space, text: String(value.text ?? JSON.stringify(value)), value }
+}
+
+export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
+  {
+    name: 'operator_run',
+    destructive: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        say: str(
+          'What you want done in this space, or the design your agent prepared.',
+        ),
+        task: str(
+          'The id of an existing operator task to continue. Omit for a new request.',
+        ),
+      },
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/run'),
+  },
+  {
+    name: 'operator_read',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        task: str('The operator task id. Omit to list the most recent tasks.'),
+      },
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/read'),
+  },
+]

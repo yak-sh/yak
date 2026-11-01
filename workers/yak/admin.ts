@@ -1,6 +1,6 @@
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
-// what their account spent this month against its one budget (M-42105), the
+// what their spaces spent this month against their combined budgets, the
 // storage and apps of the spaces they own, and when they were last active; a
 // space's says its own spend, storage, apps and latest use; an app's, its
 // requests, visits, storage, version, owners, last deploy, last write to its

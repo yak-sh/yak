@@ -771,3 +771,23 @@ words keep no journal drops the journal's tables, with their rows, in its next
 schema pass (migrate.ts `unjournaled`); a table its words declare stays. Schema
 rows are excluded from ordinary page listings unless named explicitly, like
 other platform-owned rows.
+
+## Space operator
+
+`operator_run({space, say})` starts a private task and a native harness session
+in the space's existing Builder object. `say` can be a short request or a
+design. It uses the connector's tools to read and change that space's apps,
+files and rows. A renewed space scope applies to each tool call. Model requests
+charge the space's shared dollar budget as they answer; there is no round limit.
+
+The result includes `task`, `session`, `text`, `status`, `model` and `cost` in
+USD. `operator_read({space, task})` returns the task, comments and transcript;
+omit `task` to list recent tasks. Continue with
+`operator_run({space, task, say})`. A settled model turn may be a question: the
+operator explicitly completes a task through `task_update` after finishing it.
+
+`OPERATOR_MODEL` overrides the full `BUILDER_MODEL_PAID` model used by default.
+The selected model must have a catalogue price and runs on the existing Workers
+AI binding. This entry accepts text. Picture attachments and the email, chat and
+SMS interfaces are separate work. Interrupted requests remain in the graph and
+can be continued explicitly; they do not resume automatically.

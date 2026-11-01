@@ -176,6 +176,7 @@ let VOUCH = [
   'x-yak-speaks',
   'x-yak-base-release',
   'x-yak-person',
+  'x-yak-actor',
   'x-yak-role',
   'x-yak-title',
   'x-yak-write',

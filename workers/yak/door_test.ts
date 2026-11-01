@@ -242,7 +242,12 @@ test('a Store read answered out of memory is refused once, not asked again', asy
 
 test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
   for (
-    let header of ['x-yak-administrative', 'x-yak-observe', ACCEPTED]
+    let header of [
+      'x-yak-administrative',
+      'x-yak-actor',
+      'x-yak-observe',
+      ACCEPTED,
+    ]
   ) {
     let seen: (string | null)[] = []
     let door = doorOf((req) => {

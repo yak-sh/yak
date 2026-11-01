@@ -586,4 +586,14 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Record the platform admin's code review of an app somebody else asked into the gallery, and send the platform's owner its review request with the verdict and findings; he decides either way. An ask from outside the platform's own spaces comes to the admin's agents for this first, and app_files reads the app's code. verdict is approve or reject; findings says what the review found: what the app does with people's data and keys, whether it works as it says, and anything that should not be shown under yaks.app's name. by is your project, via your session.",
   },
+  'operator_run': {
+    'title': "Ask your space's operator",
+    'description':
+      "Give this space's operator a request or a design to implement. It reads and writes this space's apps with the same tools your agent uses, including rows and deployments, and charges model use to the space's budget. Returns the private task and session ids, its answer and model cost in dollars. Pass task to continue an earlier request; operator_read reads its work. Ships changes live; app_rollback can undo a deployment. Only members who write may ask.",
+  },
+  'operator_read': {
+    'title': "Read your operator's work",
+    'description':
+      "Read this space's private operator tasks, replies and native session entries. Pass task for its full transcript, or omit it for the twenty latest tasks.",
+  },
 }

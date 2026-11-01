@@ -94,6 +94,7 @@ export let renew = (ctx: Ctx) => {
 export let asCaller = (ctx: Ctx, role: Who['role']): Who => ({
   person: ctx.person,
   role,
+  ...(ctx.who?.actor ? { actor: ctx.who.actor } : {}),
   ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
 })
 

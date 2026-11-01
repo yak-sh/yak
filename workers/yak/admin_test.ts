@@ -119,7 +119,7 @@ let census = (): Census => ({
   ],
 } as Census)
 
-test('a person uses what the spaces they own use, from one budget', () => {
+test('a person totals the separate budgets of the spaces they own', () => {
   let u = uses(census(), NOW)
   assertEquals(u.get('ann'), {
     spend: { spent: 1.5, limit: 3.2 },

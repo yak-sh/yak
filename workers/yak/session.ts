@@ -39,6 +39,8 @@ export type Who = {
   /** Explicit platform administrative access, vouched by the kernel. */
   administrative?: boolean
   person: string | null
+  /** The writer credited for work authorized by this person. */
+  actor?: string
   role: Role | null
   /** The instrument the kernel verified, independent of the person's level. */
   via?: string
@@ -62,6 +64,8 @@ export type Who = {
  */
 export type Caller = {
   person: string
+  /** A kernel-selected writer, separate from the authenticated person. */
+  actor?: string
   /** A verified instrument, independent of the authentication method below. */
   instrument?: string
   // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
@@ -132,6 +136,7 @@ export let whoIs = async (
 // The headers an app is handed in the cookie's place.
 export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person ? { 'x-yak-person': who.person } : {}),
+  ...(who.person && who.actor ? { 'x-yak-actor': who.actor } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
   ...(who.via ? { 'x-yak-via': instrumentEid(who.via) } : {}),
   ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),

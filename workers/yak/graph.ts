@@ -233,6 +233,7 @@ import type {
 import { argsOf, who } from '@yaks/graph/call'
 import { comps, dead as deleted } from '@yaks/graph/bundle'
 import { applyOptions, graph, identityEid } from '@yaks/graph'
+import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
 import { DELIVER, MAIL } from '@yaks/mail'
@@ -740,6 +741,7 @@ export let KV: CreateTable = {
  * platform says they hold on this app, and what to call them. */
 export type Vouch = {
   person: string | null
+  actor?: string
   via: string | null
   level: Level | null
   title: string | null
@@ -753,6 +755,9 @@ export let vouchOf = (req: Request): Vouch => {
   let via = req.headers.get('x-yak-via')
   return {
     person,
+    ...(person && req.headers.get('x-yak-actor')
+      ? { actor: req.headers.get('x-yak-actor')! }
+      : {}),
     via: via ? instrumentEid(via) : null,
     level: person && said ? level(said) : null,
     title: person ? req.headers.get('x-yak-title') : null,
@@ -782,7 +787,7 @@ async (req) => {
   heard(v)
   let who = v.person || v.via
     ? {
-      ...(v.person ? { by: v.person } : {}),
+      ...(v.person ? { by: v.actor ?? v.person } : {}),
       ...(v.via ? { via: v.via } : {}),
     }
     : null
@@ -1828,7 +1833,8 @@ export class Store {
         deferStatic: true,
         read: (read, writer) => ({
           ...read,
-          person: writer?.actor?.by ?? null,
+          person: this.#authority(writer?.actor)?.person ??
+            writer?.actor?.by ?? null,
           administrative: false,
         }),
         writer: ({ actor }) => this.#socketWriter(actor),
@@ -1852,7 +1858,7 @@ export class Store {
     this.#auth = authenticating(
       policy(g.storage, { ignore: this.#staleGrant }),
       () => this.#get('app'),
-      (v) => void (v.person && this.#vouched.set(v.person, v)),
+      (v) => this.#vouch(v),
     )
     this.#route = api({
       graph: g,
@@ -2028,7 +2034,7 @@ export class Store {
     req.headers.set('x-yak-access', mode(definition.access))
     req.headers.set('x-yak-policy', raw)
     req.headers.delete('x-yak-role')
-    if (person) this.#vouched.set(person, { ...vouchOf(req), level: null })
+    if (person) this.#vouch({ ...vouchOf(req), level: null })
     if (person && (role == 'owner' || role == 'editor' || role == 'viewer')) {
       req.headers.set('x-yak-role', String(role))
     }
@@ -2308,7 +2314,7 @@ export class Store {
   #socketStanding = new Map<string, Promise<boolean>>()
 
   #socketWriter(actor: Actor | null | undefined): boolean | Promise<boolean> {
-    let person = actor?.by
+    let person = this.#authority(actor)?.person ?? actor?.by
     if (!person && !this.#bind.SERVING_COPY) return true
     if (!this.#bind.SERVING_COPY && person && this.#vouched.has(person)) {
       return true
@@ -2331,8 +2337,9 @@ export class Store {
         let v = vouchOf(req)
         if (!reads(mode(req.headers.get('x-yak-access')), v.level)) return false
         if (person) {
-          this.#vouched.set(person, {
+          this.#vouch({
             ...v,
+            ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
             via: instrumentActor(actor)?.via ?? null,
           })
         }
@@ -2388,8 +2395,9 @@ export class Store {
       )
       if (!reads(mode(definition?.access), standing)) return false
       if (person) {
-        this.#vouched.set(person, {
+        this.#vouch({
           person,
+          ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
           via: instrumentActor(actor)?.via ?? null,
           level: standing,
           title: null,
@@ -2400,10 +2408,10 @@ export class Store {
     let refresh = async () => {
       try {
         let ok = await run()
-        if (!ok && person) this.#vouched.delete(person)
+        if (!ok && person) this.#forget(actor, person)
         return ok
       } catch {
-        if (person) this.#vouched.delete(person)
+        if (person) this.#forget(actor, person)
         return false
       }
     }
@@ -2414,7 +2422,38 @@ export class Store {
   }
 
   #vouched = new Map<string, Vouch>()
+  #delegated = new Map<string, Vouch>()
   #told = new Map<string, string>()
+
+  #writerKey(actor: Actor) {
+    return JSON.stringify([actor.by, actor.via ?? null])
+  }
+
+  #vouch(v: Vouch) {
+    if (!v.person) return
+    this.#vouched.set(v.person, v)
+    if (v.actor && v.actor != v.person) {
+      this.#delegated.set(
+        this.#writerKey({
+          by: v.actor,
+          via: v.via ?? undefined,
+        }),
+        v,
+      )
+    }
+  }
+
+  #authority(actor: Actor | null | undefined): Vouch | undefined {
+    return actor?.by
+      ? this.#delegated.get(this.#writerKey(actor)) ??
+        this.#vouched.get(actor.by)
+      : undefined
+  }
+
+  #forget(actor: Actor | null | undefined, person: string) {
+    this.#vouched.delete(person)
+    if (actor) this.#delegated.delete(this.#writerKey(actor))
+  }
 
   #lowering: Plugin = {
     name: 'yak/lower',
@@ -2451,8 +2490,8 @@ export class Store {
   }
 
   #untold(bundles: Bundle[]) {
-    let who = actorOf(bundles)
-    let v = who ? this.#vouched.get(who) : null
+    let v = this.#authority(writerOf(bundles))
+    let who = v?.person
     if (!who || !v) return null
     let app = this.#get('app')
     let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
@@ -2523,7 +2562,7 @@ export class Store {
       // there.
       audit: (bundles, _tx, _err, context) => {
         if (context?.admission) return bundles
-        let who = actorOf(bundles)
+        let who = this.#authority(writerOf(bundles))?.person ?? actorOf(bundles)
         if (who) this.#told.delete(who)
         return bundles
       },
@@ -2589,8 +2628,7 @@ export class Store {
    */
   #guarding(app: string, vocab: Vocab, manifest: VocabDoc): Plugin {
     let plugin = appGuard(app, vocab, manifest, {
-      level: (who) =>
-        who ? this.#vouched.get(who)?.level ?? undefined : undefined,
+      level: (_who, writer) => this.#authority(writer)?.level ?? undefined,
       ignore: this.#staleGrant,
     })
     let guard = plugin.hooks?.precondition
@@ -2715,7 +2753,8 @@ export class Store {
                   let actor = instrumentActor(who(call))
                   // Unattributed recorded work is the app's automation. A
                   // browser's vouched instrument alone never supplies a person.
-                  let person = actor?.by ?? (actor?.via ? null : appId)
+                  let person = this.#authority(actor)?.person ?? actor?.by ??
+                    (actor?.via ? null : appId)
                   let local = policy(g.storage, { ignore: this.#staleGrant })
                   let role = person == appId
                     ? 'editor'
@@ -2750,8 +2789,11 @@ export class Store {
                     throw new Denied(person, appId, 'viewer', 'read')
                   }
                   if (person) {
-                    this.#vouched.set(person, {
+                    this.#vouch({
                       person,
+                      ...(actor?.by && actor.by != person
+                        ? { actor: actor.by }
+                        : {}),
                       via: actor?.via ?? null,
                       level: role,
                       title: null,
@@ -2760,6 +2802,9 @@ export class Store {
                   let caller = {
                     person,
                     role,
+                    ...(actor?.by && actor.by != person
+                      ? { actor: actor.by }
+                      : {}),
                     ...(actor?.via ? { via: actor.via } : {}),
                   }
                   // The kept command template is the writer's vocabulary, not
@@ -2793,7 +2838,9 @@ export class Store {
                           }))
                           : entities,
                         {
-                          ...(person ? { by: person } : {}),
+                          ...(actor?.by || person
+                            ? { by: actor?.by ?? person! }
+                            : {}),
                           ...(actor?.via ? { via: actor.via } : {}),
                         },
                       ))
@@ -4396,7 +4443,8 @@ export class Store {
           try {
             out = kernel
               ? this.#trust(body as Bundle[], {
-                by: vouchOf(request).person ?? undefined,
+                by: vouchOf(request).actor ?? vouchOf(request).person ??
+                  undefined,
                 via: vouchOf(request).via ?? undefined,
               }, opts)
               : this.#graph.apply(signed(body as Bundle[], who), opts)
@@ -4880,11 +4928,12 @@ export class Store {
           : this.#runner()
         await run.ensure([name])
         let vouch = vouchOf(request)
+        this.#vouch(vouch)
         let call = signed([{
           entity: { eid: id },
           call: { to: toolEid(name), args, id, source },
         }], {
-          ...(vouch.person ? { by: vouch.person } : {}),
+          ...(vouch.person ? { by: vouch.actor ?? vouch.person } : {}),
           ...(vouch.via ? { via: vouch.via } : {}),
         })[0]
         let answer = answerOf(await run.call(call), id)

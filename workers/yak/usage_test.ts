@@ -629,10 +629,10 @@ test('the build line warns at 80%, and the line says both numbers', () => {
   assertEquals(level(space({ builds: 5, built: 40 }), 1, NOW), 'over')
 
   // Build counts are per space; model cost is attributed to this space while
-  // the budget is shared across its owner's account.
+  // each space's models and voice share its budget.
   let said = gauged(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
   assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 build seconds')
-  assertStringIncludes(said, "$0.04 of model use and voice from the owner's")
+  assertStringIncludes(said, "$0.04 of model use and voice from jeff's")
   let plus = gauged(
     space({ builds: 4, models: 0.0012, built: 44 }, 'plus'),
     9,
@@ -944,9 +944,7 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
   assertEquals(response.status, 429)
 })
 
-// The account (T-37882): a free allowance is the owner's, summed over the free
-// spaces they own, and a Plus space answers to its own alone.
-test('a free space answers to the free spaces its owner owns, summed', async () => {
+test('free sending and build allowances pool independently of model budgets', async () => {
   let as = (eid: string, meter: Partial<Meter>, tier: Tier | null = null) => ({
     ...space(meter, tier),
     eid,
@@ -970,14 +968,40 @@ test('a free space answers to the free spaces its owner owns, summed', async () 
   // What a build holds uncounted is added to the reading.
   assertEquals(await refusedSpend(dir, b, 'seconds', {}, 599, NOW), null)
   assert(await refusedSpend(dir, b, 'seconds', {}, 600, NOW))
-  assertEquals(await budgets(dir, a, NOW), [{ spent: 3.125, limit: 3.2 }])
+  assertEquals(await budgets(dir, a, NOW), [{ spent: 0.125, limit: 0.2 }])
   assertEquals(await refusedSpend(dir, a, 'models', {}, 0.0625, NOW), null)
   assert(await refusedSpend(dir, a, 'models', {}, 0.075, NOW))
-  // The free space can spend the Plus space's remaining budget and vice versa.
+  // A paid space uses its own budget even while its owner's free space has room.
   assert(await refusedSpend(dir, paid, 'models', {}, 0.075, NOW))
   // The Plus plan space is paid for on its own.
   assertEquals((await pooled(dir, paid, NOW)).emails, 900)
   assertEquals(await refusedSpend(dir, paid, 'emails', {}, 0, NOW), null)
+})
+
+test('model budgets stay with a space across shared owners and sibling spends', async () => {
+  let selected = space({ models: 0.05, realtime: 0.025 })
+  let sibling = { ...space({ models: 100 }, 'plus'), eid: 'sibling' }
+  for (let owners of [['ada'], ['ada', 'bob']]) {
+    let dir = {
+      owners: () => Promise.resolve(owners),
+      spaces: () => Promise.resolve([selected, sibling]),
+    }
+    assertEquals(
+      await refusedSpend(dir, selected, 'models', {}, 0.1, NOW),
+      null,
+    )
+    assert(await refusedSpend(dir, selected, 'realtime', {}, 0.125, NOW))
+    assert(await refusedSpend(dir, sibling, 'models', {}, 0, NOW))
+  }
+  let unread = {
+    owners: () => {
+      throw Error('a space budget reads no owners')
+    },
+    spaces: () => {
+      throw Error('a space budget reads no sibling spaces')
+    },
+  }
+  assertEquals(await refusedSpend(unread, selected, 'models', {}, 0, NOW), null)
 })
 
 test('a conversation that shipped nothing pays for its model and seconds', async () => {
@@ -1054,7 +1078,7 @@ test('a spend lands on its day, and a letter costs no day', async () => {
   assertEquals(Object.values(row?.trend?.spend ?? {}), [0.75])
 })
 
-test('models and voice spend one account budget, each counted apart', async () => {
+test('models and voice spend one space budget, each counted apart', async () => {
   let half = BUDGET.free / 2
   let both = space({ models: half, realtime: half })
   assert(await refusedSpend(alone, both, 'models', {}, 0, NOW))
