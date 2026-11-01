@@ -189,7 +189,7 @@ test('a note names its writer and instrument on one line of plain links', () => 
     },
     run: {
       entity: { eid: 'run', num: 3 },
-      session: { eid: 'run', status: 'done' },
+      session: { eid: 'run', id: 'run', status: 'settled' },
     },
     said: {
       entity: { eid: 'said', num: 4 },
