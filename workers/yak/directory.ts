@@ -200,6 +200,10 @@ export type Space = {
   tunnel: Tunnel | null
 }
 export type App = {
+  /** A transient view may keep its graph within this store alone. */
+  scope?: 'store'
+  /** An internal mount for an isolated preview, never directory state. */
+  mount?: string
   policy?: number
   eid: string
   slug: string

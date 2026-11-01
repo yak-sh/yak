@@ -12,6 +12,12 @@ import {
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
 import {
+  type Context as AppContext,
+  expired,
+  expiring,
+  type Expiry,
+} from './expires.ts'
+import {
   sessionLens,
   sessionMove,
   sessionPackage,
@@ -615,6 +621,8 @@ export type State = Hibernation & {
 /** The Worker's store capabilities lent to its own facets. The address and
  * commands arrive on later requests, so a facet reads them when it runs. */
 export type Stored = {
+  /** The app view this temporary store runs, separate from live routing. */
+  context?: AppContext
   env: Bindings
   /** the platform's own directory store, rather than an app's */
   meta: boolean
@@ -940,6 +948,7 @@ let routes = new Set([
   '/restore',
   '/writes',
   '/alarm',
+  '/expires',
   '/move',
   '/call',
   '/recover',
@@ -1155,6 +1164,7 @@ export class Store {
   #dormant: boolean | null = null
   #moveOnly = false
   #checking: Promise<boolean> | null = null
+  #expires: Expiry | undefined
 
   #ensureStarted(request?: Request): Promise<void> {
     return this.#started ??= tallying(this.#pending, async () => {
@@ -1222,6 +1232,7 @@ export class Store {
   }
 
   async #start(request?: Request) {
+    this.#expires = await this.#ctx.storage.get<Expiry>?.('expires')
     this.#startedDormant = !!this.#dormant
     let ctx = this.#ctx
     this.#sql = driver(ctx.storage, undefined, this.#measure)
@@ -1483,8 +1494,12 @@ export class Store {
     let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind
     let kernelGraph: Graph | undefined
     let kernel = () => kernelGraph ??= this.#kernelGraph(host.graph)
+    let context = () => this.#expires?.context
     let at: Stored = {
       ...this.#stored(this.#graph),
+      get context() {
+        return context()
+      },
       get env() {
         return env()
       },
@@ -2632,6 +2647,7 @@ export class Store {
   // and a write as somebody goes through `apply()` the way their own request
   // would, guard and all.
   #stored = (g: Graph): Stored => ({
+    context: this.#expires?.context,
     env: this.#bind,
     meta: this.#get('name') == PLATFORM_STORE,
     app: this.#get('app'),
@@ -2687,6 +2703,13 @@ export class Store {
                     dir && (!held || held.app.trashed || held.space.trashed)
                   ) {
                     throw new Error('app is unavailable')
+                  }
+                  let context = this.#expires?.context
+                  if (held && context) {
+                    held = {
+                      space: held.space,
+                      app: { ...context.app, policy: held.app.policy },
+                    }
                   }
                   let actor = instrumentActor(who(call))
                   // Unattributed recorded work is the app's automation. A
@@ -3080,6 +3103,14 @@ export class Store {
   }
 
   async #alarmRequest(): Promise<void> {
+    let expires = await this.#ctx.storage.get<Expiry>?.('expires')
+    if (expires && expires.at <= this.#now()) {
+      await this.#expiring(expires)
+      return
+    }
+    if (expires && this.#alarm) {
+      await arm(this.#alarm, { at: new Date(expires.at).toISOString() })
+    }
     if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
     let run = async () => {
@@ -3131,6 +3162,25 @@ export class Store {
       }
     }
     return this.#profile ? this.#profile.run('alarm', run) : run()
+  }
+
+  async #expiring(expires: Expiry) {
+    try {
+      await this.#sleep()
+      await Promise.all([this.#effectWork, this.#vectorWork])
+      let leave = await this.#enter(true)
+      try {
+        await expired(this.#bind, expires)
+        await this.#ctx.storage.deleteAll()
+        this.#kv.clear()
+        await this.#ctx.storage.put?.('dormant', true)
+      } finally {
+        leave()
+      }
+    } catch (e) {
+      defect(e, { request: 'expire store', store: this.#name() })
+      await this.#ctx.storage.setAlarm?.(this.#now() + Store.RETRY)
+    }
   }
 
   // Whether a deployment pass has run here. A store from before `deployed`
@@ -3697,6 +3747,7 @@ export class Store {
   #weighing: Promise<void> | null = null
 
   #weigh = (bundles: Bundle[]): Bundle[] => {
+    if (this.#name()?.startsWith('preview/')) return bundles
     this.#tell()
     this.#wrote(bundles)
     return bundles
@@ -4733,6 +4784,24 @@ export class Store {
     if (path == '/alarm' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       await this.#arming(new Date(this.#now()).toISOString())
+      return Response.json({ ok: true })
+    }
+    if (path == '/expires' && request.method == 'POST') {
+      if (!kernel || !this.#name()?.startsWith('preview/')) {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      if (!this.#ctx.storage.put || !this.#alarm) {
+        throw new Refused('temporary stores need durable alarms')
+      }
+      let expires: Expiry
+      try {
+        expires = expiring(await request.json())
+      } catch (e) {
+        return refuse(e, request)
+      }
+      await this.#ctx.storage.put('expires', expires)
+      this.#expires = expires
+      await arm(this.#alarm, { at: new Date(expires.at).toISOString() })
       return Response.json({ ok: true })
     }
     // The mover's door (mover.ts), a sweep's one question of each store:

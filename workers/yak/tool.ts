@@ -15,6 +15,7 @@
 import type { Security } from '@yaks/mcp'
 import { writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
+import type { Image } from '@yaks/tools/value'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
 import {
@@ -107,6 +108,7 @@ export type Out = {
   text: string
   space?: Space
   value?: Record<string, unknown>
+  images?: Image[]
 }
 
 export type Shape = {

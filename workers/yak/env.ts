@@ -253,6 +253,8 @@ export type Env = {
   // workerd probes, where the sandbox tools say so rather than half-running —
   // and absent under `wrangler dev` on a machine with no container engine.
   SANDBOX?: Sandboxes
+  // Draft screenshots run in Cloudflare's browser, including under local dev.
+  BROWSER?: Fetcher
   WORKSPACES?: Workspaces
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A

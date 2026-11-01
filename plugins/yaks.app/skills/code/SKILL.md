@@ -1,6 +1,6 @@
 ---
 name: code
-description: "Backend Code (yaks.app). Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. The build sandbox, and deploying a site built with Vite, Astro, Eleventy or SvelteKit."
+description: "Backend Code (yaks.app). Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. The build sandbox, and deploying a site built with Vite, Astro, Eleventy or SvelteKit. Check the draft worker and pages with app_preview, including screenshots, console messages and page errors, before releasing them."
 ---
 
 # Backend Code
@@ -10,6 +10,13 @@ This page covers that file: which requests reach it, what `env` holds, the
 request headers that identify the visitor, the limits it runs under, and three
 complete example workers. It also covers TypeScript and npm packages, for a
 worker and for the scripts a page loads.
+
+Write the files with `app_files`, then call `app_preview` at phone and desktop
+widths before `app_deploy`. The connector returns the screenshot, console and
+page errors from a browser on Cloudflare; there is no local checkout or browser
+to prepare. The draft worker uses a separate test store. See
+[draft previews](https://yaks.app/docs/files.md#checking-a-draft-with-app_preview)
+for the private URL, examples and limits.
 
 ## When an app needs a worker
 

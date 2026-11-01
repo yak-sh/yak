@@ -32,7 +32,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let sha = event.entity.eid, { STORE, BLOBS } = at.env
       if (!STORE || !BLOBS || !at.app || !/^[0-9a-f]{64}$/.test(sha)) return
       let { directoryOf } = await import('../directory.ts')
-      let found = await directoryOf(STORE).appAt(at.app)
+      let found = at.context ?? await directoryOf(STORE).appAt(at.app)
       if (!found) return
       await released(
         at.graph,

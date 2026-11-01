@@ -18,6 +18,8 @@ guide:
     The platform's @yaks packages, named "platform", whose components the
     app's store also keeps. The build sandbox, and deploying a site built with
     Vite, Astro, Eleventy or SvelteKit.
+    Check the draft worker and pages with app_preview, including screenshots,
+    console messages and page errors, before releasing them.
 ---
 
 # Backend Code
@@ -27,6 +29,13 @@ This page covers that file: which requests reach it, what `env` holds, the
 request headers that identify the visitor, the limits it runs under, and three
 complete example workers. It also covers TypeScript and npm packages, for a
 worker and for the scripts a page loads.
+
+Write the files with `app_files`, then call `app_preview` at phone and desktop
+widths before `app_deploy`. The connector returns the screenshot, console and
+page errors from a browser on Cloudflare; there is no local checkout or browser
+to prepare. The draft worker uses a separate test store. See
+[draft previews](https://yaks.app/docs/files.md#checking-a-draft-with-app_preview)
+for the private URL, examples and limits.
 
 ## When an app needs a worker
 

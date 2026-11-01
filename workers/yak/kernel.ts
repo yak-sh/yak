@@ -158,6 +158,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
     )
   }
   if (r.space != null) {
+    if (/^\/[^/]+\/_preview(?:\/|$)/.test(asked)) {
+      return (await import('./preview.ts')).fetch(req, env)
+    }
     // The one path on a space's hostname the kernel answers itself (drop.ts,
     // T-34230): a file dropped on the space's own page, which becomes an app.
     // POST only, so an app whose slug happens to be `deploy` still serves its

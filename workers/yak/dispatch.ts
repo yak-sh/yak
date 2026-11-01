@@ -96,7 +96,14 @@ export let SELF = 'x-yak-app-grant'
 // The app the request is for, so the shim can spell its own doors, and who
 // is looking, so the app's code can greet them. A client cannot send these
 // either.
-let VOUCH = ['x-yak-app', 'x-yak-person', 'x-yak-role', 'x-yak-via', 'x-via']
+let VOUCH = [
+  'x-yak-app',
+  'x-yak-person',
+  'x-yak-role',
+  'x-yak-via',
+  'x-via',
+  'x-yak-mount',
+]
 export let COMMAND_CALL = 'x-yak-command-call'
 export let COMMAND_AT = 'x-yak-command-at'
 export let COMMAND_SOURCE = 'x-yak-command-source'
@@ -201,7 +208,8 @@ export default {
         return env.KERNEL.fetch(out)
       },
     })
-    let api = '/' + slug + '/api/'
+    let mount = req.headers.get('x-yak-mount') || '/' + slug + '/'
+    let api = mount + 'api/'
     // The machine: only the path and query of what it is handed go on.
     let machine = {
       fetch: (input, init) => {
@@ -236,7 +244,7 @@ export default {
     }
     return app.fetch(new Request(req, { headers }), {
       STORE: door(api, grant),
-      FILES: door('/' + slug + '/', grant),
+      FILES: door(mount, grant),
       APP: door(api, self),
       // An explicitly requested binding keeps its name, even when it names
       // one of the convenience doors supplied to apps without that binding.
@@ -384,6 +392,7 @@ let handed = async (
   for (let h of [...VOUCH, GRANT, SELF]) headers.delete(h)
   uncookied(headers)
   headers.set('x-yak-app', app.slug)
+  if (app.mount) headers.set('x-yak-mount', app.mount)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)
   if (who.via) headers.set('x-yak-via', who.via)

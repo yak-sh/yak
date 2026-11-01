@@ -137,7 +137,14 @@ import {
 import { asking } from './identity.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
-import { borrowed, homed, queried, sources, vocabulary } from './page-graph.ts'
+import {
+  borrowed,
+  homed,
+  local,
+  queried,
+  sources,
+  vocabulary,
+} from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
 import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
@@ -653,7 +660,7 @@ export let pinned = (at: string, page: string, app: App) => {
     (declares(page, 'link', 'rel', 'manifest')
       ? ''
       : `<link rel="manifest" href="${at}manifest.webmanifest" ` +
-        'crossorigin="use-credentials">') +
+        `crossorigin="${local(app) ? 'anonymous' : 'use-credentials'}">`) +
     (declares(page, 'meta', 'name', 'theme-color')
       ? ''
       : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
@@ -666,7 +673,7 @@ export let pinned = (at: string, page: string, app: App) => {
     (declares(page, 'meta', 'name', 'apple-mobile-web-app-status-bar-style')
       ? ''
       : '<meta name="apple-mobile-web-app-status-bar-style" content="default">')
-  return credentialed(tags ? intoHead(page, tags) : page)
+  return credentialed(tags ? intoHead(page, tags) : page, !local(app))
 }
 
 // A browser fetches the manifest a page links without the person's cookies
@@ -681,13 +688,16 @@ let elsewhere = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i
 let hrefOf = (tag: string) =>
   /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
     ?.slice(1).find((v) => v != null) ?? ''
-let credentialed = (page: string) =>
+let credentialed = (page: string, cookies = true) =>
   page.replace(
     /<link\b[^>]*>/gi,
     (tag) =>
       declares(tag, 'link', 'rel', 'manifest') &&
         !/\scrossorigin\b/i.test(tag) && !elsewhere.test(hrefOf(tag))
-        ? tag.replace(/^<link/i, '<link crossorigin="use-credentials"')
+        ? tag.replace(
+          /^<link/i,
+          `<link crossorigin="${cookies ? 'use-credentials' : 'anonymous'}"`,
+        )
         : tag,
   )
 
@@ -1715,7 +1725,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
 // part of that bargain: writing an app's bytes is always a member's, whatever
 // the app lets its visitors save. Every internal request is built here, so the
 // store sees the vouched headers and never the cookie.
-let api = async (
+export let api = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
@@ -2015,7 +2025,7 @@ let api = async (
     // One round trip: the store answers the socket, or says which words the
     // app uses from other homes (graph.ts `/ws`), and only then are they read.
     let answer = await store(
-      sandboxed(app) ? '/ws' : '/ws?uses=1',
+      local(app) ? '/ws' : '/ws?uses=1',
       req,
       headers,
     )

@@ -281,6 +281,7 @@
     "ajv": "npm:ajv@^8.17.1",
     "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "@cloudflare/containers": "npm:@cloudflare/containers@0.3.7",
+    "@cloudflare/puppeteer": "npm:@cloudflare/puppeteer@1.4.0",
     "@cloudflare/sandbox": "npm:@cloudflare/sandbox@0.12.9",
     "@cloudflare/workers-oauth-provider": "./workers/yak/oauth-provider.ts",
     "@std/toml": "jsr:@std/toml@^1.0.0",

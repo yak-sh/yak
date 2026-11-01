@@ -102,6 +102,10 @@ let fixture = () => {
       }
       return await response.json() as T
     }
+    let appIn = async (_space: Space, slug: string) => {
+      let now = await read<App | null>('app')
+      return now?.slug == slug ? { ...now, policy: core.revision } : null
+    }
     let dir = {
       at: async (eid: string) =>
         eid == SPACE ? await read<Space>('space') : null,
@@ -122,10 +126,8 @@ let fixture = () => {
           : (await read<Space>('space')).slug == slug
           ? state.space
           : null,
-      app: async (_space: Space, slug: string) => {
-        let now = await read<App | null>('app')
-        return now?.slug == slug ? { ...now, policy: core.revision } : null
-      },
+      app: appIn,
+      binned: appIn,
       role: async (where: Space) =>
         where.eid == 'meta' ? 'owner' : await read<Role | null>('role'),
       target: async (eid: string, _person: string, held?: string | null) => {
@@ -344,6 +346,26 @@ test('tool scope: read only answers do not consume unseen details', async () => 
   )
   equal(result[0].content, { body: 'read' })
   equal(readOnly.reads, [])
+})
+
+test('tool answers preserve image bytes beside words and structured data', async () => {
+  let images = [{ data: 'cGhvbmU=', mime_type: 'image/png' }]
+  let result = await answered(
+    readOnly.ctx,
+    {
+      text: 'Preview captured.',
+      value: { width: 390 },
+      images,
+    },
+    'preview-call',
+    true,
+  )
+  equal(result[0].content, { body: 'Preview captured.' })
+  equal(result[0].output, {
+    source: 'preview-call',
+    value: { width: 390 },
+    images,
+  })
 })
 
 let unreachable = fixture()

@@ -55,6 +55,7 @@ let unb64u = (s: string) =>
 /** What a sealed value is for: one word per kind of token the kernel mints.
  * A new kind of token is a new word here, never a reuse of an old one. */
 export type Use =
+  | 'preview' // private draft snapshot, isolated store and expiry
   | 'tracker' // short-lived authorization for one independent tracker store
   | 'session' // the platform cookie (`sign`, `verify` below)
   | 'browser' // a signed-out browser's instrument, never a person

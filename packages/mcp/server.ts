@@ -40,6 +40,7 @@ import {
 import { CallError } from '@yaks/tools/errors'
 import { type Registry, registry, runner } from '@yaks/tools'
 import { answerSchema } from '@yaks/tools/schema'
+import { imagesIn } from '@yaks/tools/value'
 import {
   core,
   type CoreOpts,
@@ -243,9 +244,17 @@ let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
     // here and nowhere else.
     // Data and the words beside it go in blocks of their own, data first, so
     // a client parsing the first block finds JSON (@yaks/tools `texts`).
-    content: (failed ? [pointing(worded(answer))] : texts(answer)).map((
-      text,
-    ) => ({ type: 'text' as const, text })),
+    content: [
+      ...(failed ? [pointing(worded(answer))] : texts(answer)).map((text) => ({
+        type: 'text' as const,
+        text,
+      })),
+      ...imagesIn(answer).map(({ data, mime_type }) => ({
+        type: 'image' as const,
+        data,
+        mimeType: mime_type,
+      })),
+    ],
     ...(failed && t.outputSchema
       ? {}
       : { structuredContent: structured(t, answer) }),

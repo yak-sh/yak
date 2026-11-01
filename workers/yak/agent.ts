@@ -161,6 +161,7 @@ export let answered = async (
   let output = {
     ...(call ? { source: call } : {}),
     ...(out.value ? { value: out.value } : {}),
+    ...(out.images?.length ? { images: out.images } : {}),
   }
   return [{
     entity: { eid: '$said' },

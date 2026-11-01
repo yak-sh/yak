@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and Uploads (yaks.app). app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access."
+description: "Files and Uploads (yaks.app). Build and check a private draft with app_preview before app_deploy: screenshots at phone and desktop widths, page console and errors, isolated test data and a private preview URL, without a local computer. app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access."
 ---
 
 # Files and Uploads
@@ -20,6 +20,40 @@ written with `app_files`. **Writing a file needs no `op`**: give it a `path` and
 a `content`, or a list of them as `files: [{path, content}, …]`. The files stay
 in a private draft until `app_deploy` releases them. A refused deploy leaves the
 previous files, vocabulary and worker serving together.
+
+## Checking a draft with `app_preview`
+
+Build and check the app through the connector before releasing it. No local
+checkout, shell or computer is needed:
+
+1. Write the files with `app_files`, or copy a sandbox build with
+   `sandbox_ship`.
+2. Call `app_preview(app: 'recipes', width: 390, height: 844)` for a phone, then
+   `app_preview(app: 'recipes', width: 1280, height: 900)` for a desktop.
+3. Read the screenshot, console messages, JavaScript errors and HTTP status in
+   the reply. Change the files and preview again until they work.
+4. Release with `app_deploy` and share the released app's URL.
+
+`path: 'about/'` opens another page. `wait` is milliseconds after
+DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to
+3000 (default 1000). `screenshot: false` gives only the private preview URL
+without running a browser. Screenshots run on Cloudflare at the requested
+viewport size, and return as an image the connector client displays.
+
+The URL is a private bearer link lasting one hour. Anyone holding it can
+exercise the preview as its author while that author remains a writer; keep it
+private. Draft files, vocabulary, seed data and worker run with a separate test
+store. Preview edits do not change released app data, and do not become released
+data later. The preview store, script and snapshot expire together. External D1,
+R2, Vectorize and Durable Object bindings are unavailable in a draft preview.
+
+Calls a draft worker makes to external services still reach those services; the
+separate test store isolates app data, not external side effects.
+
+Browser time is estimated at $0.09 per hour ($0.000025 per second), charged to
+the account's existing budget. Each reply reports its browser cost; compilation,
+when needed, uses the ordinary compiler allowance. Opening an already prepared
+URL does not run a Cloudflare browser or incur browser time.
 
 `app_files(app, op: 'list')` lists their paths, each with the SHA-256 of its
 bytes, then the live version and whether the draft differs from it: the number

@@ -111,9 +111,8 @@ let payer = (app: string) => async (dir: Directory) =>
 
 let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
   store: async (bytes, mediaType) => {
-    let found = at.env.STORE
-      ? await directoryOf(at.env.STORE).appAt(at.app!)
-      : null
+    let found = at.context ??
+      (at.env.STORE ? await directoryOf(at.env.STORE).appAt(at.app!) : null)
     if (!found || !at.env.BLOBS) {
       throw new ModelError('media_storage', 'This app has no blob store')
     }
@@ -134,10 +133,15 @@ let receiptsFor = (at: Stored) =>
             meta({ STORE: at.env.STORE! }).apply(bundles, KERNEL),
         },
         vaultOf(at.env),
-        'generated-media:' + at.app + ':',
+        'generated-media:' + (at.context?.app.store ?? at.app) + ':',
       ),
       at.env.BLOBS
-        ? objectBlobs(at.env.BLOBS, receiptPrefix({ eid: at.app! }))
+        ? objectBlobs(
+          at.env.BLOBS,
+          at.context
+            ? `${at.context.app.files}/receipts/`
+            : receiptPrefix({ eid: at.app! }),
+        )
         : undefined,
     )
     : undefined
@@ -149,7 +153,7 @@ export let recovering = async (at: Stored, call: string) => {
   if (!ask?.ask || !ask.entry || !at.app || !at.env.STORE) {
     throw new ModelError('media_missing', 'No original media ask in this app')
   }
-  let found = await directoryOf(at.env.STORE).appAt(at.app)
+  let found = at.context ?? await directoryOf(at.env.STORE).appAt(at.app)
   if (!found) throw new ModelError('unbound', 'No account bound to this call')
   let outputs = await at.graph.read(`.output.source=${call}&.attachment&*`)
   let cost = ask.cost as { dollars?: number; reported?: boolean } | undefined

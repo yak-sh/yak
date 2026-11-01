@@ -458,6 +458,20 @@ deploy selects its `$speaks` for writes, dry runs, streamed imports, reads,
 subscriptions and vocabulary declarations, including composed app/home access.
 Core platform columns remain owned by the platform's vocabulary.
 
+## Draft previews
+
+`app_preview` compiles the staged files without selecting a release, then serves
+a private one-hour link with an isolated Store and dispatch script. The Store's
+expiry alarm removes its test data, private uploads, snapshot and script.
+Browser screenshots use the `BROWSER` binding, configured in production and
+staging; no Browser Run REST token or local browser is needed. Browser time
+spends the account's existing budget at $0.09/hour, including failed captures.
+See [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
+
+The connector's image content accompanies structured console messages,
+JavaScript errors, HTTP status, viewport, expiry and estimated browser cost. The
+build workflow and limits are in [Files and Uploads](public/docs/files.md).
+
 ## App bindings
 
 Apps may request D1, R2 and Vectorize resources in `wrangler.jsonc` or

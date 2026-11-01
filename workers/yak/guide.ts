@@ -42,7 +42,7 @@ export type Page = {
 }
 
 // What a model reads before it has read anything else here (T-32481). It is
-// the whole recipe on purpose — the address, the four steps, and the store in
+// the whole recipe on purpose — the address, the five steps, and the store in
 // a paragraph a page can be written from — because the first ask ("can you
 // make me a recipe box?") is answered before anyone thinks to open a guide,
 // and an agent that has to guess at the data reaches for localStorage.
@@ -78,11 +78,11 @@ routes says which wins: {"assets": {"not_found_handling":
 "single-page-application"}} answers routes index.html, "404-page" the nearest
 404.html). No build step is needed: html, css and
 js are served as written. TypeScript and npm packages work too — name the
-packages in a package.json beside index.html, and app_deploy compiles them.
+packages in a package.json beside index.html; app_preview and app_deploy compile them.
 A site any tool builds (Vite, Astro, Eleventy, SvelteKit) serves as built: build
 it in the sandbox, ship the output into a folder, and name that folder in a
 wrangler.jsonc, {"assets": {"directory": "dist"}}
-(${url(env, '/docs/code.md')}). Four steps:
+(${url(env, '/docs/code.md')}). Five steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
@@ -91,14 +91,20 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    beside index.html as well, as content: a square viewBox, a background that
    fills it, and shapes rather than <text>, which has no font. The platform
    draws it as the icon.png a phone's home screen shows.
-3. app_deploy — release them. app_files keeps its edits private until this
+3. app_preview — check the private draft before releasing it, at width: 390
+   for a phone and width: 1280 for a desktop. It returns a screenshot image,
+   console messages, JavaScript errors and a private preview URL. Use path
+   for another page. Fix the files and preview again. Its test store and
+   worker are separate from the released app. The browser runs on Cloudflare:
+   these connector tools need no local files, CLI, computer or browser.
+4. app_deploy — release them. app_files keeps its edits private until this
    runs; then they serve at once, as the version an error will name. It also
    registers any components the app declares in a vocab.json beside
    index.html — {"$defs": {"recipe":
    {"properties": {"serves": {"type": "number"}}}}} gives the app a recipe
    component of its own, filterable like doc, and two commands of its own,
    add_recipe and find_recipe, so any agent finds the app later.
-4. Give the person the URL.
+5. Give the person the released URL.
 
 app_list is what they already have — every app, its address and what is
 broken in it. Before changing one, read it back in one call:

@@ -81,6 +81,18 @@
         "value": {
           "type": "object",
           "description": "the same output as data, for a reader that parses rather than reads: a tool that declares an outputSchema answers its structured content here, beside the text a person reads"
+        },
+        "images": {
+          "type": "array",
+          "description": "Images returned beside the text and structured value, each with base64 bytes and a media type; an MCP client displays these as image content blocks.",
+          "items": {
+            "type": "object",
+            "required": ["data", "mime_type"],
+            "properties": {
+              "data": { "type": "string" },
+              "mime_type": { "type": "string" }
+            }
+          }
         }
       }
     },

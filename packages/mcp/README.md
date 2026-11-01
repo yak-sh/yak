@@ -241,6 +241,11 @@ most of a `tools/list`. A tool whose answer is not entities declares its own
 in that shape in `output.value`, which is what `structuredContent` carries.
 `graph_schema` is that tool, and its output schema is the vocab meta-schema.
 
+A tool can also return `output.images`, a list of `{data, mime_type}` objects
+with base64 image bytes. MCP sends each as an image content block beside the
+text. Images leave `output.value` and its declared schema unchanged, so the
+structured answer can describe the image without repeating its bytes.
+
 Every key on a bundle beside `entity` and the `$` sugars is read as a component,
 an object or null. A host whose rows carry words of their own beside their
 components passes `answer: answerWith({kind: {type: 'string'}})`, and every tool

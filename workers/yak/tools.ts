@@ -107,6 +107,7 @@ import {
 import * as dirPart from './directory.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
+import { tools as previewTools } from './preview.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
@@ -6259,6 +6260,7 @@ let OURS: Row[] = [
 
 /** The fixed public roster, named once per release (T-34541). */
 export let TOOLS: Tool[] = [
+  ...previewTools,
   ...OURS.map(worded),
   ...viewsTools,
   ...connectionTools,

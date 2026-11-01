@@ -15,8 +15,10 @@ import { caught } from './defects.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { mode, reads } from '@yaks/member'
 
+export let local = (app: App) => app.scope == 'store' || sandboxed(app)
+
 export let usesOf = (env: Env, space: Space, app: App) => {
-  if (sandboxed(app)) {
+  if (local(app)) {
     return Promise.resolve({} as Record<string, string>)
   }
   return appStore(env.STORE, space, app).consume('/uses', async (r) => {
@@ -51,6 +53,9 @@ export let homed = async (
   uses: Record<string, string>,
   headers: Record<string, string> = {},
 ) => {
+  if (local(app)) {
+    return { uses: {}, reach: [{ space, app, who, headers }] as Reach[] }
+  }
   let slugs = [...new Set(Object.values(uses))]
   let homes = (await appsAt(env, space, slugs))
     .filter((one) => reads(mode(one.access), who.role))
@@ -113,7 +118,7 @@ export let queried = async (
   headers: Record<string, string> = {},
 ) => {
   let store = appStore(env.STORE, space, app, env)
-  let heard = sandboxed(app) ? null : await store.consume(
+  let heard = local(app) ? null : await store.consume(
     `/query?q=${encodeURIComponent(line)}${
       live ? '&live=1' : ''
     }&listing=1&uses=1`,

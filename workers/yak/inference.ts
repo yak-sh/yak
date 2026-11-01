@@ -165,6 +165,7 @@ export let lending = async (
   provider: string,
 ): Promise<Executor | undefined> => {
   if (
+    at.context?.app.scope == 'store' ||
     !['openai', 'openrouter'].includes(provider) || !at.app ||
     !at.env.MODEL_RECEIPTS
   ) return

@@ -101,7 +101,9 @@ app_files:
     or list, read or delete them. files: [{path, content}, …] writes a whole
     app in one call, with op left out; path and content write one file, and
     base64 in place of content writes one that is not text (an image, the
-    .wasm a worker.js imports). Edits stay private until app_deploy releases
+    .wasm a worker.js imports). Check the draft with app_preview at phone and
+    desktop widths, including its console and errors, before app_deploy. No
+    local files or browser are needed. Edits stay private until app_deploy releases
     them with the app's vocabulary and worker; released files serve at
     <space>.yaks.app/<app>/<path>, index.html for the directory, another
     page at its own name (about.html at /about), and a 404.html for a page
@@ -223,13 +225,33 @@ sandbox_ship:
     so a .wasm arrives intact. Waking the sandbox is metered by the second,
     as with sandbox_shell. To undo: these are written through app_files, so
     each keeps the bytes it replaced; use app_files op: history, then op:
-    restore. Returns the copied paths, file count and app URL.
+    restore. Returns the copied paths, file count and app URL. Check the
+    staged build with app_preview before app_deploy; it runs the browser on
+    Cloudflare and returns the screenshot, console messages and page errors.
     Documentation: https://yaks.app/docs/code.
+app_preview:
+  title: Preview an app draft
+  description: >-
+    Build and open the staged app privately before app_deploy. Returns an
+    expiring preview URL, a PNG screenshot the client displays, and console
+    messages, JavaScript errors and the page's HTTP status. Choose path and
+    width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
+    The browser runs on Cloudflare; no local files, CLI or computer is needed.
+    Draft vocabulary, seed data and worker use a separate test store, so preview
+    edits never change released app data. The URL is a private one-hour bearer
+    link; do not publish it. screenshot: false returns only the URL without
+    browser cost. Browser use costs $0.09/hour from the account's existing
+    budget; the result reports the estimated cost. External database, bucket
+    and Durable Object bindings are not available in a draft preview.
+    A draft worker's external service calls still reach those services.
 app_deploy:
   title: Release a version
   description: >-
     Release the app's staged files as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
+    Before releasing, check the private draft with app_preview at widths
+    390 and 1280; inspect the returned screenshots, console messages and
+    page errors and fix the files. No local computer or browser is needed.
     Send base as the live version the files were made on (app_files op: list
     says it). When base is behind, the answer names the files this draft
     would remove or replace and keeps it unreleased; after reviewing them,

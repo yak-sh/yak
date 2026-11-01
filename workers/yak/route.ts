@@ -538,4 +538,5 @@ export let shared = (method: string, pathname: string) =>
 // which no browser attaches on its own. What the token opens is the one app
 // it was sealed for; every other request on such a path is anonymous.
 export let paged = (pathname: string) =>
-  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname)
+  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) ||
+  /^\/[^/]+\/_preview\/[^/]+(?:\/|$)/.test(pathname)
