@@ -449,7 +449,9 @@ test('a write to an app stamps when its store changed, and an install does not',
     access: 'public',
   })
   let row = async () =>
-    (await meta(p.env).query(`.entity.eid=${app.eid} ?changed ?used`))[0]
+    (await meta(p.env).query(`.entity.eid=${app.eid} ?changed ?used`))[0] as {
+      changed?: { at: string }
+    }
   let installed = await ask('/vocab', {
     method: 'POST',
     body: JSON.stringify({
@@ -468,7 +470,7 @@ test('a write to an app stamps when its store changed, and an install does not',
   await until(async () => (await row()).changed != null, {
     label: 'write receipt recorded',
   })
-  let at = (await row()).changed!.at!
+  let at = (await row()).changed!.at
   // Before the hour's end, it is the moment of the write, not the hour's end.
   equal(Date.parse(at) <= Date.now(), true)
   // A second report within the hour keeps the first.

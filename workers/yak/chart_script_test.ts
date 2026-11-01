@@ -20,7 +20,7 @@ let page = (kind: string, attrs = 'data-noun="visit"') => {
   let chart = document.getElementById('c')!
   chart.getBoundingClientRect = () =>
     ({ left: 100, width: 100, top: 50 }) as DOMRect
-  let tip = () => document.querySelector('.Chart_Tip')
+  let tip = () => document.querySelector<HTMLElement>('.Chart_Tip')
   void window
   return {
     tip,

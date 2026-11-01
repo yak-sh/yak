@@ -7,6 +7,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
+import type { ByDay } from '@yaks/ui/chart'
 import type { Meter, Space, Tier } from './directory.ts'
 import {
   accountOf,
@@ -865,7 +866,7 @@ test('each reading writes a row its days, and a space its apps added up', async 
     {
       sizesOf: () => Promise.resolve(new Map()),
       counts: () => none(),
-      daysOf: (_, a) =>
+      daysOf: (_, a): ByDay =>
         a.slug == 'one'
           ? { '2026-09-01': 2 }
           : { '2026-09-01': 1, '2026-09-02': 5 },
