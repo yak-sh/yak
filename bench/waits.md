@@ -4,23 +4,20 @@ A **waiting path** is an operation from a person's action to usable content or a
 complete answer. The benchmark names below identify the boundary, not every
 possible entity, query, account or third-party service.
 
-| Surface / waiting path                                | Benchmark                                                                                    | Boundary                                                                         |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| CLI startup/help                                      | `person-commands:cli/help`                                                                   | Spawn through complete output and exit                                           |
-| CLI task list, graph show and graph query             | `person-commands:cli/*`                                                                      | Spawn through populated answer and exit over 2,000 tasks                         |
-| CLI graph write                                       | `person-commands:cli/graph-apply`                                                            | Spawn through committed write and exit                                           |
-| UserPromptSubmit hook                                 | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup        |
-| Box connector graph read/write                        | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write                  |
-| Platform management page                              | `platform-waits:management/html`                                                             | Original HTML response workloads and populated HTML for all ten management views |
-| Platform app page                                     | `platform-waits:app/html`                                                                    | Complete HTML response over the isolated kernel                                  |
-| Platform connector app/file list and graph read/write | `platform-waits:connector/*`                                                                 | Real connector HTTP request through populated answer / saved write               |
-| Managed worker pressure                               | `worker-health:workers/cpu`                                                                  | CPU of all active worker cgroups, including threads and children                 |
-| Browser local-cache update and rendering input        | `web-client`, `client-frame`, `client-rules`                                                 | Cache folds, frame/part reads, rule keystrokes                                   |
-| Session status lookup                                 | `session-status`                                                                             | Identity and query lookup beside 2,700 calls                                     |
-| Native session start, transcript, switch and stream   | `harness-startup`, `harness-switch`, `harness-window`, `harness-streaming`, `harness-worker` | Open/resume/mount/paint, streaming writes and event-loop delay                   |
-| Graph storage and write throughput                    | `throughput`, `graph-activity`, `relay-admission`                                            | Seeded reads/writes/admission, SQL statements and recording overhead             |
-| App and platform deployment                           | `app-deploy`, `deploy`                                                                       | Deployment timing records; platform deployment is measured where it runs         |
-| Test/check commands                                   | `suite-*`                                                                                    | Command wall/control ratio, measured where commands run                          |
+| Surface / waiting path                              | Benchmark                                                                                    | Boundary                                                                  |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| CLI startup/help                                    | `person-commands:cli/help`                                                                   | Spawn through complete output and exit                                    |
+| CLI task list, graph show and graph query           | `person-commands:cli/*`                                                                      | Spawn through populated answer and exit over 2,000 tasks                  |
+| CLI graph write                                     | `person-commands:cli/graph-apply`                                                            | Spawn through committed write and exit                                    |
+| UserPromptSubmit hook                               | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup |
+| Box connector graph read/write                      | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write           |
+| Managed worker pressure                             | `worker-health:workers/cpu`                                                                  | CPU of all active worker cgroups, including threads and children          |
+| Browser local-cache update and rendering input      | `web-client`, `client-frame`, `client-rules`                                                 | Cache folds, frame/part reads, rule keystrokes                            |
+| Session status lookup                               | `session-status`                                                                             | Identity and query lookup beside 2,700 calls                              |
+| Native session start, transcript, switch and stream | `harness-startup`, `harness-switch`, `harness-window`, `harness-streaming`, `harness-worker` | Open/resume/mount/paint, streaming writes and event-loop delay            |
+| Graph storage and write throughput                  | `throughput`, `graph-activity`, `relay-admission`                                            | Seeded reads/writes/admission, SQL statements and recording overhead      |
+| App and platform deployment                         | `app-deploy`, `deploy`                                                                       | Deployment timing records; platform deployment is measured where it runs  |
+| Test/check commands                                 | `suite-*`                                                                                    | Command wall/control ratio, measured where commands run                   |
 
 Chrome is removed from this box. The `pages`, `page-content` and `inbox-content`
 suites and all Chrome paint measurements are removed. Page behavior runs in
@@ -188,51 +185,3 @@ cannot hide later suites; a run past that cap tells nothing and reports nothing.
 The registered-door gaps above, external provider latency and remote Cloudflare
 timings remain outside these isolated fixture measurements. Platform management
 coverage is described by its own suite; CLI results do not stand in for it.
-
-## Platform management and submissions
-
-`platform-waits` runs the production kernel, directory, connector and page
-renderers over local Durable Object, R2, mail and vault bindings. All ten
-management views (`/manage`, `/manage/people`, `/manage/connect`,
-`/manage/connections`, `/manage/new`, `/manage/visits`, `/manage/selling`,
-`/manage/settings`, `/manage/billing`, `/manage/trash`) have populated HTML
-measurements. A shell, empty list, refusal or sign-in page does not meet the
-fixture predicates. The six original HTML measurements and their records remain
-separate.
-
-Submission waits include the complete response and saved-state readback:
-
-| Door                                 | Operations banked                                                                                  |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `POST /manage/settings`              | Save name; rename a space                                                                          |
-| `POST /manage/trash`                 | Restore a genuinely trashed app                                                                    |
-| `POST /manage/people`                | Resend a pending invitation through another local mail delivery                                    |
-| `POST /manage/connections`           | Add key, replace key, disconnect, attach to an app, open/close sharing, begin service OAuth        |
-| `POST /deploy` on the space hostname | Multipart new app and existing app update through deployed marker content                          |
-| `POST /manage/selling`               | Start onboarding through a stored local account and hosted redirect; disconnect a connected seller |
-| `POST /manage/billing`               | Checkout and portal through exact locally returned hosted URLs and stored customer                 |
-| `POST /oauth/agents/disconnect`      | Remove the selected agent while retaining another agent's grant                                    |
-
-Preparation and resets run outside each timed submission. Each HTTP operation
-has seven samples per collection. Three collections make a round-median run;
-acceptance banks the best of three runs with the noise they measured. Existing
-records can only fall. The unchanged suite workload key identifies the retained
-app/connector/original HTML fixture; added metric names identify the separate
-populated fixture.
-
-Global fetch permits loopback and only exact authenticated local Stripe
-responses and an explicitly named local analytics response. Every other external
-request fails collection, including a caught attempt. Dummy credentials and a
-private D1 vault are created for this process; no account keys, deployed writes
-or payments are used. Stripe redirects and service OAuth authorization URLs are
-inspected, never followed. Analytics answers are local fixture data. These
-numbers are local kernel/form/render waits, **not Cloudflare, Stripe or OAuth
-provider latency**.
-
-The streaming builder at `/api/build`, service OAuth completion, hosted
-checkout, login/mail-code forms and destructive account/space confirmation pages
-are outside these management operation families. Provider generation and
-external payment completion are not replaced by a fast local response. The daily
-and half-hour monitor include `platform-waits` through shared `HOURLY`; a
-side-by-side slowdown or a collection that fails twice running files a tracker
-bug. A long throughput lane cannot delay it.

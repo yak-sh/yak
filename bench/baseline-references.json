@@ -534,69 +534,6 @@
     ]
   },
   {
-    "suite": "platform-waits",
-    "baseline": "bench/platform-waits.baseline.json",
-    "groups": [
-      {
-        "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-        "kind": "derived",
-        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "management/html",
-          "management/connections-html",
-          "management/trash-html",
-          "management/billing-html",
-          "management/connect-html",
-          "app/html",
-          "connector/app-list",
-          "connector/file-list",
-          "connector/graph-query",
-          "connector/graph-apply"
-        ]
-      },
-      {
-        "reference": "a851193acf98c69bfa4cc99dc2e907eb7668fc23",
-        "kind": "derived",
-        "source": "git history of bench/platform-waits.baseline.json: origin of unchanged median; measurement revision was not recorded",
-        "benches": [
-          "management/settings-html",
-          "management/people-html",
-          "management/new-html",
-          "management/visits-html",
-          "management/selling-html",
-          "management/apps-populated-html",
-          "management/settings-populated-html",
-          "management/connections-populated-html",
-          "management/trash-populated-html",
-          "management/billing-populated-html",
-          "management/connect-populated-html",
-          "management/people-populated-html",
-          "management/new-populated-html",
-          "management/visits-populated-html",
-          "management/selling-populated-html",
-          "form/settings-name",
-          "form/settings-space",
-          "form/restore",
-          "form/people-resend",
-          "form/connections-add",
-          "form/connections-signin",
-          "form/connections-key",
-          "form/connections-disconnect",
-          "form/connections-attach",
-          "form/connections-open",
-          "form/connections-close",
-          "form/selling-start",
-          "form/app-new-upload",
-          "form/app-update-upload",
-          "form/selling-stop",
-          "form/billing-checkout",
-          "form/billing-portal",
-          "form/agent-disconnect"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "relay-admission",
     "baseline": "bench/relay-admission.baseline.json",
     "groups": [

@@ -90,12 +90,11 @@ catch-up's, outside the benches.
 The [waiting-path inventory](waits.md) maps user-facing operations to their
 timed boundaries. `person-commands` measures CLI spawn-to-exit, the prompt hook
 over a one-MiB transcript and MCP responses over an isolated 2,000-task SQLite
-graph. `platform-waits` measures management HTML, app HTML, and connector tools
-over an isolated production kernel. `worker-health` reads CPU of active worker
-cgroups, including all threads and children, without signalling them. Its
-population and active work are uncontrolled, so the monitor excludes it from
-regression comparisons. `deno task bench worker-health` reports one live
-CPU-rate observation; `check` and `ratchet` also only report it.
+graph. `worker-health` reads CPU of active worker cgroups, including all threads
+and children, without signalling them. Its population and active work are
+uncontrolled, so the monitor excludes it from regression comparisons.
+`deno task bench worker-health` reports one live CPU-rate observation; `check`
+and `ratchet` also only report it.
 
 ## Other suites
 

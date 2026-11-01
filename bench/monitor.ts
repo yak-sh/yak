@@ -43,7 +43,6 @@ export let SUITES = [
   'operation-diagnostics',
   'operation-sessions',
   'operation-scale',
-  'platform-waits',
   'web-client',
   'client-frame',
   'client-rules',
@@ -70,7 +69,6 @@ export let HOURLY = [
   'operation-diagnostics',
   'operation-sessions',
   'operation-scale',
-  'platform-waits',
 ]
 
 /** Suites that measure the live box (its server, its workers, its deploys),

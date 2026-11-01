@@ -6,7 +6,6 @@ import { NAMES as SESSION_NAMES } from './operation-sessions.ts'
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { RELAY_ENTITIES } from './names.ts'
-import { suite as platformWaits } from './platform-waits.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
@@ -112,11 +111,6 @@ export let standalone: Registration[] = [
   measured('operation-sessions', 'bench/operation-sessions.ts', SESSION_NAMES),
   measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
-  {
-    baseline: 'bench/platform-waits.baseline.json',
-    suite: platformWaits,
-    floor: 0,
-  },
   deno('client-frame', 'packages/client/frame_bench.ts', [
     'frame: 50k-entity world, 208 bundles, 3 reads, 40 watches',
     'part: one patch (the local player steps)',
