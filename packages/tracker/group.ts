@@ -89,6 +89,7 @@ export let grouped = (
   let x = comp(row, 'exception')
   let context = comp(row, 'during')
   let fault = faultOf(row)
+  let reset = fault.startsWith('reset:')
   let app = str(context.app)
   let eid = bug?.entity.eid ?? bugEid(app, fault)
   let old = comp(bug, 'bug')
@@ -118,7 +119,15 @@ export let grouped = (
           ]),
         ),
       },
-      ...!bug ? { doc: { title: title(row) } } : {},
+      ...!bug || reset
+        ? {
+          doc: {
+            title: reset
+              ? `${str(x.type) || 'Error'}: ${fault.slice('reset:'.length)}`
+              : title(row),
+          },
+        }
+        : {},
       bug: {
         ...!bug
           ? {

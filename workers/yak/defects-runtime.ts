@@ -4,7 +4,7 @@ import { faults } from '@yaks/api'
 import { caught, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
-import { learn } from './running.ts'
+import { learn, restarting } from './running.ts'
 import { type Own, replaced } from '@yaks/durable-object'
 
 let clock = {
@@ -60,7 +60,9 @@ export let entry = <T>(
           request,
           http,
         ),
-        replaced: own(state) ? () => replaced(state.storage) : undefined,
+        replaced: own(state)
+          ? () => restarting(state) || replaced(state.storage)
+          : undefined,
       },
     )
 )

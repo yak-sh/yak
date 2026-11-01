@@ -325,3 +325,19 @@ test('concurrent grouper snapshots cannot lose a hit or count an eid twice', asy
   await group(g, '2')
   equal(comp((await bugs(g))[0], 'bug').hits, 3)
 })
+
+test('reset groups show their wording and keep the deploy id on the occurrence', () => {
+  let fault = 'reset:durable object reset because a newer deploy reached it: #'
+  let groups = [
+    '708ce874-2bc4-434d-ac0b-6f0c19a69fde',
+    '8dc1d4c1-345c-411d-b0e7-75100d6a8236',
+  ].map((id) => {
+    let words = `Durable Object reset because a newer deploy reached it: ${id}`
+    let [row] = capture(Error(words), { sink: () => {}, fault })
+    let [sample, bug] = grouped(row, undefined, [])
+    equal(comp(sample, 'exception').value, words)
+    equal(comp(bug, 'doc').title, `Error: ${fault.slice('reset:'.length)}`)
+    return bug.entity.eid
+  })
+  equal(groups[0], groups[1])
+})

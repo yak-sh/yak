@@ -103,6 +103,10 @@ export type Restartable = {
 
 // The key an object that restarted for a newer deploy remembers it under.
 let RESTARTED = 'restarted for'
+let retiring = new WeakSet<object>()
+
+/** An instance that requested its own restart, before storage reflects it. */
+export let restarting = (state: object): boolean => retiring.has(state)
 
 // The words the restart fails the request in flight with: the runtime's own,
 // so every caller's retry already knows them (@yaks/durable-object `evicted`).
@@ -175,5 +179,6 @@ export let behind = async (
   if (last && !newer(theirs, last)) return
   await s.put(RESTARTED, theirs)
   await s.sync?.()
+  retiring.add(ctx)
   ctx.abort(`${BEHIND} ${theirs.id}`)
 }
