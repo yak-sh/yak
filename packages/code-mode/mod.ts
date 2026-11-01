@@ -75,6 +75,7 @@ export let execute = async (
   asked: Bundle,
   evaluate: Evaluate,
   clock: Clock = system,
+  current: () => Promise<Runner> = () => Promise.resolve(run),
 ): Promise<Answer> => {
   if (
     script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
@@ -125,7 +126,9 @@ export let execute = async (
     calls.push(receipt)
     let work = (async () => {
       let actor = who(asked)
-      let admitted = run.admit({
+      let live = await current()
+      if (!active) throw new CallError('expired', 'execution has ended')
+      let admitted = live.admit({
         entity: { eid: id },
         call: { to: toolEid(name), args: input, source: asked.entity.eid },
         ...(actor ? { $actor: actor } : {}),
@@ -134,6 +137,7 @@ export let execute = async (
         throw new CallError('tool', 'tool is no longer available')
       }
       await admitted.ensure()
+      if (!active) throw new CallError('expired', 'execution has ended')
       let landed = await admitted.call()
       let answer = answerOf(landed, id)
       let failed = faulted(landed, id)
@@ -204,6 +208,7 @@ export let tool = (
   run: Runner,
   evaluate: Evaluate,
   clock?: Clock,
+  current?: () => Promise<Runner>,
 ): Tool => ({
   name: 'code_mode',
   description:
@@ -249,7 +254,15 @@ export let tool = (
         next: end < matches.length ? end : null,
         limits: LIMITS,
       }
-      : await execute(String(script), registry, run, asked, evaluate, clock)
+      : await execute(
+        String(script),
+        registry,
+        run,
+        asked,
+        evaluate,
+        clock,
+        current,
+      )
     if (bytes(value) > LIMITS.outputBytes) {
       throw new CallError(
         'limit',

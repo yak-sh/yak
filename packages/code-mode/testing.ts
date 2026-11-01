@@ -6,7 +6,8 @@ export let evaluate: Evaluate = async (modules, bridge) => {
   let code = modules['script.js'].replace("'./user.js'", JSON.stringify(user))
     .replace(
       "import { WorkerEntrypoint } from 'cloudflare:workers';",
-      'class WorkerEntrypoint {}',
+      `class WorkerEntrypoint {}
+       const scheduler = {wait:(ms,{signal})=>new Promise((resolve,reject)=>{let id=setTimeout(resolve,ms);signal.addEventListener('abort',()=>{clearTimeout(id);reject(signal.reason)},{once:true})})};`,
     )
   let module = await import(`data:text/javascript,${encodeURIComponent(code)}`)
   return await new module.default().run(bridge)

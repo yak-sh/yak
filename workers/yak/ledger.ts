@@ -109,8 +109,8 @@ let mine = (b: Bundle): boolean => {
  * @yaks/mcp to record its calls in (`Options.calls`). What a tool wrote passes
  * through to `host`.
  */
-export let ledger = (host: Graph): Graph => {
-  let self = graph({ vocab: VOCAB, storage: ram(VOCAB) })
+export let ledger = (host: Graph, records?: Graph): Graph => {
+  let self = records ?? graph({ vocab: VOCAB, storage: ram(VOCAB) })
   let passing = async (
     method: 'apply' | 'admit',
     bundles: Bundle[],

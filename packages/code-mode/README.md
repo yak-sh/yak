@@ -28,10 +28,13 @@ execution.
 The Cloudflare adapter uses a fresh Worker Loader isolate with an empty `env`,
 `globalOutbound: null`, and one RPC capability passed as an argument. The
 isolate has 128 MiB of memory, 100 ms CPU and 32 subrequests. The host revokes
-the bridge after 30 seconds or completion and disposes both the entrypoint and
-Worker. Executions permit 16 tool calls, 64 KiB of script and JSON arguments per
-call, and 256 KiB of combined returned JSON. Oversized results keep their call
-id and an explicit omission error. Discovery is paged and bounded too.
+the bridge after 30 seconds or completion. A trusted child deadline settles its
+invocation after 30 seconds too. The Loader exposes no hard termination method;
+CPU limits stop synchronous loops, and revocation prevents late tool calls. The
+returned RPC promise is disposed when the host finishes. Executions permit 16
+tool calls, 64 KiB of script and JSON arguments per call, and 256 KiB of
+combined returned JSON. Oversized results keep their call id and an explicit
+omission error. Discovery is paged and bounded too.
 
 A script's failure does not undo started writes. A receipt with `pending: true`
 means the call was still in flight when the execution answered; it may finish

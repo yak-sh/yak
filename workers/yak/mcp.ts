@@ -384,6 +384,20 @@ let coded = <T extends Options>(opts: T, ctx: Ctx) => {
       throw refuse('unavailable', 'code mode is unavailable on this kernel')
     }),
     ctx.env.CLOCK,
+    async () => {
+      let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+      let reach = await inReach(now)
+      let graph = await reaching(now, reach)
+      let catalog = registry([{
+        name: 'yaks',
+        tools: listing({ ...opts, graph, search: searching(now, reach) }),
+      }])
+      return runner(ledger(graph, opts.calls), {
+        tools: catalog,
+        host: graph,
+        report: opts.report,
+      })
+    },
   )
   catalog.replace('code', [code])
   return { ...opts, registry: catalog, runner: run }

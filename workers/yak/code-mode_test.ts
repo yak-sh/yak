@@ -1,5 +1,5 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
-import { connector, fresh, meta } from './probe.ts'
+import { connector, fresh, meta, seed } from './probe.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import { catalog, declarations, execute, LIMITS } from '@yaks/code-mode'
 import { source } from '@yaks/code-mode/source'
@@ -154,6 +154,33 @@ test('declarations preserve exact paths and resolve nested unions without recurs
 
 let k = await fresh({ CODE_MODE: evaluate })
 let agent = connector(k, k.owner.cookie)
+let graphPerson = await seed(k, [{ slug: 'code-mode-person', apps: [] }])
+let graphAgent = connector(k, graphPerson.cookie)
+test('nested calls discover new app vocabulary and data without naming a store', async () => {
+  let script = `
+    await tools.yaks.app_new({space:'code-mode-person',slug: 'code-graph', title: 'Code graph'});
+    await tools.yaks.app_files({space:'code-mode-person',app: 'code-graph', files: [{path: 'vocab.json', content: JSON.stringify({$defs:{code_note:{component:true,type:'object',properties:{body:{type:'string'}}}}})}]});
+    await tools.yaks.app_deploy({space:'code-mode-person',app: 'code-graph'});
+    await tools.yaks.graph_apply({bundles:[{entity:{eid:'$note'},code_note:{body:'new graph'}}]});
+    let rows = await tools.yaks.graph_query({q:'.code_note'});
+    return {rows, schema:await tools.yaks.graph_schema({component:'code_note'})};
+  `
+  let out = (await graphAgent.call('tools/call', {
+    name: 'code_mode',
+    arguments: { script },
+  })).structuredContent
+  equal(out.error, undefined)
+  equal(
+    out.calls.filter((c: { result?: { isError?: boolean } }) =>
+      c.result?.isError
+    ).map((c: { result: { content: unknown } }) => c.result.content),
+    [],
+  )
+  match(out.value.rows, {
+    structuredContent: { result: [{ code_note: { body: 'new graph' } }] },
+  })
+  ok(JSON.stringify(out.value.schema).includes('code_note'))
+})
 test('code mode requires sign-in and nested calls retain the credential scope', async () => {
   let anon = connector(k, undefined, undefined, '/mcp?auth=mixed')
   await throws(
