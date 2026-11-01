@@ -139,6 +139,12 @@ test('meter queries distinguish the same handle in two deployments', async () =>
   await weighed(env, recipes.eid, 4096)
   let was = globalThis.fetch
   globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
+    // The visits, asked of the analytics SQL API beside the bill.
+    if (String(init?.body).startsWith('SELECT')) {
+      return Promise.resolve(
+        Response.json({ data: [{ app: recipes.eid, views: 12 }] }),
+      )
+    }
     let { query } = JSON.parse(String(init?.body))
     assertEquals(query.match(/dimensions \{ objectId(?: type)? \}/g)?.length, 2)
     let values = (key: string) => [
@@ -197,6 +203,8 @@ test('meter queries distinguish the same handle in two deployments', async () =>
     assertEquals(requestUnits(app.meter!), 10)
     assertEquals(app.meter?.rows_read, 7)
     assertEquals(app.meter?.bytes, 4096)
+    let [row] = await dir.census().then((c) => c.apps)
+    assertEquals(row.meter?.visits, 12)
     assertEquals(space.meter?.requests, 27)
     assertEquals(space.meter?.ws_hibernated, 20)
     assertEquals(space.meter?.ws_messages, 60)
@@ -952,9 +960,13 @@ test('spends counted at once all count, and the sweep keeps them', async () => {
     accountInvocations: [],
     accountPeriodic: [],
   }
-  globalThis.fetch = () =>
+  globalThis.fetch = (_to, init) =>
     Promise.resolve(
-      Response.json({ data: { viewer: { accounts: [groups] } } }),
+      Response.json(
+        String(init?.body).startsWith('SELECT')
+          ? { data: [] }
+          : { data: { viewer: { accounts: [groups] } } },
+      ),
     )
   try {
     await sweep(c.env, NOW)

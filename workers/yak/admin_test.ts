@@ -3,14 +3,28 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { answer, type Census, uses } from './admin.ts'
-import { type Directory, META, type Meter, type Space } from './directory.ts'
+import {
+  type Directory,
+  directory,
+  fetch as directoryFetch,
+  META,
+  type Meter,
+  type Space,
+} from './directory.ts'
+import { platform } from './testing.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
 
 let ROOT = { eid: 'meta', slug: META.space } as Space
 let SECRET = 'secret'
-let EMPTY: Census = { people: [], spaces: [], apps: [], seats: [] }
+let EMPTY: Census = {
+  people: [],
+  spaces: [],
+  apps: [],
+  seats: [],
+  deploys: [],
+}
 // Sessions as the sign-in mints them, made once.
 let SIGNED_IN = Object.fromEntries(
   await Promise.all(['ann', 'root'].map(async (person) => [
@@ -51,8 +65,10 @@ let census = (): Census => ({
     {
       entity: { eid: 'a1' },
       app: { slug: 'notes', space: 'home', version: 2, access: 'private' },
-      meter: meter({ requests: 40, bytes: 100 }),
+      meter: meter({ requests: 40, bytes: 100, visits: 7 }),
       used: { at: '2026-10-12T00:00:00Z' },
+      changed: { at: '2026-10-11T00:00:00Z' },
+      errored: { at: '2026-10-10T00:00:00Z' },
     },
     {
       entity: { eid: 'a2' },
@@ -89,7 +105,19 @@ let census = (): Census => ({
       member: { space: 'shop', person: 'bot', role: 'viewer' },
     },
   ],
-})
+  deploys: [
+    {
+      entity: { eid: 'd1' },
+      deploy: { app: 'a1' },
+      created: { at: '2026-10-02T00:00:00Z' },
+    },
+    {
+      entity: { eid: 'd2' },
+      deploy: { app: 'a1' },
+      created: { at: '2026-10-09T00:00:00Z' },
+    },
+  ],
+} as Census)
 
 test('a person uses what the spaces they own use, from one budget', () => {
   let u = uses(census(), NOW)
@@ -122,6 +150,45 @@ test('a space counts its live apps and its latest use; an app its month', () => 
     [100, 990, 10],
   )
   assertEquals([u.get('lab')?.test, u.get('a4')?.test], [true, true])
+})
+
+test('an app says when it was deployed, changed and broke, and who owns it', () => {
+  let u = uses(census(), NOW)
+  let a1 = u.get('a1')!
+  assertEquals(
+    [a1.deployed, a1.changed, a1.errored, a1.visits, a1.owners],
+    [
+      '2026-10-09T00:00:00Z',
+      '2026-10-11T00:00:00Z',
+      '2026-10-10T00:00:00Z',
+      7,
+      ['ann'],
+    ],
+  )
+  let a2 = u.get('a2')!
+  assertEquals(
+    [a2.deployed, a2.changed, a2.errored, a2.visits],
+    [null, null, null, null],
+  )
+  let c = census()
+  let row = drawn(c.apps[0], 'Directory.List.Tile', { uses: a1, space: 'ann' })
+  for (
+    let said of [
+      'ann/notes · ann',
+      'Deployed',
+      '9 Oct',
+      'Data changed',
+      '11 Oct',
+      'Last error',
+      '10 Oct',
+      'Requests this month',
+      'Visits, 30 days',
+    ]
+  ) assertStringIncludes(row, said)
+  assertStringIncludes(
+    drawn(c.apps[1], 'Directory.List.Tile', { uses: a2, space: 'shop' }),
+    'not counted yet',
+  )
 })
 
 let env = { SESSION_SECRET: SECRET } as Env
@@ -163,4 +230,31 @@ test("the admin's people list shows who a search finds", async () => {
   let found = (await answer(...search))!
   assertEquals(found.status, 200)
   assertStringIncludes(await found.text(), 'ann@x.com')
+})
+
+test('the census reads which app each release is of and when, never its files', async () => {
+  await using p = platform('census deploys')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own('census-owner', 'census-deploys')
+  await dir.apply({
+    entities: [
+      {
+        entity: { eid: 'census-app' },
+        app: {
+          slug: 'probe',
+          space: space.eid,
+          store: 'census-deploys/probe',
+          access: 'private',
+        },
+      },
+      {
+        entity: { eid: 'census-release' },
+        deploy: { app: 'census-app', version: 1, files: '{"a.js":"sha"}' },
+      },
+    ],
+  })
+  let { deploys } = await dir.census()
+  let [row] = deploys
+  assertEquals([deploys.length, row.deploy], [1, { app: 'census-app' }])
+  assertEquals(typeof row.created?.at, 'string')
 })

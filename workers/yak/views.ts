@@ -167,6 +167,11 @@ export let perDay = (apps: string[], days = DAYS, dataset = DATASET) =>
   `day, ${COUNT} AS views ${over(apps, days, dataset)} ` +
   'GROUP BY app, day ORDER BY day'
 
+/** Each app's views over the window, one row an app that had any. */
+export let totals = (apps: string[], days = DAYS, dataset = DATASET) =>
+  `SELECT index1 AS app, ${COUNT} AS views ${over(apps, days, dataset)} ` +
+  'GROUP BY app'
+
 // The three "top" lists are one query with a different column, so they are one
 // function. `skip` drops the rows that never had the fact: a direct visit has
 // no referring site, and an unknown country is not a country.
@@ -392,6 +397,23 @@ export let statsFor = (
   return Promise.all(each).then((all) =>
     new Map(apps.map((app, i) => [app, all[i]]))
   )
+}
+
+/**
+ * Every app's views over the last {@link DAYS} days, in one query, for the
+ * hourly reading to keep on each row (usage.ts): an app absent from the answer
+ * had none.
+ */
+export let visited = async (
+  env: Env,
+  apps: string[],
+): Promise<Map<string, number>> => {
+  if (!apps.length) return new Map()
+  let rows = await ran(
+    env,
+    totals(apps, DAYS, env.VIEWS_DATASET ?? DATASET),
+  )
+  return new Map(rows.map((r) => [word(r.app), num(r.views)]))
 }
 
 /** Who visited one app: {@link statsFor} asked about it alone. */

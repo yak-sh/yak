@@ -343,6 +343,23 @@ export let useDoc: VocabDoc = {
       journal: false,
       properties: { at: owned(time) },
     },
+    changed: {
+      description:
+        "When a write last changed this app's store, to the hour; an install or a schema move is no change.",
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      properties: { at: owned(time) },
+    },
+    errored: {
+      description: "When this app's code last reported an error, to the hour.",
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      properties: { at: owned(time) },
+    },
     // An app whose code still sends a query in a retired spelling, which the
     // grammar translates for kept releases (T-122930). A translation goes only
     // once no app has sent its spelling for a while (T-123000, M-37853).

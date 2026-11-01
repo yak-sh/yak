@@ -96,6 +96,19 @@ let used = (eid: string): Receipt => ({
   app: eid,
 })
 
+// What an app's row keeps beside its use (facets/directory-vocab.ts). The
+// platform store's `/used` answers it, and a store on the previous code hears
+// only a use, so no deploy order refuses a receipt.
+type Mark = 'changed' | 'errored'
+
+let marked = (eid: string, word: Mark): Receipt => ({
+  door: '/used',
+  key: `${word} ${eid}`,
+  body: { eid, word },
+  request: `record app ${word}`,
+  app: eid,
+})
+
 let spoke = (eid: string, spelling: string): Receipt => ({
   door: '/translated',
   key: `${eid} ${spelling}`,
@@ -109,6 +122,14 @@ export let scheduleUse = (
   eid: string,
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
+
+/** A write changed this app's store, or its code reported an error. */
+export let scheduleMark = (
+  env: Partial<Env>,
+  eid: string,
+  word: Mark,
+  retain?: (work: Promise<void>) => void,
+): void => schedule(env, marked(eid, word), retain)
 
 /** The person who did it is active too: their calls and page views count. */
 export let scheduleBy = (
@@ -127,7 +148,7 @@ export let recordUse = (ns: Namespace, eid: string): Promise<string | null> =>
 
 /** What a receipt writes: when something was last used, and which retired
  * spellings an app still sends. No authorization reads either. */
-export let RECEIPTS = ['used', 'translated']
+export let RECEIPTS = ['used', 'changed', 'errored', 'translated']
 
 /// isRetired('.drill!') -> true
 /// isRetired('.drill') -> false

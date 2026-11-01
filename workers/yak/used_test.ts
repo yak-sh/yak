@@ -427,3 +427,56 @@ test('a receipt whose answer a deploy cuts off is sent again and reported nowher
   )
   equal(reports, [])
 })
+
+test('a write to an app stamps when its store changed, and an install does not', async () => {
+  await using p = platform('changed-proof')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own(VISITOR, 'changed-proof')
+  await dir.apply({
+    entities: [{
+      entity: { eid: 'changed-proof-app' },
+      app: {
+        slug: 'probe',
+        space: space.eid,
+        store: 'changed-proof/probe',
+        access: 'public',
+      },
+    }],
+  })
+  let app = (await dir.app(space, 'probe'))!
+  let ask = storeOf(p.env.STORE, 'changed-proof/probe', {
+    eid: app.eid,
+    access: 'public',
+  })
+  let row = async () =>
+    (await meta(p.env).query(`.entity.eid=${app.eid} ?changed ?used`))[0]
+  let installed = await ask('/vocab', {
+    method: 'POST',
+    body: JSON.stringify({
+      $defs: {
+        pulse: { component: true, properties: { n: { type: 'number' } } },
+      },
+    }),
+  }, KERNEL)
+  await installed.body?.cancel()
+  equal((await row()).changed, undefined)
+  let wrote = await ask('/apply', {
+    method: 'POST',
+    body: JSON.stringify([{ entity: { eid: 'pulse' }, pulse: { n: 1 } }]),
+  }, KERNEL)
+  await wrote.body?.cancel()
+  await until(async () => (await row()).changed != null, {
+    label: 'write receipt recorded',
+  })
+  let at = (await row()).changed!.at!
+  // Before the hour's end, it is the moment of the write, not the hour's end.
+  equal(Date.parse(at) <= Date.now(), true)
+  // A second report within the hour keeps the first.
+  let again = await storeOf(p.env.STORE, PLATFORM_STORE)('/used', {
+    method: 'POST',
+    body: JSON.stringify({ eid: app.eid, word: 'changed' }),
+  }, KERNEL)
+  equal(again.status, 200)
+  await again.body?.cancel()
+  equal((await row()).changed!.at, at)
+})

@@ -26,6 +26,7 @@ import { told } from './stream.ts'
 import { divided, gauged, level } from './meter.ts'
 import { holding } from './held.ts'
 import { caught, defect } from './defects.ts'
+import { scheduleMark } from './used.ts'
 import { type Break, capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
 import { refuse } from './tool.ts'
@@ -258,6 +259,7 @@ export let noted = async (
       )
     }
   }
+  scheduleMark(at.env, at.app.eid, 'errored')
   if (hushed(at.space, at.app)) return
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))

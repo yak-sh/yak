@@ -51,6 +51,8 @@ export type Counts = {
   ws_hibernated: number
   rows_read: number
   rows_written: number
+  /** an app's page views over the last 30 days, when they could be read */
+  visits?: number
 }
 
 // The month's counters for an entity that may have none, or whose row is a

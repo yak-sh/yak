@@ -245,6 +245,10 @@
           "type": "number",
           "description": "hibernated WebSocket requests counted this month"
         },
+        "visits": {
+          "type": "number",
+          "description": "an app's page views over the last 30 days, as the hourly reading found them"
+        },
         "files": {
           "type": "number",
           "description": "bytes held in uploaded files and application files"

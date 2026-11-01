@@ -64,6 +64,8 @@ import { replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Usage, warning } from './usage-alert.ts'
 import { type Answer as Asked, ask, said } from './analytics.ts'
+import { caught } from './defects.ts'
+import { visited } from './views.ts'
 
 // The whole month so far, grouped by Durable Object id. Invocation type
 // separates hibernated socket messages from ordinary requests; periodic
@@ -318,12 +320,23 @@ export let sweep = async (env: Env, now = new Date()) => {
   for (let space of await dir.all()) {
     spaces.push({ space, apps: await dir.apps(space) })
   }
+  // Visits are read beside the bill and never hold it up: a reading that
+  // fails leaves each app's last figure where it is.
+  let views = counts
+    ? await visited(env, spaces.flatMap((s) => s.apps.map((a) => a.eid)))
+      .catch((e) => {
+        caught(e, { request: 'meter visits' })
+        return null
+      })
+    : null
   let { entities, turned, refused } = await measured(spaces, {
     sizesOf: (space) => fileSizes(env, space, SWEEP.tries, SWEEP.wait),
     counts: counts &&
-      ((space, app) =>
-        counts.get(String(env.STORE.idFromName(storeName(space, app)))) ??
-          none()),
+      ((space, app) => ({
+        ...counts.get(String(env.STORE.idFromName(storeName(space, app)))) ??
+          none(),
+        ...views ? { visits: views.get(app.eid) ?? 0 } : {},
+      })),
     month,
     now,
   })

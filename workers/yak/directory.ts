@@ -76,6 +76,8 @@ export type Meter = {
   rows_read: number
   rows_written: number
   bytes: number
+  // An app's page views over the last 30 days, no month's figure.
+  visits?: number
   // Stored R2 bytes, independent of the calendar month; absent before rollout.
   files?: number
   emails: number
@@ -505,6 +507,8 @@ export type Row = {
   email?: { address: string }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
+  changed?: { at?: string | null }
+  errored?: { at?: string | null }
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
   doc?: { title?: string }
@@ -1820,13 +1824,15 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // nothing else, asks this. Fresh, since the admin opens it to see what is.
     census: async () => {
       let stamps = '?created&?used'
-      let [people, spaces, apps, seats] = await Promise.all([
+      let [people, spaces, apps, seats, deploys] = await Promise.all([
         query(`.person&?doc&?email&?signed_in&${stamps}`, true),
         query(`.space&${SPACE_ABOUT}&${stamps}`, true),
-        query(`.app&${ABOUT}&${stamps}`, true),
+        query(`.app&${ABOUT}&${stamps}&?changed&?errored`, true),
         query('.member', true),
+        // Only which app and when: a release's whole row is its file list.
+        query('.deploy&.fields=deploy.app,created.at', true),
       ])
-      return { people, spaces, apps, seats }
+      return { people, spaces, apps, seats, deploys }
     },
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`

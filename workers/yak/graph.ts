@@ -339,6 +339,7 @@ import { directory, fetch as directoryFetch } from './directory.ts'
 import {
   isRetired,
   RECEIPTS,
+  scheduleMark,
   scheduleRetired,
   scheduleUse,
   useUntil,
@@ -3697,7 +3698,28 @@ export class Store {
 
   #weigh = (bundles: Bundle[]): Bundle[] => {
     this.#tell()
+    this.#wrote(bundles)
     return bundles
+  }
+
+  // A committed write to this app's own rows, for the admin's list: at most a
+  // receipt an hour (used.ts). An install or a schema move changes no one's
+  // data, and `_` rows are the store's own bookkeeping.
+  #wrote(bundles: Bundle[]): void {
+    let ns = this.#bind.STORE, app = this.#get('app')
+    if (
+      !ns || !app || storeKind(this.#get('name') ?? '') != 'app' ||
+      this.#useScope.getStore()?.maintenance ||
+      !bundles.some((b) =>
+        deleted(b) || comps(b).some(([name]) => !name.startsWith('_'))
+      )
+    ) return
+    scheduleMark(
+      this.#bind,
+      app,
+      'changed',
+      (work) => this.#ctx.waitUntil?.(work),
+    )
   }
 
   #tell() {
@@ -4381,18 +4403,39 @@ export class Store {
       ) {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
-      let { eid } = await request.json() as { eid?: unknown }
+      let { eid, word } = await request.json() as {
+        eid?: unknown
+        word?: unknown
+      }
       if (typeof eid != 'string' || !/^[a-zA-Z0-9_-]+$/.test(eid)) {
         return json(
           { error: 'Refused', message: 'an entity id is required' },
           400,
         )
       }
-      let [row] = await this.#graph.read(`.entity.eid=${eid} ?used`)
+      let mark = word == 'changed' || word == 'errored' ? String(word) : null
+      let [row] = await this.#graph.read(
+        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used'}`,
+      )
       if (!row) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
       }
       let at = useUntil()
+      // The hour's first report says when it happened; the answer still names
+      // the hour's end, which is how long a caller holds its receipt.
+      if (mark) {
+        let last = (row[mark] as Comp | undefined)?.at
+        if (
+          typeof last != 'string' ||
+          Date.parse(last) < Date.parse(at) - 3_600_000
+        ) {
+          await this.#asIs(
+            [{ entity: { eid }, [mark]: { at: new Date().toISOString() } }],
+            { stamp: false },
+          )
+        }
+        return json({ at })
+      }
       let previous = (row.used as Comp | undefined)?.at
       if (typeof previous == 'string' && previous >= at) at = previous
       else {

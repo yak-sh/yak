@@ -3,13 +3,16 @@
 // what their account spent this month against its one budget (M-42105), the
 // storage and apps of the spaces they own, and when they were last active; a
 // space's says its own spend, storage, apps and latest use; an app's, its
-// requests, storage, version and latest use. Each opens to a page of its own.
+// requests, visits, storage, version, owners, last deploy, last write to its
+// store, last error and latest use. Each opens to a page of its own.
 //
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
 // agent reads the same rows through `yak admin query yak/platform`. It only
-// reads: four directory reads a page, nothing written and no socket, so an
-// open tab costs the directory nothing.
+// reads: five directory reads a page, one trip together, nothing written and
+// no socket, so an open tab costs the directory nothing. What a row says is
+// kept on the rows as the app changes (used.ts, usage.ts), so no store, tracker
+// or analytics read waits under a list.
 //
 // The rows and pages are drawn by the worker's registry (render/directory.ts);
 // this file counts what each uses and draws the desk around them.
@@ -72,12 +75,16 @@ let group = (rows: Row[], key: (r: Row) => string) => {
 let seatSpace = (r: Row) => idOf(r.member!.space)
 let seatPerson = (r: Row) => idOf(r.member!.person)
 let appSpace = (r: Row) => idOf(r.app!.space)
+let personName = (r: Row) =>
+  r.doc?.title || (r.email?.address ?? '').split('@')[0] || 'Someone'
 
 /**
  * What every row uses, counted once over the whole directory. A space: what
  * models and voice cost in it this month, its database and files, its apps
  * and the latest use of it or of any of them. An app: this month's requests,
- * its database and files and its latest use. A person: their budget over the
+ * its database and files, its 30 days' visits as the hourly reading found them,
+ * when it was last deployed, written to and last reported an error, who owns its
+ * space and its latest use. A person: their budget over the
  * spaces they own, those spaces' storage and apps, and the latest of their last
  * use (a tool call, a page view), last sign-in and their spaces' latest use. A space is a test space when everyone seated in it is
  * a test account, and its apps are test apps.
@@ -105,6 +112,12 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
     return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(appOf))]
   }))
   let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
+  let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
+  let deployed = new Map<string, string>()
+  for (let r of c.deploys) {
+    let app = idOf(r.deploy!.app), at = r.created?.at ?? ''
+    if (at > (deployed.get(app) ?? '')) deployed.set(app, at)
+  }
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
     let s = spaces.get(r.entity.eid)!
@@ -120,8 +133,15 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   for (let r of c.apps) {
     out.set(r.entity.eid, {
       requests: r.meter?.month == month ? r.meter.requests ?? 0 : 0,
+      visits: r.meter?.visits ?? null,
       storage: stored(held.get(appSpace(r))?.apps.get(r.app!.slug)),
       active: r.used?.at ?? null,
+      deployed: deployed.get(r.entity.eid) ?? null,
+      changed: r.changed?.at ?? null,
+      errored: r.errored?.at ?? null,
+      owners: (seatsIn.get(appSpace(r)) ?? [])
+        .filter((s) => s.member!.role == 'owner')
+        .map((s) => names.get(seatPerson(s)) ?? ''),
       test: out.get(appSpace(r))?.test ?? false,
     })
   }
@@ -165,8 +185,6 @@ let read = (env: Host, census: Census, tests: boolean): Reading => ({
   tests,
 })
 
-let personName = (r: Row) =>
-  r.doc?.title || (r.email?.address ?? '').split('@')[0] || 'Someone'
 let slugOf = (d: Reading, space: string) => d.spaces.get(space)?.slug ?? ''
 let refOf = (d: Reading, r: Row): Ref => ({
   eid: r.entity.eid,

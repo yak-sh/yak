@@ -17,6 +17,16 @@ export type Uses = {
   spend?: { spent: number; limit?: number }
   /** this month's requests */
   requests?: number
+  /** page views over the last 30 days; null before the first reading */
+  visits?: number | null
+  /** when its newest release was deployed */
+  deployed?: string | null
+  /** when a write last changed its store */
+  changed?: string | null
+  /** when its code last reported an error */
+  errored?: string | null
+  /** who owns its space, by name */
+  owners?: string[]
   /** bytes held: databases and files */
   storage?: number
   /** apps held, the trash left out */
@@ -52,6 +62,9 @@ let plan = (b: Record<string, unknown>) =>
     ? 'Plus'
     : 'Free'
 
+let visits = (n?: number | null) =>
+  n === undefined || n === null ? 'not counted yet' : count(n)
+
 let tag = <N>(h: H<N>, text: string, warn = false) =>
   h('span', { class: `Apps_Tag${warn ? ' Apps_Tag-warn' : ''}` }, text)
 let tags = <N>(
@@ -69,7 +82,15 @@ let tags = <N>(
 let ACTIVE =
   "The last sign-in, tool call (an assistant's included), page view, request " +
   'or store write by them or in what they own, to the hour.'
-let noted = (key: string) => key == 'Last active' ? { title: ACTIVE } : null
+let NOTES: Record<string, string> = {
+  'Last active': ACTIVE,
+  Deployed: 'When its newest release went up.',
+  'Data changed':
+    "The last write to the app's store, to the hour, an install or a schema " +
+    'move left out.',
+  'Last error': "The last error the app's code reported, to the hour.",
+}
+let noted = (key: string) => NOTES[key] ? { title: NOTES[key] } : null
 
 // A row: its name, stretched over the row as its link, a line under it, and
 // what it uses, each figure under the word for it.
@@ -138,7 +159,7 @@ let person: Renderer = {
     let u = uses(ctx)
     let p = personOf(b)
     return row(h, ctx, b.entity.eid, p.name, p.email, tags(h, b, u), [
-      ['Spent', spend(u.spend)],
+      ['Spent this month', spend(u.spend)],
       ['Storage', size(u.storage ?? 0)],
       ['Apps', count(u.apps ?? 0)],
       ['Last active', when(u.active, 'short')],
@@ -160,7 +181,7 @@ let space: Renderer = {
       str(ctx.address),
       tags(h, b, u, pays == 'Free' ? '' : pays),
       [
-        ['Spent', spend(u.spend)],
+        ['Spent this month', spend(u.spend)],
         ['Storage', size(u.storage ?? 0)],
         ['Apps', count(u.apps ?? 0)],
         ['Last active', when(u.active, 'short')],
@@ -182,13 +203,17 @@ let app: Renderer = {
       ctx,
       b.entity.eid,
       str((b.doc as Comp)?.title) || slug,
-      `${str(ctx.space)}/${slug}`,
+      [`${str(ctx.space)}/${slug}`, ...u.owners ?? []].join(' · '),
       tags(h, b, u, str(a?.access)),
       [
-        ['Requests', count(u.requests ?? 0)],
+        ['Deployed', when(u.deployed, 'short')],
+        ['Data changed', when(u.changed, 'short')],
+        ['Last active', when(u.active, 'short')],
+        ['Last error', when(u.errored, 'short')],
+        ['Requests this month', count(u.requests ?? 0)],
+        ['Visits, 30 days', visits(u.visits)],
         ['Storage', size(u.storage ?? 0)],
         ['Version', version ? `v${version}` : 'none'],
-        ['Last active', when(u.active, 'short')],
       ],
     )
   },
@@ -283,6 +308,8 @@ let appPage: Renderer = {
       ['Installed from', from ? link(h, ctx, from) : ''],
       ['Made', day(stamp(b, 'created'))],
       ['Last active', when(u.active)],
+      ['Data changed', when(u.changed)],
+      ['Last error', when(u.errored)],
       [
         'Visits, 30 days',
         visits === undefined
@@ -291,9 +318,9 @@ let appPage: Renderer = {
           ? 'not counted here'
           : count(visits),
       ],
-      ['Requests', count(num(m.requests))],
-      ['Rows read', count(num(m.rows_read))],
-      ['Rows written', count(num(m.rows_written))],
+      ['Requests this month', count(num(m.requests))],
+      ['Rows read this month', count(num(m.rows_read))],
+      ['Rows written this month', count(num(m.rows_written))],
       ['Database', size(num(m.bytes))],
       ['Metered', m.at ? `${str(m.month)}, read ${day(str(m.at))}` : 'never'],
     ])
