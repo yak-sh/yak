@@ -153,6 +153,34 @@
         "where"
       ]
     },
+    "admin_erase": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "erase",
+      "title": "Erase a test account",
+      "description": "Erase a test account for good: the spaces only test accounts are in with it as owner, and its seats and grants anywhere else. A person's account or a reviewer's fixture is refused. --check says what would go and changes nothing.\n\n  yak admin erase t133860@bot.yak.sh --check --as admin@bot.yak.sh\n  yak admin erase t133860@bot.yak.sh --as admin@bot.yak.sh",
+      "input": {
+        "address": {
+          "type": "string",
+          "description": "the test account's whole address"
+        },
+        "check": {
+          "type": "boolean",
+          "description": "say what would go, and change nothing"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "openWorld": true,
+      "positional": [
+        "address"
+      ]
+    },
     "admin_tunnel": {
       "tool": true,
       "noun": "admin",

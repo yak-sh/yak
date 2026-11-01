@@ -9,6 +9,10 @@
 //   POST /api/move?store=<name>&rehearse=1  that store's rehearsal
 //   POST /api/move?store=<name>           that store woken to move what it
 //                                         owes, and where each rule stands
+//   GET  /api/account?address=<address>     what erasing that test account
+//                                           would take
+//   DELETE /api/account?address=<address>   it erased (erase.ts `closed`); a
+//                                           test account may end itself
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -20,9 +24,11 @@ import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
+import type { Who } from './session.ts'
 
 export let PATH = '/api/move'
 export let IDLE_PATH = '/api/idle-spaces'
+export let ACCOUNT_PATH = '/api/account'
 
 /** One store a sweep asks: its name, and what a person calls it. */
 export type Swept = { store: string; at: string }
@@ -56,6 +62,35 @@ export let stores = async (env: Env): Promise<Swept[]> => {
   return all.filter((row, i) => last.get(row.store) == i)
 }
 
+let account = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+  who: Who,
+) => {
+  if (req.method != 'GET' && req.method != 'DELETE') {
+    return json(405, 'method_not_allowed', 'read or delete an account')
+  }
+  let { closed, closing } = await import('./erase.ts')
+  let address = new URL(req.url).searchParams.get('address') ?? ''
+  let at = await closing(env, dir, address)
+  if (!at) {
+    return json(404, 'no_account', `no account is ${address || '(nothing)'}`)
+  }
+  if (
+    who.role != 'owner' && (req.method != 'DELETE' || who.person != at.person)
+  ) {
+    return json(403, 'not_owner', 'an account is erased by an owner of yak')
+  }
+  if (req.method == 'DELETE') await closed(env, dir, address, who)
+  return Response.json({
+    address,
+    erased: req.method == 'DELETE',
+    spaces: at.spaces.map((s) => s.slug),
+    seats: at.seats.map((s) => s.slug),
+  }, { headers: { 'cache-control': 'private, no-store' } })
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
@@ -65,6 +100,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     req,
     (person) => dir.role(meta, person),
   )
+  if (new URL(req.url).pathname == ACCOUNT_PATH) {
+    return await account(req, env, dir, who)
+  }
   if (who.role != 'owner') {
     return json(403, 'not_owner', `a sweep is an owner of ${meta.slug}'s`)
   }

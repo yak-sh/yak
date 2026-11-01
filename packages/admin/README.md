@@ -55,7 +55,8 @@ yak admin errors --since 14d --resolved --as admin
 OAuth authorization as `yak auth`, runs the command with `YAK_AS` naming the
 account, and removes the connection when the command ends. Its sign-in code
 arrives in this graph's mail. It answers the command's exit code. Nothing
-outside that command's process tree runs as the account.
+outside that command's process tree runs as the account. The account is erased
+on yaks.app when the command ends, with what it made.
 
 ```sh
 yak admin throwaway 'yak admin query reviewer/notes .doc' --name reviewer
@@ -63,11 +64,26 @@ yak admin throwaway 'yak admin query reviewer/notes .doc' --name reviewer
 
 A name that already has a connection uses it and leaves it in place. A process
 killed before it ends can leave its connection behind, which selects nothing
-without `--as`. A test account to keep across commands is an ordinary sign-in:
+without `--as`, and its account until the platform's daily sweep. A test account
+to keep across commands is an ordinary sign-in, and the sweep erases it after
+seven days without use:
 
 ```sh
 yak auth yaks.app --as reviewer@bot.yak.sh
 yak admin query reviewer/notes '.doc' --as reviewer
+```
+
+## Erasing a test account
+
+`erase` removes a test account from yaks.app for good: the spaces where it is an
+owner and only test accounts sit, and its seats and grants everywhere else. An
+owner of `yak` may erase any test account, and an account may erase itself. A
+person's account and a reviewer's fixture are refused. `--check` says what would
+go and changes nothing.
+
+```sh
+yak admin erase t133860@bot.yak.sh --check --as admin@bot.yak.sh
+yak admin erase t133860@bot.yak.sh --as admin@bot.yak.sh
 ```
 
 ## Browser-only operations

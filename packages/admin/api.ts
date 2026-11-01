@@ -275,6 +275,27 @@ export let moveIn = (
     { method: 'POST' },
   ))
 
+/** A test account's end (workers/yak/sweep.ts): what it would take, or it gone. */
+export type Closed = {
+  address: string
+  erased: boolean
+  spaces: string[]
+  seats: string[]
+}
+
+export let ACCOUNT = '/api/account'
+
+export let closeAccount = (
+  session: string,
+  address: string,
+  check = false,
+): Promise<Closed> =>
+  said(sent(
+    apex(`${ACCOUNT}?address=${encodeURIComponent(address)}`),
+    session,
+    { method: check ? 'GET' : 'DELETE' },
+  ))
+
 /** The tunnel a space has to a machine (workers/yak/tunnel.ts), and, answered
  * once by the change that made it, the token its `cloudflared` runs with. */
 export type SpaceTunnel = {

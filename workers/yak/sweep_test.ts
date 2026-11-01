@@ -93,3 +93,106 @@ test('nobody else sweeps', async () => {
     403,
   )
 })
+
+// Three test accounts and a person: `probe` alone in its own space and seated
+// in Ada's, with a grant on her app; `guest` an editor in `probe`'s space.
+let accounts = async () => {
+  let { scenario } = await spaces()
+  let { env } = scenario
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let PROBE = 'a0000000-0000-4000-8000-0000000000b1'
+  let GUEST = 'a0000000-0000-4000-8000-0000000000b2'
+  let demo = 'a0000000-0000-4000-8000-0000000000b3'
+  let ada = (await dir.space('ada'))!
+  let notes = (await dir.apps(ada))[0]
+  await stamp(env, {
+    entities: [
+      { entity: { eid: ADA }, email: { address: 'ada@example.com' } },
+      {
+        entity: { eid: PROBE },
+        person: {},
+        email: { address: 'probe@bot.yak.sh' },
+      },
+      {
+        entity: { eid: GUEST },
+        person: {},
+        email: { address: 'guest@probe.invalid' },
+      },
+      {
+        entity: { eid: demo },
+        person: {},
+        email: { address: 'yourname@bot.yak.sh' },
+      },
+      {
+        entity: { eid: '$space' },
+        doc: { title: 'probe' },
+        space: { slug: 'probe', store: 'probe' },
+      },
+      {
+        entity: { eid: '$own' },
+        member: { space: '$space', person: PROBE, role: 'owner' },
+      },
+      {
+        entity: { eid: '$guest' },
+        member: { space: '$space', person: GUEST, role: 'editor' },
+      },
+      {
+        entity: { eid: '$there' },
+        member: { space: ada.eid, person: PROBE, role: 'editor' },
+      },
+      {
+        entity: { eid: '$grant' },
+        grant: { app: notes.eid, person: PROBE, access: 'editor' },
+      },
+    ],
+  })
+  let token = (who: string) =>
+    sign({ person: who, space: null, exp: Date.now() + 60_000 }, SECRET)
+  let ask = async (who: string, address: string, method = 'DELETE') => {
+    let r = await sweep.fetch(
+      new Request(
+        `https://yaks.app${sweep.ACCOUNT_PATH}?address=${
+          encodeURIComponent(address)
+        }`,
+        { method, headers: { cookie: `yak_session=${await token(who)}` } },
+      ),
+      env,
+    )
+    return { status: r.status, body: await r.json() }
+  }
+  return { scenario, env, dir, ask, PROBE, GUEST }
+}
+
+test('erasing a test account takes its spaces, seats and grants, and keeps the rest', async () => {
+  let { scenario, dir, ask, PROBE, GUEST } = await accounts()
+  await using _ = scenario
+  let checked = await ask(JEFF, 'probe@bot.yak.sh', 'GET')
+  assertEquals(checked.body, {
+    address: 'probe@bot.yak.sh',
+    erased: false,
+    spaces: ['probe'],
+    seats: ['ada'],
+  })
+  assertEquals((await dir.space('probe'))?.slug, 'probe')
+  let erased = await ask(JEFF, 'probe@bot.yak.sh')
+  assertEquals(erased.body.erased, true)
+  assertEquals(await dir.space('probe'), null)
+  assertEquals(await dir.emailAt(PROBE), null)
+  let ada = (await dir.space('ada'))!
+  assertEquals(await dir.members(ada), [ADA])
+  assertEquals(await dir.emailAt(GUEST), 'guest@probe.invalid')
+  assertEquals((await ask(JEFF, 'probe@bot.yak.sh')).status, 404)
+})
+
+test('only the admin, or the account itself, erases it; never a person or fixture', async () => {
+  let { scenario, dir, ask, PROBE } = await accounts()
+  await using _ = scenario
+  assertEquals((await ask(ADA, 'probe@bot.yak.sh')).status, 403)
+  assertEquals((await ask(PROBE, 'probe@bot.yak.sh', 'GET')).status, 403)
+  for (let address of ['ada@example.com', 'yourname@bot.yak.sh']) {
+    let no = await ask(JEFF, address).catch((why) => why)
+    assertEquals(no.code ?? no.body?.error?.code, 'access')
+  }
+  assertEquals(await dir.emailAt(ADA), 'ada@example.com')
+  assertEquals((await ask(PROBE, 'probe@bot.yak.sh')).body.erased, true)
+})

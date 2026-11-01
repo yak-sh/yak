@@ -1,9 +1,11 @@
 // Which yaks.app accounts and visitors are nobody's. An account is an address,
 // and an address on the fleet's bot domain is a test account: its sign-in
 // codes land in the tasks graph, so only the fleet can hold one, and nothing
-// it makes is a person's work. One address there is not a throwaway:
+// it makes is a person's work. Two addresses there are not throwaways:
 // `admin@bot.yak.sh` is the platform's own admin person (D-35373), whom an
-// agent runs a platform act as, and whose acts are the platform's.
+// agent runs a platform act as, and whose acts are the platform's, and
+// `yourname@bot.yak.sh` holds the demo space (M-37804). An address on `.invalid`
+// (RFC 2606) can never read a letter, so nobody can hold it either.
 //
 // Both sides read the rule from here: `yak admin` (@yaks/admin), which keeps
 // an agent on a test account unless the argv says otherwise, and the
@@ -19,11 +21,13 @@
 
 export let BOT = '@bot.yak.sh'
 export let ADMIN = `admin${BOT}`
+export let DEMO = `yourname${BOT}`
 
 // An address we cannot see is not proof, so it reads as somebody's: the safe
 // direction to be wrong in.
 export let isTestAddress = (address: string) =>
-  address.endsWith(BOT) && address != ADMIN
+  (address.endsWith(BOT) && address != ADMIN && address != DEMO) ||
+  address.endsWith('.invalid')
 
 /** A request as the runtime hands it over, with Cloudflare's own facts on it. */
 type Arrived = Request & { cf?: { verifiedBotCategory?: string } }

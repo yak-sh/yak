@@ -21,6 +21,7 @@ export { Refused } from './refusal.ts'
 import {
   acceptInvite,
   close,
+  closeAccount,
   doomedIn,
   feeNow,
   linkFor,
@@ -299,6 +300,19 @@ export let runs = (
         ? await feeNow(at.bearer)
         : await setFee(at.bearer, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    admin_erase: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let c = await closeAccount(at.bearer, String(a.address), a.check === true)
+      return [
+        said(call, [
+          `${c.address}: ${c.erased ? 'erased' : 'would be erased'}`,
+          `spaces  ${c.spaces.join(' ') || '(none)'}`,
+          `seats   ${c.seats.join(' ') || '(none)'}`,
+        ]),
+      ]
     }),
 
     // The tunnel a space has to a machine (workers/yak/tunnel.ts). A token the

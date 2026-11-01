@@ -8,6 +8,8 @@ import { AccountError, authorize, disconnect, pick } from '@yaks/connections'
 import { authorizeCLI } from '@yaks/connections/authorize-cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
 import { BOT } from '../../workers/yak/lib/bots.ts'
+import { account } from './account.ts'
+import { closeAccount } from './api.ts'
 import { Refused } from './refusal.ts'
 
 type Host = Parameters<CliCommand['run']>[1]
@@ -40,12 +42,24 @@ let held = async (host: Host, owner: string, address: string) => {
   }
 }
 
+// The account ends with its command. One that can't is left to the platform's
+// daily sweep, and the command's own answer stands.
+let erased = async (host: Host, address: string) => {
+  try {
+    let at = await account(host)(address)
+    await closeAccount(at.bearer, address)
+  } catch (error) {
+    console.error(`${address} stays until the daily sweep: ${error}`)
+  }
+}
+
 /** The command, with the seams a test replaces. A connection that was there
- * before the command stays after it: a name can land on an account someone
- * signed in to on purpose, `admin` among them. */
+ * before the command stays after it, with its account: a name can land on an
+ * account someone signed in to on purpose, `admin` among them. */
 export let throwaway = (
   run: Run = shell,
   enter: typeof signIn = signIn,
+  leave: typeof erased = erased,
 ): CliCommand['run'] =>
 async (args, host) => {
   let owner = await person(host)
@@ -64,6 +78,9 @@ async (args, host) => {
     })
   } finally {
     let made = kept ? undefined : await held(host, owner, address)
-    if (made) await disconnect(host, made.entity.eid)
+    if (made) {
+      await leave(host, address)
+      await disconnect(host, made.entity.eid)
+    }
   }
 }

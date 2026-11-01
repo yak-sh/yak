@@ -19,7 +19,7 @@ export type Row = {
   entity: { eid: string }
   space?: { slug: string }
   app?: { space: Ref }
-  member?: { space: Ref; person: Ref }
+  member?: { space: Ref; person: Ref; role?: string }
   grant?: { app: Ref; person: Ref }
   invite?: { to: Ref }
   hostname?: { serves: Ref }
@@ -28,6 +28,7 @@ export type Row = {
   created?: { at?: string; by?: Ref | null; via?: string | null }
   used?: { at?: string }
   written?: { at?: string | null; by?: Ref | null }
+  signed_in?: { at?: string }
 }
 let id = (ref: Ref) => typeof ref == 'string' ? ref : ref.eid
 let quiet = (row: Row, cutoff: number) => {
@@ -68,6 +69,38 @@ export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
   }).map((r) => r.entity.eid)
 }
 
+// A test account that may go: the reviewers' fixtures keep theirs, each named
+// for the space it holds.
+export let expendable = (address: string) =>
+  isTestAddress(address) && !PROTECTED.has(address.split('@')[0])
+
+// Idle test accounts, once the sweep has had their spaces. A space of only test
+// accounts that still stands (in use, published) keeps everyone seated in it;
+// a seat in anyone else's space goes with the account.
+export let idleAccounts = (rows: Row[], now = Date.now()): string[] => {
+  let emails = new Map(
+    rows.filter((r) => r.email).map((r) => [r.entity.eid, r.email!.address]),
+  )
+  let test = (person: Ref) => isTestAddress(emails.get(id(person)) ?? '')
+  let seats = rows.filter((r) => r.member)
+  let kept = new Set(
+    rows.filter((r) => r.space && !PROTECTED.has(r.space.slug)).map((r) =>
+      r.entity.eid
+    ).filter((eid) => {
+      let seated = seats.filter((r) => id(r.member!.space) == eid)
+      return seated.every((r) => test(r.member!.person))
+    }),
+  )
+  return rows.filter((r) =>
+    r.email && expendable(r.email.address) &&
+    quiet(r, now - IDLE) &&
+    !(Date.parse(r.signed_in?.at ?? '') > now - IDLE) &&
+    !seats.some((s) =>
+      id(s.member!.person) == r.entity.eid && kept.has(id(s.member!.space))
+    )
+  ).map((r) => r.entity.eid)
+}
+
 export let CENSUS =
   '(.space | .app | .member | .grant | .invite | .hostname | .email)' +
-  ' ?created ?used ?published'
+  ' ?created ?used ?published ?signed_in'

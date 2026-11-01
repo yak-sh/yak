@@ -632,3 +632,31 @@ test(
     )
   },
 )
+
+test('the sweep erases a test account left idle, and leaves a person', async () => {
+  let scenario = platform('a probe secret')
+  await using _ = scenario
+  let { env } = scenario
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let bot = 'a0000000-0000-4000-8000-0000000000c1'
+  let human = 'a0000000-0000-4000-8000-0000000000c2'
+  await dirPart.stamp(env, {
+    entities: [
+      {
+        entity: { eid: bot },
+        person: {},
+        email: { address: 'gone@bot.yak.sh' },
+      },
+      {
+        entity: { eid: human },
+        person: {},
+        email: { address: 'kept@example.com' },
+      },
+    ],
+  })
+  await collected(env)
+  assertEquals(await dir.emailAt(bot), 'gone@bot.yak.sh')
+  await collected(env, new Date(Date.now() + 8 * 86_400_000))
+  assertEquals(await dir.emailAt(bot), null)
+  assertEquals(await dir.emailAt(human), 'kept@example.com')
+})

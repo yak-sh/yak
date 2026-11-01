@@ -68,6 +68,8 @@ import { componentsOf } from './vocab.ts'
 import { isTestAddress } from './lib/bots.ts'
 import {
   CENSUS,
+  expendable,
+  idleAccounts,
   idleSpaces,
   inactive,
   PROTECTED,
@@ -86,6 +88,7 @@ import {
   draftStore,
   due,
   type Host,
+  idOf,
   META,
   overdue,
   type Space,
@@ -106,6 +109,7 @@ import { ending } from './billing.ts'
 import { own, type Pinner, versions } from './versions.ts'
 import { holding, pruned } from './written.ts'
 import { refuse } from './tool.ts'
+import { caught } from './defects.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -776,9 +780,78 @@ export let collected = async (env: Env, now = new Date()) => {
     standing,
     now.getTime(),
   )
+  let rows = await meta(env).query(CENSUS) as unknown as Row[]
+  for (let eid of idleAccounts(rows, now.getTime())) {
+    let address = rows.find((r) => r.entity.eid == eid)!.email!.address
+    await closed(env, dir, address, { person: eid, role: 'owner' })
+      .catch((why) => caught(why, { request: 'erase an idle test account' }))
+  }
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
+}
+
+// ---- an account's end ----
+//
+// A test account goes for good, with no trash and no letter: nothing it holds
+// is a person's work (lib/bots.ts). A space only test accounts are in goes with
+// its owner; its seat anywhere else goes with the person row, whose death
+// cascades to every membership and grant naming it (member's vocabulary). A
+// person's own account is never closed here, and neither is a fixture.
+export type Closing = {
+  person: string
+  address: string
+  spaces: Space[]
+  seats: Space[]
+}
+
+export let closing = async (
+  env: Env,
+  dir: Directory,
+  address: string,
+): Promise<Closing | null> => {
+  let [row] = await meta(env).query(
+    `.email.address="${address}"`,
+  ) as unknown as Row[]
+  if (!row) return null
+  if (!expendable(address)) {
+    throw refuse(
+      'access',
+      `${address} is not an expendable test account: only those are erased here`,
+    )
+  }
+  let person = row.entity.eid
+  let held = await meta(env).query(
+    `.member.person=${person}`,
+  ) as unknown as Row[]
+  let spaces = await dir.all()
+  let out: Closing = { person, address, spaces: [], seats: [] }
+  for (let seat of held) {
+    let space = spaces.find((s) => s.eid == idOf(seat.member!.space))
+    if (!space) continue
+    let alone = seat.member!.role == 'owner' && !PROTECTED.has(space.slug) &&
+      await nobodys(dir, await doomed(dir, space))
+    ;(alone ? out.spaces : out.seats).push(space)
+  }
+  return out
+}
+
+// The row last, so an erase that dies halfway is finished by asking again.
+export let closed = async (
+  env: Env,
+  dir: Directory,
+  address: string,
+  who: Who,
+) => {
+  let c = await closing(env, dir, address)
+  if (!c) return null
+  for (let space of c.spaces) {
+    await erase(env, dir, await doomed(dir, space), who)
+  }
+  await dir.stamp({
+    entities: [{ entity: { eid: c.person }, tombstone: {} }],
+  }, vouched(who))
+  return c
 }
 
 // No app store is woken by the preview. A file write is a `written` row, which

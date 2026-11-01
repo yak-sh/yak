@@ -1,6 +1,12 @@
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { IDLE, idleSpaces, type Row } from './idle-spaces.ts'
+import {
+  expendable,
+  IDLE,
+  idleAccounts,
+  idleSpaces,
+  type Row,
+} from './idle-spaces.ts'
 
 let now = Date.parse('2026-10-11T12:00:00Z')
 let at = (age: number) => new Date(now - age).toISOString()
@@ -75,4 +81,62 @@ test('platform and reviewer spaces survive whatever their members', () => {
       'chatb',
     ]
   ) assertEquals(selected((rows) => rows[0].space = { slug }), [])
+})
+
+let quietly = { created: { at: at(IDLE) } }
+let person = (eid: string, address: string, over: Partial<Row> = {}): Row => ({
+  entity: { eid },
+  email: { address },
+  ...quietly,
+  ...over,
+})
+let seat = (space: string, who: string): Row => ({
+  entity: { eid: `${space}-${who}` },
+  member: { space, person: who },
+})
+let idled = (...rows: Row[]) => idleAccounts(rows, now)
+
+test('an idle test account goes, and a person or fixture never does', () => {
+  assertEquals(
+    idled(
+      person('bot', 'probe@bot.yak.sh'),
+      person('guest', 'roster-guest-1@probe.invalid'),
+      person('human', 'person@example.com'),
+      person('admin', 'admin@bot.yak.sh'),
+      person('demo', 'yourname@bot.yak.sh'),
+      person('review', 'claude-review@bot.yak.sh'),
+    ),
+    ['bot', 'guest'],
+  )
+  assertEquals(expendable('yourname@bot.yak.sh'), false)
+  assertEquals(expendable('chata@bot.yak.sh'), false)
+})
+
+test('an account in use stays, and missing evidence keeps it', () => {
+  let bot = 'probe@bot.yak.sh'
+  let recent = { at: at(IDLE - 1) }
+  assertEquals(idled(person('bot', bot, { used: recent })), [])
+  assertEquals(idled(person('bot', bot, { signed_in: recent })), [])
+  assertEquals(idled(person('bot', bot, { created: {} })), [])
+})
+
+test('a seat in a standing test space keeps an account, any other seat does not', () => {
+  let bot = person('bot', 'probe@bot.yak.sh')
+  let human = person('human', 'person@example.com')
+  let space = (eid: string, slug: string): Row => ({
+    entity: { eid },
+    space: { slug },
+  })
+  assertEquals(idled(bot, space('s', 'probe'), seat('s', 'bot')), [])
+  assertEquals(
+    idled(
+      bot,
+      human,
+      space('s', 'shared'),
+      seat('s', 'bot'),
+      seat('s', 'human'),
+    ),
+    ['bot'],
+  )
+  assertEquals(idled(bot, space('s', 'yourname'), seat('s', 'bot')), ['bot'])
 })

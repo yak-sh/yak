@@ -390,8 +390,10 @@ through the connector's graph tier (tool.ts `roleIn`).
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.
 - `yak admin throwaway '<command>' [--name <name>]` runs one shell command as a
-  test account, `<name>@bot.yak.sh`, and signs out when it ends. `yak auth
-  yaks.app --as <address>` keeps a test account across commands.
+  test account, `<name>@bot.yak.sh`, and erases the account when it ends. `yak
+  auth yaks.app --as <address>` keeps a test account across commands; the daily
+  sweep erases it after seven idle days. `yak admin erase <address> --as
+  admin@bot.yak.sh` erases one now.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
 - A hang reports nothing from inside. Cloudflare's own record of every

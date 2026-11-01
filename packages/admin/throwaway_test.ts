@@ -54,20 +54,24 @@ let box = async () => {
     ((await pick(host.graph.read, 'owner', 'yaks.app'))?.connection as Comp)
       .account
   let signIns: string[] = []
+  let erased: string[] = []
   let go = (run: Run, args: Record<string, unknown>) =>
     throwaway(run, async (_host, _owner, address) => {
       signIns.push(address)
       await kept(address)
+    }, (_host, address) => {
+      erased.push(address)
+      return Promise.resolve()
     })(
       { command: 'probe', ...args },
       host,
       {} as Parameters<ReturnType<typeof throwaway>>[2],
     )
-  return { host, kept, accounts, chosen, signIns, go }
+  return { host, kept, accounts, chosen, signIns, erased, go }
 }
 
 test('the command runs as the account, whose connection ends with it', async () => {
-  let { host, accounts, chosen, go } = await box()
+  let { host, accounts, chosen, erased, go } = await box()
   try {
     let seen: unknown[] = []
     let code = await go(async (command, env) => {
@@ -82,6 +86,7 @@ test('the command runs as the account, whose connection ends with it', async () 
       'own@example.com',
     ])
     equal(await accounts(), ['own@example.com'])
+    equal(erased, ['reviewer@bot.yak.sh'])
   } finally {
     await host.close()
   }
@@ -119,6 +124,17 @@ test('without a name, each run is a fresh probe address', async () => {
     await go(() => Promise.resolve(0), {})
     equal(signIns[0].startsWith('probe-'), true)
     equal(signIns[0].endsWith('@bot.yak.sh'), true)
+  } finally {
+    await host.close()
+  }
+})
+
+test('an account signed in before the command outlives it', async () => {
+  let { host, kept, erased, go } = await box()
+  try {
+    await kept('reviewer@bot.yak.sh')
+    await go(() => Promise.resolve(0), { name: 'reviewer' })
+    equal(erased, [])
   } finally {
     await host.close()
   }
