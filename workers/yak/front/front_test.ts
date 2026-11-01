@@ -60,7 +60,7 @@ let front = (site: (req: Request) => Response | Promise<Response>) => {
     serve(new Request(url, init), env, {
       waitUntil: (work) => retained.push(work),
     })
-  return { go, asked, forwarded, used, points, errors, retained }
+  return { go, env, asked, forwarded, used, points, errors, retained }
 }
 
 test('a kept page answers from the edge with no kernel, counted once', async () => {
@@ -185,4 +185,28 @@ test('a cookie that owes something from the kernel routes there', () => {
   assertEquals(asked(session({ via: 'v', exp: days(10) })), false)
   assertEquals(asked(session({ person: 'p', exp: days(80) })), false)
   assertEquals(asked('yak_session=!!!'), false)
+})
+
+test("an app the kernel says is never kept isn't asked about again", async () => {
+  let f = front(() => {
+    throw new Error('Site was asked')
+  })
+  let env = f.env
+  env.KERNEL = {
+    fetch: (() =>
+      Promise.resolve(
+        new Response('private', { headers: { 'x-yak-unkept': '/cookbook/' } }),
+      )) as never,
+  }
+  env.SITE = {
+    fetch: ((req: Request) => {
+      f.asked.push(req.url)
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }) as never,
+  }
+  let first = await f.go('https://ada.yaks.app/cookbook/a')
+  assertEquals(first.headers.get('x-yak-unkept'), null)
+  assertEquals(f.asked.length, 1)
+  await f.go('https://ada.yaks.app/cookbook/b')
+  assertEquals(f.asked.length, 1)
 })

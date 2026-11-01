@@ -149,7 +149,12 @@ test('a page made private leaves the edge, and is no longer asked of Site', asyn
   )
   let g = gateway(() => keep(page('one'), space, app))
   assertEquals((await g.get())!.status, 200)
-  unkept(new Request('https://ada.yaks.app/cookbook/'), g.env, '/cookbook/')
+  unkept(
+    new Request('https://ada.yaks.app/cookbook/'),
+    g.env,
+    '/cookbook/',
+    clock(),
+  )
   assertEquals(await g.get(), null)
   assertEquals(g.site.asks(), 1)
 })

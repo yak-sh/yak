@@ -44,6 +44,13 @@ upload_source_maps = true
 # edge can't answer. A deploy that names none leaves a Worker's routes alone, so
 # nothing here can take them back from it while they move (T-133886).
 
+# Near what its requests read, when that's measurably faster: a request on this
+# Worker's fetch handler reads the directory several times, and a colo seeing
+# steady traffic has an isolate awake already (T-133886). Only the fetch handler
+# moves; Site and Files run nearest the visitor, and no Durable Object moves.
+[placement]
+mode = "smart"
+
 # Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
 # second go" could only be answered by guessing: the platform had no logs at
 # all, and every deploy was pushing observability_enabled: false. `logs` is

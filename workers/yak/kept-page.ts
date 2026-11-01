@@ -25,6 +25,9 @@ export let KEEP = 'x-yak-keep'
 export let NOW = 'x-yak-now'
 export let SEEN = 'x-yak-seen'
 export let BROWSER = 'x-yak-browser-cache'
+// Between the gateway and yak-front: the mount of an app whose pages are never
+// kept, which it need not ask Site about for a while (page-cache.ts `unkept`).
+export let UNKEPT_AT = 'x-yak-unkept'
 
 // A deploy probe picks a version at the gateway; a miss is served by Site at
 // the same one (kernel.ts says the same of the apex's pages).

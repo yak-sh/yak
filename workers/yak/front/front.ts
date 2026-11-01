@@ -14,7 +14,15 @@ import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import type { Fetcher } from '../env.ts'
 import { sealed } from '../cache.ts'
 import { apex, type Host } from '../host.ts'
-import { asked, listing, LISTINGS, type Timer } from '../kept-page.ts'
+import {
+  asked,
+  listing,
+  LISTINGS,
+  remember,
+  scope,
+  type Timer,
+  UNKEPT_AT,
+} from '../kept-page.ts'
 import { cookieValue } from '../lib/cookie.ts'
 import { isView, pointOf, type Visited } from '../view-point.ts'
 import { foreign, platform, spaceDoor } from '../route.ts'
@@ -172,5 +180,16 @@ export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
-  return env.KERNEL.fetch(req)
+  let res = await env.KERNEL.fetch(req)
+  let mount = res.headers.get(UNKEPT_AT)
+  if (!mount) return res
+  // An app whose pages are never kept pays the hop to Site once in a while,
+  // not on every view.
+  remember(
+    env.SITE,
+    scope(new URL(req.url).hostname.toLowerCase(), null, mount),
+  )
+  let out = new Response(res.body, res)
+  out.headers.delete(UNKEPT_AT)
+  return out
 }

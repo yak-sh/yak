@@ -43,6 +43,7 @@ import {
   scope,
   SEEN,
   UNKEPT,
+  UNKEPT_AT,
 } from './kept-page.ts'
 import { appTag, spaceTag } from './purge.ts'
 import { hostOf, MOUNT } from './route.ts'
@@ -89,12 +90,32 @@ export let keepable = (
   !sandboxed(app as App) && mode(app.access) != 'private' &&
   app.worker === ''
 
+// The mounts this request's answer owes yak-front word of (`told`), by the
+// request's clock, which is the one thing every rung of it holds.
+let owed = new WeakMap<object, string>()
+
 /** That the gateway served an app whose pages are never kept, mounted at
- * `at`: it asks Site about none of the app's addresses for a while. */
-export let unkept = (req: Request, env: Env, at: string) => {
+ * `at`: it asks Site about none of the app's addresses for a while, and tells
+ * yak-front to do the same. */
+export let unkept = (req: Request, env: Env, at: string, c: Clock) => {
   if (env.SITE) {
     remember(env.SITE, scope(hostOf(req, env), req.headers.get(MOUNT), at))
   }
+  owed.set(c, at)
+}
+
+/** This answer, saying what `unkept` found. A socket's answer carries nothing
+ * more: nothing here can copy the runtime's own socket. */
+export let told = (res: Response, c: Clock) => {
+  let at = owed.get(c)
+  if (!at || res.status == 101) return res
+  let headers = new Headers(res.headers)
+  headers.set(UNKEPT_AT, at)
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
 }
 
 /** An address no kept page may answer: the gateway serves it itself. A pass

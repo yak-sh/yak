@@ -151,7 +151,7 @@ import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, USES, whole } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
+import { asked, keep, keepable, passed, told, unkept } from './page-cache.ts'
 import {
   brokenIn,
   fault,
@@ -2944,7 +2944,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
       !pagePath(new URL(req.url).pathname) && !bearing(req) &&
         !req.headers.has('authorization'),
     )
-    return timed(res, c)
+    return timed(told(res, c), c)
   })
 }
 
@@ -3259,7 +3259,7 @@ let served = async (
   }
   if (!keepable(app)) {
     if (edge) return passed()
-    unkept(req, env, bare)
+    unkept(req, env, bare, c)
   }
   let paper = tokenOf(path)
   if (paper) {
