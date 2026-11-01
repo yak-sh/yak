@@ -38,6 +38,7 @@ import { embeds, platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { refusal } from './models.ts'
+import { within } from './defects.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 import { cleanup, test, until } from '@yaks/testing'
 import { hosting } from './inference.ts'
@@ -898,6 +899,111 @@ test('./api/ai/run shares one price lookup across concurrent and repeated calls'
   assertEquals((await run()).status, 200)
   assertEquals(reads, 1)
   assertAlmostEquals((await v.spent()).meter!.models, 0.0036)
+})
+
+test('./api/ai/run uses a held price while refreshing it without delaying inference', async () => {
+  let reads = 0, refreshed: Promise<void>[] = []
+  let finish!: (response: Response) => void
+  let page = new Promise<Response>((resolve) => finish = resolve)
+  let v = await vale(() => ({
+    response: 'hello',
+    usage: { input_tokens: 1000, output_tokens: 100 },
+  }), { env: { MODEL_FETCH: () => (reads++, page) } })
+  let graph = metaOf(
+    appStore(v.env.STORE, (await v.dir.space('ada'))!, v.app, v.env),
+    KERNEL,
+  )
+  let eid = identityEid('model', [FLASH])
+  await graph.apply([{
+    entity: { eid },
+    model: { name: FLASH, offered: true },
+    price: { input: 1, output: 2 },
+  }])
+  let result = await within(
+    v.env,
+    {},
+    () => v.run({ model: FLASH, input: {} }),
+    undefined,
+    {
+      retain: (work) => refreshed.push(work),
+    },
+  )
+  assertEquals(result.status, 200)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0012)
+  finish(new Response('$3 per M input tokens, $4 per M output tokens'))
+  await Promise.all(refreshed)
+  assertEquals((await graph.query(`.entity.eid=${eid}&.price`))[0].price, {
+    input: 3,
+    output: 4,
+  })
+  assertEquals((await v.run({ model: FLASH, input: {} })).status, 200)
+  assertEquals(reads, 1)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0046)
+})
+
+test('./api/ai/run keeps its held price when refreshing fails and reports the failure', async () => {
+  let reports: Bundle[] = [], refreshed: Promise<void>[] = []
+  let v = await vale(() => ({ response: 'hello' }), {
+    env: {
+      MODEL_FETCH: () => Promise.reject(new Error('Price refresh unavailable')),
+      ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
+    },
+  })
+  let graph = metaOf(
+    appStore(v.env.STORE, (await v.dir.space('ada'))!, v.app, v.env),
+    KERNEL,
+  )
+  let eid = identityEid('model', [FLASH])
+  await graph.apply([{
+    entity: { eid },
+    model: { name: FLASH },
+    price: { input: 1, output: 2 },
+  }])
+  let result = await within(
+    v.env,
+    {},
+    () => v.run({ model: FLASH, input: {} }),
+    undefined,
+    {
+      retain: (work) => refreshed.push(work),
+    },
+  )
+  await Promise.all(refreshed)
+  assertEquals(result.status, 200)
+  assertEquals(v.asked.length, 1)
+  assert((await v.spent()).meter!.models > 0)
+  assertEquals((await graph.query(`.entity.eid=${eid}&.price`))[0].price, {
+    input: 1,
+    output: 2,
+  })
+  assertEquals(reports.filter((r) => r.exception).length, 1)
+})
+
+test('./api/ai/run reports an unpriced model once and never purchases inference', async () => {
+  let reports: Bundle[] = []
+  let v = await vale(() => ({ response: 'must not run' }), {
+    env: {
+      MODEL_FETCH: () => Promise.resolve(new Response('No published price')),
+      ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
+    },
+  })
+  for (let model of ['@cf/llava-hf/llava-1.5-7b-hf', FLASH]) {
+    for (let n = 0; n < 2; n++) {
+      let result = await within(v.env, {}, () => v.run({ model, input: {} }))
+      assertEquals(result.status, 400)
+    }
+  }
+  let errors = reports.filter((r) => r.exception)
+  assertEquals(errors.length, 2)
+  assertEquals(
+    errors.map((r) => (r.error as Comp).tags).map((t) => (t as Comp).model),
+    [
+      '@cf/llava-hf/llava-1.5-7b-hf',
+      FLASH,
+    ],
+  )
+  assertEquals(v.asked, [])
+  assertEquals((await v.spent()).meter?.models ?? 0, 0)
 })
 
 test('./api/ai/run answers an input the model refuses as the caller’s, 400', () => {

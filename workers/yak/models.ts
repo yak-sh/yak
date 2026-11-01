@@ -14,6 +14,7 @@ import { edits, mode, writes } from '@yaks/member'
 import {
   billed,
   confirmed,
+  type Listed,
   type MediaReceipt,
   mediaReceipts,
   type Model,
@@ -31,7 +32,7 @@ import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
 import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
-import { KERNEL, meta } from './meta.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
 import { blobPrefix, receiptPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
@@ -303,6 +304,23 @@ let gateway = (at: Stored) =>
     receipts: receiptsFor(at),
   })
 
+let modelRows = (graph: {
+  read(query: string): Promise<Bundle[]>
+  apply(bundles: Bundle[]): Promise<unknown>
+}) => ({
+  price: async (name: string) => {
+    let [row] = await graph.read(
+      `.entity.eid=${identityEid('model', [name])}&?price`,
+    )
+    return row?.price as Price | undefined
+  },
+  answered: async (name: string, info: Listed) => {
+    await graph.apply(
+      confirmed(identityEid('provider', [PROVIDER]), name, info),
+    )
+  },
+})
+
 /**
  * The store's transcript runner, registered on its registry: `session_run`
  * run here, lent Workers AI through the metered binding and the app's marked
@@ -312,14 +330,14 @@ let gateway = (at: Stored) =>
 export let asking = (at: Stored): Handlers => {
   if (at.meta || !at.app) return {}
   let text = workersAi(
-    metered(at.env, payer(at.app), {
-      answered: async (name, info) => {
-        await at.graph.apply(
-          confirmed(identityEid('provider', [PROVIDER]), name, info),
-          { trusted: true },
-        )
-      },
-    }),
+    metered(
+      at.env,
+      payer(at.app),
+      modelRows({
+        read: at.graph.read,
+        apply: (bundles) => at.graph.apply(bundles, { trusted: true }),
+      }),
+    ),
     { fetch: at.env.MODEL_FETCH, gateway: at.env.AI_GATEWAY },
   )
   let audio = accounted(
@@ -483,10 +501,18 @@ export let modelRun: Answer = async (
     )
   }
   let conversation = req.headers.get('x-session-affinity') || asked.session_id
+  let graph = metaOf(appStore(env.STORE, space, app, env), KERNEL)
   try {
     return Response.json(
       said(
-        await metered(env, payer(app.eid)).run(
+        await metered(
+          env,
+          payer(app.eid),
+          modelRows({
+            read: graph.query,
+            apply: graph.apply,
+          }),
+        ).run(
           asked.model,
           asked.input,
           conversation

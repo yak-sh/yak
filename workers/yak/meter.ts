@@ -2,6 +2,7 @@
 // facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
 import { type ByDay, kept } from '@yaks/ui/chart'
+import { same } from '@yaks/fp'
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
@@ -39,7 +40,7 @@ import {
 } from '@yaks/workers-ai'
 import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
-import { defect } from './defects.ts'
+import { background, caught, defect } from './defects.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 
@@ -920,6 +921,23 @@ export let metering = (
 // the catalogue (models.ts), so the call that crosses the line still
 // completes: a soft ceiling, like the others.
 
+let unpriced = new WeakMap<typeof fetch, Set<string>>()
+let missingPrice = (model: string, fetcher: typeof fetch = fetch) => {
+  let error = new ModelError(
+    'model',
+    `No published price for ${model}; ask another model`,
+  )
+  let reported = unpriced.get(fetcher) ?? new Set<string>()
+  unpriced.set(fetcher, reported)
+  if (!reported.has(model)) {
+    defect(error, { request: 'model price', model }, {
+      fault: `model-price:${model}`,
+    })
+    reported.add(model)
+  }
+  return error
+}
+
 /**
  * The AI binding an app reaches Workers AI through, and the only one: the
  * store's runner is lent it (models.ts), and so is `./api/ai/run`. A model the
@@ -943,6 +961,7 @@ export let metered = (
   } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   rows?: {
+    price(name: string): Promise<Price | undefined>
     answered(name: string, info: Listed): Promise<void>
   },
 ): Binding => ({
@@ -959,16 +978,26 @@ export let metered = (
     }
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
-    let info = music(model)
-      ? { name: model }
-      : await modelInfo(model, bind.MODEL_FETCH)
-    let price = info.price
-    if (!music(model) && !price) {
-      throw new ModelError(
-        'model',
-        `No published price for ${model}; ask another model`,
-      )
+    let held = music(model) ? undefined : await rows?.price(model)
+    let info: Listed = { name: model }
+    if (!music(model)) {
+      let reading = modelInfo(model, bind.MODEL_FETCH)
+      if (held) {
+        background(
+          reading.then(async (fresh) => {
+            if (!fresh.price) {
+              missingPrice(model, bind.MODEL_FETCH)
+            } else if (!same(fresh.price, held)) {
+              await rows!.answered(model, fresh)
+            }
+          }).catch((error) =>
+            caught(error, { request: 'refresh model price', model })
+          ),
+        )
+      } else info = await reading
     }
+    let price = held ?? info.price
+    if (!music(model) && !price) throw missingPrice(model, bind.MODEL_FETCH)
     let answer = await bind.AI.run(
       model,
       input,
