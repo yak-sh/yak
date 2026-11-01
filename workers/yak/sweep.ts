@@ -25,8 +25,10 @@ import { bound, type Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
 import type { Who } from './session.ts'
+import { LEAVE, WHERE } from './relocate.ts'
 
 export let PATH = '/api/move'
+export let RELOCATE_PATH = '/api/relocate'
 export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
 
@@ -91,6 +93,32 @@ let account = async (
   }, { headers: { 'cache-control': 'private, no-store' } })
 }
 
+// The directory's move to a new object (relocate.ts): `?where=<name>&colo=ORD`
+// reaches the object of that name from a Worker in that colo, which is what
+// places an object that has never been reached, and says where it stands.
+// `?to=<name>` copies the directory there and answers both ends' tallies.
+let relocating = async (req: Request, env: Env): Promise<Response> => {
+  let url = new URL(req.url)
+  let where = url.searchParams.get('where'), to = url.searchParams.get('to')
+  let colo = (req as { cf?: { colo?: string } }).cf?.colo ??
+    req.headers.get('cf-ray')?.split('-')[1]
+  if (where) {
+    if (colo != url.searchParams.get('colo')) {
+      return json(409, 'wrong_colo', `this Worker is in ${colo}`)
+    }
+    let r = await storeOf(env.STORE, where)(WHERE, {}, KERNEL)
+    return Response.json({ worker: colo, ...await r.json() }, {
+      status: r.status,
+    })
+  }
+  if (!to) return json(400, 'arguments', 'name where or to')
+  return await storeOf(env.STORE, PLATFORM_STORE)(
+    `${LEAVE}?to=${encodeURIComponent(to)}`,
+    { method: 'POST' },
+    KERNEL,
+  )
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
@@ -118,6 +146,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       { headers: { 'cache-control': 'private, no-store' } },
     )
   }
+  if (new URL(req.url).pathname == RELOCATE_PATH) return relocating(req, env)
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)
   if (req.method != 'POST') {

@@ -305,6 +305,7 @@ import {
 } from './door.ts'
 import { borrows } from './reach.ts'
 import { behind, ran } from './running.ts'
+import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import {
@@ -3775,9 +3776,27 @@ export class Store {
     )
   }
 
+  // The object's move to a new address (relocate.ts). Answers before anything
+  // boots, so an object being copied out or into runs nothing of a store's.
+  #relocation = relocation({
+    storage: () => this.#ctx.storage as unknown as Relocating,
+    object: (name) => this.#bind.STORE!.get(this.#bind.STORE!.idFromName(name)),
+    leave: async () => {
+      await this.#sleep()
+      this.#ctx.abort?.('relocating')
+    },
+    resume: () => {
+      this.#dormant = null
+      this.#moveOnly = false
+    },
+    report: (e) => defect(e, { request: 'relocate', store: PLATFORM_STORE }),
+  })
+
   async #fetch(request: Request): Promise<Response> {
     // Authorization may refresh the kernel's headers after a directory write.
     request = new Request(request)
+    let relocated = await this.#relocation(request)
+    if (relocated) return relocated
     // The request that wakes this object waits for it to start, and says how
     // long beside its answer (`x-yak-wake`, timing.ts). The runtime's clock
     // moves only across I/O, so that is the waiting, never the compute. The

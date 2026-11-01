@@ -56,6 +56,18 @@ export {
   type SqlCursor,
   type SqlValue,
 } from './sql.ts'
+export {
+  arrived,
+  type Cell,
+  type Copied,
+  copied,
+  ending,
+  page,
+  type Plan,
+  plan,
+  raised,
+  tallied,
+} from './copy.ts'
 export { storage, type Store } from './store.ts'
 export {
   backoff,

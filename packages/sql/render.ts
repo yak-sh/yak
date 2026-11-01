@@ -436,6 +436,8 @@ let stmt = (s: Stmt, c: Ctx): string => {
               ? literal(s.value)
               : word(s.value, 'pragma value')
           }`)
+    case 'catalogued':
+      return s.sql
     case 'analyze':
       return s.table == null ? 'analyze' : `analyze ${q(s.table)}`
     case 'vacuum':

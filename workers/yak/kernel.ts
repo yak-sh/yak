@@ -224,7 +224,8 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The store mover's sweep (sweep.ts, D-45640): the owner's door onto every
   // store's rehearsal and wake, before the connector for the same reason.
   if (
-    path == sweep.PATH || path == sweep.IDLE_PATH || path == sweep.ACCOUNT_PATH
+    path == sweep.PATH || path == sweep.IDLE_PATH ||
+    path == sweep.ACCOUNT_PATH || path == sweep.RELOCATE_PATH
   ) {
     return sweep.fetch(req, env)
   }

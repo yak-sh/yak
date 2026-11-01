@@ -359,6 +359,10 @@ export type Vacuum = { t: 'vacuum'; into?: string }
 
 /** Collect planner statistics for the database or one named table. */
 export type Analyze = { t: 'analyze'; table?: string }
+/** A schema object's statement as `sqlite_schema` keeps it, run again to make
+ * the same object in another file. It is the catalogue's text, never a caller's:
+ * only a physical copy (@yaks/durable-object `copy`) has one to hand. */
+export type Catalogued = { t: 'catalogued'; sql: string }
 
 /** How SQLite would run a statement, one row per step of its plan. */
 export type Explain = { t: 'explain query plan'; of: Stmt }
@@ -388,6 +392,7 @@ export type Stmt =
   | Analyze
   | Explain
   | Tx
+  | Catalogued
 
 // ---- expression builders ----
 
