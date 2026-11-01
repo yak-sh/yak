@@ -2424,9 +2424,13 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     foresee(dir, person, view, !slug)
   }
   // The one a person gets with no address named is one they own.
-  let { space, role } = slug
-    ? await dir.page(slug, null, person)
-    : { space: await dir.own(person), role: 'owner' as const }
+  let { space, role, administrative } = slug
+    ? await dir.page(slug, null, person, view == 'operator')
+    : {
+      space: await dir.own(person),
+      role: 'owner' as const,
+      administrative: false,
+    }
   if (!space && slug) {
     // A link written before the space moved to another name (T-34658).
     let was = await dir.formerly(slug)
@@ -2436,7 +2440,16 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     return moved(req, to.href)
   }
   if (!space || space.slug == META.space) return nothingHere(env)
-  let who: Owner = { person, role: role ?? null, until }
+  let who: Owner = {
+    person,
+    role: administrative ? 'owner' : role ?? null,
+    administrative,
+    until,
+  }
+  if (view == 'operator' && writes(who.role) && !space.trashed) {
+    let { operatorPage } = await import('./operator-page.ts')
+    return operatorPage(req, env, space, who)
+  }
   if (who.role != 'owner') return nothingHere(env)
   // A space in the trash is brought back from its own address (`closed`).
   if (space.trashed) {

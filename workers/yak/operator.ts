@@ -26,7 +26,14 @@ import { standing } from './standing.ts'
 import type { operatorStore } from './operator-store.ts'
 
 type Store = ReturnType<typeof operatorStore>
-export type Options = { model?: Model; name?: string; price?: Price }
+export type Options = {
+  model?: Model
+  name?: string
+  price?: Price
+  session?: string
+  task?: string
+  tools?: (ctx: Ctx) => Tool[]
+}
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
@@ -42,6 +49,7 @@ export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
       ),
       space.slug,
       space.eid,
+      held.administrative,
     )
   return {
     env,
@@ -184,7 +192,10 @@ export let runOperator = async (
 ) => {
   let { g, fx, vocab } = store
   let text = typeof args.say == 'string' ? args.say.trim() : ''
-  let task = typeof args.task == 'string' ? args.task : crypto.randomUUID()
+  let task = typeof args.task == 'string'
+    ? args.task
+    : options.task ?? crypto.randomUUID()
+  let [resuming] = options.session ? await g.get([options.session]) : []
   let [old] = await g.get([task])
   if (args.task && !old?.task) {
     throw refuse('missing', `no operator task ${task}`)
@@ -198,7 +209,7 @@ export let runOperator = async (
       persona: {},
     },
     { entity: { eid: held.person }, person: {} },
-    ...old && text
+    ...old && text && !resuming?.session
       ? [{ entity: { eid: task }, completed: null, cancelled: null }]
       : [],
     ...!old
@@ -211,7 +222,7 @@ export let runOperator = async (
       }]
       : [],
   ], { trusted: true })
-  if (old && text) {
+  if (old && text && !resuming?.session) {
     await g.apply([{
       entity: { eid: crypto.randomUUID() },
       comment: { target: task },
@@ -259,27 +270,35 @@ export let runOperator = async (
       rows.push({ entity: { eid: identityEid('model', [name]) }, price })
     }
     await g.apply(rows, { trusted: true })
-    let session = await begin(g, request, {
-      persona: space.eid,
-      by: held.person,
-      project: space.eid,
-      using: {
-        provider: identityEid('provider', [provider]),
-        model: identityEid('model', [name]),
-      },
-    })
+    let session = resuming?.session
+      ? options.session!
+      : await begin(g, request, {
+        eid: options.session,
+        persona: space.eid,
+        by: held.person,
+        project: space.eid,
+        using: {
+          provider: identityEid('provider', [provider]),
+          model: identityEid('model', [name]),
+        },
+      })
     ctx.who!.instrument = session
-    await g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      edge: { from: task, to: session },
-      contains: {},
-    }])
+    if (!resuming?.session) {
+      await g.apply([{
+        entity: { eid: crypto.randomUUID() },
+        edge: { from: task, to: session },
+        contains: {},
+      }])
+    }
     let runner = lend({
       h: { g, fx, vocab, me: space.eid },
       model: paid,
       name,
       provider,
-      remote: () => operatorRoster(ctx, store),
+      remote: async () => [
+        ...await operatorRoster(ctx, store),
+        ...options.tools?.(ctx) ?? [],
+      ],
       instructions: `${instructions(env)}\n\n${await standing(ctx)
         .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.`,
       report: (e, where) =>

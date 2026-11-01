@@ -662,6 +662,7 @@ export type DeskPage = {
 }
 
 let navIcons = {
+  operator: 'bot',
   apps: 'layout-grid',
   people: 'users',
   connect: 'bot',
@@ -691,9 +692,9 @@ ${icon(navIcons[key])}${label}${
     url(env, '/yaks-app.png')
   }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('people', 'People')}${link('connect', 'Agents')}${
-    link('connections', 'Connections')
-  }<hr>
+${link('apps', 'Apps')}${link('operator', 'Operator')}${
+    link('people', 'People')
+  }${link('connect', 'Agents')}${link('connections', 'Connections')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
 ${link('billing', 'Billing')}${link('settings', 'Settings')}${
     link('trash', 'Trash')
@@ -1570,6 +1571,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let view = at.view ?? 'apps'
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
+    operator: 'Your operator',
     apps: 'Your apps',
     people: 'People',
     connect: 'Your agents',

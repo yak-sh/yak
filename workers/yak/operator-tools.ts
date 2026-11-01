@@ -5,7 +5,7 @@ import { writes } from '@yaks/member'
 import { vouched } from './session.ts'
 
 let ask = async (ctx: Ctx, args: Args, path: string) => {
-  let { space, who } = await inSpace(ctx, args, path == '/operator/run')
+  let { space, who } = await inSpace(ctx, args, path == '/operator/run', true)
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }

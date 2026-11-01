@@ -23,6 +23,9 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { plugins as blobs } from '@yaks/blob/graph'
+import { mailDoc } from '@yaks/mail/vocab'
+import { operatorDoc } from './operator-vocab.ts'
+import { draftDoc, drafts } from '@yaks/draft'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -38,9 +41,15 @@ export let operatorVocab = loadVocab([
   effectDoc,
   edgeDoc,
   artifactDoc,
+  mailDoc,
+  operatorDoc,
+  draftDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
-export let operatorStore = (durable: DurableStorage) => {
+export let operatorStore = (
+  durable: DurableStorage,
+  options: Parameters<typeof effects>[1] = {},
+) => {
   let vocab = operatorVocab
   let sql = driver(durable)
   let kept = sqliteBlobs(sql)
@@ -49,11 +58,16 @@ export let operatorStore = (durable: DurableStorage) => {
   })
   for (let stmt of blobSchema()) sql.query(stmt)
   store.install()
-  let fx = effects(vocab)
+  let fx = effects(vocab, {
+    singleOwner: true,
+    defer: true,
+    max: 1,
+    ...options,
+  })
   let g = graph({
     storage: store,
     vocab,
-    plugins: [sessions(), ...blobs({ vocab, blobs: kept })],
+    plugins: [sessions(), drafts(), ...blobs({ vocab, blobs: kept }), fx],
   })
   return { g, fx, vocab }
 }

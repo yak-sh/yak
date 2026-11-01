@@ -107,13 +107,19 @@ export type State = Hibernation & Restartable & {
     // a deleted space's conversation goes through ({@link Builder.wipe}), the
     // same call the Store makes for the same reason (graph.ts).
     deleteAll(): Promise<void>
+    setAlarm(at: number): Promise<void>
   }
 }
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
  * memory a socket has, and 2KB is far more than these three want. */
-export type Held = { person: string; role: Level | null; space: string }
+export type Held = {
+  person: string
+  role: Level | null
+  space: string
+  administrative?: boolean
+}
 
 /** The header the kernel names the space with at the handshake — the object's
  * own name is that eid, and this is how it learns it. */
@@ -232,6 +238,7 @@ export class Builder {
     ReturnType<typeof import('./operator-store.ts').operatorStore>
   >
   #building = false
+  #arming?: Promise<void>
 
   constructor(ctx: State, env: Env) {
     this.#ctx = ctx
@@ -442,23 +449,26 @@ export class Builder {
     let dir = directory({
       fetch: (req: Request) => dirPart.fetch(req, this.#env),
     }, true)
-    let role = await dir.role(space, person)
+    let access = await dir.page(
+      space.slug,
+      null,
+      person,
+      request.headers.get('x-yak-administrative') == '1',
+    )
+    let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
-    let store =
-      await (this.#operator ??= import('./operator-store.ts').then((m) =>
-        m.operatorStore(this.#ctx.storage)
-      ))
-    let { readOperator, runOperator } = await import('./operator.ts')
+    let store = await this.#work()
+    let { runOperator } = await import('./operator.ts')
     let args = await request.json() as Record<string, unknown>
-    if (new URL(request.url).pathname == '/operator/read') {
-      return Response.json(
-        await readOperator(
-          store,
-          typeof args.task == 'string' ? args.task : undefined,
-          args.context === true,
-        ),
-      )
-    }
+    let { operatorRequest } = await import('./operator-host.ts')
+    let response = await operatorRequest(
+      store,
+      { person, role, space: spaceId, administrative: access.administrative },
+      new URL(request.url).pathname,
+      args,
+      () => this.#arming,
+    )
+    if (response) return response
     if (this.#building) return no(409, WAIT)
     this.#building = true
     try {
@@ -466,11 +476,54 @@ export class Builder {
         await runOperator(
           store,
           this.#env,
-          { person, role, space: spaceId },
+          {
+            person,
+            role,
+            space: spaceId,
+            administrative: access.administrative,
+          },
           space,
           args,
         ),
       )
+    } finally {
+      this.#building = false
+    }
+  }
+
+  #work() {
+    return this.#operator ??= (async () => {
+      let { operatorStore } = await import('./operator-store.ts')
+      let { handleChannels } = await import('./operator-channels.ts')
+      let store = operatorStore(this.#ctx.storage, {
+        report: (e, where) =>
+          caught(e, { request: 'operator effects', handler: where.handler }),
+        nudge: () => {
+          this.#arming = this.#ctx.storage.setAlarm(Date.now())
+        },
+      })
+      handleChannels(store, this.#env)
+      return store
+    })()
+  }
+
+  async alarm() {
+    if (this.#building) {
+      await this.#ctx.storage.setAlarm(Date.now() + 1000)
+      return
+    }
+    this.#building = true
+    try {
+      let { g, fx } = await this.#work()
+      await fx.work(g)
+      await fx.idle()
+      let pending = await g.read(
+        '.effect.state=pending .order=effect.next .limit=1',
+      )
+      if (pending.length) {
+        let next = (pending[0].effect as { next?: string }).next
+        await this.#ctx.storage.setAlarm(next ? Date.parse(next) : Date.now())
+      }
     } finally {
       this.#building = false
     }

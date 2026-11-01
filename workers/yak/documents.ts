@@ -37,7 +37,7 @@ export let speech = (answer: unknown): string => {
   return text
 }
 
-export let transcription = (image: string) => ({
+export let transcription = (image: string, mime = 'image/png') => ({
   messages: [{
     role: 'user',
     content: [
@@ -48,7 +48,7 @@ export let transcription = (image: string) => ({
       },
       {
         type: 'image_url',
-        image_url: { url: 'data:image/png;base64,' + image },
+        image_url: { url: `data:${mime};base64,` + image },
       },
     ],
   }],
@@ -102,9 +102,20 @@ export let extraction = async (at: Stored, document: string) => {
   let bytes = await env.BLOBS.get(key)
   if (!bytes) throw new Error('Document upload bytes are missing: ' + blob)
   let body = await bytes.arrayBuffer()
-  let ai = metered(env, () => Promise.resolve(found.space))
   let pdf = isPdf(file.name ?? '', file.mime ?? '')
-  let source: Extractor = {
+  let source = extractor(env, found.space, body, file.name ?? '', file.mime)
+  await indexDocument(at.graph, document, blob, pdf, source)
+}
+
+export let extractor = (
+  env: Stored['env'],
+  space: import('./directory.ts').Space,
+  body: ArrayBuffer,
+  name: string,
+  mime?: string,
+): Extractor => {
+  let ai = metered(env, () => Promise.resolve(space))
+  return {
     pdf: async (page) => {
       if (!env.RASTER) throw new Error('No document parser bound')
       let res = await env.RASTER.fetch(
@@ -116,12 +127,18 @@ export let extraction = async (at: Stored, document: string) => {
       if (!res.ok) throw new Error('PDF extraction failed: ' + await res.text())
       return res.json()
     },
-    ocr: async (image) => speech(await ai.run(VISION, transcription(image))),
+    ocr: async (image) =>
+      speech(
+        await ai.run(
+          VISION,
+          transcription(image, mime?.startsWith('image/') ? mime : undefined),
+        ),
+      ),
     markdown: async () => {
       if (!env.AI?.toMarkdown) throw new Error('No document converter bound')
       let converted = await env.AI.toMarkdown({
-        name: file.name ?? 'document',
-        blob: new Blob([body], { type: file.mime }),
+        name: name || 'document',
+        blob: new Blob([body], { type: mime }),
       })
       if (converted.format == 'error' || converted.data == null) {
         throw new Error('Document conversion failed: ' + converted.error)
@@ -129,7 +146,6 @@ export let extraction = async (at: Stored, document: string) => {
       return converted.data
     },
   }
-  await indexDocument(at.graph, document, blob, pdf, source)
 }
 
 export let indexDocument = async (

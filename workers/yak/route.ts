@@ -26,6 +26,7 @@ export let PLATFORM = apex()
 // they see their own (directory.ts `own`).
 export let MANAGE = '/manage'
 export type ManageView =
+  | 'operator'
   | 'apps'
   | 'connect'
   | 'connections'
@@ -41,6 +42,7 @@ export let managePath = (view: ManageView = 'apps', space?: string) =>
   (space ? `?space=${encodeURIComponent(space)}` : '')
 export let manageView = (path: string): ManageView | null => {
   let views: ManageView[] = [
+    'operator',
     'apps',
     'connect',
     'connections',

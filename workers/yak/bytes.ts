@@ -9,6 +9,15 @@
  * all take. */
 export type Bytes = Uint8Array<ArrayBuffer>
 
+/// base64(new TextEncoder().encode('Hello')) -> 'SGVsbG8='
+export let base64 = (bytes: Uint8Array) => {
+  let parts = []
+  for (let i = 0; i < bytes.length; i += 8192) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + 8192)))
+  }
+  return btoa(parts.join(''))
+}
+
 export type Reader = {
   /** The bytes held, at least `n` of them unless the stream ends first. */
   peek: (n: number) => Promise<Bytes>

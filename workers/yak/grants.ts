@@ -219,6 +219,7 @@ export let narrowed = (
   dir: Directory,
   slug: string,
   eid?: string,
+  over = false,
 ): Directory => {
   let matches = (space: Parameters<Directory['role']>[0]) =>
     eid ? space.eid == eid : space.slug == slug
@@ -230,13 +231,14 @@ export let narrowed = (
       return space && matches(space) ? space : null
     },
     page: async (want, app, person) => {
-      let got = await dir.page(want, app, person)
+      let got = await dir.page(want, app, person, over)
       return {
         ...got,
         ...person
           ? {
             role: got.space && matches(got.space) ? got.role : null,
-            administrative: false,
+            administrative: !!got.space && matches(got.space) && over &&
+              got.administrative === true,
           }
           : {},
       }
@@ -245,12 +247,30 @@ export let narrowed = (
       (await dir.spaces(person, role)).filter(matches),
     seats: async (person: string, role?: Role) =>
       (await dir.seats(person, role)).filter((s) => matches(s.space)),
-    reachable: async (person: string) =>
-      (await dir.reachable(person)).filter((r) => matches(r.space)),
+    reachable: async (person: string) => {
+      if (!over) {
+        return (await dir.reachable(person)).filter((r) => matches(r.space))
+      }
+      let space = eid ? await dir.at(eid) : await dir.space(slug)
+      if (!space || space.trashed) return []
+      let page = await dir.page(space.slug, null, person, true)
+      let role = page.administrative ? 'owner' as const : page.role
+      return role
+        ? (await dir.apps(space)).filter((app) => !app.trashed).map((app) => ({
+          space,
+          app,
+          role,
+        }))
+        : []
+    },
     seated: async (person: string, role?: Role) =>
       (await dir.seated(person, role)).filter((s) => matches(s.space)),
-    role: async (space: Parameters<Directory['role']>[0], person: string) =>
-      matches(space) ? await dir.role(space, person) : null,
+    role: async (space: Parameters<Directory['role']>[0], person: string) => {
+      if (!matches(space)) return null
+      if (!over) return dir.role(space, person)
+      let page = await dir.page(space.slug, null, person, true)
+      return page.administrative ? 'owner' : page.role ?? null
+    },
     target: async (space: string, person: string, app?: string | null) => {
       let got = await dir.target(space, person, app)
       return got.space && matches(got.space) ? got : { ...got, role: null }

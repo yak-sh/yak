@@ -43,10 +43,17 @@ import { copyOf, signedDirectory } from './directory-copy.ts'
 import PostalMime, { type Email } from 'postal-mime'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
-import { type Head, inbound, verdict } from '@yaks/mail'
+import { author, type Head, inbound, messageId, verdict } from '@yaks/mail'
+import { writes } from '@yaks/member'
 import { acceptsOf, filed, Untaken } from './apps.ts'
 import * as dirPart from './directory.ts'
-import { type App, appStore, directory, type Space } from './directory.ts'
+import {
+  type App,
+  appStore,
+  directory,
+  directoryOf,
+  type Space,
+} from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
@@ -206,6 +213,8 @@ let carried = async (
  * told; anything else thrown is ours, and the sending server will try again.
  */
 export let arrived = async (m: Inbound, env: Env): Promise<string> => {
+  let requested = await operatorMail(m, env)
+  if (requested) return requested
   let { space, app } = await opened(env, m.to)
   let mail = await PostalMime.parse(m.raw)
   let head = read(m, mail)
@@ -236,4 +245,75 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
   // because a letter refused here is somebody else's words lost.
   await counted(env, space)
   return eid
+}
+
+// App addresses keep receiving app mail. A member writing the space itself
+// asks its operator; unauthenticated arrivals remain ordinary app mail.
+let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
+  let box = mailedTo(m.to, env)
+  if (!box || box.app) return null
+  let dir = directoryOf(env.STORE)
+  let space = await dir.answering(box.space)
+  if (!space || space.trashed) return null
+  let from = author(m).trim().toLowerCase()
+  let person = await dir.personAt(from)
+  if (!person || !writes(await dir.role(space, person))) return null
+  let { authenticated, keepFile, requestId } = await import(
+    './operator-channels.ts'
+  )
+  if (!authenticated(m.headers.get('authentication-results'), from)) {
+    throw new Refused(
+      'The operator needs an authenticated email from your member address. Sign in and use Operator chat, or resend with DMARC authentication.',
+    )
+  }
+  let mail = await PostalMime.parse(m.raw)
+  let head = read(m, mail)
+  let files = []
+  for (let a of mail.attachments) {
+    let bytes = typeof a.content == 'string'
+      ? new TextEncoder().encode(a.content)
+      : new Uint8Array(a.content as ArrayBuffer)
+    files.push(
+      await keepFile(
+        env,
+        space,
+        a.filename ?? 'attachment',
+        a.mimeType || 'application/octet-stream',
+        bytes,
+      ),
+    )
+  }
+  let id = requestId(space.eid, messageId({ ...m, headers: head }))
+  let received = inbound({ ...m, headers: head }, {
+    eid: id,
+    text: words(mail),
+    verified: true,
+  })[0]
+  let { builderOf, SPACE } = await import('./build.ts')
+  let response = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/receive', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-person': person,
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify({
+        say: words(mail),
+        request: {
+          channel: 'email',
+          address: from,
+          reply_to: messageId({ ...m, headers: head }),
+          files,
+        },
+        options: { id, mail: received.mail, title: mail.subject },
+        in_reply_to: mail.inReplyTo,
+      }),
+    })
+  )
+  if (!response.ok) {
+    throw new Error('Operator email intake failed: ' + await response.text())
+  }
+  if (response.status == 202) await counted(env, space)
+  return id
 }
