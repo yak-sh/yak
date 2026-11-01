@@ -106,6 +106,23 @@ copy that's too clever backfires, and get people to a live demo fast
 
 ## How a page is written
 
+**Start with the outline.** Jeff, verbatim: "that's probably good advice for
+the skill: start with the outline; what do people need to know? what's the
+priority? turn that into an outline." And: "that outline then turns into the
+sections of the site." So before any copy, write down what the people the page
+is for need to know, most important first. Hale's questions are a good first
+draft of the order. That list becomes the page's sections, in the same order,
+and each section says only what its item needs. The copy comes from the
+outline. A line that answers nothing on it is cut, and a point that belongs to
+a later item waits for that section.
+
+**The hero fits on a phone's first screen.** Of a 55-word lead, Jeff,
+verbatim: "is way too long", and "that's practically a screen of text on a
+phone". The heading, a lead of one short sentence and the button fit on the
+first screen of a phone, with room to spare. The lead answers "what is this?"
+and nothing else; whatever more it wants to say goes where the outline puts
+it.
+
 **Start from the people.** Each venture names who it's for in a design with
 its personas (yaks.app's is D-131886, reached through `yaks-app-business`).
 Read it before writing a line, and write for one of them: their work, their
