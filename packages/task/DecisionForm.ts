@@ -59,7 +59,7 @@ export let DecisionForm = (
               type: 'button',
               onClick: () => apply(answer(eid, c.label)),
             }, `${i + 1}. ${c.label}`)
-            : h(Notes.Text, {}, `${i + 1}. ${c.label}`),
+            : h('span', {}, `${i + 1}. ${c.label}`),
           c.label == d.recommended && h(Section.Note, {}, 'recommended'),
           h('p', {}, c.description),
         )

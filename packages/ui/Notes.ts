@@ -36,6 +36,7 @@ export let description = 'Notes left on something: who left each, and when.'
 export let sheet = (c: Colors): Sheet => ({
   Notes_Children: { block: true, indent: 2 },
   Notes_Item: { block: true, spaced: true },
+  Notes_Text: { block: true },
   'Notes_Item-done': { fg: c.muted },
   Notes_Who: { fg: c.who },
   Notes_When: { fg: c.muted },

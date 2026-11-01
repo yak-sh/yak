@@ -181,6 +181,38 @@ test('a thread shows answers under their question, not under unrelated notes', (
   }
 })
 
+test('a note names its writer and instrument on one line of plain links', () => {
+  cache.value = {
+    jeff: {
+      entity: { eid: 'jeff', num: 2 },
+      doc: { eid: 'jeff', title: 'Jeff', body: '' },
+    },
+    run: {
+      entity: { eid: 'run', num: 3 },
+      session: { eid: 'run', status: 'done' },
+    },
+    said: {
+      entity: { eid: 'said', num: 4 },
+      comment: { eid: 'said', target: 'task' },
+      doc: { eid: 'said', title: '', body: 'Lined up' },
+      created: { eid: 'said', by: 'jeff', via: 'run' },
+    },
+  }
+  let { root, free } = mount(h(Branches, { rows: [domainBundle(ent('said'))] }))
+  try {
+    let who = [...root.querySelectorAll('.Notes_Who')]
+    assertEquals(who.map((w) => w.textContent!.includes('Jeff')), [true, false])
+    assertEquals(who[1].textContent!.startsWith('· via '), true)
+    assertEquals(
+      root.querySelector('a a, a div, .Notes_Who [role=textbox]'),
+      null,
+    )
+  } finally {
+    free()
+    cache.value = {}
+  }
+})
+
 test('shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone', async () => {
   let eid = 'dddddddd-3333-4333-8333-dddddddddddd'
   cache.value = {

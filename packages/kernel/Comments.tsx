@@ -224,18 +224,9 @@ export let Note = (
   let verdict = comp(c, 'review')?.verdict
   return (
     <Notes.Item>
-      {who && (
-        <Notes.Who>
-          <a {...host.link(who)}>{host.render(who, 'Card.Title')}</a>
-        </Notes.Who>
-      )}
+      {who && <Notes.Who>{host.render(who, 'Inline')}</Notes.Who>}
       {actor && instrument && actor.entity.eid != instrument.entity.eid && (
-        <Notes.Who>
-          · via{' '}
-          <a {...host.link(instrument)}>
-            {host.render(instrument, 'Card.Title')}
-          </a>
-        </Notes.Who>
+        <Notes.Who>· via {host.render(instrument, 'Inline')}</Notes.Who>
       )}
       {!!verdict && <span>{String(verdict).replaceAll('_', ' ')}</span>}
       <a {...host.link(c)} title={host.timestamp(stamp?.at as string)}>
