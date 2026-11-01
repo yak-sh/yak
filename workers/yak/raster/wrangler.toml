@@ -1,7 +1,7 @@
-# yak-raster (index.ts, draw.ts): draws an SVG as a square PNG, which is how an
-# app whose agent wrote an icon.svg gets the icon.png a home screen reads
-# (../raster.ts). Its own Worker because the drawing is resvg compiled to 2.4 MB
-# of WebAssembly, and a Worker compiles its WebAssembly when an isolate starts:
+# yak-raster draws SVG icons and PDF pages. An SVG becomes a square PNG, how an
+# app whose agent wrote icon.svg gets the icon.png a home screen reads
+# (../raster.ts). PDFium extracts page text and draws scans for OCR. Its own
+# Worker because resvg and PDFium are WebAssembly compiled when an isolate starts:
 # in the kernel that would be every isolate, a Store waking for one query
 # included. Here it is only the isolates that draw.
 #
