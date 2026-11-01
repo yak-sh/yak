@@ -109,7 +109,9 @@ export let about = (env: Host = {}): Says => ({
   name: 'about',
   text: `${what(env)}
 
-Signed out, this endpoint already does a fair amount. The guide is here to read:
+Signed out, ${url(env, '/mcp?auth=mixed')} offers the tools below.
+The default ${url(env, '/mcp')} and ${url(env, '/mcp?auth=required')} require
+sign-in before initialization or listing tools. The guide is here to read:
 ${url(env, '/docs.md')} is the map, and a page per subject sits beside it.
 app_published is what other people have published, browsable by word.
 integration_list is the integration directory: the outside services a yaks app
@@ -129,7 +131,7 @@ Making anything needs signing in: a space, an app, its files, a deploy, and
 writing any app's data. Sign in at ${url(env, '/login')} — one email address
 and a six-digit code, no password. That one line is also signing up: an
 address nobody has used here yet becomes an account on the spot, with a space
-of its own. Then this connector grows the tools to build with.`,
+of its own. Then the tools to build with become callable.`,
 })
 
 export let publics = (env: Host = {}): Says[] => [about(env)]

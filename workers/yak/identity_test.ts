@@ -1431,9 +1431,7 @@ test(
       }
       assertEquals(as.scopes_supported, ['graph'])
       assertStringIncludes(page, '<code>graph</code>')
-      // And the address for a client that cannot do optional authentication
-      // is still written down (T-34416), as the sentence it now is: everybody
-      // is handed the plain door, which does mixed auth (T-34465).
+      assertStringIncludes(page, 'https://yaks.app/mcp?auth=mixed')
       assertStringIncludes(page, 'https://yaks.app/mcp?auth=required')
     } finally {
       await k.stop()

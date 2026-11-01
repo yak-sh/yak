@@ -502,12 +502,16 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
 
     // A stranger finds it: no cookie, no bearer, the same answer with the
     // install line on it.
-    let found = await connector(k).tool('gallery_search', { words: 'recipes' })
+    let found = await connector(k, undefined, undefined, '/mcp?auth=mixed')
+      .tool('gallery_search', { words: 'recipes' })
     assertStringIncludes(found, 'Recipe box — Somewhere to keep recipes')
     assertStringIncludes(found, `app_install(name: '${published}')`)
     // Words in neither the name nor the line find nothing.
     assertStringIncludes(
-      await connector(k).tool('gallery_search', { words: 'spreadsheet' }),
+      await connector(k, undefined, undefined, '/mcp?auth=mixed').tool(
+        'gallery_search',
+        { words: 'spreadsheet' },
+      ),
       'nothing in the gallery answers',
     )
     // And the owner's own page says where it stands.
@@ -519,7 +523,10 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     // The trash writes nothing: the listing and the offer simply stop being
     // drawn, and a restore gives both back with nobody asked twice.
     let offers = () =>
-      connector(k).tool('app_published', { words: `${published} v` })
+      connector(k, undefined, undefined, '/mcp?auth=mixed').tool(
+        'app_published',
+        { words: `${published} v` },
+      )
     await agent.tool('app_delete', { space: mine, app: 'recipes' })
     assertEquals(
       cards(await k.at('yaks.app', '/gallery').then((r) => r.text())),
@@ -551,7 +558,10 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       0,
     )
     assertStringIncludes(
-      await connector(k).tool('gallery_search', { words: 'recipes' }),
+      await connector(k, undefined, undefined, '/mcp?auth=mixed').tool(
+        'gallery_search',
+        { words: 'recipes' },
+      ),
       'nothing in the gallery answers',
     )
     // The link out of the old letter is worth nothing now: there is no offer

@@ -56,31 +56,12 @@ import { copyOf, signedDirectory } from './directory-copy.ts'
 // one endpoint, sending the challenge the two ways the two directories read
 // it.
 //
-// A caller who has not signed in is answered too (T-33030, T-34467), in two
-// halves. What this platform is, and the guide, come from preauth.ts, which is
-// given a method and its params and no binding but the static assets — no
-// person, no `Ctx`, nothing to read anybody's data with. Everything else a
-// stranger may call comes from `stranger` below: the same @yaks/mcp server the
-// signed-in path mounts, over a graph with nobody in it. What a stranger may
-// call is the tools that declare they need nobody (anon.ts `openly`) and the
-// generic READS scoped to the one public or open app the call names;
-// everything else on the list meets the same challenge as ever.
-//
-// Mixed auth is what that adds up to, and it is the path (T-34465): a stranger
-// is answered, is shown the whole tool list with `securitySchemes` marking
-// which tools want a token (anon.ts `asked`, `barred`), and is met with the
-// challenge the moment one of those is called — which is the sequence OpenAI
-// documents and ChatGPT follows (developers.openai.com/plugins/build/auth).
-// The half that used to be missing was the menu: a list holding only what a
-// stranger may call gives the client nothing to offer a sign-in for — and,
-// since a directory scans a mixed-auth server with no token, it is also the
-// list the published connector gets forever.
-//
-// And `?auth=required` is this same endpoint with the pre-auth surface
-// switched off (T-34416), kept for a client that cannot do optional auth at
-// all — one that probes anonymously, reads the 200 as "no sign-in needed" and
-// never asks again. The address is the lever, since a client like that is not
-// ours to fix.
+// Every request needs sign-in by default, including discovery. `?auth=mixed`
+// offers the pre-auth surface (T-33030): static orientation and guide pages,
+// plus the tools anon.ts permits over a graph with nobody in it. Its full
+// roster keeps each tool's securitySchemes, so clients can offer sign-in at
+// the first protected call. `?auth=required` remains the default's alias for
+// existing connectors. All three addresses share one resource and OAuth flow.
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
@@ -657,22 +638,8 @@ let answered = async (
   if (req.method != 'POST' && req.method != 'GET') {
     return json(405, { error: { code: 'method_not_allowed' } })
   }
-  // The same endpoint, told to skip the pre-auth surface: `?auth=required`
-  // (T-34416). An MCP client that decides whether a server has an
-  // authorization server by probing it anonymously reads our 200 as "no auth"
-  // and never looks at `WWW-Authenticate`, so it configures the connector with
-  // the tools a stranger gets and never offers to sign in. The address is the
-  // lever because the client's behaviour is not ours to change: a client that
-  // cannot ask twice is given an address that only ever answers the challenge,
-  // and `/mcp` stays lazy — and mixed — for the clients that can (anon.ts
-  // `asked`). A query parameter rather than a second path so there is still
-  // one resource here — one route, one `WWW-Authenticate`, one
-  // `/.well-known/…/mcp`, which the challenge already builds from the
-  // pathname.
-  let strict = url.searchParams.get('auth') == 'required'
-  // Who is asking, if anybody. An anonymous request costs nothing to find
-  // out — no header to unwrap, no cookie to verify (identity.ts) — and what
-  // it gets is the pre-auth surface below rather than a refusal.
+  // Mixed auth is opt-in; every other value keeps discovery protected.
+  let strict = url.searchParams.get('auth') != 'mixed'
   let { who: auth, tried } = await c.time('asking', () => asking(env, req))
   // A credential that did not verify is NOT an anonymous caller: an expired or
   // revoked token, or one minted for something else, is refused here with the

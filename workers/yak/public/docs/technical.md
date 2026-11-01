@@ -74,9 +74,18 @@ The MCP endpoint is `https://yaks.app/mcp` and uses Streamable HTTP. It supports
 Claude connectors, ChatGPT custom connectors, Claude Code, and other MCP
 clients. No yaks.app-specific client package is required.
 
-Authentication uses OAuth with dynamic client registration. Accounts have no
-password; yaks.app emails a six-digit code and stores the browser session in a
-signed cookie. Only a keyed digest of the code is stored.
+Every MCP request requires sign-in, including initialization and tool discovery.
+An unsigned request receives a 401 with a `WWW-Authenticate` challenge pointing
+to the OAuth resource metadata. `https://yaks.app/mcp?auth=required` has the
+same behavior. For clients that support mixed authentication,
+`https://yaks.app/mcp?auth=mixed` also serves the signed-out tools: the guide,
+gallery and public app reads. Protected calls still require sign-in. An existing
+bearer token works at all three URLs.
+
+Authentication uses OAuth with dynamic client registration and Client ID
+Metadata Documents (CIMD). Accounts have no password; yaks.app emails a
+six-digit code and stores the browser session in a signed cookie. Only a keyed
+digest of the code is stored.
 
 App pages do not use MCP. They import a client from their own URL and access the
 app database through `query`, `apply`, `search`, `subscribe` over a WebSocket

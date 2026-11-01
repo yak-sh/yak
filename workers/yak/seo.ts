@@ -258,7 +258,11 @@ export let llms = (
     '',
     'An app is an index.html and the files beside it, served live, with a graph',
     'store behind it and no build step. An assistant connects over MCP at',
-    `${at('/mcp', env)} and makes apps with the tools it finds there.`,
+    `${at('/mcp', env)} and signs in before initialization and tool discovery.`,
+    `Use ${
+      at('/mcp?auth=mixed', env)
+    } for signed-out tools with mixed authentication.`,
+    `${at('/mcp?auth=required', env)} also requires sign-in.`,
     '',
     '## Pages',
     '',

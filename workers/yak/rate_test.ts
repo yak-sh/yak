@@ -84,7 +84,7 @@ test(
       // its own count on top, so one stranger's note leaves another's alone.
       let n = 0
       let call = async (ip: string, name: string, args: unknown = {}) => {
-        let r = await k.at(k.host, '/mcp', {
+        let r = await k.at(k.host, '/mcp?auth=mixed', {
           method: 'POST',
           headers: { ...from(ip), 'content-type': 'application/json' },
           body: JSON.stringify({

@@ -46,7 +46,7 @@ test(
           params: unknown,
           headers: Record<string, string> = {},
         ) =>
-          k.at('yaks.app', '/mcp', {
+          k.at('yaks.app', auth ? '/mcp' : '/mcp?auth=mixed', {
             method: 'POST',
             headers: {
               'content-type': 'application/json',
@@ -104,7 +104,7 @@ test(
       // door (C-32607 item 1), and carries the challenge a host reads to
       // offer signing in (T-34349). What nobody is answered is the pre-auth
       // surface, held in its own test below (T-33030).
-      let shut = await k.at('yaks.app', '/mcp', {
+      let shut = await k.at('yaks.app', '/mcp?auth=mixed', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{"jsonrpc":"2.0","id":1,"method":"tools/call",' +

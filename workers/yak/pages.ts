@@ -2397,8 +2397,10 @@ let clients = (env: Host) => [
     details: {
       summary: 'More about authentication',
       text: oauthHelp(env) +
-        ' If your client never offers sign-in, use ' +
-        `<code>${url(env, '/mcp?auth=required')}</code> as the server URL.`,
+        ' Sign-in is required when connecting. To use the signed-out tools in ' +
+        'a client that supports mixed authentication, use ' +
+        `<code>${url(env, '/mcp?auth=mixed')}</code>. ` +
+        `<code>${url(env, '/mcp?auth=required')}</code> also requires sign-in.`,
     },
     finish: 'Start a new chat in your MCP client',
   },

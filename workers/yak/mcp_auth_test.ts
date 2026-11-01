@@ -40,10 +40,10 @@ import { b64u, facing, GUIDE, HELLO } from './mcp-probe.ts'
 test('the door before anyone signs in', async () => {
   let k = await kernel()
   try {
-    let anon = connector(k)
+    let anon = connector(k, undefined, undefined, '/mcp?auth=mixed')
     // Raw, so a refusal can be read as a refusal: `connector` throws on one.
     let post = (method: string, params: unknown = {}) =>
-      k.at('yaks.app', '/mcp', {
+      k.at('yaks.app', '/mcp?auth=mixed', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
@@ -192,7 +192,7 @@ test('the door before anyone signs in', async () => {
 
     // A notification is answered the transport's way, with no body to sign
     // in for.
-    let noted = await k.at('yaks.app', '/mcp', {
+    let noted = await k.at('yaks.app', '/mcp?auth=mixed', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{"jsonrpc":"2.0","method":"notifications/initialized"}',
@@ -300,7 +300,7 @@ test('the door before anyone signs in', async () => {
     await shut('nonsense/method')
     // A body nobody could read: a refusal every caller gets, and still the
     // challenge for one who has not signed in.
-    let bad = await k.at('yaks.app', '/mcp', {
+    let bad = await k.at('yaks.app', '/mcp?auth=mixed', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: 'not json',
@@ -315,7 +315,7 @@ test('the door before anyone signs in', async () => {
     // on a 200. Answered on `tools/list`, which is exactly what a stranger IS
     // served, so nothing here can pass by falling through to the public list.
     let offered = async (headers: Record<string, string>) => {
-      let r = await k.at('yaks.app', '/mcp', {
+      let r = await k.at('yaks.app', '/mcp?auth=mixed', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...headers },
         body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
@@ -348,7 +348,7 @@ test('the door before anyone signs in', async () => {
     })
 
     // And the stream, which is a person's own: there is no public one.
-    let stream = await k.at('yaks.app', '/mcp', {
+    let stream = await k.at('yaks.app', '/mcp?auth=mixed', {
       headers: { accept: 'text/event-stream' },
     })
     assertEquals(stream.status, 401)
@@ -434,7 +434,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
   try {
     let them = await seed(k, [{ slug: ada30, apps: [] }])
     let agent = connector(k, them.cookie)
-    let anon = connector(k)
+    let anon = connector(k, undefined, undefined, '/mcp?auth=mixed')
     let made = async (
       slug: string,
       comp: string,
@@ -636,7 +636,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
         { name: 'graph_apply', arguments: { bundles: [] } },
       ]
     ) {
-      let r = await k.at('yaks.app', '/mcp', {
+      let r = await k.at('yaks.app', '/mcp?auth=mixed', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -668,13 +668,10 @@ test('signed out: the gallery, the guide, and one public app', async () => {
   }
 })
 
-// The address for a host that cannot do mixed auth (T-34416), walked in the
-// order such a host walks it: probe anonymously, read the status, follow the
-// challenge to the two metadata documents, and only then sign in. At `/mcp`
-// the probe answers 200 and the host writes down "no auth"; at
-// `/mcp?auth=required` it answers the challenge, which is the whole
-// difference — everything past signing in is the same door and the same list.
-test('?auth=required answers the challenge a probing host needs', async () => {
+// Default and legacy required URLs challenge before discovery; mixed auth is
+// opt-in. All three authenticate through the same resource metadata and serve
+// the same signed-in roster.
+test('discovery requires sign-in unless auth=mixed', async () => {
   let k = await kernel()
   try {
     let hello = (auth?: string) => ({
@@ -692,24 +689,31 @@ test('?auth=required answers the challenge a probing host needs', async () => {
       }),
     })
 
-    // Step 1, the probe. Lazy at `/mcp` — this is what Claude is given and
-    // what T-33030 is for — and the challenge at the strict address.
-    let lazy = await k.at('yaks.app', '/mcp', hello())
+    let lazy = await k.at('yaks.app', '/mcp?auth=mixed', hello())
     assertEquals(lazy.status, 200)
     assertEquals((await lazy.json()).result.serverInfo.name, 'yaks.app')
-    let probe = await k.at('yaks.app', '/mcp?auth=required', hello())
+    let probe = await k.at('yaks.app', '/mcp', hello())
     assertEquals(probe.status, 401)
     await probe.body?.cancel()
-    let listing = await k.at('yaks.app', '/mcp?auth=required', {
-      ...hello(),
-      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-    })
-    assertEquals(listing.status, 401)
-    assertEquals(
-      listing.headers.get('www-authenticate'),
-      probe.headers.get('www-authenticate'),
-    )
-    await listing.body?.cancel()
+    for (let path of ['/mcp', '/mcp?auth=required', '/mcp?auth=unknown']) {
+      for (let method of ['initialize', 'tools/list', 'ping']) {
+        let listing = await k.at('yaks.app', path, {
+          ...hello(),
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method,
+            params: HELLO,
+          }),
+        })
+        assertEquals(listing.status, 401, `${path}: ${method}`)
+        assertEquals(
+          listing.headers.get('www-authenticate'),
+          probe.headers.get('www-authenticate'),
+        )
+        await listing.body?.cancel()
+      }
+    }
 
     // Step 2, the challenge names where the metadata is (RFC 9728). It names
     // `/mcp`, not the query: the resource is one resource, said two ways.
@@ -745,14 +749,14 @@ test('?auth=required answers the challenge a probing host needs', async () => {
     // Step 5, a token that does not verify is still the challenge, at both
     // addresses — a host that lets its token lapse must be asked again and
     // never quietly handed the stranger's surface (T-34344).
-    for (let at of ['/mcp', '/mcp?auth=required']) {
+    for (let at of ['/mcp', '/mcp?auth=required', '/mcp?auth=mixed']) {
       let stale = await k.at('yaks.app', at, hello('Bearer nope'))
       assertEquals(stale.status, 401)
       assertMatch(stale.headers.get('www-authenticate') ?? '', /resource_meta/)
       await stale.body?.cancel()
     }
     // And the stream, which was never public, is the challenge either way.
-    for (let at of ['/mcp', '/mcp?auth=required']) {
+    for (let at of ['/mcp', '/mcp?auth=required', '/mcp?auth=mixed']) {
       let held = await k.at('yaks.app', at, {
         headers: { accept: 'text/event-stream' },
       })
@@ -784,6 +788,7 @@ test('?auth=required answers the challenge a probing host needs', async () => {
     }
     let strict = await tools('/mcp?auth=required')
     assertEquals(strict, await tools('/mcp'))
+    assertEquals(strict, await tools('/mcp?auth=mixed'))
     assert(strict.includes('app_new'), 'the whole list, not the public one')
     assert(strict.length > 1)
   } finally {
@@ -791,7 +796,7 @@ test('?auth=required answers the challenge a probing host needs', async () => {
   }
 })
 
-// Mixed auth, played through at plain `/mcp` in the order OpenAI documents it
+// Mixed auth, played through at `/mcp?auth=mixed` in the order OpenAI documents it
 // (developers.openai.com/plugins/build/auth, read 2026-09-06) — owner,
 // 2026-09-06: "mixed auth is documented and should work correctly. chatgpt
 // will then prompt auth on the first auth-required tool use".
@@ -817,8 +822,9 @@ test(
         method: string,
         params: unknown = {},
         token?: string,
+        path = '/mcp?auth=mixed',
       ) => {
-        let r = await k.at('yaks.app', '/mcp', {
+        let r = await k.at('yaks.app', path, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
@@ -973,6 +979,27 @@ test(
       assertEquals(first.status, 200, await first.clone().text())
       let got = await first.json()
       assert(got.access_token && got.refresh_token)
+
+      // One existing bearer authenticates at every address, including both
+      // discovery methods and a tool that the mixed surface refuses unsigned.
+      for (let path of ['/mcp', '/mcp?auth=required', '/mcp?auth=mixed']) {
+        for (let method of ['initialize', 'tools/list']) {
+          let reply = await say(method, HELLO, got.access_token, path)
+          assertEquals(reply.status, 200, `${path}: ${method}`)
+          assert(reply.body.result)
+        }
+        let reply = await say(
+          'tools/call',
+          {
+            name: 'app_list',
+            arguments: {},
+          },
+          got.access_token,
+          path,
+        )
+        assertEquals(reply.status, 200)
+        assertEquals(reply.body.result.isError, undefined)
+      }
 
       // 8. And the tool that was refused now answers: the sign-in the menu
       // asked for is the whole of what was missing.

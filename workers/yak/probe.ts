@@ -333,6 +333,7 @@ export let connector = (
   k: Pick<Kernel, 'at' | 'host'>,
   cookie?: string,
   bearer?: string,
+  path = '/mcp',
 ) => {
   let n = 0
   // The transport's session id: minted at `initialize` and sent back on every
@@ -341,7 +342,7 @@ export let connector = (
   let session = ''
   let schemas = new Map<string, ReturnType<typeof ajv.compile>>()
   let ask = async (method: string, params: unknown = {}) => {
-    let r = await k.at(k.host, '/mcp', {
+    let r = await k.at(k.host, path, {
       method: 'POST',
       headers: {
         ...(cookie ? { cookie } : {}),

@@ -103,14 +103,8 @@ export let PRICING = url({}, '/pricing')
 export let planSettings = (slug: string, env: Host = {}) =>
   manageAt(slug, 'billing', env)
 
-// The agent door, as an address a person types into a connector form: two
-// addresses for one resource (mcp.ts). `MCP` is lazy — it tells a stranger
-// what this place is before anybody has signed in — and `MCP_ASK` never does,
-// so a host that decides whether a server needs OAuth by calling it with no
-// credential and reading the status gets the 401 and its challenge instead of
-// writing down "no auth" (T-34416). Here for the same reason PRICING is: the
-// door and the page that teaches somebody to type it must say the same
-// string, and pages.ts is identity.ts's, never the other way round.
+// One MCP resource, requiring sign-in by default. The explicit required URL
+// remains for existing connectors; mixed auth is opt-in at `?auth=mixed`.
 export let MCP = url({}, '/mcp')
 export let MCP_ASK = `${MCP}?auth=required`
 

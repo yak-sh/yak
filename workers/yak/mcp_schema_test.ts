@@ -500,7 +500,10 @@ test(
       // nobody at all: one list, in one order.
       assertEquals(await named(connector(k, maya.cookie)), his)
       assertEquals(await named(connector(k, nobody.cookie)), his)
-      assertEquals(await named(connector(k)), his)
+      assertEquals(
+        await named(connector(k, undefined, undefined, '/mcp?auth=mixed')),
+        his,
+      )
       assert(his.includes('app_deploy'), 'the platform tools are listed')
       assert(his.includes('graph_apply'), 'so is the write, signed out and in')
       assert(his.includes('store_mail_send'), 'and the mailbox')
