@@ -7,7 +7,7 @@
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
 import { clock, test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import { releaseFiles, staged } from './release.ts'
@@ -281,6 +281,36 @@ test('pruning keeps the bytes the serving release names', async () => {
     new TextDecoder().decode(await served.get(key))
   assertEquals(await text(`${current}/index.html`), 'kept')
   assertEquals(await text(`${current}/esbuild/app.js`), 'compiled')
+})
+
+test('pruning finishes when an app in its census was erased meanwhile', async () => {
+  let { blobs, clock } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+  let files = await stored(blobs, { 'index.html': 'erased' })
+  let sha = files['index.html']
+  let app = { ...APP, source: 'jeff/.releases/a1/erased' }
+  dir.appAt = () => Promise.resolve(null)
+  dir.written = () => {
+    throw new Error('an erased app has no history to trim')
+  }
+  assertEquals(await pruned(dir, blobs, [{ prefix: PREFIX, app }]), 1)
+  assertEquals(await blobs.has(addressed(sha)), false)
+})
+
+test('pruning preserves bytes and reports a missing index for a standing app', async () => {
+  let { blobs, clock } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+  let files = await stored(blobs, { 'index.html': 'kept' })
+  let app = { ...APP, source: 'jeff/.releases/a1/missing' }
+  dir.appAt = () => Promise.resolve({ space: {} as Space, app })
+  await assertRejects(
+    () => pruned(dir, blobs, [{ prefix: PREFIX, app }]),
+    Error,
+    'has no index',
+  )
+  assertEquals(await blobs.has(addressed(files['index.html'])), true)
 })
 
 test('published releases keep versioned bytes after newer deploys', async () => {

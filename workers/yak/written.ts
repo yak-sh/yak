@@ -383,11 +383,23 @@ export let pruned = async (
         )
         .map((source) => space + source.slice(source.indexOf('/') + 1)),
     )
+    let erased = false
     await lanes(LANES)([...sources], async (source) => {
-      for (let sha of Object.values(await filesAt(blobs, source))) {
+      let files = await filesIn(blobs, source)
+      if (!files) {
+        // The census predates these reads. An erase removes bytes before
+        // its directory row, and may have finished while the sweep yielded.
+        if (!await dir.appAt(app.eid)) {
+          erased = true
+          return
+        }
+        throw new Error(`release ${source} has no index`)
+      }
+      for (let sha of Object.values(files)) {
         named.add(sha)
       }
     })
+    if (erased) continue
     // A stage holds nothing but the index of each release, so any other key
     // there, or the index of a release nothing names, goes once a day old.
     let indexes = new Set([...sources].map((source) => source + META))
