@@ -265,7 +265,7 @@ export let measured = async (
         return undefined
       })
     let held = holding(space, apps, sizes)
-    let filesOf = (app: App) => held.apps.get(app.slug)!.files
+    let filesOf = (app: App) => held.apps.get(app.eid)!.files
     // A space that has just crossed a line — or fallen back under one — has
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
@@ -463,7 +463,8 @@ export let fullFiles = async (
   let arriving = writes.reduce((sum, w) => sum + w.bytes, 0)
   if ((spent(space, now).files ?? 0) + arriving < ceiling * WARN) return ''
   let sizes = await fileSizes(env, space)
-  let held = holding(space, [], sizes)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let held = holding(space, await dir.apps(space), sizes)
   let delta = 0
   // A batch may repeat a path; parallel puts can finish in either order.
   let incoming = new Map<string, number>()

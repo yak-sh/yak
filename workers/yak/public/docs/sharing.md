@@ -250,9 +250,9 @@ Read it before you build something somebody may already have made.
   the same address is easier to reason about. (A page written relatively works
   either way; the platform gives every page a `<base href>` pointing at its own
   folder under the app's address.)
-- An explicit `as` already taken in the space — by an app, or by an address an
-  app has moved away from and still redirects from — is refused. The default
-  skips those addresses.
+- An explicit `as` held by a live app is refused. Trashed apps free their
+  addresses, and a former address stops redirecting when another app takes it.
+  The default skips addresses held by live apps.
 - An installed app counts against the space's app ceiling like any other (the
   free tier allows five, the Plus plan has no limit, and trashed apps do not
   count).

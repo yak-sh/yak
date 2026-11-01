@@ -281,10 +281,15 @@ test('who visited: an app nobody opened says so', async () => {
 })
 
 test('trash has restore forms only on its own page', async () => {
-  let trash = [{ slug: 'notes', title: 'Notes', days: 12 }]
+  let trash = [{
+    eid: '6abfba87-7e72-42d6-b954-73aa236acb14',
+    slug: 'notes',
+    title: 'Notes',
+    days: 12,
+  }]
   let page = await block({ view: 'trash', trash })
   assertStringIncludes(page, `action="${managePath('trash')}"`)
-  assertStringIncludes(page, 'name="restore" value="notes"')
+  assertStringIncludes(page, `name="restore" value="${trash[0].eid}"`)
   assertStringIncludes(page, '12 days left')
   let other = await block({ trash })
   assert(!other.includes('name="restore"'), other)

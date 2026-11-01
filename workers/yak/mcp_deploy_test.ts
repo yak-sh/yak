@@ -155,15 +155,19 @@ test('an app names no app, and the copy works at its own address', async () => {
       `as ${space}/${published}`,
     )
     await hers.tool('app_set', { app: published, slug: 'renamed' })
-    let numbered = `${published.slice(0, 61)}-2`
     assertStringIncludes(
       await hers.tool('app_install', { name: published }),
-      `as ${space}/${numbered}`,
+      `as ${space}/${published}`,
     )
     await assertRejects(
       () => hers.tool('app_install', { name: published, as: published }),
       Error,
-      'still points there',
+      `app ${published} exists`,
+    )
+    let numbered = `${published.slice(0, 61)}-2`
+    assertStringIncludes(
+      await hers.tool('app_install', { name: published }),
+      `as ${space}/${numbered}`,
     )
     let copy = await k.at(host, `/${numbered}/`)
     assertEquals(copy.status, 200)

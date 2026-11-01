@@ -2591,6 +2591,7 @@ let desk = async (
       errors: broken?.get(a.eid),
     })),
     trash: here.filter((a) => a.trashed).map((a) => ({
+      eid: a.eid,
       slug: a.slug,
       title: a.title,
       days: daysLeft(a.trashed!),
@@ -2809,7 +2810,7 @@ let saved = async (
   // back on this page with the app in the listing again.
   let back = String(form.get('restore') ?? '').trim()
   if (back) {
-    let app = await dir.app(space, back)
+    let app = await dir.binned(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
     return redirect(sentFrom(req, env).href, 303)
   }

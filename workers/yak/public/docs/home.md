@@ -223,6 +223,10 @@ from the address card on the space's settings page. Every app in the space moves
 with the address, with its files and data, and each keeps its path, so
 `ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.
 
+An app rename also keeps the old path redirecting until another app takes it
+with `app_new`, `app_install`, `app_set` or `app_restore`. Trashed apps free
+their paths immediately.
+
 **The old address keeps working until another space takes it.** It redirects to
 the new address with the path and the query string kept, so a link somebody was
 given a year ago still opens the same page. Email to `<old>.<app>@yaks.app` is

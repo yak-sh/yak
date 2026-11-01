@@ -369,13 +369,14 @@ test('the platform admin trashes and restores an app without a seat', async () =
     let admin = connector(k, k.owner.cookie)
     let stranger = connector(k, (await signIn(k)).cookie)
     let directory = meta(k)
-    let row = async () => {
-      let [parent] = await directory.query(`.space.slug=${space}`)
-      let [app] = await directory.query(
-        `.app.space=${parent.entity.eid}&.app.slug=${at.app}&?trashed&?updated`,
-      )
-      return app
-    }
+    let [parent] = await directory.query(`.space.slug=${space}`)
+    let [held] = await directory.query(
+      `.app.space=${parent.entity.eid}&.app.slug=${at.app}`,
+    )
+    let row = async () =>
+      (await directory.query(
+        `.entity.eid=${held.entity.eid}&?trashed&?updated`,
+      ))[0]
     let page = () => k.at(`${space}.yaks.app`, `/${at.app}/`)
 
     // Neither reversible act grants anything to a non-admin non-member.
@@ -510,21 +511,14 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
         .map(({ slug, title, days }) => ({ slug, title, days })),
       [{ slug: 'notes', title: 'Notes', days: 30 }],
     )
-    // And the slug is held for it: a second app here is the one thing a
-    // restore could not undo, so `app_new` refuses and says which two words
-    // resolve it.
-    assertStringIncludes(
-      (await assertRejects(
-        () =>
-          agent.tool('app_new', {
-            space: binlab49,
-            slug: 'notes',
-            title: 'Notes again',
-          }),
-        Error,
-      )).message,
-      `notes is in the trash in ${binlab49}, 30 days left — app_restore`,
-    )
+    // A replacement takes the address immediately; erasing that replacement
+    // leaves the retained app ready to return to its original address.
+    await agent.tool('app_new', {
+      space: binlab49,
+      slug: 'notes',
+      title: 'Notes again',
+    })
+    await agent.tool('app_delete', { ...at, forever: true })
     // Deleting it again is not a second delete; it says where the app is.
     assertStringIncludes(
       (await assertRejects(() => agent.tool('app_delete', at), Error)).message,

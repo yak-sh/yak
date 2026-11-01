@@ -149,7 +149,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
       requests: r.meter?.month == month ? r.meter.requests ?? 0 : 0,
       visits: r.meter?.visits ?? null,
       ...days('requesting', r.trend?.requests, now),
-      storage: stored(held.get(appSpace(r))?.apps.get(r.app!.slug)),
+      storage: stored(held.get(appSpace(r))?.apps.get(r.entity.eid)),
       active: r.used?.at ?? null,
       deployed: deployed.get(r.entity.eid) ?? null,
       changed: r.changed?.at ?? null,
@@ -225,7 +225,7 @@ let around = (d: Reading, r: Row) => {
     address: r.space
       ? spaceHost(d.env, r.space.slug)
       : r.app
-      ? `${spaceHost(d.env, space)}/${r.app.slug}`
+      ? `${spaceHost(d.env, space)}/${r.app.slug ?? r.former?.slug ?? ''}`
       : '',
   }
 }

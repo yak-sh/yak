@@ -155,13 +155,14 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     )
     assertStringIncludes(named, `href="${managePath('trash', slug)}"`)
 
+    let discarded = (await dir.query('.app.slug=discarded'))[0].entity.eid
     await agent.tool('app_delete', { space: slug, app: 'discarded' })
     let trash = managePath('trash')
     assertStringIncludes(
       await (await get(trash)).text(),
-      'name="restore" value="discarded"',
+      `name="restore" value="${discarded}"`,
     )
-    let restored = await post(trash, { restore: 'discarded' })
+    let restored = await post(trash, { restore: discarded })
     assertEquals(restored.status, 303)
     assertEquals(restored.headers.get('location'), `https://yaks.app${trash}`)
     assertStringIncludes(

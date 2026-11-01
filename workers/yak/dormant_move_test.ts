@@ -165,7 +165,7 @@ let fixture = async () => {
     dormant: await ctx.storage.get<boolean>('dormant'),
   }
   let after = await ask('/vocab', undefined, KERNEL)
-  let appAfter = await dir.app(space, 'held')
+  let appAfter = (await dir.appAt(app.eid))?.app
   let warmed = current
   let statements = 0
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)

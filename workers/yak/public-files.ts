@@ -1,3 +1,4 @@
+import { ownedPrefix } from './file-root.ts'
 // Public files (D-132641): an app publishes a file at a path of its own
 // address, and from then on that address answers those bytes to anyone,
 // before the app's worker runs and whatever the app's access says. A private
@@ -91,8 +92,8 @@ let decoded = (path: string) => {
  * prefix, so they are the space's and follow the app. */
 export let publicPrefix = (
   space: Pick<Space, 'store'>,
-  app: Pick<App, 'slug'>,
-) => `${space.store}/${app.slug}/public/`
+  app: Pick<App, 'slug' | 'files'>,
+) => `${ownedPrefix(space, app)}/public/`
 
 /// typeOf('text/html; charset=utf-8', 'x') -> 'text/html; charset=utf-8'
 /// typeOf('', 'notes/week-1.html') -> 'text/html; charset=utf-8'

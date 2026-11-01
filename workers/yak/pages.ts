@@ -588,7 +588,7 @@ export type DeskPage = {
   pick?: string
   /** each with its open errors, newest first (unseen.ts `plain`) */
   apps: (Listed & { errors?: Plain[] })[]
-  trash?: { slug: string; title: string; days: number }[]
+  trash?: { eid: string; slug: string; title: string; days: number }[]
   name?: string
   agents?: Agent[]
   views?: Visits[] | null
@@ -872,7 +872,7 @@ let trash = (at: DeskPage) =>
   at.trash?.length
     ? `<section class="Card">${
       heading('Deleted apps')
-    }<p class="Card_Sub">Each is kept for 30 days, then erased for good. Restoring one brings back everything it held.</p><ul class="Rows">${
+    }<p class="Card_Sub">Each is kept for 30 days, then erased for good. Restoring one brings back everything it held, at its old address if free or a numbered address otherwise.</p><ul class="Rows">${
       at.trash.map((a) =>
         `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${
           esc(a.title || a.slug)
@@ -881,7 +881,7 @@ let trash = (at: DeskPage) =>
         } left</span></div><form class="Rows_Actions" method="post" action="${
           managePath('trash', at.pick)
         }"><input type="hidden" name="restore" value="${
-          esc(a.slug)
+          esc(a.eid)
         }"><button type="submit" class="Button Button-quiet">Restore</button></form></li>`
       ).join('')
     }</ul></section>`

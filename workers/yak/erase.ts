@@ -1,3 +1,4 @@
+import { ownedPrefix } from './file-root.ts'
 // Deleting, and taking it back. An app and a space go to the same 30-day
 // trash (T-34430, T-34431, the bottom of this file) and are erased by the
 // same daily sweep; a space still dies behind a link in a letter (T-33166,
@@ -46,9 +47,7 @@
 // prefix, never in the last one's.
 //
 // The thirty days a trashed space holds its name are not a cooling-off period
-// against that: the space is still there, whole, and the name is held for the
-// same reason a trashed app's is — a second space at the address is the one
-// thing a restore could not put back.
+// against that: space restoration returns it to its original address.
 //
 // Order: everything outside the directory first — the custom hostnames at
 // Cloudflare, the app scripts in the dispatch namespace, the stores, the
@@ -80,6 +79,7 @@ import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
+  addresses,
   type App,
   appStore,
   clamped,
@@ -314,11 +314,9 @@ let swept = async (env: Env, prefix: string) => {
   return keys
 }
 
-// The prefix an app's files live under (files.ts prefixOf): its space's
-// handle, then its slug, so the handle alone is what a space's whole
-// footprint in the bucket is prefixed by.
+// App-owned bytes stay beneath the space's handle across address changes.
 let under = (space: Space, app?: App) =>
-  `${space.store}/${app ? `${app.slug}/` : ''}`
+  app ? `${ownedPrefix(space, app)}/` : `${space.store}/`
 
 // One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
@@ -579,8 +577,7 @@ let rehomed = async (
   return patches
 }
 
-// Into the trash: the mark, then the roster. Nothing else — the bytes, the
-// store, the deploys and the slug are all exactly where they were.
+// The bytes keep their identity; the address returns to the space immediately.
 export let trash = async (
   env: Env,
   dir: Directory,
@@ -588,9 +585,15 @@ export let trash = async (
   app: App,
   who: Who,
 ) => {
-  await mark(dir, app.eid, who, {}, await rehomed(env, dir, space, app, who))
-  // A dormant store cannot describe its views. Tell the directory's members
-  // directly, without asking the app for the declaration it stopped serving.
+  let declarations = await rehomed(env, dir, space, app, who)
+  await mark(dir, app.eid, who, {}, [{
+    entity: { eid: app.eid },
+    app: { slug: null, files: ownedPrefix(space, app) },
+    former: addresses([
+      app.slug,
+      ...app.slugs.filter((slug) => slug != app.slug),
+    ]),
+  }, ...declarations])
   await viewsMoved({ env, dir }, space)
 }
 
@@ -604,9 +607,44 @@ export let untrash = async (
   space: Space,
   app: App,
   who: Who,
+  slug?: string,
 ) => {
-  await mark(dir, app.eid, who, null)
-  await rostered(env, dir, space, app)
+  let to = slug ?? app.slug
+  if (!slug) {
+    for (let n = 2;; n++) {
+      let taken = await dir.app(space, to)
+      if (!taken || taken.trashed || taken.eid == app.eid) break
+      let suffix = `-${n}`
+      to = app.slug.slice(0, 63 - suffix.length) + suffix
+    }
+  }
+  let taken = await dir.app(space, to)
+  if (taken && taken.eid != app.eid && !taken.trashed) {
+    throw refuse(
+      'conflict',
+      `app ${to} exists in ${space.slug} — choose another slug`,
+    )
+  }
+  if (taken?.trashed && taken.eid != app.eid) {
+    await trash(env, dir, space, taken, who)
+  }
+  await mark(dir, app.eid, who, null, [{
+    entity: { eid: app.eid },
+    app: { slug: to, files: ownedPrefix(space, app) },
+    ...(app.home && await dir.home(space) ? { home: null } : {}),
+    former: addresses(
+      (await dir.apps(space))
+        .filter((one) => !one.trashed && one.eid != app.eid)
+        .reduce(
+          (slugs, one) =>
+            slugs.filter((s) => s != one.slug && !one.slugs.includes(s)),
+          app.slugs.filter((s) => s != to),
+        ),
+    ),
+  }, ...await dir.claimApp(space, to, app.eid)])
+  let restored = { ...app, slug: to, trashed: null }
+  await rostered(env, dir, space, restored)
+  return restored
 }
 
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the

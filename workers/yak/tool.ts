@@ -503,12 +503,16 @@ let reached = async (
       // provisional admission never reselects an already observed entity.
       let app = selectedApp
         ? (await scope.dir.appAt(selectedApp.eid))?.app
-        : await scope.dir.app(space, slug)
+        : await scope.dir.binned(space, slug)
       if (app) selectedApp = app
       // A stranger learns no target existence from a failed admission.
       let who = await callerIn(scope, space, write, over)
       if (!app || app.space != space.eid) {
-        throw refuse('missing', `no app ${slug} in ${space.slug}`)
+        throw refuse(
+          'missing',
+          `no app ${slug} in ${space.slug}` +
+            (trash ? ' — use the app eid from app_list for a deleted app' : ''),
+        )
       }
       awake(space, trash ? undefined : app)
       ctx.dir = scope.dir
@@ -549,7 +553,7 @@ export let inRead = async (ctx: Ctx, args: Args) => {
     page.role,
     page.administrative,
   )
-  let app = page.app
+  let app = page.app ?? await scope.dir.binned(space, text(args.app, 'app'))
   if (!app) throw refuse('missing', `no app ${args.app} in ${space.slug}`)
   awake(space, app)
   return { space, app, who }

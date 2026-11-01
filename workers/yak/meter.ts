@@ -668,7 +668,7 @@ export let heldAloud = (h: Held) => {
 export let shares = (held: Holding, what: keyof Held) =>
   [...held.apps].filter(([, h]) => h[what] > 0)
     .sort(([, a], [, b]) => b[what] - a[what])
-    .map(([slug, h]) => `${slug} ${size(h[what])}`)
+    .map(([id, h]) => `${held.names?.get(id) ?? id} ${size(h[what])}`)
     .join(', ')
 
 /** A line for each stored ceiling the space is near or at, saying each app's

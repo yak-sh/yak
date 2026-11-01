@@ -209,6 +209,7 @@ export type App = {
   // A borrowed property can move this while the app's own files stay put.
   declaration?: string | null
   source?: string | null
+  files?: string | null
   draft?: string | null
   fence?: string | null
   script?: string | null
@@ -260,8 +261,8 @@ export type App = {
   // In the trash, and since when (erase.ts, T-34430). Null for every app that
   // is not — which is almost all of them — and every reader of an app asks
   // it: a trashed app serves nothing, declares nothing, is nobody's front
-  // page and takes no mail, while its bytes, its store and its slug are all
-  // still here for the thirty days `app_restore` has to bring it back.
+  // page and takes no mail, while its bytes and store stay for thirty days.
+  // Its slug is free immediately; former keeps the address to restore at.
   trashed: Trashed | null
   // The colours this app's owner set for its installed chrome (apps.ts
   // `manifesting`/`pinned`, T-33055): the phone's splash while it opens
@@ -420,12 +421,13 @@ export type Row = {
   entity: { eid: string }
   space?: { slug: string; store?: string | null }
   app?: {
-    slug: string
+    slug: string | null
     space: Id
     version: number | null
     lenses?: Record<string, number> | null
     declaration?: string | null
     source?: string | null
+    files?: string | null
     draft?: string | null
     fence?: string | null
     script?: string | null
@@ -963,18 +965,19 @@ let unsaid = (app: string): Access => {
 export let appOf = (r: Row): App => ({
   ...(r.policy === undefined ? {} : { policy: r.policy.revision }),
   eid: r.entity.eid,
-  slug: r.app!.slug,
+  slug: r.app!.slug ?? r.former?.slug ?? '',
   space: idOf(r.app!.space),
   version: r.app!.version,
   ...(r.app!.lenses ? { lenses: r.app!.lenses } : {}),
   declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
+  files: r.app!.files ?? null,
   draft: r.app!.draft ?? null,
   fence: r.app!.fence ?? null,
   script: r.app!.script ?? null,
   worker: r.app!.worker ?? null,
   access: r.app!.access ?? unsaid(r.entity.eid),
-  title: r.doc?.title || r.app!.slug,
+  title: r.doc?.title || r.app!.slug || r.former?.slug || '',
   store: r.app!.store ?? null,
   slugs: slugsOf(r.former),
   home: r.home != null,
@@ -1579,6 +1582,29 @@ export let directory = (via: Fetcher | Part, now = false) => {
       )
       return row ? appOf(row) : null
     },
+    binned: async (space: Space, name: string) => {
+      let pair = await self.appAt(name)
+      if (pair?.space.eid == space.eid) return pair.app
+      let current = await self.app(space, name)
+      if (current) return current
+      let trash = (await self.apps(space)).filter((app) =>
+        app.trashed && app.slug == name
+      )
+      return trash.length == 1 ? trash[0] : null
+    },
+    claimApp: async (
+      space: Space,
+      slug: string,
+      by?: string,
+    ): Promise<Bundle[]> => {
+      let was = await self.former(space, slug)
+      return was && was.eid != by
+        ? [{
+          entity: { eid: was.eid },
+          former: addresses(was.slugs.filter((s) => s != slug)),
+        }]
+        : []
+    },
     // What routing a path asks (apps.ts): the app at its address and the
     // space's front page, whose router may claim the path first. One read
     // answers both, so a page view asks the directory about its apps once,
@@ -1602,7 +1628,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // a move to follow (T-32576: a rename used to strand every open page).
     former: async (space: Space, slug: string) => {
       let app = (await self.apps(space))
-        .find((a) => a.slug != slug && a.slugs.includes(slug))
+        .find((a) => !a.trashed && a.slug != slug && a.slugs.includes(slug))
       return app ?? null
     },
     // Every app in a space, oldest first — the order they were made. Many

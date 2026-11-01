@@ -332,12 +332,12 @@ version names, so the oldest rollback an app still offers always has its files.
 ## app_delete and app_restore
 
     app_delete(app, space?, forever?)
-    app_restore(app, space?)
+    app_restore(app, space?, slug?)
 
 A rollback undoes a deploy; a restore undoes a **delete**. `app_delete` does not
 erase anything. It puts the app in the trash and keeps every byte of it: its
-files, its store, its deploys, and its slug, which stays reserved so a restore
-brings the app back exactly as it was, at the same address.
+files, its store and its deploys. Its slug becomes available immediately for
+app_new, app_install or an app rename.
 
 What changes as soon as it is in the trash: its address answers nothing on the
 web, its commands stop being offered and its views leave your resource list, it
@@ -356,11 +356,15 @@ After 30 days the platform erases it, and then there is nothing to restore.
       answering and its commands have gone with it; nothing it saved was
       touched.
 
-Two things to know before you call it. The slug is held for the whole 30 days,
-so `app_new` at that address is refused, with the reason. Restore it or erase
-it, but do not build a second app at the address of one the person may want
-back. And `forever: true` skips the trash: files, data and address gone with no
-undo. Use it only when the person has said they mean exactly that.
+Restore by the app's eid from `app_delete` or the Trash section of `app_list`.
+Its old slug also works while no live app owns it. `app_restore` uses the old
+address when free; otherwise it picks the first free numbered address, such as
+`scratch-2`. Pass `slug: 'another-name'` to choose a different free address. The
+restored app keeps its files, store and deploys; the new app at its old address
+keeps its own data.
+
+`forever: true` skips the trash: files and data gone with no undo. Use it only
+when the person has said they mean exactly that.
 
 ## space_delete and space_restore
 
@@ -395,7 +399,8 @@ Every destructive action on yaks.app can be undone, and each tool's own
 description ends by naming how. There are four ways, at four scopes:
 
 - A deleted app or space is in the trash for 30 days, above, and `app_restore`
-  or `space_restore` brings the whole thing back: files, data, address.
+  or `space_restore` brings back the files and data; an app may return at a
+  different address.
 - A store can be restored to any moment in the last 30 days. `store_restore`
   returns everything the app has saved to how it was at a time you name: a bad
   import, rows deleted that should not have been. The state before the restore

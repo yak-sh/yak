@@ -796,8 +796,14 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   // What the space and each app hold (T-124320), as the reading left them.
   let held = async () => {
     let jeff = (await dir.space('jeff'))!
-    let h = holding(jeff, await dir.apps(jeff))
-    return [h.files, h.apps.get('a')?.files, h.apps.get('b')?.files]
+    let apps = await dir.apps(jeff)
+    let h = holding(jeff, apps)
+    return [
+      h.files,
+      ...['a', 'b'].map((slug) =>
+        h.apps.get(apps.find((a) => a.slug == slug)!.eid)?.files
+      ),
+    ]
   }
   let writes = async () =>
     (await meta(env).query('.space.slug=jeff ?created ?updated'))

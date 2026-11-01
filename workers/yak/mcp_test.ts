@@ -1309,17 +1309,18 @@ test(
       for (let was of ['/recipes/', '/cookbook/']) {
         assertEquals((await asked(was)).headers.get('location'), '/kitchen/')
       }
-      // An address is not free just because an app left it.
-      await assertRejects(
-        () =>
-          agent.tool('app_new', {
-            space: jeff54,
-            slug: 'recipes',
-            title: 'Recipes again',
-          }),
-        Error,
-        'used to be',
-      )
+      // A new app takes a former address and replaces its redirect.
+      await agent.tool('app_new', {
+        space: jeff54,
+        slug: 'recipes',
+        title: 'Recipes again',
+      })
+      assertEquals((await asked('/recipes/')).status, 404)
+      await agent.tool('app_delete', {
+        space: jeff54,
+        app: 'recipes',
+        forever: true,
+      })
       // …and back, so the rest of this reads of the cookbook. An address the
       // app returns to is its own again, never a redirect to itself.
       await agent.tool('app_set', {

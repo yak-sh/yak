@@ -39,10 +39,8 @@ import * as shared from './shared.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
-// one answer from another. The prefix moves when an app's slug moves
-// (tools.ts `app_set` copies the bytes across), and the same bytes at the new
-// prefix are the same answer — so keying on it would throw away a warm cache
-// for a rename that changed nothing a visitor sees.
+// one answer from another. Relocating legacy bytes keeps their identity,
+// so changing a prefix preserves the cached answer.
 export let PREFIX = 'x-yak-prefix'
 
 // The store that holds an app's rows and what it is told of the app
@@ -68,13 +66,12 @@ export let keyed = (prefix: string, path: string) =>
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
   }`
 
-// The prefix an app's files live under: its space's handle, which a space
-// rename leaves alone (D-131924), then its slug, which moves when the app's
-// does.
+import { ownedPrefix } from './file-root.ts'
+
 export let prefixOf = (
   space: { store: string },
-  app: { slug: string; source?: string | null },
-) => app.source ?? `${space.store}/${app.slug}`
+  app: { slug: string; source?: string | null; files?: string | null },
+) => app.source ?? ownedPrefix(space, app)
 
 // Which file answered, told back to the gateway: its path inside the served
 // folder (`about/index.html`, `404.html`), which is where the page's own
