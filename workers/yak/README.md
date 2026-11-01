@@ -783,10 +783,11 @@ files and rows. A renewed space scope applies to each tool call. Model requests
 charge the space's shared dollar budget as they answer; there is no round limit.
 
 The result includes `task`, `session`, `text`, `status`, `model` and `cost` in
-USD. `operator_read({space, task})` returns the task, comments and transcript;
-omit `task` to list recent tasks. Continue with
-`operator_run({space, task, say})`. A settled model turn may be a question: the
-operator explicitly completes a task through `task_update` after finishing it.
+USD. `operator_read({space, task})` returns the task, comments and conversation;
+`context: true` also includes model instruction snapshots. Omit `task` to list
+recent tasks. Continue with `operator_run({space, task, say})`. A settled model
+turn may be a question: the operator explicitly completes a task through
+`task_update` after finishing it.
 
 `OPERATOR_MODEL` overrides the full `BUILDER_MODEL_PAID` model used by default.
 The selected model must have a catalogue price and runs on the existing Workers

@@ -82,10 +82,8 @@ export let inReach = async (ctx: Ctx): Promise<Reach[]> =>
     return reads(mode(app.access), who.role) ? [{ space, app, who }] : []
   })
 
-let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
-  person: ctx.person,
-  role: await ctx.dir.role(space, ctx.person),
-})
+let whoIn = async (ctx: Ctx, space: Space): Promise<Who> =>
+  asCaller(ctx, await ctx.dir.role(space, ctx.person))
 
 // The apps a call means: all the caller can reach, or the one it named —
 // `recipes`, or `yourname/recipes` where two spaces spell one slug.

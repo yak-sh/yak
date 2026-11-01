@@ -59,6 +59,26 @@ let fixture = async () => {
     slug: 'notices',
     title: 'Notices',
   })
+  await TOOLS.find((t) => t.name == 'app_files')!.run(ctx, {
+    app: 'notices',
+    files: [
+      { path: 'index.html', content: '<h1>Notices</h1>' },
+      {
+        path: 'vocab.json',
+        content: JSON.stringify({
+          $defs: {
+            meeting: {
+              properties: {
+                subject: { type: 'string' },
+                at: { type: 'string' },
+              },
+            },
+          },
+        }),
+      },
+    ],
+  })
+  await TOOLS.find((t) => t.name == 'app_deploy')!.run(ctx, { app: 'notices' })
   let raw = durable()
   let store = operatorStore(raw)
   return { env, space, held, store, raw }
@@ -82,6 +102,15 @@ let script = [
       entity: { eid },
       doc: { title: 'Special meeting Thursday at 7: road millage' },
     }],
+  }),
+  calls('command', {
+    name: 'add_meeting',
+    app: 'notices',
+    args: {
+      title: 'Road millage',
+      subject: 'Road millage',
+      at: 'November 5, 2026 at 7 pm America/Detroit',
+    },
   }),
   [{
     kind: 'assistant',
@@ -116,6 +145,7 @@ let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
 let g = await reaching(ctx, await inReach(ctx))
 let docs = await g.read('.doc ?created *')
+let meetings = await g.read('.meeting ?created *')
 let tasks = await g.read('.task&*')
 let other = await ctx.dir.space('other')
 
@@ -124,10 +154,11 @@ test('the operator edits app rows through agent tools and records its work priva
   let created = comp(posted, 'created')
   assertEquals(out.status, 'settled')
   assertStringIncludes(out.text, 'notice is posted')
-  assertEquals(out.cost, 0.005)
+  assertEquals(out.cost, 0.006)
   assertEquals(comp(history.task, 'task').status, 'done')
+  assertEquals(comp(history.task, 'completed').by, f.space.eid)
   assertEquals(history.comments?.length, 1)
-  assertEquals(history.entries?.filter((b) => b.call).length, 4)
+  assertEquals(history.entries?.filter((b) => b.call).length, 5)
   let tools = asked[0].tools.map((t) => t.name)
   assertEquals(tools.includes('graph_query'), true)
   assertEquals(posted?.doc, {
@@ -135,6 +166,8 @@ test('the operator edits app rows through agent tools and records its work priva
   })
   assertEquals(created.by, f.space.eid)
   assertEquals(created.via, out.session)
+  assertEquals(comp(meetings[0], 'created').by, f.space.eid)
+  assertEquals(comp(meetings[0], 'created').via, out.session)
   assertEquals(tasks.length, 0)
   assertEquals(other, null)
 })

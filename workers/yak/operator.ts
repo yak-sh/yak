@@ -108,7 +108,11 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
         let out = await invoke(
           {
             ...call,
-            call: { ...comp(call, 'call'), args },
+            call: {
+              ...comp(call, 'call'),
+              args,
+              actor: { by: ctx.who!.actor!, via: context!.session },
+            },
             $actor: {
               by: ctx.who!.actor!,
               via: context!.session,
@@ -145,7 +149,11 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
 export let operatorModel = (env: Env): Model =>
   workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
 
-export let readOperator = async ({ g }: Store, task?: string) => {
+export let readOperator = async (
+  { g }: Store,
+  task?: string,
+  context = false,
+) => {
   if (!task) {
     return { tasks: await g.read('.task ?doc .order=-created.at .limit=20') }
   }
@@ -156,7 +164,14 @@ export let readOperator = async ({ g }: Store, task?: string) => {
   let sessions = await g.get(links.map((b) => String(comp(b, 'edge')!.to)))
   let entries =
     (await Promise.all(sessions.map((b) => transcript(g, b.entity.eid)))).flat()
-  return { task: row, comments, sessions, entries }
+  return {
+    task: row,
+    comments,
+    sessions,
+    entries: context
+      ? entries
+      : entries.map(({ sending: _sending, ...entry }) => entry),
+  }
 }
 
 export let runOperator = async (
@@ -214,9 +229,8 @@ export let runOperator = async (
     let name = options.name ?? env.OPERATOR_MODEL ?? env.BUILDER_MODEL_PAID ??
       '@cf/zai-org/glm-5.3'
     if (!options.model && !name.startsWith('@cf/')) {
-      throw refuse(
-        'unavailable',
-        'Choose a priced Workers AI model for the operator',
+      throw new Error(
+        'The operator needs a priced Workers AI model in OPERATOR_MODEL',
       )
     }
     let provider = name.startsWith('@cf/') ? 'workers-ai' : 'openai'
@@ -225,10 +239,7 @@ export let runOperator = async (
         ? (await modelInfo(name, env.MODEL_FETCH)).price
         : undefined)
     if (!options.model && !price) {
-      throw refuse(
-        'unavailable',
-        `No catalogue price for operator model ${name}`,
-      )
+      throw new Error(`No catalogue price for operator model ${name}`)
     }
     let spent = 0
     let model = accounted(

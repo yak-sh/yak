@@ -594,6 +594,6 @@ export let WORDS: Record<string, Words> = {
   'operator_read': {
     'title': "Read your operator's work",
     'description':
-      "Read this space's private operator tasks, replies and native session entries. Pass task for its full transcript, or omit it for the twenty latest tasks.",
+      "Read this space's private operator tasks, replies and native session entries. Pass task for its conversation, or omit it for the twenty latest tasks. Model instruction snapshots are omitted unless context is true.",
   },
 }

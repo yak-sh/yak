@@ -53,6 +53,11 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       properties: {
         space: SPACE,
         task: str('The operator task id. Omit to list the most recent tasks.'),
+        context: {
+          type: 'boolean',
+          description:
+            'Include the model instruction snapshots beside transcript entries (omitted by default).',
+        },
       },
     },
     run: (ctx, args) => ask(ctx, args, '/operator/read'),

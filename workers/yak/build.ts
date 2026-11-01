@@ -455,6 +455,7 @@ export class Builder {
         await readOperator(
           store,
           typeof args.task == 'string' ? args.task : undefined,
+          args.context === true,
         ),
       )
     }
