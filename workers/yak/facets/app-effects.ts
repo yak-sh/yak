@@ -1,5 +1,6 @@
 // Keep builder provenance when a release arrives, and delete an upload's
 // bytes once its row is gone.
+import { extraction } from '../documents.ts'
 import { preserve } from '@yaks/builders'
 import type { Bundle } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
@@ -16,6 +17,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     ...(at.graph.vocab.docs.some((doc) => noticeComponents(doc).length)
       ? { notice_post: noticePost(at) }
       : {}),
+    document_extract: maintenance((event) => extraction(at, event.entity.eid)),
     builder_install: maintenance(async () => {
       let writes: Bundle[] = []
       if (at.graph.vocab.comp('builder')) {

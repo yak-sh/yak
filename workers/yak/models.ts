@@ -39,7 +39,7 @@ import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './defects.ts'
-import type { Answer } from './apps.ts'
+import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
 
@@ -472,13 +472,10 @@ export let refusal = (
  * The input is the caller's, passed whole, so one the model refuses
  * (@yaks/workers-ai `unfit`) is answered 400 as theirs to correct.
  */
-export let modelRun: Answer = async (
-  { env, req, path, space, app, who, refuse, json },
-) => {
-  if (path != '/ai/run') return null
-  if (req.method != 'POST') return json(405, 'method_not_allowed')
+export let modelAccess = async (
+  { env, app, space, who, refuse, json }: Asked,
+): Promise<Response | null> => {
   if (!edits(mode(app.access), who.role)) return refuse()
-  let body = await req.text()
   if (!writes(who.role)) {
     let manifest = await appStore(env.STORE, space, app, env).consume(
       '/vocab',
@@ -495,6 +492,26 @@ export let modelRun: Answer = async (
         : refuse()
     }
   }
+  return null
+}
+
+export let modelRun: Answer = async (
+  { env, req, path, space, app, who, refuse, json },
+) => {
+  if (path != '/ai/run') return null
+  if (req.method != 'POST') return json(405, 'method_not_allowed')
+  let denied = await modelAccess({
+    env,
+    req,
+    path,
+    space,
+    app,
+    who,
+    refuse,
+    json,
+  })
+  if (denied) return denied
+  let body = await req.text()
   let asked = posted(body)
   if (!asked) {
     return json(
@@ -513,7 +530,7 @@ export let modelRun: Answer = async (
           env,
           payer(app.eid),
           modelRows({
-            read: graph.query,
+            read: (query) => graph.query(query, { trusted: true }),
             apply: graph.apply,
           }),
         ).run(

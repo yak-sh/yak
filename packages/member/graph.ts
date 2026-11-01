@@ -7,4 +7,10 @@ import { type Personal, personal } from './personal.ts'
 export let plugins = (
   host: Pick<Host, 'vocab'>,
   options: Options,
-): Plugin[] => [personal(host.vocab, options.personal as Personal | undefined)]
+): Plugin[] => [
+  personal(
+    host.vocab,
+    options.personal as Personal | undefined,
+    options.through as Personal | undefined,
+  ),
+]

@@ -240,6 +240,7 @@ export type Env = {
   AI?: {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
     gateway(id: string): { getUrl(provider?: string): Promise<string> }
+    toMarkdown?: import('./documents.ts').Markdown
   }
   AI_GATEWAY?: string
   AI_GATEWAY_TOKEN?: string

@@ -26,6 +26,8 @@ import {
 } from './session-lens.ts'
 import { statements } from '@yaks/sqlite'
 import { recovering } from './models.ts'
+import { hits as documentHits } from './document-search.ts'
+import { metered as meteredModel } from './meter.ts'
 import { attributed } from './attribution.ts'
 import {
   backed as journalBacked,
@@ -1055,7 +1057,7 @@ export class Store {
   #texts!: {
     statements: Statements
     fields: Text[]
-    screen: (line: string) => Raw | null
+    screen: (line: string, opts?: ReadOpts) => Raw | null
   }
   #vectorWork: Promise<void> | null = null
   #vectorAgain = false
@@ -1433,7 +1435,7 @@ export class Store {
         return store.statements
       },
       fields: texts(vocab, derived),
-      screen: (line) => store.screen(line),
+      screen: (line, opts) => store.screen(line, opts),
     }
     this.#analyze = (tables) => store.analyze(tables)
     // The schema this object stands at is one word (`shapeOf`): a wake under
@@ -1572,7 +1574,7 @@ export class Store {
         bury: () => Promise.resolve([]),
         gone: () => Promise.resolve(false),
         report: (error) => defect(error, { request: 'plugin', store: name }),
-        meaning: ranking(() => embedder(this.#bind), this.#texts),
+        meaning: ranking(() => this.#embedder(), this.#texts),
       },
       storage: (_host, extend) => {
         store = sqliteStorage(
@@ -3292,7 +3294,7 @@ export class Store {
     watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made
     // by another, every text owes its vector again (`#embedding` below).
-    let model = embedder(this.#bind)
+    let model = this.#embedder()
     if (model) {
       remodel(this.#texts.statements, this.#texts.fields, model.model)
     }
@@ -3674,6 +3676,19 @@ export class Store {
     this.#ctx.waitUntil?.(this.#effectWork)
   }
 
+  #embedder = () => {
+    let app = this.#get('app'), bind = this.#bind
+    return embedder({
+      ...bind,
+      AI: bind.AI && bind.STORE && app
+        ? meteredModel(
+          bind,
+          async (dir) => (await dir.appAt(app))?.space ?? null,
+        )
+        : bind.AI,
+    })
+  }
+
   // ---- the vectors (@yaks/embedding, T-59101) -------------------------------
   //
   // A vector beside each text the vocabulary marks searched, made by the model
@@ -3718,7 +3733,7 @@ export class Store {
 
   #embedding = () => {
     if (this.#dormant) return
-    let model = embedder(this.#bind)
+    let model = this.#embedder()
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
     if (this.#now() < this.#vectorRetry) {
       // An alarm sooner than the retry spends the one the failure armed.
@@ -4957,6 +4972,30 @@ export class Store {
       } catch (e) {
         return refuse(e, request)
       }
+    }
+    if (path == '/documents/search' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound' }, 404)
+      let { words, semantic, person } = await request.json() as {
+        words: string
+        semantic: boolean
+        person: string | null
+      }
+      return Response.json(
+        await documentHits(
+          {
+            read: (query, opts) => this.#graph.read(query, { ...opts, person }),
+            get: (ids, comps, opts) =>
+              this.#graph.get(ids, comps, { ...opts, person }),
+          },
+          ranking(() => this.#embedder(), {
+            ...this.#texts,
+            screen: (line) =>
+              this.#texts.screen(line, this.#graph.scope({ person })),
+          }),
+          words,
+          semantic,
+        ),
+      )
     }
     if (path == '/recover' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)

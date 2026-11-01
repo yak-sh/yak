@@ -30,7 +30,7 @@ import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections'
-import { identityEid } from '@yaks/graph/identity'
+import { identityEid, minted } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
 import {
   type Door,
@@ -1593,7 +1593,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
       return row ? appOf(row) : null
     },
     binned: async (space: Space, name: string) => {
-      let pair = await self.appAt(name)
+      let pair = minted(name) ? await self.appAt(name) : null
       if (pair?.space.eid == space.eid) return pair.app
       let current = await self.app(space, name)
       if (current) return current

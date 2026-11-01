@@ -297,6 +297,7 @@ export let embeds = <A extends AiBinding>(ai: A): A => ({
   ) =>
     model == EMBEDDER
       ? Promise.resolve({
+        usage: { prompt_tokens: 0, completion_tokens: 0 },
         data: (input as { text: string[] }).text.map((_, i) =>
           Array.from({ length: DIM }, (_, j) => j == i % DIM ? 1 : 0)
         ),

@@ -99,3 +99,26 @@ test('a failed metadata fetch is retried and an unpriced page can acquire a pric
   await time.advance(3_600_000)
   assertEquals((await read()).price?.input, 3)
 })
+
+test('embedding input-only pricing can be metered without inventing an output price', async () => {
+  let info = await modelInfo(
+    '@cf/qwen/qwen3-embedding-0.6b',
+    () =>
+      Promise.resolve(
+        new Response(
+          'Text Embeddings • Qwen\nUnit Pricing | $0.0118 per M input tokens',
+        ),
+      ),
+  )
+  assertEquals(info.price, { input: 0.0118, output: 0 })
+  let incomplete = await modelInfo(
+    'text/model',
+    () =>
+      Promise.resolve(
+        new Response(
+          'Text Generation\nUnit Pricing | $0.1 per M input tokens',
+        ),
+      ),
+  )
+  assertEquals(incomplete.price, undefined)
+})

@@ -63,7 +63,7 @@ export let PAGES: Record<string, Page> = {
     'description':
       "Build and check a private draft with app_preview before app_deploy: screenshots at phone and desktop widths, page console and errors, isolated test data and a private preview URL, without a local computer. app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access.",
     'brief':
-      'private draft preview, screenshots, console and page errors, files, releases, uploads, images',
+      'private draft previews, files, releases, uploads, searchable PDFs, scanned documents, document questions and page citations',
   },
   'games': {
     'slug': 'games',

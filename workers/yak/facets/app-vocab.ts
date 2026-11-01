@@ -74,6 +74,33 @@ export let kernelDoc: VocabDoc = {
     // unless a row the app keeps still names them (apps.ts `naming`). So the
     // row is the one door for deleting an upload, and whoever may delete the
     // row (@yaks/member) is who may delete the file.
+    document_page: {
+      component: true,
+      type: 'object',
+      description:
+        'Text extracted from one stored document page; searchable by words and meaning.',
+      properties: {
+        document: owned(ref('cascade')),
+        blob: owned(ref('cascade')),
+        page: owned(num),
+        location: owned(text),
+        text: owned({ ...text, search: true }),
+      },
+    },
+    document_text: {
+      component: true,
+      type: 'object',
+      description: 'Completed extraction of an attachment’s immutable bytes.',
+      properties: { blob: owned(ref('cascade')), pages: owned(num) },
+    },
+    document_extract: {
+      effect: true,
+      created: ['attachment'],
+      changed: ['attachment.blob', 'attachment.mime', 'attachment.name'],
+      target: '.attachment',
+      description:
+        'Extract stored documents once into searchable pages, reading scanned pages too.',
+    },
     delete_upload: {
       effect: true,
       removed: ['blob'],

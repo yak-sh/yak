@@ -1,6 +1,6 @@
 // A person's private rows and aspects. App roles never confer ownership.
 import { after } from '@yaks/fp'
-import { absent, and, eq, or } from '@yaks/query/core'
+import { absent, and, eq, or, present } from '@yaks/query/core'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { dead } from '@yaks/graph/bundle'
 import type {
@@ -17,6 +17,9 @@ import { Denied } from './deny.ts'
 /** Component → owner: `entity` keeps just this aspect private on the person's
  * entity; a local reference property makes the entire entity private. */
 export type Personal = Record<string, string>
+
+/** Derived component → reference property whose source owns its visibility. */
+export type PersonalSources = Record<string, string>
 
 // Component → owner as the vocabulary declares it, then as the host overrides.
 let said = (
@@ -94,10 +97,22 @@ let caller = (opts: ReadOpts) =>
 /** Protect person-owned data at reads and at every transaction write,
  * including changes made by rules and reference cascades. Trusted server
  * writes and explicitly vouched administrative reads are the only bypasses. */
-export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
+export let personal = (
+  vocab: Vocab,
+  declared: Personal = {},
+  through: PersonalSources = {},
+): Plugin => {
   let owners = personalsIn(vocab, declared)
   let entries = Object.entries(owners)
-  let comps = Object.keys(owners)
+  let inherited = Object.entries(through)
+  for (let [name, prop] of inherited) {
+    if (!vocab.prop(name, prop)?.ref) {
+      throw new Error(
+        `${name}.${prop} must reference an entity to inherit visibility`,
+      )
+    }
+  }
+  let comps = [...new Set([...Object.keys(owners), ...Object.keys(through)])]
   let entityOwned = entries.filter(([, by]) => by != 'entity')
   let foreign = (row: Bundle, person: string | null | undefined) =>
     entityOwned.some(([name, by]) => {
@@ -111,6 +126,23 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       ...entityOwned.map(([name, by]) =>
         who ? or(absent(name), eq(`${name}.${by}`, who)) : absent(name)
       ),
+      ...inherited.map(([name, prop]) => {
+        let source = `${name}.${prop}`
+        return or(
+          absent(name),
+          and(
+            present(source),
+            ...entityOwned.map(([owner, by]) =>
+              who
+                ? or(
+                  absent(`${source}.${owner}`),
+                  eq(`${source}.${owner}.${by}`, who),
+                )
+                : absent(`${source}.${owner}`)
+            ),
+          ),
+        )
+      }),
     )
   let check = (
     bundles: Bundle[],
@@ -173,9 +205,12 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
   return {
     name: '@yaks/member/personal',
     admission: () => true,
-    reads: (opts) => entries.length > 0 && caller(opts),
+    reads: (opts) =>
+      (entries.length > 0 || inherited.length > 0) && caller(opts),
     scope: ({ opts }) => {
-      if (!entries.length || !caller(opts)) return undefined
+      if ((!entries.length && !inherited.length) || !caller(opts)) {
+        return undefined
+      }
       let who = opts.person
       return {
         entity: mine(who),
@@ -259,71 +294,97 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       if (!caller(opts) || !bundles.length) return bundles
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
-        let visible = bundles.flatMap((b) => {
-          let row = held.get(b.entity.eid)
-          if (foreign(row ?? b, opts.person)) return []
-          let out = { ...b }
-          for (let [name, by] of entries) {
-            if (by == 'entity' && b.entity.eid != opts.person) {
-              delete out[name]
-              if (row?.[name] || b[name]) {
-                out.entity = { ...out.entity }
-                delete out.entity.archetype
-              }
-            }
-          }
-          return [out]
-        })
-        if (!entityOwned.length) return visible
-        let references = (b: Bundle) =>
-          Object.entries(b).flatMap(([name, value]) => {
-            if (
-              name == 'entity' || !value || typeof value != 'object' ||
-              !vocab.comp(name)
-            ) return []
-            let c = value as Comp
-            return vocab.props(name).flatMap((prop) =>
-              vocab.prop(name, prop)?.category == 'ref' &&
-                typeof c[prop] == 'string'
-                ? [[name, prop, c[prop] as string]]
-                : []
-            )
-          })
         let targets = [
-          ...new Set(
-            visible.flatMap((b) => references(b).map(([, , eid]) => eid)),
-          ),
+          ...new Set(rows.flatMap((b) =>
+            inherited.flatMap(([name, prop]) => {
+              let target = (b[name] as Comp | undefined)?.[prop]
+              return typeof target == 'string' ? [target] : []
+            })
+          )),
         ]
-        if (!targets.length) return visible
-        return after(tx.get(targets, comps), (rows) => {
-          // A deleted target holds nothing left to say whose it was. Its
-          // history does, so the store is asked under this scope, which sees
-          // one it would have seen as it last was (@yaks/sql `ghostly`).
-          let gone = rows.filter(dead).map((b) => b.entity.eid)
-          let seen = gone.length
-            ? tx.get(gone, [], { visibility: { entity: mine(opts.person) } })
-            : []
-          return after(seen, (seen) => {
-            let allowed = new Set(
-              [
-                ...rows.filter((b) => !dead(b) && !foreign(b, opts.person)),
-                ...seen,
-              ]
-                .map((b) => b.entity.eid),
-            )
-            return visible.map((b) => {
-              let out = b
-              for (let [name, prop, eid] of references(b)) {
-                if (!allowed.has(eid)) {
-                  out = {
-                    ...out,
-                    [name]: { ...out[name] as Comp, [prop]: null },
-                  }
+        return after(tx.get(targets, comps), (sources) => {
+          let byId = new Map(sources.map((b) => [b.entity.eid, b]))
+          let visible = bundles.flatMap((b) => {
+            let row = held.get(b.entity.eid)
+            if (foreign(row ?? b, opts.person)) return []
+            if (
+              inherited.some(([name, prop]) => {
+                let comp = (row ?? b)[name] as Comp | undefined
+                if (!comp) return false
+                let source = byId.get(String(comp[prop]))
+                return !source || dead(source) || foreign(source, opts.person)
+              })
+            ) return []
+            let out = { ...b }
+            for (let [name, by] of entries) {
+              if (by == 'entity' && b.entity.eid != opts.person) {
+                delete out[name]
+                if (row?.[name] || b[name]) {
+                  out.entity = { ...out.entity }
+                  delete out.entity.archetype
                 }
               }
-              return out
-            })
+            }
+            return [out]
           })
+          if (!entityOwned.length && !inherited.length) return visible
+          let references = (b: Bundle) =>
+            Object.entries(b).flatMap(([name, value]) => {
+              if (
+                name == 'entity' || !value || typeof value != 'object' ||
+                !vocab.comp(name)
+              ) return []
+              let c = value as Comp
+              return vocab.props(name).flatMap((prop) =>
+                vocab.prop(name, prop)?.category == 'ref' &&
+                  typeof c[prop] == 'string'
+                  ? [[name, prop, c[prop] as string]]
+                  : []
+              )
+            })
+          let targets = [
+            ...new Set(
+              visible.flatMap((b) => references(b).map(([, , eid]) => eid)),
+            ),
+          ]
+          if (!targets.length) return visible
+          return after(
+            tx.get(targets, comps, {
+              visibility: { entity: mine(opts.person) },
+            }),
+            (rows) => {
+              // A deleted target holds nothing left to say whose it was. Its
+              // history does, so the store is asked under this scope, which sees
+              // one it would have seen as it last was (@yaks/sql `ghostly`).
+              let gone = rows.filter(dead).map((b) => b.entity.eid)
+              let seen = gone.length
+                ? tx.get(gone, [], {
+                  visibility: { entity: mine(opts.person) },
+                })
+                : []
+              return after(seen, (seen) => {
+                let allowed = new Set(
+                  [
+                    ...rows.filter((b) => !dead(b) && !foreign(b, opts.person)),
+                    ...seen,
+                  ]
+                    .map((b) => b.entity.eid),
+                )
+                return visible.map((b) => {
+                  let out = b
+                  for (let [name, prop, eid] of references(b)) {
+                    if (!allowed.has(eid)) {
+                      out = {
+                        ...out,
+                        [name]: { ...out[name] as Comp, [prop]: null },
+                      }
+                    }
+                  }
+                  return out
+                })
+              })
+            },
+          )
         })
       })
     },

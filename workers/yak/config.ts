@@ -69,7 +69,7 @@ export let appConfig: Config = {
     ...addressed,
     '@yaks/doc',
     '@yaks/draft',
-    '@yaks/member',
+    { use: '@yaks/member', with: { through: { document_page: 'document' } } },
     {
       use: '@yaks/task',
       facets: ['vocab'],
@@ -271,6 +271,7 @@ export let configs = {
 export let domains = {
   'yak/app': {
     vocab: './facets/app-vocab.ts',
+    graph: './facets/app-graph.ts',
     effects: './facets/app-effects.ts',
   },
   'yak/directory': {

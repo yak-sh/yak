@@ -399,3 +399,13 @@ caller can choose its own response policy.
 
 Pure TypeScript with no platform API imports. It runs on Deno, Node, browsers
 and Cloudflare Workers with suitable storage and package resolution.
+
+## Derived rows and source visibility
+
+A server-generated row can inherit its source's personal visibility. Pass
+`through: { page: 'source' }` to the plugin, where `page.source` references the
+source entity, or call `personal(vocab, owners, { page: 'source' })` directly.
+Reads, counts, reference traversal and relayed patches then follow the source's
+current owner; changing that owner changes the derived row's visibility too.
+This controls disclosure. It does not give a client permission to edit the
+source or the derived row.

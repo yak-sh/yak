@@ -378,6 +378,80 @@ supplies it instead (`video/mp4` for `.mp4`, `audio/mpeg` for `.mp3`). An
 unknown name gets `application/octet-stream`. `w` and `h` are there only when
 the bytes are an image that declares its size; otherwise both keys are absent.
 
+## Searching documents
+
+Uploading a PDF, Word `.docx`, spreadsheet (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`,
+`.ods`, `.numbers`), `.odt` or `.csv` also extracts its text in the background.
+Use the same `upload(file)` call above. The original stays downloadable; the app
+does not need a conversion service or another search index.
+
+Automatic extraction supports files up to 16 MiB. A larger file is kept and its
+attachment gets `failed{reason}` explaining the extraction limit. Scanned pages
+render at up to 144 dpi, with their longest edge capped at 2,400 pixels. Tiny or
+unreadable print can still need a clearer original.
+
+PDFs are read page by page. Pages containing images are rendered in full and
+transcribed, so scanned pages, rotated scans and pages with text over a scan are
+searchable too. The renderer preserves the PDF's page numbers. Office conversion
+produces one searchable document section, labeled `Document`; it does not invent
+printed page numbers for reflowable Word files or sheets.
+
+Extraction writes `document_page{document, blob, page, location, text}` rows.
+`text` is indexed by the app's existing full-text and meaning search. The
+`document` reference names the upload's `attachment{blob, mime, name}` row, so
+changing its name changes citations without extracting again.
+`document_text{blob, pages}` on that attachment marks completed extraction.
+Completed pages are reused after an interrupted extraction. The same upload is
+extracted once; replacing or deleting it removes its old searchable pages. Pages
+inherit the source entity's personal visibility.
+
+An ordinary query finds pages:
+
+    zoning .document_page&*
+
+A page can request hits with citations directly:
+
+```js ignore
+let searchDocuments = async (words, semantic = false) => {
+  let response = await fetch('./api/documents/search', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ words, semantic }),
+  })
+  if (!response.ok) throw await response.json()
+  return response.json()
+}
+```
+
+Each hit is `{eid, document: {eid, name, url}, page, location, text}`. Semantic
+hits also carry `score`. `document.url` opens the original PDF at `#page=N`.
+Full-text search is available to anyone who may read the app. Semantic search
+embeds the question and follows the same model permissions as `./api/ai/run`:
+members who may write, or a writable app with `models: 'open'`. Search words and
+questions are limited to 4,000 characters; each request returns up to eight
+pages.
+
+`POST ./api/documents/ask` with `{words: 'your question'}` retrieves relevant
+pages and answers from them. Its reply is `{answer, citations}`. Citations
+contain the hit's page and document fields, without the extracted text. Only
+retrieved page ids can be returned as citations. If there are no matching pages,
+the answer says so. The same model permissions apply.
+
+Text extraction itself makes no model call on a text-only PDF; Office conversion
+uses Workers AI's free `toMarkdown` conversion. A scanned page is transcribed
+with `@cf/google/gemma-4-26b-a4b-it`, priced at $0.10 per million input tokens
+and $0.30 per million output tokens. Page embeddings and semantic
+query embeddings use `@cf/qwen/qwen3-embedding-0.6b` ($0.0118 per million input
+tokens). Answers are separate model calls. All model costs spend the account's
+one budget, alongside the app's other use. Costs vary with page content and
+answer length; there is no separate document allowance.
+
+Cloudflare's PDF conversion extracts existing text; it does not OCR scans. The
+platform renders and transcribes scanned pages explicitly. See
+[Cloudflare's conversion behavior](https://developers.cloudflare.com/workers-ai/features/markdown-conversion/how-it-works/)
+and
+[model pricing](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/).
+
 ## Content addressing
 
 `eid` is the SHA-256 of the bytes, in hex. Nothing else affects it: not the
