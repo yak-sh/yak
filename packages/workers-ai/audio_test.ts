@@ -309,3 +309,35 @@ test('music refuses every redirect without following its location', async () => 
     assertEquals(downloads, 1)
   }
 })
+
+test('raw music generation awaits the same paid submission guard', async () => {
+  let events: string[] = []
+  let model = workersAi({
+    run: () => Promise.reject(new Error('raw fetch required')),
+    fetch: () => {
+      events.push('paid')
+      return Promise.reject(new Error('music answer lost'))
+    },
+  }, { media: { store: artifactStore(memoryBlobs()) } })
+  await assertRejects(
+    () =>
+      model({
+        ...ask('minimax/music-2.6'),
+        onSubmit: () => Promise.resolve(void events.push('submitted')),
+      }),
+    Error,
+    'music answer lost',
+  )
+  assertEquals(events, ['submitted', 'paid'])
+  events.length = 0
+  await assertRejects(
+    () =>
+      model({
+        ...ask('minimax/music-2.6'),
+        onSubmit: () => Promise.reject(new ModelError('limit', 'budget spent')),
+      }),
+    ModelError,
+    'budget spent',
+  )
+  assertEquals(events, [])
+})

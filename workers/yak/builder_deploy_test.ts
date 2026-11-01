@@ -39,6 +39,6 @@ test('a deploy review ships no version and consumes no build', () => {
     review.lines.find((l) => l.said == 'tool')!.text,
     'no version was deployed',
   )
-  assertEquals(meter?.built, undefined)
-  assertEquals(meter?.builds, undefined)
+  assertEquals(meter?.built ?? 0, 0)
+  assertEquals(meter?.builds ?? 0, 0)
 })

@@ -16,12 +16,15 @@
 // kbit/s. The owner pays from the account budget shared with models
 // (meter.ts `realtime`).
 import { edits, mode, writes } from '@yaks/member'
+import { mint } from '@yaks/graph'
+import { ModelError } from '@yaks/model'
 import { answer, type Rates, type Realtime, type Store } from '@yaks/rtc/door'
 import { appStore, directoryOf } from './directory.ts'
 import type { Door } from './door.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { countedRealtime, refusedSpend } from './meter.ts'
+import { refusedSpend } from './meter.ts'
+import { reserved } from './model-spend.ts'
 import type { Answer } from './apps.ts'
 import { source, within } from './rate.ts'
 import { defect } from './defects.ts'
@@ -103,7 +106,22 @@ export let voice: Answer = async (asked) => {
     store: kept(door),
     meter: {
       refused: () => refusedSpend(dir, space, 'realtime', env),
-      spend: (dollars) => countedRealtime(env, space, dollars),
+      reserve: async (dollars) => {
+        try {
+          return await reserved(
+            env,
+            space,
+            (remaining) => dollars <= remaining ? { dollars } : null,
+            mint(),
+            'realtime',
+          )
+        } catch (error) {
+          if (error instanceof ModelError && error.code == 'limit') {
+            return error.message
+          }
+          throw error
+        }
+      },
     },
     realtime,
     rates: RATES,

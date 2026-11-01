@@ -8,7 +8,8 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import {
-  billed,
+  affordable,
+  charged,
   type Executor,
   frozenRequest,
   type Inference,
@@ -29,12 +30,17 @@ import { egressOf } from './outbound.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Stored } from './graph.ts'
-import { countedMedia, refusedSpend } from './meter.ts'
+import { countedMedia, monthOf } from './meter.ts'
+import { reservation, reserved } from './model-spend.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vaultOf } from './vault.ts'
 
 export let RELEASE = 'yak-model-v1'
-type PrivateRequest = FrozenRequest & { app: string; price?: Price }
+type PrivateRequest = FrozenRequest & {
+  app: string
+  price?: Price
+  context?: number
+}
 type Bindings = Partial<Env>
 let identity = (call: string, executor = RELEASE): Inference => ({
   call,
@@ -158,6 +164,34 @@ let providerAt = async (
   }
 }
 
+let quoted = (
+  req: Pick<PrivateRequest['request'], 'modalities' | 'tokens'>,
+  price: Price | undefined,
+  context: number | undefined,
+  remaining: number,
+) =>
+  price && context != null &&
+    !(price.output > 0 && req.tokens != null && req.tokens <= 0) &&
+    !req.modalities?.some((m) => m != 'text')
+    ? affordable(price, context, remaining, req.tokens)
+    : null
+
+let matching = (
+  hold: Awaited<ReturnType<typeof reservation>>,
+  space: string,
+) => {
+  if (
+    !hold || hold.space != space || hold.what != 'models' ||
+    hold.month != monthOf(new Date())
+  ) {
+    throw new ModelError(
+      'limit',
+      'This call has no current model budget reservation',
+    )
+  }
+  return hold
+}
+
 /** Missing or not-yet-live bindings preserve inline dispatch. Accepted asks
  * resume from their pinned receipt even while new dispatch is unavailable. */
 export let lending = async (
@@ -183,24 +217,43 @@ export let lending = async (
       if (!pinned?.request) {
         if (!enabled || !at.env.MODEL) throw new ModelError('unbound')
         let found = await location(at.env, at.app!)
-        let no = await refusedSpend(
-          directoryOf(at.env.STORE!),
-          found.space,
-          'models',
-          at.env,
-        )
-        if (no) throw new ModelError('limit', no)
-        // Retries never replace the first frozen request, including a lost
-        // object-write acknowledgement before the graph pin was committed.
+        // Retries never replace the first frozen request. A reservation may
+        // have committed before the object-write acknowledgement was lost.
         if (!await read(at.env, job.request)) {
           let [model] = await at.graph.get([String((ask.ask as Comp).to)])
+          let price = model?.price as Price | undefined
+          let context = (model?.model as Comp | undefined)?.context as
+            | number
+            | undefined
+          let providerInfo = await providerAt(at, provider)
+          let prior = await reservation({ STORE: at.env.STORE! }, call)
+          let quote = prior
+            ? quoted(
+              req,
+              price,
+              context,
+              matching(prior, found.space.eid).dollars,
+            )
+            : (await reserved(
+              { STORE: at.env.STORE! },
+              found.space,
+              (remaining) => quoted(req, price, context, remaining),
+              call,
+            )).value
+          if (!quote) {
+            throw new ModelError(
+              'limit',
+              'This call cannot fit its reserved model budget',
+            )
+          }
           let frozen: PrivateRequest = {
             call,
             executor: job.executor,
             app: at.app!,
-            provider: await providerAt(at, provider),
-            request: frozenRequest({ ...req, call }),
-            ...model?.price ? { price: model.price as Price } : {},
+            provider: providerInfo,
+            request: frozenRequest({ ...req, call, tokens: quote.tokens }),
+            price,
+            context,
           }
           await bucket(at.env).put(job.request, JSON.stringify(frozen))
         }
@@ -255,15 +308,56 @@ export let lending = async (
 export let hosting = (env: Bindings): Kernel => ({
   submitted: async (job) => !!(await authenticated(env, job)).ask.submitted,
   claim: async (job) => {
-    let { graph, found, ask } = await authenticated(env, job)
+    let { graph, found, ask, frozen } = await authenticated(env, job)
     if (ask.submitted) return { claimed: false }
-    let no = await refusedSpend(
-      directoryOf(env.STORE!),
-      found.space,
-      'models',
-      env,
-    )
-    if (no) return { refused: { code: 'limit', reason: no } }
+    let [row] = frozen.context == null
+      ? await graph.query(`.entity.eid=${String((ask.ask as Comp).to)}&*`, {
+        trusted: true,
+      })
+      : []
+    let context = frozen.context ??
+      (row?.model as Comp | undefined)?.context as number | undefined
+    let desired = frozen.request.tokens
+    if (desired == null) {
+      return {
+        refused: {
+          code: 'limit',
+          reason: 'This call has no reserved output token limit',
+        },
+      }
+    }
+    let prior = await reservation({ STORE: env.STORE! }, job.call)
+    if (!prior) {
+      // A job frozen by an earlier release has no hold. Its immutable request
+      // can proceed only if its whole existing output limit still fits.
+      try {
+        await reserved({ STORE: env.STORE! }, found.space, (remaining) => {
+          let quote = quoted(frozen.request, frozen.price, context, remaining)
+          return quote?.tokens == desired ? quote : null
+        }, job.call)
+      } catch (error) {
+        if (error instanceof ModelError && error.code == 'limit') {
+          return { refused: { code: 'limit', reason: error.message } }
+        }
+        throw error
+      }
+      prior = await reservation({ STORE: env.STORE! }, job.call)
+    }
+    try {
+      let hold = matching(prior, found.space.eid)
+      let quote = quoted(frozen.request, frozen.price, context, hold.dollars)
+      if (quote?.tokens != desired) {
+        throw new ModelError(
+          'limit',
+          'This call does not match its model budget reservation',
+        )
+      }
+    } catch (error) {
+      if (error instanceof ModelError && error.code == 'limit') {
+        return { refused: { code: 'limit', reason: error.message } }
+      }
+      throw error
+    }
     try {
       await submitCall(
         { apply: (b) => graph.apply(b) },
@@ -314,15 +408,32 @@ export let hosting = (env: Bindings): Kernel => ({
       env,
       `inference/${job.executor}/${job.call}/media`,
     )
+    let hold = await reservation({ STORE: env.STORE! }, job.call)
+    if (hold && (hold.space != found.space.eid || hold.what != 'models')) {
+      throw new ModelError('inference_identity')
+    }
+    let reply = receipt.reply, price = frozen.price
+    let measured = reply && price && reply.usage?.input_tokens != null &&
+      (price.output == 0 || reply.usage.output_tokens != null)
     let cost =
       (ask?.cost as { dollars: number; reported: boolean } | undefined) ??
-        (receipt.reply ? billed(receipt.reply, frozen.price) : undefined)
+        (reply && (reply.cost != null || measured)
+          ? charged(reply, price, hold?.dollars ?? 0)
+          : undefined)
     if (media && media.call !== job.call) {
       throw new ModelError('inference_identity')
     }
     cost ??= media?.cost == null
       ? undefined
       : { dollars: media.cost, reported: media.costReported ?? true }
+    // A completed answer with missing usage has spent at most its hold. Keep
+    // all of it unavailable rather than refunding an estimated cheaper cost.
+    if (!cost && reply && hold) {
+      cost = charged(reply, price, hold.dollars)
+    }
+    if (!cost && budgetRefusal(receipt.failure) && hold) {
+      cost = { dollars: 0, reported: false }
+    }
     if (cost) {
       await countedMedia(
         { STORE: env.STORE! },

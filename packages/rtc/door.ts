@@ -27,7 +27,8 @@
 // store, the meter, the rates and the account. The door serves no route
 // itself, the way @yaks/egress is handed each call.
 
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, token } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 
 /** Cloudflare Realtime's API, as documented at
  * developers.cloudflare.com/realtime/sfu/https-api/. */
@@ -60,11 +61,12 @@ export type Store = {
   write: (bundles: Bundle[]) => Promise<unknown>
 }
 
-/** The space's allowance: the sentence that refuses a spend when it is used
- * up, or null, and the count of one that went ahead. */
+/** The space's allowance, with dollars held before a lease can spend them. */
 export type Meter = {
   refused: () => Promise<string | null>
-  spend: (dollars: number) => Promise<unknown>
+  reserve: (dollars: number) => Promise<
+    string | { settle: (dollars: number) => Promise<unknown> }
+  >
 }
 
 /** One call to the door. */
@@ -300,19 +302,25 @@ let called = async (
       return refusal(404, 'not_found', `no open session ${other} here`)
     }
   }
-  if (them.length) {
-    let no = await ask.meter.refused()
-    if (no) return refusal(429, 'limit', no)
-  }
+  // New subscriptions receive for the lease already granted. Renewals pay
+  // only for the extension beyond it, so these seconds are charged once.
+  let dollars = subscribes
+    ? rate(sent, ask.rates) * Math.max(
+      0,
+      Date.parse(String(comp(row, 'wake').at)) - (ask.now ?? Date.now)(),
+    ) / 1000
+    : 0
+  let held = dollars > 0 ? await ask.meter.reserve(dollars) : null
+  if (typeof held == 'string') return refusal(429, 'limit', held)
   let tail = rest ? `/${rest}` : ''
-  return await relayed(
-    await realtime(
-      ask.realtime,
-      ask.req.method,
-      `/apps/${ask.realtime.app}/sessions/${session}${tail}`,
-      sent,
-    ),
+  let res = await realtime(
+    ask.realtime,
+    ask.req.method,
+    `/apps/${ask.realtime.app}/sessions/${session}${tail}`,
+    sent,
   )
+  if (held) await held.settle(res.ok ? dollars : 0)
+  return await relayed(res)
 }
 
 // A renewal: the lease a minute out from now, and what the session receives
@@ -333,11 +341,20 @@ let renew = async (ask: Ask, session: string) => {
   let until = now + LEASE
   let seconds = Math.max(0, until - Math.max(was, now)) / 1000
   let dollars = rate(await res.json(), ask.rates) * seconds
-  if (dollars > 0) await ask.meter.spend(dollars)
-  await ask.store.write([{
-    entity: { eid: row.entity.eid },
-    wake: { at: iso(until) },
-  }])
+  let held = dollars > 0 ? await ask.meter.reserve(dollars) : null
+  if (typeof held == 'string') return refusal(429, 'limit', held)
+  try {
+    await ask.store.write([{
+      entity: { eid: row.entity.eid },
+      $was: { wake: { at: token(comp(row, 'wake').at) } },
+      wake: { at: iso(until) },
+    }])
+  } catch (error) {
+    if (!(error instanceof Stale)) throw error
+    if (held) await held.settle(0)
+    return await renew(ask, session)
+  }
+  if (held) await held.settle(dollars)
   return Response.json({ until: iso(until) }, {
     headers: { 'cache-control': 'no-store' },
   })

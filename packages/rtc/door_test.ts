@@ -69,7 +69,15 @@ let app = (allowance = Infinity) => {
   let meter = {
     refused: () =>
       Promise.resolve(spent >= allowance ? 'the allowance is spent' : null),
-    spend: (d: number) => Promise.resolve(spent += d),
+    reserve: (dollars: number) => {
+      if (spent + dollars > allowance) {
+        return Promise.resolve('the allowance is spent')
+      }
+      spent += dollars
+      return Promise.resolve({
+        settle: (cost: number) => Promise.resolve(spent += cost - dollars),
+      })
+    },
   }
   let rt = cloud()
   let now = T0
@@ -167,7 +175,7 @@ test('a change to a session carries the key it was opened with', async () => {
 })
 
 test('a session subscribes only to sessions this store holds, and not at the ceiling', async () => {
-  let a = app(1)
+  let a = app(60)
   let me = await a.open()
   await a.open()
   let hear = (sessionId: string) =>
@@ -229,4 +237,105 @@ test('ICE servers come from TURN, asked with its own token', async () => {
   let [sent] = a.rt.sent
   assertEquals(sent.path, '/turn/keys/k1/credentials/generate-ice-servers')
   assertEquals(sent.auth, 'Bearer turn-secret')
+})
+
+let capped = app(29)
+let cappedSession = await capped.open()
+let cappedUntil = of((await capped.sfu())[0], 'wake').at
+capped.rt.receiving.s1 = [{ mid: '1', location: 'remote' }]
+capped.wait(30_000)
+
+test('a renewal cannot extend a lease past the remaining dollars', async () => {
+  let res = await capped.call(
+    'POST',
+    '/sessions/s1/renew',
+    undefined,
+    cappedSession.key,
+  )
+  assertEquals(res.status, 429)
+  assertEquals(capped.spent, 0)
+  assertEquals(of((await capped.sfu())[0], 'wake').at, cappedUntil)
+})
+
+let subscribing = app(29)
+let subscribingSession = await subscribing.open()
+await subscribing.open()
+subscribing.wait(30_000)
+
+test('a subscription pays its existing lease before reaching Realtime', async () => {
+  let before = subscribing.rt.sent.length
+  let res = await subscribing.call('POST', '/sessions/s1/tracks/new', {
+    tracks: [{ location: 'remote', sessionId: 's2', trackName: 'voice' }],
+  }, subscribingSession.key)
+  assertEquals(res.status, 429)
+  assertEquals(subscribing.spent, 0)
+  assertEquals(subscribing.rt.sent.length, before)
+})
+
+let prepaid = app(60)
+let prepaidSession = await prepaid.open()
+await prepaid.open()
+prepaid.wait(30_000)
+
+test('subscription and renewal each pay only their own lease seconds', async () => {
+  let res = await prepaid.call('POST', '/sessions/s1/tracks/new', {
+    tracks: [{ location: 'remote', sessionId: 's2', trackName: 'voice' }],
+  }, prepaidSession.key)
+  assertEquals(res.status, 200)
+  assertEquals(prepaid.spent, 30)
+  prepaid.rt.receiving.s1 = [{ mid: '1', location: 'remote' }]
+  res = await prepaid.call(
+    'POST',
+    '/sessions/s1/renew',
+    undefined,
+    prepaidSession.key,
+  )
+  assertEquals(res.status, 200)
+  assertEquals(prepaid.spent, 60)
+})
+
+let concurrent = app(60)
+let concurrentSession = await concurrent.open()
+await concurrent.open()
+
+test('concurrent subscriptions share the dollars left for their leases', async () => {
+  let subscribe = () =>
+    concurrent.call('POST', '/sessions/s1/tracks/new', {
+      tracks: [{ location: 'remote', sessionId: 's2', trackName: 'voice' }],
+    }, concurrentSession.key)
+  let results = await Promise.all([subscribe(), subscribe()])
+  assertEquals(results.map((r) => r.status).sort(), [200, 429])
+  assertEquals(concurrent.spent, 60)
+})
+
+let rejected = app(60)
+let rejectedSession = await rejected.open()
+await rejected.open()
+let rejectedFetch = rejected.rt.realtime.fetch!
+rejected.rt.realtime.fetch = (url, init) =>
+  String(url).endsWith('/tracks/new')
+    ? Promise.resolve(
+      Response.json({ errorCode: 'bad_track' }, { status: 400 }),
+    )
+    : rejectedFetch(url, init)
+
+test('a subscription Realtime refuses releases its lease dollars', async () => {
+  let res = await rejected.call('POST', '/sessions/s1/tracks/new', {
+    tracks: [{ location: 'remote', sessionId: 's2', trackName: 'voice' }],
+  }, rejectedSession.key)
+  assertEquals(res.status, 400)
+  assertEquals(rejected.spent, 0)
+})
+
+let renewals = app(60)
+let renewalsSession = await renewals.open()
+renewals.rt.receiving.s1 = [{ mid: '1', location: 'remote' }]
+renewals.wait(30_000)
+
+test('concurrent renewals charge a lease extension once', async () => {
+  let renew = () =>
+    renewals.call('POST', '/sessions/s1/renew', undefined, renewalsSession.key)
+  let results = await Promise.all([renew(), renew()])
+  assertEquals(results.map((r) => r.status), [200, 200])
+  assertEquals(renewals.spent, 30)
 })

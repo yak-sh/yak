@@ -41,6 +41,7 @@ import {
   recoveredMedia,
   type Reply,
   type Request,
+  submitted,
   type Usage,
 } from '@yaks/model'
 import { generatedBytes, type MediaStore } from '@yaks/openai'
@@ -468,6 +469,7 @@ export let workersAi = (
       )
     }
     let sent = music(req.model) ? musicInput(req) : input(req)
+    await submitted(req)
     let response = await decoded(
       await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(
         req.model,

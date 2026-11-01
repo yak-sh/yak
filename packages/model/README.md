@@ -301,6 +301,17 @@ is the latest reading of how much of a provider's plan a window has used.
 
 `weigh(price, usage)` calculates dollars, treating missing counts as zero and
 using the input price when the cached or cache-write price is absent.
+`affordable(price, inputUpperTokens, remainingDollars, outputTokens?)` returns
+the largest affordable output limit and its reserved dollars, or `null`. The
+input bound includes provider framing, tools and retained conversation history;
+a token estimate is insufficient. It reserves input at the highest applicable
+cache tariff, rounds the maximum cost upward, and requires the provider to
+enforce the returned output limit.
+
+`charged(reply, price, maximumReservedDollars)` settles reported dollars or
+complete usage conservatively. Missing usage retains the reserved maximum;
+unclassified input uses the highest cache tariff.
+
 `billed(reply, price?)` uses `Reply.cost` first (provider-reported unless
 `costReported: false`), then weighs usage if both usage and price exist, or
 returns `undefined`.

@@ -794,3 +794,22 @@ The selected model must have a catalogue price and runs on the existing Workers
 AI binding. This entry accepts text. Picture attachments and the email, chat and
 SMS interfaces are separate work. Interrupted requests remain in the graph and
 can be continued explicitly; they do not resume automatically.
+
+Model spending reserves each provider call's maximum in the directory before
+submission. The atomic reservation debits the space's shared model and voice
+budget; settlement releases unused dollars once, and an uncertain submitted call
+keeps its maximum unavailable until its receipt can settle. A late receipt never
+resets or refunds another month's meter. Provider-reported cost exceeding the
+quoted maximum is a defect, not a charge silently clamped to the cap.
+
+Token-model bounds currently use the published context window and the most
+expensive input/cache tariff, then limit output to what remains. Workers AI
+offers no documented input-count endpoint, and its server-rendered chat template
+is not a verified local tokenizer input. This conservative bound can refuse a
+small request whose measured cost would fit: GLM-5.3's published 1,048,576-token
+window reserves $1.4680064 for input at $1.40 per million, beyond the free
+space's $0.20 budget. GLM-5.3 Flash reserves $0.1572864 for input at $0.15 per
+million. Unknown bounds refuse before generation. MiniMax music's fixed
+per-track tariff is bounded; speech with post-generation-only pricing and
+ElevenLabs' measured output-duration tariff require a verified bound before a
+new call can be bought. Existing paid receipts remain recoverable.

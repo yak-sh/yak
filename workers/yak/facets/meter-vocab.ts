@@ -2,6 +2,17 @@
 import type { VocabDoc } from '@yaks/vocab'
 export let docs: VocabDoc[] = [{
   $defs: {
+    model_reservation: {
+      component: true,
+      wire: false,
+      type: 'object',
+      properties: {
+        space: { type: 'string', ref: 'space', death: 'cascade' },
+        month: { type: 'string' },
+        dollars: { type: 'number' },
+        what: { type: 'string', enum: ['models', 'realtime'] },
+      },
+    },
     account_usage: {
       component: true,
       wire: false,

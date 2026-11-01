@@ -301,3 +301,32 @@ test('gateway validation details survive message/stack-only trackers', async () 
   assertEquals(e.stack?.includes('Model execution failed: invalid input'), true)
   assertEquals(e.errors[0].code, 7003)
 })
+
+test('paid submission is guarded before the binding and remains submitted on a lost answer', async () => {
+  let events: string[] = []
+  let model = workersAi({
+    run: () => {
+      events.push('paid')
+      return Promise.reject(new Error('answer lost'))
+    },
+  })
+  await assertRejects(
+    () =>
+      model(ask([], {
+        onSubmit: () => Promise.resolve(void events.push('submitted')),
+      })),
+    Error,
+    'answer lost',
+  )
+  assertEquals(events, ['submitted', 'paid'])
+  events.length = 0
+  await assertRejects(
+    () =>
+      model(ask([], {
+        onSubmit: () => Promise.reject(new ModelError('limit', 'budget spent')),
+      })),
+    ModelError,
+    'budget spent',
+  )
+  assertEquals(events, [])
+})

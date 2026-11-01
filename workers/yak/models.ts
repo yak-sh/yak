@@ -24,7 +24,7 @@ import {
 import { records } from '@yaks/secrets'
 
 import type { VocabDoc } from '@yaks/vocab'
-import { music, said, unfit, workersAi } from '@yaks/workers-ai'
+import { said, unfit, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
 import { resolve } from '@yaks/connections'
 import { gateway as openai } from '@yaks/openai'
@@ -333,29 +333,15 @@ let modelRows = (graph: {
  */
 export let asking = (at: Stored): Handlers => {
   if (at.meta || !at.app) return {}
-  let text = workersAi(
-    metered(
-      at.env,
-      payer(at.app),
-      modelRows({
-        read: at.graph.read,
-        apply: (bundles) => at.graph.apply(bundles, { trusted: true }),
-      }),
-    ),
-    { fetch: at.env.MODEL_FETCH, gateway: at.env.AI_GATEWAY },
-  )
-  let audio = accounted(
+  let served = accounted(
     at.env,
     payer(at.app),
     workersAi(at.env.AI!, {
       media: mediaStore(at),
+      fetch: at.env.MODEL_FETCH,
       gateway: at.env.AI_GATEWAY,
       receipts: receiptsFor(at),
     }),
-  )
-  let served: Model = Object.assign(
-    (req: Parameters<Model>[0]) => music(req.model) ? audio(req) : text(req),
-    { info: (name: string) => text.info!(name) },
   )
   let lent = {
     [PROVIDER]: served,

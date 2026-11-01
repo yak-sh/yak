@@ -14,6 +14,7 @@ import * as apps from './apps.ts'
 import { endpoint } from './probe.ts'
 import {
   ANON,
+  type Ask,
   build,
   BUSY,
   fake,
@@ -27,7 +28,7 @@ import {
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { platform } from './testing.ts'
+import { embeds, platform } from './testing.ts'
 import { invokePackage } from './package-tools.ts'
 import { BUDGET, BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
@@ -45,7 +46,9 @@ let seeded = async (vars: Partial<Env> = {}) => {
     BUILDER_MODEL_FREE: '@cf/test/free',
     MODEL_FETCH: () =>
       Promise.resolve(
-        new Response('$0.15 per M input tokens, $0.5 per M output tokens'),
+        new Response(
+          'Context Window: 100,000 tokens\n$0.15 per M input tokens, $0.5 per M output tokens',
+        ),
       ),
     BUILDER_MODEL_PAID: '@cf/test/paid',
     ...vars,
@@ -173,7 +176,7 @@ test('a conversation that ships nothing is no build at all', async () => {
   ])
   await build(env, owner, space, asked('what do i have'), { model })
 
-  assertEquals((await dirOf(env).space('ada'))!.meter?.built, undefined)
+  assertEquals((await dirOf(env).space('ada'))!.meter?.built ?? 0, 0)
 })
 
 test('a space at its build ceiling is told so before a token is spent', async () => {
@@ -369,6 +372,7 @@ test('the roster is the platform table, whole', async () => {
 let terra = (env: Env) => ({
   ...openai(env, 'gpt-5.6-terra'),
   price: { input: 1, output: 1 },
+  context: 100000,
 })
 
 // OpenAI Responses requests and responses stay inside this process.
@@ -465,13 +469,13 @@ test('a busy model is a wait, not a failure', async () => {
 test('builder affinity and tools survive followups; missing usage stays unknown', async () => {
   let calls: Parameters<NonNullable<Env['AI']>['run']>[] = []
   let { env, space } = await seeded({
-    AI: {
+    AI: embeds({
       run: (...args) => {
         calls.push(args)
         return Promise.resolve({ response: 'hi' })
       },
       gateway: () => ({ getUrl: () => Promise.resolve('') }),
-    },
+    }),
   })
   let first = await build(env, owner, space, asked('hi'))
   await build(env, owner, space, [...first.lines, ...asked('again')])
@@ -497,4 +501,88 @@ test('builder affinity and tools survive followups; missing usage stays unknown'
     text: 'hi',
     usage: first.usage,
   })
+})
+
+let pilot = await seeded()
+await dirOf(pilot.env).apply({
+  entities: [{
+    entity: { eid: pilot.space.eid },
+    meter: { month: monthOf(new Date()), models: 0.11129812 },
+  }],
+})
+let pilotModel = fake([{ text: 'too expensive', cost: 0.08893328 }])
+
+test('the builder refuses an unaffordable final call before submitting it', async () => {
+  let out = await build(pilot.env, owner, pilot.space, asked('continue'), {
+    model: pilotModel,
+  })
+  assert(out.refused)
+  assertEquals(pilotModel.asked.length, 0)
+  assertEquals((await dirOf(pilot.env).space('ada'))!.meter?.models, 0.11129812)
+})
+
+let capped = await seeded()
+let cappedTokens = 0
+let cappedModel = {
+  id: 'bounded-fixture',
+  context: 0,
+  price: { input: 0, output: 1000 },
+  ask: async (a: Ask) => {
+    await a.onSubmit?.()
+    cappedTokens = a.tokens
+    return {
+      text: 'within budget',
+      calls: [],
+      usage: { input: 0, output: a.tokens },
+    }
+  },
+}
+
+test('the builder bounds output tokens to the affordable maximum and charges once', async () => {
+  let out = await build(capped.env, owner, capped.space, asked('go'), {
+    model: cappedModel,
+  })
+  assertEquals(out.refused, undefined)
+  assertEquals(cappedTokens, 200)
+  assertEquals(
+    (await dirOf(capped.env).space('ada'))!.meter?.models,
+    BUDGET.free,
+  )
+})
+
+let parallel = await seeded()
+let parallelModels = [fake([{ cost: 0.15 }]), fake([{ cost: 0.15 }])]
+
+test('concurrent builders reserve from the same remaining space dollars', async () => {
+  let results = await Promise.all(
+    parallelModels.map((model) =>
+      build(parallel.env, owner, parallel.space, asked('go'), { model })
+    ),
+  )
+  assertEquals(results.map((r) => r.rounds).sort(), [0, 1])
+  assertEquals(
+    parallelModels.reduce((n, model) => n + model.asked.length, 0),
+    1,
+  )
+  assertEquals((await dirOf(parallel.env).space('ada'))!.meter?.models, 0.15)
+})
+
+let unknown = await seeded()
+let unknownModel = {
+  ...cappedModel,
+  ask: async (a: Ask) => {
+    await a.onSubmit?.()
+    return { text: 'usage unavailable', calls: [], usage: {} }
+  },
+}
+
+test('a builder answer without measured usage retains its reserved maximum', async () => {
+  let out = await build(unknown.env, owner, unknown.space, asked('go'), {
+    model: unknownModel,
+  })
+  assertEquals(out.refused, undefined)
+  assertEquals(
+    (await dirOf(unknown.env).space('ada'))!.meter?.models,
+    BUDGET.free,
+  )
 })

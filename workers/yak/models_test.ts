@@ -3,7 +3,7 @@
 // answered as an entry of its own, a model calls the commands the app marks
 // for it and no others, as the person who asked, a visitor asks only an app
 // that opens its models, and the space's budget moves by what a call cost
-// until, past it, the transcript rests on the ceiling's sentence. Workers AI
+// until the remaining dollars cannot cover a call. Workers AI
 // is a fake binding here; the directory and the stores are the platform's own.
 
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
@@ -87,10 +87,12 @@ let vale = async (
     'a probe secret',
     {
       AI,
-      MODEL_FETCH: () =>
+      MODEL_FETCH: (url) =>
         Promise.resolve(
           new Response(
-            'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens',
+            String(url).includes('qwen3-embedding')
+              ? 'Text Embeddings • Qwen\nContext Window | 8,192 tokens\nUnit Pricing | $0 per M input tokens'
+              : 'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens',
           ),
         ),
       ...env,
@@ -286,7 +288,7 @@ let hosted = async () => {
 // start; the case closes it, paying for what its asks leave running.
 let openRouter = await hosted()
 
-test('a connected OpenRouter model puts generated audio in the app store', async () => {
+test('an existing OpenRouter receipt delivers audio and settles once without generation', async () => {
   let { v, key, space, build, call, dispatched, workflows, quiet } = openRouter
   cleanup(v.close)
   let bytes = new Uint8Array([
@@ -296,40 +298,67 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     0x64,
     ...new Array(400).fill(0),
   ])
-  let calls = 0
+  let session = crypto.randomUUID(), callId = crypto.randomUUID()
+  let job = {
+    call: callId,
+    executor: 'yak-model-v1',
+    request: `inference/yak-model-v1/${callId}/request`,
+    receipt: `inference/yak-model-v1/${callId}/receipt`,
+  }
+  let privateRequest = {
+    call: callId,
+    executor: job.executor,
+    app: v.app.eid,
+    provider: { api: 'openrouter', key: 'existing-credential-sentinel' },
+    request: { call: callId, model: SEED, items: [], tools: [] },
+  }
+  let artifact = await artifactStore(
+    objectBlobs(v.env.MODEL_RECEIPTS!, 'artifacts/'),
+  )(bytes, 'audio/mpeg')
+  await v.env.MODEL_RECEIPTS!.put(job.request, JSON.stringify(privateRequest))
+  await v.env.MODEL_RECEIPTS!.put(
+    job.receipt,
+    JSON.stringify({
+      call: callId,
+      reply: {
+        id: 'gen-test',
+        model: SEED,
+        items: [],
+        cost: 0.125,
+        costReported: true,
+        artifacts: [artifact],
+      },
+    }),
+  )
+  let request = asking(session, SEED)
+  request[0] = { ...request[0], session: { source: call } }
+  request.push({
+    entity: { eid: callId },
+    entry: { session },
+    ask: { to: identityEid('model', [SEED]), through: request[1].entity.eid },
+    using: request[1].using,
+    attempt: { by: ADA },
+    submitted: { at: new Date().toISOString() },
+    inference: { executor: job.executor, request: job.request },
+  })
   let original = globalThis.fetch
-  globalThis.fetch =
-    (async (input: string | URL | Request, init?: RequestInit) => {
-      let sent = new Request(input, init)
-      if (sent.url.includes('/models')) {
-        return Response.json({
-          data: [{
-            id: SEED,
-            name: 'Seed',
-            architecture: { output_modalities: ['speech'] },
-          }],
-        })
-      }
-      calls++
-      if (sent.url.includes('/generation?')) {
-        assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
-        return Response.json({ data: { total_cost: 0.125 } })
-      }
-      assertEquals(sent.url, 'https://openrouter.ai/api/v1/audio/speech')
-      assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
-      assertEquals((await sent.json()).model, SEED)
-      return new Response(bytes, {
-        headers: {
-          'content-type': 'audio/mpeg',
-          'x-generation-id': 'gen-test',
-        },
-      })
-    }) as typeof fetch
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    let sent = new Request(input, init)
+    assertEquals(sent.method, 'GET')
+    assert(sent.url.includes('/models'))
+    return Promise.resolve(Response.json({
+      data: [{
+        id: SEED,
+        name: 'Seed',
+        architecture: { output_modalities: ['speech'] },
+      }],
+    }))
+  }) as typeof fetch
   try {
-    let session = crypto.randomUUID()
-    let request = asking(session, SEED)
-    request[0] = { ...request[0], session: { source: call } }
-    assertEquals((await v.send('/apply', request)).status, 200)
+    await metaOf(appStore(v.env.STORE, space, v.app, v.env), KERNEL).apply(
+      request,
+    )
+    await hosting(v.env).delivered(job)
     await quiet()
     let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
     let eid = (attachment.attachment as Comp).artifact as string
@@ -351,10 +380,8 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals(file.status, 200)
     assertEquals(file.headers.get('content-type'), 'audio/mpeg')
     assertEquals(new Uint8Array(await file.arrayBuffer()), bytes)
-    assertEquals(calls, 2)
-    assertEquals(dispatched.length, 1)
+    assertEquals(dispatched.length, 0)
     await Promise.all(workflows)
-    let job = dispatched[0]
     let host = hosting(v.env)
     assertEquals(await host.submitted(job), true)
     assertEquals(await host.claim(job), { claimed: false })
@@ -373,10 +400,6 @@ test('a connected OpenRouter model puts generated audio in the app store', async
       host.grants({ ...job, request: job.request + '-forged' })
     )
     await assertRejects(() => host.checkpoint(job, { submitted: { at: null } }))
-    let frozen = await v.env.MODEL_RECEIPTS!.get(job.request)
-    let privateRequest = JSON.parse(
-      new TextDecoder().decode(await frozen!.arrayBuffer()),
-    )
     assertEquals(privateRequest.request.call, job.call)
     assertEquals(privateRequest.app, v.app.eid)
     assert(!JSON.stringify(privateRequest).includes(key))
@@ -459,7 +482,7 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     await quiet()
     let [error] = await v.landed(`.entry.session=${blocked}&.refusal&*`)
     assertEquals((error.refusal as Comp).code, 'limit')
-    assertEquals(calls, 2)
+    assertEquals(dispatched.length, 0)
     assertEquals(v.asked.length, 0)
     assertEquals((await v.spent()).meter!.models, BUDGET.free)
     assert(
@@ -487,7 +510,107 @@ test('a connected OpenRouter model puts generated audio in the app store', async
       interrupted: false,
     })
     await assertRejects(() => host.grants(job))
-    assertEquals(calls, 2)
+    assertEquals(dispatched.length, 0)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('a hosted text call freezes and sends the output its remaining space budget can afford', async () => {
+  let { v, dispatched, quiet } = await hosted()
+  cleanup(v.close)
+  let original = globalThis.fetch
+  let tokens = 0, posts = 0
+  globalThis.fetch =
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      let sent = new Request(input, init)
+      if (sent.url.includes('/models')) {
+        return Response.json({
+          data: [{
+            id: 'vendor/text',
+            name: 'Text',
+            context_length: 100,
+            architecture: { output_modalities: ['text'] },
+            pricing: { prompt: '0.000001', completion: '0.001' },
+          }],
+        })
+      }
+      assertEquals(sent.url, 'https://openrouter.ai/api/v1/responses')
+      posts++
+      tokens = Number((await sent.json()).max_output_tokens)
+      assert(tokens > 0 && tokens < 4096)
+      return new Response(
+        [
+          {
+            type: 'response.output_item.done',
+            item: {
+              type: 'message',
+              content: [{ type: 'output_text', text: 'within budget' }],
+            },
+          },
+          {
+            type: 'response.completed',
+            response: {
+              id: 'bounded',
+              model: 'vendor/text',
+              status: 'completed',
+              usage: {
+                input_tokens: 100,
+                output_tokens: tokens,
+                cost: 0.0001 + tokens / 1000,
+              },
+            },
+          },
+        ].map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join(''),
+        { headers: { 'content-type': 'text/event-stream' } },
+      )
+    }) as typeof fetch
+  try {
+    assertEquals(
+      (await v.send('/apply', asking(crypto.randomUUID(), 'vendor/text')))
+        .status,
+      200,
+    )
+    await quiet()
+    assertEquals(posts, 1)
+    assertEquals(dispatched.length, 1)
+    let object = await v.env.MODEL_RECEIPTS!.get(dispatched[0].request)
+    let frozen = JSON.parse(
+      new TextDecoder().decode(await object!.arrayBuffer()),
+    )
+    assertEquals(frozen.request.tokens, tokens)
+    assert((await v.spent()).meter!.models <= BUDGET.free)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('a connected hosted model refuses unbounded speech before provider submission', async () => {
+  let { v, dispatched, quiet } = await hosted()
+  cleanup(v.close)
+  let original = globalThis.fetch
+  let posts = 0
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    let sent = new Request(input, init)
+    if (sent.method == 'POST') posts++
+    assert(sent.url.includes('/models'))
+    return Promise.resolve(Response.json({
+      data: [{
+        id: SEED,
+        name: 'Seed',
+        architecture: { output_modalities: ['speech'] },
+      }],
+    }))
+  }) as typeof fetch
+  try {
+    let session = crypto.randomUUID()
+    await v.send('/apply', asking(session, SEED))
+    await quiet()
+    let [failed] = await v.landed(`.entry.session=${session}&.refusal&*`)
+    assertEquals((failed.refusal as Comp).code, 'limit')
+    assertEquals(posts, 0)
+    assertEquals(dispatched, [])
+    assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free - 0.125)
   } finally {
     globalThis.fetch = original
   }
@@ -831,6 +954,33 @@ test('a space past its budget is told so, and the transcript rests', async () =>
   assertEquals(v.asked.length, 0)
 })
 
+test('./api/ai/run bounds the final answered call and concurrent spend to the space cap', async () => {
+  let v = await vale(({ input }) => ({
+    response: 'affordable',
+    usage: { input_tokens: 100, output_tokens: Number(input.max_tokens) },
+  }), {
+    models: BUDGET.free - 0.0005,
+    env: {
+      MODEL_FETCH: () =>
+        Promise.resolve(
+          new Response(
+            'Context Window | 100 tokens\n$1 per M input tokens, $100 per M output tokens',
+          ),
+        ),
+    },
+  })
+  let run = () => v.run({ model: FLASH, input: { max_tokens: 1000 } })
+  let results = await Promise.all([run(), run()])
+  assertEquals(results.map((r) => r.status).sort(), [200, 429])
+  assertEquals(v.asked.length, 1)
+  assert(Number(v.asked[0].input.max_tokens) > 0)
+  assert(Number(v.asked[0].input.max_tokens) < 1000)
+  assert((await v.spent()).meter!.models <= BUDGET.free)
+  assertEquals((await run()).status, 429)
+  assertEquals(v.asked.length, 1)
+  assert((await v.spent()).meter!.models <= BUDGET.free)
+})
+
 test('./api/ai/run answers what the model said, and the space pays for it', async () => {
   let usage = { prompt_tokens: 2_000, completion_tokens: 50 }
   let v = await vale(() => ({ response: 'Welcome.', usage }))
@@ -839,7 +989,11 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
     status: 200,
     said: { response: 'Welcome.', usage },
   })
-  assertEquals(v.asked, [{ model: FLASH, input, options: undefined }])
+  assertEquals(v.asked, [{
+    model: FLASH,
+    input: { ...input, max_tokens: 4096 },
+    options: undefined,
+  }])
   let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, {
     input_tokens: 2_000,
     output_tokens: 50,
@@ -863,7 +1017,9 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
     env: {
       MODEL_FETCH: () =>
         Promise.resolve(
-          new Response('Text Embeddings • Qwen\n$0.0118 per M input tokens'),
+          new Response(
+            'Text Embeddings • Qwen\nContext Window | 8,192 tokens\n$0.0118 per M input tokens',
+          ),
         ),
     },
   })
@@ -914,7 +1070,9 @@ test('./api/ai/run shares one price lookup across concurrent and repeated calls'
       MODEL_FETCH: () => {
         reads++
         return Promise.resolve(
-          new Response('$1 per M input tokens, $2 per M output tokens'),
+          new Response(
+            'Context Window | 10,000 tokens\n$1 per M input tokens, $2 per M output tokens',
+          ),
         )
       },
     },
@@ -929,8 +1087,8 @@ test('./api/ai/run shares one price lookup across concurrent and repeated calls'
   assertAlmostEquals((await v.spent()).meter!.models, 0.0036)
 })
 
-test('./api/ai/run uses a held price while refreshing it without delaying inference', async () => {
-  let reads = 0, refreshed: Promise<void>[] = []
+test('./api/ai/run waits for current pricing before reserving and purchasing inference', async () => {
+  let reads = 0
   let finish!: (response: Response) => void
   let page = new Promise<Response>((resolve) => finish = resolve)
   let v = await vale(() => ({
@@ -944,34 +1102,31 @@ test('./api/ai/run uses a held price while refreshing it without delaying infere
   let eid = identityEid('model', [FLASH])
   await graph.apply([{
     entity: { eid },
-    model: { name: FLASH, offered: true },
+    model: { name: FLASH, offered: true, context: 10000 },
     price: { input: 1, output: 2 },
   }])
-  let result = await within(
-    v.env,
-    {},
-    () => v.run({ model: FLASH, input: {} }),
-    undefined,
-    {
-      retain: (work) => refreshed.push(work),
-    },
+  let result = v.run({ model: FLASH, input: {} })
+  await until(() => reads == 1, { label: 'current model pricing' })
+  assertEquals(v.asked, [])
+  finish(
+    new Response(
+      'Context Window | 10,000 tokens\n$3 per M input tokens, $4 per M output tokens',
+    ),
   )
-  assertEquals(result.status, 200)
-  assertAlmostEquals((await v.spent()).meter!.models, 0.0012)
-  finish(new Response('$3 per M input tokens, $4 per M output tokens'))
-  await Promise.all(refreshed)
+  assertEquals((await result).status, 200)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0034)
   assertEquals((await graph.query(`.entity.eid=${eid}&.price`))[0].price, {
     input: 3,
     output: 4,
   })
   assertEquals((await v.run({ model: FLASH, input: {} })).status, 200)
   assertEquals(reads, 1)
-  assertAlmostEquals((await v.spent()).meter!.models, 0.0046)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0068)
 })
 
-test('./api/ai/run keeps its held price when refreshing fails and reports the failure', async () => {
-  let reports: Bundle[] = [], refreshed: Promise<void>[] = []
-  let v = await vale(() => ({ response: 'hello' }), {
+test('./api/ai/run refuses unavailable current pricing before purchasing inference', async () => {
+  let reports: Bundle[] = []
+  let v = await vale(() => ({ response: 'must not run' }), {
     env: {
       MODEL_FETCH: () => Promise.reject(new Error('Price refresh unavailable')),
       ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
@@ -984,26 +1139,13 @@ test('./api/ai/run keeps its held price when refreshing fails and reports the fa
   let eid = identityEid('model', [FLASH])
   await graph.apply([{
     entity: { eid },
-    model: { name: FLASH },
+    model: { name: FLASH, context: 10000 },
     price: { input: 1, output: 2 },
   }])
-  let result = await within(
-    v.env,
-    {},
-    () => v.run({ model: FLASH, input: {} }),
-    undefined,
-    {
-      retain: (work) => refreshed.push(work),
-    },
-  )
-  await Promise.all(refreshed)
-  assertEquals(result.status, 200)
-  assertEquals(v.asked.length, 1)
-  assert((await v.spent()).meter!.models > 0)
-  assertEquals((await graph.query(`.entity.eid=${eid}&.price`))[0].price, {
-    input: 1,
-    output: 2,
-  })
+  let result = await within(v.env, {}, () => v.run({ model: FLASH, input: {} }))
+  assertEquals(result.status, 502)
+  assertEquals(v.asked, [])
+  assertEquals((await v.spent()).meter?.models ?? 0, 0)
   assertEquals(reports.filter((r) => r.exception).length, 1)
 })
 
@@ -1142,6 +1284,12 @@ test('accounting preserves provider continuation metadata and passes requests wh
     mark: () => ({ openrouter: { response_id: 'reply' } }),
     anchor: () => 'prior',
     vocab: { $defs: {} },
+    info: () =>
+      Promise.resolve({
+        name: 'fixture',
+        context: 0,
+        price: { input: 0, output: 0 },
+      }),
   })
   let model = accounted(v.env, (dir) => dir.space('ada'), raw)
   assertEquals(model.mark, raw.mark)

@@ -77,7 +77,7 @@ let res = await answer({
   req,
   path, // within the door: '/sessions/new'
   store, // the app's store: read(query), write(bundles)
-  meter, // refused() -> sentence | null, spend(dollars)
+  meter, // refused() -> sentence | null; reserve(dollars) -> {settle(cost)} | sentence
   realtime: { app, token, turn: { key, token } },
   rates: { track, channel }, // dollars a second received
 })
@@ -90,11 +90,18 @@ let res = await answer({
 - A change to a session carries the key `sessions/new` handed back
   (`x-yak-rtc-key`); the row keeps its SHA-256. The session id is no proof:
   `rtc` relays it to every listener.
-- The allowance is asked before a session opens, before it subscribes to
-  another, and before each renewal. A renewal weighs the time it extends the
-  lease by: Realtime's reading of the session, each active remote track and
-  channel at its rate. Realtime reports no bytes per session, so this is an
-  estimate.
+- The allowance is asked before a session opens. A subscription reserves its
+  remote tracks' and channels' rates over the remaining lease before reaching
+  Realtime. A renewal reserves the active subscriptions' rates over the lease
+  extension before granting it. The host reserves and settles these dollars
+  atomically against the same balance its other consumers use; a refused
+  subscription releases its reservation. Concurrent renewals charge each
+  extension once.
+- Voice dollars are an egress estimate. Realtime reports no bytes per session
+  and does not enforce the host's lease; its wake closes the tracks later. These
+  reservations bound the shared dollar ledger, rather than guaranteeing a
+  maximum provider egress invoice. Model providers have separate request limits
+  and priced maximums for their strict next-call caps.
 - When a lease lapses, its wake fires, and `rtc_lapse` closes the session's open
   tracks at Realtime and drops the row. The host composes `@yaks/rtc/effects`
   with `with: {realtime: {app, token}}`, using the same account as the door. In

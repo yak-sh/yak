@@ -101,6 +101,7 @@ export {
   type Paid,
   type Part,
 } from './attribute.ts'
+export { type Affordable, affordable, charged } from './afford.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
 export { acknowledged, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'

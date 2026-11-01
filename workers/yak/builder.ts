@@ -36,17 +36,17 @@
 // asks the meter before it spends anything (`over`) and counts one
 // afterwards where a deploy went through (`countedBuild`), so a long
 // conversation that ships one app costs one build and one that ships nothing
-// costs none. What its model calls cost is counted either way
-// (`countedSpend`), weighed in dollars by the model's price (models.ts), and
-// the account budget is asked before every round, since a
-// conversation that never deploys spends it all the same. What the meter is holding is meter.ts's (T-34241); the page is
-// somebody else's (T-34242).
+// costs none. Each model turn reserves its priced maximum and settles its
+// answer against the shared space budget (builder-spend.ts), whether or not
+// the conversation deploys. What the meter holds is meter.ts's (T-34241);
+// the page is somebody else's (T-34242).
 import {
+  type Affordable,
   type Item,
+  type Listed,
   ModelError,
   type Price,
   type Reply,
-  weigh,
 } from '@yaks/model'
 import { valueIn } from '@yaks/tools/value'
 import { worded } from '@yaks/tools/result'
@@ -65,7 +65,6 @@ import {
   over,
   pooled,
 } from './meter.ts'
-import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
@@ -73,6 +72,7 @@ import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
 import { caught } from './defects.ts'
+import { turn } from './builder-spend.ts'
 
 /** What one response used, in tokens; its model's price weighs it in dollars
  * (@yaks/model `weigh`). */
@@ -114,6 +114,7 @@ export type Ask = {
   fns: Fn[]
   /** the most this turn may write */
   tokens: number
+  onSubmit?: () => Promise<void>
 }
 
 /** What a model answered: its words, the tools it wants run, what it spent. */
@@ -124,10 +125,16 @@ export type Answer = {
   cost?: number
 }
 
-/** A model, whichever provider it is behind, and its price in the catalogue
- * (models.ts). One with no price is never asked: what it spent could not be
- * counted. */
-export type Model = { id: string; price?: Price; ask(a: Ask): Promise<Answer> }
+/** A model with published pricing and an input bound, or an explicit quote
+ * for the complete next turn. Its adapter enforces the granted output cap. */
+export type Model = {
+  id: string
+  price?: Price
+  context?: number
+  info?: () => Promise<Listed>
+  quote?: (a: Ask, remaining: number) => Affordable | null
+  ask(a: Ask): Promise<Answer>
+}
 
 /**
  * The loop, as it happens. A round is not a stream — a turn arrives whole —
@@ -341,7 +348,11 @@ let answer = (reply: Reply): Answer => ({
  */
 let binding = (env: Env, id: string): Model => ({
   id,
-  ask: async ({ system, conversation, said, fns, tokens }) => {
+  info: () => {
+    if (!env.AI) throw new Error(NO_AI)
+    return modelInfo(id, env.MODEL_FETCH)
+  },
+  ask: async ({ system, conversation, said, fns, tokens, onSubmit }) => {
     if (!env.AI) throw new Error(NO_AI)
     let model = workersAi(env.AI)
     return answer(
@@ -352,6 +363,7 @@ let binding = (env: Env, id: string): Model => ({
         items: items(said),
         tools: fns,
         tokens,
+        onSubmit,
       }),
     )
   },
@@ -381,7 +393,7 @@ let gateway = async (env: Env): Promise<string | null> => {
  */
 export let openai = (env: Env, id: string): Model => ({
   id,
-  ask: async ({ system, conversation, said, fns, tokens }) => {
+  ask: async ({ system, conversation, said, fns, tokens, onSubmit }) => {
     let at = await gateway(env)
     let key = env.OPENAI_API_KEY
     let aig = env.AI_GATEWAY_TOKEN
@@ -410,6 +422,7 @@ export let openai = (env: Env, id: string): Model => ({
         })
       }
     }
+    await onSubmit?.()
     let res = await fetch(`${at}/responses`, {
       method: 'POST',
       headers: {
@@ -491,7 +504,12 @@ export let fake = (script: Partial<Answer>[]) => {
     id: 'fake',
     price: { input: 0, output: 0 },
     asked,
-    ask: (a: Ask) => {
+    quote: (a: Ask, remaining: number) => {
+      let dollars = script[at]?.cost ?? 0
+      return dollars <= remaining ? { dollars, tokens: a.tokens } : null
+    },
+    ask: async (a: Ask) => {
+      await a.onSubmit?.()
       asked.push(a)
       let one = script[at++] ?? {}
       return Promise.resolve({
@@ -524,11 +542,6 @@ export let build = async (
   let usage: Usage = { input: 0, output: 0, cached: 0 }
   let rounds = 0
   let built = false
-  // What the model this build runs on costs, once one is picked; and what the
-  // conversation has spent on it so far, in dollars.
-  let price: Price | undefined
-  let dollars = 0
-  let cost = () => dollars
   // A listener's own failure is not the build's: a socket that went away
   // mid-round must not end a conversation that is still going.
   let on = (b: Beat) => {
@@ -545,19 +558,19 @@ export let build = async (
   let spend = spending()
   // Every way out of the loop, including the refusals: a build that happened
   // is counted whichever end the conversation came to, and a conversation
-  // that deployed nothing is counted as the model dollars and seconds it
-  // spent and no build (meter.ts `countedSpend`). The container goes on every one of
-  // those ends too — a refusal is not a reason to leave one running.
+  // that deployed nothing counts its container seconds and no build.
+  // Model dollars settled at each turn (builder-spend.ts). The container
+  // goes on every end too — a refusal is no reason to leave one running.
   let end = async (refused?: string): Promise<Built> => {
     if (refused) lines.push({ said: 'builder', text: refused })
     let seconds = await released(env, space, spend)
     // The container went with the build, so the person's place goes too
     // (sandbox.ts `awake`), rather than when its nap would have ended.
     if (seconds && who.person) await asleep(env, space, who.person)
-    // One write, from one reading of the space: the build, what its model
-    // cost and the seconds it compiled for go together.
-    if (built) await countedBuild(env, space, cost(), seconds)
-    else await countedSpend(env, space, cost(), seconds)
+    // Turns already settled their model dollars; this counts only the build
+    // and the seconds its container compiled for.
+    if (built) await countedBuild(env, space, 0, seconds)
+    else await countedSpend(env, space, 0, seconds)
     let last = [...lines].reverse().find((l) => l.said == 'builder')
     let text = last?.said == 'builder' ? last.text : ''
     on({ beat: 'done', text, ...(refused ? { refused } : {}) })
@@ -588,7 +601,6 @@ export let build = async (
 
   let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
-  price = model.price
   let tools = roster(ctx)
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
   let fns = tools.map((t) => t.fn)
@@ -602,14 +614,10 @@ export let build = async (
 
   while (true) {
     if (rounds >= max) return await end(tooMany(max))
-    let full = accounts.find((a) => a.spent + cost() >= a.limit)
-    if (full) {
-      return await end(atCeiling(space, 'models', env, full.limit))
-    }
     if (now() - started > ms) return await end(tooLong(ms))
     let answer: Answer
     try {
-      answer = await model.ask({
+      answer = await turn(env, space, model, {
         system,
         conversation,
         said: lines,
@@ -617,25 +625,14 @@ export let build = async (
         tokens,
       })
     } catch (e) {
-      if (!busy(e)) caught(e, { request: 'build model', space: space.slug })
+      if (!busy(e) && !(e instanceof ModelError && e.code == 'limit')) {
+        caught(e, { request: 'build model', space: space.slug })
+      }
       return await end(
         busy(e) ? BUSY : e instanceof Error ? e.message : String(e),
       )
     }
     rounds++
-    if (answer.cost == null && !price) {
-      price = (await modelInfo(model.id, env.MODEL_FETCH)).price
-    }
-    // Estimates charge the budget, never masquerade as reported usage.
-    dollars += answer.cost ?? (price
-      ? weigh(price, {
-        input_tokens: answer.usage.input ?? guess({ system, lines, fns }),
-        output_tokens: answer.usage.output ?? guess(answer.text),
-        cached_tokens: answer.usage.cached,
-      })
-      : (() => {
-        throw new Error(unpriced(model.id))
-      })())
     usage.input = sum(usage.input, answer.usage.input)
     usage.output = sum(usage.output, answer.usage.output)
     usage.cached = sum(usage.cached, answer.usage.cached)

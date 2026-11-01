@@ -2,7 +2,6 @@
 // facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
 import { type ByDay, kept } from '@yaks/ui/chart'
-import { same } from '@yaks/fp'
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
@@ -21,12 +20,13 @@ import type { Held, Holding } from './held.ts'
 import { mailedTo } from './post.ts'
 import { refuse } from './tool.ts'
 import {
+  affordable,
   billed,
+  charged,
   type Listed,
   type Model,
   ModelError,
   type Price,
-  weigh,
 } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import {
@@ -36,11 +36,13 @@ import {
   pricedAudio,
   routing,
   said,
+  unfit,
   usageOf,
 } from '@yaks/workers-ai'
-import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
-import { background, caught, defect } from './defects.ts'
+import { defect } from './defects.ts'
+import { reserved, settled } from './model-spend.ts'
+import { mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 
@@ -805,6 +807,7 @@ export let countedMedia = async (
   if (!Number.isFinite(dollars) || dollars < 0) {
     throw new Error('Generated media returned no valid request cost')
   }
+  if (await settled(env, call, dollars, reported)) return
   let eid = derivedEid('generated-media-spend|' + call)
   try {
     await stamp(env, {
@@ -873,8 +876,7 @@ export let metering = (
 // A model call is counted where it happens, like a letter and for the same
 // reason: nothing in the analytics knows which space asked. The budget is
 // read before the call and the call weighed after it, by its model's price in
-// the catalogue (models.ts), so the call that crosses the line still
-// completes: a soft ceiling, like the others.
+// the catalogue (models.ts). Each call reserves its bounded maximum first.
 
 let unpriced = new WeakMap<typeof fetch, Set<string>>()
 let missingPrice = (model: string, fetcher: typeof fetch = fetch) => {
@@ -907,6 +909,19 @@ let missingPrice = (model: string, fetcher: typeof fetch = fetch) => {
  * and reported: the account met no budget of its own, and only the platform
  * can buy more.
  */
+export let musicQuote = (
+  model: string,
+  input: Record<string, unknown>,
+  remaining: number,
+) => {
+  // MiniMax bills per track. ElevenLabs is priced from encoded output
+  // seconds; a requested duration does not bound MP3 padding or plan output.
+  let dollars = model == 'minimax/music-2.6'
+    ? 0.15 + (input.lyrics_optimizer == true ? 0.01 : 0)
+    : Infinity
+  return dollars <= remaining ? { dollars, tokens: 0 } : null
+}
+
 export let metered = (
   bind: {
     AI?: Binding
@@ -931,34 +946,74 @@ export let metered = (
           'and to the space that pays for it',
       )
     }
-    let no = await refusedSpend(dir, space, 'models', bind)
-    if (no) throw new ModelError(LIMIT, no)
-    let held = music(model) ? undefined : await rows?.price(model)
-    let info: Listed = { name: model }
-    if (!music(model)) {
-      let reading = modelInfo(model, bind.MODEL_FETCH)
-      if (held) {
-        background(
-          reading.then(async (fresh) => {
-            if (!fresh.price) {
-              missingPrice(model, bind.MODEL_FETCH)
-            } else if (!same(fresh.price, held)) {
-              await rows!.answered(model, fresh)
-            }
-          }).catch((error) =>
-            caught(error, { request: 'refresh model price', model })
-          ),
-        )
-      } else info = await reading
-    }
-    let price = held ?? info.price
+    let info = music(model)
+      ? { name: model }
+      : await modelInfo(model, bind.MODEL_FETCH)
+    let price = info.price
     if (!music(model) && !price) throw missingPrice(model, bind.MODEL_FETCH)
+    let sent = input && typeof input == 'object'
+      ? input as Record<string, unknown>
+      : {}
+    let structured = 'questions' in sent
+    let choices = Number(sent.n ?? 1)
+    if (
+      'requests' in sent ||
+      Array.isArray(sent.tools) &&
+        sent.tools.some((t) =>
+          !t || typeof t != 'object' || Reflect.get(t, 'type') != 'function'
+        ) ||
+      !Number.isSafeInteger(choices) || choices < 1 ||
+      Array.isArray(sent.modalities) && sent.modalities.some((m) => m != 'text')
+    ) {
+      throw new ModelError(
+        'limit',
+        'This request has no bounded text-generation price',
+      )
+    }
+    let desired = price?.output == 0
+      ? 0
+      : structured
+      ? Number(info.context)
+      : Number(
+        sent.max_completion_tokens ?? sent.max_tokens ?? 4096,
+      )
+    let hold = await reserved({ STORE: ns }, space, (remaining) => {
+      if (music(model)) return musicQuote(model, sent, remaining)
+      let bound = info.context
+      if (bound == null) return null
+      let quote = affordable(
+        { ...price!, output: price!.output * choices },
+        bound * choices *
+          (price!.output == 0 && Array.isArray(sent.text)
+            ? sent.text.length
+            : 1),
+        remaining,
+        desired,
+      )
+      return structured && quote?.tokens != desired ? null : quote
+    })
+    if (!music(model) && !structured && price!.output) {
+      input = {
+        ...sent,
+        max_tokens: hold.value.tokens,
+        ...'max_completion_tokens' in sent
+          ? { max_completion_tokens: hold.value.tokens }
+          : {},
+      }
+    }
     let answer = await bind.AI.run(
       model,
       input,
       routing(model, options, bind.AI_GATEWAY),
-    ).catch((e) => {
+    ).catch(async (e) => {
       let said = failure(e)
+      if (
+        unfit(e) ||
+        said instanceof ModelError &&
+          ['busy', 'model', LIMIT].includes(said.code)
+      ) {
+        await hold.settle(0, false)
+      }
       if (said instanceof ModelError && said.code == LIMIT) {
         defect(e, { request: `model ${model}`, space: space.slug })
       }
@@ -968,16 +1023,8 @@ export let metered = (
     let n = usageOf(answer)
     let cost = music(model)
       ? (await pricedAudio(model, input, said(answer))).cost
-      : price
-      ? weigh(price, {
-        input_tokens: n.input_tokens ?? guess(input),
-        output_tokens: n.output_tokens ?? guess(answer),
-        cached_tokens: n.cached_tokens,
-      })
-      : (() => {
-        throw new Error(`No price reported for ${model}`)
-      })()
-    await countedSpend({ STORE: ns }, space, cost, 0)
+      : charged({ usage: n }, price, hold.value.dollars).dollars
+    await hold.settle(cost, false)
     return answer
   },
 })
@@ -1001,40 +1048,52 @@ export let accounted = (
           'No account is bound to this model call',
         )
       }
-      let no = await refusedSpend(dir, space, 'models', bind)
-      if (no) throw new ModelError(LIMIT, no)
-      let checkpoint = req.onMedia
-      let mediaCall: string | undefined
-      let reply = await model({
-        ...req,
-        onMedia: async (receipt) => {
-          mediaCall = receipt.call
-          if (receipt.cost != null) {
-            await countedMedia(
-              { STORE: ns },
-              space,
-              receipt.call,
-              receipt.cost,
-              receipt.costReported ?? true,
-            )
-          }
-          await checkpoint?.(receipt)
-        },
-      })
-      let cost = billed(reply, await price?.(req.model))
+      let info = music(req.model) ? undefined : await model.info?.(req.model)
+      let tariff = info?.price ?? await price?.(req.model)
+      let call = req.call ?? mint()
+      let hold = await reserved({ STORE: ns }, space, (remaining) => {
+        if (music(req.model)) {
+          return musicQuote(req.model, req.input ?? {}, remaining)
+        }
+        if (
+          req.modalities?.some((m) => m != 'text')
+        ) return null
+        let bound = info?.context ??
+          (tariff && Object.values(tariff).every((p) => p == 0) ? 0 : undefined)
+        let output = req.questions ? bound : req.tokens
+        let quote = tariff && bound != null
+          ? affordable(tariff, bound, remaining, output)
+          : null
+        return req.questions && quote?.tokens != output ? null : quote
+      }, call)
+      let submitted = false
+      let reply: Awaited<ReturnType<Model>>
+      try {
+        reply = await model({
+          ...req,
+          call,
+          tokens: hold.value.tokens,
+          onSubmit: async () => {
+            if (submitted) {
+              throw new ModelError(
+                'submitted',
+                'This call has already been submitted',
+              )
+            }
+            await req.onSubmit?.()
+            submitted = true
+          },
+        })
+      } catch (error) {
+        if (!submitted) await hold.settle(0, false)
+        throw error
+      }
+      let cost = charged(reply, tariff, hold.value.dollars)
       if (!cost || !Number.isFinite(cost.dollars) || cost.dollars < 0) {
         throw new Error('Hosted provider returned no valid request cost')
       }
-      if (mediaCall) {
-        await countedMedia(
-          { STORE: ns },
-          space,
-          mediaCall,
-          cost.dollars,
-          cost.reported,
-        )
-      } else await countedSpend({ STORE: ns }, space, cost.dollars, 0)
-      return reply
+      await hold.settle(cost.dollars, cost.reported)
+      return { ...reply, cost: cost.dollars, costReported: cost.reported }
     },
     model,
     {
@@ -1061,13 +1120,15 @@ export let accounted = (
             'Recovered provider returned no request cost',
           )
         }
-        await countedMedia(
-          { STORE: ns },
-          space,
-          call,
-          cost.dollars,
-          cost.reported,
-        )
+        if (!await settled({ STORE: ns }, call, cost.dollars, cost.reported)) {
+          await countedMedia(
+            { STORE: ns },
+            space,
+            call,
+            cost.dollars,
+            cost.reported,
+          )
+        }
         return reply
       },
     },
