@@ -1,6 +1,7 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count twice.
 
+import { type ByDay, kept } from '@yaks/ui/chart'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
@@ -130,6 +131,11 @@ export let grouped = (
         first: str(old.first) && str(old.first) < at ? old.first : at,
         last: str(old.last) > at ? old.last : at,
         hits: Number(old.hits ?? 0) + Number(e.hits ?? 1),
+        days: kept(
+          old.days as ByDay,
+          Number(e.hits ?? 1),
+          Date.parse(at) || Date.now(),
+        ),
       },
       ...marks,
       ...back
@@ -156,7 +162,13 @@ export let grouped = (
 // its marks whole only for an imported sample.
 let MARKS = ['archived', 'notified', 'resolved']
 let ITS = ['error', 'exception', 'during', 'refusal', ...MARKS]
-let COUNTED = fields('bug.hits', 'bug.first', 'bug.last', 'resolved.at')
+let COUNTED = fields(
+  'bug.hits',
+  'bug.days',
+  'bug.first',
+  'bug.last',
+  'resolved.at',
+)
 
 /** The bug an occurrence joins, as grouping reads it. */
 let joined = (

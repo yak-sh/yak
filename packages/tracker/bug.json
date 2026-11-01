@@ -48,6 +48,10 @@
           "stamped": true,
           "description": "Occurrences grouped, including those retained only in the count."
         },
+        "days": {
+          "type": "object",
+          "description": "Its hits by day, YYYY-MM-DD, for the last thirty days; a quiet day is absent."
+        },
         "people": {
           "type": "number",
           "description": "Distinct people its retained occurrences reached, by their user_id tag.",

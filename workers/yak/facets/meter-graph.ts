@@ -3,7 +3,7 @@ import type { Plugin } from '@yaks/graph'
 import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import { reporting } from '../wake.ts'
-import { added } from '../meter.ts'
+import { added, trended } from '../meter.ts'
 
 let props = (c: unknown): Record<string, unknown> =>
   c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
@@ -34,9 +34,10 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
     // a caller's, so two spends at once both count.
     name: 'spend',
     phase: 'rules',
-    match: '+meter, *spend',
-    run: ({ meter, spend }) => ({
+    match: '+meter, +trend, *spend, #Now',
+    run: ({ meter, trend, spend, Now }) => ({
       meter: added(props(meter), props(spend)),
+      trend: trended(props(trend), props(spend), Date.parse(Now.at)),
       spend: null,
     }),
   }],

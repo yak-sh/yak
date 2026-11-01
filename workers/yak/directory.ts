@@ -1,3 +1,4 @@
+import type { ByDay } from '@yaks/ui/chart'
 import { EPOCH, gathered, MEND, READS } from './directory-copy.ts'
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
@@ -527,6 +528,7 @@ export type Row = {
     details_submitted?: boolean | null
   }
   meter?: Partial<Meter>
+  trend?: { requests?: ByDay; spend?: ByDay }
   notified?: Record<string, unknown> | null
   tunnel?: {
     id?: string | null
@@ -1826,8 +1828,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let stamps = '?created&?used'
       let [people, spaces, apps, seats, deploys] = await Promise.all([
         query(`.person&?doc&?email&?signed_in&${stamps}`, true),
-        query(`.space&${SPACE_ABOUT}&${stamps}`, true),
-        query(`.app&${ABOUT}&${stamps}&?changed&?errored`, true),
+        // A row's days ride only here: every other read of a row does without.
+        query(`.space&${SPACE_ABOUT}&?trend&${stamps}`, true),
+        query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`, true),
         query('.member', true),
         // Only which app and when: a release's whole row is its file list.
         query('.deploy&.fields=deploy.app,created.at', true),

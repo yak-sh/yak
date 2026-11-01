@@ -196,6 +196,22 @@
       },
       "description": "a copy of somebody else\u2019s app, at the version it was copied from"
     },
+    "trend": {
+      "component": true,
+      "journal": false,
+      "description": "What an app or a space counted, by day, for its charts: the last thirty days, a quiet day absent.",
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "description": "Requests by day, YYYY-MM-DD, as Cloudflare's analytics said at the hourly reading."
+        },
+        "spend": {
+          "type": "object",
+          "description": "Dollars spent on models, builds and generated media by day, YYYY-MM-DD, added as each is spent."
+        }
+      }
+    },
     "meter": {
       "component": true,
       "journal": false,

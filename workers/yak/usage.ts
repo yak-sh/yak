@@ -35,6 +35,7 @@
 // reads and the sentence a door says no with — is meter.ts, which this half
 // reads and the Store object reads too.
 import { patient } from '@yaks/blob'
+import { type ByDay, series, summed } from '@yaks/ui/chart'
 import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
 import {
@@ -71,8 +72,13 @@ import { visited } from './views.ts'
 // separates hibernated socket messages from ordinary requests; periodic
 // metrics carry messages received while the object was active. `limit` is
 // the group count, not the request count.
+//
+// `days` is the requests again, by object and day over the last thirty, for
+// the charts: each hour's reading writes a row's whole series from what
+// Cloudflare holds, so a late count corrects itself. The newest days come
+// first, so a limit reached forgets the oldest.
 export let QUERY =
-  `query Meter($account: string!, $since: string!, $until: string!) {
+  `query Meter($account: string!, $since: string!, $recent: string!, $until: string!) {
   viewer {
     accounts(filter: {accountTag: $account}) {
       durableObjectsInvocationsAdaptiveGroups(
@@ -89,6 +95,14 @@ export let QUERY =
         dimensions { objectId }
         sum { rowsRead rowsWritten inboundWebsocketMsgCount }
       }
+      days: durableObjectsInvocationsAdaptiveGroups(
+        limit: 10000
+        orderBy: [date_DESC]
+        filter: {datetime_geq: $recent, datetime_lt: $until}
+      ) {
+        dimensions { objectId date }
+        sum { requests }
+      }
       accountInvocations: durableObjectsInvocationsAdaptiveGroups(
         limit: 1
         filter: {datetime_geq: $since, datetime_lt: $until}
@@ -102,7 +116,7 @@ export let QUERY =
 }`
 
 type Group = {
-  dimensions?: { objectId?: string; type?: string }
+  dimensions?: { objectId?: string; type?: string; date?: string }
   sum?: {
     requests?: number
     rowsRead?: number
@@ -116,6 +130,7 @@ type Data = {
     accounts?: {
       durableObjectsInvocationsAdaptiveGroups?: Group[]
       durableObjectsPeriodicGroups?: Group[]
+      days?: Group[]
       accountInvocations?: Group[]
       accountPeriodic?: Group[]
     }[]
@@ -150,6 +165,19 @@ export let read = (answer: Answer) => {
     row.ws_messages += g.sum?.inboundWebsocketMsgCount ?? 0
     row.rows_read += g.sum?.rowsRead ?? 0
     row.rows_written += g.sum?.rowsWritten ?? 0
+  }
+  return by
+}
+
+// The answer's requests by object and day.
+export let daysOfAnswer = (answer: Answer): Map<string, ByDay> => {
+  let by = new Map<string, ByDay>()
+  for (let g of said(answer)?.viewer?.accounts?.[0]?.days ?? []) {
+    let { objectId, date } = g.dimensions ?? {}
+    if (!objectId || !date) continue
+    let days = by.get(objectId) ?? {}
+    days[date] = (days[date] ?? 0) + (g.sum?.requests ?? 0)
+    by.set(objectId, days)
   }
   return by
 }
@@ -214,9 +242,10 @@ let SWEEP = { tries: 8, wait: 500 }
  * or null where no credential was given and only storage is measured. */
 export let measured = async (
   spaces: { space: Space; apps: App[] }[],
-  { sizesOf, counts, month, now }: {
+  { sizesOf, counts, daysOf, month, now }: {
     sizesOf: (space: Space) => Promise<Map<string, number>>
     counts: ((space: Space, app: App) => Counts) | null
+    daysOf?: (space: Space, app: App) => ByDay
     month: string
     now: Date
   },
@@ -264,12 +293,16 @@ export let measured = async (
       continue
     }
     let total = { ...none(), bytes: held.bytes, files: held.files }
+    let days: ByDay[] = []
     for (let app of apps) {
       let got = counts(space, app)
+      let requests = daysOf?.(space, app) ?? {}
+      days.push(requests)
       // No `bytes`: the store's own figure stands, and a patch leaves it.
       entities.push({
         entity: { eid: app.eid },
         meter: { month, ...got, at, ...sizes ? { files: filesOf(app) } : {} },
+        ...daysOf ? { trend: { requests } } : {},
       })
       total.requests += got.requests
       total.ws_messages += got.ws_messages
@@ -291,6 +324,7 @@ export let measured = async (
     entities.push({
       entity: { eid: space.eid },
       meter,
+      ...daysOf ? { trend: { requests: summed(days) } } : {},
       ...(moved(meter) ? { notified: null } : {}),
       // Every space is on the free tier until Stripe says otherwise
       // (D-32751); one that already carries a plan keeps it.
@@ -311,10 +345,13 @@ export let sweep = async (env: Env, now = new Date()) => {
     ? await ask<Data>(env, QUERY, {
       account: env.CF_ACCOUNT ?? '',
       since: `${month}-01T00:00:00Z`,
+      recent: new Date(Date.parse(series(null, 30, now.getTime()).from))
+        .toISOString(),
       until: at,
     })
     : null
   let counts = answer ? read(answer) : null
+  let days = answer ? daysOfAnswer(answer) : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let spaces = []
   for (let space of await dir.all()) {
@@ -337,6 +374,10 @@ export let sweep = async (env: Env, now = new Date()) => {
           none(),
         ...views ? { visits: views.get(app.eid) ?? 0 } : {},
       })),
+    daysOf: days
+      ? (space, app) =>
+        days.get(String(env.STORE.idFromName(storeName(space, app)))) ?? {}
+      : undefined,
     month,
     now,
   })

@@ -12,6 +12,7 @@ import * as base from './base.ts'
 import * as body from './Body.ts'
 import * as button from './Button.ts'
 import * as catalog from './Catalog.ts'
+import * as chart from './Chart.ts'
 import * as chip from './Chip.ts'
 import * as choices from './Choices.ts'
 import * as doc from './Doc.ts'
@@ -72,6 +73,7 @@ let modules = {
     Value: value,
     Meter: meter,
     Spark: spark,
+    Chart: chart,
     Tip: tip,
   },
   Controls: {

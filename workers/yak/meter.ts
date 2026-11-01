@@ -1,6 +1,7 @@
 // A space's allowances, counted spends and metered model/mail providers.
 // facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
+import { type ByDay, kept } from '@yaks/ui/chart'
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
@@ -344,6 +345,30 @@ export let added = (
   for (let k of SPENDS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
   if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
   return out
+}
+
+/**
+ * The patch a spend makes to a space's `trend`: what it cost, on its day. A
+ * letter or a spend of nothing costs nothing and leaves the days as they are.
+ *
+ * ```ts
+ * import { trended } from './meter.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = Date.parse('2026-10-31T12:00:00Z')
+ * equal(trended({ spend: { '2026-10-31': 1 } }, { models: 0.5 }, now), {
+ *   spend: { '2026-10-31': 1.5 },
+ * })
+ * equal(trended({}, { emails: 1 }, now), {})
+ * ```
+ */
+export let trended = (
+  trend: Record<string, unknown> | undefined,
+  spend: Record<string, unknown>,
+  now: number,
+): Record<string, unknown> => {
+  let cost = Number(spend.models ?? 0)
+  return cost ? { spend: kept(trend?.spend as ByDay, cost, now) } : {}
 }
 
 /** Whether a space's hourly reading is past its monthly request units. It

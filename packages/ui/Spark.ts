@@ -32,7 +32,10 @@ let BARS = '▁▂▃▄▅▆▇█'
  * equal(bars([1, 2], 16), '▁▁')
  * ```
  */
-export let bars = (values: number[], max = Math.max(0, ...values)): string =>
+export let bars = (
+  values: number[],
+  max: number = Math.max(0, ...values),
+): string =>
   values.map((v) =>
     v > 0 && max > 0
       ? BARS[Math.min(7, Math.max(0, Math.ceil(v / max * 8) - 1))]

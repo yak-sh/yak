@@ -3,6 +3,8 @@
 // are portable renderers through the host's hyperscript, so `yak bug list`
 // prints the same rows a browser lists. A message reads as its headline; the
 // whole of it is on the page (./inspect.ts), one press away.
+import { type ByDay, series } from '@yaks/ui/chart'
+import { bars } from '@yaks/ui'
 import { parse } from '@yaks/query/core'
 import { define, type H, type RenderContext } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
@@ -63,6 +65,19 @@ let dot = <Node>(h: H<Node>, e: Bundle): Node =>
     title: standing(e),
   })
 
+// Its hits over the last fortnight, in the characters a browser and a terminal
+// both paint, for a bug that has kept any.
+let trail = <Node>(h: H<Node>, days?: ByDay) => {
+  let { values } = series(days, 14)
+  return values.some((v) => v > 0)
+    ? h(
+      'span',
+      { class: 'Spark', title: 'hits a day, the last 14 days' },
+      h('span', { class: 'Spark_Bar' }, bars(values)),
+    )
+    : null
+}
+
 let bugTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx), bug = comp(e, 'bug')
   return tile(h, s.link?.(e.entity.eid), {
@@ -73,6 +88,8 @@ let bugTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
       line(h, 'Tile_Title', said(e)),
       ' ',
       h('span', { class: 'Tile_Count' }, count(Number(bug.hits ?? 0), 'hit')),
+      ' ',
+      trail(h, bug.days as ByDay | undefined),
     ],
     sub: [
       where(e),

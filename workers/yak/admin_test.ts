@@ -185,12 +185,10 @@ test('an app says when it was deployed, changed and broke, and who owns it', () 
       'Visits, 30 days',
     ]
   ) assertStringIncludes(row, said)
-  let bare = drawn(c.apps[1], 'Directory.List.Tile', {
-    uses: a2,
-    space: 'shop',
-  })
-  assertStringIncludes(bare, 'not counted yet')
-  assertStringIncludes(bare, 'none since 1 Nov')
+  assertStringIncludes(
+    drawn(c.apps[1], 'Directory.List.Tile', { uses: a2, space: 'shop' }),
+    'not counted yet',
+  )
 })
 
 let env = { SESSION_SECRET: SECRET } as Env
@@ -259,4 +257,51 @@ test('the census reads which app each release is of and when, never its files', 
   let [row] = deploys
   assertEquals([deploys.length, row.deploy], [1, { app: 'census-app' }])
   assertEquals(typeof row.created?.at, 'string')
+})
+
+test("a row's figures carry their days, and a person's are their spaces' added", () => {
+  let c: Census = {
+    ...EMPTY,
+    people: [{
+      entity: { eid: 'ann' },
+      person: {},
+      email: { address: 'ann@x.com' },
+    }],
+    spaces: [
+      {
+        entity: { eid: 's' },
+        space: { slug: 'ann' },
+        trend: { spend: { '2026-10-14': 0.5 }, requests: { '2026-10-13': 7 } },
+      },
+      {
+        entity: { eid: 't' },
+        space: { slug: 'two' },
+        trend: { spend: { '2026-10-14': 0.25 } },
+      },
+    ],
+    apps: [{
+      entity: { eid: 'a' },
+      app: { slug: 'one', space: 's' },
+      trend: { requests: { '2026-10-14': 3 } },
+    }],
+    seats: ['s', 't'].map((space) => ({
+      entity: { eid: `seat-${space}` },
+      member: { person: 'ann', space, role: 'owner' },
+    })),
+  } as unknown as Census
+  let all = uses(c, NOW)
+  assertEquals(all.get('ann')?.spending?.values.at(-1), 0.75)
+  assertEquals(all.get('s')?.requesting?.values.at(-2), 7)
+  let row = drawn(c.apps[0], 'Directory.List.Tile', {
+    uses: all.get('a'),
+    base: '/admin',
+  })
+  assertStringIncludes(row, 'data-chart="line"')
+  assertStringIncludes(row, 'data-noun="request"')
+  // A quiet row draws its number alone.
+  let quiet = drawn(c.apps[0], 'Directory.List.Tile', {
+    uses: { requests: 0 },
+    base: '/admin',
+  })
+  assertEquals(quiet.includes('data-chart'), false)
 })

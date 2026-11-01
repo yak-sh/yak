@@ -10,6 +10,7 @@ import {
 import type { Meter, Space, Tier } from './directory.ts'
 import {
   accountOf,
+  daysOfAnswer,
   fileSizes,
   full,
   fullFiles,
@@ -52,6 +53,7 @@ import {
   WARN,
   weighed,
 } from './meter.ts'
+import { none } from './meter.ts'
 
 let ANSWER = {
   data: {
@@ -852,6 +854,58 @@ test('a space whose files cannot be listed keeps its figure, and the rest are re
   assertEquals(refused.map((e) => (e as Error).message), ['list: refused'])
 })
 
+test('each reading writes a row its days, and a space its apps added up', async () => {
+  let app = (eid: string, slug: string) =>
+    ({ eid, slug, meter: null }) as unknown as dirPart.App
+  let { entities } = await measured(
+    [{
+      space: { eid: 's', slug: 'ada', meter: null } as Space,
+      apps: [app('a', 'one'), app('b', 'two')],
+    }],
+    {
+      sizesOf: () => Promise.resolve(new Map()),
+      counts: () => none(),
+      daysOf: (_, a) =>
+        a.slug == 'one'
+          ? { '2026-09-01': 2 }
+          : { '2026-09-01': 1, '2026-09-02': 5 },
+      month: '2026-09',
+      now: NOW,
+    },
+  )
+  assertEquals(
+    entities.map((e) => [e.entity.eid, e.trend]),
+    [
+      ['a', { requests: { '2026-09-01': 2 } }],
+      ['b', { requests: { '2026-09-01': 1, '2026-09-02': 5 } }],
+      ['s', { requests: { '2026-09-01': 3, '2026-09-02': 5 } }],
+    ],
+  )
+})
+
+test("the answer's requests by object and day, added across its groups", () => {
+  let group = (objectId: string, date: string, requests: number) => ({
+    dimensions: { objectId, date },
+    sum: { requests },
+  })
+  assertEquals(
+    [...daysOfAnswer({
+      data: {
+        viewer: {
+          accounts: [{
+            days: [
+              group('x', '2026-09-01', 1),
+              group('x', '2026-09-01', 2),
+              group('y', '2026-09-02', 4),
+            ],
+          }],
+        },
+      },
+    })],
+    [['x', { '2026-09-01': 3 }], ['y', { '2026-09-02': 4 }]],
+  )
+})
+
 test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
   for (
     const what of [
@@ -980,6 +1034,17 @@ test('spends counted at once all count, and the sweep keeps them', async () => {
     ...spends,
     emails: 2,
   })
+})
+
+test('a spend lands on its day, and a letter costs no day', async () => {
+  let c = await counting()
+  await countedBuild(c.env, c.space, 0.25, 0, NOW)
+  await countedBuild(c.env, c.space, 0.5, 0, NOW)
+  await counted(c.env, c.space, NOW)
+  // Read the way the admin's page reads it.
+  let { spaces } = await c.dir.census()
+  let row = spaces.find((r) => r.space?.slug == 'jeff')
+  assertEquals(Object.values(row?.trend?.spend ?? {}), [0.75])
 })
 
 test('models and voice spend one account budget, each counted apart', async () => {

@@ -6,6 +6,7 @@
     "./routes": "./routes.ts",
     "./cli": "./cli.ts",
     "./ui": "./ui.ts",
+    "./chart": "./chart-marks.ts",
     "./contributions": "./contributions.ts",
     "./guide": "./guide.ts",
     "./history": "./history.ts"

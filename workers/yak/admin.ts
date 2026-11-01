@@ -37,7 +37,8 @@ import { esc } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { icon, type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
-import { statsOf } from './views.ts'
+import { DAYS, statsOf } from './views.ts'
+import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 
 export let PATH = '/admin'
@@ -77,6 +78,16 @@ let seatPerson = (r: Row) => idOf(r.member!.person)
 let appSpace = (r: Row) => idOf(r.app!.space)
 let personName = (r: Row) =>
   r.doc?.title || (r.email?.address ?? '').split('@')[0] || 'Someone'
+
+// A figure's days, for a row that has kept any.
+let days = (
+  name: 'spending' | 'requesting',
+  byDay: ByDay | undefined,
+  now: Date,
+) =>
+  byDay && Object.keys(byDay).length
+    ? { [name]: series(byDay, DAYS, now.getTime()) }
+    : {}
 
 /**
  * What every row uses, counted once over the whole directory. A space: what
@@ -118,12 +129,15 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
     let app = idOf(r.deploy!.app), at = r.created?.at ?? ''
     if (at > (deployed.get(app) ?? '')) deployed.set(app, at)
   }
+  let trends = new Map(c.spaces.map((r) => [r.entity.eid, r.trend]))
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
     let s = spaces.get(r.entity.eid)!
     let apps = appsIn.get(s.eid) ?? []
     out.set(s.eid, {
       spend: { spent: budget([s], now).spent },
+      ...days('spending', r.trend?.spend, now),
+      ...days('requesting', r.trend?.requests, now),
       storage: stored(held.get(s.eid)),
       apps: apps.length,
       active: latest(r.used?.at, ...apps.map((a) => a.used?.at)),
@@ -134,6 +148,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
     out.set(r.entity.eid, {
       requests: r.meter?.month == month ? r.meter.requests ?? 0 : 0,
       visits: r.meter?.visits ?? null,
+      ...days('requesting', r.trend?.requests, now),
       storage: stored(held.get(appSpace(r))?.apps.get(r.app!.slug)),
       active: r.used?.at ?? null,
       deployed: deployed.get(r.entity.eid) ?? null,
@@ -152,6 +167,11 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
       .filter((s) => s.slug != META.space)
     out.set(r.entity.eid, {
       spend: budget(owned, now),
+      ...days(
+        'spending',
+        summed(owned.map((s) => trends.get(s.eid)?.spend)),
+        now,
+      ),
       storage: sum(owned.map((s) => out.get(s.eid)?.storage ?? 0)),
       apps: sum(owned.map((s) => out.get(s.eid)?.apps ?? 0)),
       active: latest(
@@ -356,7 +376,7 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     let [deploys, visits] = await Promise.all([
       dir.deploys(appOf(r)),
       (statsOf(env, r.entity.eid) ?? Promise.resolve(null))
-        .then((s) => s?.total ?? null, (e) => {
+        .then((s) => s, (e) => {
           caught(e, { request: 'admin visits' })
           return null
         }),
@@ -364,7 +384,10 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     ctx.home = home ? refOf(d, home) : undefined
     ctx.from = from ? refOf(d, from) : undefined
     ctx.deploys = { count: deploys.length, at: deploys[0]?.at ?? '' }
-    ctx.visits = visits
+    ctx.visits = visits?.total ?? null
+    ctx.visiting = visits?.daily.length
+      ? { from: visits.daily[0].day, values: visits.daily.map((d) => d.views) }
+      : undefined
     let copies = c.apps.filter((a) =>
       a.installed?.of && idOf(a.installed.of) == r.entity.eid
     )

@@ -46,6 +46,7 @@ equal(
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/ui`               | Parts below; `el`, `block`, `Surround`, `Props`, `Part`; `relative`; browser placement; kits, themes, skins, composition helpers and their types; `Guide`, `Specimens` |
 | `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` for a host's UI facet                                                                                                                   |
+| `@yaks/ui/chart`         | A chart's marks through any `h`: `sparkline`, `columns`, and the days a row keeps (`kept`, `series`, `summed`)                                                         |
 | `@yaks/ui/contributions` | Browser-safe `gather` and `Contributions`                                                                                                                              |
 | `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                      |
 | `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                    |

@@ -38,6 +38,9 @@ import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { links } from './sheets.ts'
 import { count, FREE, PLUS, PRICE, size } from './meter.ts'
+import { columns } from '@yaks/ui/chart'
+import { h, type VNode } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 
@@ -99,7 +102,11 @@ ${links(env, 'pages.css')}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
       lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`
-    }${inner}</main></body>
+    }${inner}</main>${
+      inner.includes('data-chart')
+        ? `<script src="${url(env, '/chart.js')}" defer></script>`
+        : ''
+    }</body>
 </html>`,
     {
       status,
@@ -473,10 +480,6 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 // the pages people opened, the sites that sent them, the countries they were
 // in — as tables, because a table reads on a phone and needs no script.
 //
-// The chart is inline SVG with `preserveAspectRatio="none"`: the viewBox is
-// one unit per day, the page stretches it to whatever width there is, and a
-// rectangle stretched is still a rectangle. No library, no canvas, no script —
-// and the whole series is in one `aria-label` for anyone who cannot see it.
 // Short enough for the ends of an axis: "7 Aug".
 let axisDay = (iso: string) => {
   let at = new Date(`${iso}T00:00:00Z`)
@@ -487,25 +490,21 @@ let axisDay = (iso: string) => {
   })
 }
 
-let chart = (days: { day: string; views: number }[], total: number) => {
-  let most = Math.max(...days.map((d) => d.views), 1)
-  let bars = days.map((d, i) =>
-    `<rect class="Stats_Bar" x="${(i + 0.15).toFixed(2)}" y="${
-      (40 - (d.views / most) * 40).toFixed(2)
-    }" width="0.7" height="${((d.views / most) * 40).toFixed(2)}"></rect>`
-  ).join('')
-  return `<figure class="Stats_Plot"><svg class="Stats_Chart" viewBox="0 0 ${days.length} 40"
-preserveAspectRatio="none" role="img" aria-label="${
-    count(total)
-  } visits over ${days.length} days, ${
-    count(days[days.length - 1]?.views ?? 0)
-  } on the last day">${bars}</svg>
+let chart = (days: { day: string; views: number }[]) =>
+  `<figure class="Stats_Plot">${
+    renderToString(
+      columns(h as never, {
+        from: days[0]?.day ?? '',
+        values: days.map((d) => d.views),
+        noun: 'visit',
+      }) as VNode,
+    )
+  }
 <figcaption class="Stats_Span"><span>${
     esc(axisDay(days[0]?.day ?? ''))
   }</span><span>${
     esc(axisDay(days[days.length - 1]?.day ?? ''))
   }</span></figcaption></figure>`
-}
 
 let column = (head: string, rows: { name: string; views: number }[]) =>
   rows.length
@@ -545,7 +544,7 @@ let visits = (v: Visits, site: string) =>
     v.stats.total == 1 ? 'visit' : 'visits'
   }</span></p></header>${
     v.stats.total
-      ? chart(v.stats.daily, v.stats.total) +
+      ? chart(v.stats.daily) +
         `<div class="Stats_Tops">${
           column('Pages', v.stats.pages) + column('Came from', v.stats.from) +
           column('Countries', v.stats.countries)

@@ -971,8 +971,23 @@
 
         <div class="Card Guide_Demo">
           <p class="Guide_Name">
-            .Stats · .Stats_Total · .Stats_Unit · .Stats_Plot · .Stats_Chart ·
-            .Stats_Bar · .Stats_Span · .Stats_Tops · .Stats_Column ·
+            .Chart · .Chart-line · .Chart-bars · .Chart_Plot · .Chart_Line ·
+            .Chart_End · .Chart_Bar · .Chart_Tip
+          </p>
+          <p>1,204 requests<span class="Chart Chart-line" role="img"
+              tabindex="0" aria-label="1,204 requests over 7 days, 310 on the last day"
+              data-chart="line" data-from="2026-09-01"
+              data-values="40,90,60,204,180,320,310" data-noun="request"><svg
+                class="Chart_Plot" viewBox="0 0 64 16" width="64" height="16"
+                aria-hidden="true"><path class="Chart_Line"
+                  d="M2 13.3L12 9.3L22 11L32 8.3L42 6.3L52 2L62 2.4"></path><circle
+                  class="Chart_End" cx="62" cy="2.4" r="1.75"></circle></svg></span></p>
+          <p><span class="Chart_Tip" style="position: static">3 Sept: 60 requests</span></p>
+        </div>
+
+        <div class="Card Guide_Demo">
+          <p class="Guide_Name">
+            .Stats · .Stats_Total · .Stats_Unit · .Stats_Plot · .Stats_Span · .Stats_Tops · .Stats_Column ·
             .Stats_List
           </p>
           <article class="Card Stats" aria-labelledby="stats-demo-title">
@@ -982,24 +997,28 @@
                 class="Stats_Total">42 <span class="Stats_Unit">visits</span></p>
             </header>
             <figure class="Stats_Plot">
-              <svg class="Stats_Chart" viewBox="0 0 7 40"
-                preserveAspectRatio="none" role="img"
-                aria-label="42 visits over 7 days, 9 on the last day">
-                <rect class="Stats_Bar" x=".15" y="30" width=".7"
-                  height="10"></rect>
-                <rect class="Stats_Bar" x="1.15" y="26.67" width=".7"
-                  height="13.33"></rect>
-                <rect class="Stats_Bar" x="2.15" y="40" width=".7"
-                  height="0"></rect>
-                <rect class="Stats_Bar" x="3.15" y="13.33" width=".7"
-                  height="26.67"></rect>
-                <rect class="Stats_Bar" x="4.15" y="0" width=".7"
-                  height="40"></rect>
-                <rect class="Stats_Bar" x="5.15" y="20" width=".7"
-                  height="20"></rect>
-                <rect class="Stats_Bar" x="6.15" y="10" width=".7"
-                  height="30"></rect>
-              </svg>
+              <div class="Chart Chart-bars" role="img" tabindex="0"
+                aria-label="42 visits over 7 days, 9 on the last day"
+                data-chart="bars" data-from="2026-09-01"
+                data-values="3,4,0,8,12,6,9" data-noun="visit">
+                <svg class="Chart_Plot" viewBox="0 0 7 40"
+                  preserveAspectRatio="none" aria-hidden="true">
+                  <rect class="Chart_Bar" x=".15" y="30" width=".7"
+                    height="10"></rect>
+                  <rect class="Chart_Bar" x="1.15" y="26.67" width=".7"
+                    height="13.33"></rect>
+                  <rect class="Chart_Bar" x="2.15" y="40" width=".7"
+                    height="0"></rect>
+                  <rect class="Chart_Bar" x="3.15" y="13.33" width=".7"
+                    height="26.67"></rect>
+                  <rect class="Chart_Bar" x="4.15" y="0" width=".7"
+                    height="40"></rect>
+                  <rect class="Chart_Bar" x="5.15" y="20" width=".7"
+                    height="20"></rect>
+                  <rect class="Chart_Bar" x="6.15" y="10" width=".7"
+                    height="30"></rect>
+                </svg>
+              </div>
               <figcaption
                 class="Stats_Span"><span>1 Sept</span><span>7 Sept</span></figcaption>
             </figure>
@@ -1172,5 +1191,6 @@
     })
     choose()
     </script>
+    <script src="chart.js" defer></script>
   </body>
 </html>

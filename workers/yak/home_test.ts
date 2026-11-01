@@ -225,7 +225,7 @@ test('who visited: a bar per day and three lists, no script', async () => {
   })
   assertStringIncludes(page, '9 visits')
   // One rect per day, the tallest full height and the empty day absent.
-  let bars = page.match(/class="Stats_Bar"/g)
+  let bars = page.match(/class="Chart_Bar"/g)
   assertEquals(bars?.length, 3)
   assertStringIncludes(page, 'height="40.00"')
   assertStringIncludes(page, 'height="0.00"')
@@ -236,7 +236,7 @@ test('who visited: a bar per day and three lists, no script', async () => {
   assertStringIncludes(page, '4 Sep')
   assertStringIncludes(page, '6 Sep')
   // Nothing here runs: the chart is markup, not a canvas somebody paints.
-  assertStringIncludes(page, '<svg class="Stats_Chart"')
+  assertStringIncludes(page, 'class="Chart Chart-bars"')
 
   // Not the owner's, not their business: the front door has no such block.
   let theirs = await face({
@@ -254,7 +254,7 @@ test('who visited: no token is one sentence, no chart', async () => {
   })
   assertStringIncludes(page, 'not switched on')
   assert(
-    !page.includes('<svg class="Stats_Chart"'),
+    !page.includes('class="Chart Chart-bars"'),
     'an empty chart is worse than a line',
   )
 })
@@ -277,7 +277,7 @@ test('who visited: an app nobody opened says so', async () => {
   })
   let { document } = parseHTML(page)
   assertEquals(document.querySelector('.Stats_Total')?.textContent, '0 visits')
-  assert(!page.includes('<svg class="Stats_Chart"'), page)
+  assert(!page.includes('class="Chart Chart-bars"'), page)
 })
 
 test('trash has restore forms only on its own page', async () => {

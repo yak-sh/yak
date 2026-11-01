@@ -6,6 +6,7 @@
 // of what it points at: a reference is drawn by name and links to its page.
 
 import { parse } from '@yaks/query'
+import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { COMPED } from '../directory.ts'
 import { day } from '../html.ts'
@@ -27,6 +28,9 @@ export type Uses = {
   errored?: string | null
   /** who owns its space, by name */
   owners?: string[]
+  /** dollars and requests, day by day, for their charts */
+  spending?: Days
+  requesting?: Days
   /** bytes held: databases and files */
   storage?: number
   /** apps held, the trash left out */
@@ -62,12 +66,14 @@ let plan = (b: Record<string, unknown>) =>
     ? 'Plus'
     : 'Free'
 
-// A mark kept only from the day it began (used.ts): none on the row says nothing
-// about before then.
-let since = (iso?: string | null, month: 'long' | 'short' = 'long') =>
-  iso ? day(iso, month) : 'none since 1 Nov'
 let visits = (n?: number | null) =>
   n === undefined || n === null ? 'not counted yet' : count(n)
+
+// A figure and how it got there, each drawn where the number is.
+let trended = <N>(h: H<N>, value: string, days?: Days, noun?: string) =>
+  days
+    ? [value, sparkline(h, { ...days, ...noun ? { noun } : { money: true } })]
+    : value
 
 let tag = <N>(h: H<N>, text: string, warn = false) =>
   h('span', { class: `Apps_Tag${warn ? ' Apps_Tag-warn' : ''}` }, text)
@@ -105,7 +111,7 @@ let row = <N>(
   name: string,
   sub: string,
   marks: Child<N>[],
-  figures: [string, string][],
+  figures: [string, Child<N>][],
 ) =>
   h(
     'div',
@@ -163,7 +169,7 @@ let person: Renderer = {
     let u = uses(ctx)
     let p = personOf(b)
     return row(h, ctx, b.entity.eid, p.name, p.email, tags(h, b, u), [
-      ['Spent this month', spend(u.spend)],
+      ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Storage', size(u.storage ?? 0)],
       ['Apps', count(u.apps ?? 0)],
       ['Last active', when(u.active, 'short')],
@@ -185,7 +191,7 @@ let space: Renderer = {
       str(ctx.address),
       tags(h, b, u, pays == 'Free' ? '' : pays),
       [
-        ['Spent this month', spend(u.spend)],
+        ['Spent this month', trended(h, spend(u.spend), u.spending)],
         ['Storage', size(u.storage ?? 0)],
         ['Apps', count(u.apps ?? 0)],
         ['Last active', when(u.active, 'short')],
@@ -211,10 +217,13 @@ let app: Renderer = {
       tags(h, b, u, str(a?.access)),
       [
         ['Deployed', when(u.deployed, 'short')],
-        ['Data changed', since(u.changed, 'short')],
+        ['Data changed', when(u.changed, 'short')],
         ['Last active', when(u.active, 'short')],
-        ['Last error', since(u.errored, 'short')],
-        ['Requests this month', count(u.requests ?? 0)],
+        ['Last error', when(u.errored, 'short')],
+        [
+          'Requests this month',
+          trended(h, count(u.requests ?? 0), u.requesting, 'request'),
+        ],
         ['Visits, 30 days', visits(u.visits)],
         ['Storage', size(u.storage ?? 0)],
         ['Version', version ? `v${version}` : 'none'],
@@ -243,7 +252,7 @@ let personPage: Renderer = {
           : 'never',
       ],
       ['Last active', when(u.active)],
-      ['Spent this month', spend(u.spend)],
+      ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Storage', size(u.storage ?? 0)],
       ['Apps', count(u.apps ?? 0)],
     ])
@@ -265,10 +274,10 @@ let spacePage: Renderer = {
       ['Owners', refs(h, ctx, owners)],
       ['Made', day(stamp(b, 'created'))],
       ['Last active', when(u.active)],
-      ['Spent this month', spend(u.spend)],
+      ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Database', size(num(m.bytes))],
       ['Files', size(num(m.files))],
-      ['Requests', count(num(m.requests))],
+      ['Requests', trended(h, count(num(m.requests)), u.requesting, 'request')],
       ['Rows read', count(num(m.rows_read))],
       ['Rows written', count(num(m.rows_written))],
       ['Build seconds', count(num(m.seconds))],
@@ -312,17 +321,25 @@ let appPage: Renderer = {
       ['Installed from', from ? link(h, ctx, from) : ''],
       ['Made', day(stamp(b, 'created'))],
       ['Last active', when(u.active)],
-      ['Data changed', since(u.changed)],
-      ['Last error', since(u.errored)],
+      ['Data changed', when(u.changed)],
+      ['Last error', when(u.errored)],
       [
         'Visits, 30 days',
         visits === undefined
           ? ''
           : visits === null
           ? 'not counted here'
-          : count(visits),
+          : trended(
+            h,
+            count(visits),
+            ctx.visiting as Days | undefined,
+            'visit',
+          ),
       ],
-      ['Requests this month', count(num(m.requests))],
+      [
+        'Requests this month',
+        trended(h, count(num(m.requests)), u.requesting, 'request'),
+      ],
       ['Rows read this month', count(num(m.rows_read))],
       ['Rows written this month', count(num(m.rows_written))],
       ['Database', size(num(m.bytes))],
