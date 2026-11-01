@@ -185,10 +185,12 @@ test('an app says when it was deployed, changed and broke, and who owns it', () 
       'Visits, 30 days',
     ]
   ) assertStringIncludes(row, said)
-  assertStringIncludes(
-    drawn(c.apps[1], 'Directory.List.Tile', { uses: a2, space: 'shop' }),
-    'not counted yet',
-  )
+  let bare = drawn(c.apps[1], 'Directory.List.Tile', {
+    uses: a2,
+    space: 'shop',
+  })
+  assertStringIncludes(bare, 'not counted yet')
+  assertStringIncludes(bare, 'none since 1 Nov')
 })
 
 let env = { SESSION_SECRET: SECRET } as Env

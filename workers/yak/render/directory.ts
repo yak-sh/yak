@@ -62,6 +62,10 @@ let plan = (b: Record<string, unknown>) =>
     ? 'Plus'
     : 'Free'
 
+// A mark kept only from the day it began (used.ts): none on the row says nothing
+// about before then.
+let since = (iso?: string | null, month: 'long' | 'short' = 'long') =>
+  iso ? day(iso, month) : 'none since 1 Nov'
 let visits = (n?: number | null) =>
   n === undefined || n === null ? 'not counted yet' : count(n)
 
@@ -207,9 +211,9 @@ let app: Renderer = {
       tags(h, b, u, str(a?.access)),
       [
         ['Deployed', when(u.deployed, 'short')],
-        ['Data changed', when(u.changed, 'short')],
+        ['Data changed', since(u.changed, 'short')],
         ['Last active', when(u.active, 'short')],
-        ['Last error', when(u.errored, 'short')],
+        ['Last error', since(u.errored, 'short')],
         ['Requests this month', count(u.requests ?? 0)],
         ['Visits, 30 days', visits(u.visits)],
         ['Storage', size(u.storage ?? 0)],
@@ -308,8 +312,8 @@ let appPage: Renderer = {
       ['Installed from', from ? link(h, ctx, from) : ''],
       ['Made', day(stamp(b, 'created'))],
       ['Last active', when(u.active)],
-      ['Data changed', when(u.changed)],
-      ['Last error', when(u.errored)],
+      ['Data changed', since(u.changed)],
+      ['Last error', since(u.errored)],
       [
         'Visits, 30 days',
         visits === undefined
