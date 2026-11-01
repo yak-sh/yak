@@ -11,7 +11,12 @@ import {
 // may live in a different Worker from the one that binds it, and so are the
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
-import { DurableObject, waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
+import {
+  DurableObject,
+  RpcTarget,
+  waitUntil,
+  WorkerEntrypoint,
+} from 'cloudflare:workers'
 import { evaluator } from './code-runtime.ts'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
@@ -218,7 +223,16 @@ export default {
     entry(env, 'gateway fetch', () =>
       handler.fetch(req, {
         ...env,
-        ...(env.LOADER ? { CODE_MODE: evaluator(env.LOADER) } : {}),
+        ...(env.LOADER
+          ? {
+            CODE_MODE: evaluator(env.LOADER, (bridge) =>
+              new class extends RpcTarget {
+                call(set: string, name: string, args: string) {
+                  return bridge.call(set, name, args)
+                }
+              }()),
+          }
+          : {}),
       }), req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(

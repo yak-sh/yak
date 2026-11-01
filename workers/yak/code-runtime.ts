@@ -1,7 +1,6 @@
 // Cloudflare is the isolation boundary. No parent bindings enter the child;
 // the only capability is one revocable RpcTarget passed for one invocation.
-import { RpcTarget } from 'cloudflare:workers'
-import type { Evaluate, Result } from '@yaks/code-mode'
+import type { Evaluate } from '@yaks/code-mode'
 import { CallError } from '@yaks/tools/errors'
 import { caught } from './defects.ts'
 
@@ -15,22 +14,19 @@ export type Loader = {
     limits: { cpuMs: number; subRequests: number }
   }): {
     getEntrypoint(): {
-      run(bridge: unknown): Promise<string>
-      [Symbol.dispose](): void
+      run(bridge: unknown): PromiseLike<string> & Disposable
     }
-    [Symbol.dispose](): void
   }
 }
 
+type Bridge = Parameters<Evaluate>[1]
+
 export let evaluator =
-  (loader: Loader): Evaluate => async (modules, bridge, signal) => {
-    class Bridge extends RpcTarget {
-      call(set: string, name: string, args: string): Promise<Result> {
-        return bridge.call(set, name, args)
-      }
-    }
+  (loader: Loader, target: (bridge: Bridge) => Bridge): Evaluate =>
+  async (modules, bridge, signal) => {
     try {
-      using worker = loader.load({
+      signal.throwIfAborted()
+      let worker = loader.load({
         compatibilityDate: '2026-11-01',
         mainModule: 'script.js',
         modules,
@@ -38,14 +34,13 @@ export let evaluator =
         globalOutbound: null,
         limits: { cpuMs: 100, subRequests: 32 },
       })
-      using entry = worker.getEntrypoint()
-      let abort = () => {
-        entry[Symbol.dispose]()
-        worker[Symbol.dispose]()
-      }
+      let entry = worker.getEntrypoint()
+      // Loader and entrypoint handles aren't disposable; the RPC call is.
+      using call = entry.run(target(bridge))
+      let abort = () => call[Symbol.dispose]()
       signal.addEventListener('abort', abort, { once: true })
       try {
-        return await entry.run(new Bridge())
+        return await call
       } finally {
         signal.removeEventListener('abort', abort)
       }
