@@ -79,6 +79,7 @@
 //     anything else           the front page's own file, page or api door at
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
+import { locating } from './door.ts'
 import { origin } from '@yaks/tracker/report'
 import { caught, within } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
@@ -705,7 +706,11 @@ export let handler = {
       {},
       async () => {
         let at = Date.now(), cold = served++ == 0
-        let res = await slid(req, env, await router.fetch(req, env))
+        let res = await slid(
+          req,
+          env,
+          await locating(req, () => router.fetch(req, env)),
+        )
         let host = hostOf(req, env)
         if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
         // Every answer on our zone, including refusals and failures, carries
