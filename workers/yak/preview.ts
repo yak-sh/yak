@@ -418,7 +418,23 @@ let target = async (req: Request, env: Env) => {
     storeName(pair.space, app),
     app.policy,
   )
-  if (bearing(req) && !grant) return null
+  if (bearing(req) && !grant) {
+    let claims = await opened<Record<string, unknown>>(
+      'visit',
+      req.headers.get('x-yak-grant')!,
+      env.SESSION_SECRET,
+    )
+    let reason = !claims
+      ? 'grant signature'
+      : claims.store != storeName(pair.space, app)
+      ? 'grant store'
+      : claims.policy !== app.policy
+      ? `grant policy ${claims.policy} != ${app.policy}`
+      : 'grant expiry'
+    return privateResponse(
+      new Response(`Preview unavailable: ${reason}`, { status: 404 }),
+    )
+  }
   let who: Who = grant ??
     { person: ticket.person, role: role!, via: ticket.app }
   return { dir, ...pair, app, who, path: '/' + match[3], mount }
@@ -427,6 +443,7 @@ let target = async (req: Request, env: Env) => {
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let found = await target(req, env)
   if (!found) return no()
+  if (found instanceof Response) return found
   let { dir, space, app, who, path, mount } = found
   // No ambient platform login follows a preview or reaches its app code.
   let headers = new Headers(req.headers)

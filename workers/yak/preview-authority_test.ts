@@ -72,3 +72,43 @@ test('a draft preview carries serving authority to its store reads and writes', 
   equal(rows.length, 1)
   equal(rows[0].doc.title, 'Private')
 })
+
+let { opened, seal } = await import('./lib/token.ts')
+let { shim } = await import('./dispatch.ts')
+let data = (source: string) =>
+  'data:text/javascript,' + encodeURIComponent(source)
+let worker = data(`export default {
+  fetch(req, env) { return env.STORE.fetch('/query?q=.doc.title=Private') }
+}`)
+let entry = shim().replaceAll('"./worker.js"', JSON.stringify(worker))
+let { default: dispatch } = await import(data(entry))
+p.env.DISPATCH = {
+  get: () => ({
+    fetch: (req: Request) =>
+      dispatch.fetch(req, {
+        KERNEL: {
+          fetch: (inner: Request) => handler.fetch(inner, p.env),
+        },
+      }, {}),
+  }),
+}
+let ticket = new URL(url).pathname.split('/')[3]
+let claims = await opened<Record<string, unknown>>(
+  'preview',
+  ticket,
+  p.env.SESSION_SECRET!,
+)
+let withWorker = await seal(
+  'preview',
+  { ...claims, worker: 'private-worker' },
+  p.env.SESSION_SECRET!,
+)
+let workerRead = await handler.fetch(
+  new Request(url.replace(ticket, withWorker)),
+  p.env,
+)
+let workerText = await workerRead.text()
+test('a preview worker reads its isolated store through the kernel', () => {
+  equal(workerRead.status, 200)
+  equal(JSON.parse(workerText).length, 1)
+})
