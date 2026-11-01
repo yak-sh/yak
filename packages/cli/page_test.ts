@@ -1,6 +1,6 @@
 import { test, tick } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Body, type Build, compiled, kept } from './page.ts'
+import { type Body, type Build, bundle, compiled, kept } from './page.ts'
 
 let get = (handle: (r: Request) => Promise<Response>) =>
   handle(new Request('http://x/x'))
@@ -125,4 +125,20 @@ test('a failed build releases its context', async () => {
   let { seen, build } = compiling(() => Promise.reject(new Error('broken')))
   assertEquals(await compiled(build).catch((e) => e.message), 'broken')
   assertEquals(seen.disposed, 1)
+})
+
+test('a bundled page compiles its JSX against Preact', async () => {
+  let path = await Deno.makeTempFile({
+    dir: new URL('./', import.meta.url).pathname,
+    prefix: '.page-',
+    suffix: '.tsx',
+  })
+  try {
+    await Deno.writeTextFile(path, 'export let page = <><b>hi</b></>\n')
+    let code = await bundle(new URL(`file://${path}`))
+    assertEquals(code.includes('React'), false)
+    assertEquals(code.includes('hi'), true)
+  } finally {
+    await Deno.remove(path)
+  }
 })

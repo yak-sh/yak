@@ -191,6 +191,9 @@ export let bundle = async (
       format: 'esm',
       platform: 'browser',
       target: 'esnext',
+      // esbuild reads no deno.json: said here, or JSX compiles to `React`.
+      jsx: 'automatic',
+      jsxImportSource: 'preact',
       minify: true,
       write: false,
       logLevel: 'silent',
