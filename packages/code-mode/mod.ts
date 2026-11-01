@@ -76,7 +76,9 @@ export let execute = async (
   evaluate: Evaluate,
   clock: Clock = system,
 ): Promise<Answer> => {
-  if (bytes(script) > LIMITS.scriptBytes) {
+  if (
+    script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
+  ) {
     throw new CallError('limit', 'script exceeds 64 KiB')
   }
   let entries = catalog(registry).filter((e) => e.name != 'code_mode')
@@ -96,7 +98,10 @@ export let execute = async (
       typeof set != 'string' || typeof name != 'string' ||
       typeof args != 'string'
     ) throw new CallError('args', 'bridge takes JSON text')
-    if (new TextEncoder().encode(args).length > LIMITS.scriptBytes) {
+    if (
+      args.length > LIMITS.scriptBytes ||
+      new TextEncoder().encode(args).length > LIMITS.scriptBytes
+    ) {
       throw new CallError('limit', 'tool arguments exceed 64 KiB')
     }
     let input: unknown
@@ -174,7 +179,7 @@ export let execute = async (
     active = false
     await Promise.race([Promise.allSettled([...pending]), timeout])
     if (
-      typeof text != 'string' ||
+      typeof text != 'string' || text.length > LIMITS.outputBytes ||
       new TextEncoder().encode(text).length > LIMITS.outputBytes
     ) throw new CallError('limit', 'script return exceeds output limit')
     let answer = JSON.parse(text)
@@ -202,7 +207,7 @@ export let tool = (
 ): Tool => ({
   name: 'code_mode',
   description:
-    'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No imports, network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script, 256KiB combined answer. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
+    'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script, 256KiB combined answer. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
   inputSchema: {
     type: 'object',
     properties: {

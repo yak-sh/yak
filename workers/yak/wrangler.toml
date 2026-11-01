@@ -35,14 +35,14 @@ compatibility_flags = [
   "enable_nodejs_process_v2",
 ]
 
-[[worker_loaders]]
-binding = "LOADER"
-
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports
 # and groups the eager modules together; Wrangler uploads that prepared graph.
 # Function names and composed source maps survive both build passes.
 minify = true
 upload_source_maps = true
+
+[[worker_loaders]]
+binding = "LOADER"
 
 # No routes: yak-front (front/) holds yaks.app's and hands this Worker what the
 # edge can't answer. A deploy that names none leaves a Worker's routes alone, so
