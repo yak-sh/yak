@@ -116,6 +116,15 @@ and each section says only what its item needs. The copy comes from the
 outline. A line that answers nothing on it is cut, and a point that belongs to
 a later item waits for that section.
 
+**The page answers the outline's questions; it never asks them.** The questions
+are for whoever writes the page. Shown mockups whose headings, tabs and index
+read "Is it for me?" and "What does it cost?", Jeff, verbatim: "ok so the
+mockups are neat. but the questions the site is meant to *answer* are instead
+being *asked*. it's backwards". And: ""Is it for me?" should never appear on
+the site. that's so dumb". So no heading, tab, index item or label on the
+page is a visitor's question. Each states its answer in plain words: "For your
+work, a side business or home", "Free for five apps, or $9 a month for more".
+
 **The hero fits on a phone's first screen.** Of a 55-word lead, Jeff,
 verbatim: "is way too long", and "that's practically a screen of text on a
 phone". The heading, a lead of one short sentence and the button fit on the
