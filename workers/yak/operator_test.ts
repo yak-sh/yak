@@ -4,6 +4,7 @@ import { durable } from '../../packages/durable-object/testing.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './testing.ts'
+import { operatorModel } from './operator-testing.ts'
 import { directoryOf } from './directory.ts'
 import { operatorStore } from './operator-store.ts'
 import { readOperator, runOperator } from './operator.ts'
@@ -137,7 +138,7 @@ let model: Model = async (req) => {
 let out = await runOperator(f.store, f.env, f.held, f.space, {
   say:
     'Post a special meeting Thursday at 7 about the road millage in notices.',
-}, { model, name: 'test-model', price: { input: 0, output: 0 } })
+}, operatorModel(model))
 
 let history = await readOperator(f.store, out.task)
 let ctx = operatorContext(f.env, f.held, f.space)
@@ -172,20 +173,24 @@ test('the operator edits app rows through agent tools and records its work priva
   assertEquals(other, null)
 })
 
-let continued = await runOperator(f.store, f.env, f.held, f.space, {
-  task: out.task,
-  say: 'Schedule another meeting.',
-}, {
-  name: 'test-model',
-  price: { input: 0, output: 0 },
-  model: (req) =>
+let continued = await runOperator(
+  f.store,
+  f.env,
+  f.held,
+  f.space,
+  {
+    task: out.task,
+    say: 'Schedule another meeting.',
+  },
+  operatorModel((req) =>
     Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
       items: [{ kind: 'assistant', text: 'Which date and time?' }],
       cost: 0.001,
-    }),
-})
+    })
+  ),
+)
 let clarified = await readOperator(f.store, out.task)
 test('a follow-up reopens completed work and a clarification leaves it open', () => {
   assertEquals(continued.status, 'settled')
@@ -194,12 +199,15 @@ test('a follow-up reopens completed work and a clarification leaves it open', ()
 })
 
 let rounds = 0
-let pastTwelve = await runOperator(f.store, f.env, f.held, f.space, {
-  say: 'Inspect the app.',
-}, {
-  name: 'test-model',
-  price: { input: 0, output: 0 },
-  model: (req) =>
+let pastTwelve = await runOperator(
+  f.store,
+  f.env,
+  f.held,
+  f.space,
+  {
+    say: 'Inspect the app.',
+  },
+  operatorModel((req) =>
     Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
@@ -207,8 +215,9 @@ let pastTwelve = await runOperator(f.store, f.env, f.held, f.space, {
         ? calls('graph_query', { q: '.doc&.limit=1' })
         : [{ kind: 'assistant', text: 'Inspected.' }],
       cost: 0.001,
-    }),
-})
+    })
+  ),
+)
 test('the space budget, rather than twelve model rounds, bounds the operator', () => {
   assertEquals(rounds, 14)
   assertEquals(pastTwelve.status, 'settled')

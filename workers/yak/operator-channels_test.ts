@@ -5,6 +5,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
+import { operatorModel } from './operator-testing.ts'
 import { operatorStore } from './operator-store.ts'
 import {
   authenticated,
@@ -100,7 +101,7 @@ let model: Model = (req) => {
     cost: 0.001,
   })
 }
-let options = { model, name: 'test-model', price: { input: 0, output: 0 } }
+let options = operatorModel(model)
 let sent: string[] = []
 handleChannels(f.store, f.env, options, {
   chat: (_request, answer) => {
@@ -251,9 +252,10 @@ let file = await keepFile(
 )
 let attachmentRequests: Request[] = []
 let attachmentStore = operatorStore(durable())
-handleChannels(attachmentStore, f.env, {
-  ...options,
-  model: (req) => {
+handleChannels(
+  attachmentStore,
+  f.env,
+  operatorModel((req) => {
     attachmentRequests.push(req)
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -261,8 +263,8 @@ handleChannels(attachmentStore, f.env, {
       items: [{ kind: 'assistant', text: 'Read the minutes.' }],
       cost: 0,
     })
-  },
-})
+  }),
+)
 let attachmentId = await receive(attachmentStore, {
   space: f.space.eid,
   person: f.person,
@@ -430,9 +432,10 @@ let attachmentScript = [
   call('operator_attachment', { index: 0, app: 'notices' }),
   [{ kind: 'assistant', text: 'The original minutes are attached.' } as Item],
 ]
-handleChannels(attachmentStore, f.env, {
-  ...options,
-  model: (req) => {
+handleChannels(
+  attachmentStore,
+  f.env,
+  operatorModel((req) => {
     receivedTools.push(req)
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -440,8 +443,8 @@ handleChannels(attachmentStore, f.env, {
       items: attachmentScript.shift()!,
       cost: 0,
     })
-  },
-})
+  }),
+)
 let attachmentTask = (attachmentAnswer as { task: string }).task
 await receive(attachmentStore, {
   space: f.space.eid,
@@ -467,6 +470,12 @@ test('a follow-up can publish an earlier request original without asking for it 
 let media = operatorStore(durable())
 let mediaAsks: Request[] = [], ocrInputs: unknown[] = []
 let beforeMedia = (await f.dir.at(f.space.eid))!.meter!.models
+f.env.MODEL_FETCH = () =>
+  Promise.resolve(
+    new Response(
+      'Context Window | 100000 tokens\nUnit Pricing | $0.1 per M input tokens, $0.3 per M output tokens',
+    ),
+  )
 f.env.AI!.run = (_name, input) => {
   ocrInputs.push(input)
   return Promise.resolve({
@@ -496,9 +505,10 @@ let pdf = await keepFile(
   'application/pdf',
   new TextEncoder().encode('%PDF-1.7'),
 )
-handleChannels(media, f.env, {
-  ...options,
-  model: (req) => {
+handleChannels(
+  media,
+  f.env,
+  operatorModel((req) => {
     mediaAsks.push(req)
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -506,8 +516,8 @@ handleChannels(media, f.env, {
       items: [{ kind: 'assistant', text: 'Read the documents.' }],
       cost: 0,
     })
-  },
-})
+  }),
+)
 let mediaId = await receive(media, {
   space: f.space.eid,
   person: f.person,
