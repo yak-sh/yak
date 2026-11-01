@@ -24,7 +24,7 @@ for (let source of [undefined, 'ask']) {
       let items = project(entries, entries, new Map(), { anchor })
       assertEquals(items, [
         ...anchor && source == anchor ? [] : [{
-          kind: 'call',
+          kind: 'call' as const,
           id: 'item_0',
           name: 'tool',
           args: '{}',
