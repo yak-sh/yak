@@ -4001,7 +4001,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   if (held) return held
   let allowed: Cte[] = []
   let names = new Map<string, string>()
-  let shared = (screen: Bind): string => {
+  let shared = (screen: Raw): string => {
     let sql = inline(screen)
     let name = names.get(sql)
     if (!name) {
