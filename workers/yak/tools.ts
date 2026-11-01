@@ -5441,7 +5441,7 @@ let OURS: Row[] = [
       }
       let was = app.installed.version
       let to = from.app.published.version
-      if (to == was) {
+      if (to == was && app.version) {
         return {
           text:
             `${space.slug}/${app.slug} is already at v${to} of ${from.app.published.name} — nothing to update`,

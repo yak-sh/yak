@@ -43,7 +43,8 @@ export let demonstrate = async (
     copy = await ctx.dir.app(demo, String(installed.value!.app)) ?? undefined
   }
   if (!copy) throw new Error('the gallery copy is missing after installation')
-  let changed = copy.installed!.version != app.published!.version
+  let changed = !copy.version ||
+    copy.installed!.version != app.published!.version
   if (changed) {
     await run(copying, 'app_update', { space: DEMO, app: copy.slug })
   }

@@ -1,12 +1,34 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { connector, fresh, letter, vocabFile } from './probe.ts'
+import { ServingCopy } from './serving-copy.ts'
+import type { ServingCopyDoor } from './directory-copy.ts'
+import { directoryOf } from './directory.ts'
 
-let k = await fresh()
+let copy = new ServingCopy({
+  persistence: { read: () => undefined, write: () => {} },
+})
+let rpc: ServingCopyDoor = {
+  begin: (floor) => Promise.resolve(copy.begin(floor)),
+  finish: (revision) => Promise.resolve(copy.finish(revision)),
+  revision: () => Promise.resolve(copy.revision),
+  settle: (revision, committed) =>
+    Promise.resolve(copy.settle(revision, committed)),
+  put: (...args) => Promise.resolve(copy.put(...args)),
+  get: (key) => Promise.resolve().then(() => copy.get(key)),
+  valid: (revision) => Promise.resolve(copy.valid(revision)),
+  publish: (...args) => Promise.resolve(copy.publish(...args)),
+}
+let dir!: ReturnType<typeof directoryOf>
+let k = await fresh({
+  SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
+}, (env) => {
+  dir = directoryOf(env.STORE)
+})
 let agent = connector(k, k.owner.cookie)
 await agent.tool('space_new', { slug: 'yourname', title: 'Demos' })
 await agent.tool('space_new', { slug: 'home', title: 'Private home' })
-let cases = ['skip', 'tool', 'web']
+let cases = ['skip', 'tool', 'web', 'resume']
 for (let app of cases) {
   await agent.tool('app_new', {
     space: 'home',
@@ -44,6 +66,23 @@ for (let app of cases) {
   })
 }
 
+let home = (await dir.space('home'))!
+let demosSpace = (await dir.space('yourname'))!
+let source = (await dir.app(home, 'resume'))!
+await agent.tool('app_new', {
+  space: 'yourname',
+  slug: 'resume',
+  title: 'Interrupted copy',
+  access: 'open',
+})
+let partial = (await dir.app(demosSpace, 'resume'))!
+await dir.stamp({
+  entities: [{
+    entity: { eid: partial.eid },
+    installed: { of: source.eid, version: source.published!.version },
+  }],
+})
+
 for (let app of cases) {
   test(`a private internal gallery listing gets an installable demo through ${app}`, async () => {
     if (app == 'skip') {
@@ -53,7 +92,7 @@ for (let app of cases) {
         gallery: true,
         review: false,
       })
-    } else if (app == 'tool') {
+    } else if (app == 'tool' || app == 'resume') {
       await agent.tool('gallery_review', {
         app: `home/${app}`,
         decision: 'approve',
