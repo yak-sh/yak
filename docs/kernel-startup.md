@@ -301,3 +301,44 @@ reply compare identically over the scoped admin connector before and after.
 `yourname/holdfast`; admin deploys confirms 100% and errors shows zero current
 occurrences/bugs. Budget tests for the changed kernel/sandbox/MCP/Site paths,
 including provider and Site workerd behavior, pass; types/lint/format pass.
+
+## The split: T-133886
+
+November 1, 2026. Three things changed, each deployed and measured from
+production telemetry (span `time_to_first_byte_ms` minus `wall_time_ms`, 75 ms
+or more counted as a wait, as in D-133933).
+
+`yak-front` (`workers/yak/front/`, 11 KB, no secrets) holds the routes and
+answers what Site's cache holds. A throwaway Worker bound to a callee of 3 MB
+measured a hit through a service binding at 5-7 ms on a just-deployed callee
+version, against 138-199 ms for running that callee cold; hits on the live
+`Site` took 4-11 ms.
+
+| From the box                      | Before |       After |
+| --------------------------------- | -----: | ----------: |
+| `GET /`, cold isolate, first byte | 479 ms | 67-122 ms\* |
+| Requests that reach the kernel    |    all |        41%† |
+
+\* One of eight probes took 439 ms, not explained. † 271 gateway spans beside
+658 front spans in one 14-minute window, probes included.
+
+The kernel's fetch handler then moved beside the directory
+(`region = "aws:us-east-2"`). `mode = "smart"` was tried first and replaced: it
+followed the tracker's minute probe to SEA, a directory read went from 57 to 110
+ms, and a gateway answer from 57 ms to as much as 637 ms.
+
+| Gateway, browsers and other non-probe clients |   n | Waited | Median wait | First byte p50 / p90 |
+| --------------------------------------------- | --: | -----: | ----------: | -------------------: |
+| 90 minutes before the move                    | 206 |    37% |      207 ms |         279 / 803 ms |
+| 20 minutes with the region hint               |  63 |    19% |      293 ms |         103 / 439 ms |
+
+These windows are short, their request mix differs, and another agent moved the
+directory to ORD in between (T-134094), which accounts for part of the first
+byte change. Telemetry reports the eyeball's colo, so `cf-placement` is what
+shows the move: `remote-ORD` or `local-ORD` on every probe from IAD or ORD.
+
+The kernel's own upload is unchanged at 3.7 MB. Splitting it by role measured:
+gateway 2.85 MB, gateway without the connector 2.24 MB, connector 2.58 MB, Store
+3.07 MB; the modules are shared in a long tail with no single import to cut. A
+new Worker for any of these needs the kernel's 18 secrets, whose values only the
+Worker itself can read. T-133988 holds that.
