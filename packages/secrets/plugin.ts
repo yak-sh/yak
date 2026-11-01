@@ -54,11 +54,13 @@ import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'
 import type { Vault } from './vault.ts'
+import { concealedBundles, concealedRows } from './reads.ts'
 
 export let SECRET = 'secret'
 let HOLD_MS = 10 * 60_000
 // What a reader is told while the value is on its way to the vault.
 let SAVING = 'saving the key'
+let SET = '[set]'
 
 let obj = (v: unknown): Record<string, unknown> | undefined =>
   v && typeof v == 'object' && !Array.isArray(v)
@@ -69,7 +71,9 @@ let obj = (v: unknown): Record<string, unknown> | undefined =>
 // handle.
 let plain = (v: unknown): string | undefined => {
   let value = obj(v)?.value
-  return typeof value == 'string' && !isHandle(value) ? value : undefined
+  return typeof value == 'string' && value != SET && !isHandle(value)
+    ? value
+    : undefined
 }
 
 // Which secret a bundle writes: the entity it names, or, for an alias not yet
@@ -213,6 +217,13 @@ export let secrets = (
 
   let hide = (b: Bundle): Bundle | Promise<Bundle> => {
     let own = plain(b[SECRET])
+    if (obj(b[SECRET])?.value == SET) {
+      return after(handleOf(whose(b)), (value) =>
+        hide({
+          ...b,
+          [SECRET]: { ...obj(b[SECRET]), value },
+        }))
+    }
     let called = args(b)
     let found = inside(called)
     let mark = own != null || behind(b)
@@ -240,6 +251,8 @@ export let secrets = (
 
   return {
     name: '@yaks/secrets',
+    answerRows: (_ctx, query, rows) => concealedRows(vocab, query, rows),
+    answer: (_ctx, bundles) => concealedBundles(bundles),
     // What `noting` reads: whether the entities a batch removes a secret from
     // hold one, and what points at those it deletes, read with the batch.
     wants: (bundles) => {
@@ -263,7 +276,11 @@ export let secrets = (
         let now = clock.now()
         for (let [h, w] of waiting) if (w.until < now) waiting.delete(h)
         for (let [e, m] of minted) if (m.until < now) minted.delete(e)
-        if (!bundles.some((b) => writes(b) || behind(b))) return bundles
+        if (
+          !bundles.some((b) =>
+            writes(b) || behind(b) || obj(b[SECRET])?.value == SET
+          )
+        ) return bundles
         return each(
           bundles,
           [] as Bundle[],

@@ -15,7 +15,7 @@
 
 import type { Bundle, Eid } from './bundle.ts'
 import type { Query as Ast } from '@yaks/query'
-import type { ReadOpts, ReadTx, Tx, Visibility } from './storage.ts'
+import type { ReadOpts, ReadTx, Row, Tx, Visibility } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
@@ -326,6 +326,13 @@ export type Plugin = {
   ask?: (ctx: ReadContext, query: Ast) => Ast | Promise<Ast>
   /** Rewrite outgoing bundles after storage and projection. */
   answer?: (ctx: ReadContext, bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+
+  /** Rewrite scalar projections and reductions after storage and caller views. */
+  answerRows?: (
+    ctx: ReadContext,
+    query: Ast,
+    rows: Row[],
+  ) => Row[] | Promise<Row[]>
 
   /** Transaction-local write tracking. Receives a lookup for the gathered
    * pre-write state (undefined means it was not gathered, null means the

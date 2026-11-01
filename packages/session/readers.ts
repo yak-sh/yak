@@ -89,10 +89,12 @@ let text = (v: unknown): string =>
  * assertEquals(scrub('curl -H "Authorization: Bearer abc.def"'), 'curl -H "Authorization: [redacted]"')
  * assertEquals(scrub('token=ghp_0123456789abcdef'), 'token=[redacted]')
  * assertEquals(scrub('ls -la'), 'ls -la')
+ * assertEquals(scrub('value: yak_secret_example'), 'value: [set]')
  * ```
  */
 export let scrub = (s: string): string =>
   s
+    .replace(/\byak_secret_[A-Za-z0-9_-]+/g, '[set]')
     .replace(/\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted]')
     .replace(
       /\b(?:sk|sk-ant|sess|pk|rk|ghp|gho|ghs|ghu|ghr|xox[baprs])[-_][A-Za-z0-9_-]{8,}/gi,

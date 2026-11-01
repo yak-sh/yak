@@ -13,7 +13,6 @@ import {
 import { envOf, integrationEid, need, registration } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
-import { isHandle } from '@yaks/secrets'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import {
@@ -120,7 +119,7 @@ test(
     )
     let [b] = await s.at.query(`.entity.eid=${one.eid}&.secret`)
     let handle = (b.secret as { value: string }).value
-    assert(isHandle(handle))
+    assertEquals(handle, '[set]')
     assertEquals(
       (await vaultOf(s.p.env).read(one.eid))?.value,
       'sk-live-0123456789',

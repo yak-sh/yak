@@ -30,7 +30,9 @@ value out in `normalize`, the first phase of `apply()`, puts the secret's
 **handle** where it was, and once the write commits seals the value into the
 host's **vault**. The graph, its journal, its sync and its backups only ever
 hold the handle: `yak_secret_` and 256 random bits, kept across every rotation
-of the value and safe to show anyone. The eid is derived from the name
+of the value and safe to show anyone. Public graph reads replace `secret.value` with `[set]`;
+trusted native storage reads retain the handle. Transcript capture also masks
+handles, so a read cannot be mistaken for a credential. The eid is derived from the name
 (`secretEid`), so one name is one secret and nobody looks an id up. The file
 headers in packages/secrets are the reference; it has no README.
 

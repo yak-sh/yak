@@ -20,7 +20,6 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { provisionalDoc } from '@yaks/effects'
 import { edgeDoc, edgeEid, edgeKeywords, edges } from '@yaks/edge'
 import {
-  isHandle,
   ramVault,
   reveal,
   secretEid,
@@ -545,7 +544,7 @@ test(
     await connect(c, eid, { key: 'sk-live' }, 'shop@example.com')
     let b = await at(g, eid)
     let name = String(of(b, 'secret').name)
-    assert(isHandle(String(of(b, 'secret').value)))
+    assertEquals(of(b, 'secret').value, '[set]')
     assertEquals(of(b, 'connection').status, 'connected')
     assertEquals(of(b, 'connection').account, 'shop@example.com')
     assertEquals(await reveal(vault, name), 'sk-live')

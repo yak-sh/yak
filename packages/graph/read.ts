@@ -548,7 +548,23 @@ export let reader = (opts: {
     view,
     rewrites,
     read: (q, o) => read(q, scoped(o)),
-    rows: (q, o) => rows(q, o === undefined ? scoped() : scoped(o)),
+    rows: (q, o) => {
+      let opts = scoped(o)
+      return continuing(rows(q, opts), (out) =>
+        each(
+          plugins.filter((p) =>
+            p.answerRows && (!opts.native || p.scope) &&
+            (!p.reads || p.reads(opts))
+          ),
+          out,
+          (at, p) =>
+            p.answerRows!(
+              readContext(p, opts),
+              typeof q == 'string' ? parse(q) : q,
+              at,
+            ),
+        ))
+    },
     get: (ids, comps, o) => get(ids, comps, scoped(o)),
     use: (plugin) => {
       plugins.push(plugin)

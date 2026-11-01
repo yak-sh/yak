@@ -92,14 +92,16 @@ let transient = () =>
   Object.assign(new Error('Network connection lost.'), { retryable: true })
 
 let row = async (g: Graph, name: string) =>
-  (await g.read(`.secret.name="${name}"&*`))[0]?.secret as
+  (await g.read(`.secret.name="${name}"&*`, { native: true }))[0]?.secret as
     | Record<string, string>
     | undefined
 
 let none = { env: () => undefined }
 
 let whole = async (g: Graph, name: string) =>
-  (await g.read(`.secret.name="${name}"&*`))[0] as Bundle | undefined
+  (await g.read(`.secret.name="${name}"&*`, { native: true }))[0] as
+    | Bundle
+    | undefined
 
 test('a written value is kept in the vault and read back as its handle', async () => {
   let { g, vault } = setup()
@@ -530,4 +532,73 @@ test('a secret can carry optional purpose documentation without changing its ide
     (await g.get([secretEid('UNDOCUMENTED')], ['doc']))[0].doc,
     undefined,
   )
+})
+
+let publicSecret = setup()
+await publicSecret.g.apply([sealed('PUBLIC_TEST', 'credential-for-test')])
+test('graph reads show only that a secret is set, including projected values', async () => {
+  let { g, vault } = publicSecret
+  let eid = secretEid('PUBLIC_TEST')
+  for (
+    let q of [`.entity.eid=${eid}`, '.secret', '.secret .fields=secret.value']
+  ) {
+    let [b] = await g.read(q)
+    assertEquals((b.secret as Record<string, string>).value, '[set]')
+  }
+  let [b] = await g.get([eid])
+  assertEquals((b.secret as Record<string, string>).value, '[set]')
+  await g.apply([b])
+  assertEquals(await reveal(vault, 'PUBLIC_TEST'), 'credential-for-test')
+})
+
+let recordedSet = setup()
+await recordedSet.g.apply([sealed('RECORDED_TEST', 'kept-credential')])
+test('a recorded call carrying a read marker never rotates the vault to the marker', async () => {
+  let { g, vault } = recordedSet
+  let bundle = sealed('RECORDED_TEST', '[set]')
+  await g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    call: { args: { bundles: [bundle] } },
+  }])
+  await g.apply([bundle])
+  assertEquals(await reveal(vault, 'RECORDED_TEST'), 'kept-credential')
+})
+
+let scalarSecrets = setup()
+await scalarSecrets.g.apply([
+  sealed('SCALAR_A', 'first-credential'),
+  sealed('SCALAR_B', 'second-credential'),
+])
+test('scalar graph projections and reductions expose only whether secrets are set', async () => {
+  let { g } = scalarSecrets
+  assertEquals(await g.rows('.secret .distinct=secret.value'), [{
+    value: '[set]',
+  }])
+  assertEquals(await g.rows('.secret .tally=secret.value'), [{
+    value: '[set]',
+    n: 2,
+  }])
+  let rows = await g.rows('.secret .fields=secret.value')
+  assertEquals(rows.map((r) => r['secret.value']), ['[set]', '[set]'])
+})
+
+let nestedProjection = setup()
+await nestedProjection.g.apply([sealed('PROJECTED_CALL', 'kept-key')])
+await nestedProjection.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  call: {
+    args: {
+      bundles: [
+        sealed(
+          'PROJECTED_CALL',
+          nestedProjection.vault.read(secretEid('PROJECTED_CALL'))!.handle,
+        ),
+      ],
+    },
+  },
+}])
+test('projecting call arguments masks nested secret values', async () => {
+  let [row] = await nestedProjection.g.rows('.call .fields=call.args')
+  let args = row['call.args'] as { bundles: { secret: { value: string } }[] }
+  assertEquals(args.bundles[0].secret.value, '[set]')
 })
