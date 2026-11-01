@@ -2675,7 +2675,7 @@ export let again = async (
   let email = await dir.emailAt(invite.person)
   if (!email) return { say: 'That invitation is no longer waiting.', no: true }
   try {
-    await allowed(env, dir, space, who.person)
+    await allowed(env, dir, who.person)
   } catch (e) {
     if (e instanceof CallError) return { say: sentence(e.message), no: true }
     throw e

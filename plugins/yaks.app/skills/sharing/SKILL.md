@@ -178,9 +178,10 @@ The accept link is sent only to the invited address, so the tool's answer never
 includes it. If the email cannot be sent, the invitation still stands, and
 calling `member_add` again sends it.
 
-Each invitation email counts against the space's monthly email ceiling, and one
-person may send 50 invitations an hour. Changing the role of somebody who has
-already accepted sends no email and counts against nothing.
+Invitation emails never count against the space's monthly email ceiling, so a
+space can invite as many people as it likes; one person may send 50 invitations
+an hour. Changing the role of somebody who has already accepted sends no email
+and counts against nothing.
 
 `member_remove` refuses to remove the last owner, because a space with nobody to
 decide who belongs could never be opened again. Removing someone leaves their

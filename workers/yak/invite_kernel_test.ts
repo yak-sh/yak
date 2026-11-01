@@ -135,11 +135,11 @@ test('an invitation reaches nobody until its person accepts it', async () => {
       `https://${mine}.yaks.app/`,
     )
 
-    // The letter counted against his space's month.
+    // The letter spent none of his space's monthly emails (T-131892).
     let [row] = await meta(k).query(
       `.space.slug=${mine}&?meter`,
     ) as { meter?: { emails?: number } }[]
-    assertEquals(row.meter?.emails, 1)
+    assertEquals(row.meter?.emails ?? 0, 0)
 
     // A pending invitation is withdrawn by member_remove, and its link then
     // opens onto nothing.

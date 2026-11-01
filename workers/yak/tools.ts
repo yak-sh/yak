@@ -5648,7 +5648,7 @@ let OURS: Row[] = [
             app && ctx.dir.grant(app, person),
             ctx.dir.invite(to, person),
           ]),
-          room(ctx.env, ctx.dir, space, ctx.person),
+          room(ctx.dir, ctx.person),
         ]))
       if (here.status == 'rejected') throw here.reason
       let [had, held, standing] = here.value
@@ -5698,9 +5698,9 @@ let OURS: Row[] = [
         }
       }
       // Anyone else is invited, and nothing is theirs until they accept
-      // (invite.ts, T-37880). The letter is counted twice before it goes: on
-      // the space's monthly letters, and on the inviter's hour, which is
-      // written in the one batch with the invitation and the person it names.
+      // (invite.ts, T-37880). The letter is counted on the inviter's hour,
+      // written in the one batch with the invitation and the person it names,
+      // and never on the space's monthly emails (T-131892).
       if (counting.status == 'rejected') throw counting.reason
       let eid = standing?.eid ?? crypto.randomUUID()
       await c.time('invite', () =>

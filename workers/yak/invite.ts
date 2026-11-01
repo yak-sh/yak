@@ -31,14 +31,15 @@ import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from './host.ts'
 import { type Mail, mail } from './mail.ts'
-import { counted, refusedSpend } from './meter.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
  * or a class in at once, few enough that a loop aimed at strangers stops
- * within the hour; the space's monthly letters bound the rest. */
+ * within the hour. It is the only bound: an invitation never spends the
+ * space's monthly emails, because the people an app is for are never metered
+ * (D-131886, T-131892). */
 export let CAP = 50
 
 /** The subject every invitation goes out under: fixed words, since a subject
@@ -70,35 +71,19 @@ export let paced = (
 }
 
 /**
- * What stops one more invitation going out from this person for this space:
- * the space's letters this month (meter.ts), then the inviter's hour. Both
- * are read at once and nothing is written: the answer is the inviter's hour
- * with this invitation counted on it, for the caller to write beside the
- * invitation, so a refused invitation writes and mails nothing at all
- * (T-32963).
+ * What stops one more invitation going out from this person: their hour. It
+ * is read and nothing is written: the answer is the inviter's hour with this
+ * invitation counted on it, for the caller to write beside the invitation, so
+ * a refused invitation writes and mails nothing at all (T-32963).
  */
-export let room = async (
-  env: Env,
-  dir: Directory,
-  space: Space,
-  person: string,
-): Promise<Bundle> => {
-  let [no, held] = await Promise.all([
-    refusedSpend(dir, space, 'emails', env),
-    dir.inviting(person),
-  ])
-  if (no) throw refuse('limit', no)
-  return { entity: { eid: person }, inviting: paced(held) }
-}
+export let room = async (dir: Directory, person: string): Promise<Bundle> => ({
+  entity: { eid: person },
+  inviting: paced(await dir.inviting(person)),
+})
 
 /** {@link room}, and the invitation counted on the inviter's hour. */
-export let allowed = async (
-  env: Env,
-  dir: Directory,
-  space: Space,
-  person: string,
-) => {
-  await stamp(env, { entities: [await room(env, dir, space, person)] })
+export let allowed = async (env: Env, dir: Directory, person: string) => {
+  await stamp(env, { entities: [await room(dir, person)] })
 }
 
 /** The article a role takes: an editor, an owner, a viewer. */
@@ -195,19 +180,16 @@ export let send = async (
     return false
   })
   if (!sent) return false
-  await Promise.all([
-    counted(env, space),
-    // On the invitation still standing: one withdrawn or accepted while its
-    // letter went stays gone, rather than coming back as a row that names
-    // nobody and nothing (`$was`, @yaks/graph guard.ts).
-    stamp(env, {
-      entities: [{
-        entity: { eid: o.invite },
-        invite: { sent: new Date().toISOString(), by: o.by },
-        $was: { invite: { to: token(app ? app.eid : space.eid) } },
-      }],
-    }),
-  ])
+  // On the invitation still standing: one withdrawn or accepted while its
+  // letter went stays gone, rather than coming back as a row that names
+  // nobody and nothing (`$was`, @yaks/graph guard.ts).
+  await stamp(env, {
+    entities: [{
+      entity: { eid: o.invite },
+      invite: { sent: new Date().toISOString(), by: o.by },
+      $was: { invite: { to: token(app ? app.eid : space.eid) } },
+    }],
+  })
   return true
 }
 
