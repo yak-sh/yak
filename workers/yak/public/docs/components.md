@@ -664,7 +664,7 @@ The complete list of reserved names:
     execution failed favorite fee feedback file filed finding fired former
     gallery gitobj grant home hook hostname image inference installed
     integration integration_install interrupted invite inviting key lease
-    lines listed mail mail_answered mail_post mail_task member memory meter model
+    lines listed mail mail_answered mail_post mail_task member memory meter model model_reservation
     notice notice_confirmed notice_letter notice_posted notice_subscription
     notified notify_trash occupancy openai opened openrouter order output output_of
     parent pending person plan price product project provider provisional public_file
