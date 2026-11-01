@@ -1,24 +1,4 @@
 <!doctype html>
-<!--
-  Privacy policy (T-32746): what the platform stores, where it lives, and who
-  can see it. Every line is a fact about the code — the session cookie is
-  workers/yak/lib/token.ts (30 days, signed), the sign-in digest signin.ts (a mac, never
-  the digits), the break reports unseen.ts, the letters mail.ts (Cloudflare
-  Email Sending). Change one of those and change this page with it.
-
-  THE PAGE SAYS IT IS THE WHOLE LIST, so anything the code sends off this box
-  belongs on it (T-34352): the feedback tool's letter to hello@yaks.app
-  (tools.ts `feedback`, mail.ts REPLY_TO), an app's own
-  letters out and the arrivals filed into it (post.ts, inbox.ts), the words a
-  person types to the builder, which a model on Cloudflare's own AI binding
-  reads (builder.ts) and a Cloudflare container compiles for (sandbox.ts), and
-  Stripe, who sell the paid plan and hold the card (billing.ts — the email
-  address is all we hand them). Add a recipient in the code and add it here.
-
-  The operator, its address and the contact are the owner's own (confirmed on 2026-09-02). The Cloudflare Web Analytics note is T-32487, open: the beacon
-  is still attached until the dashboard switch is thrown, so the page says so
-  rather than claiming a clean sheet.
--->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -75,15 +55,14 @@
     <main class="Page Prose">
       <div class="Prose_Head">
         <h1 class="Title Title-page">Privacy policy</h1>
-        <p class="Prose_When">Last updated 5 September 2026</p>
+        <p class="Prose_When">Last updated 1 November 2026</p>
         <p>
-          We keep as little as we can, and we're happy to tell you all of it.
-          This page is the whole list.
+          We collect as little information as we can. This policy lists all of it.
         </p>
       </div>
 
       <section>
-        <h2>Who holds it</h2>
+        <h2>About us</h2>
         <address>
           Yak Shaving LLC<br />
           971 S Centerville Rd, #2009<br />
@@ -91,263 +70,256 @@
           United States
         </address>
         <p>
-          Questions, corrections, or a request to delete something all go to
-          <a href="mailto:hello@yaks.app">hello@yaks.app</a>.
+          Send questions, corrections and deletion requests to <a href="mailto:hello@yaks.app">hello@yaks.app</a>.
         </p>
       </section>
 
       <section>
-        <h2>What we keep</h2>
+        <h2>Information we collect</h2>
         <ul>
           <li>
-            <strong>Your email address.</strong> It's how you sign in, how we
-            send your code, and how a friend invites you to their app. We don't
-            show it to other people — an app shows a name, never an address.
+            <strong>Your email address.</strong> We use it to sign you in, to
+            send your code, and to let other people invite you to their apps. We
+            don't show it to other people: an app shows a name, never an address.
           </li>
           <li>
-            <strong>The name you chose.</strong> When you first sign in we ask
-            what you'd like to be called. Skip the question and we use the front
-            of your address. That name is what appears beside things you write
-            in an app other people can see.
+            <strong>Your name.</strong> When you first sign in, we ask what you'd
+            like to be called. If you skip the question, we use the part of your
+            address before the @. That name appears beside what you write in an
+            app other people can see.
           </li>
           <li>
-            <strong>A session cookie.</strong> One, so guest rows belong to the
-            browser that wrote them, and you stay signed in once you sign in.
-            Signing in puts your name on that browser's guest rows across apps.
-            Visitor counts never use this identity. The
-            <a href="/cookies">cookies page</a> has the details.
+            <strong>A session cookie.</strong> We set one cookie. It ties
+            anything written without signing in (guest entries) to the browser
+            that wrote it, and keeps you signed in. Signing in puts your name on
+            that browser's guest entries across apps. Visitor counts never use
+            this cookie. The <a href="/cookies">cookies page</a> has the details.
           </li>
           <li>
             <strong>Your sign-in codes, briefly.</strong> A code lasts ten
-            minutes and five guesses. We never store the digits themselves, only
-            a one-way scramble of them, so nobody reading our records can sign
-            in as you.
+            minutes and allows five guesses. We never store the digits, only a
+            one-way hash of them, so nobody reading our records can sign in as
+            you.
           </li>
           <li>
-            <strong>What's in your apps.</strong> Everything you and the people
-            you invited write — text, lists, photos and any other file uploaded
-            — along with who wrote it and when.
+            <strong>The content of your apps.</strong> Everything you and the
+            people you invited write (text, lists, photos and any other uploaded
+            file), along with who wrote it and when.
           </li>
           <li>
             <strong>The apps themselves.</strong> The files your assistant
             writes to build them.
           </li>
           <li>
-            <strong>Letters your apps send and receive.</strong> An app can
-            have an address of its own, like
-            <b>yourspace.yourapp@yaks.app</b>. Anything written to it is kept
-            in that app — the sender's address, what they wrote, and whatever
-            they attached — and anything the app sends goes out under that
-            address.
+            <strong>Email your apps send and receive.</strong> An app can have
+            its own email address, like <b>yourspace.yourapp@yaks.app</b>. We
+            keep anything sent to that address in the app, including the sender's
+            address, the message and any attachments. Anything the app sends
+            goes out under that address.
           </li>
           <li>
-            <strong>Reports when something breaks.</strong> If a page or a
-            request fails, we record what happened: the message, where in the
-            code it came from, the address being visited, and which version of
-            the app was running. That report goes to your assistant so it can
-            fix the thing. It isn't a record of what you were up to.
+            <strong>Error reports.</strong> If a page or a request fails, we
+            record the error message, where in the code it came from, the address
+            being visited, and which version of the app was running. We send
+            that report to your assistant so it can fix the problem. It isn't a
+            record of what you were doing.
           </li>
           <li>
-            <strong>A count of the pages your app served.</strong> So you can
-            see whether anyone is reading it, we tally each page an app
-            answered — which page, which country the request came from, which
-            site linked to it, and whether the visitor was a person's browser,
-            a search crawler or an AI assistant. Counts only: no address, no
-            name, no cookie, and not the browser's own identifying string, so
-            there is nothing here to pick one visitor out of and nothing to
-            follow anyone with. We keep those tallies about three months, and
-            only the app's own people can see them.
+            <strong>Page counts for your app.</strong> So you can see whether
+            anyone is reading your app, we count each page it serves: which page,
+            which country the request came from, which site linked to it, and
+            whether the visitor was a person's browser, a search crawler or an AI
+            assistant. We keep only the counts. They contain no address, name,
+            cookie or user agent string, so they can't identify or track a
+            visitor. We keep them for about three months, and only the app's own
+            members can see them.
           </li>
           <li>
-            <strong>What you say to our builder.</strong> If you have us build
-            an app for you rather than bringing your own assistant, what you
-            type goes to a model to be read and answered, and we keep the
-            conversation with your space so you can pick it back up.
+            <strong>What you say to our builder.</strong> If you have us build an
+            app for you instead of using your own assistant, what you type goes
+            to a model that reads and answers it. We keep the conversation with
+            your space so you can continue it later.
           </li>
           <li>
-            <strong>Feedback you send us.</strong> Ask your assistant to report
-            a problem — or pass on a wish, a rough edge or a kind word — and
-            your words are mailed to the people who run this place, at
-            <a href="mailto:hello@yaks.app">hello@yaks.app</a> and the work
-            list where we track them. Your name, your email address, the space
-            and the app you were in, and the version that was running ride
-            along, so we can look into it and write back. We keep those
-            reports.
+            <strong>Feedback you send us.</strong> If you ask your assistant to
+            report a problem or send us a request or comment, your words are
+            emailed to us at <a href="mailto:hello@yaks.app">hello@yaks.app</a> and added to the list where we track them.
+            Your name, your email address, the space and app you were in, and the
+            version that was running are included, so we can look into it and
+            reply. We keep those reports.
           </li>
         </ul>
       </section>
 
       <section>
-        <h2>What we don't keep</h2>
+        <h2>Information we don't collect</h2>
         <p>
-          No advertising profile, no history of where else you've been, no
-          location, and no contact list. No card number either: the paid plan
-          is sold and charged by Stripe, your card goes to them and never
-          through us, and what comes back to us is your plan and whether it's
-          on. We don't sell anything to anyone, ever.
+          We don't keep an advertising profile, a history of where else you've
+          been, your location, or your contacts. We don't keep your card number
+          either: Stripe sells and charges for the paid plan, your card goes to
+          Stripe and never through us, and Stripe tells us only your plan and
+          whether it's active. We don't sell anything to anyone, ever.
         </p>
       </section>
 
       <section>
-        <h2>Where it lives</h2>
+        <h2>Where information is stored</h2>
         <p>
-          All of it sits on Cloudflare, who host this whole platform: their
-          workers run the code, their storage holds each app's data and files,
-          their network carries every request, their model is the one that
-          answers you in the builder, and their sandbox is where a build
-          compiles anything a browser can't. They handle it on our behalf and
-          keep their own operational records of requests, the way any host
-          does. That network is worldwide, so the nearest copy to you may sit in
-          a different country than the nearest copy to somebody else.
+          All of it is on Cloudflare, which hosts yaks.app. Cloudflare's workers
+          run the code, its storage holds each app's data and files, its network
+          carries every request, its model answers you in the builder, and its
+          sandbox is where a build compiles anything a browser can't. Cloudflare
+          handles this information on our behalf and keeps its own operational
+          records of requests, as any host does. That network is worldwide, so
+          your information may be stored in a different country from someone
+          else's.
         </p>
       </section>
 
       <section>
-        <h2>Who else touches it</h2>
+        <h2>Who we share information with</h2>
         <p>
-          Two other companies, and that's the end of the list.
-          <strong>Stripe</strong> sells the paid plan: we hand them your email
-          address so they can bill you, and they hand back whether the plan is
-          on. <strong>Google</strong> serves the typeface these pages are set
-          in, so your browser asks them for a font file and they see that
-          request the way any web server would.
+          Besides Cloudflare, we share information with one other company.
+          <strong>Stripe</strong> sells the paid plan: we give Stripe your email
+          address so it can bill you, and Stripe tells us whether the plan is
+          active.
         </p>
         <p>
-          Nobody else — no advertiser, no data broker, no analytics company of
-          our choosing. And when you send us feedback, it reaches us by mail,
-          which means it passes through whichever mail providers stand between
-          here and our inbox, the way every letter does.
+          We don't share information with advertisers, data brokers or analytics
+          companies. Feedback you send us reaches us by email, so it passes
+          through the email providers between you and our inbox, as any email
+          does.
         </p>
       </section>
 
       <section>
-        <h2>If you buy something here</h2>
+        <h2>Buyers</h2>
         <p>
-          Some yaks apps sell things, and when one does the seller is the
-          merchant — not us (<a href="/terms">terms</a>). Your card details go
-          to <strong>Stripe</strong> on Stripe's own page and never touch this
-          platform or the app; we never see a card number, and neither does the
-          seller.
+          Some yaks apps sell things. When one does, the seller is the merchant,
+          not us (see the <a href="/terms">terms</a>). Your card details go to
+          <strong>Stripe</strong> on Stripe's own page and never touch this
+          platform or the app. Neither we nor the seller ever see your card
+          number.
         </p>
         <p>
-          What we do see is the order, and it goes two places. <b>To the
-          seller</b>: what you bought, what it cost, and the email address you
-          gave at checkout, written into their app's own store, where they read
-          it to send you your things. <b>And to Stripe</b>, who take the payment
-          and hold the record of it under the seller's account. We keep our copy
-          of the order for as long as the seller keeps their app; deleting the
-          app deletes it, and the seller can delete a single order like any
-          other row.
+          We do see the order, and it goes to two places. <b>The seller</b>
+          receives what you bought, what it cost, and the email address you gave
+          at checkout, stored in the seller's app so the seller can send you what
+          you bought. <b>Stripe</b> takes the payment and holds the record of it
+          under the seller's account. We keep our copy of the order for as long
+          as the seller keeps the app. Deleting the app deletes it, and the
+          seller can delete a single order.
         </p>
         <p>
-          We use your address for the receipt the app sends you and for nothing
-          else. We do not add you to a list, and we never sell it.
+          We use your email address only for the receipt the app sends you. We
+          don't add you to a list, and we never sell your address.
         </p>
       </section>
 
       <section>
-        <h2>If you sell something here</h2>
+        <h2>Sellers</h2>
         <p>
-          Connecting a Stripe account sends <strong>Stripe</strong> your email
-          address and the name of your space, and Stripe then asks you directly
+          When you connect a Stripe account, we send <strong>Stripe</strong> your
+          email address and the name of your space. Stripe then asks you directly
           for your business details, your identity documents and your bank
-          account. <b>Those never come to us.</b> We are told three things back
-          and hold only those: the account's id, whether Stripe says you may
-          take payments, and whether you finished their form.
+          account. <b>Those never come to us.</b> Stripe tells us three things,
+          and we keep only those: the account's id, whether Stripe says you may
+          take payments, and whether you finished Stripe's form.
         </p>
       </section>
 
       <section>
         <h2>Email</h2>
         <p>
-          Sign-in codes and invitations go out through Cloudflare Email Sending.
-          Those are the only letters we send you unasked, and each one is
-          something you or a friend set in motion.
+          We send sign-in codes and invitations through Cloudflare Email Sending.
+          Those are the only emails we send you without your asking, and each one
+          results from something you or another person did.
         </p>
         <p>
-          Your apps' own letters travel the same road, and so does the feedback
-          you send us — that one goes to us rather than to you.
+          Email from your apps and feedback you send us go through the same
+          service.
         </p>
       </section>
 
       <section>
-        <h2>Counting visits</h2>
+        <h2>Analytics</h2>
         <p>
-          We run no analytics of our own and no advertising trackers. Cloudflare
+          We don't run our own analytics or any advertising trackers. Cloudflare
           gives us the ordinary request counts any host sees.
         </p>
-        <p>
-          One honest note: Cloudflare currently attaches its own Web Analytics
-          script to pages served from here. It counts page views, sets no
-          cookie, and doesn't follow you elsewhere. We didn't add it, and we're
-          switching it off.
-        </p>
       </section>
 
       <section>
-        <h2>Who can see your things</h2>
+        <h2>Who can see your content</h2>
         <p>
-          That's yours to set, one app at a time. Private means you and the
-          members you invited. Public means anyone who has the link can read it.
-          Open means anyone who has the link can write in it as well. Whoever
-          you invite can see what's in that app.
+          You set this for each app. Private means you and the members you
+          invited. Public means anyone with the link can read it. Open means
+          anyone with the link can also write in it. Anyone you invite can see
+          what's in that app.
         </p>
         <p>
           Your assistant sees the apps you connected it to, and acts as you when
-          it does. On our side, we look at what's in your apps only when you ask
-          us for help with something, or when we have to in order to keep the
-          place running or to answer the law.
+          it does. We look at the content of your apps only when you ask us for
+          help, or when we have to in order to keep the service running or to
+          comply with the law.
         </p>
       </section>
 
       <section>
-        <h2>How long we keep it</h2>
+        <h2>Data retention</h2>
         <p>
-          For as long as you have an account here. Delete an app and it goes to
-          the trash: it stops answering at its address straight away, and its
-          data and files are kept for 30 days so you can restore it if you
-          deleted it by mistake. After 30 days we erase it — its data, its
-          files, everything — and that is final. Ask for it gone at once
-          instead and we erase it then and there, with nothing kept. Close a
-          space — ask your assistant to delete it and confirm the link we email
-          you, or do it yourself while signed in — and the same 30 days apply
-          to the whole of it: it stops answering at every address it has
-          straight away, and its apps, everything they saved, their files and
-          the conversation you had with our builder are all kept for 30 days so
-          you can restore it. Its address is held for you for those 30 days
-          too. After them we erase all of it and the address goes back into
-          circulation. Ask for the space gone at once instead — your assistant
-          emails you that link too — and we erase it then and there. Ask
-          us to close your account and we remove the rest, the record of you
-          included; ordinary backups and server records age out on their own in
-          the weeks after.
+          We keep your information for as long as you have an account.
+        </p>
+        <p>
+          When you delete an app, it goes to the trash. It stops responding at
+          its address immediately, and we keep its data and files for 30 days so
+          you can restore it. After 30 days we erase its data, its files and
+          everything else belonging to it, and this can't be undone. If you ask
+          us to erase it immediately instead, we erase it right away and keep
+          nothing.
+        </p>
+        <p>
+          You can close a space by asking your assistant to delete it and
+          confirming the link we email you, or by deleting it yourself while
+          signed in. The same 30 days apply to the whole space. It stops
+          responding at all of its addresses immediately, and we keep its apps,
+          their saved data and files, and your conversation with our builder for
+          30 days so you can restore it. We also hold the space's address for you
+          during those 30 days. After that, we erase everything and the address
+          becomes available to others. If you ask for the space to be erased
+          immediately instead, your assistant emails you a link for that too, and
+          we erase it right away.
+        </p>
+        <p>
+          If you ask us to close your account, we remove everything else,
+          including our record of you. Backups and server records expire on their
+          own in the following weeks.
         </p>
       </section>
 
       <section>
-        <h2>What you can ask for</h2>
+        <h2>Your rights</h2>
         <p>
-          Write to <a href="mailto:hello@yaks.app">hello@yaks.app</a> and ask
-          for a copy of what we hold, a correction, or deletion, and we'll do
-          it. Depending on where you live the law may give you those rights
-          formally — in the UK and the EU, in California, and elsewhere. We'd
-          rather just do it than argue about which rule applies.
+          Email <a href="mailto:hello@yaks.app">hello@yaks.app</a> to ask for a copy of what we hold, a correction, or
+          deletion, and we'll do it. Depending on where you live, including the
+          UK, the EU and California, the law may give you these rights formally.
+          We honor these requests wherever you live.
         </p>
       </section>
 
       <section>
         <h2>Children</h2>
         <p>
-          This isn't built for children, and it isn't for anyone under 13. If a
-          child's information has ended up here, tell us and we'll remove it.
+          yaks.app isn't built for children, and it isn't for anyone under 13. If
+          a child's information has ended up here, tell us and we'll remove it.
         </p>
       </section>
 
       <section>
-        <h2>Changes</h2>
+        <h2>Changes to this policy</h2>
         <p>
-          If this policy changes, the page and the date at the top change with
-          it, and we'll email you when the change is one that matters.
+          If this policy changes, we'll update this page and the date at the top,
+          and we'll email you if the change matters to you.
         </p>
       </section>
     </main>

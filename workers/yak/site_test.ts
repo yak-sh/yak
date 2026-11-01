@@ -685,7 +685,7 @@ test('the terms leave every price to the pricing page', () => {
   // And the section that would carry one says no number and no "free" of its
   // own: what it costs is a question the pricing page answers.
   let costs = flat(
-    read('terms.html').split('<h2>What it costs</h2>')[1].split(
+    read('terms.html').split('<h2>Fees and payment</h2>')[1].split(
       '</section>',
     )[0],
   )
@@ -694,7 +694,7 @@ test('the terms leave every price to the pricing page', () => {
   assertStringIncludes(costs, '/pricing')
 })
 
-// "This page is the whole list", so everything the code sends off this box is
+// "This policy lists all of it", so everything the code sends off this box is
 // named on it (T-34352). Each line below is one recipient in the code, and the
 // address is read out of mail.ts rather than typed here.
 test('the privacy policy names everywhere the code sends something', () => {
@@ -719,7 +719,7 @@ test('the privacy policy names everywhere the code sends something', () => {
   assertStringIncludes(html, 'never touch this platform')
   assertStringIncludes(html, 'those never come to us')
   // And the claim that makes the rest of it a promise.
-  assertStringIncludes(html, 'this page is the whole list')
+  assertStringIncludes(html, 'this policy lists all of it')
 })
 
 // Where a security problem goes, said on the page a person reads as well as
