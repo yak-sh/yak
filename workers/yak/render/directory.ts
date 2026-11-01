@@ -200,6 +200,13 @@ let space: Renderer = {
   },
 }
 
+// Whether it stands published, and whether the gallery lists it: the gallery
+// shows only a published app, whatever its gallery word still says.
+let offered = (b: Record<string, unknown>) =>
+  (b.published as Comp)?.name
+    ? ['published', (b.gallery as Comp)?.listed_at ? 'in the gallery' : '']
+    : ['not published']
+
 let app: Renderer = {
   view: 'Directory.List.Tile',
   match: parse('.app'),
@@ -214,7 +221,7 @@ let app: Renderer = {
       b.entity.eid,
       str((b.doc as Comp)?.title) || slug,
       [`${str(ctx.space)}/${slug}`, ...u.owners ?? []].join(' · '),
-      tags(h, b, u, str(a?.access)),
+      tags(h, b, u, str(a?.access), ...offered(b)),
       [
         ['Deployed', when(u.deployed, 'short')],
         ['Data changed', when(u.changed, 'short')],

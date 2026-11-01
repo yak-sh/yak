@@ -191,6 +191,27 @@ test('an app says when it was deployed, changed and broke, and who owns it', () 
   )
 })
 
+test("an app's row says whether it is published and in the gallery", () => {
+  let marks = (parts: Record<string, unknown>) => {
+    let row = drawn({ ...census().apps[0], ...parts }, 'Directory.List.Tile', {
+      space: 'ann',
+    })
+    return ['not published', '>published', 'in the gallery'].filter((said) =>
+      row.includes(said)
+    )
+  }
+  let published = { name: 'notes', version: 2 }
+  let listed = { asked_at: NOW, listed_at: NOW }
+  assertEquals(marks({}), ['not published'])
+  assertEquals(marks({ published }), ['>published'])
+  assertEquals(marks({ published, gallery: { asked_at: NOW } }), ['>published'])
+  assertEquals(marks({ published, gallery: listed }), [
+    '>published',
+    'in the gallery',
+  ])
+  assertEquals(marks({ gallery: listed }), ['not published'])
+})
+
 let env = { SESSION_SECRET: SECRET } as Env
 let dir = {
   space: (slug: string) => Promise.resolve(slug == META.space ? ROOT : null),
