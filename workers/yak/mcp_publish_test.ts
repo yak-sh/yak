@@ -165,6 +165,11 @@ test('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(page, 'Somewhere to keep recipes')
     assertStringIncludes(page, 'Open the app')
     assertStringIncludes(page, `action="/install?name=${recipes44}"`)
+    // And the badge on the app itself opens that page (T-131901).
+    assertStringIncludes(
+      await k.at(`${mine}.yaks.app`, `/${recipes44}/`).then((r) => r.text()),
+      `data-yak-badge="https://yaks.app/apps/${recipes44}"`,
+    )
     let listed = (await offered()).join('\n')
     assertStringIncludes(listed, `- ${recipes44} v1`)
     assertStringIncludes(listed, 'Somewhere to keep recipes')

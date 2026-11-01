@@ -61,7 +61,7 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Mail } from './mail.ts'
-import { pilled, standing } from './gallery.ts'
+import { pageAt, pilled, standing } from './gallery.ts'
 import { checkout, portal } from './billing.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
@@ -467,16 +467,16 @@ let platformFile = (req: Request, env: Env, path: string) =>
 // what follows it, and the tags come first.
 //
 // A page of a space on the free plan wears the badge too (public/badge.js,
-// meter.ts `free`): decided as it is served, so every version and release an
-// app serves wears it, and none of their files change.
+// `badgeOf`), opening `badge`: decided as it is served, so every version and
+// release an app serves wears it, and none of their files change.
 export let reported = async (
   env: Env,
   at: string,
   page: Response,
   version: number,
-  badged: boolean,
+  badge: string | null,
 ) => {
-  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badged)
+  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badge)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -858,12 +858,23 @@ export let folderMove = (to: string, search: string, cache: string) =>
     headers: { location: to + search, 'cache-control': cache },
   })
 
-// Whether a page wears the platform's scripts as the files door hands it, and
-// the badge among them: not when an app's worker asked for it, since what the
-// worker answers is woven on its way out (`reported`), and the browser would
-// run each script twice. Otherwise the badge is the free plan's.
-export let badge = (req: Request, space: Space) =>
-  bearing(req) ? null : free(space)
+// What the badge on an app's page opens (public/badge.js, T-131901), or null
+// for no badge, which is the Plus plan's. A published app's badge opens its
+// own page on yaks.app (app-page.ts), where whoever followed it can open the
+// app and make their own copy; an app that is not published opens yaks.app.
+export let badgeOf = (space: Space, app: App, env: Host) =>
+  !free(space)
+    ? null
+    : app.published?.name
+    ? pageAt(app.published.name, env)
+    : hostUrl(env, '/')
+
+// The platform's scripts a page wears as the files door hands it: none when
+// an app's worker asked for it, since what the worker answers is woven on its
+// way out (`reported`), and the browser would run each script twice.
+// Otherwise its badge is `badgeOf`.
+export let worn = (req: Request, space: Space, app: App, env: Host) =>
+  bearing(req) ? null : { badge: badgeOf(space, app, env) }
 
 let asset = async (
   req: Request,
@@ -950,7 +961,7 @@ let asset = async (
       bare,
       app,
       sandbox ? await sandbox() : '',
-      badge(req, space),
+      worn(req, space, app, env),
       base,
     ))
   if (sandbox) {
@@ -979,8 +990,8 @@ let asset = async (
 
 // A page as the browser gets it: the app's address before its own first
 // relative URL, the tags a home screen needs, its release's asset addresses,
-// any tags the caller adds, and the platform's scripts, wearing the badge when
-// `badged` and left out when it is null. The weaving is done here rather than
+// any tags the caller adds, and the platform's scripts (`worn`), left out when
+// `scripts` is null. The weaving is done here rather than
 // behind the cache because the same file is a different document at each
 // mount, and one cached copy of the bytes serving every mount beats one copy
 // per mount.
@@ -991,7 +1002,7 @@ export let woven = async (
   bare: string,
   app: App,
   tags: string,
-  badged: boolean | null,
+  scripts: { badge: string | null } | null,
   base = at,
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source, base), app)
@@ -1003,8 +1014,8 @@ export let woven = async (
     app.source,
     base,
   )
-  if (badged != null) {
-    page = await reported(env, at, page, app.version ?? 0, badged)
+  if (scripts) {
+    page = await reported(env, at, page, app.version ?? 0, scripts.badge)
   }
   return await page.text()
 }
@@ -3261,7 +3272,13 @@ let served = async (
       ))
   if (open) {
     if (open.headers.get('content-type')?.startsWith('text/html')) {
-      open = await reported(env, bare, open, app.version ?? 0, free(space))
+      open = await reported(
+        env,
+        bare,
+        open,
+        app.version ?? 0,
+        badgeOf(space, app, env),
+      )
     }
     let page = reporting(open, req, bare)
     if (edge) return keep(page, space, app)
@@ -3385,7 +3402,7 @@ let served = async (
           '/',
           page,
           early.app.version ?? 0,
-          free(space),
+          badgeOf(space, early.app, env),
         )
       }
       let res = reporting(page, req, '/')
@@ -3432,7 +3449,7 @@ let served = async (
           version: env.CF_VERSION_METADATA?.id ?? '',
         }),
         app.version ?? 0,
-        false,
+        null,
       )
     }
     if (!who.person) {
@@ -3556,7 +3573,13 @@ let served = async (
     own?.body &&
     own.headers.get('content-type')?.startsWith('text/html')
   ) {
-    own = await reported(env, at, own, app.version ?? 0, free(space))
+    own = await reported(
+      env,
+      at,
+      own,
+      app.version ?? 0,
+      badgeOf(space, app, env),
+    )
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and

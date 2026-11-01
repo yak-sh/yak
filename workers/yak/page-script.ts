@@ -8,12 +8,16 @@
 //
 // Each tag says where its app is mounted for this browser (`data-yak-at`) and
 // which release the page is (`data-yak-version`): the scripts read their doors
-// off the first, and client.js sends the second with every request.
+// off the first, and client.js sends the second with every request. The
+// badge's also says what it opens (`data-yak-badge`): the app's own page on
+// yaks.app, or yaks.app itself. Attributes are not hashed, so the scripts'
+// text and a policy's hashes are the same on every page.
 //
 // A page with a Content-Security-Policy of its own may refuse inline scripts.
 // Its policy is given the scripts' hashes (`admitted`), which lets these run
 // and nothing else.
 import { caught } from './defects.ts'
+import { esc } from './html.ts'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 type Script = { text: string; hash: string }
@@ -51,23 +55,25 @@ let scripts = (assets: Assets) => {
   return got
 }
 
-/** The tags for a page mounted at `at`, of release `version`, wearing the
- * badge when `badged`, and the hashes a policy needs to admit them. A page
+/** The tags for a page mounted at `at`, of release `version`, wearing a badge
+ * that opens `badge` unless it is null, and the hashes a policy needs to admit
+ * them. A page
  * whose scripts could not be read is served without them, and the failure is
  * reported: a page that paints without its reporter beats one that fails. */
 export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  badged: boolean,
+  badge: string | null,
 ) => {
   try {
-    let [report, release, badge] = await scripts(assets)
-    let all = badged ? [report, release, badge] : [report, release]
+    let [report, release, badged] = await scripts(assets)
+    let tag = ({ text }: Script, more = '') =>
+      `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
+    let all = badge == null ? [report, release] : [report, release, badged]
     return {
-      tags: all.map(({ text }) =>
-        `<script data-yak-at="${at}" data-yak-version="${version}">${text}</script>`
-      ).join(''),
+      tags: tag(report) + tag(release) +
+        (badge == null ? '' : tag(badged, ` data-yak-badge="${esc(badge)}"`)),
       hashes: all.map(({ hash }) => hash),
     }
   } catch (e) {

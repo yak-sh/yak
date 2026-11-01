@@ -1,6 +1,8 @@
 // The badge an app wears while its space is on the free plan: "Made with
-// yaks.app" in a corner, opening yaks.app in a new tab so the page and what
-// was typed into it stay put. Woven inline beside the reporter, and only into
+// yaks.app" in a corner, opening in a new tab so the page and what was typed
+// into it stay put. What it opens is on its own tag (`data-yak-badge`,
+// page-script.ts): a published app's own page on yaks.app, where a visitor can
+// open it and make their own copy (T-131901), or yaks.app itself. Woven inline beside the reporter, and only into
 // a free space's pages (page-script.ts), so a kept version or a published
 // release wears it without its files changing, and a space on the Plus plan
 // sheds it on its next load.
@@ -92,6 +94,8 @@ b { font-weight: 800 }
     '[role=switch],[contenteditable],[tabindex]'
   let CORNERS = ['br', 'bl', 'tr', 'tl']
 
+  // Read while this script runs: afterwards there is no current script.
+  let opens = document.currentScript?.dataset.yakBadge || 'https://yaks.app/'
   let host = document.createElement('yaks-badge')
   let root = host.attachShadow({ mode: 'closed' })
   // Two sheets: the look, and how high the badge rides at the end of a
@@ -111,7 +115,7 @@ b { font-weight: 800 }
   let rise = (px) =>
     sheets[1].put(`:host([at=end]) { bottom: ${px}px !important }`)
   let link = document.createElement('a')
-  link.href = 'https://yaks.app/'
+  link.href = opens
   link.target = '_blank'
   link.rel = 'noopener'
   let name = document.createElement('b')
