@@ -1746,11 +1746,9 @@ test("rung 1½: the router's own onward request is not intercepted again", async
 
 // ---- the trash (T-34430) ----------------------------------------------------
 
-// An app in the trash keeps its address and answers nothing at it. To the web
-// that is the same nothing a wrong address gets — whether an app was ever here
-// is not a stranger's business — and to the owner it is the one page that says
-// where the app went and how long they have.
-test('an app in the trash serves nothing, and says so to its owner', async () => {
+// Trash releases the address. Its former files answer nothing there, including
+// for the owner, who restores the retained app from the dashboard's trash page.
+test('an app in the trash releases its address for visitors and its owner', async () => {
   await using k = await router()
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let garden = (await k.dir.app(k.space, 'garden'))!
@@ -1768,8 +1766,8 @@ test('an app in the trash serves nothing, and says so to its owner', async () =>
   let mine = await apps.fetch(visit('/garden/', { headers: { cookie } }), k.env)
   assertEquals(mine.status, 404)
   let said = await mine.text()
-  assertStringIncludes(said, 'Garden is in the trash')
-  assertStringIncludes(said, '30 more days')
+  assertStringIncludes(said, 'Nothing here yet')
+  assertEquals(said.includes('Garden'), false)
 })
 
 // The front page is a word on the app (T-34227), so a trashed app that wears

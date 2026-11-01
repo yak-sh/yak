@@ -192,9 +192,10 @@ test(
       // The shape is the generic one with this platform's row words declared
       // (agent.ts `ROWS`) and not the vocabulary typed out per tool, which
       // would be megabytes of listing. graph_schema answers a vocabulary
-      // document instead (T-37998), so it promises the vocab meta-schema.
+      // document instead (T-37998); code_mode answers declarations or a script's
+      // value and receipts, rather than graph rows.
       for (let t of tools as { name: string; outputSchema?: unknown }[]) {
-        if (t.name == 'graph_schema') continue
+        if (['graph_schema', 'code_mode'].includes(t.name)) continue
         assertEquals(t.outputSchema, ROWS, `${t.name}'s answer`)
       }
       let schema = (tools as { name: string; outputSchema?: unknown }[])

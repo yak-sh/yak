@@ -211,6 +211,7 @@ export let tool = (
   current?: () => Promise<Runner>,
 ): Tool => ({
   name: 'code_mode',
+  title: 'Code mode',
   description:
     'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script, 256KiB combined answer. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
   inputSchema: {
