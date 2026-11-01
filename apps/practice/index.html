@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Practice planner</title>
+    <meta
+      name="description"
+      content="Plan each practice minute by minute, keep your drills in one place, and share the plan with your coaches."
+    >
+    <meta name="theme-color" content="#1f3a5f">
+    <link rel="icon" href="./icon.svg">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <header class="top">
+      <div class="top__in">
+        <h1 class="top__title">Practice planner</h1>
+        <p class="top__lede">
+          Each practice, minute by minute, and the drills you run.
+        </p>
+        <nav class="tabs" aria-label="Sections">
+          <a href="#/" data-tab="practices">Practices</a>
+          <a href="#/drills" data-tab="drills">Drills</a>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap" id="stage">
+      <p class="empty">Getting the plan&hellip;</p>
+    </main>
+    <footer class="foot" id="foot"></footer>
+    <dialog id="ask" aria-label="Edit"></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

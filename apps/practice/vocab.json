@@ -1,0 +1,30 @@
+{
+  "$defs": {
+    "practice": {
+      "description": "One practice: its date, the clock time it starts, the team and what it is for. Its notes after practice are doc.body.",
+      "properties": {
+        "date": { "type": "string" },
+        "start": { "type": "string" },
+        "team": { "type": "string" },
+        "focus": { "type": "string" }
+      }
+    },
+    "block": {
+      "description": "One drill in a practice, in running order. doc.title names it and doc.body holds its coaching points, copied from the library when it is added.",
+      "properties": {
+        "practice": { "type": "string", "ref": "practice", "death": "cascade" },
+        "ord": { "type": "number" },
+        "minutes": { "type": "number" },
+        "kind": { "type": "string" }
+      }
+    },
+    "drill": {
+      "description": "A drill in the coach's library: its usual length, its kind and its equipment. doc.title names it and doc.body says how it runs.",
+      "properties": {
+        "minutes": { "type": "number" },
+        "kind": { "type": "string" },
+        "equipment": { "type": "string" }
+      }
+    }
+  }
+}

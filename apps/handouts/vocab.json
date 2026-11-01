@@ -1,0 +1,16 @@
+{
+  "$defs": {
+    "handout": {
+      "description": "One handout: who it is for, the team it belongs to, and the file attached to it, if any. doc.title names it and doc.body is its text. file is the eid of the uploaded bytes, served at ./api/blob/<file>; name, mime and bytes describe them.",
+      "properties": {
+        "audience": { "type": "string" },
+        "team": { "type": "string" },
+        "file": { "type": "string" },
+        "name": { "type": "string" },
+        "mime": { "type": "string" },
+        "bytes": { "type": "number" }
+      }
+    }
+  },
+  "blob": { "maxLength": 26214400 }
+}
