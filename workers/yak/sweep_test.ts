@@ -188,6 +188,10 @@ test('only the admin, or the account itself, erases it; never a person or fixtur
   let { scenario, dir, ask, PROBE } = await accounts()
   await using _ = scenario
   assertEquals((await ask(ADA, 'probe@bot.yak.sh')).status, 403)
+  // Nobody but the admin learns who has an account.
+  for (let address of ['nobody@bot.yak.sh', 'ada@example.com']) {
+    assertEquals((await ask(PROBE, address)).status, 403)
+  }
   assertEquals((await ask(PROBE, 'probe@bot.yak.sh', 'GET')).status, 403)
   for (let address of ['ada@example.com', 'yourname@bot.yak.sh']) {
     let no = await ask(JEFF, address).catch((why) => why)

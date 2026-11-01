@@ -75,14 +75,15 @@ let account = async (
   }
   let { closed, closing } = await import('./erase.ts')
   let address = new URL(req.url).searchParams.get('address') ?? ''
+  // The caller first, so nobody learns from the answer who has an account.
+  let self = req.method == 'DELETE' && !!who.person &&
+    await dir.emailAt(who.person) == address
+  if (who.role != 'owner' && !self) {
+    return json(403, 'not_owner', 'an account is erased by an owner of yak')
+  }
   let at = await closing(env, dir, address)
   if (!at) {
     return json(404, 'no_account', `no account is ${address || '(nothing)'}`)
-  }
-  if (
-    who.role != 'owner' && (req.method != 'DELETE' || who.person != at.person)
-  ) {
-    return json(403, 'not_owner', 'an account is erased by an owner of yak')
   }
   if (req.method == 'DELETE') await closed(env, dir, address, who)
   return Response.json({
