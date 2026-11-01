@@ -4007,7 +4007,11 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
     if (!name) {
       name = `__derive_allowed${names.size}`
       names.set(sql, name)
-      allowed.push({ name, q: select({ from: from(raw(sql), '__screen') }) })
+      allowed.push({
+        name,
+        q: select({ from: from(raw(sql), '__screen') }),
+        materialized: false,
+      })
     }
     return name
   }
