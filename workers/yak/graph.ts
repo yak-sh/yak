@@ -1096,6 +1096,7 @@ export class Store {
     let scope = this.#useScope.getStore()
     if (
       !ns || !app ||
+      this.#expires?.context ||
       storeKind(this.#get('name') ?? '') != 'app' ||
       scope?.maintenance ||
       (!domain && (scope?.administrative || scope?.kernel || scope?.observe))
