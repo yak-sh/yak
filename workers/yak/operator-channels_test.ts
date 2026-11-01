@@ -4,7 +4,7 @@ import { durable } from '../../packages/durable-object/testing.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
-import { platform } from './testing.ts'
+import { modelPage, platform } from './testing.ts'
 import { operatorModel } from './operator-testing.ts'
 import { operatorStore } from './operator-store.ts'
 import {
@@ -470,12 +470,7 @@ test('a follow-up can publish an earlier request original without asking for it 
 let media = operatorStore(durable())
 let mediaAsks: Request[] = [], ocrInputs: unknown[] = []
 let beforeMedia = (await f.dir.at(f.space.eid))!.meter!.models
-f.env.MODEL_FETCH = () =>
-  Promise.resolve(
-    new Response(
-      'Context Window | 100000 tokens\nUnit Pricing | $0.1 per M input tokens, $0.3 per M output tokens',
-    ),
-  )
+f.env.MODEL_FETCH = () => Promise.resolve(modelPage(0.1, 0.3))
 f.env.AI!.run = (_name, input) => {
   ocrInputs.push(input)
   return Promise.resolve({
