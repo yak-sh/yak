@@ -700,6 +700,16 @@ test('?auth=required answers the challenge a probing host needs', async () => {
     let probe = await k.at('yaks.app', '/mcp?auth=required', hello())
     assertEquals(probe.status, 401)
     await probe.body?.cancel()
+    let listing = await k.at('yaks.app', '/mcp?auth=required', {
+      ...hello(),
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+    })
+    assertEquals(listing.status, 401)
+    assertEquals(
+      listing.headers.get('www-authenticate'),
+      probe.headers.get('www-authenticate'),
+    )
+    await listing.body?.cancel()
 
     // Step 2, the challenge names where the metadata is (RFC 9728). It names
     // `/mcp`, not the query: the resource is one resource, said two ways.

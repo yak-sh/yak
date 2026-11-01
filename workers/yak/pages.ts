@@ -2372,6 +2372,19 @@ let clients = (env: Host) => [
     finish: 'Open a new Agent chat in Cursor',
   },
   {
+    key: 'grok',
+    tab: 'Grok',
+    title: 'Grok',
+    steps: [
+      'Open ' + external('https://grok.com/connectors', 'Grok Connectors') +
+      ' and choose <b>New Connector</b>, then <b>Custom</b>.',
+      'Enter this server URL:' +
+      fields(field('URL', url(env, '/mcp?auth=required'), 'the MCP URL')),
+      'Connect and follow the prompt to sign in to yaks.app.',
+    ],
+    finish: 'Start a new Grok chat',
+  },
+  {
     key: 'other',
     tab: 'Other',
     title: 'Anything else that speaks MCP',
