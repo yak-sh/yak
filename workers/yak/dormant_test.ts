@@ -2,7 +2,7 @@ import { equal, test, until } from '@yaks/testing'
 import { directory, fetch as directoryFetch, storeName } from './directory.ts'
 import { trash, untrash } from './erase.ts'
 import { Store } from './graph.ts'
-import { storeOf } from './door.ts'
+import { PLATFORM_OBJECT, storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { openIn } from './unseen.ts'
 import { declared, platform, slot } from './testing.ts'
@@ -161,7 +161,7 @@ test('an app store wake makes zero directory calls and directory SQL statements'
   let ask = storeOf(p.env.STORE, name, { eid: app.eid, access: 'public' })
   await (await ask('/vocab', undefined, KERNEL)).body?.cancel()
   let ctx = p.states.get(name)!
-  let directoryCtx = p.states.get('yak/platform')!
+  let directoryCtx = p.states.get(PLATFORM_OBJECT)!
   let calls = 0
   let statements = 0
   let get = p.env.STORE.get.bind(p.env.STORE)
@@ -169,7 +169,7 @@ test('an app store wake makes zero directory calls and directory SQL statements'
     let stub = get(id)
     return {
       fetch: (r: Request) => {
-        if (String(id) == 'yak/platform') calls++
+        if (String(id) == PLATFORM_OBJECT) calls++
         return stub.fetch(r)
       },
     }

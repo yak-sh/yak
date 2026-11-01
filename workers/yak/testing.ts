@@ -55,7 +55,7 @@ import { scopeOf } from '../tracker/worker.ts'
 import type { Env, Inbound } from './env.ts'
 import { DIM, MODEL as EMBEDDER, texts } from './embedding.ts'
 import { KV, shapeOf, Store } from './graph.ts'
-import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { GIT_STORE, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
 import { schema as writeSchema } from './writes.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
@@ -79,7 +79,9 @@ export let declared = (
 // private bytes. The platform's two fixed names and an app's declaration are
 // schema identity; no app name, actor, entity or lineage is copied.
 let schemas = new Map<string, Snapshot>()
-export let durable = (name = '', declaration: string | null = null) => {
+export let durable = (at = '', declaration: string | null = null) => {
+  // The object the directory stands in holds the directory's words.
+  let name = at == PLATFORM_OBJECT ? PLATFORM_STORE : at
   let shape = shapeOf(name, declaration)
   let key = JSON.stringify([shape.stamp, declaration, shape.own ? name : ''])
   let from = schemas.get(key)
@@ -962,7 +964,7 @@ export let lasting = (
           let store = object(String(n))
           // The deployed directory carries the platform's shipped integrations
           // and wakes. The fixture supplies that deployment once, before reads.
-          if (String(n) == PLATFORM_STORE) {
+          if (String(n) == PLATFORM_OBJECT) {
             initialized ??= store.fetch(
               new Request('http://store/vocab', {
                 method: 'POST',

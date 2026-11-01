@@ -7,6 +7,7 @@
 // The browser is the part a probe cannot boot, so the test posts what a
 // browser would post; that the page carries the reporter at all is asserted
 // on the served bytes.
+import { PLATFORM_OBJECT } from './door.ts'
 import {
   assert,
   assertEquals,
@@ -746,7 +747,7 @@ let platformBreak = await (async () => {
       let stub = store(id)
       return {
         fetch: (req: Request) =>
-          failing == 'query' && String(id) != 'yak/platform' &&
+          failing == 'query' && String(id) != PLATFORM_OBJECT &&
             new URL(req.url).pathname == '/query'
             ? Promise.resolve(Response.json({
               error: 'Error',

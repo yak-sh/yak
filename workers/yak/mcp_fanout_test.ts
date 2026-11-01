@@ -8,7 +8,7 @@ import {
   txt,
   vocabFile,
 } from './probe.ts'
-import { type Namespace, PLATFORM_STORE } from './door.ts'
+import { type Namespace, PLATFORM_OBJECT } from './door.ts'
 
 let watched = async () => {
   let fetched: { store: string; path: string }[] = []
@@ -18,7 +18,7 @@ let watched = async () => {
       idFromName: (name) => name,
       get: (name) => ({
         fetch: (req) => {
-          if (String(name) != PLATFORM_STORE) {
+          if (String(name) != PLATFORM_OBJECT) {
             fetched.push({
               store: String(name),
               path: new URL(req.url).pathname,

@@ -17,7 +17,7 @@ import type { Load } from '@yaks/host'
 import { directoryConfig } from './config.ts'
 import { load } from './load.ts'
 import { API } from './analytics.ts'
-import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
+import { GIT_STORE, PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
 import { reporting, resumed, STUCK } from './wake.ts'
@@ -37,11 +37,11 @@ let wake = async (env: ReturnType<typeof platform>['env'], eid: string) =>
 let directory = async (p: ReturnType<typeof platform>) => {
   await meta(p.env).query('.wake')
   await p.settled()
-  return p.object(PLATFORM_STORE)
+  return p.object(PLATFORM_OBJECT)
 }
 // The bell, as the runtime rings it: the alarm is cleared on delivery, and
 // what the object arms afterwards is the next instant it owes.
-let ring = async (p: ReturnType<typeof platform>, name = PLATFORM_STORE) => {
+let ring = async (p: ReturnType<typeof platform>, name = PLATFORM_OBJECT) => {
   await p.states.get(name)!.storage.deleteAlarm()
   await p.object(name).alarm()
 }
@@ -70,8 +70,8 @@ test('a wake fires in the store that holds it and its rule receives the tick ins
   directoryConfig.plugins!.push(configured)
   try {
     let p = platform('wake fixture')
-    let ctx = state(PLATFORM_STORE)
-    p.states.set(PLATFORM_STORE, ctx)
+    let ctx = state(PLATFORM_OBJECT)
+    p.states.set(PLATFORM_OBJECT, ctx)
     let store = new Store(ctx, p.env, undefined, undefined, fixture)
     p.env.STORE = {
       idFromName: (name) => name,
@@ -138,7 +138,7 @@ test('seeded wake rows survive a directory restart without rewinding or resuming
   }])
   // The object goes and comes back: the rows are the storage's, and the seed
   // pass finds them already there.
-  store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
+  store = new Store(p.states.get(PLATFORM_OBJECT)!, p.env)
   p.env.STORE = {
     idFromName: (n) => n,
     get: () => ({ fetch: (req: Request) => store.fetch(req) }),
@@ -414,7 +414,7 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
   })
   // The runtime clears the alarm as it delivers it; the tick is what sets the
   // next one, and a refusal is what it is being asked to set here.
-  await p.states.get(PLATFORM_STORE)!.storage.deleteAlarm()
+  await p.states.get(PLATFORM_OBJECT)!.storage.deleteAlarm()
   await within(p.env, {}, () => store.tick(at('05:00')), clock())
   assertEquals((await wake(p.env, 'yak-meter')).wake.at, iso('05:00'))
   assertEquals(rows.length, 1)
@@ -429,7 +429,7 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
   assertEquals(await meta(p.env).query('.exception'), [])
   // A refusal is not a dropped occurrence: the object comes back for it.
   assertEquals(
-    await p.states.get(PLATFORM_STORE)!.storage.getAlarm(),
+    await p.states.get(PLATFORM_OBJECT)!.storage.getAlarm(),
     at('05:00') + Store.RETRY,
   )
 })
@@ -437,7 +437,7 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
 test('a write arms the object for the wake it just heard, and the alarm fires it', async () => {
   let p = platform('wake alarm')
   await directory(p)
-  let storage = p.states.get(PLATFORM_STORE)!.storage
+  let storage = p.states.get(PLATFORM_OBJECT)!.storage
   // The directory seeds schedules of its own, the hourly meter among them, and
   // near the top of an hour one falls due inside the minute looked ahead here.
   // Paused, with their alarm gone, they leave the one alarm to the wakes this

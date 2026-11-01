@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { directory, fetch as directoryFetch } from './directory.ts'
-import { PLATFORM_STORE, storeOf } from './door.ts'
+import { PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { LEAVE } from './relocate.ts'
@@ -55,7 +55,7 @@ test('the directory moves to a new object and every request follows it', async (
   )
   equal(there.status, 200)
   equal(JSON.stringify(await there.json()).includes('second'), true)
-  let left = p.states.get(PLATFORM_STORE)!
+  let left = p.states.get(PLATFORM_OBJECT)!
   equal(await left.storage.get('dormant'), true)
   equal(await left.storage.get('relocated'), 'yak/ord')
   equal(slot(p.states.get('yak/ord')!, 'name'), PLATFORM_STORE)
@@ -83,7 +83,7 @@ test('what moved after the copy reaches the new object in the hold', async () =>
   equal((await asked(p.env, 'prepare=yak/ord')).status, 200)
   // Nothing has changed hands yet, and nothing boots at the far end.
   equal((await dir.own('during', 'during')).slug, 'during')
-  equal(slot(p.states.get(PLATFORM_STORE)!, 'name'), PLATFORM_STORE)
+  equal(slot(p.states.get(PLATFORM_OBJECT)!, 'name'), PLATFORM_STORE)
   equal(await p.states.get('yak/ord')!.storage.getAlarm(), null)
 
   let r = await asked(p.env, 'to=yak/ord')
@@ -103,7 +103,7 @@ test('a hold with nothing prepared leaves the directory serving', async () => {
   let { dir, space } = await seeded(p)
   equal((await asked(p.env, 'to=yak/ord')).status, 500)
   equal((await dir.space('moving'))?.eid, space.eid)
-  let left = p.states.get(PLATFORM_STORE)!
+  let left = p.states.get(PLATFORM_OBJECT)!
   equal(await left.storage.get('relocating'), false)
   equal(await left.storage.get('dormant'), false)
   equal((await dir.own('after', 'after')).slug, 'after')
@@ -116,5 +116,5 @@ test('the way back returns requests to the old object', async () => {
   let r = await asked(p.env, 'back=1')
   equal(r.status, 200)
   equal((await dir.own('home', 'home')).slug, 'home')
-  equal(await p.states.get(PLATFORM_STORE)!.storage.get('dormant'), false)
+  equal(await p.states.get(PLATFORM_OBJECT)!.storage.get('dormant'), false)
 })

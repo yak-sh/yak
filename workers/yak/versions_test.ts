@@ -14,7 +14,7 @@ import { releaseFiles, staged } from './release.ts'
 import type { Tally } from './lib/hops.ts'
 import * as dirPart from './directory.ts'
 import type { App, Directory, Space } from './directory.ts'
-import { type Namespace, PLATFORM_STORE } from './door.ts'
+import { type Namespace, PLATFORM_OBJECT } from './door.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -558,7 +558,7 @@ let restartFixture = async (answer: () => Response) => {
     idFromName: (name) => name,
     get: (name) => ({
       fetch: async (req: Request) => {
-        let deploy = name == PLATFORM_STORE &&
+        let deploy = name == PLATFORM_OBJECT &&
           (await req.clone().text()).includes('"deploy"')
         if (deploy) deploys++
         let r = await store.get(name).fetch(req)

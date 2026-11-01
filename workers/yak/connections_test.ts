@@ -29,7 +29,7 @@ import {
   own,
 } from './connections.ts'
 import { directory, over, storeName } from './directory.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_OBJECT } from './door.ts'
 import { db, named, platform } from './testing.ts'
 import { scan } from '@yaks/sql'
 import { KERNEL, meta } from './meta.ts'
@@ -85,7 +85,7 @@ let setup = async (vault = true) => {
     connectionsOf(p.env, [space], person, [], enable)
   // Every row the directory's SQLite holds, as text.
   let dump = () => {
-    let held = p.states.get(PLATFORM_STORE)!
+    let held = p.states.get(PLATFORM_OBJECT)!
     return named(held, { type: 'table' })
       .map((t) => JSON.stringify(scan(db(held), t))).join('\n')
   }

@@ -5,7 +5,13 @@ import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
 import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
-import { IDEMPOTENCY, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
+import {
+  IDEMPOTENCY,
+  type Namespace,
+  PLATFORM_OBJECT,
+  PLATFORM_STORE,
+  storeOf,
+} from './door.ts'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
 import { Store } from './graph.ts'
@@ -157,7 +163,7 @@ let visits = await (async () => {
     let stub = get(id)
     return {
       fetch: (r) =>
-        receiptDown && String(id) == PLATFORM_STORE &&
+        receiptDown && String(id) == PLATFORM_OBJECT &&
           new URL(r.url).pathname == '/used'
           ? stalled
           : stub.fetch(r),

@@ -46,7 +46,9 @@ and setup; this is the map and the feel.
   the packages: `appVocab(manifest)`, @yaks/durable-object's storage over
   @yaks/sqlite, `graph()`, `api()` and sockets. It owns no behavior of its own.
 - **The directory**: the store named `yak/platform` on the platform's own
-  vocabulary (`directory.ts`, `meta.ts`): spaces, apps, members, deploys. Every
+  vocabulary (`directory.ts`, `meta.ts`): spaces, apps, members, deploys. Its
+  file stands in the object `PLATFORM_OBJECT` (`door.ts`), near Chicago; an
+  object can't move, so moving it is a new name there and a copy. Every
   door asks it who may do what before a request reaches an app's store. What its
   writes owe (a release's commit, a trash notice) is an effect its pool works
   after the write answers, so a test that reads one awaits the platform's

@@ -80,6 +80,16 @@ export type Dispatch = {
  * the directory without importing its words or its store composition. */
 export let PLATFORM_STORE = 'yak/platform'
 
+/** Where the directory's file stands. Its name above is what the directory is;
+ * this is the object holding it, first reached from a Worker in ORD so that it
+ * stands near Chicago (relocate.ts, T-134094). An object can't move, so a move
+ * is a new name here. */
+export let PLATFORM_OBJECT = 'yak/platform/ord'
+
+/** The name of the Durable Object a store lives in. */
+export let objectOf = (name: string): string =>
+  name == PLATFORM_STORE ? PLATFORM_OBJECT : name
+
 /** The store the git object graph lives in (git.ts, D-34943). One object for
  * the whole platform, because a git object is named by its own bytes: the same
  * blob deployed by two apps in two spaces is one row, and a graph that were
@@ -264,7 +274,7 @@ export let fetchOf =
   (ns: Namespace, name: string, wait?: (ms: number) => Promise<void>) =>
   (make: () => Request): Promise<Response> =>
     retried(
-      () => ns.get(ns.idFromName(name)).fetch(stamped(make())),
+      () => ns.get(ns.idFromName(objectOf(name))).fetch(stamped(make())),
       true,
       undefined,
       wait,
@@ -302,7 +312,7 @@ export let storeOf = (
   // door keeps it rather than minting one per call. `wait` waits out each
   // pause before a resend (@yaks/durable-object `retried`).
   let door = doorOf(
-    (req) => ns.get(ns.idFromName(name)).fetch(req),
+    (req) => ns.get(ns.idFromName(objectOf(name))).fetch(req),
     name,
     app,
   )
