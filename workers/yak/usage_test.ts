@@ -203,8 +203,11 @@ test('meter queries distinguish the same handle in two deployments', async () =>
     assertEquals(requestUnits(app.meter!), 10)
     assertEquals(app.meter?.rows_read, 7)
     assertEquals(app.meter?.bytes, 4096)
-    let [row] = await dir.census().then((c) => c.apps)
-    assertEquals(row.meter?.visits, 12)
+    let { apps } = await dir.census()
+    assertEquals(
+      apps.find((r) => r.entity.eid == recipes.eid)?.meter?.visits,
+      12,
+    )
     assertEquals(space.meter?.requests, 27)
     assertEquals(space.meter?.ws_hibernated, 20)
     assertEquals(space.meter?.ws_messages, 60)
