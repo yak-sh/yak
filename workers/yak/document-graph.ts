@@ -43,7 +43,7 @@ export let documentPages = (): Plugin => ({
         }
         let current = (document: string, blob: unknown) => {
           let file = files.get(document)
-          return file?.blob == blob &&
+          return !!file && file.blob == blob &&
             supported(String(file.name ?? ''), String(file.mime ?? ''))
         }
         return after(
