@@ -87,17 +87,17 @@ let texts = (vocab: Vocab, b: Bundle): string[] =>
 // one letter or part of a phrase; a phrase matches consecutive runs.
 let WORD = /[\p{L}\p{N}]+/gu
 type Wanted = { runs: string[]; prefix: boolean }
-let runs = (text: string) =>
-  [...text.matchAll(WORD)].map((m) => ({
-    at: m.index,
-    end: m.index + m[0].length,
-    low: m[0].toLowerCase(),
-  }))
+type Run = { at: number; end: number; low: string }
+let runs = function* (text: string): Generator<Run> {
+  for (let m of text.matchAll(WORD)) {
+    yield { at: m.index, end: m.index + m[0].length, low: m[0].toLowerCase() }
+  }
+}
 let matcher = (words: string[]): Wanted[] | null => {
   let wanted = words
     .map((w) => w.replace(/\*+$/, '').replaceAll('"', '').trim())
     .map((w) => ({
-      runs: runs(w).map((r) => r.low),
+      runs: [...runs(w)].map((r) => r.low),
       prefix: w.length > 1 && !/\s/.test(w),
     }))
     .filter((w) => w.runs.length)
@@ -105,25 +105,31 @@ let matcher = (words: string[]): Wanted[] | null => {
 }
 
 // Where the words match in `text`, first to last, none overlapping.
-let spans = (text: string, wanted: Wanted[]): [number, number][] => {
-  let rs = runs(text)
-  let found: [number, number][] = []
-  for (let i = 0; i < rs.length;) {
+let spans = function* (
+  text: string,
+  wanted: Wanted[],
+): Generator<[number, number]> {
+  let pending: Run[] = []
+  let width = Math.max(...wanted.map((w) => w.runs.length))
+  let source = runs(text)
+  let ended = false
+  while (!ended || pending.length) {
+    while (!ended && pending.length < width) {
+      let next = source.next()
+      if (next.done) ended = true
+      else pending.push(next.value)
+    }
+    if (!pending.length) break
     let w = wanted.find(({ runs: q, prefix }) =>
       q.every((r, j) => {
-        let low = rs[i + j]?.low
+        let low = pending[j]?.low
         return low != null &&
           (prefix && j == q.length - 1 ? low.startsWith(r) : low == r)
       })
     )
-    if (!w) {
-      i++
-      continue
-    }
-    found.push([rs[i].at, rs[i + w.runs.length - 1].end])
-    i += w.runs.length
+    if (w) yield [pending[0].at, pending[w.runs.length - 1].end]
+    pending.splice(0, w?.runs.length ?? 1)
   }
-  return found
 }
 
 /** The part of `text` around the first match of `words`, every match in it
@@ -142,21 +148,28 @@ let spans = (text: string, wanted: Wanted[]): [number, number][] => {
  * ```
  */
 export let snippet = (text: string, words: string[]): string => {
-  let line = text.replace(/\s+/g, ' ').trim()
   let wanted = matcher(words)
+  let first = wanted ? spans(text, wanted).next().value : undefined
+  let at = first?.[0] ?? 0
+  let start = Math.max(0, at - BEFORE)
+  while (start > Math.max(0, at - BEFORE * 2) && !/\s/.test(text[start - 1])) {
+    start--
+  }
+  let end = Math.min(text.length, at + AFTER)
+  while (
+    end < Math.min(text.length, at + AFTER + BEFORE) && !/\s/.test(text[end])
+  ) end++
+  // Tokenize only the displayed window after finding its first match. Large
+  // transcripts may hold millions of later matches that cannot be displayed.
+  let line = text.slice(start, end).replace(/\s+/g, ' ').trim()
   let found = wanted ? spans(line, wanted) : []
-  let at = found[0]?.[0] ?? 0
-  let start = at > BEFORE ? line.lastIndexOf(' ', at - BEFORE) + 1 : 0
-  let stop = line.indexOf(' ', at + AFTER)
-  let end = stop < 0 ? line.length : stop
-  let cut = ''
-  let from = start
-  for (let [a, b] of found.filter(([, b]) => b <= end)) {
+  let cut = '', from = 0
+  for (let [a, b] of found) {
     cut += `${line.slice(from, a)}\x01${line.slice(a, b)}\x02`
     from = b
   }
-  cut += line.slice(from, end)
-  return (start ? '…' : '') + cut + (end < line.length ? '…' : '')
+  cut += line.slice(from)
+  return (start ? '…' : '') + cut + (end < text.length ? '…' : '')
 }
 
 /** The hit a search row says itself as: the id it is {@link called}, its
@@ -219,6 +232,7 @@ export let hit = (
 let besides = (vocab: Vocab, words: string[], b: Bundle, title: string) => {
   let said = texts(vocab, b).filter((t) => t != title)
   let wanted = matcher(words)
-  let found = said.find((t) => wanted && spans(t, wanted).length) ?? said[0]
+  let found = said.find((t) => wanted && !spans(t, wanted).next().done) ??
+    said[0]
   return found ? snippet(found, words) : ''
 }
