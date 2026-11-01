@@ -27,6 +27,7 @@
 // Nothing here reads a cookie or an env: the kernel's session.ts reads the
 // cookie, the login page (T-32327) mints one with `sign` and sets it with
 // `cookie`.
+import { COOKIE, cookieValue } from './cookie.ts'
 import { oldUse, today } from './token_legacy.ts'
 import { HMAC, hmac, kept } from './hmac.ts'
 
@@ -40,7 +41,7 @@ export type Claims = {
 
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
 // carries it and one sign-in serves the platform.
-export let COOKIE = 'yak_session'
+export { COOKIE, cookieValue }
 
 let enc = new TextEncoder()
 let dec = new TextDecoder()
@@ -194,15 +195,6 @@ export let verify = async (
     ...(typeof c.via == 'string' && c.via ? { via: c.via } : {}),
     ...(o.legacy ? { legacy: true as const } : {}),
   }
-}
-
-// One cookie's value out of a Cookie header, or null.
-export let cookieValue = (header: string | null, name = COOKIE) => {
-  for (let part of (header ?? '').split(';')) {
-    let [k, ...v] = part.trim().split('=')
-    if (k == name) return v.join('=')
-  }
-  return null
 }
 
 // The Set-Cookie value that carries a token: platform-wide by domain, never

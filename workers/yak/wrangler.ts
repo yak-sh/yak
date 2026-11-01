@@ -350,11 +350,15 @@ let logTail = (path: string) => {
 // entrypoint, yak-esbuild (esbuild/) is what the ESBUILD binding compiles
 // an app with at deploy (@yaks/esbuild), in a container of its own, and
 // yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
-// with. Each exists before this Worker's bindings name it.
+// with, and yak-front (front/) is what answers the cached pages in front of
+// this Worker. Each exists before this Worker's bindings name it, except
+// yak-front, whose bindings name this Worker: a missing entrypoint there only
+// fails its use receipts until this deploy finishes, seconds later.
 export let SIBLINGS = [
   'outbound/wrangler.toml',
   'esbuild/wrangler.toml',
   'raster/wrangler.toml',
+  'front/wrangler.toml',
 ]
 
 // Each sibling's deploy arguments, or none when these arguments are not a

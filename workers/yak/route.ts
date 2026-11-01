@@ -183,6 +183,21 @@ export let ORIGIN = `origin.saas.${PLATFORM}`
 // move an app's address from outside.
 export let MOUNT = 'x-yak-mount'
 
+/** The header an app's own worker carries its sealed visitor in, coming back
+ * through its service binding (dispatch.ts). */
+export let GRANT = 'x-yak-grant'
+
+/** Whether a request carries one, valid or not: it is the kernel's to open. */
+export let bearing = (req: Request) => req.headers.has(GRANT)
+
+// The addresses on a space's hostname its apps never answer: a repository
+// (git_door.ts) and a service's webhooks (connections.ts). They come before
+// the apps and before the edge's kept pages.
+export let DOORS = /^\/([^/.]+)\.git\/(info\/refs|git-upload-pack)$/
+export let BARE = /^\/([^/.]+)\/info\/refs$/
+export let spaceDoor = (path: string) =>
+  DOORS.test(path) || BARE.test(path) || path.startsWith(`${OURS}/hooks/`)
+
 /** The browser-facing URL retained when the router aims a custom domain. */
 export let ADDRESS = 'x-yak-address'
 

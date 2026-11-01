@@ -26,6 +26,7 @@ import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
 import { type Purged, purger } from './purge.ts'
 import { hosting } from './inference.ts'
+import { scheduleUse } from './used.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
 // The Store, at every address the binding names — the directory at
@@ -127,6 +128,17 @@ export class Purger extends DurableObject<Env> {
 
   purge(tags: string[]): Promise<void> {
     return this.#purge(tags)
+  }
+}
+
+// What yak-front (front/) owes for a page it answered from the edge: the app was
+// used. That Worker holds no door onto a store, so it hands the receipt here,
+// behind the response it has already sent. RPC, which the cache never answers.
+export class Uses extends WorkerEntrypoint {
+  declare env: Env
+
+  used(eid: string): void {
+    entry(this.env, 'Uses used', () => scheduleUse(this.env, eid, waitUntil))
   }
 }
 

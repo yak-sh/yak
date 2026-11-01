@@ -6,7 +6,8 @@ import { copyOf, publicDirectory } from './directory-copy.ts'
 // app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged } from './apps.ts'
-import { KEPT, kept, shareable, visitor } from './page-cache.ts'
+import { KEPT, listing, listingAt, shareable, visitor } from './kept-page.ts'
+import { kept } from './page-cache.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -19,61 +20,25 @@ import { SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { clock, timed } from './timing.ts'
 
-let FRESH = 'public, max-age=30, must-revalidate'
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
   headers.set('cache-control', 'private, no-store')
   return new Response(page.body, { status: page.status, headers })
 }
 
-// The hostname is a placeholder for a service binding; the apex is in the
-// path because Workers Caching keys by path and entrypoint,
-// not the request hostname.
-export let at = (env: Host, path: string) =>
-  `https://site.invalid/${encodeURIComponent(apex(env))}${path}`
+export let at = (env: Host, path: string) => listingAt(apex(env), path)
 
-// The gateway's anonymous subrequest carries validators and deploy selection,
-// never browser credentials. HEAD uses that same GET and drops only its body.
-export let forward = async (req: Request, env: Env, path: string) => {
-  // A deploy probe selects a version at the gateway and at its cached Site
-  // entrypoint. Without the override here the body can come from the previous
-  // deployment even while the gateway runs the requested version.
-  let headers = new Headers()
-  for (
-    let name of [
-      'if-none-match',
-      'cache-control',
-      'Cloudflare-Workers-Version-Overrides',
-    ]
-  ) {
-    let value = req.headers.get(name)
-    if (value) headers.set(name, value)
-  }
+// The gateway's anonymous subrequest; a credentialed request renders in-process
+// and takes no copied listing.
+export let forward = (req: Request, env: Env, path: string) => {
   let anonymous = shareable(req)
-  if (!anonymous) headers.set('x-yak-no-copy', '1')
-  let shown =
-    await (anonymous
-      ? bound(env.SITE, fetch, env)
-      : bound(undefined, fetch, env)).fetch(
-        new Request(at(env, path), { headers }),
-      )
-  // A hit carries the old render's timing, not work done for this view, and
-  // the home page's lifetime is its edge's: a browser still revalidates it.
-  let hit = ['HIT', 'UPDATING', 'STALE'].includes(
-    shown.headers.get('cf-cache-status') ?? '',
+  return listing(
+    req,
+    anonymous ? bound(env.SITE, fetch, env) : bound(undefined, fetch, env),
+    apex(env),
+    path,
+    !anonymous,
   )
-  if (hit || shown.headers.get('cache-control') == KEPT) {
-    shown = new Response(shown.body, shown)
-    if (hit) shown.headers.delete('server-timing')
-    if (shown.headers.get('cache-control') == KEPT) {
-      shown.headers.set('cache-control', FRESH)
-    }
-  }
-  if (req.method == 'GET') {
-    return shown
-  }
-  await shown.body?.cancel()
-  return new Response(null, { status: shown.status, headers: shown.headers })
 }
 
 let checksum = async (body: string) =>

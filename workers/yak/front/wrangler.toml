@@ -1,0 +1,96 @@
+# yak-front (front.ts): answers what Site's cache holds, and hands everything
+# else to the kernel over a service binding, so a request answered from the edge
+# never pays for the kernel's start (T-133886, D-133933). No secrets and no
+# stores; the kernel's deploy deploys it first, to the same environment
+# (../wrangler.ts `siblings`).
+name = "yak-front"
+main = "index.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2026-06-01"
+workers_dev = false
+preview_urls = false
+minify = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[vars]
+APEX = "yaks.app"
+WORKER_NAME = "yak-front"
+
+[[services]]
+binding = "KERNEL"
+service = "yak"
+
+[[services]]
+binding = "SITE"
+service = "yak"
+entrypoint = "Site"
+
+[[services]]
+binding = "USES"
+service = "yak"
+entrypoint = "Uses"
+
+[[queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[[analytics_engine_datasets]]
+binding = "VIEWS"
+dataset = "yak_views"
+
+# The two workspace files this Worker reads. Each is named here because esbuild
+# has no idea about the workspace, and the kernel's written-out `paths` carry
+# hundreds of names this Worker must not grow to need.
+[alias]
+"@yaks/tracker/report" = "../../../packages/tracker/report.ts"
+"@yaks/graph/errors" = "../../../packages/graph/errors.ts"
+
+[env.staging]
+name = "yak-front-staging"
+workers_dev = false
+preview_urls = false
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true
+
+[env.staging.observability.traces]
+enabled = true
+
+[env.staging.version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[env.staging.vars]
+APEX = "yaks.fyi"
+WORKER_NAME = "yak-front-staging"
+
+[[env.staging.queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "VIEWS"
+dataset = "yak_views_staging"
+
+[[env.staging.services]]
+binding = "KERNEL"
+service = "yak-staging"
+
+[[env.staging.services]]
+binding = "SITE"
+service = "yak-staging"
+entrypoint = "Site"
+
+[[env.staging.services]]
+binding = "USES"
+service = "yak-staging"
+entrypoint = "Uses"

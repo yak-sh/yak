@@ -50,16 +50,13 @@ import { bound, type Env } from './env.ts'
 import { bodies, graphOf, held, MAIN, refAt } from './gitobj.ts'
 import { held as heldGrant, ledger, narrowed } from './grants.ts'
 import { meta } from './meta.ts'
-import type { Arrived } from './route.ts'
+import { type Arrived, BARE, DOORS } from './route.ts'
 import { nobody, type Who, whoIs } from './session.ts'
 
-// The two addresses smart HTTP knocks on, under a slug wearing `.git`. The
-// slug may hold no dot of its own (route.ts), so the split is unambiguous.
-let DOORS = /^\/([^/.]+)\.git\/(info\/refs|git-upload-pack)$/
-
-// The advertisement asked for at the app's own address, which is where a clone
-// of the browser's URL begins.
-let BARE = /^\/([^/.]+)\/info\/refs$/
+// route.ts names the two addresses smart HTTP knocks on, under a slug wearing
+// `.git` (`DOORS`), and the advertisement asked for at the app's own address
+// (`BARE`), which is where a clone of the browser's URL begins. The slug may
+// hold no dot of its own, so the split is unambiguous.
 
 let SERVICE = 'git-upload-pack'
 

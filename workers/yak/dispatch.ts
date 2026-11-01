@@ -58,6 +58,7 @@ import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { accountUrl, failure, resent } from './workers_api.ts'
 import { oops } from './pages.ts'
+import { bearing, GRANT } from './route.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
@@ -84,7 +85,7 @@ export let namespace = (env: Env) => env.DISPATCH_NAMESPACE ?? NAMESPACE
 // The grant rides its own header, in and out. A client's own is always
 // stripped before an app's worker is called, so the only one an app ever
 // sees is the kernel's.
-export let GRANT = 'x-yak-grant'
+export { GRANT }
 
 // The app's own grant, on the way in only. The shim takes it off and spends
 // it under `GRANT` like any other, so the kernel has one header to open and
@@ -322,7 +323,7 @@ export let itsApp = (who: Who | null, app: App) =>
 // handed, so this is what keeps a path it just intercepted from arriving back
 // at it. `granted` below is the other question — who this grant says the
 // caller is — and only its own app can ask that one.
-export let bearing = (req: Request) => req.headers.has(GRANT)
+export { bearing }
 
 // Who this request is, when it is an app's own worker coming back through
 // its service binding — and null for anything else: no header, a forged or
