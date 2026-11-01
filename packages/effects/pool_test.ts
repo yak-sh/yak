@@ -180,6 +180,16 @@ test('a pooled event retains all components moved on its target', async () => {
   assert(touched[0].includes('created'))
 })
 
+test('a delayed effect retains the publication time of its committed change', async () => {
+  let now = 1000, seen: (string | undefined)[] = []
+  let a = proc(store(), { clock: { ...system, now: () => now } })
+  a.fx.handle({ post_note: (event) => void seen.push(event.at) })
+  await a.g.apply([post('p1')])
+  now = 50_000
+  await a.fx.work(a.g)
+  assertEquals(seen, [new Date(1000).toISOString()])
+})
+
 test('what one process wrote, another runs, and only one of many', async () => {
   let s = store()
   let [w, a, b] = [proc(s), proc(s), proc(s)]

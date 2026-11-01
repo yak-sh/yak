@@ -42,6 +42,8 @@ export type Kind = 'created' | 'changed' | 'removed' | 'matched' | 'started'
  * commit.
  */
 export type Event = {
+  /** When the committed change owed this durable run, preserved across retries. */
+  at?: string
   /** what happened */
   kind: Kind
   /** the entity it happened to, with the `num` storage minted */

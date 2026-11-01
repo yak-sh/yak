@@ -237,6 +237,8 @@ import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
 import { DELIVER, MAIL } from '@yaks/mail'
+import { subscription } from './notices.ts'
+import { noticeComponents } from './notices-vocab.ts'
 import {
   actorOf,
   Denied,
@@ -903,10 +905,14 @@ export let FLOORS: Floors = {
 
 /** The floors an app's own manifest leaves standing: every one, less the
  * floor on asking its models where it opens them to anyone who may write. */
-export let floorsOf = (manifest: VocabDoc): Floors =>
-  manifest.models == 'open'
+export let floorsOf = (manifest: VocabDoc): Floors => ({
+  ...(manifest.models == 'open'
     ? Object.fromEntries(Object.entries(FLOORS).filter(([k]) => k != 'using'))
-    : FLOORS
+    : FLOORS),
+  ...Object.fromEntries(
+    noticeComponents(manifest).map((name) => [name, 'editor']),
+  ),
+})
 
 /** The rows an open app's visitor writes only inside a row of their own: a
  * line of a transcript, since after an entry with `using` every line asks for
@@ -4499,6 +4505,9 @@ export class Store {
   async #serve(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    if (path == '/notices' && kernel) {
+      return subscription(request, this.#stored(this.#graph))
+    }
     if (path == '/used') {
       if (
         !kernel || request.method != 'POST' ||

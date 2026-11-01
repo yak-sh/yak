@@ -40,6 +40,7 @@ import { selected } from '@yaks/host/documents'
 import { dependencies, Unplanned } from '@yaks/esbuild'
 import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
+import { noticeEffects } from './notices-vocab.ts'
 export {
   appsDoc,
   classificationDoc,
@@ -774,7 +775,7 @@ export let appWords = (source: unknown = {}): Words => {
   }
   let v = composed(
     pluginsOf(doc),
-    [metaDoc, ...lensDocs, sessionLens, doc],
+    [metaDoc, ...lensDocs, sessionLens, doc, noticeEffects(doc)],
     appOptions,
   )
   appVocabs.set(key, v)

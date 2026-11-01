@@ -546,6 +546,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let entity = found?.entity ?? { eid: String(row.target) }
       let before = row.before as Comp | undefined
       let event: Event = {
+        at: String(row.at),
         kind,
         entity,
         name,

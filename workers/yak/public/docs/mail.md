@@ -9,7 +9,8 @@ guide:
     (<space>.<app>@yaks.app), the rows that send an email and who may send
     one, the delivered and bounced rows that record the outcome, replies and
     threading, how incoming email is stored with its attachments, the monthly
-    email limit, and what yaks.app email does not support.
+    email limit, confirmed email subscriptions for notices declared with
+    notice: true, unsubscribe links, and what yaks.app email does not support.
 ---
 
 # Email
@@ -98,9 +99,70 @@ HTML part. Headings, bullets, links, bold, italic and code are supported, and
 nothing else; markup in the body is escaped rather than sent as markup, and only
 an absolute `http`, `https`, `mailto` or `tel` link becomes an anchor.
 
-Each email goes to one recipient. There is no cc, no bcc, and no mailing list: a
-note to forty people is forty emails, one entity each, which also makes "who was
-sent it, and when" a query afterwards.
+Each email goes to one recipient. There is no cc or bcc: a note to forty people
+is forty emails, one entity each, which also makes "who was sent it, and when" a
+query afterwards.
+
+## Email subscriptions for notices
+
+Mark an app component with `"notice": true` in `vocab.json`:
+
+    { "$defs": {
+      "town_notice": { "notice": true, "properties": {} }
+    } }
+
+A row **posts a notice** when it first gains that component. Its `doc.title` is
+the subject and `doc.body` is the markdown body. Write them together:
+
+    await apply([
+      { entity: { eid: '$meeting' },
+        town_notice: {},
+        doc: { title: 'Meeting Tuesday', body: 'The meeting begins at 7pm.' } }
+    ])
+
+Only an owner or editor may post notices, including in an `open` app. Keep a
+draft as `doc{title, body}` and add the marked component when it is ready.
+Editing a posted notice does not send it again. A new notice is a new row. The
+platform records `notice_posted{at}` at publication, so the age of a draft does
+not change who receives it. Several notice components on one row still post one
+notice. Adding `notice: true` to a component does not email rows that already
+carry it, even when their text is later edited.
+
+Visitors subscribe with an email address; no yaks.app account is needed. A plain
+HTML form works on a public app:
+
+    <form method="post" action="./api/notices/subscribe">
+      <label>Email <input name="email" type="email" required></label>
+      <button>Subscribe to notices</button>
+    </form>
+
+Or POST JSON `{ "email": "ana@example.com" }` with
+`Content-Type: application/json` to `./api/notices/subscribe`. Show the response
+text to the visitor. The response asks them to check their email.
+
+The confirmation letter comes from the app's own address. Its link confirms the
+address in one click and expires after 48 hours. An unconfirmed address receives
+no notices. Repeated requests send at most one confirmation per address per
+hour, and do not change an existing confirmed subscription.
+
+Every confirmation and notice letter includes an unsubscribe link. One click
+stops future notices without signing in; the same URL accepts POST. An old
+confirmation link cannot subscribe the person again after they unsubscribe.
+Notices reach people already confirmed when the notice was posted; subscribing
+does not send old notices.
+
+Subscriptions are private rows in this app's store: `email{address}` plus
+`notice_subscription{owner, root, ticket, requested_at}`. A
+`notice_confirmed{at}` mark records consent. The platform writes these rows
+through the subscription doors; visitors cannot forge consent or read another
+subscriber's address. Confirmation and notice emails are private too, carrying
+`notice_letter{owner}` beside the usual `doc`, `mail`, `deliver` and delivery
+outcome.
+
+The platform queues a separate letter for each confirmed subscriber, using the
+same delivery and monthly email allowance as other app mail. Confirmations count
+too. A letter over the allowance is recorded as `bounced{reason}`; receiving
+mail continues. Text messages are not supported.
 
 ## Who may send email
 
@@ -115,6 +177,9 @@ open app would be an open relay.
 So a signed-out visitor's write carrying `deliver` is refused whole (403,
 `Denied`), and nothing in it is saved, the email included. The same visitor's
 write without `deliver` is written as usual.
+
+Notice subscriptions use the fixed confirmation letter described below; they
+allow a visitor to request consent without choosing an outgoing subject or body.
 
 An app's own `worker.js` does not bypass this: `env.STORE` reads and writes as
 the person viewing the page, so a route called by a visitor makes a visitor's
@@ -229,8 +294,9 @@ about, and the page can draw the thread beside that entity.
 
 ## Monthly email limits
 
-Email is metered in both directions, per space, per calendar month; the
-allowance belongs to the space's plan, not to one app.
+Email is metered in both directions per calendar month. Apps share their space's
+allowance. Free spaces belonging to one owner share the free allowance; each
+space on the Plus plan has its own allowance.
 
 The limits are in the plan table at <https://yaks.app/pricing>. Read them there,
 not from a page that copies them, including this one. `app_list` reports how

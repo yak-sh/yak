@@ -8,6 +8,7 @@ import { effects } from './facets/app-effects.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
 import { blobPrefix } from './blob-key.ts'
+import { appVocab } from './vocab.ts'
 
 let p = platform()
 let { dir, space, app } = await seeded(p.env)
@@ -77,7 +78,7 @@ let sha = 'a'.repeat(64)
 let at = {
   env: p.env,
   app: app.eid,
-  graph: { read: () => Promise.resolve([]) },
+  graph: { vocab: appVocab(), read: () => Promise.resolve([]) },
   context: { space, app: candidate },
 } as unknown as Stored
 let remove = p.env.BLOBS.delete.bind(p.env.BLOBS)

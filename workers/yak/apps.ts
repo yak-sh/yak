@@ -182,6 +182,7 @@ import { own as connection } from './connections.ts'
 import { envDoor, fetchDoor } from './outbound.ts'
 import { modelRun, recovery } from './models.ts'
 import { voice } from './rtc.ts'
+import { notices } from './notices.ts'
 import { reach } from './tunnel.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
@@ -1933,7 +1934,8 @@ export let api = async (
   let asked: Asked = { env, req, path, space, app, who, refuse: refused, json }
   let mine = await stats(asked) ?? await connection(asked) ??
     await envDoor(asked) ?? await fetchDoor(asked) ?? await reach(asked) ??
-    await modelRun(asked) ?? await recovery(asked) ?? await voice(asked)
+    await modelRun(asked) ?? await recovery(asked) ?? await voice(asked) ??
+    await notices(asked)
   if (mine) return mine
   // Taking money (sell.ts, T-34525). A read door as far as this app is
   // concerned — it reads the products the cart names and writes nothing — so it

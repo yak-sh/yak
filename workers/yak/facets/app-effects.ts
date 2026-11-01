@@ -7,10 +7,15 @@ import type { Options } from './store.ts'
 import { maintenance } from '../used.ts'
 import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
+import { noticePost } from '../notices.ts'
+import { noticeComponents } from '../notices-vocab.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
   return {
+    ...(at.graph.vocab.docs.some((doc) => noticeComponents(doc).length)
+      ? { notice_post: noticePost(at) }
+      : {}),
     builder_install: maintenance(async () => {
       let writes: Bundle[] = []
       if (at.graph.vocab.comp('builder')) {

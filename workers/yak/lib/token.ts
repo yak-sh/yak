@@ -56,6 +56,7 @@ let unb64u = (s: string) =>
  * A new kind of token is a new word here, never a reuse of an old one. */
 export type Use =
   | 'preview' // private draft snapshot, isolated store and expiry
+  | 'notice' // an email subscription's confirmation or unsubscribe link
   | 'tracker' // short-lived authorization for one independent tracker store
   | 'session' // the platform cookie (`sign`, `verify` below)
   | 'browser' // a signed-out browser's instrument, never a person

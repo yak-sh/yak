@@ -167,11 +167,9 @@ test('the public resources are the guide, and only the guide', () => {
 // reads first. Not even "free to start", which names a paid tier by implying
 // one.
 test('nothing public sells anything', () => {
-  // `subscribe` is deliberately not in this net: it is the client function a
-  // page calls to redraw itself (docs/store.md), and the word to catch is
-  // the noun, not the verb.
+  // Email subscriptions describe app behavior, without selling a purchase.
   let sold =
-    /subscription|upgrade|pricing|\bplans?\b|billing|per month|free to|\$\d/i
+    /(?:paid|monthly|annual) subscription|upgrade|pricing|\bplans?\b|billing|per month|free to|\$\d/i
   for (let t of PUBLIC) {
     let said = WORDS[t.name]
     assertEquals(
