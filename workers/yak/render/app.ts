@@ -8,7 +8,8 @@
 // are in).
 //
 // The title is the tile's link, stretched over the whole card, so the error
-// mark can be a link of its own: to where the dashboard says what broke.
+// mark can be a link of its own: to where the dashboard says what broke. `editor`
+// asks for one more, to the app's data editor, on a page for who may open it.
 
 import { parse } from '@yaks/query'
 import type { Renderer } from '@yaks/render'
@@ -53,6 +54,14 @@ export let app: Renderer = {
             { class: 'Apps_Tag Apps_Tag-warn', href: `#fix-${a.slug}` },
             `${errors} ${errors == 1 ? 'error' : 'errors'}`,
           )
+          : null,
+        ctx.editor
+          ? h('a', {
+            class: 'Apps_Tag Apps_Tag-link',
+            href: `${ctx.at ?? ''}/${a.slug}/_web/data`,
+            target: '_blank',
+            rel: 'noopener',
+          }, 'Edit data')
           : null,
         b.home ? tag('Homepage') : null,
         a.access ? tag(a.access) : null,

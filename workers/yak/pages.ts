@@ -79,6 +79,10 @@ let labeled = (id: string, label: string, control: string, hint = '') =>
     hint ? `<p class="Form_Hint">${hint}</p>` : ''
   }</div>`
 
+// A value as text a script can hold: JSON, with nothing that could close it.
+let script = (value: unknown) =>
+  JSON.stringify(value).replaceAll('<', '\\u003c')
+
 export let shell = (
   env: Host,
   title: string,
@@ -714,7 +718,7 @@ let sharedWith = (at: DeskPage, env: Host) =>
     ? `<h2 class="Group">Shared with you</h2><div class="Apps">${
       at.shared.map((a) => {
         let host = spaceHost(env, a.space)
-        return tile(a, { at: `https://${host}`, host })
+        return tile(a, { at: `https://${host}`, host, editor: true })
       }).join('')
     }</div>`
     : ''
@@ -731,6 +735,7 @@ export let library = (at: DeskPage, env: Host) => {
           tile(a, {
             at: `https://${spaceHost(env, at.space)}`,
             errors: a.errors?.length,
+            editor: true,
           })
         ).join('')
       }</div>${
@@ -1606,6 +1611,36 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     'Desk',
   )
 }
+
+/** The data editor's page (public/data.js draws what is in it): an app's own
+ * words, read by the script as data. */
+export let editor = (
+  env: Host,
+  at: { app: string; at: string; words: unknown; version: string },
+) =>
+  shell(
+    env,
+    `Data · ${esc(at.app)}`,
+    null,
+    200,
+    `<header class="Desk_Head"><div><a class="Desk_Address" href="${
+      esc(at.at)
+    }/">${esc(at.app)} ↗</a><h1>Data</h1></div></header>
+<div id="data"><noscript><p class="Say Say-no">This page needs JavaScript.</p></noscript></div>
+<script type="module">
+import { open } from ${script(`${at.at}/_web/data.js?v=${at.version}`)}
+import * as client from ${script(`${at.at}/api/client.js`)}
+await open({
+  root: document.getElementById('data'),
+  client,
+  view: window,
+  files: ${script(`${at.at}/api/blob/`)},
+  words: ${script(at.words)},
+})
+</script>`,
+    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
+    'Data',
+  )
 
 export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   let mine = at.apps.length

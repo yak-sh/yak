@@ -488,6 +488,24 @@
     font-weight: 700;
     text-decoration: none;
   }
+  .Apps_Tag-link {
+    position: relative;
+    color: var(--ink);
+  }
+  .Data main {
+    max-width: 44rem;
+    text-align: left;
+  }
+  .Data main > .Card {
+    margin-bottom: 1rem;
+  }
+  .Data main .Card > .Field {
+    margin-bottom: .75rem;
+  }
+  .Data main img {
+    max-width: 6rem;
+    max-height: 6rem;
+  }
   .Fix_Said {
     color: var(--ink);
     font-family: var(--mono);

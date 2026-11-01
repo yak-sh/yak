@@ -575,6 +575,31 @@ app's rows can conflict with them, unless another app of the same person
 declares the same name, which is covered on the next page, Cross-App Data
 (<https://yaks.app/docs/entities.md>).
 
+## Editing rows without building an interface
+
+Every app has a data editor at `<app>/_web/data`, generated from its
+`vocab.json`, so nobody has to build an admin page to change rows. Point people
+at it when they want to post a notice, fix a row or attach a PDF: anyone holding
+a level on the app opens it from their dashboard ("Edit data" on the app), an
+owner or editor lists, adds, edits and removes rows, and a viewer reads them.
+
+It lists each component the app declares, and rows that are only a `doc`. It
+leaves out edges, `personal` components and components that are not kept (`sync`
+other than `server`, `durable` other than `forever`). Each row gets its `doc`
+title and text, then one control per property, from what the property declares:
+
+- `{"type": "string", "ref": "blob", "death": "keep"}` (or a text property named
+  `blob`) is a file: an upload, with a link to what is there.
+- any other `ref` is a picker over the rows of the component it names, newest
+  200 first; `ref: "entity"` picks from every row with a `doc`.
+- `format: "date-time"`, `format: "uri"`, `number` and `boolean` get their own
+  controls; a list of strings is one item per line; any other object or list is
+  JSON.
+
+So declare a meeting's files and links as references and the editor needs
+nothing more: `"agenda": {"type": "string", "ref": "blob", "death": "keep"}`. A
+property's `description` is shown under its control.
+
 ## Changing the vocabulary across deploys
 
 The rule: **a component or property is dropped only when nothing is stored under

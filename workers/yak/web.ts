@@ -5,6 +5,10 @@ import type { Hosting } from '../../packages/browse/hosting.ts'
 
 export let webPath = (path: string) =>
   path == '/_web' || path.startsWith('/_web/')
+// The app's data editor (pages.ts `editor`, public/data.js), and its script.
+export let DATA = '/_web/data'
+export let DATA_SCRIPT = '/_web/data.js'
+export let dataPath = (path: string) => path == DATA || path == DATA_SCRIPT
 export let webHost = (at: string): Hosting => ({
   page: at + '/_web',
   api: at + '/api',

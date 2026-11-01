@@ -25,6 +25,7 @@ export type Around = {
   host?: string
   errors?: number
   icon?: string
+  editor?: boolean
 }
 
 export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>

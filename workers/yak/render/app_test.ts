@@ -56,7 +56,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     `<div class="Card Apps_Item">
 <img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt="">
 <a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span>
-<span class="Apps_Tags"><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
+<span class="Apps_Tags"><a class="Apps_Tag Apps_Tag-link" href="https://ada.yaks.app/recipes/_web/data" target="_blank" rel="noopener">Edit data</a><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
   )
   assertEquals(signature(card(html)), signature(expected))
 
@@ -66,6 +66,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     view: 'List.Tile',
     gallery: 'gallery: waiting',
     at: 'https://ada.yaks.app',
+    editor: true,
   }))
   try {
     assertEquals(

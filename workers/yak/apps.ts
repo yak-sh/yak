@@ -100,6 +100,7 @@ import {
   binned,
   desk as deskPage,
   type DeskPage,
+  editor,
   invitedTo,
   nothingHere,
   sentence,
@@ -146,7 +147,7 @@ import {
   vocabulary,
 } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
-import { webAsset, webPage, webPath } from './web.ts'
+import { DATA_SCRIPT, dataPath, webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { admitted, pageScript } from './page-script.ts'
@@ -3402,6 +3403,30 @@ let served = async (
   if (webPath(path)) {
     if (req.method != 'GET' && req.method != 'HEAD') {
       return json(405, 'method_not_allowed')
+    }
+    // The data editor is a person's page, not a machine door: anyone who holds
+    // a level on this app opens it, a guest included, and it writes only what
+    // the store lets them. Everyone else meets what a page would tell them.
+    if (dataPath(path)) {
+      if (edge) return passed()
+      if (!who.person) return redirect(signInAt(req.url, env), 303)
+      if (!who.role || !reads(mode(app.access), who.role)) {
+        return nothingHere(env)
+      }
+      if (path == DATA_SCRIPT) return platformFile(req, env, '/data.js')
+      let at = url.pathname.slice(0, -path.length)
+      return await reported(
+        env,
+        at || '/',
+        editor(env, {
+          app: app.title || app.slug,
+          at,
+          words: (await declarationOf(env, space, app)).vocab,
+          version: env.CF_VERSION_METADATA?.id ?? '',
+        }),
+        app.version ?? 0,
+        false,
+      )
     }
     if (!who.person) {
       return json(
