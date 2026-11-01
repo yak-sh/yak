@@ -1,5 +1,6 @@
 // Workers AI's binding listing and published model page, never a code catalogue.
 import type { Listed, Price } from '@yaks/model'
+import { type Clock, system } from '@yaks/fp'
 
 export type Listing = {
   name: string
@@ -43,7 +44,7 @@ export let pagePrice = (body: string): Price | undefined => {
     : undefined
 }
 
-export let modelInfo = async (
+let readInfo = async (
   name: string,
   fetcher: typeof fetch = fetch,
 ): Promise<Listed> => {
@@ -67,6 +68,35 @@ export let modelInfo = async (
     ...context ? { context: Number(context[1].replaceAll(',', '')) } : {},
     ...price ? { price } : {},
   }
+}
+
+// A page is shared across callers, including in-flight reads. Refresh hourly
+// so a stored offering never freezes an old price; a failed fetch is retried.
+let pages = new WeakMap<
+  typeof fetch,
+  Map<string, { until: number; read: Promise<Listed> }>
+>()
+
+/** Published metadata, read once per model and fetch binding each hour. */
+export let modelInfo = (
+  name: string,
+  fetcher: typeof fetch = fetch,
+  clock: Clock = system,
+): Promise<Listed> => {
+  let held = pages.get(fetcher) ?? new Map()
+  pages.set(fetcher, held)
+  let found = held.get(name)
+  if (found && found.until > clock.now()) return found.read
+  let read = readInfo(name, fetcher)
+  held.set(name, { until: clock.now() + 3_600_000, read })
+  read.catch(() => {
+    if (held.get(name)?.read == read) held.delete(name)
+  })
+  for (let key of held.keys()) {
+    if (held.size <= 512) break
+    held.delete(key)
+  }
+  return read
 }
 
 export let listing = async (

@@ -943,7 +943,6 @@ export let metered = (
   } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   rows?: {
-    price(name: string): Promise<Price | undefined>
     answered(name: string, info: Listed): Promise<void>
   },
 ): Binding => ({
@@ -960,6 +959,16 @@ export let metered = (
     }
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
+    let info = music(model)
+      ? { name: model }
+      : await modelInfo(model, bind.MODEL_FETCH)
+    let price = info.price
+    if (!music(model) && !price) {
+      throw new ModelError(
+        'model',
+        `No published price for ${model}; ask another model`,
+      )
+    }
     let answer = await bind.AI.run(
       model,
       input,
@@ -971,11 +980,6 @@ export let metered = (
       }
       throw said
     })
-    let held = await rows?.price(model)
-    let info = held
-      ? { name: model, price: held }
-      : await modelInfo(model, bind.MODEL_FETCH)
-    let price = info.price
     await rows?.answered(model, info)
     let n = usageOf(answer)
     let cost = music(model)

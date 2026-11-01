@@ -852,6 +852,54 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
   assertEquals(v.asked.length, 2)
 })
 
+for (let priced of [false, true]) {
+  test(`./api/ai/run checks pricing before inference (${priced ? 'fetch failed' : 'no price'})`, async () => {
+    let v = await vale(() => ({ response: 'must not run' }), {
+      env: {
+        MODEL_FETCH: () =>
+          priced
+            ? Promise.reject(new Error('Docs unavailable'))
+            : Promise.resolve(new Response('No published price')),
+      },
+    })
+    let result = await v.run({
+      model: '@cf/llava-hf/llava-1.5-7b-hf',
+      input: {},
+    })
+    assertEquals(result.status, priced ? 502 : 400)
+    assertEquals(v.asked, [])
+    assertEquals((await v.spent()).meter?.models ?? 0, 0)
+  })
+}
+
+test('./api/ai/run shares one price lookup across concurrent and repeated calls', async () => {
+  let reads = 0
+  let v = await vale(() => {
+    assertEquals(reads, 1)
+    return {
+      response: 'hello',
+      usage: { input_tokens: 1000, output_tokens: 100 },
+    }
+  }, {
+    env: {
+      MODEL_FETCH: () => {
+        reads++
+        return Promise.resolve(
+          new Response('$1 per M input tokens, $2 per M output tokens'),
+        )
+      },
+    },
+  })
+  let run = () => v.run({ model: FLASH, input: {} })
+  assertEquals((await Promise.all([run(), run()])).map((r) => r.status), [
+    200,
+    200,
+  ])
+  assertEquals((await run()).status, 200)
+  assertEquals(reads, 1)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0036)
+})
+
 test('./api/ai/run answers an input the model refuses as the caller’s, 400', () => {
   let schema = "5006: Error: oneOf at '/' not met, 0 matches"
   let [status, code, message] = refusal(new Error(schema), FLASH)!

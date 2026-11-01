@@ -313,10 +313,6 @@ export let asking = (at: Stored): Handlers => {
   if (at.meta || !at.app) return {}
   let text = workersAi(
     metered(at.env, payer(at.app), {
-      price: async (name) => {
-        let [row] = await at.graph.get([identityEid('model', [name])])
-        return row?.price as Price | undefined
-      },
       answered: async (name, info) => {
         await at.graph.apply(
           confirmed(identityEid('provider', [PROVIDER]), name, info),
