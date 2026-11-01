@@ -6,8 +6,13 @@ import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { as, col, cross, eq, lit, op, render, select, table } from '@yaks/sql'
-import { hits } from './search.ts'
-import { seed, selected, text } from '../../workers/yak/fts_cost_fixture.ts'
+import { hits, screens } from './search.ts'
+import {
+  seed,
+  selected,
+  text,
+  vocab,
+} from '../../workers/yak/fts_cost_fixture.ts'
 
 let counters = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: {
@@ -83,6 +88,29 @@ test(
     }
   },
 )
+
+let visible = hits(text, 'needle', {
+  plan: 'sort',
+  limit: 2,
+  screens: screens(text, vocab, { visibility: { entity: '.entity.eid!=far' } }),
+})!
+let visibleText = render(visible)
+let visibleRanked = large.prepare(visibleText.sql)
+test('a sparse CPU ranked search probes visibility without enumerating unrelated owners', () => {
+  try {
+    let rows = visibleRanked.all(...visibleText.params)
+    assertEquals(rows.map((r) => r.entity), ['near'])
+    assert(String(rows[0].snippet).includes('\x01needle\x02'))
+    let scans = counters.symbols.sqlite3_stmt_status(
+      visibleRanked.unsafeHandle,
+      1,
+      0,
+    )
+    assert(scans < 100, `${scans} full-scan advances`)
+  } finally {
+    visibleRanked.finalize()
+  }
+})
 
 // A filtered listing drives from its indexed component, then looks up each
 // entity. Correlating that selection scans its candidates again for every hit.

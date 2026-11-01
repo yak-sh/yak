@@ -114,7 +114,9 @@ export let permitted = (
 
 // Ranking revisits each index for its page, ties and exact names. Bind each
 // admission relation once, including when several indexes share its scope.
-let shared = (screens: Record<string, Raw> = {}, materialized = false) => {
+// Keep it keyed by the matching owner: materializing a broad visibility scope
+// enumerates the whole graph before a search can return even one hit.
+let shared = (screens: Record<string, Raw> = {}) => {
   let ctes: Cte[] = []
   let held = new Map<string, Raw>()
   let sources = Object.fromEntries(
@@ -123,7 +125,7 @@ let shared = (screens: Record<string, Raw> = {}, materialized = false) => {
       let source = held.get(key)
       if (!source) {
         let name = `__fts_allowed${ctes.length}`
-        ctes.push({ name, q, materialized })
+        ctes.push({ name, q, materialized: false })
         source = render(select({ cols: [col('id')], from: table(name) }))
         held.set(key, source)
       }
@@ -261,7 +263,7 @@ let chosen = (
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'
-  let { ctes, sources } = shared(opts.screens, sorting)
+  let { ctes, sources } = shared(opts.screens)
   let e = at('entity')
   let c = at('__candidate')
   let b = at('best')
