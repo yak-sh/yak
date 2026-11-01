@@ -15,20 +15,27 @@ allows `x-yak-host` to select a hostname on loopback requests. A direct
 Deployed requests ignore the header. Production and staging disable both
 workers.dev routes and preview URLs; callers use the zone or service bindings.
 
+yaks.app's routes belong to `yak-front` (`front/`), not to this Worker: it
+answers what Site's cache holds and hands everything else to the kernel's
+default entrypoint over a service binding. Its upload is what a cold request to
+it pays for, so what it imports stays free of the graph stack. Moving a route
+takes an API call on the route, since Wrangler refuses one held by another
+Worker.
+
 A deploy of the kernel deploys its sibling Workers first, from the same commit
-and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
-outbound Worker), `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks for
-an app's TypeScript and npm imports, @yaks/esbuild) and `yak-raster` (`raster/`,
-which draws an app's `icon.svg` as its `icon.png` with resvg's WebAssembly, kept
-out of the kernel so no Store's isolate compiles it). `yak-esbuild` is a Worker
-in front of a container running native esbuild; its image is
-`esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
-the image like the kernel's sandbox. The siblings do not call one another, so
-their deploys run concurrently with the kernel bundle. All must finish
-successfully before the kernel upload begins; a failure waits for the other work
-and refuses the kernel upload. The pinned Wrangler bundles once, including node
-compatibility code and source maps; the upload reads those generated modules
-without bundling again.
+and to the same environment: `yak-front`, `yak-out` (`outbound/`, the dispatch
+namespace's outbound Worker), `yak-esbuild` (`esbuild/`, the compiler
+`app_deploy` asks for an app's TypeScript and npm imports, @yaks/esbuild) and
+`yak-raster` (`raster/`, which draws an app's `icon.svg` as its `icon.png` with
+resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it).
+`yak-esbuild` is a Worker in front of a container running native esbuild; its
+image is `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and
+pushes the image like the kernel's sandbox. The siblings do not call one
+another, so their deploys run concurrently with the kernel bundle. All must
+finish successfully before the kernel upload begins; a failure waits for the
+other work and refuses the kernel upload. The pinned Wrangler bundles once,
+including node compatibility code and source maps; the upload reads those
+generated modules without bundling again.
 
 Hosted model execution has its own [executor release](../model/README.md),
 independently deployed by Workers Builds. A production kernel build adds its

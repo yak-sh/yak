@@ -34,6 +34,14 @@ and setup; this is the map and the feel.
   (`unseen.ts` `refusal`). A door with a catch-all of its own answers through
   `defects.ts` `refusing`: a refusal or a relayed answer keeps its status, and a
   failure raised there is reported and thrown on, never answered as a 4xx.
+- **The front** (`front/`): yak-front holds the routes and answers what Site's
+  cache holds (`kept-page.ts`), so a request answered from the edge doesn't wait
+  for the kernel to start: its upload is 11 KB against the kernel's 3.7 MB, and a
+  hit through a service binding runs no code of the Worker behind it. It holds
+  no secret and opens no store: everything else, and every failure of its own,
+  goes to the kernel unchanged. So a module it imports reaches no graph stack;
+  check the upload's size when you add one. A first-time visitor gets their
+  instrument at the first door that uses one, not with a kept page.
 - **A store**: one Durable Object per app (`graph.ts`), a graph composed from
   the packages: `appVocab(manifest)`, @yaks/durable-object's storage over
   @yaks/sqlite, `graph()`, `api()` and sockets. It owns no behavior of its own.

@@ -131,9 +131,10 @@ export let kept = (
     platform(host, path, env) || !settled(req)
   ) return null
   if (host == apex(env)) {
-    return LISTINGS.includes(path)
-      ? listing(req, env.SITE, apex(env), path)
-      : null
+    if (!LISTINGS.includes(path)) return null
+    return listing(req, env.SITE, apex(env), path).then((page) =>
+      page.status < 500 ? page : null
+    )
   }
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
   if (host.slice(0, -apex(env).length - 1).includes('.')) return null

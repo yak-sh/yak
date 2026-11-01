@@ -2,10 +2,13 @@
 // (T-124419). Every page view used to read the directory twice before a byte
 // was sent; a kept page is answered with none of that.
 //
-// The gateway (apps.ts `served`) asks Site first for a page any visitor could
-// be sent, keyed by the hostname it routed, the path and the mount
-// (`pageAt`), so two spaces never share a key and one app mounted at two
-// addresses keeps two pages. On a miss Site serves the address as an
+// yak-front (front/) asks Site first for a page any visitor could be sent on
+// our own hostnames, so a kept page waits on no kernel to start (kept-page.ts
+// holds that path). The gateway (apps.ts `served`) asks too: a customer's
+// own domain is only an app once it has read the directory, and a page Site
+// passed a moment ago costs it one cached answer. A page is keyed by the hostname
+// routed, the path and the mount (`pageAt`), so two spaces never share a key and
+// one app mounted at two addresses keeps two pages. On a miss Site serves the address as an
 // anonymous visitor would be served it (apps.ts `edged`), and keeps it only
 // when it is the same answer for everyone: the own file or 404 of an app
 // anyone may read (public or open), with no worker of its own, no sandbox, no

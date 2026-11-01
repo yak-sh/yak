@@ -1,7 +1,8 @@
-# The kernel Worker (D-32318 §The meta-space, §v1 sequencing): the ONE Worker
-# below the app line — hostname and path routing, the Store Durable Object
-# (one SQLite graph per (space, app)), session verification, the apex's static
-# home page, and an app's files out of R2. Everything above it is an app.
+# The kernel Worker (D-32318 §The meta-space, §v1 sequencing): below the app
+# line, behind yak-front (front/), which answers what the edge holds — hostname
+# and path routing, the Store Durable Object (one SQLite graph per (space,
+# app)), session verification, the apex's static home page, and an app's files
+# out of R2. Everything above it is an app.
 # Local: `wrangler dev` here, or the tests (workers/yak/yak_test.ts boots it
 # on a probe port). Deploy: `wrangler deploy`
 # once the owner points DNS at it — nothing deploys on its own.
@@ -382,7 +383,8 @@ cross_version_cache = true
 # on the second request.
 #
 # So the default entrypoint is the gateway and never cached: it runs on every
-# request, resolves the space and app, and decides who is asking. `Files` is
+# request yak-front hands it, resolves the space and app, and decides who is
+# asking. `Files` is
 # behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes.
 # `Site` is behind it too, and receives only the apex's public pages and the
 # pages an app serves to anyone, each under a path naming the hostname that

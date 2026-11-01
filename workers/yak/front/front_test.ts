@@ -147,6 +147,11 @@ test('a broken Site is reported and answered by the kernel', async () => {
   assertEquals(f.errors.length, 1)
 })
 
+test("a listing Site fails to render is the kernel's to answer", async () => {
+  let f = front(() => new Response('broken', { status: 500 }))
+  assertEquals(await (await f.go('https://yaks.app/')).text(), 'kernel')
+})
+
 test("the apex's listings come from Site, with their own lifetime", async () => {
   let f = front(() =>
     new Response('home', {
