@@ -78,6 +78,13 @@ a browser or server. No monitored suite starts a separate server process, so
 `operation-lifecycle`, `terminal-interactions` and the tmux figures of
 `person-commands` are removed too.
 
+The `operation-sessions` suite is removed. Its CLI figures timed a fresh Deno
+process and the configured plugin set, while the fixture's HTTP server and
+native runner remained active in the measured parent. Connector samples shared
+that runner's background work. Those figures do not isolate session operations;
+paired runs still inherit the interference. Session behavior remains covered by
+package tests, and `session-status` and the harness suites measure in process.
+
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
 [command CPU timing](suites.md#command-timing) uses the same runner and ratchet.

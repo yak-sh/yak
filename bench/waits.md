@@ -115,14 +115,6 @@ deno eval 'import { inventory } from "./bench/operation-commands.ts"; import { r
 
 ## Isolated lifecycle and diagnostic acceptance
 
-`operation-sessions` banks twelve independent production-door figures: CLI
-list/new/peek/send/spawn/stop/wait and HTTP MCP list/peek/spawn/stop/wait. A
-private SQLite graph and a deterministic local model complete real native turns
-through the production effects runner. Transcript readback proves replies, spawn
-claims and stopped/idle transitions. Stop starts with a held active turn; wait
-races actual local completion. New/send are declared CLI-only, not imaginary
-HTTP doors. These are local lifecycle waits, not remote generation latency.
-
 `operation-diagnostics` banks CLI model-list local catalogue handling plus
 CLI/HTTP session-home saved workspace changes and CLI/HTTP vector-check over a
 built native index containing 2,001 offline hash vectors. Model listing crosses
@@ -140,7 +132,7 @@ unavailable**. No handler is called directly and no process provenance is
 manufactured. Entity citations and private CLI land remain covered by their
 existing suites.
 
-All four suites bank best-of-three runs, three round medians per run, three
+The remaining suites bank best-of-three runs, three round medians per run, three
 samples per round, with tolerance zero. All are registered in `SUITES` and
 `HOURLY`, under the persistent scheduler's 25-minute window. The installed cron
 invokes that lane every 30 minutes; a collection that fails twice running

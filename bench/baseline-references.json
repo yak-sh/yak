@@ -488,31 +488,6 @@
     ]
   },
   {
-    "suite": "operation-sessions",
-    "baseline": "bench/operation-sessions.baseline.json",
-    "groups": [
-      {
-        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "kind": "derived",
-        "source": "git history of bench/operation-sessions.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "cli/session-list",
-          "cli/session-new",
-          "cli/session-peek",
-          "cli/session-send",
-          "cli/session-spawn",
-          "cli/session-stop",
-          "cli/session-wait",
-          "connector/session-list",
-          "connector/session-peek",
-          "connector/session-spawn",
-          "connector/session-stop",
-          "connector/session-wait"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "person-commands",
     "baseline": "bench/person-commands.baseline.json",
     "groups": [

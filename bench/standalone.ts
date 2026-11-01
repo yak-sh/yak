@@ -2,7 +2,6 @@
  * Each suite declares its own baseline path and retains its timed boundaries. */
 import { CHECKOUT_NAMES } from './operation-checkout.ts'
 import { DIAGNOSTIC_NAMES } from './operation-diagnostics.ts'
-import { NAMES as SESSION_NAMES } from './operation-sessions.ts'
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { RELAY_ENTITIES } from './names.ts'
@@ -108,7 +107,6 @@ export let standalone: Registration[] = [
     'bench/operation-diagnostics.ts',
     DIAGNOSTIC_NAMES,
   ),
-  measured('operation-sessions', 'bench/operation-sessions.ts', SESSION_NAMES),
   measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
   deno('client-frame', 'packages/client/frame_bench.ts', [

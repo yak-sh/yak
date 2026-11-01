@@ -41,7 +41,6 @@ export let SUITES = [
   'operation-controls',
   'operation-checkout',
   'operation-diagnostics',
-  'operation-sessions',
   'operation-scale',
   'web-client',
   'client-frame',
@@ -67,7 +66,6 @@ export let HOURLY = [
   'operation-controls',
   'operation-checkout',
   'operation-diagnostics',
-  'operation-sessions',
   'operation-scale',
 ]
 
