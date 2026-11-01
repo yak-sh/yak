@@ -1,14 +1,13 @@
 import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { affordable, ModelError } from '@yaks/model'
 import { mint } from '@yaks/graph'
-import { cleanup, test } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from './meter.ts'
 import { reserved, settled } from './model-spend.ts'
 
 let p = platform('model spending')
-cleanup(p.close)
 let dir = directoryOf(p.env.STORE)
 let fixture = async (models = 0) => {
   let eid = mint()
