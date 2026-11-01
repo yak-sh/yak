@@ -40,24 +40,9 @@ compatibility_flags = [
 minify = true
 upload_source_maps = true
 
-# The apex and every first-level space hostname, both on the yaks.app zone;
-# the zone's Universal certificate covers the wildcard. `*/*` is the third
-# because a customer's own hostname is not under `yaks.app` at all
-# (T-33035): traffic for a custom hostname enters this zone and only a
-# zone-wide pattern matches it, which is Cloudflare's own instruction for a
-# Worker as the fallback origin. The two above are the same Worker and are
-# kept for what they say.
-#
-# This sits ABOVE every table header on purpose. TOML gives a bare key to the
-# last table declared, so under `[observability.logs]` these three read as
-# `observability.logs.routes` — a field wrangler warns about and ignores, and
-# the deploy stops managing the routes rather than saying so (T-33684). The
-# routes survived only because they were already on the zone.
-routes = [
-  { pattern = "yaks.app/*", zone_name = "yaks.app" },
-  { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
-  { pattern = "*/*", zone_name = "yaks.app" },
-]
+# No routes: yak-front (front/) holds yaks.app's and hands this Worker what the
+# edge can't answer. A deploy that names none leaves a Worker's routes alone, so
+# nothing here can take them back from it while they move (T-133886).
 
 # Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
 # second go" could only be answered by guessing: the platform had no logs at
@@ -564,10 +549,6 @@ fflate = "./node_modules/fflate/esm/browser.js"
 name = "yak-staging"
 workers_dev = false
 preview_urls = false
-routes = [
-  { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
-  { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
-]
 
 [env.staging.triggers]
 crons = []

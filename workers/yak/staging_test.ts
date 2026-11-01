@@ -81,8 +81,4 @@ test('staging repeats the kernel bindings without production resources', () => {
   )
   assertNotEquals(vars.CF_ZONE, (config.vars as Record<string, string>).CF_ZONE)
   assert(!('MAIL_SINK' in vars), 'the owner address belongs in a secret')
-  assertEquals(staging.routes, [
-    { pattern: 'yaks.fyi/*', zone_name: 'yaks.fyi' },
-    { pattern: '*.yaks.fyi/*', zone_name: 'yaks.fyi' },
-  ])
 })

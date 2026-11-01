@@ -140,7 +140,16 @@ export let asked = async (
   }
   let headers = new Headers(got.headers)
   headers.set('cache-control', headers.get(BROWSER) || 'private, no-cache')
-  for (let name of [SEEN, BROWSER, 'age', 'cf-cache-status', 'cache-tag']) {
+  for (
+    let name of [
+      SEEN,
+      BROWSER,
+      'age',
+      'cf-cache-status',
+      'cache-tag',
+      'server-timing',
+    ]
+  ) {
     headers.delete(name)
   }
   let etag = headers.get('etag')

@@ -19,6 +19,7 @@ let page = (headers: Record<string, string> = {}) =>
       'x-yak-browser-cache': 'public, no-cache',
       'cache-tag': 'a,s',
       age: '5',
+      'server-timing': 'site_old;dur=9',
       [SEEN]: seen,
       ...headers,
     },
@@ -74,6 +75,7 @@ test('a kept page answers from the edge with no kernel, counted once', async () 
   }
   assertStringIncludes(res.headers.get('strict-transport-security')!, 'max-age')
   assertStringIncludes(res.headers.get('server-timing')!, 'front;dur=')
+  assertEquals(res.headers.get('server-timing')!.includes('site_old'), false)
   assertStringIncludes(
     res.headers.get('content-security-policy')!,
     "frame-ancestors 'self' https://yaks.app",

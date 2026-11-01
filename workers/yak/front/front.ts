@@ -65,7 +65,13 @@ export let settled = (req: Request, now = Date.now()) => {
 // What an answer from here says about the time it took, under the same names
 // the gateway uses for its own.
 let served = 0
-let finished = (res: Response, env: Host, at: number, cold: boolean) => {
+let finished = (
+  res: Response,
+  env: Host,
+  at: number,
+  cold: boolean,
+  said: string[],
+) => {
   let out = sealed(res, env)
   out.headers.set(
     'strict-transport-security',
@@ -75,6 +81,7 @@ let finished = (res: Response, env: Host, at: number, cold: boolean) => {
     'server-timing',
     [
       out.headers.get('server-timing'),
+      ...said,
       `front;dur=${Date.now() - at}`,
       cold ? 'cold;dur=1' : null,
     ].filter(Boolean).join(', '),
@@ -82,11 +89,14 @@ let finished = (res: Response, env: Host, at: number, cold: boolean) => {
   return out
 }
 
-// The front Worker keeps no per-request clock of its own.
-let untimed: Timer = {
+// The front Worker keeps no per-request clock of its own: what it says of a
+// page is what Site said of rendering it.
+let timer = (said: string[]): Timer => ({
   time: (_name, work) => work(),
-  include: () => {},
-}
+  include: (timing) => {
+    if (timing) said.push(timing)
+  },
+})
 
 // A use is a receipt the platform store keeps an hour (used.ts): one a key per
 // hour from this isolate, whatever the traffic.
@@ -104,6 +114,7 @@ export let kept = (
   req: Request,
   env: FrontEnv,
   ctx: Lent,
+  said: string[] = [],
 ): Promise<Response | null> | null => {
   let url = new URL(req.url)
   let host = url.hostname.toLowerCase(), path = url.pathname
@@ -119,7 +130,7 @@ export let kept = (
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
   if (host.slice(0, -apex(env).length - 1).includes('.')) return null
   if (spaceDoor(path)) return null
-  return asked(req, env.SITE, host, null, untimed, (answer, at) => {
+  return asked(req, env.SITE, host, null, timer(said), (answer, at) => {
     if (env.VIEWS && isView(answer)) {
       env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
     }
@@ -154,10 +165,10 @@ let report = (
 }
 
 export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
-  let at = Date.now(), cold = served++ == 0
+  let at = Date.now(), cold = served++ == 0, said: string[] = []
   try {
-    let page = await kept(req, env, ctx)
-    if (page) return finished(page, env, at, cold)
+    let page = await kept(req, env, ctx, said)
+    if (page) return finished(page, env, at, cold, said)
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
