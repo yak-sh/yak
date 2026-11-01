@@ -30,8 +30,9 @@ checkout, shell or computer is needed:
    `sandbox_ship`.
 2. Call `app_preview(app: 'recipes', width: 390, height: 844)` for a phone, then
    `app_preview(app: 'recipes', width: 1280, height: 900)` for a desktop.
-3. Read the screenshot, console messages, JavaScript errors and HTTP status in
-   the reply. Change the files and preview again until they work.
+3. Read the screenshot, console messages, JavaScript errors, HTTP status and
+   WCAG 2.1 AA accessibility report. Fix the reported problems before deploying
+   and preview again. Each problem names its rule, element and one-line fix.
 4. Release with `app_deploy` and share the released app's URL.
 
 `path: 'about/'` opens another page. `wait` is milliseconds after
@@ -39,6 +40,13 @@ DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to
 3000 (default 1000). `screenshot: false` gives only the private preview URL
 without running a browser. Screenshots run on Cloudflare at the requested
 viewport size, and return as an image the connector client displays.
+
+The accessibility report uses a vendored axe-core checker, including WCAG 2.0
+and 2.1 A and AA rules. `accessibility.problems` lists every affected element;
+`accessibility.review` lists elements needing manual review. The chat reply
+shows up to 30 problems and five review items, with remaining counts. Findings
+never refuse a preview or release. Automated checks do not prove conformance;
+check keyboard use, reading order and content as well.
 
 The URL is a private bearer link lasting one hour. Anyone holding it can
 exercise the preview as its author while that author remains a writer; keep it

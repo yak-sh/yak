@@ -15,6 +15,7 @@ import * as directoryPart from './directory.ts'
 import { copyOf, signedDirectory } from './directory-copy.ts'
 import { bearing, carried, granted, ran, upload } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
+import { report } from './accessibility.ts'
 import { compiled } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
 import { baseOf, fileBytes, inside, prefixOf } from './files.ts'
@@ -317,9 +318,9 @@ let preview = async (ctx: Ctx, args: Args) => {
     text:
       `Private draft preview: ${url}\n${view.width} × ${view.height}; HTTP ${rendered.status}. Expires ${value.expires}. Test data is isolated; worker calls to external services still reach those services.\nConsole: ${
         JSON.stringify(rendered.console)
-      }\nErrors: ${JSON.stringify(rendered.errors)}\nEstimated browser cost: $${
-        cost.toFixed(6)
-      } from the account budget.`,
+      }\nErrors: ${JSON.stringify(rendered.errors)}\n${
+        report(rendered.accessibility)
+      }\nEstimated browser cost: $${cost.toFixed(6)} from the account budget.`,
     space,
     value,
     images: [{ data: image, mime_type: 'image/png' }],

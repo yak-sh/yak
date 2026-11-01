@@ -470,7 +470,9 @@ See [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
 
 The connector's image content accompanies structured console messages,
 JavaScript errors, HTTP status, viewport, expiry and estimated browser cost. The
-build workflow and limits are in [Files and Uploads](public/docs/files.md).
+vendored axe-core checker reports WCAG 2.1 A and AA problems per element and
+elements requiring manual review; findings never refuse a release. The build
+workflow and limits are in [Files and Uploads](public/docs/files.md).
 
 ## App bindings
 

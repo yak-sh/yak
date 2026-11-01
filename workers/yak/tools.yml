@@ -234,7 +234,11 @@ app_preview:
   description: >-
     Build and open the staged app privately before app_deploy. Returns an
     expiring preview URL, a PNG screenshot the client displays, and console
-    messages, JavaScript errors and the page's HTTP status. Choose path and
+    messages, JavaScript errors, the page's HTTP status and an axe-core WCAG
+    2.1 AA accessibility report (rule, element and one-line fix per problem,
+    plus elements needing manual review). Fix the reported problems before
+    deploying; findings are a report and never refuse a release. Automated
+    checks do not prove conformance. Choose path and
     width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
     Draft vocabulary, seed data and worker use a separate test store, so preview
@@ -250,7 +254,7 @@ app_deploy:
     Release the app's staged files as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
     Before releasing, check the private draft with app_preview at widths
-    390 and 1280; inspect the returned screenshots, console messages and
+    390 and 1280; inspect the returned screenshots, accessibility problems, console messages and
     page errors and fix the files. No local computer or browser is needed.
     Send base as the live version the files were made on (app_files op: list
     says it). When base is behind, the answer names the files this draft

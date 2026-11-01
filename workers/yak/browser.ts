@@ -2,6 +2,7 @@
 // load, diagnostics and cleanup run in process without a local browser.
 import { type Clock, sleep, system } from '@yaks/fp'
 import type { Env } from './env.ts'
+import { type Audit, audit } from './accessibility.ts'
 
 export type View = { width: number; height: number; wait: number }
 export type Message = { type(): string; text(): string }
@@ -16,6 +17,7 @@ export type Page = {
     waitUntil: 'domcontentloaded'
     timeout: number
   }): Promise<{ status(): number } | null>
+  evaluate(expression: string): Promise<unknown>
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
 }
 export type Browser = {
@@ -59,6 +61,7 @@ export let capture = async (
     console: { type: string; text: string }[]
     errors: string[]
     status: number
+    accessibility: Audit
   }
   try {
     result = await bounded(async () => {
@@ -87,7 +90,8 @@ export let capture = async (
       }
       if (view.wait) await sleep(view.wait, undefined, time)
       let image = await page.screenshot({ type: 'png', encoding: 'base64' })
-      return { image, console, errors, status }
+      let accessibility = await audit(page)
+      return { image, console, errors, status, accessibility }
     }, time)
   } finally {
     try {

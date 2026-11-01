@@ -15,10 +15,12 @@ Apps in the same space can work with one entity across those stores.
 Make one with `app_new`, write files with `app_files` (the whole set in one
 call, as `files: [{path, content}, ...]`), and check the private draft with
 `app_preview(app, width: 390)` and `app_preview(app, width: 1280)`. Each call
-returns a screenshot, the page's console messages and JavaScript errors, and a
-private preview URL. The browser runs on Cloudflare; use these connector tools
-directly without a local checkout, shell or browser. Fix what you find, then
-`app_deploy`, and give the person the released URL.
+returns a screenshot, the page's console messages and JavaScript errors, WCAG
+2.1 AA accessibility problems with their rule, element and fix, and a private
+preview URL. The browser runs on Cloudflare; use these connector tools directly
+without a local checkout, shell or browser. Fix the reported accessibility
+problems and other issues, then `app_deploy`, and give the person the released
+URL.
 
 The person can also make or update one without you: the drop zone on their
 space's own page accepts a `.zip` of an app's files, or a single `index.html`.

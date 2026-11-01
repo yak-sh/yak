@@ -24,6 +24,20 @@ let page = (options: { loading?: Error; screenshot?: Error } = {}) => {
         ? Promise.reject(options.loading)
         : Promise.resolve({ status: () => 200 })
     },
+    evaluate: (expression) =>
+      Promise.resolve(
+        expression.includes('axe.run(document')
+          ? {
+            violations: [{
+              id: 'image-alt',
+              help: 'Add alternative text',
+              impact: 'critical',
+              nodes: [{ html: '<img src=photo.png>', target: ['img'] }],
+            }],
+            incomplete: [],
+          }
+          : undefined,
+      ),
     screenshot: () =>
       options.screenshot
         ? Promise.reject(options.screenshot)
@@ -48,6 +62,7 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   )
   assertEquals(p.viewport(), { width: 390, height: 844 })
   assertEquals(result.image, 'png-bytes')
+  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
   assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
   assertStringIncludes(result.errors[0], 'page exception')
   assertEquals(result.status, 200)
@@ -62,6 +77,7 @@ test('a failed page load still returns the screenshot and its error', async () =
     view,
   )
   assertEquals(result.image, 'png-bytes')
+  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
   assertEquals(result.status, 0)
   assertStringIncludes(result.errors[1], 'net::ERR_NAME_NOT_RESOLVED')
   assertEquals(p.closed(), true)

@@ -93,8 +93,9 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    draws it as the icon.png a phone's home screen shows.
 3. app_preview — check the private draft before releasing it, at width: 390
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
-   console messages, JavaScript errors and a private preview URL. Use path
-   for another page. Fix the files and preview again. Its test store and
+   console messages, JavaScript errors, WCAG 2.1 AA accessibility problems
+   (rule, element and fix) and a private preview URL. Use path for another
+   page. Fix the reported problems before deploying and preview again. Its test store and
    worker are separate from the released app. The browser runs on Cloudflare:
    these connector tools need no local files, CLI, computer or browser.
 4. app_deploy — release them. app_files keeps its edits private until this
