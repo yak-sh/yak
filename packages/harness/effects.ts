@@ -16,7 +16,6 @@ import { lend, offering } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
-import { overheadEach } from './overhead.ts'
 import { machines } from './session_machines.ts'
 
 /** The runner, lent this machine, over the host's graph. The plugin's options
@@ -123,7 +122,7 @@ export let effects = (
   return {
     ...running(host.graph, {
       ...runner,
-      each: overheadEach(host, unfinishedEach(host, runner.each)),
+      each: unfinishedEach(host, runner.each),
       answers: async (using, session) => {
         if (!await runner.answers?.(using, session)) return false
         if (session) await opening(session)

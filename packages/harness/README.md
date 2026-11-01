@@ -88,27 +88,14 @@ unblocked claimed work, and reports that condition without automatically
 resuming the session or spending another model turn. Explicit blockers and
 unfinished task dependencies are excluded.
 
-The `harness-steps` benchmark uses an instantly answered scripted model over an
-isolated graph, with the overhead observer enabled. **Native overhead** is
-measured in three phases: dispatch is call creation to execution claim; tool
-overhead is execution claim to result minus the tool's own `result.ms`;
-preflight is final result to next model claim, excluding remaining provider wait
-and intervening owner input. Neither inference latency nor command runtime
-produces an overhead alert.
-
-Each phase uses the committed `steps.baseline.json` `tool-step` reference and
-the slack its noise measured. A whole benchmark step conservatively bounds each
-constituent phase. A session's own median never changes that fixed limit. Only
-samples for the current step are considered. A phase is judged by what load does
-not move: its wall time less what the worker's thread waited for a CPU over it
-(@yaks/benchmark `waited`, read at each commit that writes a transcript line, a
-call's execution or an ask's attempt), so a loaded box neither hides an excess
-nor makes one. A phase is over when the median of a session's newest five
-samples of it is, as the bench judges the median of its steps: one slow step is
-noise. It reports once per worker; the fixed-message report reaches the tracker,
-with numbers in tags, and the next step never waits on its delivery. Missing
-journal marks are omitted, not guessed. Bounded scalar transcript reads keep
-observation independent of transcript age.
+The `harness-steps` benchmark measures native step CPU time with an instantly
+answered scripted model over an isolated graph. It compares that work with the
+committed `steps.baseline.json` reference and the slack its noise measured. Live
+dispatch wall time also includes other sessions' event-loop work and storage
+waits, even after subtracting time waiting for a CPU. It cannot be compared with
+this isolated CPU reference, so live timings do not file bugs. Deterministic
+read-cost tests in `@yaks/session` check that long transcripts do not amplify a
+step's reads.
 
 ```sh
 deno task bench harness-steps

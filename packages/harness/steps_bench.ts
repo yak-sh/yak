@@ -10,7 +10,6 @@ import { seed } from './agent.ts'
 import { agent } from './agent.ts'
 import { harness, working } from './testing.ts'
 import { unfinishedEach } from './unfinished.ts'
-import { overheadEach } from './overhead.ts'
 
 const ROUNDS = 3
 const STEPS = 12
@@ -66,10 +65,7 @@ let round = async (steps: number) => {
     asyncTools: true,
     tools,
     model,
-    each: overheadEach(
-      { graph: h.g, storage: h.store } as Host,
-      unfinishedEach({ graph: h.g } as Host),
-    ),
+    each: unfinishedEach({ graph: h.g } as Host),
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
