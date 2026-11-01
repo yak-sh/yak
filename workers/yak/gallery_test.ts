@@ -324,13 +324,13 @@ test('the gallery page carries the listings and its own metadata', async () => {
 test('the showcase keeps the chosen demo order and featured image', () => {
   let file = `<ul class="Make_List"><li>A recipe box</li></ul><p>after</p>`
   assertEquals(showcase(file, []), file)
-  let six = showcase(
+  let all = showcase(
     file,
     DEMOS.map((eid) => shown({ eid, title: `App ${eid}` })),
   )
-  assertEquals(cards(six), 6)
-  assert(six.indexOf('App recipes') < six.indexOf('App chores'))
-  assertStringIncludes(six, '<p>after</p>')
+  assertEquals(cards(all), DEMOS.length)
+  assert(all.indexOf('App recipes') < all.indexOf('App chores'))
+  assertStringIncludes(all, '<p>after</p>')
   let hero = showcase(
     '<img src="mossvale.webp" data-feature-shot="vale">',
     [],
@@ -347,7 +347,7 @@ test('the showcase keeps the chosen demo order and featured image', () => {
   )
 })
 
-test('the homepage paints all six chosen screenshots and Mossvale', async () => {
+test('the homepage paints every chosen screenshot and Mossvale', async () => {
   let apps = [
     ...DEMOS.map((slug) =>
       app({ slug, gallery: null, screenshot: `${slug}-image` })
@@ -366,7 +366,7 @@ test('the homepage paints all six chosen screenshots and Mossvale', async () => 
       '<ul class="Make_List"><li>fallback</li></ul>',
   )
   let html = await (await made({} as Env, dir, file)).text()
-  assertEquals(cards(html), 6)
+  assertEquals(cards(html), DEMOS.length)
   for (let slug of DEMOS) {
     assertStringIncludes(
       html,

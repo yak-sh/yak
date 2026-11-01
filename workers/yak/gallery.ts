@@ -821,9 +821,11 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// These are the six examples promised on the home page. Gallery approval and
-// listing recency do not decide which apps the platform features.
+// These are the examples promised on the home page, in its order: something
+// for a side business, then for home. Gallery approval and listing recency do
+// not decide which apps the platform features.
 export let DEMOS = [
+  'menu',
   'recipes',
   'garden',
   'bookclub',
@@ -866,7 +868,7 @@ export let showcase = (file: string, all: Shown[], feature = '') => {
     file.slice(to)
 }
 
-// The home page as served: all six demos and the featured Mossvale image come
+// The home page as served: every demo and the featured Mossvale image come
 // from the apps' chosen screenshots. The file remains the fallback when the
 // directory does not answer.
 export let made = async (env: Env, dir: Directory, file: Response) => {
