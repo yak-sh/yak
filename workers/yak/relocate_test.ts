@@ -4,7 +4,7 @@ import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { KERNEL } from './meta.ts'
-import { LEAVE } from './relocate.ts'
+import { LEAVE, type Relocating, relocation } from './relocate.ts'
 import { platform, slot } from './testing.ts'
 
 let asked = (env: Env, query: string) =>
@@ -134,4 +134,40 @@ test('the way back returns requests to the old object', async () => {
   equal(r.status, 200)
   equal((await dir.own('home', 'home')).slug, 'home')
   equal(await p.states.get(PLATFORM_OBJECT)!.storage.get('dormant'), false)
+})
+
+test('a restart at the new object is sent again, body and all', async () => {
+  let sent: string[] = []
+  let answer = relocation({
+    storage: () =>
+      ({
+        get: (key: string) =>
+          Promise.resolve(key == 'relocated' ? 'yak/ord' : undefined),
+      }) as unknown as Relocating,
+    object: () => ({
+      fetch: async (req) => {
+        sent.push(await req.text())
+        if (sent.length == 1) {
+          throw new Error(
+            'Durable Object reset because a newer deploy reached it: x',
+          )
+        }
+        return new Response('landed')
+      },
+    }),
+    leave: () => Promise.resolve(),
+    resume: () => {},
+    report: (e) => {
+      throw e
+    },
+  })
+  let r = await answer(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { 'x-store': PLATFORM_STORE },
+      body: 'write',
+    }),
+  )
+  equal(await r!.text(), 'landed')
+  equal(sent, ['write', 'write'])
 })

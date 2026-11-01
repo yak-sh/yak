@@ -32,6 +32,7 @@ import {
   plan,
   raised,
   reread,
+  retried,
   stale,
 } from '@yaks/durable-object'
 import { col, eq, select, table, val } from '@yaks/sql'
@@ -294,6 +295,9 @@ export let relocation = (o: {
       return (await copying).clone()
     }
     if (copying) await copying
-    return moved ? o.object(moved).fetch(request) : null
+    // A restart at the new object is sent again here, where a caller would have
+    // sent it, rather than reaching that caller as this object's failure.
+    let to = moved
+    return to ? retried(() => o.object(to).fetch(request.clone()), true) : null
   }
 }
