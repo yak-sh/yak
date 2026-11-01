@@ -4,8 +4,8 @@ description: >
   Use for READMEs, guide pages, doc comments, opening file prose, examples,
   titles, headings, or explaining a feature/term. Covers plain technical
   prose and consistent defined terms. Skills are skill-writing; proposals
-  are design-docs; component names are vocabulary; marketing is
-  yaks-app-business.
+  are design-docs; component names are vocabulary; marketing pages are
+  marketing-site.
 ---
 
 # Writing documentation
@@ -69,7 +69,8 @@ written; in documentation they make the text vague.
   API, request, query, schema. The guide is reference. The soft, friendly voice
   the owner asked of yaks.app (M-32311, and for the homepage, T-32746: "soft and
   friendly. not this AI-technical analytical modern nonsense.") belongs to the
-  homepage and the marketing pages (`yaks-app-business`), not the guide.
+  homepage and the marketing pages (`marketing-site`, `yaks-app-business`),
+  not the guide.
 
 ## Defined terms
 

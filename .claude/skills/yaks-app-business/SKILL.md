@@ -4,8 +4,9 @@ description: >
   Use for yaks.app pricing, plans, meter.ts allowances/limits,
   upgrade/refusal text, marketing pages, sign-up/onboarding, billing,
   gallery, homepage examples or audience decisions. Covers its customers,
-  spaces and plans. Business principles are business-model; platform
-  mechanics are yaks-app.
+  spaces and plans. Business principles are business-model; how any
+  marketing page's copy is written is marketing-site; platform mechanics
+  are yaks-app.
 ---
 
 # yaks.app's business
@@ -97,7 +98,9 @@ and the things they run*. The Plus plan is $9 a month for now (T-131888; Jeff:
 its budget is T-131904.
 
 Copy is written for a stranger. "Each space is free or on the Plus plan"
-passes; "Free allowances are yours, not each space's" doesn't.
+passes; "Free allowances are yours, not each space's" doesn't. How a marketing
+page is written, for any venture, is `marketing-site`; what follows is how it
+lands on yaks.app's.
 
 The homepage and the marketing pages speak in the voice the owner asked for,
 verbatim (T-32746): "soft and friendly. not this AI-technical analytical modern
