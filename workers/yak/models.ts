@@ -305,8 +305,8 @@ let gateway = (at: Stored) =>
   })
 
 let modelRows = (graph: {
-  read(query: string): Promise<Bundle[]>
-  apply(bundles: Bundle[]): Promise<unknown>
+  read(query: string): Bundle[] | Promise<Bundle[]>
+  apply(bundles: Bundle[]): unknown
 }) => ({
   price: async (name: string) => {
     let [row] = await graph.read(
