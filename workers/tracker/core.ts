@@ -277,6 +277,7 @@ export let store = (storage: Storage, config: Config) => {
       app: string,
       eids: string[],
       mark: 'notified' | 'archived',
+      remove = false,
     ) => {
       let found = (await g.get(eids)).filter((row) =>
         row.error && row.during &&
@@ -286,7 +287,7 @@ export let store = (storage: Storage, config: Config) => {
         await g.apply(
           found.map((row) => ({
             entity: row.entity,
-            [mark]: {},
+            [mark]: remove ? null : {},
           })),
           { trusted: true },
         )

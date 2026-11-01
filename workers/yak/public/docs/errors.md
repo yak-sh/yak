@@ -211,14 +211,13 @@ unseen:
     - #8c0ac745fe 2026-08-14T10:02:11.004Z exception recipes v3:
       /recipes/app.js:12 — boom is not a function (3 times since
       2026-08-14T09:58:40.120Z)
-    Each is said once. The next deploy closes them, and the new code reports
-    again any it still makes; app_errors(seen: ['all']) closes them without one.
+    Each is said once. Errors stay open across deploys. After fixing the cause
+    and verifying the fix live, archive with app_errors(fixed: [id]).
 
 Including them in a reply marks each one seen, so the next reply does not repeat
 them. The mark records that you were told, not that anything was fixed:
-`app_errors` still lists them. Often the write whose reply includes them is
-already the fix (a page that failed to load `app.js` before `app.js` existed),
-so there is nothing to dismiss: the deploy that ships it closes them.
+`app_errors` still lists them. A deploy does not establish that their causes
+were fixed and leaves every open error open.
 
 Only new errors are included. An error naming a version below the one the app
 serves now came from code a later release replaced, and one naming no version at
@@ -262,14 +261,11 @@ many times it happened since the first. A render loop that threw twenty times is
 one thing to fix, and archiving the line's id archives all twenty. The place is
 the app's own file and line, `/recipes/app.js:12`, the file you wrote.
 
-You will rarely archive by hand, because **a new release closes the errors from
-older releases.** Every `app_deploy`, `app_install` and `app_rollback` archives
-every open error from a version other than the one now live (and every one that
-names no version at all, since nothing can tell whether those are still
-happening); the deploy's reply reports how many. An `app_files` write stays in a
-private draft until deploy, so a page's "failed to load app.js" is fixed when
-that deploy succeeds. An error the new files still produce is filed again the
-next time it happens.
+Every `app_deploy`, `app_install` and `app_rollback` leaves open errors open,
+including errors from older versions and errors without a version. Fix the
+cause, verify the fix live, then pass the error's id to
+`app_errors(fixed: [id])`. A successful deploy alone does not prove that an
+error was fixed.
 
 ## app_versions
 

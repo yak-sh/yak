@@ -621,10 +621,7 @@ test('app_stats with no analytics token says so, once', async () => {
   }
 })
 
-// D-32318 §Errors, verbatim: "One is open until a later deploy stops
-// producing it or the agent marks it fixed." So the deploy that carries the
-// fix closes it, with nobody archiving by hand (T-32910, C-32905 item 7).
-test('the deploy that fixes a break closes it', async () => {
+test('deploy keeps every break open until explicitly fixed', async () => {
   let k = await kernel()
   try {
     let space = unique('mend34')
@@ -659,27 +656,26 @@ test('the deploy that fixes a break closes it', async () => {
       '1 open error',
     )
 
-    // Another dies before anyone is told: unseen until the fix goes out.
+    // Another dies before anyone is told.
     await (await report('failed to load script /weather/w.css')).body?.cancel()
 
-    // The fix goes out. Nothing archives it by hand, and the deploy's own
-    // answer does not tell as unseen what it just closed.
+    // Deploying a change cannot establish that either cause was fixed.
     await agent.tool('app_files', {
       ...app,
       files: [{ path: 'app.js', content: 'document.title = "W"' }],
     })
     let out = await agent.tool('app_deploy', app)
     assertMatch(out, /v2/)
-    assertStringIncludes(out, 'closed 2 breaks from other versions')
-    assert(!out.includes('unseen'), out)
-    assertEquals(await agent.tool('app_errors', app), 'no open errors')
-    assert(
-      !(await agent.tool('app_list', { space })).includes('open error'),
-      'the count follows',
+    assert(!out.includes('closed'), out)
+    let stillOpen = await agent.tool('app_errors', app)
+    assertStringIncludes(stillOpen, 'failed to load script /weather/app.js')
+    assertStringIncludes(stillOpen, 'failed to load script /weather/w.css')
+    assertStringIncludes(
+      await agent.tool('app_list', { space }),
+      '2 open errors',
     )
 
-    // A break on the version now serving stays open: only the code that is
-    // gone is answered for.
+    // New failures remain alongside the earlier versions' reports.
     await (await report('boom is not a function')).body?.cancel()
     assertStringIncludes(
       await agent.tool('app_errors', app),

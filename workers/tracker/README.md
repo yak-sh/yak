@@ -58,7 +58,12 @@ are refused with 404; malformed marks with 400. Platform-only `POST /errors`
 accepts immutable error captures with a separately signed `ingest: true`
 capability; ordinary read tickets cannot submit captures. Box reporters retain
 their outbox until this intake admits their records. Retrying a capture
-preserves its global eid and counts it once.
+preserves its global eid and counts it once. `POST /app-errors` requires both
+admin and intake capabilities. It accepts `{app, eids, mark}` to add `notified`
+or `archived` to the app's occurrences; `remove: true` removes that mark,
+allowing an incorrectly archived occurrence to reopen without changing its
+report or delivery history.
+
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug
 statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug followed by its

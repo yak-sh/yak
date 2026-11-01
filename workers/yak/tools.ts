@@ -242,15 +242,7 @@ import {
   type Text,
 } from './seed.ts'
 import { said as sentence } from './writes.ts'
-import {
-  archive,
-  breaks,
-  folds,
-  healed,
-  line,
-  serve,
-  trackedIn,
-} from './unseen.ts'
+import { archive, breaks, folds, line, serve, trackedIn } from './unseen.ts'
 import { scheduleUse } from './used.ts'
 import {
   atCeiling,
@@ -1494,17 +1486,7 @@ let published = async (
       app: app.slug,
     }),
   )
-  let [, closed = 0] = await Promise.all([
-    tooled.views ? after(() => viewsMoved(ctx, space)) : null,
-    // What the versions before this one broke is closed by this one: the code
-    // that produced it is not what serves any more (unseen.ts `healed`,
-    // D-32318 §Errors). The release already happened, so a store that cannot
-    // be asked leaves the breaks open rather than failing a deploy that is
-    // live.
-    after(() =>
-      c.time('healed', () => healed(ctx.env, space, app, who, version))
-    ),
-  ])
+  if (tooled.views) await after(() => viewsMoved(ctx, space))
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
   // editor's deploy must not change what the whole platform gets. Silence
@@ -1522,11 +1504,6 @@ let published = async (
     said: ran +
       trailing +
       servesSaid(serves) +
-      (closed
-        ? `\nclosed ${closed} ${
-          closed == 1 ? 'break' : 'breaks'
-        } from other versions`
-        : '') +
       // What this app can now be asked to do, as `command` takes them: bare
       // names, because a command is said with its app beside it rather than
       // spliced into it (declared.ts, T-34541).

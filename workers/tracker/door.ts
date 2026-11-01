@@ -86,7 +86,8 @@ async (request: Request): Promise<Response> => {
       body.eids.some((eid: unknown) =>
         typeof eid != 'string' || !minted(eid)
       ) ||
-      !['notified', 'archived'].includes(body.mark)
+      !['notified', 'archived'].includes(body.mark) ||
+      (body.remove !== undefined && typeof body.remove != 'boolean')
     ) {
       return json({
         error:
@@ -94,7 +95,12 @@ async (request: Request): Promise<Response> => {
       }, 400)
     }
     return json({
-      marked: await tracker.markErrors(body.app, body.eids, body.mark),
+      marked: await tracker.markErrors(
+        body.app,
+        body.eids,
+        body.mark,
+        body.remove,
+      ),
     })
   }
   if (path == '/ws') {

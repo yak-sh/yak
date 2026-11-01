@@ -227,6 +227,34 @@ test('scoped RPC reads, resolves, reopens, archives and never exposes trusted in
     marked: 1,
   })
   equal((await tenant.graph.get(mark.eids))[0].notified != null, true)
+  let archived = { ...mark, mark: 'archived' }
+  await marks(request('/app-errors', member, archived))
+  equal((await tenant.graph.get(mark.eids))[0].archived != null, true)
+  equal(
+    (await marks(request('/app-errors', auth, {
+      ...archived,
+      remove: true,
+    }))).status,
+    403,
+  )
+  equal(
+    await (await marks(request('/app-errors', member, {
+      ...archived,
+      remove: true,
+    }))).json(),
+    { marked: 1 },
+  )
+  let [reopened] = await tenant.graph.get(mark.eids)
+  equal(reopened.archived, undefined)
+  equal(reopened.notified != null, true)
+  equal(
+    (await marks(request('/app-errors', member, {
+      ...archived,
+      remove: 'true',
+    }))).status,
+    400,
+  )
+
   for (let body of ['null', '{']) {
     equal(
       (await marks(

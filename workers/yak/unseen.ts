@@ -4,8 +4,8 @@
 // from before the tracker still translate through their original app stores. The comms bus
 // in this graph stamps `notified` on each line it delivers (client.ts
 // notices()); this does the same, so an item rides one reply and then only
-// `app_errors` shows it again. Open means not `archived`: a later deploy
-// ({@link healed}) or the agent saying so ({@link archive}) archives it.
+// `app_errors` shows it again. Open means not `archived`: only the agent
+// explicitly archiving it ({@link archive}) ends it.
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
@@ -534,7 +534,7 @@ let trackedHit = (row: Bundle): Hit => {
  * no app's store: an app nobody uses stays asleep, and its month's requests
  * are its visitors' alone (T-123502). The rows an app's own store keeps
  * (pre-tracker breaks, its transcripts' errors) are read where one app is
- * named: `app_errors`, an archive, a deploy. */
+ * named: `app_errors` or an archive. */
 export let trackedIn = async (
   env: Env,
   space: Space,
@@ -668,8 +668,7 @@ let moment = (word: string) =>
 // deploy, or a day or an instant for everything at or before it.
 //
 // A break naming no version, or no moment, goes with any bound of its kind: it
-// predates the counter, and nothing can ever say whether it is still true —
-// the rule {@link healed} already keeps.
+// predates the counter, so its position within that bound is unknown.
 export let named = (word: string, h: Hit) => {
   if (word == 'all') return true
   let v = VERSION.exec(word)
@@ -713,39 +712,10 @@ export let archive = async (
   return breaks(hits)
 }
 
-// And fixed by a release, which is how a break usually ends. D-32318 §Errors,
-// verbatim: "One is open until a later deploy stops producing it or the agent
-// marks it fixed." The code that produced it is not what serves any more, so
-// every deploy, install and rollback closes what other versions broke
-// (tools.ts `released`); a break the new code still produces is written again
-// the next time it happens, and `app_list`'s open count follows either way.
-// A break that names no version at all predates the counter, and goes with
-// them — nothing else can ever say whether it is still true.
-export let healed = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
-  version: number,
-) => {
-  let old = (await openIn(env, space, app, who, true)).filter((h) => {
-    let was = broke(h).version
-    return was == null || was != version
-  })
-  if (!old.length) return 0
-  await close(env, space, app, who, old)
-  // Counted as the lines app_errors said them: breaks, not occurrences.
-  return breaks(old)
-}
-
-// The section a tool reply carries: nothing when nothing is unseen. Its last
-// line says what ends them, because the write it rides is often the fix: a
-// page that failed to load a script before the script existed rides the very
-// write that adds it (E-34329, T-34338). The next deploy closes them
-// ({@link healed}), so nothing needs a call to say they are stale.
-let ENDS = 'Each is said once. The next deploy closes them, and the new code ' +
-  "reports again any it still makes; app_errors(seen: ['all']) closes them " +
-  'without one.'
+// Notification records that the agent was told; only a verified fix warrants
+// explicitly archiving the report.
+let ENDS = 'Each is said once. Errors stay open across deploys. After fixing ' +
+  'the cause and verifying the fix live, archive with app_errors(fixed: [id]).'
 
 export let unseenBlock = (seen: Seen[]) =>
   seen.length

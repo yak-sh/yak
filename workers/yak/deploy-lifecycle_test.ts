@@ -453,7 +453,8 @@ test('worker errors after rollback and an in-flight pointer move name the routed
   )
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
   let current = (await call(f.ctx, 'app_errors', f.args)).text
-  assertEquals(current, 'no open errors')
+  assertEquals(current.includes('v2'), true, current)
+  assertEquals(current.includes('version two failed'), true, current)
   await workerBreak(
     scenario.env,
     space,
