@@ -112,6 +112,27 @@ export let permitted = (
     : lit(true)
 }
 
+// Ranking revisits each index for its page, ties and exact names. Bind each
+// admission relation once, including when several indexes share its scope.
+let shared = (screens: Record<string, Raw> = {}, materialized = false) => {
+  let ctes: Cte[] = []
+  let held = new Map<string, Raw>()
+  let sources = Object.fromEntries(
+    Object.entries(screens).map(([index, q]) => {
+      let key = JSON.stringify(q)
+      let source = held.get(key)
+      if (!source) {
+        let name = `__fts_allowed${ctes.length}`
+        ctes.push({ name, q, materialized })
+        source = render(select({ cols: [col('id')], from: table(name) }))
+        held.set(key, source)
+      }
+      return [index, source]
+    }),
+  )
+  return { ctes, sources }
+}
+
 // The ranked statement for a search, or null when the text contains no word.
 // The words are ANDed terms (./term.ts) and bm25 orders the results, so a
 // search behaves as a set of words rather than as one phrase.
@@ -240,6 +261,7 @@ let chosen = (
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'
+  let { ctes, sources } = shared(opts.screens, sorting)
   let e = at('entity')
   let c = at('__candidate')
   let b = at('best')
@@ -255,7 +277,7 @@ let chosen = (
     let owner = col('rowid', fts)
     return and(
       op('match', col(fts), val(expr)),
-      permitted(name, owner, opts.screens),
+      permitted(name, owner, sources),
       ...opts.screen ? [eligible(owner)] : [],
       not(exists(select({
         cols: [lit(1)],
@@ -308,6 +330,7 @@ let chosen = (
   })
   return select({
     with: [
+      ...ctes,
       ...opts.screen
         ? [{
           name: '__fts_screen',

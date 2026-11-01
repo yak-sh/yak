@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { bounded } from '../sqlite/testing.ts'
-import { fields, schema, search } from './mod.ts'
+import { fields, find, schema, screens, search } from './mod.ts'
 
 let kinds = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
 let vocab = loadVocab({
@@ -17,7 +17,7 @@ let vocab = loadVocab({
   }])),
 })
 
-let db = bounded({ compoundSelect: 5 })
+let db = bounded({ compoundSelect: 5, variableNumber: 100 })
 let text = fields(vocab)
 let store = storage(db, vocab, { extend: [search(text, db)] })
 store.install()
@@ -40,4 +40,18 @@ test('a search over seven indexes answers within five compound terms', () => {
   assertEquals(found('ceramic .limit=3'), mugs.slice(0, 3))
   assertEquals(found('ceramic mug .limit=20'), mugs)
   assertEquals(found('"woven basket" .limit=2').length, 2)
+})
+
+let scope = {
+  visibility: {
+    entity: kinds.map((k) => `.entity.eid!=${k}2`).join(' ') +
+      ' .entity.eid!=a1',
+  },
+}
+test('ranked excerpts share admission scopes within the bound parameter allowance', () => {
+  assertEquals(
+    find(db, text, 'ceramic', { screens: screens(text, vocab, scope) })
+      .map((hit) => hit.entity),
+    mugs.slice(1),
+  )
 })
