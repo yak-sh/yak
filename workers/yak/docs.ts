@@ -17,8 +17,10 @@
 // like any other. The guide does not OFFER it — it answers a person asking
 // where this runs, not an agent building an app — so it says no `guide` row in
 // its frontmatter, it is no connector resource, and `TECHNICAL` below is the
-// one place that knows it is there. Every number on it is read off the code,
-// and the pointer is a comment in the file beside the words it holds up.
+// one place that knows it is there. Every number on it is read off the code:
+// if the code stops being true, the page is wrong and gets fixed, so it says as
+// little as it can and points at the guide for the rest. The file is served as
+// it is written at /docs/technical.md, so it carries no comments.
 //
 // `/technical` and the old `/guide` addresses answer 301, for the links
 // already in the world and the resource list a connector cached.

@@ -3,7 +3,6 @@
 // an app serves, ahead of the page's own scripts (page-script.ts). Wrapped,
 // so none of its names land in the page's global scope, where a classic
 // script declaring its own `send` or `version` would refuse to run.
-// The platform retains its existing report door until T-59077 switches intake.
 ;(() => {
   let script = document.currentScript
   let door = new URL(`${script.dataset.yakAt}api/report`, location.href).href
@@ -127,7 +126,7 @@
 
   // A load can fail with the file in place: Safari stops every load of a page
   // the moment the person heads elsewhere, and a stopped stylesheet fires this
-  // same event while the page is still up (T-124011), as does a phone dropping
+  // same event while the page is still up, as does a phone dropping
   // its connection. So a miss is asked for again, and only one the server
   // refuses is news. One that answers, or that cannot be asked because the
   // connection or the page is gone, is not a fault of the app's or ours. A
@@ -162,7 +161,7 @@
       let where = at(src)
       // Off the app's origin is not the app's file: the analytics beacon the
       // edge injects, blocked in the visitor's browser, is the platform's news
-      // and not this app's (T-32487).
+      // and not this app's.
       if (where && !mine(where)) return
       let miss = () =>
         broke({
@@ -299,14 +298,12 @@
     }
   }
 
-  // The soft state, in D-32318 §Errors' own words: "The app's page shows a soft
-  // 'something went wrong, your assistant has been told' state rather than a
-  // stack trace."
+  // The soft state: the app's page shows "something went wrong, your assistant
+  // has been told" rather than a stack trace.
   //
   // Only when the break left the person with nothing to look at. "Painted" is
-  // judged the honest, cheap way — the body's own words, and whether anything
-  // that draws pixels is in it — because the page that sent the ninth user test
-  // away was a heading and empty space (C-32905 item 2), which every paint
+  // judged the cheap way — the body's own words, and whether anything that draws
+  // pixels is in it — because a heading and empty space is a page every paint
   // timing in the browser calls a paint. A shell is under a line of text and
   // has no picture in it; a page doing its job has one or the other.
   let SHELL = 80

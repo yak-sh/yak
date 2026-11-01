@@ -1,6 +1,6 @@
 <!--
-  The card a link to yaks.app unfurls as, and the source og.png is drawn from
-  (T-34288). Everforest, the same tokens as style.css: linen ground, coffee
+  The card a link to yaks.app unfurls as, and the source og.png is drawn from.
+  Everforest, the same tokens as style.css: linen ground, coffee
   wordmark, meadow rule, and the raster yak beside it. No webfont — Nunito is
   the site's face but an OG card is rasterized once and every renderer here has
   its own fonts, so the wordmark is set in whatever grotesque the machine has.

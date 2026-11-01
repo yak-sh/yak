@@ -40,16 +40,6 @@
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="stylesheet" href="style.css" />
-    <!--
-      What this place is, said for a machine (T-34288). One block on one page,
-      because a second copy of the prices is a second thing to change: the
-      numbers are meter.ts `PRICE`, and site_test.ts holds this block to them,
-      so a price change is that line, this block, and the Stripe price id in
-      wrangler.toml.
-
-      No `sameAs`: yaks.app has no profile anywhere else to name yet, and an
-      empty claim is worse than none.
-    -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -169,7 +159,6 @@
           </p>
         </div>
 
-        <!-- Show the range of what a yaks app can be beside the promise. -->
         <div class="Demo" aria-labelledby="demo">
           <h2 id="demo"
             class="Demo_Title">A multiplayer game made with yaks.app</h2>
@@ -228,8 +217,6 @@
       <section class="Make" aria-labelledby="examples">
         <div class="Make_Intro">
           <h2 id="examples" class="Title">Example apps</h2>
-          <!-- The six demo links remain when the directory is unavailable.
-               gallery.ts fills their cards from the apps' chosen screenshots. -->
           <p class="Note">
             Each of these is a working app. Open one to try it, or get your
             own copy and ask your assistant to change it.
@@ -323,7 +310,6 @@
         </ol>
       </section>
 
-      <!-- Keep these allowances in step with /pricing and meter.ts. -->
       <section class="Cost" aria-labelledby="cost">
         <h2 id="cost" class="Title">What it costs</h2>
         <div class="Plans">

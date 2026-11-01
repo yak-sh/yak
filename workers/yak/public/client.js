@@ -18,8 +18,7 @@ export { draftEid }
 // gives every page it serves a `<base href>` at the app's own address
 // (apps.ts `based`), so `./api/client.js` is this app's client from a page at
 // any depth — a pretty path like `/lending/loans/1` included — and stays this
-// app's client in a copy someone installed at another address (C-32905 item
-// 1). An absolute `/<app>/api/client.js` still works; it just stops working
+// app's client in a copy someone installed at another address. An absolute `/<app>/api/client.js` still works; it just stops working
 // the moment the app is copied.
 //
 // `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
@@ -68,20 +67,19 @@ export { draftEid }
 //
 // A refusal is thrown with the server's own words — 'not a writer of jeff',
 // or what the store said about the batch — because that sentence is what the
-// person's agent reads next (D-32318 §Errors are surfaced).
+// person's agent reads next.
 
 // A refusal, as one Error. The kernel and the store both answer a sentence —
 // `{error: {code, message}}` from the kernel, plain words from the store —
 // and that sentence is the whole of what a page shows and an agent reads.
 // A body that is neither is a page (a 404 answers the platform's "Nothing
 // here yet." HTML), so it never rides the throw: the status and a short line
-// of it say what happened without dumping a document into an error message
-// (C-32574 items 2 and 4).
+// of it say what happened without dumping a document into an error message.
 //
 // When signing in is the way through, the kernel also names where: the throw
 // carries `signIn`, the login page already holding this page as its return
 // address, so `catch (e) { if (e.signIn) location = e.signIn }` sends them
-// and brings them back (T-32593). It carries the answer's `status` too, so a
+// and brings them back. It carries the answer's `status` too, so a
 // refusal the page never caught reaches the reporter as the no it was
 // (report.js).
 let refused = (r, body) => {
@@ -172,7 +170,7 @@ let pageVersion = () => {
 // The address a store's doors hang off. Every app in a space shares one
 // hostname, so the address a page names is a path — `store('/lending/api/')`,
 // which the guide's own line — and a path is no `new URL` base by itself:
-// the documented call threw `Invalid base URL` (C-32800 item 6). It is
+// the documented call threw `Invalid base URL`. It is
 // resolved against this origin, and a path that names the api directory
 // without saying so keeps its meaning: the doors are under it, so the base
 // ends in a slash or `query` would replace the last segment. A sandboxed
@@ -369,7 +367,7 @@ export let digest = async (blob) => (await hashed(blob)).sha
 
 // A file at least this big goes up in parts, several at once, which from
 // here on send faster than one request, and their fixed second or two of
-// beginning and assembling is about a tenth of the upload (measured, T-124790).
+// beginning and assembling is about a tenth of the upload.
 // Anything smaller is one request.
 let SPLIT = 32 * 1024 * 1024
 let LANES = 4
@@ -585,8 +583,7 @@ export let store = (base, { clock = system } = {}) => {
   // from them, `signIn` where a signed-out visitor signs in, and `invited`
   // whether an invitation waits in their email to accept. Call it on load and
   // the page knows whether to show a sign-in link, the invitation or a name
-  // field, instead of finding out from a refusal after someone has typed
-  // (C-32675 items 5 and 6).
+  // field, instead of finding out from a refusal after someone has typed.
   let me = () => ask('me')
 
   // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The

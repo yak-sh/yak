@@ -26,6 +26,12 @@ people make". The visitor has none of that context and won't stay long enough
 to build it. And a hero feels like the place for a flourish, so the sentence
 that most needs to be plain is the one most often written for effect.
 
+A public page holds only what a visitor needs. No draft marker, task or memory
+id, decision date, or note about the owner, agents or our process, in its text
+or anywhere view-source reaches, comments in served HTML, JS and CSS included;
+and no line about how the page was written or who wrote it. Notes for us go in
+code that isn't served.
+
 ## What Jeff wants from it
 
 Jeff, 2026-10-31, verbatim, on the yaks.app home page (T-134185):

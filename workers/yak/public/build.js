@@ -1,4 +1,4 @@
-// The builder's chat, live (T-34242): the script half of the form on a space's
+// The builder's chat, live: the script half of the form on a space's
 // page or the dashboard's (pages.ts `chat`). It opens the socket where the form
 // posts, the space's `/api/build`, draws the
 // conversation the object replays, and then draws each frame of a build as it

@@ -22,6 +22,12 @@ first. This skill is how they land here. Jeff's words are in M-131884, and the
 model in full, with the personas, the cycle, the plans and the site's
 information architecture, is D-131886.
 
+A public page holds only what a visitor needs. No draft marker, task or memory
+id, decision date, or note about the owner, agents or our process, in its text
+or anywhere view-source reaches, comments in served HTML, JS and CSS included;
+and no line about how the page was written or who wrote it. Notes for us go in
+code that isn't served.
+
 ## Who it's for
 
 People with a specific problem, at work, at home or in something they run on

@@ -3,6 +3,12 @@
 // furniture an engine or a model reads — title, description, canonical, Open
 // Graph, JSON-LD — against the lists seo.ts builds `/sitemap.xml`,
 // `/robots.txt` and `/llms.txt` from (T-34288).
+//
+// Served pages hold no comments, since view-source shows them, so their notes
+// live here. The home page's JSON-LD prices are meter.ts PRICE: a price change
+// is that line, that block and the Stripe price id in wrangler.toml. It says no
+// `sameAs` because yaks.app has no profile elsewhere to name. Each FAQ answer in
+// help.html's JSON-LD is the first paragraph of the section it names, verbatim.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'

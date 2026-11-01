@@ -357,8 +357,8 @@
     margin-inline: auto;
   }
 
-  /* The header: the mark and the name, and the four places worth going
-     (T-33643). The name IS "home" — it carries the label — so the nav names
+  /* The header: the mark and the name, and the four places worth going.
+     The name IS "home" — it carries the label — so the nav names
      the other four and nothing else.
 
      Centred and stacked on a phone, and only spread apart once there is room
@@ -839,7 +839,7 @@
     margin-top: var(--quarter-gap);
   }
 
-  /* The pricing page (pricing.html, D-32751): two plans side by side on a
+  /* The pricing page (pricing.html): two plans side by side on a
      laptop, stacked on a phone. A wider column than a letter, because two
      columns of numbers is the one thing here that is not prose — and no
      wider, because there are only two. */

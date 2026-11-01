@@ -11,6 +11,7 @@ import { answer, CONTENTS, DOCS, PATH, pathOf } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES } from './guide.ts'
 import { esc } from './html.ts'
+import { KEEP } from './versions.ts'
 
 // The assets binding, answering out of public/ the way it does in the Worker.
 let site = () =>
@@ -163,11 +164,8 @@ test('the technical page is markdown drawn like the rest', async () => {
   assertStringIncludes(html, '<article class="Page_Body Prose">')
   assertEquals((html.match(/<main[\s>]/g) ?? []).length, 1)
   assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
-  // A number read off the code is on the page; the comment naming where it
-  // was read is in the file and nowhere on the page (@yaks/markdown).
-  assertStringIncludes(html, '20 versions')
-  assertStringIncludes(sourceOf('/docs/technical.md'), 'versions.ts KEEP = 20')
-  assertEquals(html.includes('versions.ts'), false)
+  // A number read off the code is on the page.
+  assertStringIncludes(html, `${KEEP} versions`)
 })
 
 // The whole rule, on one page: the `.md` address is the file, the address

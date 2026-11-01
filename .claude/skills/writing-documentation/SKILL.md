@@ -22,6 +22,12 @@ the last. The owner, verbatim (T-64477):
 > usually how technical writing works: it should have clearly defined terms and
 > then those terms should always be used.
 
+A public page holds only what a visitor needs. No draft marker, task or memory
+id, decision date, or note about the owner, agents or our process, in its text
+or anywhere view-source reaches, comments in served HTML, JS and CSS included;
+and no line about how the page was written or who wrote it. Notes for us go in
+code that isn't served.
+
 ## Literal titles, plain sentences
 
 A reader decides from a title whether a page holds what they need, and from a

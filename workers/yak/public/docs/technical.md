@@ -1,25 +1,3 @@
-<!--
-  The technical page (T-33643). Jeff: "i'd like also a link to a page for
-  technical details. basically, explain that it's hosted on CF, scalable, some
-  limitations, etc etc."
-
-  The rule this page is written under: every number and every capability on this page
-  is read off the code, never invented, and the pointer is named in a comment
-  beside anything a reader might want to check. If the code stops being true,
-  this page is wrong and somebody has to fix it — so it says as little as it
-  can get away with, and points at the guide for the rest (M-14370).
-
-  It is reference, like the rest of the guide: explicit and technical, in plain
-  words and short sentences, with no hype. It is the page for the person who
-  asked "but where does it actually run".
-
-  It is a page of the documentation (docs.ts, T-37752), drawn at
-  /docs/technical from this file, which is served as it is written at
-  /docs/technical.md. It says no `guide` row, so the connector does not offer
-  it as a resource: it is written for a person, not for an agent building an
-  app. /technical answers a 301 to it.
--->
-
 # Technical Details
 
 This page explains how yaks.app hosts apps, stores data, runs code, controls
@@ -35,19 +13,12 @@ each app. An app with no traffic uses no compute.
 
 ## Data storage
 
-<!-- graph.ts:1 "one app's graph, and nothing of the fleet's"; the DO name is
-     pinned at the app's birth (directory.ts storeName) so a rename never moves
-     the data. -->
-
 Each app has its own SQLite database inside a Cloudflare Durable Object. Apps in
 the same space can work with one entity across their separate databases: each
 component is read or written in the app that holds it.
 
 The platform checks access to each app when it handles a request. Your signed-in
 assistant can access your apps on your behalf.
-
-<!-- apps.ts blobKey: `${space}/${app}/blobs/${sha}` in the BLOBS R2 bucket,
-     content-addressed, so the same photo twice is one object. -->
 
 Photos and files are stored in Cloudflare R2 under an app-specific prefix. Files
 are addressed by a hash of their contents, so uploading the same file twice
@@ -58,16 +29,8 @@ their own components. See [the documentation](/docs) for the data model.
 
 ## Serving app files
 
-<!-- files.ts + the Files entrypoint, cached per wrangler.toml
-     [exports.Files.cache]; the default entrypoint is never cached because the
-     cache key is not the hostname. -->
-
 An app consists of `index.html` and related CSS, JavaScript, image, and other
 files. There is no required framework or build step.
-
-<!-- @yaks/esbuild plan.ts decides; yak-esbuild's container compiles
-     (packages/esbuild/compile.ts, workers/yak/esbuild/); files.ts serves the
-     output under BUILT. -->
 
 A page script written in TypeScript, or importing an npm package its
 `package.json` names, is compiled at `app_deploy` with esbuild, in a container
@@ -76,8 +39,6 @@ versions, so the next deploy installs the same ones. A compile has 1 GiB of
 memory: an app whose six page scripts bundle three.js, Preact and the platform
 toolkit, the largest to 1.5 MB, peaks near 300 MB. A compile that runs out of it
 is refused, and `app_deploy` says so.
-
-<!-- files.ts `resolve` and `rootOf`; apps.ts `asset` weaves the base. -->
 
 Files are served from R2 through Cloudflare's cache. A cached file can be
 returned from the edge without reading R2. Every HTML file is a page at the
@@ -88,17 +49,11 @@ supports client-side routing and direct loads of nested URLs. A `wrangler.jsonc`
 naming `assets.directory` serves one folder of the app, so a build can sit
 beside its source.
 
-<!-- versions.ts KEEP = 20 -->
-
 Each deployment creates a version, and the last twenty are kept. A rollback
 moves the live pointer to a kept version without minting a new version.
 Rollbacks do not change saved app data.
 
 ## Server-side code
-
-<!-- dispatch.ts: a worker.js among an app's files is uploaded into the
-     `yak-apps` Workers for Platforms dispatch namespace; the kernel forwards
-     non-/api requests to it and falls back to the files on a 404. -->
 
 Apps can receive webhooks or call APIs without exposing credentials in browser
 code. A `worker.js` (or `worker.ts`) file runs as a Cloudflare Worker in a
@@ -114,10 +69,6 @@ and its fetches leave through yaks.app, which puts the key in the sentinel's
 place for the hosts the connection names.
 
 ## Connectors and MCP
-
-<!-- mcp.ts: POST /mcp is stateless streamable HTTP; GET /mcp is the per-person
-     stream backed by the Wire DO, resumable by Last-Event-ID. Auth is OAuth
-     via @cloudflare/workers-oauth-provider. -->
 
 The MCP endpoint is `https://yaks.app/mcp` and uses Streamable HTTP. It supports
 Claude connectors, ChatGPT custom connectors, Claude Code, and other MCP
@@ -135,9 +86,6 @@ for live updates, and `upload` for files.
 
 Each app has one of three access levels, which can be changed:
 
-<!-- session.ts reads/writes: private hides the app entirely; open lets a
-     stranger write; public is read-anyone, write-members. -->
-
 - **Public.** Anyone with the link can read it. Only you and invited members can
   make changes. This is the default.
 - **Open.** Anyone with the link can read and write without signing in. This
@@ -150,10 +98,6 @@ Members can be owners, editors, or viewers. Only members can change app files;
 the Open level applies to app data, not code.
 
 ## Custom domains
-
-<!-- domains.ts: Cloudflare for SaaS custom hostnames on the yaks.app zone,
-     HTTP DV, one CNAME to ORIGIN (route.ts). Apex is a hint, not a special
-     case; the guide's answer is CNAME flattening. -->
 
 A space, or one app in it, can use a domain you own in addition to
 `yourname.yaks.app`. On the space, the domain serves it the way that address

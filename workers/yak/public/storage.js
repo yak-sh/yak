@@ -1,4 +1,4 @@
-// localStorage and sessionStorage for a sandboxed app (installed.ts, D-37901).
+// localStorage and sessionStorage for a sandboxed app (installed.ts).
 // An installed app its space's owner sandboxed runs in an opaque origin of
 // its own, where the browser's own storage throws. The kernel weaves this
 // script into the page's head, ahead of every script of the page's own, with

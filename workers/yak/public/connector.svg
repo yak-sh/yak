@@ -1,5 +1,5 @@
 <!--
-  The connector's face (T-34415): the square icon a connector form asks for,
+  The connector's face: the square icon a connector form asks for,
   and what the MCP server's own `initialize` hands a client that reads
   `serverInfo.icons` (seo.ts CONNECTOR). On the linen ground, so it reads as a
   tile at 48px wherever a host crops it — icon-512.png is the same yak on
