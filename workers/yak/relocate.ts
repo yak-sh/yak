@@ -298,6 +298,8 @@ export let relocation = (o: {
     // A restart at the new object is sent again here, where a caller would have
     // sent it, rather than reaching that caller as this object's failure.
     let to = moved
-    return to ? retried(() => o.object(to).fetch(request.clone()), true) : null
+    return to
+      ? retried(() => o.object(to).fetch(new Request(request.clone())), true)
+      : null
   }
 }
