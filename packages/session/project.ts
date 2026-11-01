@@ -273,7 +273,7 @@ export let project = (
       })
     } else if (kind == 'output') {
       out.push({ kind: 'assistant', text: textOf(b) })
-    } else if (kind == 'call' && c?.source != opts.anchor) {
+    } else if (kind == 'call' && (!opts.anchor || c?.source != opts.anchor)) {
       out.push({ kind: 'call', ...spelled(b) })
     } else if (kind == 'result') {
       let eid = String(answers(b))

@@ -239,7 +239,7 @@ for (let legacy of [false, true]) {
       {
         entity: { eid: 'call' },
         entry: { session: 'parent', seq: 22 },
-        call: { to: tool, id: 'c', source: 'begin' },
+        call: { to: tool, id: 'c', ...legacy ? {} : { source: 'begin' } },
         content: { body: '{"text":"exact arguments"}' },
       },
       {
