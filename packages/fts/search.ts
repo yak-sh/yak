@@ -20,6 +20,7 @@ import {
   type BindOpts,
   catalogue,
   col,
+  cross,
   type Cte,
   desc,
   type Driver,
@@ -267,6 +268,23 @@ let chosen = (
   let e = at('entity')
   let c = at('__candidate')
   let b = at('best')
+  // A kind can have no owners in an index at all. Prove that through the
+  // selected owners' component keys before opening a CPU-sorted FTS cursor.
+  let guarded = sorting && !!opts.screen
+  let active = (arm: Index) =>
+    exists(select({
+      cols: [lit(1)],
+      from: table('__fts_screen'),
+      joins: [cross(table(arm.on ?? arm.comp, '__source'))],
+      where: eq(col('entity', '__source'), col('id', '__fts_screen')),
+    }))
+  let take = (i: number, n: number): Expr =>
+    guarded
+      ? when([[
+        sub(select({ cols: [col(`arm${i}`)], from: table('__fts_active') })),
+        lit(n),
+      ]], lit(0))
+      : lit(n)
   let eligible = (owner: Expr) =>
     exists(select({
       cols: [lit(1)],
@@ -297,7 +315,9 @@ let chosen = (
       ? []
       : arms.map(({ name }, i) => newest(name, i, t, limit, admitted)),
     opts.name
-      ? arms.map((arm, i) => exactly(arm, i, t, opts.name!, limit, admitted))
+      ? arms.map((arm, i) =>
+        exactly(arm, i, t, opts.name!, take(i, limit), admitted)
+      )
       : [],
   ].filter((kind) => kind.length)
   let candidates = unionAll(
@@ -344,8 +364,22 @@ let chosen = (
           materialized: sorting,
         }]
         : [],
+      ...guarded
+        ? [{
+          name: '__fts_active',
+          q: select({ cols: arms.map((arm, i) => as(active(arm), `arm${i}`)) }),
+          materialized: true,
+        }]
+        : [],
       ...arms.flatMap(({ name }, i) =>
-        placing(name, i, t, limit, admitted, sorting)
+        placing(
+          name,
+          i,
+          t,
+          take(i, sorting ? limit : limit + 1),
+          admitted,
+          sorting,
+        )
       ),
       { name: 'best', q: best, materialized: true },
     ],
@@ -381,7 +415,7 @@ let placing = (
   name: string,
   i: number,
   t: string,
-  limit: number,
+  limit: Expr,
   admitted: Admitted,
   sorting: boolean,
 ): Cte[] => [{
@@ -391,7 +425,7 @@ let placing = (
     from: table(indexName(name)),
     where: admitted(name, t),
     order: [col('rank'), ...sorting ? [desc(col('rowid'))] : []],
-    limit: lit(sorting ? limit : limit + 1),
+    limit,
   }),
   materialized: true,
 }, {
@@ -481,7 +515,7 @@ let exactly = (
   i: number,
   t: string,
   name: string,
-  limit: number,
+  limit: Expr,
   admitted: Admitted,
 ): Query => {
   let fts = indexName(index)
@@ -514,7 +548,7 @@ let exactly = (
           })),
         ),
         order: [...props.length > 1 ? [col('rank')] : [], desc(col('rowid'))],
-        limit: lit(limit),
+        limit,
       }),
       `__named${i}`,
     ),

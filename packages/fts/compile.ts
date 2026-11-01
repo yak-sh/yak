@@ -51,7 +51,7 @@ import {
 import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { named, term } from './term.ts'
-import { type And, map, words as wordsIn } from '@yaks/query/core'
+import { type And, type Clause, map, words as wordsIn } from '@yaks/query/core'
 
 // The ranking `.order=` names.
 export let SEARCH = 'search'
@@ -60,16 +60,22 @@ export let SEARCH = 'search'
 // follow, newest first.
 export let RANKED = 1000
 
+let mandatory = (c: Clause): number =>
+  c.kind == 'and'
+    ? c.clauses.reduce((n, child) => n + mandatory(child), 0)
+    : Number(c.kind == 'text')
+
 // How many of a query's best rows its answer reaches, when those are all it
 // reaches: the first page (no `.after`) of a window of at most `RANKED` rows
-// ordered by search, whose words are all clauses of its own. A word in a group
-// or a child filter selects rows the ranking of all the words never sees.
+// ordered by search, whose words are all mandatory clauses of its own. A word
+// under OR or a child filter selects rows an all-word ranking never sees.
 ///
 /// let { parse } = await import('@yaks/query')
 /// reach(parse('dragon .limit=5 .order=search')) -> 5
 /// reach(parse('dragon .limit=5 .order=-search')) -> null
 /// reach(parse('dragon .limit=5 .order=search .after=7')) -> null
 /// reach(parse('(dragon|scale) .limit=5 .order=search')) -> null
+/// reach(parse('dragon (scale) .limit=5 .order=search')) -> 5
 /// reach(parse('dragon .limit=5000 .order=search')) -> null
 export let reach = (q: And): number | null => {
   let limit = q.clauses.find((c) => c.kind == 'limit')
@@ -84,7 +90,7 @@ export let reach = (q: And): number | null => {
     if (c.kind == 'text') all++
     return c
   })
-  let own = q.clauses.filter((c) => c.kind == 'text').length
+  let own = mandatory(q)
   return all == own ? limit.n : null
 }
 

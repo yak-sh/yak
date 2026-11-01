@@ -34,7 +34,10 @@ let unranked = db.query(compile(parse('dragon'), shop, {
   extend: [search(fields(shop))],
 })).map((r) => r.eid)
 let window = compiled('dragon .limit=3')
+let grouped = compiled('(dragon) .limit=3')
 test('a window of words with no order answers best match first', () => {
   assertEquals(ids(window), all)
   assertNotEquals(unranked, all)
 })
+test('grouping conjunctive words preserves the ranked page', () =>
+  assertEquals(ids(grouped), all))

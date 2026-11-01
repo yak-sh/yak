@@ -5,7 +5,18 @@ import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { as, col, cross, eq, lit, op, render, select, table } from '@yaks/sql'
+import {
+  as,
+  col,
+  cross,
+  eq,
+  insert,
+  lit,
+  op,
+  render,
+  select,
+  table,
+} from '@yaks/sql'
 import { hits, screens } from './search.ts'
 import {
   seed,
@@ -109,6 +120,33 @@ test('a sparse CPU ranked search probes visibility without enumerating unrelated
     assert(scans < 100, `${scans} full-scan advances`)
   } finally {
     visibleRanked.finalize()
+  }
+})
+
+largeSql.query(insert('entity', { id: 100000000, eid: 'without-text' }))
+let empty = render(
+  hits(text, 'dragon', {
+    plan: 'sort',
+    limit: 2,
+    screen: render(select({
+      cols: [col('id')],
+      from: table('entity'),
+      where: eq(col('id'), lit(100000000)),
+    })),
+  })!,
+)
+let emptyRanked = large.prepare(empty.sql)
+test('a CPU search opens no matching index when selected owners carry none of its sources', () => {
+  try {
+    assertEquals(emptyRanked.all(...empty.params), [])
+    let steps = counters.symbols.sqlite3_stmt_status(
+      emptyRanked.unsafeHandle,
+      4,
+      0,
+    )
+    assert(steps < 1000, `${steps} VM instructions`)
+  } finally {
+    emptyRanked.finalize()
   }
 })
 
