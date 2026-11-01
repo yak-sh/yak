@@ -2,8 +2,8 @@
 name: end-to-end-checks
 description: >
   Use when checking a change by hand, against live or copied data, in a
-  browser/terminal, taking screenshots or proving UI, query, write and
-  migration behavior. Proof runs in your process with compose(), kernel(),
+  browser/terminal or at a phone's width, taking screenshots or proving UI,
+  query, write and migration behavior. Proof runs in your process with compose(), kernel(),
   linkedom or TUI lay; no probe servers or Chrome. Automated tests are
   testing.
 ---
@@ -101,5 +101,31 @@ waits for those background runs. `admin_deploys` as admin says what is live,
 `secrets-and-connections`). Acting as the owner is his to grant
 (M-31958). The box's own server runs main after `yak restart`. The platform
 itself is `yaks-app`.
+
+## Seeing a live page at a width
+
+Whether a landed page fits a phone is a question about layout, and layout
+needs a browser, which this box doesn't have. thum.io renders a public URL in
+its own Chrome and returns the picture, so the box runs nothing:
+
+```
+https://image.thum.io/get/png/viewportWidth/<w>/width/<w>/crop/<h>/wait/<s>/<url>
+```
+
+Its window is never narrower than 500px. Ask for 390 or 320 and it lays the
+page out at 500, then crops the picture to the width you asked for. The page
+looks as if it runs off the right edge, and the nav and headings come out cut
+short. That picture once filed a phone overflow on yaks.app's home page that
+didn't exist.
+
+To see a narrower width, frame the page: a 500px page holding an `<iframe>`
+that is exactly 390 or 320px wide, since an iframe is a window of its own.
+Measure rather than squint. A script in the framed copy that compares
+`document.documentElement.scrollWidth` with `clientWidth`, and lists any
+element whose right edge passes the window, answers "does it overflow?"
+outright. A copy is the live page's HTML with `<base href="https://yaks.app/">`
+in its head and the script before `</body>`. thum.io can only fetch it from
+the open internet, so publish the copy and its frame on public.yak.sh
+(`sharing`) and delete them when you're done.
 
 When this skill is wrong or missing something, fix it in the same change.
