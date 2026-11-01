@@ -11,6 +11,18 @@ workers_dev = false
 preview_urls = false
 minify = true
 
+# The apex and every first-level space hostname, both on the yaks.app zone, and
+# `*/*` for a customer's own hostname: traffic for a custom hostname enters this
+# zone and only a zone-wide pattern matches it, which is Cloudflare's own
+# instruction for a Worker as the fallback origin.
+#
+# Above every table header: TOML gives a bare key to the last table declared.
+routes = [
+  { pattern = "yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*/*", zone_name = "yaks.app" },
+]
+
 [observability.logs]
 enabled = true
 invocation_logs = true
