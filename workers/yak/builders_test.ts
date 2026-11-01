@@ -14,7 +14,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
 import { weigh } from '@yaks/model'
-import { embeds, platform } from './testing.ts'
+import { embeds, modelPage, platform } from './testing.ts'
 import creatures from '../../apps/vale/data/creatures/01.json' with {
   type: 'json',
 }
@@ -56,9 +56,7 @@ let app = async (
     AI,
     MODEL_FETCH: () =>
       Promise.resolve(
-        new Response(
-          '$0.15 per M input tokens, $0.5 per M output tokens',
-        ),
+        modelPage(0.15, 0.5),
       ),
   } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)

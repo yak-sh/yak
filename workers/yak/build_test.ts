@@ -26,7 +26,7 @@ import {
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { ai, platform, state, type Turn } from './testing.ts'
+import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { test, until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
 
@@ -75,7 +75,7 @@ let seeded = async (script: Turn[] = []) => {
     BUILDER_MODEL_FREE: '@cf/test/free',
     MODEL_FETCH: () =>
       Promise.resolve(
-        new Response('$0.15 per M input tokens, $0.5 per M output tokens'),
+        modelPage(0.15, 0.5),
       ),
   })
   let dir = dirOf(env)

@@ -5,6 +5,7 @@ import {
 } from '@std/assert'
 import { test } from '@yaks/testing'
 import { hashEmbedder } from '@yaks/embedding'
+import { modelPage } from './testing.ts'
 import { DIM, MODEL } from './embedding.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 import { fetch } from './apps.ts'
@@ -63,7 +64,7 @@ let p = platform({
   },
   MODEL_FETCH: () =>
     Promise.resolve(
-      new Response('$0.1 per M input tokens, $0.3 per M output tokens'),
+      modelPage(0.1, 0.3),
     ),
 })
 let { dir, space, app } = await seeded(p.env, 'private')

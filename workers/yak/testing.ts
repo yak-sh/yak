@@ -305,6 +305,11 @@ export let embeds = <A extends AiBinding>(ai: A): A => ({
       : ai.run(model, input, options),
 })
 
+export let modelPage = (input: number, output: number, context = 100_000) =>
+  new Response(
+    `Context Window ${context} tokens\n$${input} per M input tokens, $${output} per M output tokens`,
+  )
+
 /**
  * Workers AI, scripted: the `AI` binding answering the turns it was given, in
  * the binding's own shape (`{response, tool_calls, usage}`), so a test drives
