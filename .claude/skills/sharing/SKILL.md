@@ -1,20 +1,52 @@
 ---
 name: sharing
 description: >
-  Use to publish/unpublish files on public.yak.sh, share a file, obtain an
-  artifact’s public/tailnet link, or explain ~/shared. yaks apps are served
+  Use whenever you put anything in ~/shared or make something for the owner
+  to look at: a mockup, report, screenshot, image or HTML page. Also to
+  publish/unpublish on public.yak.sh or explain ~/shared. yaks apps are served
   by yaks.app; this does not cover inspector or browse at tasks.yak.sh.
 ---
 
-# Sharing files — `~/shared`, tailnet-private by default, public on request
+# Sharing files: `~/shared`, a web page he opens, private unless published
+
+Jeff, verbatim:
+
+> can you edit the skill that describes `~/shared` and make it clear that i view
+> it in the webbrowser and you should be using index.html to create the page? i
+> have to go digging for everything that's shared with me because the agents
+> never give me a link and also don't seem to be aware that it's a just a http
+> file server
+
+## What he sees
+
+`~/shared` is a plain HTTP file server (Caddy), and the owner reads it in his
+web browser at `https://shared.yak.sh/`. He doesn't open files on the box. A
+directory with an `index.html` serves that page; a directory without one serves
+a bare file listing, which is where he ends up digging.
+
+So anything you share with him is a directory with an `index.html` that is the
+page he opens:
+
+- **`~/shared/<name>/index.html`** shows the thing itself: the images inline,
+  links to every HTML file beside it, a line saying what it is. Relative paths
+  work, because it's just files over HTTP.
+- **Every message about it gives the full link**,
+  `https://shared.yak.sh/<name>/`, never only a path on the box. Sending a file
+  with SendUserFile doesn't replace the link: he looks in the browser.
+- **Check the link loads** before you send it: `curl -sS -o /dev/null -w
+  '%{http_code}' https://shared.yak.sh/<name>/` gives 200, and so does each
+  image and page it links.
+
+## Private and public
 
 `~/shared` (`/home/yaks/shared`) is the fleet's file-share tree. It is served
 **two** ways:
 
 - **Private (default):** the whole tree is served read-only over the owner's
   **Tailscale tailnet** at `https://shared.yak.sh/<path>` — the owner's devices
-  only, not the public internet. (The old
-  `https://claude.ibis-micro.ts.net/<path>` still works as a legacy alias.)
+  only, not the public internet. Always write this host: the legacy
+  `claude.ibis-micro.ts.net` alias resolves to a non-serving LAN address from
+  the fleet box, so a link on it can't be checked where it's written.
 - **Public (opt-in, per file):** a file is on the open internet at
   `https://public.yak.sh/<path>` **iff its sticky bit is set**. Nothing is
   public until you mark it.
