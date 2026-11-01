@@ -165,6 +165,7 @@
     "./packages/file",
     "./packages/git",
     "./packages/code",
+    "./packages/code-mode",
     "./packages/mirror",
     "./packages/alias",
     "./packages/memory",

@@ -1,0 +1,19 @@
+{
+  "name": "@yaks/code-mode",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./source": "./source.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Typed tool objects from a scoped registry, bounded short script execution and recorded nested calls through an isolated evaluator.",
+  "imports": {
+    "sucrase": "npm:sucrase@^3.35.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "testing.ts"
+    ]
+  }
+}

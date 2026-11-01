@@ -45,6 +45,8 @@ export type Inbound = {
 }
 
 export type Env = {
+  LOADER?: import('./code-runtime.ts').Loader
+  CODE_MODE?: import('@yaks/code-mode').Evaluate
   // Platform defects and triggered Store traces, through independent intake.
   ERRORS?: { send(rows: import('@yaks/graph').Bundle[]): Promise<void> }
   ENVIRONMENT?: string

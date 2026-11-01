@@ -64,7 +64,16 @@ import { copyOf, signedDirectory } from './directory-copy.ts'
 // existing connectors. All three addresses share one resource and OAuth flow.
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
-import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
+import {
+  type Exchange,
+  listing,
+  mcp,
+  type Options,
+  roster,
+  rosterVersion,
+} from '@yaks/mcp'
+import { registry, runner } from '@yaks/tools'
+import { tool as codeMode } from '@yaks/code-mode'
 import { translated } from '@yaks/mcp/tools'
 import {
   named,
@@ -361,13 +370,39 @@ let instrumentOf = async (
 // It returns the handler and the tool list it is about to serve (T-34277): the
 // tool names, and the version naming them, which `initialize` records for this
 // session and every later call is compared against.
+let coded = <T extends Options>(opts: T, ctx: Ctx) => {
+  let catalog = registry([{ name: 'yaks', tools: listing(opts) }])
+  let run = runner(opts.calls ?? opts.graph, {
+    tools: catalog,
+    host: opts.graph,
+    report: opts.report,
+  })
+  let code = codeMode(
+    catalog,
+    run,
+    ctx.env.CODE_MODE ?? (() => {
+      throw refuse('unavailable', 'code mode is unavailable on this kernel')
+    }),
+    ctx.env.CLOCK,
+  )
+  catalog.replace('code', [code])
+  return { ...opts, registry: catalog, runner: run }
+}
+
 let needsReach = (
   rpc: Rpc,
 ) => (rpc.method == 'initialize' ||
   reads({ method: rpc.method }, 'resources') ||
   reads({ method: rpc.method }, 'prompts') ||
   rpc.method == 'tools/call' &&
-    ['graph_apply', 'graph_query', 'graph_show', 'graph_schema', 'search']
+    [
+      'graph_apply',
+      'graph_query',
+      'graph_show',
+      'graph_schema',
+      'search',
+      'code_mode',
+    ]
       .includes(String(rpc.params?.name)))
 
 let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
@@ -457,6 +492,7 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     extend: (server: McpServer, exchange?: Exchange) =>
       c.time('extend', () => extend(ctx, stood)(server, exchange)),
   }
+  let shared = coded(opts, ctx)
   // What this connector lists right now, and the version naming that list.
   // `about` returns both (tools.ts), so a client that suspects its list is old
   // has one call that settles it without reconnecting.
@@ -467,7 +503,7 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // and components, and the tools that carry them are the same tools they
   // always were. So the version moves when we deploy, and a client is told its
   // list is stale only when it is.
-  let names = roster(opts)
+  let names = roster(shared)
   let listed = { version: rosterVersion(names, markOf(ctx.env)), names }
   ctx.roster = listed
   return {
@@ -476,7 +512,7 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     // tool list — the same news `notifications/tools/list_changed` sends to a
     // client holding a stream, put where a client without one will read it.
     handle: mcp({
-      ...opts,
+      ...shared,
       roster: () => rostered(ctx.env, ctx.person, { session, ...listed }),
     }),
   }
@@ -579,7 +615,7 @@ let stranger = async (
   // changes only when we deploy. `about` signed out returns the same text for
   // everyone, which is what makes it safe to answer without knowing who is
   // asking.
-  return mcp(opts)(
+  return mcp(coded(opts, ctx))(
     new Request(req.url, {
       method: 'POST',
       headers: req.headers,

@@ -35,6 +35,9 @@ compatibility_flags = [
   "enable_nodejs_process_v2",
 ]
 
+[[worker_loaders]]
+binding = "LOADER"
+
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports
 # and groups the eager modules together; Wrangler uploads that prepared graph.
 # Function names and composed source maps survive both build passes.
@@ -561,6 +564,9 @@ fflate = "./node_modules/fflate/esm/browser.js"
 name = "yak-staging"
 workers_dev = false
 preview_urls = false
+
+[[env.staging.worker_loaders]]
+binding = "LOADER"
 
 [env.staging.triggers]
 crons = []

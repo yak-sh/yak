@@ -1,0 +1,259 @@
+/** Short, isolated code executions over a caller's scoped registry. The host
+ * supplies an evaluator; this package owns discovery, limits and the bridge. */
+import { argsOf, type Bundle, mint, type Tool, who } from '@yaks/graph'
+import { type Clock, system } from '@yaks/fp'
+import {
+  answerOf,
+  CallError,
+  faulted,
+  type Registry,
+  type Runner,
+  structured,
+  texts,
+  toolEid,
+} from '@yaks/tools'
+import { catalog, declarations } from './types.ts'
+import { source } from './source.ts'
+export { catalog, declarations, type Entry } from './types.ts'
+
+export let LIMITS = {
+  wallMs: 30_000,
+  cpuMs: 100,
+  memoryMiB: 128,
+  calls: 16,
+  outputBytes: 262_144,
+  scriptBytes: 65_536,
+}
+export type Result = {
+  content: { type: 'text'; text: string }[]
+  structuredContent?: Record<string, unknown>
+  isError?: boolean
+}
+export type Receipt = {
+  id: string
+  path: [string, string]
+  result?: Result
+  error?: string
+  pending?: boolean
+}
+export type Answer = { value: unknown; calls: Receipt[]; error?: string }
+export type Evaluate = (
+  modules: Record<string, string>,
+  bridge: { call(set: string, name: string, args: string): Promise<Result> },
+  signal: AbortSignal,
+) => Promise<string>
+let bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length
+let message = (e: unknown) =>
+  (e instanceof Error ? e.message : String(e)).slice(0, 1024)
+let finished = (value: unknown, calls: Receipt[], error?: string): Answer => {
+  let out: Answer = {
+    value,
+    calls: structuredClone(calls),
+    ...(error ? { error } : {}),
+  }
+  if (bytes(out) > LIMITS.outputBytes) {
+    out.value = null
+    out.error = 'return value and tool results exceed 256 KiB output limit'
+  }
+  for (let receipt of [...out.calls].reverse()) {
+    if (bytes(out) <= LIMITS.outputBytes) break
+    delete receipt.result
+    receipt.error = 'tool result omitted to fit output limit'
+  }
+  if (bytes(out) > LIMITS.outputBytes) {
+    throw new CallError('limit', 'receipts exceed output limit')
+  }
+  return out
+}
+
+/** All nested calls use admitted registry implementations, the outer caller's
+ * stamps and the ordinary runner. Arguments cannot select an actor or session. */
+export let execute = async (
+  script: string,
+  registry: Registry,
+  run: Runner,
+  asked: Bundle,
+  evaluate: Evaluate,
+  clock: Clock = system,
+): Promise<Answer> => {
+  if (bytes(script) > LIMITS.scriptBytes) {
+    throw new CallError('limit', 'script exceeds 64 KiB')
+  }
+  let entries = catalog(registry).filter((e) => e.name != 'code_mode')
+  let allowed = new Map(entries.map((e) => [JSON.stringify(e.path), e]))
+  let calls: Receipt[] = []
+  let pending = new Set<Promise<unknown>>()
+  let controller = new AbortController()
+  let active = true
+  let used = 0
+  let call = async (
+    set: string,
+    name: string,
+    args: string,
+  ): Promise<Result> => {
+    if (!active) throw new CallError('expired', 'execution has ended')
+    if (
+      typeof set != 'string' || typeof name != 'string' ||
+      typeof args != 'string'
+    ) throw new CallError('args', 'bridge takes JSON text')
+    if (new TextEncoder().encode(args).length > LIMITS.scriptBytes) {
+      throw new CallError('limit', 'tool arguments exceed 64 KiB')
+    }
+    let input: unknown
+    try {
+      input = JSON.parse(args)
+    } catch {
+      throw new CallError('args', 'tool arguments must be JSON')
+    }
+    let tool = allowed.get(JSON.stringify([set, name]))
+    if (!tool) {
+      throw new CallError('tool', 'tool is outside this execution scope')
+    }
+    if (calls.length >= LIMITS.calls) {
+      throw new CallError('limit', 'execution allows 16 tool calls')
+    }
+    if (!input || typeof input != 'object' || Array.isArray(input)) {
+      throw new CallError('args', 'tool arguments must be an object')
+    }
+    let id = mint()
+    let receipt: Receipt = { id, path: [set, name], pending: true }
+    calls.push(receipt)
+    let work = (async () => {
+      let actor = who(asked)
+      let admitted = run.admit({
+        entity: { eid: id },
+        call: { to: toolEid(name), args: input, source: asked.entity.eid },
+        ...(actor ? { $actor: actor } : {}),
+      })
+      if (!admitted || admitted.tool.name != name) {
+        throw new CallError('tool', 'tool is no longer available')
+      }
+      await admitted.ensure()
+      let landed = await admitted.call()
+      let answer = answerOf(landed, id)
+      let failed = faulted(landed, id)
+      let result: Result = {
+        content: texts(answer).map((text) => ({ type: 'text', text })),
+        ...(!failed || !admitted.tool.outputSchema
+          ? { structuredContent: structured(admitted.tool, answer) }
+          : {}),
+        ...(failed ? { isError: true } : {}),
+      }
+      used += bytes(result)
+      if (used > LIMITS.outputBytes - 16_384) {
+        throw new CallError('limit', 'tool results exceed 256 KiB output limit')
+      }
+      receipt.result = result
+      return result
+    })()
+    pending.add(work)
+    try {
+      return await work
+    } catch (e) {
+      receipt.error = message(e)
+      throw e
+    } finally {
+      delete receipt.pending
+      pending.delete(work)
+    }
+  }
+  let cancel = () => {}
+  let timeout = new Promise<never>((_, reject) => {
+    cancel = clock.after(LIMITS.wallMs, () => {
+      active = false
+      controller.abort()
+      reject(new CallError('timeout', 'execution exceeded 30 seconds'))
+    })
+  })
+  try {
+    let module = source(script, entries, LIMITS.outputBytes)
+    let text = await Promise.race([
+      evaluate(module, { call }, controller.signal),
+      timeout,
+    ])
+    active = false
+    await Promise.race([Promise.allSettled([...pending]), timeout])
+    if (
+      typeof text != 'string' ||
+      new TextEncoder().encode(text).length > LIMITS.outputBytes
+    ) throw new CallError('limit', 'script return exceeds output limit')
+    let answer = JSON.parse(text)
+    return finished(
+      answer.value ?? null,
+      calls,
+      typeof answer.error == 'string' ? answer.error.slice(0, 1024) : undefined,
+    )
+  } catch (e) {
+    return finished(null, calls, message(e))
+  } finally {
+    active = false
+    controller.abort()
+    cancel()
+  }
+}
+
+/** One connector tool: omit script to discover generated declarations; supply
+ * a JS/TS function body to execute it with the same tool objects. */
+export let tool = (
+  registry: Registry,
+  run: Runner,
+  evaluate: Evaluate,
+  clock?: Clock,
+): Tool => ({
+  name: 'code_mode',
+  description:
+    'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No imports, network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script, 256KiB combined answer. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      script: { type: 'string' },
+      search: { type: 'string' },
+      offset: { type: 'integer', minimum: 0 },
+      limit: { type: 'integer', minimum: 1, maximum: 20 },
+    },
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      value: {},
+      calls: { type: 'array', items: { type: 'object' } },
+      error: { type: 'string' },
+      declarations: { type: 'string' },
+      tools: { type: 'array', items: { type: 'object' } },
+      limits: { type: 'object' },
+      next: { type: ['integer', 'null'] },
+    },
+  },
+  applied: true,
+  destructive: true,
+  openWorld: true,
+  run: async (asked) => {
+    let { script, search, offset = 0, limit = 20 } = argsOf(asked)
+    let matches = catalog(registry).filter((e) =>
+      e.name != 'code_mode' &&
+      (!search || registry.search(String(search)).some((t) => t.name == e.name))
+    )
+    let start = Number(offset), end = start + Number(limit)
+    let value = script === undefined
+      ? {
+        declarations: declarations(matches.slice(start, end)),
+        tools: matches.slice(start, end).map((
+          { path, description, inputSchema, outputSchema },
+        ) => ({ path, description, inputSchema, outputSchema })),
+        next: end < matches.length ? end : null,
+        limits: LIMITS,
+      }
+      : await execute(String(script), registry, run, asked, evaluate, clock)
+    if (bytes(value) > LIMITS.outputBytes) {
+      throw new CallError(
+        'limit',
+        'declarations exceed output limit; narrow search or limit',
+      )
+    }
+    return [{
+      entity: { eid: mint() },
+      output: { source: asked.entity.eid, value },
+    }]
+  },
+})

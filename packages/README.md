@@ -39,6 +39,9 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/code-mode](./code-mode)** — Typed tool objects from a scoped registry
+  and bounded short JS/TS executions through an isolated evaluator.
+
 - **[@yaks/benchmark](./benchmark)** — Named workloads, raw samples, JSON runs
   and explicit baseline ratchets, with process-configured reporters.
 

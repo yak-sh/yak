@@ -12,6 +12,7 @@ import {
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
 import { DurableObject, waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
+import { evaluator } from './code-runtime.ts'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -214,7 +215,11 @@ export class ModelHost extends WorkerEntrypoint {
 // build of this Worker failed (builds.ts).
 export default {
   fetch: (req: Request, env: Env) =>
-    entry(env, 'gateway fetch', () => handler.fetch(req, env), req),
+    entry(env, 'gateway fetch', () =>
+      handler.fetch(req, {
+        ...env,
+        ...(env.LOADER ? { CODE_MODE: evaluator(env.LOADER) } : {}),
+      }), req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(
       env,
