@@ -299,7 +299,7 @@ export let relocation = (o: {
     // sent it, rather than reaching that caller as this object's failure.
     let to = moved
     return to
-      ? retried(() => o.object(to).fetch(new Request(request.clone())), true)
+      ? retried(() => o.object(to).fetch(request.clone() as Request), true)
       : null
   }
 }
