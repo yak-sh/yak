@@ -313,7 +313,10 @@ let chosen = (
           name: '__fts_screen',
           cols: ['id'],
           q: opts.screen,
-          materialized: false,
+          // A CPU sort visits every matching posting. Share its admission
+          // set rather than re-running an indexed listing for every hit.
+          // Index-order pages keep candidate seeks for sparse paid reads.
+          materialized: sorting,
         }]
         : [],
       ...arms.flatMap(({ name }, i) =>

@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { render } from '@yaks/sql'
+import { as, col, cross, eq, lit, op, render, select, table } from '@yaks/sql'
 import { hits } from './search.ts'
 import { seed, selected, text } from '../../workers/yak/fts_cost_fixture.ts'
 
@@ -83,3 +83,30 @@ test(
     }
   },
 )
+
+// A filtered listing drives from its indexed component, then looks up each
+// entity. Correlating that selection scans its candidates again for every hit.
+let listing = render(select({
+  cols: [as(col('id', 'e'), 'id')],
+  from: table('selected', 's'),
+  joins: [cross(table('entity', 'e'))],
+  where: eq(col('id', 'e'), op('+', col('entity', 's'), lit(0))),
+}))
+let sorted = hits(text, 'dragon', { screen: listing, limit: 2, plan: 'sort' })!
+let sortedText = render(sorted)
+let sortedRanked = db.prepare(sortedText.sql)
+test('a CPU sorted search evaluates a filtered listing once across its hits', () => {
+  try {
+    let rows = sortedRanked.all(...sortedText.params)
+    assertEquals(rows.map((r) => r.entity), ['near', 'far'])
+    assert(String(rows[0].snippet).includes('\x01dragon\x02'))
+    let steps = counters.symbols.sqlite3_stmt_status(
+      sortedRanked.unsafeHandle,
+      4,
+      0,
+    )
+    assert(steps < history * 200, `${steps} VM instructions`)
+  } finally {
+    sortedRanked.finalize()
+  }
+})
