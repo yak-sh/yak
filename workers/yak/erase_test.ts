@@ -28,6 +28,7 @@ import {
   ticketed,
 } from './erase.ts'
 import { daysLeft, directory, due, GRACE, overdue } from './directory.ts'
+import { PLATFORM_OBJECT } from './door.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -370,7 +371,7 @@ let idlePreview = await (async () => {
   let ns = p.env.STORE
   p.env.STORE = {
     idFromName: (name) => {
-      assertEquals(name, 'yak/platform')
+      assertEquals(name, PLATFORM_OBJECT)
       return ns.idFromName(name)
     },
     get: (id) => ns.get(id),
