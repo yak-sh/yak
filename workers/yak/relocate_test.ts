@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { evicted } from '@yaks/durable-object'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
@@ -36,6 +37,23 @@ let seeded = async (p: { env: Env }) => {
 test('the directory moves to a new object and every request follows it', async () => {
   await using p = platform('relocate')
   let { dir } = await seeded(p)
+  let left = p.states.get(PLATFORM_OBJECT)!
+  let durable = false
+  let synced: unknown
+  Object.assign(left.storage, {
+    sync: async () => {
+      synced = await left.storage.get('relocating')
+      await Promise.resolve()
+      durable = true
+    },
+  })
+  Object.assign(left, {
+    abort: (reason: string) => {
+      equal(durable, true)
+      equal(synced, { to: 'yak/ord', tries: 0 })
+      equal(evicted(new Error(reason)), true)
+    },
+  })
   let r = await leave(p.env, 'yak/ord')
   let report = await r.json()
   if (r.status != 200) throw new Error(JSON.stringify(report).slice(0, 1500))
@@ -55,7 +73,6 @@ test('the directory moves to a new object and every request follows it', async (
   )
   equal(there.status, 200)
   equal(JSON.stringify(await there.json()).includes('second'), true)
-  let left = p.states.get(PLATFORM_OBJECT)!
   equal(await left.storage.get('dormant'), true)
   equal(await left.storage.get('relocated'), 'yak/ord')
   equal(slot(p.states.get('yak/ord')!, 'name'), PLATFORM_STORE)
