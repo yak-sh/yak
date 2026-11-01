@@ -821,10 +821,12 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// These are the examples promised on the home page, in its order: something
-// for a side business, then for home. Gallery approval and listing recency do
-// not decide which apps the platform features.
+// These are the examples promised on the home page, in its order: tools for
+// work, then something for a side business, then for home. Gallery approval
+// and listing recency do not decide which apps the platform features.
 export let DEMOS = [
+  'practice',
+  'handouts',
   'menu',
   'recipes',
   'garden',
