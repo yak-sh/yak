@@ -35,10 +35,10 @@ export let pagePrice = (body: string): Price | undefined => {
   let input = body.match(/\$([\d.]+) per (?:M|million) input tokens/i)
   let output = body.match(/\$([\d.]+) per (?:M|million) output tokens/i)
   let cache = body.match(/\$([\d.]+) per (?:M|million) cached input tokens/i)
-  return input && output
+  return input && (output || /Text Embeddings/i.test(body))
     ? {
       input: Number(input[1]),
-      output: Number(output[1]),
+      output: output ? Number(output[1]) : 0,
       ...cache ? { cached: Number(cache[1]) } : {},
     }
     : undefined

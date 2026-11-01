@@ -1,7 +1,27 @@
 // Model metadata follows the published page, without any inference call.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { modelInfo } from './list.ts'
+import { modelInfo, pagePrice } from './list.ts'
+
+test('embedding pages price input tokens without charging for the vector output', async () => {
+  let info = await modelInfo(
+    '@cf/qwen/qwen3-embedding-0.6b',
+    () =>
+      Promise.resolve(
+        new Response(`Text Embeddings • Qwen
+| Unit Pricing | $0.0118 per M input tokens |`),
+      ),
+  )
+  assertEquals(info.price, { input: 0.0118, output: 0 })
+  assertEquals(
+    pagePrice('Text Generation • Vendor\n$0.01 per M input tokens'),
+    undefined,
+  )
+  assertEquals(
+    pagePrice('Text Embeddings • Vendor\nNo published price'),
+    undefined,
+  )
+})
 
 for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
   test(`${name} metadata falls back to its full provider path`, async () => {
