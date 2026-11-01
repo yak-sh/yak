@@ -9,6 +9,7 @@ import {
   desk,
   type DeskPage,
   lost,
+  paused,
   spaceBinned,
   spaceIndex,
 } from './pages.ts'
@@ -62,6 +63,34 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
       'https://yaks.fyi/pages.css',
       'https://yaks.fyi/',
     ])
+  }
+})
+
+test('pages: a paused space tells a browser when, and an app the same in plain text', async () => {
+  let at = {
+    until: new Date('2026-12-01T00:00:00Z'),
+    signIn: 'https://yaks.fyi/login?return=x',
+  }
+  let ask = (accept: string, method = 'GET') =>
+    paused(
+      at,
+      new Request('https://ada.yaks.fyi/', { method, headers: { accept } }),
+      env,
+    )
+  let page = ask('text/html')
+  assertEquals(page.status, 429)
+  assertEquals(page.headers.get('cache-control'), 'no-store')
+  assertEquals(page.headers.get('retry-after'), 'Tue, 01 Dec 2026 00:00:00 GMT')
+  await staged(page, ['Paused until 1 December 2026', at.signIn])
+  let text = ask('*/*')
+  assertEquals(text.status, 429)
+  assertStringIncludes(text.headers.get('content-type')!, 'text/plain')
+  assertStringIncludes(
+    await text.text(),
+    'paused for visitors until 1 December 2026',
+  )
+  for (let accept of ['text/html', '*/*']) {
+    assertEquals(await ask(accept, 'HEAD').text(), '')
   }
 })
 

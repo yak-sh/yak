@@ -352,46 +352,22 @@ export let trended = (
   return cost ? { spend: kept(trend?.spend as ByDay, cost, now) } : {}
 }
 
-/** Whether a space's hourly reading is past its monthly request units. It
- * stays past until the UTC month turns or the plan changes; an absent
- * reading is not. */
-export let overVisits = (space: Space, now = new Date()) => {
-  let limit = ceilings(space.tier, space.slug)
-  return !!limit && requestUnits(spent(space, now)) >= limit.requests
-}
+// How many times its monthly request units a space is served before serving
+// pauses for visitors (D-131886): past the allowance its owner is told and
+// visitors keep coming, which is how the next person finds yaks.app; twice it
+// is a ceiling against abuse, not a plan's limit.
+let PAUSED = 2
 
-/** The serving quota uses the existing hourly reading, not a per-hit write.
- * Management stays outside this gate, so an owner can still change plans or
- * work on their apps. */
-export let refusedVisit = (
-  space: Space,
-  req: Request,
-  env: Host = {},
-  now = new Date(),
-): Response | null => {
-  if (!overVisits(space, now)) return null
-  let limit = ceilings(space.tier, space.slug)!
-  let reset = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
-  )
-  return new Response(
-    req.method == 'HEAD'
-      ? null
-      : `This space has reached its ${
-        count(limit.requests)
-      } monthly request units. ` +
-        `Its apps will be available again on the 1st (UTC). ` +
-        `Its own people, signed in, can still use them and manage the ` +
-        `space. Plan settings: ${planSettings(space.slug, env)}`,
-    {
-      status: 429,
-      headers: {
-        'content-type': 'text/plain; charset=utf-8',
-        'cache-control': 'no-store',
-        'retry-after': reset.toUTCString(),
-      },
-    },
-  )
+/** When serving resumes for a space's visitors, if the hourly reading has
+ * them paused: twice its monthly request units, until the UTC month turns or
+ * the plan changes. Under that, or with no reading, it is null. Management
+ * stays outside this, so an owner can still change plans or work on their
+ * apps. */
+export let pausedUntil = (space: Space, now = new Date()) => {
+  let limit = ceilings(space.tier, space.slug)
+  return limit && requestUnits(spent(space, now)) >= limit.requests * PAUSED
+    ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+    : null
 }
 
 /** A ceiling a space answers to: what it has used and what it is allowed. */
@@ -495,11 +471,11 @@ export let standingOf = (
 }
 
 // Each ceiling as a person reads it: what it is called, and how much of it.
-// Request units say what happens at the limit because nobody is refused them
-// to their face: visitors are (apps.ts).
+// Request units say what happens past the limit, since what happens there
+// reaches visitors, not whoever reads this line (apps.ts).
 let NAME: Record<Ceiling, string> = {
   apps: 'apps',
-  requests: 'request units (its apps pause for visitors at the limit)',
+  requests: 'request units (visitors are still served up to twice the limit)',
   bytes: 'app data',
   files: 'photos and files',
   emails: 'emails',

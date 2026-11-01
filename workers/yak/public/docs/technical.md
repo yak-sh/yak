@@ -131,7 +131,8 @@ allows 50,000 estimated request units a month on Free and 1,000,000 on the Plus
 plan. An ordinary request uses one unit; incoming WebSocket messages use one
 unit per 20 messages, as Cloudflare bills them. The hourly meter keeps a
 conservative estimate when Cloudflare's analytics has not classified an
-invocation. Past the allowance, an app answers visitors 429 until the 1st, while
+invocation. Past the allowance, visitors are still served and your assistant is
+told; only past twice it does an app answer visitors 429 until the 1st, while
 the space's own people, signed in, are still served. Operations that exceed a
 limit are refused, but existing apps and data are not deleted. Your assistant
 receives a notice when usage reaches 80% of a limit.

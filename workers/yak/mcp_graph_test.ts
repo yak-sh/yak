@@ -896,7 +896,7 @@ test('the free tier: a warning once, then the refusals', async () => {
 
     await meta(k).apply([{
       entity: { eid: eids[brim36] },
-      meter: { ...row, requests: FREE.requests },
+      meter: { ...row, requests: FREE.requests * 2 },
     }])
     await agent.tool('space_new', {
       slug: quotaCache,
@@ -904,7 +904,7 @@ test('the free tier: a warning once, then the refusals', async () => {
     })
     let over = await k.at(`${brim36}.yaks.app`, '/one/')
     assertEquals(over.status, 429)
-    assertStringIncludes(await over.text(), '50,000 monthly request units')
+    assertStringIncludes(await over.text(), 'paused for visitors until')
     let manage = await k.at('yaks.app', `/manage?space=${brim36}`, {
       headers: { cookie },
     })

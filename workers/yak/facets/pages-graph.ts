@@ -19,7 +19,7 @@
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, SPACE_PARTS, spaceOf } from '../directory.ts'
-import { overVisits } from '../meter.ts'
+import { pausedUntil } from '../meter.ts'
 import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
@@ -114,11 +114,12 @@ export let owed = async (
       } else if (shows(b) && !lowers(b)) tags.add(appTag(b.entity.eid))
     } else if (row?.space) {
       if (sets(b.space, ['slug']) || has(b, ROUTING)) tags.add(SITE_TAG)
-      // The hourly reading is what moves a space past its quota, and a page
-      // kept for a stranger must not outlive that. Said again every hour while
-      // over, which is one purge an hour for a space nobody is served in.
+      // The hourly reading is what pauses a space for its visitors, and a
+      // page kept for a stranger must not outlive that. Said again every hour
+      // while paused, which is one purge an hour for a space nobody is served
+      // in.
       let over = sets(b.meter, ['requests']) &&
-        overVisits(spaceOf(row as Parameters<typeof spaceOf>[0]))
+        !!pausedUntil(spaceOf(row as Parameters<typeof spaceOf>[0]))
       if (shows(b) || over) tags.add(spaceTag(b.entity.eid))
     }
   }

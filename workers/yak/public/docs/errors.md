@@ -104,7 +104,7 @@ Those two lines are all a page needs. `e.message` is the endpoint's `message`
 whole, with no status in front of it, or its `code` when there was no message.
 When the body was not a JSON error at all, `e.message` is the status followed by
 the first 120 characters of the body's text with any HTML tags removed. Two
-answers are like that: the plain-text 429 of a space that has used its monthly
+answers are like that: the plain-text 429 of a space past twice its monthly
 request units, given to anyone who is not one of its signed-in people, and the
 platform's HTML error page, a 500, when yaks.app itself fails. `e.status` is the
 HTTP status in every case.

@@ -43,10 +43,10 @@ import {
   gauged,
   LETTERS,
   level,
+  pausedUntil,
   PLUS,
   pooled,
   refusedSpend,
-  refusedVisit,
   requestUnits,
   size,
   type Spend,
@@ -343,70 +343,38 @@ test('a space is near a ceiling at 80% and over it at 100%', () => {
   )
 })
 
-test('monthly serving quota: both tiers, comped spaces, and UTC reset', async () => {
-  let req = new Request('https://jeff.yaks.app/')
+test('visitors are served past the allowance and pause only at twice it', () => {
+  let until = (meter: Partial<Meter>, tier: Tier | null = null, now = NOW) =>
+    pausedUntil(space(meter, tier), now)?.toISOString() ?? null
+  let october = '2026-10-01T00:00:00.000Z'
   for (let tier of [null, 'free', 'plus'] as const) {
     let limit = tier == 'plus' ? PLUS.requests : FREE.requests
-    for (let requests of [0, limit * 0.8, limit - 1]) {
-      assertEquals(refusedVisit(space({ requests }, tier), req, {}, NOW), null)
+    for (let requests of [0, limit, limit * 2 - 1]) {
+      assertEquals(until({ requests }, tier), null)
     }
-    for (let requests of [limit, limit + 1]) {
+    for (let requests of [limit * 2, limit * 3]) {
+      assertEquals(until({ requests }, tier), october)
       let full = space({ requests }, tier)
-      let out = refusedVisit(full, req, {}, NOW)!
-      assertEquals(out.status, 429)
-      assertEquals(out.headers.get('cache-control'), 'no-store')
-      assertEquals(
-        out.headers.get('retry-after'),
-        'Thu, 01 Oct 2026 00:00:00 GMT',
-      )
-      assertStringIncludes(await out.text(), count(limit))
       for (let slug of ['yourname', 'yak']) {
-        assertEquals(refusedVisit({ ...full, slug }, req, {}, NOW), null)
+        assertEquals(pausedUntil({ ...full, slug }, NOW), null)
       }
-      assertEquals(refusedVisit({ ...full, meter: null }, req, {}, NOW), null)
-      assertEquals(
-        refusedVisit(full, req, {}, new Date('2026-10-01T00:00:00Z')),
-        null,
-      )
+      assertEquals(pausedUntil({ ...full, meter: null }, NOW), null)
+      assertEquals(until({ requests }, tier, new Date('2026-10-01')), null)
     }
   }
-  let full = space({ requests: FREE.requests })
+  // Twenty WebSocket messages are one unit.
+  assertEquals(until({ ws_messages: FREE.requests * 40 - 20 }), null)
+  assertEquals(until({ ws_messages: FREE.requests * 40 }), october)
+  // A plan change raises the ceiling at once.
+  assertEquals(until({ requests: FREE.requests * 2 }, 'plus'), null)
   assertEquals(
-    refusedVisit(space({ ws_messages: 999_980 }), req, {}, NOW),
-    null,
+    until(
+      { month: '2026-12', requests: FREE.requests * 2 },
+      null,
+      new Date('2026-12-31T23:59:59Z'),
+    ),
+    '2027-01-01T00:00:00.000Z',
   )
-  assertEquals(
-    refusedVisit(space({ ws_messages: 1_000_000 }), req, {}, NOW)?.status,
-    429,
-  )
-  assertEquals(
-    refusedVisit(
-      space({
-        requests: 1_000_000,
-        ws_hibernated: 1_000_000,
-        ws_messages: 1_000_000,
-      }),
-      req,
-      {},
-      NOW,
-    )?.status,
-    429,
-  )
-  assertEquals(refusedVisit({ ...full, tier: 'plus' }, req, {}, NOW), null)
-  let head = refusedVisit(full, new Request(req, { method: 'HEAD' }), {}, NOW)!
-  assertEquals(head.status, 429)
-  assertEquals(await head.text(), '')
-  let december = refusedVisit(
-    space({ month: '2026-12', requests: FREE.requests }),
-    req,
-    {},
-    new Date('2026-12-31T23:59:59Z'),
-  )!
-  assertEquals(
-    december.headers.get('retry-after'),
-    'Fri, 01 Jan 2027 00:00:00 GMT',
-  )
-  await december.body?.cancel()
 })
 
 test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
@@ -935,13 +903,6 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
       assert(!paid.includes('Compare paid plans'))
     }
   }
-  const response = refusedVisit(
-    space({ requests: FREE.requests }),
-    new Request('https://jeff.yaks.app/'),
-    {},
-    NOW,
-  )!
-  assertEquals(response.status, 429)
 })
 
 test('free sending and build allowances pool independently of model budgets', async () => {

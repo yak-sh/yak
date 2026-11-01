@@ -157,6 +157,50 @@ export let binned = (
     }">Restore it from your apps</a></p>`,
   )
 
+// A space's visitors past twice its monthly request units (meter.ts
+// `pausedUntil`, D-131886): a calm page that says when its apps open again,
+// and to its own people that signing in is all it takes. A browser gets the
+// page; an app's own fetch gets the same words as plain text, which is what
+// client.js reads a non-JSON answer as. 429, never cached, with when to try
+// again.
+export let paused = (
+  at: { until: Date; signIn: string },
+  req: Request,
+  env: Host = {},
+) => {
+  let when = day(at.until.toISOString())
+  let headers = {
+    'cache-control': 'no-store',
+    'retry-after': at.until.toUTCString(),
+  }
+  let why = `This space's apps had more visitors this month than its plan ` +
+    `allows, so they are paused for visitors until ${when} (UTC).`
+  if (!(req.headers.get('accept') ?? '').includes('text/html')) {
+    return new Response(
+      req.method == 'HEAD'
+        ? null
+        : `${why} Its own people, signed in, can still use them.`,
+      {
+        status: 429,
+        headers: { 'content-type': 'text/plain; charset=utf-8', ...headers },
+      },
+    )
+  }
+  let page = shell(
+    env,
+    `Paused until ${when}`,
+    why,
+    429,
+    `<p>If this is your space, <a href="${
+      esc(at.signIn)
+    }">sign in</a> to use it.</p>${home(env)}`,
+    headers,
+  )
+  return req.method == 'HEAD'
+    ? new Response(null, { status: 429, headers: page.headers })
+    : page
+}
+
 // A space in the trash, at any address of its own (erase.ts, T-34431).
 // Everyone else gets `nothingHere` at every one of them — a deleted space is
 // not a stranger's news — so this is its owner, told where their space went,

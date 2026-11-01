@@ -1370,7 +1370,7 @@ test('worker non-HTML and bodyless answers are not rewritten', async () => {
   }
 })
 
-test('monthly visit quota stops all app serving before dispatch or files', async () => {
+test('visitors are served past the allowance, and twice it pauses all app serving before dispatch or files', async () => {
   for (let tier of ['free', 'plus'] as const) {
     let calls = 0
     await using k = await router(() => {
@@ -1387,10 +1387,10 @@ test('monthly visit quota stops all app serving before dispatch or files', async
           meter: { month, requests },
         }],
       })
-    await meter(limit - 1)
+    await meter(limit)
     assertEquals(await (await k.at('/')).text(), 'the router')
     assertEquals(calls, 1)
-    await meter(limit)
+    await meter(limit * 2)
     for (
       let path of [
         '/',
@@ -1402,8 +1402,16 @@ test('monthly visit quota stops all app serving before dispatch or files', async
     ) {
       let res = await k.at(path)
       assertEquals(res.status, 429, path)
-      assertStringIncludes(await res.text(), 'monthly request units')
+      assertStringIncludes(await res.text(), 'paused for visitors until')
     }
+    // A browser is shown a page that says when, and how its people get in.
+    let page = await apps.fetch(
+      visit('/garden/', { headers: { accept: 'text/html' } }),
+      k.env,
+    )
+    assertEquals(page.status, 429)
+    assertStringIncludes(page.headers.get('content-type')!, 'text/html')
+    assertStringIncludes(await page.text(), 'sign in')
     // Neither a claimed internal request nor a socket upgrade skips the gate.
     for (
       let headers of [
@@ -1432,9 +1440,9 @@ test('monthly visit quota stops all app serving before dispatch or files', async
     )
     await manage.body?.cancel()
     // A prior month's count cannot keep serving blocked before the next sweep.
-    await meter(limit, '2020-01')
+    await meter(limit * 2, '2020-01')
     assertEquals(await (await k.at('/')).text(), 'the router')
-    await meter(limit)
+    await meter(limit * 2)
     await stamp(k.env, {
       entities: [{
         entity: { eid: k.space.eid },
