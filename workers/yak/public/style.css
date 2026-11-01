@@ -752,6 +752,34 @@
     padding: 1rem;
   }
 
+  /* A published app's own page (app-page.ts): its name, what it is and
+     where it was made, its picture, then its two doors, opening it first. */
+  .Listing {
+    display: grid;
+    gap: var(--gap);
+    width: min(100%, 44rem);
+  }
+
+  .Listing_Head {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  .Listing_Doors {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap);
+  }
+
+  .Listing_Doors form {
+    display: contents;
+  }
+
+  .Listing_Made {
+    margin-top: var(--gap);
+  }
+
   /* The integration directory (integrations.ts): a card a service, its head
      the service and the way to add it, then what it is, where its key goes
      and how to get one. */

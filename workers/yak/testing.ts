@@ -1064,3 +1064,49 @@ export let lasting = (
     [Symbol.asyncDispose]: close,
   }
 }
+
+/** A space on the free plan, as the directory reads one, for a test to vary. */
+export let space = (over: Partial<Space> = {}): Space => ({
+  eid: 'space-eid',
+  slug: 'jeff',
+  store: 'jeff',
+  title: 'jeff',
+  tier: 'free',
+  plan: null,
+  stripe: null,
+  fee: 0,
+  meter: null,
+  told: false,
+  trashed: null,
+  slugs: [],
+  tunnel: null,
+  ...over,
+})
+
+/** A published public app in {@link space}, for a test to vary. */
+export let app = (over: Partial<App> = {}): App => ({
+  eid: 'app-eid',
+  slug: 'recipes',
+  space: 'space-eid',
+  version: 1,
+  title: 'Recipe box',
+  access: 'public',
+  store: null,
+  slugs: ['jeff/recipes'],
+  home: false,
+  first: [],
+  meter: null,
+  published: {
+    name: 'recipes',
+    version: 1,
+    at: '2026-09-01T00:00:00.000Z',
+    about: 'Somewhere to keep recipes',
+  },
+  installed: null,
+  gallery: null,
+  screenshot: null,
+  seeded: null,
+  trashed: null,
+  theme: null,
+  ...over,
+})

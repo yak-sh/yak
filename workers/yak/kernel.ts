@@ -97,6 +97,7 @@ import * as install from './install.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
+import * as appPage from './app-page.ts'
 import { call } from './tools.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { HANDOFF } from './handoff.ts'
@@ -261,6 +262,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   if (path == install.PATH) return install.answer(req, env, dir)
+  // A published app's own page (app-page.ts): read from the offers on every
+  // visit, so an unpublished app's page is gone the moment it is.
+  if (path.startsWith(gallery.PAGE)) {
+    return appPage.answer(req, env, path, dir)
+  }
   if (path == gallery.REVIEW || path.startsWith(gallery.IMAGE)) {
     let shown = await gallery.answer(req, env, path, dir, call)
     if (shown) return shown

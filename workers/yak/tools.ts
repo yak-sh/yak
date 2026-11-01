@@ -173,6 +173,7 @@ import {
   drop as unGallery,
   letter as galleryLetter,
   owned as ownerOf,
+  pageAt,
   pictureOf,
   review as reviewCode,
   saying,
@@ -5190,6 +5191,7 @@ let OURS: Row[] = [
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
           (about ? ` — ${about}` : '') + said +
+          `\nits page, to open it or make a copy: ${pageAt(name, ctx.env)}` +
           (shown ? `\n${saying(shown, ctx.env)}` : ''),
         space,
       }

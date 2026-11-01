@@ -156,6 +156,15 @@ test('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(said, `published ${recipes44} v1`)
     assertStringIncludes(said, 'Somewhere to keep recipes')
     assertStringIncludes(said, `app_install(name: '${recipes44}')`)
+    // Its own page on yaks.app, which the answer names, opens it and offers a
+    // copy to anyone, signed in or not.
+    assertStringIncludes(said, `https://yaks.app/apps/${recipes44}`)
+    let shown = await k.at('yaks.app', `/apps/${recipes44}`)
+    assertEquals(shown.status, 200)
+    let page = await shown.text()
+    assertStringIncludes(page, 'Somewhere to keep recipes')
+    assertStringIncludes(page, 'Open the app')
+    assertStringIncludes(page, `action="/install?name=${recipes44}"`)
     let listed = (await offered()).join('\n')
     assertStringIncludes(listed, `- ${recipes44} v1`)
     assertStringIncludes(listed, 'Somewhere to keep recipes')
@@ -274,6 +283,10 @@ test('an app is published by name, and the name is one app', async () => {
       await agent.tool('app_unpublish', { space: mine, app: recipes44 }),
       'no longer offered',
     )
+    // Its page goes with the offer.
+    let gone = await k.at('yaks.app', `/apps/${recipes44}`)
+    assertEquals(gone.status, 404)
+    await gone.body?.cancel()
     let left = await offered()
     assertEquals(left.length, 1)
     assertStringIncludes(left[0], cards44)

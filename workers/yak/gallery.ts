@@ -87,6 +87,11 @@ import type { Args, Ctx, Out } from './tool.ts'
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
 export let IMAGE = `${PATH}/image/`
+// Where each published app's own page lives (app-page.ts): one address per
+// platform-wide name, listed or not.
+export let PAGE = '/apps/'
+export let pageAt = (name: string, env: Host = {}) =>
+  siteUrl(env, `${PAGE}${encodeURIComponent(name)}`)
 
 // Where a code review is asked for: the yaks.app project's own address on the
 // box (its project wears it), so the letter is filed as a priority-1 task on
@@ -183,12 +188,13 @@ let shownOf = (space: Space, app: App, env: Host): Shown => ({
   app,
 })
 
-// Every app on the gallery, newest listing first. It reads the offers
-// (directory.ts) rather than a query of its own, because a listing is a
-// published app and nothing else: unpublishing is what takes an app out of
+// Every published app as a stranger can open it. It reads the offers
+// (directory.ts) rather than a query of its own, because a page for an app is
+// a published app and nothing else: unpublishing is what takes an app out of
 // that list, and it takes it out of this one at the same moment without a
-// second rule to keep in step.
-export let listed = async (
+// second rule to keep in step. A private app opens as its copy in the demo
+// space, where there is one.
+export let shown = async (
   dir: Directory,
   env: Host = {},
 ): Promise<Shown[]> => {
@@ -198,20 +204,21 @@ export let listed = async (
       space.slug == DEMO && app.access != 'private' && app.installed?.of
     ).map((offer) => [offer.app.installed!.of, offer]),
   )
-  return offers
-    .filter(({ app }) => app.gallery?.listedAt)
-    .map(({ space, app }) => {
-      let shown = shownOf(space, app, env)
-      let demo = app.access == 'private' ? demos.get(app.eid) : null
-      return demo
-        ? {
-          ...shown,
-          at: url(demo.space, demo.app, env),
-        }
-        : shown
-    })
-    .sort((a, b) => b.since.localeCompare(a.since))
+  return offers.map(({ space, app }) => {
+    let shown = shownOf(space, app, env)
+    let demo = app.access == 'private' ? demos.get(app.eid) : null
+    return demo ? { ...shown, at: url(demo.space, demo.app, env) } : shown
+  })
 }
+
+// Every app on the gallery, newest listing first.
+export let listed = async (
+  dir: Directory,
+  env: Host = {},
+): Promise<Shown[]> =>
+  (await shown(dir, env))
+    .filter(({ app }) => app.gallery?.listedAt)
+    .sort((a, b) => b.since.localeCompare(a.since))
 
 // The line an agent runs to give somebody their own copy. It is the whole
 // point of a listing: a gallery you cannot install from is a picture of apps.

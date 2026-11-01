@@ -37,51 +37,7 @@ import {
   ticketed,
 } from './gallery.ts'
 import type { Env } from './env.ts'
-import { cards } from './testing.ts'
-
-let space = (over: Partial<Space> = {}): Space => ({
-  eid: 'space-eid',
-  slug: 'jeff',
-  store: 'jeff',
-  title: 'jeff',
-  tier: 'free',
-  plan: null,
-  stripe: null,
-  fee: 0,
-  meter: null,
-  told: false,
-  trashed: null,
-  slugs: [],
-  tunnel: null,
-  ...over,
-})
-
-let app = (over: Partial<App> = {}): App => ({
-  eid: 'app-eid',
-  slug: 'recipes',
-  space: 'space-eid',
-  version: 1,
-  title: 'Recipe box',
-  access: 'public',
-  store: null,
-  slugs: ['jeff/recipes'],
-  home: false,
-  first: [],
-  meter: null,
-  published: {
-    name: 'recipes',
-    version: 1,
-    at: '2026-09-01T00:00:00.000Z',
-    about: 'Somewhere to keep recipes',
-  },
-  installed: null,
-  gallery: null,
-  screenshot: null,
-  seeded: null,
-  trashed: null,
-  theme: null,
-  ...over,
-})
+import { app, cards, space } from './testing.ts'
 
 let asked = { askedAt: '2026-09-06T10:00:00.000Z', listedAt: '' }
 let live = { ...asked, listedAt: '2026-09-06T12:00:00.000Z' }

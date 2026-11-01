@@ -210,6 +210,12 @@ now.
   Each name belongs to one app across the whole platform.
 - `about` is the one-line description someone browsing reads. Leave it out on a
   republish and the previous one stays.
+- Every published app has a page of its own at `https://yaks.app/apps/<name>`,
+  which the answer names: its title, its `about`, the space it was made in, a
+  link to open it, and a button to make your own copy. It is the address to send
+  someone who should see the app and get one. It is kept out of search engines
+  until the app is listed on the gallery, and it is gone once the app is
+  unpublished.
 - Only the **space owner** may publish. Publishing gives the code to anyone, so
   an editor cannot do it.
 - **A later `app_deploy` does not change the offer.** The offer stays pinned to
