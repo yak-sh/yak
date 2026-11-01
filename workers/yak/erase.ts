@@ -194,8 +194,11 @@ export let doomed = async (
 // A space that is nobody's work: everyone with a way in is a test account
 // (lib/bots.ts). The letter exists so an assistant cannot delete a person's
 // work on its own; with no person in the space there is nobody to ask, so the
-// act asked for happens at once (tools.ts `space_delete`).
+// act asked for happens at once (tools.ts `space_delete`). A protected space
+// has somebody waiting on it even with only test accounts in it, a directory's
+// next reviewer, so it takes the letter, which only the fleet can read.
 export let nobodys = async (dir: Directory, d: Doomed) => {
+  if (PROTECTED.has(d.space.slug)) return false
   for (let m of d.members) {
     if (!isTestAddress(await dir.emailAt(m.person) ?? '')) return false
   }
@@ -753,7 +756,9 @@ export let collected = async (env: Env, now = new Date()) => {
     let apps = await dir.apps(space)
     await retitled(dir, [space, ...apps])
     let went = new Set<string>()
-    if (sweepable) {
+    // A trashed app's thirty days hold in a fixture too, or a reviewer reads
+    // "0 days left" for good; only the platform's own apps never go.
+    if (space.slug != META.space) {
       for (let app of overdue(apps, now.getTime())) {
         await erased(env, dir, space, app, {
           person: app.trashed!.by,
@@ -829,7 +834,7 @@ export let closing = async (
   for (let seat of held) {
     let space = spaces.find((s) => s.eid == idOf(seat.member!.space))
     if (!space) continue
-    let alone = seat.member!.role == 'owner' && !PROTECTED.has(space.slug) &&
+    let alone = seat.member!.role == 'owner' &&
       await nobodys(dir, await doomed(dir, space))
     ;(alone ? out.spaces : out.seats).push(space)
   }

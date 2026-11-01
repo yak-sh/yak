@@ -522,6 +522,36 @@ test(
   },
 )
 
+test('the sweep keeps a reviewer space and empties its trash', async () => {
+  let { env } = platform('a probe secret')
+  let { dir } = await owned(env)
+  let old = {
+    trashed: { at: new Date(Date.now() - 31 * day).toISOString(), by: ADA },
+  }
+  let space = await makes(dir, 'claude-review')
+  for (let [slug, over] of [['recipes', {}], ['garden', old]] as const) {
+    await dir.apply({
+      entities: [{
+        entity: { eid: `$${slug}` },
+        doc: { title: slug },
+        app: {
+          slug,
+          space: space.eid,
+          version: 1,
+          access: 'public',
+          store: `claude-review/${slug}.aaa111`,
+        },
+        former: { slug },
+        ...over,
+      }],
+    }, by)
+    await declared(env, space, (await dir.app(space, slug))!)
+  }
+  await collected(env, new Date(Date.now() + 400 * day))
+  assert(await dir.space('claude-review'))
+  assertEquals((await dir.apps(space)).map((a) => a.slug), ['recipes'])
+})
+
 // And the same sweep on the row above (T-34431): a space out of days goes
 // whole, taking its apps and their bytes with it, while a space still inside
 // its thirty days is a space its person can still have back.

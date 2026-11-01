@@ -855,6 +855,31 @@ test('the front page says which paths it answers first', async () => {
 // not a space at `login.yaks.app`, not an app at `/admin/`, not a letter from
 // `security@yaks.app`. Sign-in steps around one the way it steps around a
 // taken one, by number.
+test('deleting a reviewer space waits on its letter', async () => {
+  let k = await kernel()
+  try {
+    let them = await signIn(k, 'grok-review@bot.yak.sh')
+    let agent = connector(k, them.cookie)
+    await agent.tool('app_new', {
+      space: 'grok-review',
+      slug: 'notes',
+      title: 'Notes',
+    })
+    for (let forever of [false, true]) {
+      assertEquals(
+        (await agent.tool('space_delete', { space: 'grok-review', forever }))
+          .includes('is in the trash'),
+        false,
+      )
+      let kept = await k.at('grok-review.yaks.app', '/notes/api/query?q=.doc')
+      assertEquals(kept.status, 200)
+      await kept.body?.cancel()
+    }
+  } finally {
+    await k.stop()
+  }
+})
+
 test('an address that reads as the platform is refused', async () => {
   let k = await kernel()
   let app = unique('recipes')

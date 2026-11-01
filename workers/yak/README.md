@@ -514,7 +514,9 @@ leaving the box's current account as it was; `--as` names it on each command
 after. `yak admin link` prints the URL, the id that revokes it, and when it dies
 (30 days by asking for nothing, a year at most). Build the account out — an app
 or two — before handing the link over, since a reviewer is asked to walk a
-working account.
+working account. Add its name to `PROTECTED` (idle-spaces.ts) first: the sweep
+and `yak admin erase` keep what's named there however long it sits idle, and a
+`space_delete` of it asks by letter.
 
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 

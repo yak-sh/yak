@@ -77,6 +77,8 @@ test('platform and reviewer spaces survive whatever their members', () => {
       'yourname',
       'claude-review',
       'claude-review-2',
+      'grok-review',
+      'grok-review-2',
       'chata',
       'chatb',
     ]
@@ -105,6 +107,7 @@ test('an idle test account goes, and a person or fixture never does', () => {
       person('admin', 'admin@bot.yak.sh'),
       person('demo', 'yourname@bot.yak.sh'),
       person('review', 'claude-review@bot.yak.sh'),
+      person('grok', 'grok-review@bot.yak.sh'),
     ),
     ['bot', 'guest'],
   )

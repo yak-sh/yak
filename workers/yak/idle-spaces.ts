@@ -9,6 +9,8 @@ export let PROTECTED = new Set([
   'yourname',
   'claude-review',
   'claude-review-2',
+  'grok-review',
+  'grok-review-2',
   'chata',
   'chatb',
 ])
@@ -70,7 +72,8 @@ export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
 }
 
 // A test account that may go: the reviewers' fixtures keep theirs, each named
-// for the space it holds.
+// for the space it holds. A new reviewer account goes in PROTECTED before its
+// link is handed over: a directory may not look for months.
 export let expendable = (address: string) =>
   isTestAddress(address) && !PROTECTED.has(address.split('@')[0])
 
