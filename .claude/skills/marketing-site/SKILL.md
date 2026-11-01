@@ -63,6 +63,12 @@ advice below, he said, verbatim:
 > understand the product without having to dig. i assumed good design went
 > without saying, but it seems we gotta put YC's advice in a skill.
 
+And on the home page's examples, verbatim:
+
+> we should probably not show every demo app as a grid and instead use rolling
+> slides or something. it's meant to evoke "optionality" and perhaps trigger
+> ideas, not to display a menu of options.
+
 ## What YC says
 
 These are Y Combinator's words, not Jeff's, each opened from its source. They
@@ -107,6 +113,11 @@ problem, the words they'd use for it. The examples on the page should be things
 that person would ask for, named the way they'd name them. "A practice planner
 for your team" tells a coach the page is about her; "a world you can explore
 together" tells her nothing.
+
+**Examples spark ideas; they aren't a menu.** A row of example apps is there
+to show how wide the range is and to set off the visitor's own idea, not to
+offer a list to choose from. Show a few at a time, moving or rotating, rather
+than every one at once in a grid. The full list belongs in the gallery.
 
 **Say what it is first.** The hero's first sentence says what the product
 does, in the visitor's terms. Run Hale's copy-paste test and Seibel's
