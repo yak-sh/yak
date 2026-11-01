@@ -4,6 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Actor, Bundle, Comp, Storage } from '@yaks/graph'
 import { graph } from '@yaks/graph'
+import { comp } from '../graph/testing.ts'
 import { members } from './plugin.ts'
 import { club } from './testing.ts'
 import { isPromise } from '@yaks/fp'
@@ -538,7 +539,7 @@ test('one author can write through instruments with different authority', () => 
     pick: { title: 'Piranesi' },
     $actor: { by: ids.club, via },
   })
-  equal(sync(g.apply([b(browsers.owner)]))[0].created?.by, ids.club)
+  equal(comp(sync(g.apply([b(browsers.owner)]))[0], 'created').by, ids.club)
   for (let write of [g.admit, g.apply]) {
     denied(() => write([b(browsers.other)]))
   }

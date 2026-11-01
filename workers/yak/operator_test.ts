@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Item, Model, Request } from '@yaks/model'
+import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { operatorStore } from './operator-store.ts'
@@ -119,19 +120,21 @@ let tasks = await g.read('.task&*')
 let other = await ctx.dir.space('other')
 
 test('the operator edits app rows through agent tools and records its work privately', () => {
+  let posted = docs.find((b) => b.entity.eid == eid)
+  let created = comp(posted, 'created')
   assertEquals(out.status, 'settled')
   assertStringIncludes(out.text, 'notice is posted')
   assertEquals(out.cost, 0.005)
-  assertEquals(history.task?.task?.status, 'done')
+  assertEquals(comp(history.task, 'task').status, 'done')
   assertEquals(history.comments?.length, 1)
   assertEquals(history.entries?.filter((b) => b.call).length, 4)
   let tools = asked[0].tools.map((t) => t.name)
   assertEquals(tools.includes('graph_query'), true)
-  assertEquals(docs.find((b) => b.entity.eid == eid)?.doc, {
+  assertEquals(posted?.doc, {
     title: 'Special meeting Thursday at 7: road millage',
   })
-  assertEquals(docs.find((b) => b.entity.eid == eid)?.created?.by, f.space.eid)
-  assertEquals(docs.find((b) => b.entity.eid == eid)?.created?.via, out.session)
+  assertEquals(created.by, f.space.eid)
+  assertEquals(created.via, out.session)
   assertEquals(tasks.length, 0)
   assertEquals(other, null)
 })
@@ -153,7 +156,7 @@ let continued = await runOperator(f.store, f.env, f.held, f.space, {
 let clarified = await readOperator(f.store, out.task)
 test('a follow-up reopens completed work and a clarification leaves it open', () => {
   assertEquals(continued.status, 'settled')
-  assertEquals(clarified.task?.task?.status, 'open')
+  assertEquals(comp(clarified.task, 'task').status, 'open')
   assertStringIncludes(continued.text, 'Which date')
 })
 
