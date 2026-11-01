@@ -1,31 +1,38 @@
 // An object's move to a new address. Cloudflare keeps a Durable Object where it
 // was first reached and never moves it (T-134094), so moving the directory
-// nearer is a new object holding the old one's file.
+// nearer is a new object holding the old one's file. It takes two steps.
 //
-// The object leaving stops first: it goes dormant, which ends its alarm and
+// `prepare` copies every table across while this object goes on serving, as long
+// as that takes, and builds the far end's indexes. Nothing ever boots there.
+//
+// `to` is the short part. This object goes dormant, which ends its alarm and
 // sockets, and restarts, which ends what it had in flight. The next incarnation
-// copies its file across before it boots anything, while every request that
-// reaches it waits. A copy that arrives, table by table the same at both ends,
-// leaves the mark `relocated`, and from then on this object hands every request
-// to the new one, a write's idempotency key still on it, so no caller on any
-// deploy can reach the rows left behind. A copy that fails puts the object back
-// to serving, and the far end stays unaddressed until the next try wipes it.
+// boots nothing: it compares the two files a chunk at a time and sends what
+// moved since the copy, while every request that reaches it waits. Once both
+// ends are alike it leaves the mark `relocated` and from then on hands every
+// request to the new object, a write's idempotency key still on it, so no
+// caller on any deploy can reach the rows left behind. A step that fails puts
+// the object back to serving, and the far end stays unaddressed.
 //
-// A wake that finds a copy under way (an instance died in it) starts it again,
-// at most TRIES times, so a copy that kills its instance can't hold the
-// platform down.
+// A wake that finds a hold under way (an instance died in it) starts it again,
+// at most TRIES times, so a hold that kills its instance can't keep the platform
+// down.
 import {
   arrived,
   type Cell,
-  type Copied,
+  type Chunk,
+  chunks,
   copied,
   driver,
   type DurableStorage,
   ending,
+  overwritten,
   page,
   type Plan,
   plan,
   raised,
+  reread,
+  stale,
 } from '@yaks/durable-object'
 import { col, eq, select, table, val } from '@yaks/sql'
 import { PLATFORM_STORE } from './door.ts'
@@ -34,6 +41,7 @@ export let LEAVE = '/relocate'
 export let ARRIVE = '/relocate/arrive'
 export let WHERE = '/relocate/where'
 let TRIES = 2
+let ROUNDS = 3
 
 /** The object storage a move needs beyond its SQL. */
 export type Relocating = DurableStorage & {
@@ -47,8 +55,10 @@ type Leaving = { to: string; tries: number }
 type Told =
   | { op: 'begin'; plan: Plan }
   | { op: 'rows'; table: Plan['tables'][number]; rows: Cell[][] }
-  | { op: 'end'; plan: Plan; rehearsing?: boolean }
-  | { op: 'erase' }
+  | { op: 'end'; plan: Plan }
+  | { op: 'stale'; plan: Plan; chunks: Chunk[] }
+  | { op: 'replace'; plan: Plan; chunk: Chunk; rows: Cell[][] }
+  | { op: 'seal' }
 
 let SOON = 1000
 
@@ -67,12 +77,8 @@ let serving = (sql: ReturnType<typeof driver>) => {
 }
 
 let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
-  if (told.op == 'erase') {
-    await storage.deleteAll()
-    return Response.json({ ok: true })
-  }
+  let sql = driver(storage)
   if (told.op == 'begin') {
-    let sql = driver(storage)
     if (serving(sql) && !await storage.get('arriving')) {
       return Response.json({ error: 'this object serves already' }, {
         status: 409,
@@ -83,16 +89,25 @@ let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
     copied(driver(storage), told.plan)
     return Response.json({ ok: true })
   }
-  let sql = driver(storage)
-  if (told.op == 'rows') {
-    arrived(sql, told.table, told.rows)
-    return Response.json({ ok: true })
+  if (!await storage.get('arriving')) {
+    return Response.json({ error: 'nothing is arriving here' }, { status: 409 })
   }
-  let tallies = ending(sql, told.plan)
-  if (told.rehearsing) return Response.json(tallies)
-  await storage.put('arriving', false)
-  await storage.setAlarm(Date.now() + SOON)
-  return Response.json(tallies)
+  switch (told.op) {
+    case 'rows':
+      arrived(sql, told.table, told.rows)
+      return Response.json({ ok: true })
+    case 'end':
+      return Response.json(ending(sql, told.plan))
+    case 'stale':
+      return Response.json(stale(sql, told.plan, told.chunks))
+    case 'replace':
+      overwritten(sql, told.plan, told.chunk, told.rows)
+      return Response.json({ ok: true })
+    case 'seal':
+      await storage.put('arriving', false)
+      await storage.setAlarm(Date.now() + SOON)
+      return Response.json({ ok: true })
+  }
 }
 
 // Where this object stands: its own egress names the colo it runs in.
@@ -101,15 +116,6 @@ let standing = async () => {
     .json() as { colo?: string; city?: string }
   return Response.json({ object: trace.colo, city: trace.city })
 }
-
-let unlike = (
-  made: Plan,
-  here: Record<string, Copied>,
-  there: Record<string, Copied>,
-) =>
-  made.tables.filter((t) =>
-    JSON.stringify(here[t.name]) != JSON.stringify(there[t.name])
-  ).map((t) => t.name)
 
 /** Each request an object is sent, answered by the move when it is the move's,
  * or handed to where the object now stands. Null is an object serving as ever. */
@@ -151,53 +157,62 @@ export let relocation = (o: {
     return r
   }
 
-  // The whole copy into a throwaway object while this one goes on serving, so
-  // tables that moved during it read unlike, and nothing there ever boots. It
-  // tries every statement the runtime might refuse, and says how long the hold
-  // will be.
-  let rehearse = async (to: string): Promise<Response> => {
+  // Every table across while this object serves.
+  let prepare = async (to: string): Promise<Response> => {
     let start = Date.now()
     let sql = driver(o.storage())
     let made = plan(sql)
     await send(to, { op: 'begin', plan: made })
-    let here: Record<string, Copied> = {}
-    for (let t of made.tables) here[t.name] = await sent(sql, to, t)
-    let there = await (await send(to, {
-      op: 'end',
-      plan: made,
-      rehearsing: true,
-    })).json()
-    let took = Date.now() - start
-    await send(to, { op: 'erase' })
-    return Response.json({
-      tables: made.tables.length,
-      fts: made.fts.length,
-      sequences: made.sequences.length,
-      rows: Object.values(here).reduce((n, c) => n + c.rows, 0),
-      unlike: unlike(made, here, there),
-      took,
-    })
-  }
-
-  let copy = async (to: string): Promise<Response> => {
-    let storage = o.storage()
-    let sql = driver(storage)
-    let made = plan(sql)
-    await send(to, { op: 'begin', plan: made })
-    let here: Record<string, Copied> = {}
-    for (let t of made.tables) here[t.name] = await sent(sql, to, t)
-    let there = await (await send(to, { op: 'end', plan: made })).json()
-    let differ = unlike(made, here, there)
-    if (differ.length) throw new Error(`unlike at both ends: ${differ}`)
-    await storage.put('relocated', to)
-    await storage.put('relocating', false)
-    moved = to
+    let rows = 0
+    for (let t of made.tables) rows += (await sent(sql, to, t)).rows
+    await send(to, { op: 'end', plan: made })
     return Response.json({
       to,
       tables: made.tables.length,
-      rows: Object.values(here).reduce((n, c) => n + c.rows, 0),
-      here,
+      rows,
+      took: Date.now() - start,
     })
+  }
+
+  // What moved since `prepare`, across until both ends are alike. A row sent
+  // again can fire the far end's triggers, so each round looks again.
+  let hold = async (to: string): Promise<Response> => {
+    let start = Date.now()
+    let storage = o.storage()
+    let sql = driver(storage)
+    let made = plan(sql)
+    let source = chunks(sql, made)
+    let resent = 0
+    for (let round = 0; round < ROUNDS; round++) {
+      let differ = await (await send(to, {
+        op: 'stale',
+        plan: made,
+        chunks: source,
+      })).json() as Chunk[]
+      if (!differ.length) {
+        await send(to, { op: 'seal' })
+        await storage.put('relocated', to)
+        await storage.put('relocating', false)
+        moved = to
+        return Response.json({
+          to,
+          tables: made.tables.length,
+          rows: source.reduce((n, c) => n + c.held.rows, 0),
+          resent,
+          took: Date.now() - start,
+        })
+      }
+      for (let chunk of differ) {
+        await send(to, {
+          op: 'replace',
+          plan: made,
+          chunk,
+          rows: reread(sql, made, chunk),
+        })
+        resent++
+      }
+    }
+    throw new Error(`the two ends still differ after ${ROUNDS} rounds`)
   }
 
   let begin = (leaving: Leaving) =>
@@ -208,7 +223,7 @@ export let relocation = (o: {
           ...leaving,
           tries: leaving.tries + 1,
         })
-        return await copy(leaving.to)
+        return await hold(leaving.to)
       } catch (e) {
         o.report(e)
         await storage.put('relocating', false)
@@ -249,9 +264,9 @@ export let relocation = (o: {
     await look()
     if (kernel && path == LEAVE && request.method == 'POST') {
       let asked = new URL(request.url).searchParams
-      let rehearsal = asked.get('rehearse')
-      if (rehearsal) {
-        return await rehearse(rehearsal).catch((e) => {
+      let preparing = asked.get('prepare')
+      if (preparing) {
+        return await prepare(preparing).catch((e) => {
           o.report(e)
           return Response.json({ error: String(e) }, { status: 500 })
         })

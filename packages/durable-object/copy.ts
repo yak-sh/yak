@@ -5,12 +5,25 @@
 //
 // The rows go first and the triggers after, so a copied row fires nothing, and
 // foreign keys stay off while they arrive, since a table may reference one
-// that comes later. A full-text index is made anew from its content table, so
-// its own shadow tables never travel. The planner's statistics live in tables an object may not
-// write, so the far end analyzes what it now holds. Both ends tally what they
-// hold in the same order (`tallied`), which is how a copy knows it arrived.
+// that comes later. The rows travel while the source still serves, so a second
+// look (`chunks`, `stale`, `overwritten`) compares what each end holds a chunk
+// at a time and sends again only what changed. A full-text index is made anew
+// from its content table, so its shadow tables never travel. The planner's
+// statistics live in tables an object may not write, so the far end analyzes
+// what it now holds.
 
-import { as, col, type Driver, eq, gt, select, table, val } from '@yaks/sql'
+import {
+  and,
+  as,
+  col,
+  type Driver,
+  eq,
+  gt,
+  le,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import { reserved } from './sql.ts'
 
 /** A value on its way between objects: a blob travels as base64. */
@@ -146,6 +159,92 @@ export let page = (
     last: rows.length ? rows[rows.length - 1][0] as number : null,
     held: { rows: n, digest },
   }
+}
+
+/** One run of a table's rows, its digest and where it ends. */
+export type Chunk = {
+  table: string
+  after: number
+  /** the last rowid in the run; null runs past every rowid the far end holds */
+  last: number | null
+  held: Copied
+}
+
+let ranged = (
+  driver: Driver,
+  t: Plan['tables'][number],
+  after: number,
+  last: number | null,
+  limit?: number,
+) =>
+  driver.query(select({
+    cols: [as(col(ROWID), ROWID), ...t.cols.map((c) => col(c))],
+    from: table(t.name),
+    where: last == null
+      ? gt(col(ROWID), val(after))
+      : and(gt(col(ROWID), val(after)), le(col(ROWID), val(last))),
+    order: [col(ROWID)],
+    ...limit ? { limit: val(limit) } : {},
+  })).map((r) => [r[ROWID] as number, ...t.cols.map((c) => cell(r[c]))])
+
+let digestOf = (rows: Cell[][]): Copied => {
+  let held = raised()
+  for (let row of rows) {
+    held = { rows: held.rows + 1, digest: mixed(held.digest, row) }
+  }
+  return held
+}
+
+/** Every table as runs of `size` rows with their digests. Each table's last run
+ * stands for everything past the rows it has, so rows the far end holds that
+ * this end no longer does read as a difference too. */
+export let chunks = (driver: Driver, p: Plan, size = 500): Chunk[] =>
+  p.tables.flatMap((t) => {
+    let found: Chunk[] = [], after = 0
+    while (true) {
+      let rows = ranged(driver, t, after, null, size)
+      if (rows.length < size) {
+        found.push({ table: t.name, after, last: null, held: digestOf(rows) })
+        return found
+      }
+      let last = rows[rows.length - 1][0] as number
+      found.push({ table: t.name, after, last, held: digestOf(rows) })
+      after = last
+    }
+  })
+
+/** Those of a source's chunks that this end holds differently. */
+export let stale = (driver: Driver, p: Plan, source: Chunk[]): Chunk[] => {
+  let tables = new Map(p.tables.map((t) => [t.name, t]))
+  return source.filter((c) => {
+    let held = digestOf(ranged(driver, tables.get(c.table)!, c.after, c.last))
+    return held.rows != c.held.rows || held.digest != c.held.digest
+  })
+}
+
+/** A source's rows for a chunk. */
+export let reread = (driver: Driver, p: Plan, c: Chunk): Cell[][] =>
+  ranged(driver, p.tables.find((t) => t.name == c.table)!, c.after, c.last)
+
+/** A chunk's rows put in place of what this end holds there. */
+export let overwritten = (
+  driver: Driver,
+  p: Plan,
+  c: Chunk,
+  rows: Cell[][],
+): void => {
+  let t = p.tables.find((t) => t.name == c.table)!
+  driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
+  txOf(driver, () => {
+    driver.query({
+      t: 'delete',
+      from: t.name,
+      where: c.last == null
+        ? gt(col(ROWID), val(c.after))
+        : and(gt(col(ROWID), val(c.after)), le(col(ROWID), val(c.last))),
+    })
+  })
+  arrived(driver, t, rows)
 }
 
 /** What a whole table holds, read as `page` reads it. */

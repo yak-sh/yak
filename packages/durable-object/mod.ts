@@ -59,13 +59,18 @@ export {
 export {
   arrived,
   type Cell,
+  type Chunk,
+  chunks,
   type Copied,
   copied,
   ending,
+  overwritten,
   page,
   type Plan,
   plan,
   raised,
+  reread,
+  stale,
   tallied,
 } from './copy.ts'
 export { storage, type Store } from './store.ts'

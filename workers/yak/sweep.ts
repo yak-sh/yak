@@ -97,9 +97,9 @@ let account = async (
 // The directory's move to a new object (relocate.ts): `?where=<name>&colo=ORD`
 // reaches the object of that name from a Worker in that colo, which is what
 // places an object that has never been reached, and says where it stands.
-// `?rehearse=<name>` copies it to a throwaway object while it serves.
-// `?to=<name>` copies the directory there and answers both ends' tallies, and
-// `?back=1` returns it, for a new object that can't serve.
+// `?prepare=<name>` copies the directory there while it serves, `?to=<name>`
+// finishes the copy in a short hold and hands every request on, and `?back=1`
+// returns them, for a new object that can't serve.
 let relocating = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   let where = url.searchParams.get('where')
@@ -115,9 +115,9 @@ let relocating = async (req: Request, env: Env): Promise<Response> => {
     })
   }
   let asked = [...url.searchParams].filter(([k]) =>
-    k == 'to' || k == 'rehearse' || k == 'back'
+    k == 'to' || k == 'prepare' || k == 'back'
   )
-  if (!asked.length) return json(400, 'arguments', 'name where, to or rehearse')
+  if (!asked.length) return json(400, 'arguments', 'name where, prepare or to')
   return await storeOf(env.STORE, PLATFORM_STORE)(
     `${LEAVE}?${new URLSearchParams(asked)}`,
     { method: 'POST' },

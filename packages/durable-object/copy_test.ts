@@ -1,6 +1,17 @@
 import { equal, test } from '@yaks/testing'
 import { col, eq, op, select, table, val } from '@yaks/sql'
-import { arrived, copied, ending, page, plan, raised } from './copy.ts'
+import {
+  arrived,
+  chunks,
+  copied,
+  ending,
+  overwritten,
+  page,
+  plan,
+  raised,
+  reread,
+  stale,
+} from './copy.ts'
 import { driver } from './sql.ts'
 import { durable } from './testing.ts'
 
@@ -110,4 +121,25 @@ test('a copy leaves its triggers, counters and full-text index working', () => {
     })).length,
     1,
   )
+})
+
+test('a second look sends only what changed, deletions included', () => {
+  let from = source()
+  let { to, p } = copyOf(from)
+  equal(stale(to, p, chunks(from, p)), [])
+  from.query({
+    t: 'update',
+    table: 'parent',
+    set: { v: val('changed') },
+    where: eq(col('id'), val(3)),
+  })
+  from.query({ t: 'delete', from: 'text_src' })
+  let differ = stale(to, p, chunks(from, p))
+  equal(differ.map((c) => c.table).sort(), ['parent', 'text_src'])
+  for (let c of differ) overwritten(to, p, c, reread(from, p, c))
+  // Sending a row again fired the far end's trigger, and the next look finds it.
+  let fired = stale(to, p, chunks(from, p))
+  equal(fired.map((c) => c.table), ['child'])
+  for (let c of fired) overwritten(to, p, c, reread(from, p, c))
+  equal(stale(to, p, chunks(from, p)), [])
 })
