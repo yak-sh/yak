@@ -3805,7 +3805,10 @@ export class Store {
     object: (name) => this.#bind.STORE!.get(this.#bind.STORE!.idFromName(name)),
     leave: async () => {
       await this.#sleep()
-      this.#ctx.abort?.('relocating')
+      // Made durable first: a restart drops what is still being written. The
+      // words are ones a caller's door sends again (@yaks/durable-object `evicted`).
+      await this.#ctx.storage.sync?.()
+      this.#ctx.abort?.('Durable Object reset because the directory is moving')
     },
     resume: () => {
       this.#dormant = null
