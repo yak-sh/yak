@@ -543,6 +543,7 @@ fflate = "./node_modules/fflate/esm/browser.js"
 "marked" = "./node_modules/marked/lib/marked.esm.js"
 "preact" = "./node_modules/preact/dist/preact.module.js"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
+"@preact/signals" = "./node_modules/@preact/signals/dist/signals.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"
 "zod" = "./node_modules/zod/index.js"
 # Both MCP packages use Zod 4. Share one copy while older tool declarations

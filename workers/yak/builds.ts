@@ -262,7 +262,11 @@ export let logsOf = async (env: Env, uuid?: string) => {
       if (cursor && seen.has(cursor)) return 'build logs repeated a page'
       if (cursor) seen.add(cursor)
     } while (cursor)
-    return failure(lines)
+    let commit = lines.map((line) =>
+      line.match(/^Build commit: ([a-f0-9]{40})$/)?.[1]
+    )
+      .find(Boolean)
+    return { ...failure(lines), commit }
   } catch (error) {
     caught(error, { request: 'read build logs', build: uuid })
     return signal.aborted ? 'build logs timed out' : 'build logs request failed'
@@ -277,6 +281,19 @@ export let diagnosed = async (
   b: Broke,
 ): Promise<Broke & { cause: string }> => {
   let detail = await logsOf(env, b.uuid)
+  let commit = b.commit ??
+    (typeof detail == 'string' ? undefined : detail.commit)
+  if (commit && !b.commit) {
+    b = {
+      ...b,
+      commit,
+      request: `BUILD ${b.tags.worker} ${commit.slice(0, 8)}`,
+      tags: { ...b.tags, commit },
+      error: new BuildFailed(
+        b.error.message.replace('at unknown', `at ${commit.slice(0, 8)}`),
+      ),
+    }
+  }
   let summary = typeof detail == 'string'
     ? `Details unavailable: ${detail}`
     : `Step: ${detail.step}; error: ${detail.reason}; ${deployed(detail.step)}`

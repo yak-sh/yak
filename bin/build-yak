@@ -55,6 +55,7 @@ fi
 deno --version
 
 cd "$root"
+echo "Build commit: $(git rev-parse HEAD)"
 
 case "${1:-}" in
   install|deploy)

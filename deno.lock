@@ -52,7 +52,8 @@
     "npm:@napi-rs/canvas@0.1.80": "0.1.80",
     "npm:@noble/hashes@2.4.0": "2.4.0",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
-    "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
+    "npm:@preact/signals@2.9.4": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0",
+    "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0",
     "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
     "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2": "1.1.2",
     "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2": "1.1.2",
@@ -823,7 +824,7 @@
     "@preact/signals-core@1.14.4": {
       "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA=="
     },
-    "@preact/signals@2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7": {
+    "@preact/signals@2.9.4_preact@10.29.7__preact-render-to-string@6.7.0": {
       "integrity": "sha512-JzAZXcRkmCNf9wVuxNI7UWseu3++Mm0dZ6UFyjFby44CyKIl7Y06oOsW3KA5Nx0L8tpE87OY5pLe0uQ0xcWKrg==",
       "dependencies": [
         "@preact/signals-core",
@@ -3233,6 +3234,7 @@
             "npm:@modelcontextprotocol/core@2.2.0",
             "npm:@modelcontextprotocol/server@2.2.0",
             "npm:@noble/hashes@2.4.0",
+            "npm:@preact/signals@2.9.4",
             "npm:@resvg/resvg-wasm@2.6.2",
             "npm:croner@10.0.1",
             "npm:es-module-lexer@2.3.2",

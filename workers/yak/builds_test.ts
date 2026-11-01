@@ -136,6 +136,31 @@ test('builds: the error names its statement, place and code', () => {
   )
 })
 
+test('builds: a hook failure gets its checked-out commit from the log', async () => {
+  let commit = 'a6aa52d9' + '1'.repeat(32)
+  let hook = event('failed')
+  hook.payload!.buildTriggerMetadata!.commitHash = ''
+  let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
+  let was = globalThis.fetch
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({
+      success: true,
+      result: {
+        lines: [[1, `Build commit: ${commit}`], [2, 'error: missing module']],
+      },
+    }))
+  try {
+    let report = await diagnosed(env, broke(hook)!)
+    assertEquals(report.commit, commit)
+    assertEquals(report.tags.commit, commit)
+    assertEquals(report.request, 'BUILD yak a6aa52d9')
+    assertStringIncludes(report.error.message, 'at a6aa52d9')
+    assertStringIncludes(report.error.message, 'error: missing module')
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
 test('builds: a build that fails at staging says production deployed', async () => {
   let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
   let was = globalThis.fetch
