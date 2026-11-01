@@ -1,13 +1,15 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { preparedDriver, snapshot } from '../sqlite/testing.ts'
+import { preparedDriver, snapshot, textual } from '../sqlite/testing.ts'
 import {
   as,
   col,
   derivedOf,
   eq,
+  fn,
   insert,
+  render,
   select,
   sub,
   table,
@@ -101,3 +103,44 @@ test('a shared registry leaves auxiliary sources outside graph visibility', () =
   assertEquals(scopedValue(auxiliary), 'secret'))
 test('a shared registry scopes sources declared by this vocabulary', () =>
   assertEquals(scopedValue(vocab), null))
+
+// Several probes of the same protected relation must fit the engine's statement
+// allowance without exposing a row its component permission hides.
+let wide = textual({ sqlLength: 100_000 }, snapshot(vocab, { derived }))
+let exec = (stmt: Parameters<typeof render>[0]) => {
+  let { sql, params } = render(stmt)
+  return wide.run(sql, params)
+}
+let prose = 'visible'.repeat(600)
+exec(insert('entity', { id: 1, eid: 'one' }))
+exec(insert('public', { entity: 1 }))
+exec(insert('private', { entity: 1, text: prose }))
+let repeated = {
+  'public.value': {
+    ...derived['public.value'],
+    expr: (owner: ReturnType<typeof col>) =>
+      fn(
+        'coalesce',
+        ...Array.from(
+          { length: 30 },
+          () => derived['public.value'].expr(owner),
+        ),
+      ),
+  },
+}
+let guardedValue = (text: string) => {
+  let registry = visibleDerived(vocab, {
+    derived: repeated,
+    visibility: { components: { private: `.private.text="${text}"` } },
+  })
+  return exec(select({
+    cols: [as(registry['public.value'].expr(col('entity', 'public')), 'value')],
+    from: table('public'),
+  }))[0].value
+}
+guardedValue(prose)
+guardedValue(prose + 'hidden')
+test('repeated derived probes share their permission screen within SQL limits', () => {
+  assertEquals(guardedValue(prose), prose)
+  assertEquals(guardedValue(prose + 'hidden'), null)
+})

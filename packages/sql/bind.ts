@@ -3999,6 +3999,18 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let cache = byVocab.get(derived)
   let held = cache?.get(key)
   if (held) return held
+  let allowed: Cte[] = []
+  let names = new Map<string, string>()
+  let shared = (screen: Bind): string => {
+    let sql = inline(screen)
+    let name = names.get(sql)
+    if (!name) {
+      name = `__derive_allowed${names.size}`
+      names.set(sql, name)
+      allowed.push({ name, q: select({ from: from(raw(sql), '__screen') }) })
+    }
+    return name
+  }
   let source = (name: string, alias = name): Source => {
     if (!vocab.comp(name)) return table(name, alias)
     let screen = screens.has(name) ? screens.get(name) : entity
@@ -4009,10 +4021,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
           from: table(name, alias),
           where: exists(select({
             cols: [lit(1)],
-            from: from(
-              { ...screen, sql: inline(screen), params: [] },
-              '__allowed',
-            ),
+            from: table(shared(screen), '__allowed'),
             where: eq(
               col('id', '__allowed'),
               col(name == 'entity' ? 'id' : 'entity', alias),
@@ -4023,18 +4032,36 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       )
       : table(name, alias)
   }
+  // A derived expression can read the same protected relation many times.
+  // Name each permission screen once instead of repeating it at every probe.
+  let expression = (expr: Cond): Cond => {
+    allowed = []
+    names = new Map()
+    let scoped = sources(expr, source)
+    return allowed.length
+      ? sub(select({ with: allowed, cols: [scoped] }))
+      : scoped
+  }
+  let selection = (query: Select): Select => {
+    allowed = []
+    names = new Map()
+    let scoped = sources(query, source)
+    return allowed.length
+      ? { ...scoped, with: [...allowed, ...scoped.with ?? []] }
+      : scoped
+  }
   let scope = { masked: [...screens.keys()] }
   let made = Object.fromEntries(
     Object.entries(derived).map(([path, prop]) => [
       path,
       {
         ...prop,
-        expr: (owner: Cond) => sources(prop.expr(owner, scope), source),
+        expr: (owner: Cond) => expression(prop.expr(owner, scope)),
         ...prop.test
           ? {
             test: (owner: Cond, values: Cond[]) => {
               let test = prop.test!(owner, values, scope)
-              return test && sources(test, source)
+              return test && expression(test)
             },
           }
           : {},
@@ -4042,7 +4069,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
           ? {
             select: (values: Cond[]) => {
               let set = prop.select!(values, scope)
-              return set && sources(set, source)
+              return set && selection(set)
             },
           }
           : {},
