@@ -7,6 +7,7 @@ import { caught } from './defects.ts'
 export type Loader = {
   load(code: {
     compatibilityDate: string
+    compatibilityFlags: string[]
     mainModule: string
     modules: Record<string, string>
     env: Record<string, never>
@@ -28,6 +29,7 @@ export let evaluator =
       signal.throwIfAborted()
       let worker = loader.load({
         compatibilityDate: '2026-11-01',
+        compatibilityFlags: ['no_nodejs_compat', 'no_nodejs_compat_v2'],
         mainModule: 'script.js',
         modules,
         env: {},
