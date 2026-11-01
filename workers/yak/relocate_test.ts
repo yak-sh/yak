@@ -73,3 +73,35 @@ test('a copy that cannot land leaves the directory serving, and it can try again
   equal((await leave(p.env, 'yak/ord')).status, 200)
   equal((await dir.space('after'))?.slug, 'after')
 })
+
+test('a rehearsal copies everything and changes nothing here or there', async () => {
+  await using p = platform('relocate rehearsal')
+  let { dir, space } = await seeded(p)
+  let r = await storeOf(p.env.STORE, PLATFORM_STORE)(
+    `${LEAVE}?rehearse=yak/try`,
+    { method: 'POST' },
+    KERNEL,
+  )
+  let said = await r.json()
+  equal(r.status, 200, JSON.stringify(said))
+  equal(said.unlike, [])
+  equal(said.rows > 0, true)
+  equal(said.fts > 0, true)
+  equal((await dir.space('moving'))?.eid, space.eid)
+  equal(await p.states.get(PLATFORM_STORE)!.storage.get('relocated'), undefined)
+  equal(await p.states.get('yak/try')!.storage.getAlarm(), null)
+})
+
+test('the way back returns requests to the old object', async () => {
+  await using p = platform('relocate back')
+  let { dir } = await seeded(p)
+  equal((await leave(p.env, 'yak/ord')).status, 200)
+  let r = await storeOf(p.env.STORE, PLATFORM_STORE)(
+    `${LEAVE}?back=1`,
+    { method: 'POST' },
+    KERNEL,
+  )
+  equal(r.status, 200)
+  equal((await dir.own('home', 'home')).slug, 'home')
+  equal(await p.states.get(PLATFORM_STORE)!.storage.get('dormant'), false)
+})

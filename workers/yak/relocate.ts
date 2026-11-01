@@ -47,7 +47,8 @@ type Leaving = { to: string; tries: number }
 type Told =
   | { op: 'begin'; plan: Plan }
   | { op: 'rows'; table: Plan['tables'][number]; rows: Cell[][] }
-  | { op: 'end'; plan: Plan }
+  | { op: 'end'; plan: Plan; rehearsing?: boolean }
+  | { op: 'erase' }
 
 let SOON = 1000
 
@@ -66,6 +67,10 @@ let serving = (sql: ReturnType<typeof driver>) => {
 }
 
 let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
+  if (told.op == 'erase') {
+    await storage.deleteAll()
+    return Response.json({ ok: true })
+  }
   if (told.op == 'begin') {
     let sql = driver(storage)
     if (serving(sql) && !await storage.get('arriving')) {
@@ -84,6 +89,7 @@ let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
     return Response.json({ ok: true })
   }
   let tallies = ending(sql, told.plan)
+  if (told.rehearsing) return Response.json(tallies)
   await storage.put('arriving', false)
   await storage.setAlarm(Date.now() + SOON)
   return Response.json(tallies)
@@ -95,6 +101,15 @@ let standing = async () => {
     .json() as { colo?: string; city?: string }
   return Response.json({ object: trace.colo, city: trace.city })
 }
+
+let unlike = (
+  made: Plan,
+  here: Record<string, Copied>,
+  there: Record<string, Copied>,
+) =>
+  made.tables.filter((t) =>
+    JSON.stringify(here[t.name]) != JSON.stringify(there[t.name])
+  ).map((t) => t.name)
 
 /** Each request an object is sent, answered by the move when it is the move's,
  * or handed to where the object now stands. Null is an object serving as ever. */
@@ -109,6 +124,21 @@ export let relocation = (o: {
   let looked: Promise<void> | null = null
   let copying: Promise<Response> | null = null
 
+  let sent = async (
+    sql: ReturnType<typeof driver>,
+    to: string,
+    t: Plan['tables'][number],
+  ) => {
+    let held = raised(), after = 0
+    while (true) {
+      let next = page(sql, t, after, held)
+      held = next.held
+      if (next.last == null) return held
+      await send(to, { op: 'rows', table: t, rows: next.rows })
+      after = next.last
+    }
+  }
+
   let send = async (to: string, told: Told) => {
     let r = await o.object(to).fetch(
       new Request(`http://store${ARRIVE}`, {
@@ -121,28 +151,44 @@ export let relocation = (o: {
     return r
   }
 
+  // The whole copy into a throwaway object while this one goes on serving, so
+  // tables that moved during it read unlike, and nothing there ever boots. It
+  // tries every statement the runtime might refuse, and says how long the hold
+  // will be.
+  let rehearse = async (to: string): Promise<Response> => {
+    let start = Date.now()
+    let sql = driver(o.storage())
+    let made = plan(sql)
+    await send(to, { op: 'begin', plan: made })
+    let here: Record<string, Copied> = {}
+    for (let t of made.tables) here[t.name] = await sent(sql, to, t)
+    let there = await (await send(to, {
+      op: 'end',
+      plan: made,
+      rehearsing: true,
+    })).json()
+    let took = Date.now() - start
+    await send(to, { op: 'erase' })
+    return Response.json({
+      tables: made.tables.length,
+      fts: made.fts.length,
+      sequences: made.sequences.length,
+      rows: Object.values(here).reduce((n, c) => n + c.rows, 0),
+      unlike: unlike(made, here, there),
+      took,
+    })
+  }
+
   let copy = async (to: string): Promise<Response> => {
     let storage = o.storage()
     let sql = driver(storage)
     let made = plan(sql)
     await send(to, { op: 'begin', plan: made })
     let here: Record<string, Copied> = {}
-    for (let t of made.tables) {
-      let held = raised(), after = 0
-      while (true) {
-        let next = page(sql, t, after, held)
-        held = next.held
-        if (next.last == null) break
-        await send(to, { op: 'rows', table: t, rows: next.rows })
-        after = next.last
-      }
-      here[t.name] = held
-    }
+    for (let t of made.tables) here[t.name] = await sent(sql, to, t)
     let there = await (await send(to, { op: 'end', plan: made })).json()
-    let unlike = made.tables.filter((t) =>
-      JSON.stringify(here[t.name]) != JSON.stringify(there[t.name])
-    ).map((t) => t.name)
-    if (unlike.length) throw new Error(`unlike at both ends: ${unlike}`)
+    let differ = unlike(made, here, there)
+    if (differ.length) throw new Error(`unlike at both ends: ${differ}`)
     await storage.put('relocated', to)
     await storage.put('relocating', false)
     moved = to
@@ -178,7 +224,7 @@ export let relocation = (o: {
   let look = () =>
     looked ??= (async () => {
       let storage = o.storage()
-      moved = await storage.get<string>?.('relocated') ?? null
+      moved = await storage.get<string | false>?.('relocated') || null
       if (moved) return
       let leaving = await storage.get<Leaving | false>?.('relocating')
       if (!leaving) return
@@ -202,8 +248,27 @@ export let relocation = (o: {
     if (request.headers.get('x-store') != PLATFORM_STORE) return null
     await look()
     if (kernel && path == LEAVE && request.method == 'POST') {
+      let asked = new URL(request.url).searchParams
+      let rehearsal = asked.get('rehearse')
+      if (rehearsal) {
+        return await rehearse(rehearsal).catch((e) => {
+          o.report(e)
+          return Response.json({ error: String(e) }, { status: 500 })
+        })
+      }
+      // The way back, for a new object that can't serve: this one takes the
+      // requests again, and whatever the new one committed stays there.
+      if (asked.get('back') && moved) {
+        moved = null
+        let storage = o.storage()
+        await storage.put('relocated', false)
+        await storage.put('dormant', false)
+        await storage.setAlarm(Date.now() + SOON)
+        o.resume()
+        return Response.json({ back: true })
+      }
       if (moved) return Response.json({ to: moved })
-      let to = new URL(request.url).searchParams.get('to')
+      let to = asked.get('to')
       if (!to) return Response.json({ error: 'to' }, { status: 400 })
       if (!copying) {
         let leaving = { to, tries: 0 }
