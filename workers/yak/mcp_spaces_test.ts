@@ -524,10 +524,8 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       (await assertRejects(() => agent.tool('app_delete', at), Error)).message,
       'is already in the trash',
     )
-    // Every other door that names it says the same and the way back, and
-    // writes nothing: a file, a release, a row.
-    let binned = `${binlab49}/notes is in the trash, 30 days left — ` +
-      `app_restore(space: '${binlab49}', app: 'notes') brings it back`
+    // Ordinary doors see the freed address as missing and write nothing:
+    // a file, a release, a row. Only the trash doors resolve retained apps.
     for (
       let [name, args] of [
         ['app_files', { ...at, files: [{ path: 'b.html', content: 'b' }] }],
@@ -537,7 +535,7 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     ) {
       assertStringIncludes(
         (await assertRejects(() => agent.tool(name, args), Error)).message,
-        binned,
+        `no app notes in ${binlab49}`,
         name,
       )
     }
