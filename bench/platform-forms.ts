@@ -181,8 +181,8 @@ export const forms = async (
     const row = await connection()
     insist(
       row.connection.status == 'connected' &&
-        row.secret?.value?.startsWith('yak_secret_'),
-      'sealed connection readback',
+        row.secret?.value == '[set]',
+      'connected key readback',
     )
     return text
   }

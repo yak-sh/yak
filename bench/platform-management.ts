@@ -64,7 +64,7 @@ export let management = async (k: Kernel) => {
     connect: 'Your agents',
     people: 'waiting@bench.invalid',
     new: 'Upload your website',
-    visits: 'Stats_Chart',
+    visits: 'benchmark.invalid',
     selling: 'Payments are connected',
   }
   let r = await k.at(k.host, path('connections'), {
@@ -100,7 +100,7 @@ export let management = async (k: Kernel) => {
   }
   let ready = Object.fromEntries(VIEWS.map((v) => [v, 'true']))
   ready.settings = "!!document.querySelector('input[name=name]')"
-  ready.visits = "!!document.querySelector('.Stats_Chart')"
+  ready.visits = "!!document.querySelector('.Chart')"
   ready.billing = "!!document.querySelector('[data-door=portal]')"
   ready.trash =
     "!!document.querySelector('input[name=restore][value=discarded]')"
