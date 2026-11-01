@@ -87,7 +87,15 @@ p.env.DISPATCH = {
     fetch: (req: Request) =>
       dispatch.fetch(req, {
         KERNEL: {
-          fetch: (inner: Request) => handler.fetch(inner, p.env),
+          fetch: async (inner: Request) => {
+            await ctx.dir.apply({
+              entities: [{
+                entity: { eid: crypto.randomUUID() },
+                doc: { title: 'Concurrent edit' },
+              }],
+            })
+            return handler.fetch(inner, p.env)
+          },
         },
       }, {}),
   }),
@@ -108,7 +116,7 @@ let workerRead = await handler.fetch(
   p.env,
 )
 let workerText = await workerRead.text()
-test('a preview worker reads its isolated store through the kernel', () => {
+test('a concurrent directory edit leaves a preview worker able to read its isolated store', () => {
   equal(workerRead.status, 200)
   equal(JSON.parse(workerText).length, 1)
 })
