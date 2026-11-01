@@ -8,10 +8,32 @@ import { operatorStore } from './operator-store.ts'
 import { readOperator, runOperator } from './operator.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
+import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
+import type { ServingCopyDoor } from './directory-copy.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {
-  let { env } = platform('operator-test')
+  let saved: ServingCopyState | undefined
+  let copy = new ServingCopy({
+    persistence: {
+      read: () => saved,
+      write: (next) => void (saved = next),
+    },
+  })
+  let rpc: ServingCopyDoor = {
+    begin: (floor) => Promise.resolve(copy.begin(floor)),
+    finish: (revision) => Promise.resolve(copy.finish(revision)),
+    revision: () => Promise.resolve(copy.revision),
+    settle: (revision, committed) =>
+      Promise.resolve(copy.settle(revision, committed)),
+    put: (...args) => Promise.resolve(copy.put(...args)),
+    get: (key) => Promise.resolve().then(() => copy.get(key)),
+    valid: (revision) => Promise.resolve(copy.valid(revision)),
+    publish: (...args) => Promise.resolve(copy.publish(...args)),
+  }
+  let { env } = platform('operator-test', {
+    SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
+  })
   let dir = directoryOf(env.STORE)
   await dir.apply({
     entities: [

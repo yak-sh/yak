@@ -10,12 +10,14 @@ import { loadTools } from '@yaks/graph/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
-import { directoryOf, type Space } from './directory.ts'
+import { directory, type Space } from './directory.ts'
+import * as directoryPart from './directory.ts'
+import { copyOf, signedDirectory } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { inReach } from './declared.ts'
 import { reaching } from './agent.ts'
 import { type Args, type Ctx, refuse } from './tool.ts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 import type { Held } from './build.ts'
 import { accounted } from './meter.ts'
 import { caught } from './defects.ts'
@@ -28,7 +30,19 @@ export type Options = { model?: Model; name?: string; price?: Price }
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
-  let reopen = () => narrowed(directoryOf(env.STORE), space.slug, space.eid)
+  let reopen = () =>
+    narrowed(
+      directory(
+        signedDirectory(
+          bound(env.DIRECTORY, directoryPart.fetch, env),
+          copyOf(env),
+          env.CLOCK,
+        ),
+        true,
+      ),
+      space.slug,
+      space.eid,
+    )
   return {
     env,
     dir: reopen(),
