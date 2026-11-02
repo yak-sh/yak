@@ -337,25 +337,37 @@ export { bearing }
 // its service binding — and null for anything else: no header, a forged or
 // expired one, or one minted for a store that is not this app's. The app door
 // refuses a presented grant that failed, so it never falls back to a visitor.
+//
+// A grant names the directory revision its role was read at. The revision is
+// the whole directory's, and any write anywhere moves it — a file upload's
+// usage, another space's member — so a grant read at another revision is not
+// refused for that alone: `seat` reads the person's role now, and the grant
+// stands at that role, so a seat removed since is still revoked. Without
+// `seat`, a grant from another revision is refused.
 export let granted = async (
   req: Request,
   secret: string | undefined,
   store: string,
   policy?: number,
+  seat?: (person: string) => Promise<Role | null>,
 ): Promise<Who | null> => {
   let sealed = req.headers.get(GRANT)
   if (!sealed || !secret) return null
   let g = await opened<Grant>('visit', sealed, secret)
   if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
+  let role = g.role ?? null
   // An anonymous instrument carries no standing to revoke. Its current app
   // mode still decides access; every person/app grant must match authority.
   if (
     policy != null && (g.person != null || g.role != null) &&
     g.policy !== policy
-  ) return null
+  ) {
+    if (!seat || !g.person) return null
+    role = await seat(g.person)
+  }
   return {
     person: g.person ?? null,
-    role: g.role ?? null,
+    role,
     via: instrumentEid(
       typeof g.via == 'string' && g.via ? g.via : `visit:${sha256(sealed)}`,
     ),

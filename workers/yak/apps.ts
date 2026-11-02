@@ -3320,7 +3320,14 @@ let served = async (
     paper && (!env.SESSION_SECRET ||
       !await paged(paper.token, env.SESSION_SECRET, store))
   ) return json(401, 'not_a_reader', 'This page token does not open this app')
-  let itself = await granted(req, env.SESSION_SECRET, store, app.policy)
+  // The app acting as itself (`owning`) has no seat: its standing is its own.
+  let itself = await granted(
+    req,
+    env.SESSION_SECRET,
+    store,
+    app.policy,
+    (p) => p == app.eid ? Promise.resolve('editor') : seatOf(p),
+  )
   if (bearing(req) && !itself) {
     return json(
       401,
