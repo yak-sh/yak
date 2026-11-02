@@ -603,7 +603,6 @@ let restartFixture = async (answer: () => Response) => {
   let restarting = { ...env, STORE, CLOCK: time } as Env
   let dir = dirPart.directory(
     { fetch: (r: Request) => dirPart.fetch(r, restarting) },
-    true,
   )
   let ada = crypto.randomUUID()
   await dir.apply({
