@@ -59,7 +59,7 @@ let app = async (
         modelPage(0.15, 0.5),
       ),
   } as Partial<Env>)
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },

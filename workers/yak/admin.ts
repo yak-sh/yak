@@ -20,7 +20,7 @@
 import type { Env } from './env.ts'
 import { type Held, holding } from './held.ts'
 import {
-  appOf,
+  appAbout,
   type Directory,
   idOf,
   META,
@@ -120,7 +120,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   // (held.ts): app data and photos and files together.
   let held = new Map(c.spaces.map((r) => {
     let s = spaces.get(r.entity.eid)!
-    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(appOf))]
+    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(appAbout))]
   }))
   let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
@@ -374,7 +374,7 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     let home = byId(appSpace(r))
     let from = r.installed?.of ? d.apps.get(idOf(r.installed.of)) : undefined
     let [deploys, visits] = await Promise.all([
-      dir.deploys(appOf(r)),
+      dir.deploys(appAbout(r)),
       (statsOf(env, r.entity.eid) ?? Promise.resolve(null))
         .then((s) => s, (e) => {
           caught(e, { request: 'admin visits' })

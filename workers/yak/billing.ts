@@ -229,8 +229,7 @@ let hushed = (what: string) => {
   return ++hit.n > FILED
 }
 
-let dirOf = (env: Env) =>
-  directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 // Who is buying: the platform session cookie, and nothing else. Deliberately
 // not identity.ts's `withAuth`, which also answers an agent's OAuth bearer —

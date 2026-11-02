@@ -91,7 +91,7 @@ import { packageAt, sealed } from './cache.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
-import { copyOf, signedDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 import { customOf, reading, refresh, type Step } from './domains.ts'
 import * as drop from './drop.ts'
 import * as install from './install.ts'
@@ -261,11 +261,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return site.forward(req, env, path)
   }
   // The gallery's ticketed review stays on this uncached gateway.
-  let dir = directory(signedDirectory(
-    bound(env.DIRECTORY, dirPart.fetch, env),
-    copyOf(env),
-    env.CLOCK,
-  ))
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   if (path == install.PATH) return install.answer(req, env, dir)
   // A published app's own page (app-page.ts): read from the offers on every
   // visit, so an unpublished app's page is gone the moment it is.

@@ -38,7 +38,7 @@ import * as fileDoor from './files.ts'
 import {
   type Access,
   type App,
-  appOf,
+  appAbout,
   appStore,
   directory,
   type Role,
@@ -776,6 +776,7 @@ let wireFixture = async () => {
       env.SESSION_SECRET!,
       storeName(space, app),
       { person: ADA, role: 'owner' },
+      app.policy,
     )
     await scenario.settled()
     return { scenario, env, cookie, page, visitors, grant }
@@ -2292,7 +2293,7 @@ test('a folder sent to its slash keeps the query', () => {
 
 test('an app marked rooted keeps its pages based at the root', () => {
   let row = (more: object) =>
-    appOf({
+    appAbout({
       entity: { eid: 'a' },
       app: { slug: 'cookbook', space: 's', version: 1, access: 'public' },
       ...more,

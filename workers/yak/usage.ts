@@ -414,7 +414,7 @@ export let full = async (
   let free = ceilings(space.tier, space.slug)
   if (!free) return ''
   if (spent(space, now).bytes + extra < free.bytes * WARN) return ''
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let held = holding(space, await dir.apps(space))
   return held.bytes + extra > free.bytes
     ? atStored(space, 'bytes', held, env)

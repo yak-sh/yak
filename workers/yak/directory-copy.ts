@@ -246,7 +246,7 @@ export let gathered = (via: Fetcher): Fetcher => {
     void send(trip)
   }
   return {
-    fetch: (req) => {
+    fetch: (req: Request) => {
       let url = new URL(req.url)
       let q = url.searchParams.get('q')
       if (
@@ -267,18 +267,44 @@ export let gathered = (via: Fetcher): Fetcher => {
 /** One line of a READS answer: what `/query` would have answered it. */
 export type ReadAnswer = { status: number; epoch: string | null; body: string }
 
+export type ServingDirectoryOptions = {
+  copy?: ServingCopyDoor
+  time?: Clock
+  public?: boolean
+  used?: () => void
+}
+
+/** The transport every directory client uses. Revisions travel with direct
+ * reads too, including hosts without a serving-copy binding. */
+export let servingDirectory = (
+  via: Fetcher,
+  options: ServingDirectoryOptions = {},
+): Fetcher & { stale?: boolean } => {
+  let direct: Fetcher = {
+    fetch: (req) => {
+      if (req.method != 'GET') return via.fetch(req)
+      let headers = new Headers(req.headers)
+      headers.set(EPOCH, '1')
+      return via.fetch(new Request(req, { headers }))
+    },
+  }
+  if (!options.copy) return gathered(direct)
+  return options.public
+    ? publicDirectory(direct, options.copy, options.time, options.used)
+    : signedDirectory(direct, options.copy, options.time)
+}
+
 /** The real directory wins normally. Only a successful copy ends a stall. */
 export let publicDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
   time: Clock = system,
   used: () => void = () => {},
-): Fetcher & { stale?: boolean; versioned?: boolean } => {
+): Fetcher & { stale?: boolean } => {
   if (!copy) return via
   let reads = gathered(via)
   let late = false
-  let door: Fetcher & { stale?: boolean; versioned?: boolean } = {
-    versioned: true,
+  let door: Fetcher & { stale?: boolean } = {
     fetch: (req) => {
       if (req.method != 'GET') return via.fetch(req)
       let key = new URL(req.url).searchParams.get('q') ?? ''
@@ -368,7 +394,7 @@ export let signedDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
   time: Clock = system,
-): Fetcher & { signed?: boolean } => {
+): Fetcher => {
   if (!copy) return via
   let reads = gathered(via)
   let late = false
@@ -417,7 +443,6 @@ export let signedDirectory = (
     await (await via.fetch(new Request(req, { headers }))).body?.cancel()
   }
   return {
-    signed: true,
     fetch: (req) => {
       if (req.method !== 'GET') return via.fetch(req)
       let key = new URL(req.url).searchParams.get('q') ?? ''

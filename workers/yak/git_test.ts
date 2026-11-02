@@ -39,7 +39,7 @@ let text = new TextDecoder()
 // A space with an app in it, and the two doors this file reads through: the
 // directory, and the git object store beside it.
 let standing = async (env: Env) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {}, doc: { title: 'Ada' } },
@@ -82,7 +82,7 @@ let deploy = async (
   version: number,
   files: Record<string, string>,
 ) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let blobs = r2Objects(env.BLOBS)
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {

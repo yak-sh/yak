@@ -87,6 +87,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
   let store = doorOf((req) => object.fetch(req), 'ada/cookbook.aaa111', {
     eid: app.eid,
     access: app.access,
+    policy: app.policy,
   })
   let words = {
     $defs: {

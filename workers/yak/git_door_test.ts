@@ -24,7 +24,7 @@ let utf8 = new TextEncoder()
 // the space, which is what a credential of hers has to find to reach a private
 // app; Ben is a person of the platform with no seat here at all.
 let standing = async (env: Env, access: string, trashed = false) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {}, doc: { title: 'Ada' } },
@@ -67,7 +67,7 @@ let deploy = async (
   version: number,
   files: Record<string, string>,
 ) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {
     let bytes = utf8.encode(body)

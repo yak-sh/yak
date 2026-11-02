@@ -1,11 +1,7 @@
 // The production store requires the directory revision on every app request.
 import { equal, test } from '@yaks/testing'
 import { directory, fetch as directoryFetch } from './directory.ts'
-import {
-  copyOf,
-  type ServingCopyDoor,
-  signedDirectory,
-} from './directory-copy.ts'
+import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
 import { handler } from './kernel.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
@@ -35,10 +31,9 @@ let p = platform({
 await seeded(p.env)
 let ctx: Ctx = {
   env: p.env,
-  dir: directory(signedDirectory(
-    { fetch: (req) => directoryFetch(req, p.env) },
-    copyOf(p.env),
-  )),
+  dir: directory({ fetch: (req) => directoryFetch(req, p.env) }, {
+    copy: copyOf(p.env),
+  }),
   person: ADA,
 }
 let tool = (name: string, args: Record<string, unknown>) =>

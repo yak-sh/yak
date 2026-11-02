@@ -1090,6 +1090,7 @@ export let space = (over: Partial<Space> = {}): Space => ({
 
 /** A published public app in {@link space}, for a test to vary. */
 export let app = (over: Partial<App> = {}): App => ({
+  policy: 0,
   eid: 'app-eid',
   slug: 'recipes',
   space: 'space-eid',

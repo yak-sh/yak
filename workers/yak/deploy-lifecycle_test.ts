@@ -13,7 +13,7 @@ import { pins, sha256 } from './versions.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let fixture = async (env: Env) => {
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ctx: Ctx = { env, dir, person: ADA }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(ctx, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })

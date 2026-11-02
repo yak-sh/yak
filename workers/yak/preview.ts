@@ -12,7 +12,7 @@ import {
   storeName,
 } from './directory.ts'
 import * as directoryPart from './directory.ts'
-import { copyOf, signedDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 import { bearing, carried, granted, ran, upload } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { report } from './accessibility.ts'
@@ -377,14 +377,10 @@ let target = async (req: Request, env: Env) => {
   if (!match || !env.SESSION_SECRET) return null
   let ticket = await opened<Ticket>('preview', match[2], env.SESSION_SECRET)
   if (!ticket || ticket.exp <= Date.now()) return null
-  let dir = directory(
-    signedDirectory(
-      bound(env.DIRECTORY, directoryPart.fetch, env),
-      copyOf(env),
-      env.CLOCK,
-    ),
-    true,
-  )
+  let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   let found = await dir.target(ticket.space, ticket.person, ticket.app)
   let pair = found.space && found.app
     ? { space: found.space, app: found.app }

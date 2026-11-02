@@ -12,7 +12,7 @@ import { holding } from './held.ts'
 
 let fixture = async (reuse = false) => {
   let { env } = platform('trash-address')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ctx: Ctx = { env, dir, person: crypto.randomUUID() }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(ctx, 'app_new', { space: 'ada', slug: 'notes', title: 'Notes' })

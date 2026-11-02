@@ -747,7 +747,7 @@ let retitled = async (
 }
 
 export let collected = async (env: Env, now = new Date()) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let idle = new Set(await abandoned(env, now))
   let gone = 0
   // Every app left standing when the erasures are done, which is exactly the
@@ -902,7 +902,7 @@ export let closed = async (
 export let abandoned = async (env: Env, now = new Date(), only?: string) => {
   let rows = await meta(env).query(CENSUS) as unknown as Row[]
   let eligible = new Set(idleSpaces(rows, now.getTime()))
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let result: string[] = []
   for (let space of await dir.all()) {
     if (only && space.eid != only) continue

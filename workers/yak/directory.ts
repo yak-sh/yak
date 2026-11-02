@@ -1,5 +1,11 @@
 import type { ByDay } from '@yaks/ui/chart'
-import { EPOCH, gathered, MEND, READS } from './directory-copy.ts'
+import {
+  EPOCH,
+  MEND,
+  READS,
+  servingDirectory,
+  type ServingDirectoryOptions,
+} from './directory-copy.ts'
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
 // yak/platform, a graph on the platform's own vocabulary (vocab.ts
@@ -199,12 +205,12 @@ export type Space = {
   // a space with no tunnel, which is almost all of them.
   tunnel: Tunnel | null
 }
-export type App = {
+export type App = AppInfo & { policy: number }
+export type AppInfo = {
   /** A transient view may keep its graph within this store alone. */
   scope?: 'store'
   /** An internal mount for an isolated preview, never directory state. */
   mount?: string
-  policy?: number
   eid: string
   slug: string
   space: string
@@ -765,6 +771,11 @@ export let over = (store: Meta) => {
   let door = part(store)
   return async (req: Request): Promise<Response> => {
     let url = new URL(req.url)
+    if (req.method == 'GET' && req.headers.has(EPOCH) && store.door) {
+      return store.door(url.pathname + url.search, {}, {
+        ...req.headers.has(STATIC_QUERY) ? { [STATIC_QUERY]: '1' } : {},
+      })
+    }
     if (url.pathname == '/apply' && req.method == 'POST') {
       try {
         let sent = await req.json() as { entities?: Bundle[] }
@@ -972,8 +983,7 @@ let unsaid = (app: string): Access => {
   return 'private'
 }
 
-export let appOf = (r: Row): App => ({
-  ...(r.policy === undefined ? {} : { policy: r.policy.revision }),
+export let appAbout = (r: Row): AppInfo => ({
   eid: r.entity.eid,
   slug: r.app!.slug ?? r.former?.slug ?? '',
   space: idOf(r.app!.space),
@@ -1033,6 +1043,9 @@ export let appOf = (r: Row): App => ({
   rooted: r.rooted != null,
   publishing: publishingOf(r.publishing),
 })
+
+type ReadRow = Row & { policy: { revision: number } }
+let appOf = (r: ReadRow): App => ({ ...appAbout(r), policy: r.policy.revision })
 
 let hostOf = (r: Row): Host => ({
   eid: r.entity.eid,
@@ -1125,7 +1138,7 @@ export let restoreOf = (r: Row) => ({
 // (migrate.ts `handled`), which is what the app was already named before the
 // property existed; it fires for nobody after the directory's first request of
 // the deploy.
-export let storeName = (space: Space, app: App) =>
+export let storeName = (space: Space, app: AppInfo) =>
   app.store ?? `${space.slug}/${app.slug}`
 
 /** The dispatch script serving the app's live release: each release uploads
@@ -1174,7 +1187,7 @@ let tagged = (name: string, eid: string) =>
 // name — the meta store, the usage sweep — have no app to name and use
 // `storeOf` directly.
 let served = (space: Space, app: App, env: HostEnv) => ({
-  ...(app.policy == null ? {} : { policy: app.policy }),
+  policy: app.policy,
   eid: app.eid,
   space: space.eid,
   access: app.access,
@@ -1318,18 +1331,8 @@ export let kept = (
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
-let remote = (via: Fetcher): Part => ({
-  query: async (q, fresh) => {
-    let r = await via.fetch(
-      new Request(
-        `http://directory/query?q=${encodeURIComponent(q)}`,
-        { headers: { [STATIC_QUERY]: '1', ...fresh ? { [FRESH]: '1' } : {} } },
-      ),
-    )
-    if (!r.ok) throw await answered(r)
-    return r.text()
-  },
-  apply: async (entities, headers) => {
+let remote = (via: Fetcher) => ({
+  apply: async (entities: Bundle[], headers: Record<string, string>) => {
     let r = await via.fetch(
       new Request('http://directory/apply', {
         method: 'POST',
@@ -1348,22 +1351,26 @@ let revised = async (via: Fetcher, q: string): Promise<string> => {
   let answer = await via.fetch(
     new Request(
       `http://directory/query?q=${encodeURIComponent(q)}`,
-      { headers: { [FRESH]: '1', [STATIC_QUERY]: '1' } },
+      { headers: { [EPOCH]: '1', [FRESH]: '1', [STATIC_QUERY]: '1' } },
     ),
   )
   if (!answer.ok) throw await answered(answer)
   let epoch = answer.headers.get(EPOCH)
   let text = await answer.text()
-  if (epoch == null) return text
+  if (
+    epoch == null || !/^\d+$/.test(epoch) ||
+    !Number.isSafeInteger(Number(epoch))
+  ) {
+    throw new Error('The directory answered without a serving revision')
+  }
   let policy = { revision: Number(epoch) }
   return JSON.stringify(
     (JSON.parse(text) as Row[]).map((row) => ({ ...row, policy })),
   )
 }
 
-// `now` makes every read of this client fresh (FRESH above). App rows are
-// always fresh: the app and the homes it borrows from must select declarations
-// written by one directory commit, even when two isolates hold old caches.
+// Every read carries the directory's revision. The app and the homes it borrows
+// from select declarations written by one directory commit.
 // Address lookups select one app, routing the app and the front page;
 // roster consumers explicitly ask apps().
 //
@@ -1371,21 +1378,25 @@ let revised = async (via: Fetcher, q: string): Promise<string> => {
 // each ask who the caller is and where they sit, and within one request those
 // are one moment, so a line already asked is answered from what came back
 // until the request writes to the directory, by this client or any other door
-// (hops.ts `recall`). A versioned door's answers are held the same way, each
-// with the revision it was read at and apart from the unversioned ones: every
+// (hops.ts `recall`). Each answer holds the revision it was read at: every
 // directory read is a round trip from wherever the request landed (T-130730).
 // What is kept is the text: every caller parses rows of its own.
-export let directory = (via: Fetcher | Part, now = false) => {
-  let versioned = ('signed' in via && !!via.signed) ||
-    ('versioned' in via && !!via.versioned)
-  let door = 'fetch' in via ? remote(versioned ? via : gathered(via)) : via
-  let query = async (q: string, fresh = now): Promise<Row[]> =>
+export let directory = (
+  via: Fetcher,
+  options: ServingDirectoryOptions = {},
+) => {
+  let serving = servingDirectory(via, options)
+  let door = remote(serving)
+  let query = async (q: string): Promise<ReadRow[]> =>
     JSON.parse(
-      versioned && 'fetch' in via
-        ? await recall(META_STORE, `${EPOCH} ${q}`, () => revised(via, q), true)
-        : await recall(META_STORE, q, () => door.query(q, fresh), fresh),
+      await recall(
+        META_STORE,
+        `${EPOCH} ${q}`,
+        () => revised(serving, q),
+        true,
+      ),
     )
-  let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
+  let one = async (q: string) => (await query(q))[0]
   let write = (
     mutation: { entities: Bundle[] },
     headers: Record<string, string> = {},
@@ -1399,9 +1410,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
   // of every signed-in call (mcp.ts `door`) and each read waited on in turn is
   // a round trip under every tool; the answer for a person with no row is
   // never read, and its refusal is nobody's to report.
-  let theirs = async (person: string, line: string, fresh?: boolean) => {
+  let theirs = async (person: string, line: string) => {
     if (!person) return []
-    let asked = query(line, fresh)
+    let asked = query(line)
     if (!(await one(`.entity.eid=${person}`))) {
       asked.catch(() => {})
       return []
@@ -1411,6 +1422,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
+    get stale() {
+      return !!serving.stale
+    },
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
     apply: write,
@@ -1444,7 +1458,6 @@ export let directory = (via: Fetcher | Part, now = false) => {
         : ''
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
-        true,
       )
       let space = rows.find((row) => row.space)
       let apps = rows.filter((row) => row.app).map(appOf)
@@ -1588,7 +1601,6 @@ export let directory = (via: Fetcher | Part, now = false) => {
     app: async (space: Space, slug: string) => {
       let row = await one(
         `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
-        true,
       )
       return row ? appOf(row) : null
     },
@@ -1626,7 +1638,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let which = slug
         ? `((${at}&.app.slug=${slug})|(${at}&.home))`
         : `${at}&.home`
-      let apps = (await query(`${which}&${ABOUT}`, true)).map(appOf)
+      let apps = (await query(`${which}&${ABOUT}`)).map(appOf)
       return {
         app: apps.find((app) => app.slug == slug) ?? null,
         home: apps.find((app) => app.home && !app.trashed) ?? null,
@@ -1651,7 +1663,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     ): Promise<App[]> => {
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
-      return (await query(`.app.space=${eids.join(',')}&${ABOUT}`, true))
+      return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)
     },
     // The space that pays as this Stripe customer (billing.ts). It is how a
@@ -1684,7 +1696,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await one(`.entity.eid=${eid}`, true)
+      let row = await one(`.entity.eid=${eid}`)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
@@ -1707,7 +1719,6 @@ export let directory = (via: Fetcher | Part, now = false) => {
             ? [`(.member.space=${space}&.member.person=${person})`]
             : [],
         ].join('|'),
-        true,
       )
       let found = rows.find((r) => r.space && r.entity.eid == space)
       let named = rows.find((r) =>
@@ -1790,7 +1801,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     integrations: (words?: string): Promise<Listed[]> =>
       listing((q) => query(String(q)) as Promise<Bundle[]>, words),
     switches: async (app: App) =>
-      (await query(`.switched.app=${app.eid}`, true)).map((row) => ({
+      (await query(`.switched.app=${app.eid}`)).map((row) => ({
         ...row,
         switched: row.switched && {
           ...row.switched,
@@ -1803,7 +1814,6 @@ export let directory = (via: Fetcher | Part, now = false) => {
     written: async (app: App, draft?: string) =>
       (await query(
         `.written.app=${app.eid}${draft ? `&.written.draft=${draft}` : ''}`,
-        true,
       )).map(writtenOf),
     // The file an app published at a path, or none (public-files.ts). Its
     // eid is derived from the two, so this asks for one row by its eid.
@@ -1811,13 +1821,12 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let row = await one(
         `.entity.eid=${identityEid('public_file', [app.eid, path])}` +
           '&.public_file',
-        true,
       )
       return row?.public_file ? publicFileOf(row) : null
     },
     // Every file an app published, by path.
     publicFiles: async (app: App) =>
-      (await query(`.public_file.app=${app.eid}`, true))
+      (await query(`.public_file.app=${app.eid}`))
         .map(publicFileOf)
         .sort((a, b) => a.path.localeCompare(b.path)),
     // Every deploy of an app, newest first — the versions app_versions pages
@@ -1826,15 +1835,14 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // app; a manifest is a few hundred bytes and git derives its commit chain
     // from them (D-34942). Never cached: a deploy reads its own versions back
     // the moment it writes one.
-    deploys: async (app: App) =>
-      (await query(`.deploy.app=${app.eid}&?created`, true))
+    deploys: async (app: Pick<App, 'eid'>) =>
+      (await query(`.deploy.app=${app.eid}&?created`))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
     // One release of the app, by its version.
     deployAt: async (app: App, version: number) => {
       let row = await one(
         `.deploy.app=${app.eid}&.deploy.version=${version}&?created`,
-        true,
       )
       return row?.deploy ? deployOf(row) : null
     },
@@ -1844,13 +1852,12 @@ export let directory = (via: Fetcher | Part, now = false) => {
     released: async (app: App, source: string) =>
       !!(await one(
         `.deploy.app=${app.eid}&.deploy.source=${source}`,
-        true,
       ))?.deploy,
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.
     restores: async (app: App) =>
-      (await query(`.restored.app=${app.eid}`, true))
+      (await query(`.restored.app=${app.eid}`))
         .map(restoreOf)
         .sort((a, b) => b.at.localeCompare(a.at)),
     // Every space there is. Only the meter asks this (usage.ts): a tool
@@ -1863,13 +1870,13 @@ export let directory = (via: Fetcher | Part, now = false) => {
     census: async () => {
       let stamps = '?created&?used'
       let [people, spaces, apps, seats, deploys] = await Promise.all([
-        query(`.person&?doc&?email&?signed_in&${stamps}`, true),
+        query(`.person&?doc&?email&?signed_in&${stamps}`),
         // A row's days ride only here: every other read of a row does without.
-        query(`.space&${SPACE_ABOUT}&?trend&${stamps}`, true),
-        query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`, true),
-        query('.member', true),
+        query(`.space&${SPACE_ABOUT}&?trend&${stamps}`),
+        query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`),
+        query('.member'),
         // Only which app and when: a release's whole row is its file list.
-        query('.deploy&.fields=deploy.app,created.at', true),
+        query('.deploy&.fields=deploy.app,created.at'),
       ])
       return { people, spaces, apps, seats, deploys }
     },
@@ -1914,14 +1921,14 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // role it offers. The same guard as `member`.
     invite: async (to: string, person: string) => {
       if (!person) return null
-      let row = await one(`.invite.to=${to}&.invite.person=${person}`, true)
+      let row = await one(`.invite.to=${to}&.invite.person=${person}`)
       return row?.invite ? { eid: row.entity.eid, role: row.invite.role } : null
     },
     // One invitation by the eid its letter carries, and who sent its latest
     // letter, when one went. Fresh, because the click that accepts it is
     // often the second one on the same letter.
     invitation: async (eid: string) => {
-      let row = await one(`.entity.eid=${eid}`, true)
+      let row = await one(`.entity.eid=${eid}`)
       return row?.invite
         ? {
           eid: row.entity.eid,
@@ -1944,7 +1951,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
         ...apps.length ? [`.grant.app=${list(apps)}`] : [],
         `.invite.to=${list([...spaces, ...apps])}`,
       ]
-      return (await query(asked.join(' | '), true)).flatMap((r): Held[] => {
+      return (await query(asked.join(' | '))).flatMap((r): Held[] => {
         let { member: m, grant: g, invite: i } = r
         let at = m
           ? { held: 'seat' as const, on: m.space, who: m.person, role: m.role }
@@ -1968,7 +1975,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
     inviting: async (person: string) =>
-      (await one(`.entity.eid=${person}`, true))?.inviting ?? null,
+      (await one(`.entity.eid=${person}`))?.inviting ?? null,
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.
@@ -2076,7 +2083,6 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let mine = `.members_space.member.person=${person}`
       let rows = await query(
         `(.member.person=${person})|(.space&${mine})|(.app.space${mine}&${ABOUT})&*`,
-        true,
       )
       let spaces = new Map(
         rows.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
@@ -2102,14 +2108,13 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // that page is often opened right after the click that accepted one.
     granted: async (person: string): Promise<Granted[]> => {
       let held = new Map<string, Role>()
-      for (let r of await theirs(person, `.grant.person=${person}`, true)) {
+      for (let r of await theirs(person, `.grant.person=${person}`)) {
         if (r.grant) held.set(idOf(r.grant.app), r.grant.access)
       }
       if (!held.size) return []
       // Bare `.entity.eid=`, as in `seated`: the rows are read whole.
-      let apps =
-        (await query(`.entity.eid=${[...held.keys()].join(',')}`, true))
-          .filter((r) => r.app).map(appOf)
+      let apps = (await query(`.entity.eid=${[...held.keys()].join(',')}`))
+        .filter((r) => r.app).map(appOf)
       let ids = [...new Set(apps.map((a) => a.space))]
       let spaces = new Map(
         ids.length
@@ -2181,7 +2186,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
       // Admission cannot use a cached vacancy: sign-in writes the first seat
       // directly to meta, and another isolate's cache would not hear even a
       // directory write. A later sign-in must not mint a second owner seat.
-      let seats = await query(`.member.space=${space.eid}&.limit=2`, true)
+      let seats = await query(`.member.space=${space.eid}&.limit=2`)
       if (seats.length != 1) return !seats.length
       let seat = seats[0].member
       return !!seat && idOf(seat.person) == await self.personAt(ADMIN)
@@ -2203,7 +2208,7 @@ export let directoryOf = (ns: Namespace): Directory => {
   if (!held) {
     reached.set(
       ns,
-      held = directory(part(metaStore({ STORE: ns })), true),
+      held = directory({ fetch: (req) => fetch(req, { STORE: ns }) }),
     )
   }
   return held

@@ -56,6 +56,7 @@ let space = (over: Partial<Space> = {}): Space => ({
 })
 
 let app = (over: Partial<App> = {}): App => ({
+  policy: 0,
   eid: 'app-eid',
   slug: 'shop',
   space: 'space-eid',
@@ -296,7 +297,7 @@ let makes = async (
 }
 
 let owned = async (env: Env) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   return { dir, space: await makes(dir, 'ada') }
 }
 
@@ -377,7 +378,7 @@ let idlePreview = await (async () => {
     get: (id) => ns.get(id),
   }
   let before = await abandoned(p.env, now)
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) })
   await call({ env: p.env, dir, person }, 'app_files', {
     space: 'used',
     app: 'notes',
@@ -668,7 +669,7 @@ test('the sweep erases a test account left idle, and leaves a person', async () 
   let scenario = platform('a probe secret')
   await using _ = scenario
   let { env } = scenario
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let bot = 'a0000000-0000-4000-8000-0000000000c1'
   let human = 'a0000000-0000-4000-8000-0000000000c2'
   await dirPart.stamp(env, {

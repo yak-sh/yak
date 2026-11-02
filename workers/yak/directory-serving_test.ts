@@ -5,12 +5,7 @@ import { clock, equal, ok, test } from '@yaks/testing'
 import { edged, fetch as appFetch } from './apps.ts'
 import { directory, type Row } from './directory.ts'
 import * as dirPart from './directory.ts'
-import {
-  EPOCH,
-  publicDirectory,
-  type ServingCopyDoor,
-  STALL,
-} from './directory-copy.ts'
+import { EPOCH, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { pageAt } from './page-cache.ts'
 import { fetch as siteFetch } from './site.ts'
@@ -26,6 +21,8 @@ let copyFixture = () => {
   let door: ServingCopyDoor = {
     begin: () => Promise.resolve(copy.begin()),
     finish: (revision) => Promise.resolve(copy.finish(revision)),
+    read: (key) => Promise.resolve().then(() => copy.read(key)),
+    valid: (revision) => Promise.resolve(copy.valid(revision)),
     get: (key) => {
       try {
         return Promise.resolve(copy.get(key))
@@ -106,11 +103,10 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
       return new Promise(() => {})
     },
   }
-  let wrap = () => env.DIRECTORY = publicDirectory(via, f.door, time)
-  // Apps sees its normal DIRECTORY binding, already deadline-wrapped. No
-  // SERVING_COPY here: Apps must not install a second, real-time wrapper.
   let env = {
-    DIRECTORY: undefined,
+    DIRECTORY: via,
+    CLOCK: time,
+    SERVING_COPY: { idFromName: (name: string) => name, get: () => f.door },
     FILES: {
       fetch: (req: Request) => {
         fileReads++
@@ -122,7 +118,6 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
       },
     },
   } as unknown as Env
-  wrap()
   return {
     ...f,
     env,
@@ -131,7 +126,6 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
     fileReads: () => fileReads,
     stall: () => {
       stalled = true
-      wrap()
     },
     // Both sequential reads share one request deadline. Once space resumes,
     // run the routing timer at the same instant, without another wait.
@@ -227,9 +221,10 @@ let privatePage = await (async () => {
   let edge = watching(f.page())
   await f.deadlines()
   let pass = edge.answer()
-  // The pass is not a page. Apps.fetch, where signed-in/private access is
-  // actually decided, must still await the authoritative directory binding.
+  // The pass is not a page. With the copy fenced, Apps.fetch must wait for
+  // the directory before deciding the caller's private access.
   f.env.DIRECTORY = { fetch: () => new Promise(() => {}) }
+  await f.door.begin()
   let gateway = watching(appFetch(
     visit('/cookbook/', {
       headers: { cookie: 'yak_session=not-a-session' },
@@ -253,7 +248,7 @@ let p = platform({
   SERVING_COPY: { idFromName: (name) => name, get: () => mutationCopy.door },
 })
 let warm = await seeded(p.env)
-let mutations = directory({ fetch: (req) => dirPart.fetch(req, p.env) }, true)
+let mutations = directory({ fetch: (req) => dirPart.fetch(req, p.env) })
 await mutations.stamp({
   entities: [{
     entity: { eid: warm.app.eid },
@@ -270,11 +265,12 @@ for (
 ) {
   let f = fixture()
   let time = clock()
-  f.env.DIRECTORY = publicDirectory(
-    { fetch: (req) => dirPart.fetch(req, p.env) },
-    mutationCopy.door,
-    time,
-  )
+  f.env.DIRECTORY = { fetch: (req) => dirPart.fetch(req, p.env) }
+  f.env.SERVING_COPY = {
+    idFromName: (name) => name,
+    get: () => mutationCopy.door,
+  }
+  f.env.CLOCK = time
   let previous = await (await f.page()).text()
   await continuations()
   let old = mutationCopy.puts.slice(-1)
@@ -289,11 +285,7 @@ for (
       mutationCopy.door.put(revision, key, body)
     ),
   )
-  f.env.DIRECTORY = publicDirectory(
-    { fetch: () => new Promise(() => {}) },
-    mutationCopy.door,
-    time,
-  )
+  f.env.DIRECTORY = { fetch: () => new Promise(() => {}) }
   let read = watching(f.page())
   await continuations()
   await time.advance(STALL)
@@ -301,11 +293,7 @@ for (
   let pending = read.pending()
   // A fresh read after the write publishes the new declaration, not old rows.
   let current = (await mutations.app(warm.space, warm.app.slug))!
-  f.env.DIRECTORY = publicDirectory(
-    { fetch: (req) => dirPart.fetch(req, p.env) },
-    mutationCopy.door,
-    time,
-  )
+  f.env.DIRECTORY = { fetch: (req) => dirPart.fetch(req, p.env) }
   let recovered = await f.page()
   let body = await recovered.text()
   let status = recovered.status

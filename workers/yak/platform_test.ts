@@ -43,7 +43,7 @@ let platform = () => {
   let store = new Store(state())
   let door = doorOf((req) => Promise.resolve(store.fetch(req)), PLATFORM_STORE)
   let at = metaOf(door)
-  return { at, dir: directory({ fetch: over(at) }, true) }
+  return { at, dir: directory({ fetch: over(at) }) }
 }
 
 let SECRET = 'a probe secret'

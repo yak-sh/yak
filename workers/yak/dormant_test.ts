@@ -10,7 +10,7 @@ import type { Wire } from '@yaks/durable-object'
 
 test('trash makes a store dormant across every wake and restore keeps its data', async () => {
   await using p = platform('dormant probe')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('dormant-owner', 'dormant')
   await dir.apply({
     entities: [{
@@ -107,7 +107,7 @@ test('trash makes a store dormant across every wake and restore keeps its data',
 
 test('directory recovery delivers trash before the dormant store boots', async () => {
   await using p = platform('missed trash probe')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('missed-owner', 'missed')
   await dir.apply({
     entities: [{
@@ -143,7 +143,7 @@ test('directory recovery delivers trash before the dormant store boots', async (
 
 test('an app store wake makes zero directory calls and directory SQL statements', async () => {
   await using p = platform('wake directory probe')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('wake-owner', 'wake')
   await dir.apply({
     entities: [{

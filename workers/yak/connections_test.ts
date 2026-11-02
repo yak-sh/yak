@@ -52,7 +52,7 @@ let setup = async (vault = true) => {
     vault ? { VAULT: d1() as unknown as D1Like, VAULT_KEY: KEY } : {},
   )
   let at = meta(p.env)
-  let dir = directory({ fetch: over(at) }, true)
+  let dir = directory({ fetch: over(at) })
   let person = crypto.randomUUID()
   let as = { 'x-yak-person': person, 'x-yak-role': 'owner' }
   await at.apply([

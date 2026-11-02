@@ -1,7 +1,7 @@
 import { refuse as refusedOptions, writeOptions } from '@yaks/api'
 import { decodedPath } from './request-path.ts'
 import { BINARY } from '@yaks/vocab/wire'
-import { copyOf, publicDirectory, signedDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
 // reads the hostname and path (route.ts), resolves the space and app through
@@ -1664,14 +1664,10 @@ let named = (env: Env, who: Who, app?: App) =>
   app && itsApp(who, app)
     ? Promise.resolve({} as Record<string, string>)
     : titling(
-      directory(
-        signedDirectory(
-          bound(env.DIRECTORY, dirPart.fetch, env),
-          copyOf(env),
-          env.CLOCK,
-        ),
-        true,
-      ),
+      directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+        copy: copyOf(env),
+        time: env.CLOCK,
+      }),
       who.person,
     )
 
@@ -2404,14 +2400,10 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   let view = manageView(url.pathname)
   if (!view) return nothingHere(env)
-  let dir = directory(
-    signedDirectory(
-      bound(env.DIRECTORY, dirPart.fetch, env),
-      copyOf(env),
-      env.CLOCK,
-    ),
-    true,
-  )
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   let { person, until } = await whoIs(
     req,
     env.SESSION_SECRET,
@@ -3052,10 +3044,12 @@ let served = async (
   // memory when it is warm: a page Site passes needs it next, and so pays
   // the longer of the two rather than both.
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
-  let serving = edge
-    ? publicDirectory(direct, copyOf(env), env.CLOCK, copied)
-    : signedDirectory(direct, copyOf(env), env.CLOCK)
-  let dir = directory(serving, edge)
+  let dir = directory(direct, {
+    copy: copyOf(env),
+    time: env.CLOCK,
+    public: edge,
+    used: copied,
+  })
   // The space, the app at the address, the front page and the seat of the
   // person the cookie names, in one read of the directory: every rung below
   // asks one of them, and asking each in turn was a round trip apiece.
@@ -3281,7 +3275,7 @@ let served = async (
           at: bare,
         },
         path,
-        'stale' in serving && !!serving.stale,
+        dir.stale,
       ))
   if (open) {
     if (open.headers.get('content-type')?.startsWith('text/html')) {
@@ -3303,7 +3297,7 @@ let served = async (
   // carries its visitor's token, and an app's worker may answer each visitor
   // differently. Nor does the gateway ask Site about such an app's other
   // addresses for a while.
-  if (edge && 'stale' in serving && serving.stale && app.access != 'public') {
+  if (edge && dir.stale && app.access != 'public') {
     return passed()
   }
   if (!keepable(app)) {
@@ -3609,7 +3603,7 @@ let served = async (
   // Site's page is counted by the gateway that sends it (page-cache.ts).
   if (edge) {
     let answer = keep(reporting(page, req, at), space, app)
-    if ('stale' in serving && serving.stale) {
+    if (dir.stale) {
       answer.headers.set('x-yak-directory-copy', '1')
     }
     return answer

@@ -13,10 +13,22 @@ import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { READS } from './directory-copy.ts'
 import { tallying } from './lib/hops.ts'
-import { answered, type Meta, meta, metaOf } from './meta.ts'
+import { answered, type Meta, metaOf } from './meta.ts'
 import { doorOf, PLATFORM_STORE, STATIC_QUERY } from './door.ts'
 import { EPOCH } from './directory-copy.ts'
 import { Pending } from './writes.ts'
+
+let fixture = (store: Meta) => {
+  let fetch = dirPart.over(store)
+  return {
+    fetch: async (req: Request) => {
+      let answer = await fetch(req)
+      answer.headers.set(EPOCH, '0')
+      return answer
+    },
+  }
+}
+let rows = (body: unknown) => Response.json(body, { headers: { [EPOCH]: '0' } })
 
 test('a typed directory read keeps the local transport and its revision', async () => {
   let requests: Request[] = []
@@ -34,7 +46,7 @@ test('a typed directory read keeps the local transport and its revision', async 
     },
   }
   let via = { fetch: (req: Request) => dirPart.fetch(req, env) }
-  assertEquals(await directory(via, true).all(), [])
+  assertEquals(await directory(via).all(), [])
   let answer = await via.fetch(
     new Request('http://directory/query?q=.space', {
       headers: { [EPOCH]: '1', [STATIC_QUERY]: '1' },
@@ -63,6 +75,7 @@ let space: Space = {
 }
 
 let an: App = {
+  policy: 0,
   eid: 'a1',
   slug: 'recipes',
   space: 's1',
@@ -89,7 +102,7 @@ test('a release is served only after its deploy records it', async () => {
     fetch: (req: Request) => {
       let q = new URL(req.url).searchParams.get('q') ?? ''
       let found = q.endsWith(`.deploy.source=${source}live`)
-      return Promise.resolve(Response.json(
+      return Promise.resolve(rows(
         found
           ? [{
             entity: { eid: 'd1' },
@@ -116,12 +129,12 @@ let stub = () => {
           if (url.search.includes('space.slug')) {
             if (url.search.includes('space.slug%3Djeff')) {
               at.reads++
-              return Response.json([{
+              return rows([{
                 entity: { eid: 's1', num: 1 },
                 space: { slug: 'jeff', store: 'jeff' },
               }])
             }
-            return Response.json([
+            return rows([
               {
                 entity: { eid: 'm1', num: 1 },
                 space: { slug: 'yak', store: 'yak' },
@@ -129,7 +142,7 @@ let stub = () => {
             ])
           }
           at.reads++
-          return Response.json([{
+          return rows([{
             entity: { eid: 'a1', num: 2 },
             app: { slug: 'recipes', space: 's1', version: at.version },
           }])
@@ -139,7 +152,7 @@ let stub = () => {
   } as unknown as Env
   return {
     at,
-    dir: directory(dirPart.part(meta(env))),
+    dir: directory({ fetch: (req) => dirPart.fetch(req, env) }),
   }
 }
 
@@ -150,7 +163,7 @@ let stub = () => {
 // path alone. A hostname nobody attached answers null, which is what keeps
 // every address that exists today routing as it always has.
 let hosts = () =>
-  directory(dirPart.part({
+  directory(fixture({
     query: (q) => {
       let rows = q.includes('hostname.name=herbusiness.com')
         ? [{
@@ -223,7 +236,7 @@ test('a release reaches consumer and home through stale isolate caches', async (
       },
       apply: () => Promise.resolve([]),
     }
-    let via = dirPart.part(store)
+    let via = fixture(store)
     return { dir: directory(via), another: () => directory(via) }
   }
   let first = isolate(0)
@@ -276,7 +289,7 @@ await routingGraph.apply([
     ...(eid == 'a4' ? { trashed: { at: '2026-10-19T00:00:00Z' } } : {}),
   })),
 ], { trusted: true })
-let routingDir = directory(dirPart.part({
+let routingDir = directory(fixture({
   query: (q) => routingGraph.read(q) as Promise<dirPart.Row[]>,
   apply: () => Promise.resolve([]),
 }))
@@ -409,12 +422,14 @@ let held = () => {
             return Response.json(
               url.searchParams.getAll('q').map((q) => ({
                 status: 200,
-                epoch: null,
+                epoch: '0',
                 body: JSON.stringify(answer(`?q=${encodeURIComponent(q)}`)),
               })),
             )
           }
-          return Response.json(answer(url.search))
+          return Response.json(answer(url.search), {
+            headers: { [EPOCH]: '0' },
+          })
         },
       }),
     },
@@ -422,7 +437,7 @@ let held = () => {
   return {
     put,
     hops,
-    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true),
+    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }),
   }
 }
 
@@ -494,13 +509,13 @@ test('signing in asks the directory a bounded number of questions', async () => 
   assertEquals(m.hops.length, 2, m.hops.join('\n'))
 })
 
-test('directory caches belong to a store, not the shared isolate', async () => {
+test('directory clients read their own stores at the current revision', async () => {
   let a = stub()
   let b = stub()
   assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')
   assertEquals((await b.dir.space('jeff'))?.slug, 'jeff')
   assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')
-  assertEquals(a.at.reads, 1)
+  assertEquals(a.at.reads, 2)
   assertEquals(b.at.reads, 1)
 })
 
@@ -509,15 +524,15 @@ test('an app row that says no access mode is read as private', () => {
     entity: { eid: an.eid },
     app: { slug: 'lost', space: space.eid, version: 1 },
   }
-  assertEquals(dirPart.appOf(row).access, 'private')
+  assertEquals(dirPart.appAbout(row).access, 'private')
   let open = { ...row, app: { ...row.app, access: 'open' as const } }
-  assertEquals(dirPart.appOf(open).access, 'open')
+  assertEquals(dirPart.appAbout(open).access, 'open')
 })
 
 test('pointer history lowers expanded actor and session references', async () => {
   let dir = directory({
     fetch: () =>
-      Promise.resolve(Response.json([{
+      Promise.resolve(rows([{
         entity: { eid: 'move' },
         switched: {
           app: 'a1',
@@ -603,9 +618,7 @@ test('the directory HTTP door carries only admitted write headers to its part', 
 test("the directory door answers a refusal in the store's terms and throws a fault on", async () => {
   let seeded = () => Promise.resolve([{ entity: { eid: 'seed' } }])
   let door = (query: Meta['query'], apply: Meta['apply'] = seeded) =>
-    directory({
-      fetch: dirPart.over({ query, apply }),
-    })
+    directory(fixture({ query, apply }))
   let thrown = (p: Promise<unknown>) => p.then(() => null, (e) => e)
   let no = await answered(
     Response.json({ error: 'Unknown', message: 'no word' }, { status: 400 }),
@@ -660,13 +673,13 @@ await offersGraph.apply([
 
 test('offers reads its apps and spaces together and screens both trash marks', async () => {
   let reads = 0
-  let dir = directory({
+  let dir = directory(fixture({
     query: async (q) => {
       reads++
-      return JSON.stringify(await offersGraph.read(q))
+      return await offersGraph.read(q) as dirPart.Row[]
     },
     apply: () => Promise.resolve([]),
-  })
+  }))
   let found = await dir.offers()
   assertEquals(
     found.map((

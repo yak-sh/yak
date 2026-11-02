@@ -2,10 +2,23 @@ import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { platformVocab } from './vocab.ts'
-import { directory, part, type Row } from './directory.ts'
+import { directory, over, type Row } from './directory.ts'
+import { EPOCH } from './directory-copy.ts'
+import type { Meta } from './meta.ts'
 import { narrowed } from './grants.ts'
 import { and, eq, ge } from '@yaks/query'
 import { preparedStore } from '../../packages/sqlite/testing.ts'
+
+let fixture = (store: Meta) => {
+  let fetch = over(store)
+  return {
+    fetch: async (req: Request) => {
+      let answer = await fetch(req)
+      answer.headers.set(EPOCH, '0')
+      return answer
+    },
+  }
+}
 
 let vocab = platformVocab()
 let g = graph({ storage: ram(vocab), vocab })
@@ -45,7 +58,7 @@ let rows = [
 await g.apply(rows, { trusted: true })
 await database.apply(rows, { trusted: true })
 let asked: string[] = []
-let dir = directory(part({
+let dir = directory(fixture({
   query: async (q) => {
     asked.push(q)
     return await g.read(q) as Row[]
@@ -77,7 +90,7 @@ test('app routing returns a visitor’s app grant alongside their seat', () => {
   equal([...page.grants!], [['app-one', 'viewer']])
 })
 
-let backed = directory(part({
+let backed = directory(fixture({
   query: async (q) => await database.read(q) as Row[],
   apply: () => Promise.resolve([]),
 }))

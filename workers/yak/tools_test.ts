@@ -44,11 +44,7 @@ import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 import { running } from './agent.ts'
-import {
-  copyOf,
-  type ServingCopyDoor,
-  signedDirectory,
-} from './directory-copy.ts'
+import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
 import { ServingCopy } from './serving-copy.ts'
 
 // Every app app_list answered as data, across its spaces.
@@ -66,7 +62,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
       },
     },
   })
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ctx: Ctx = {
     env,
     dir,
@@ -150,7 +146,7 @@ test('app_list says the caller’s role in each space it lists', async () => {
   let { env } = platform('member-role-secret', {
     MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
   })
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let hers = 'a0000000-0000-4000-8000-00000000ada0'
   let ada: Ctx = { env, dir, person: hers }
   await call(ada, 'space_new', { slug: 'ada', title: 'Ada' })
@@ -434,7 +430,7 @@ let booted = async (ctx: Ctx) => {
 // cost assertions remain part of fixture admission, outside OS/HTTP timing.
 let deployRoundTrips = await (async () => {
   let { env } = platform('hops-secret')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let setup: Ctx = { env, dir, person: ADA }
   await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
@@ -554,10 +550,7 @@ let signedRoundTrips = await (async () => {
     SERVING_COPY: { idFromName: (name) => name, get: () => door },
   })
   let reopen = () =>
-    directory(
-      signedDirectory({ fetch: (r) => dirPart.fetch(r, env) }, copyOf(env)),
-      true,
-    )
+    directory({ fetch: (r) => dirPart.fetch(r, env) }, { copy: copyOf(env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let setup: Ctx = { env, dir: reopen(), reopen, person: ADA }
   await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
@@ -594,7 +587,7 @@ test('a deploy through the connector asks the directory each thing once until it
 test('a listing asks the directory a fixed number of times', async () => {
   let p = platform('listing-hops-secret')
   let { env } = p
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let setup: Ctx = { env, dir, person: ADA }
   for (let space of ['one', 'two', 'three']) {
@@ -682,7 +675,7 @@ test('a write costs the same however many apps its space holds', async () => {
 // way back to the app it is about. A binding names its own app, so it does.
 test('one read of the bindings still lands each on its own app', async () => {
   let { env } = platform('listing-bindings-secret')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let ctx: Ctx = { env, dir, person: ADA }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
@@ -715,7 +708,7 @@ test('one read of the bindings still lands each on its own app', async () => {
 
 test('free custom domains return plan settings before provisioning', async () => {
   const { env } = platform('domain-plan-test', { APEX: 'yaks.fyi' })
-  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(ctx, 'app_new', {
@@ -745,7 +738,7 @@ test('paid and comped domain attachment still provisions normally', async () => 
     CF_ZONE: 'test-zone',
     CF_HOSTNAMES_TOKEN: 'test-only',
   })
-  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
   const original = globalThis.fetch
   let provisions = 0

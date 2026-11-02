@@ -173,7 +173,7 @@ test('a cart off the shop page is an ask the checkout door can price', async () 
 
 // Where the space stands with selling, read back off the directory.
 let sold = async (env: Env) =>
-  (await directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  (await directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
     .space('ada'))?.stripe
 
 // The button on that page, as its form posts it. The page it is on is drawn in
@@ -305,7 +305,7 @@ test('the fee is an owner’s to set, and is charged on the next request', async
   await using scenario = platform()
   let { env } = scenario
   await seeded(env)
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let cookie = await as(ADA)
   // Ada owns her own space and is nobody in `yak`, so the platform's rate is
   // not hers to read or to move.
@@ -340,7 +340,7 @@ test('the fee is whole basis points, and never more than the sale', async () => 
   await using scenario = platform()
   let { env } = scenario
   await seeded(env)
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let cookie = await as(ADA)
   await seated(env, dir)
   for (let no of ['-5', '2.5', '10001', 'lots', '']) {

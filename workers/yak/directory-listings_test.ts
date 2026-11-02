@@ -1,12 +1,7 @@
 // Site.fetch listing requests over the seeded directory and its public
 // copy. Run the integration while loading; the timed cases inspect results.
 import { clock, equal, ok, test } from '@yaks/testing'
-import {
-  anonymousPage,
-  publicDirectory,
-  type ServingCopyDoor,
-  STALL,
-} from './directory-copy.ts'
+import { anonymousPage, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { DEMOS, LIST } from './gallery.ts'
@@ -47,6 +42,8 @@ let fixture = async () => {
     begin: () => Promise.resolve(copy.begin()),
     finish: (revision) => Promise.resolve(copy.finish(revision)),
     get: (key) => Promise.resolve().then(() => copy.get(key)),
+    read: (key) => Promise.resolve().then(() => copy.read(key)),
+    valid: (revision) => Promise.resolve(copy.valid(revision)),
     put: (revision, key, body) => {
       let filled = Promise.resolve(copy.put(revision, key, body))
       fills.push(filled)
@@ -57,7 +54,7 @@ let fixture = async () => {
     SERVING_COPY: { idFromName: (name) => name, get: () => coreDoor },
   })
   let warm = await seeded(p.env)
-  let dir = directory({ fetch: (req) => dirPart.fetch(req, p.env) }, true)
+  let dir = directory({ fetch: (req) => dirPart.fetch(req, p.env) })
   await dir.stamp({
     entities: [
       {
@@ -101,10 +98,8 @@ let fixture = async () => {
   }
   let env = {
     ...p.env,
-    // Site must see the injected wrapper itself (including its stale marker),
-    // not install a second wrapper with a real wall-clock timer.
-    SERVING_COPY: undefined,
-    DIRECTORY: publicDirectory(via, coreDoor, time),
+    CLOCK: time,
+    DIRECTORY: via,
     ASSETS: {
       fetch: (_req: Request) => {
         assets++
@@ -125,7 +120,6 @@ let fixture = async () => {
     time,
     stall: () => {
       stalled = true
-      env.DIRECTORY = publicDirectory(via, coreDoor, time)
     },
     request: (path: string, etag = '') =>
       site.fetch(

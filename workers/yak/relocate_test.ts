@@ -29,7 +29,7 @@ let held = (env: Env, name: string, path: string) =>
   )
 
 let seeded = async (p: { env: Env }) => {
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('mover', 'moving')
   return { dir, space }
 }

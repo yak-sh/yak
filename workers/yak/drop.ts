@@ -126,7 +126,7 @@ export let received = async (
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let r = route(hostOf(req, env), new URL(req.url).pathname, env)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = r.space ? await dir.space(r.space) : null
   if (!space) return nothingHere(env)
   let no = (why: string, status = 400) =>

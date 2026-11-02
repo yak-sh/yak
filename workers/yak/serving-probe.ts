@@ -27,7 +27,7 @@ export let as = async (person: string) =>
 
 /** Ada's space `ada` and its app `cookbook`, open to `access`. */
 export let seeded = async (env: Env, access = 'public') => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },

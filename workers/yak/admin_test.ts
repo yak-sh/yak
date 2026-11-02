@@ -255,7 +255,7 @@ test("the admin's people list shows who a search finds", async () => {
 
 test('the census reads which app each release is of and when, never its files', async () => {
   await using p = platform('census deploys')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('census-owner', 'census-deploys')
   await dir.apply({
     entities: [

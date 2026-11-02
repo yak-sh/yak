@@ -13,6 +13,7 @@ import { link } from '@yaks/edge'
 import type { Namespace } from './door.ts'
 import { platformVocab } from './vocab.ts'
 import type { Stored } from './graph.ts'
+import { EPOCH } from './directory-copy.ts'
 
 let browser = '00000000-0000-4000-8000-000000000001'
 let signedBrowser = '00000000-0000-4000-8000-000000000002'
@@ -195,7 +196,17 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
     idFromName: (name) => name,
     get: () => ({
       fetch: async (req) => {
-        assertEquals(new URL(req.url).pathname, '/attribute')
+        let url = new URL(req.url)
+        if (url.pathname == '/query') {
+          return Response.json(
+            await writer.g.read(url.searchParams.get('q')!),
+            {
+              headers: { [EPOCH]: '7' },
+            },
+          )
+        }
+        assertEquals(url.pathname, '/attribute')
+        assertEquals(req.headers.get('x-yak-policy'), '7')
         calls++
         let { via, by } = await req.json()
         return Response.json(await attributed(app, via, by))

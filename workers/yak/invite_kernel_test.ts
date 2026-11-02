@@ -34,10 +34,11 @@ import {
   type Directory,
   directory,
   type Held,
-  part,
+  over,
   type Space,
 } from './directory.ts'
 import type { Env } from './env.ts'
+import { EPOCH } from './directory-copy.ts'
 import type { Letter } from './mail.ts'
 import type { Meta } from './meta.ts'
 import { platformVocab } from './vocab.ts'
@@ -475,7 +476,14 @@ let directoryWith = async () => {
       invite: { to: 'ap', person, role: 'editor' },
     })),
   ], { trusted: true })
-  let dir = directory(part(store), true)
+  let fetch = over(store)
+  let dir = directory({
+    fetch: async (req) => {
+      let answer = await fetch(req)
+      answer.headers.set(EPOCH, '0')
+      return answer
+    },
+  })
   let place = (await placeOf(dir, 'ap'))!
   await accept(dir, (await dir.invitation(`inv-${guest}`))!, place)
   return { dir, invitee, guest }

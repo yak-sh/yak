@@ -272,8 +272,7 @@ export let refusedSell = (space: Space, env: Host = {}) =>
 
 // ---- connecting ------------------------------------------------------------
 
-let dirOf = (env: Env) =>
-  directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 /** The space's `stripe` row, written through the kernel's own door — every
  * property of it is server-owned (vocab.ts), so this is the only writer. */

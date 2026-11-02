@@ -35,8 +35,7 @@ export let ACCOUNT_PATH = '/api/account'
 /** One store a sweep asks: its name, and what a person calls it. */
 export type Swept = { store: string; at: string }
 
-let dirOf = (env: Env) =>
-  directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })

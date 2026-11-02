@@ -1,5 +1,5 @@
 import { clock, test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import {
   anonymousPage,
   EPOCH,
@@ -197,42 +197,50 @@ let publicPolicies = await (async () => {
     validations++
     return Promise.resolve(true)
   }
-  let direct = publicDirectory(
+  let direct = directory(
     {
       fetch: () =>
         Promise.resolve(Response.json([row], {
           headers: { [EPOCH]: '7' },
         })),
     },
-    f.copy,
-    time,
+    { copy: f.copy, time, public: true },
   )
-  let current = await directory(direct, true).app(
+  let current = await direct.app(
     { eid: 'space', slug: 'space' } as never,
     'page',
   )
   f.copy.read = () =>
     Promise.resolve({ revision: 8, body: JSON.stringify([row]) })
   let copied = directory(
-    publicDirectory({ fetch: () => new Promise(() => {}) }, f.copy, time),
-    true,
+    { fetch: () => new Promise(() => {}) },
+    { copy: f.copy, time, public: true },
   )
     .app({ eid: 'space', slug: 'space' } as never, 'page')
   await time.advance(STALL)
   let held = await copied
   delete f.copy.read
   let legacy = directory(
-    publicDirectory({ fetch: () => new Promise(() => {}) }, {
-      ...f.copy,
-      get: () => Promise.resolve(JSON.stringify([row])),
-    }, time),
-    true,
+    { fetch: () => new Promise(() => {}) },
+    {
+      copy: {
+        ...f.copy,
+        get: () => Promise.resolve(JSON.stringify([row])),
+      },
+      time,
+      public: true,
+    },
   ).app({ eid: 'space', slug: 'space' } as never, 'page')
+  let rejected = assertRejects(
+    () => legacy,
+    Error,
+    'without a serving revision',
+  )
   await time.advance(STALL)
+  await rejected
   return {
     current: current?.policy,
     copied: held?.policy,
-    legacy: (await legacy)?.policy,
     reads: f.reads(),
     validations,
   }
@@ -241,7 +249,6 @@ test('public directory stamps current and copied Apps but never invents legacy a
   assertEquals(publicPolicies, {
     current: 7,
     copied: 8,
-    legacy: undefined,
     reads: 0,
     validations: 0,
   })

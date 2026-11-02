@@ -121,7 +121,7 @@ test('meter queries distinguish the same handle in two deployments', async () =>
       return stores.get(String(id).slice('staging:'.length))
     },
   }
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       {
@@ -498,7 +498,7 @@ let refusedBuild = (s: Space, now: Date) =>
 // with the meter given, and that space as the directory has it now.
 let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
   let { env } = platform('counting', vars)
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [{
       entity: { eid: '$space' },
@@ -612,7 +612,7 @@ test('the build line warns at 80%, and the line says both numbers', () => {
 
 test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {
   let { env } = platform('plus-bytes')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: '$space' }, space: { slug: 'jeff', store: 'jeff' } },
@@ -742,7 +742,7 @@ test('an upload under the files warning line never waits on a busy bucket', asyn
 
 test('R2 accounting sweeps without analytics, follows deletion and survives the month', async () => {
   let { env, files } = platform('files-sweep')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       {

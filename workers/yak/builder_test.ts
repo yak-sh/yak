@@ -72,7 +72,7 @@ let seeded = async (vars: Partial<Env> = {}) => {
 }
 
 let dirOf = (env: Env) =>
-  directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 
 let call = (id: string, name: string, args: unknown) => ({
   id,
@@ -355,7 +355,7 @@ test('the roster is the platform table, whole', async () => {
   let { env } = await seeded()
   let ctx = {
     env,
-    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true),
+    dir: directory({ fetch: (r: Request) => dirPart.fetch(r, env) }),
     person: ADA,
   }
   let names = roster(ctx).map((t) => t.fn.name)

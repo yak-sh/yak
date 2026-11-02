@@ -325,7 +325,7 @@ export class Builder {
     let ns = this.#env.STORE
     return directory({
       fetch: (req: Request) => dirPart.fetch(req, { STORE: ns }),
-    }, true).at(eid)
+    }).at(eid)
   }
 
   /**
@@ -448,7 +448,7 @@ export class Builder {
     if (!space) return no(404, 'that space is gone')
     let dir = directory({
       fetch: (req: Request) => dirPart.fetch(req, this.#env),
-    }, true)
+    })
     let access = await dir.page(
       space.slug,
       null,

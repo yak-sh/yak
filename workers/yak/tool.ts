@@ -272,7 +272,7 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
   // authoritative client and starts a new scope before any role is used.
   let space =
     await (ctx.reopen
-      ? directory(bound(ctx.env.DIRECTORY, directoryPart.fetch, ctx.env), true)
+      ? directory(bound(ctx.env.DIRECTORY, directoryPart.fetch, ctx.env))
       : ctx.dir).own(ctx.person)
   if (ctx.reopen) return (await reacquire(ctx, space, undefined, false)).space
   return space

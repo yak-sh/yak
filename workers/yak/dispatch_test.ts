@@ -66,6 +66,7 @@ let space: Space = {
   tunnel: null,
 }
 let app: App = {
+  policy: 0,
   eid: '00000000-0000-4000-8000-000000000002',
   slug: 'recipes',
   space: 's1',
@@ -104,7 +105,12 @@ let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
     },
     STORE: {
       idFromName: (n: string) => n,
-      get: () => ({ fetch: () => Promise.resolve(Response.json([])) }),
+      get: () => ({
+        fetch: () =>
+          Promise.resolve(Response.json([], {
+            headers: { 'x-yak-directory-revision': '0' },
+          })),
+      }),
     },
   }) as unknown as Env
 
@@ -670,7 +676,7 @@ test("a person's app break is the platform's to look at too", async () => {
             entity: { eid: 'p-probe' },
             member: { person: 'p-probe', space: probe.eid },
             email: { address: 'probe@bot.yak.sh' },
-          }])),
+          }], { headers: { 'x-yak-directory-revision': '0' } })),
       }),
     },
   } as unknown as Env

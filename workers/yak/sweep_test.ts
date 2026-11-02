@@ -17,7 +17,7 @@ let JEFF = 'a0000000-0000-4000-8000-00000000000f'
 let spaces = async () => {
   let scenario = platform(SECRET)
   let { env } = scenario
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
@@ -99,7 +99,7 @@ test('nobody else sweeps', async () => {
 let accounts = async () => {
   let { scenario } = await spaces()
   let { env } = scenario
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let PROBE = 'a0000000-0000-4000-8000-0000000000b1'
   let GUEST = 'a0000000-0000-4000-8000-0000000000b2'
   let demo = 'a0000000-0000-4000-8000-0000000000b3'

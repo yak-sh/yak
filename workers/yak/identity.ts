@@ -431,7 +431,7 @@ let closing = async (
   // had not heard of it — its store and its bytes would outlive the space and
   // be inherited by whoever takes the address next (directory.ts fresh,
   // billing.ts reads the same way).
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await dir.space(slug)
   if (!space || (await dir.role(space, person)) != 'owner') return lost(env)
   let d = await doomed(dir, space)

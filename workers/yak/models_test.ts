@@ -98,7 +98,7 @@ let vale = async (
       ...env,
     } as Partial<Env>,
   )
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
@@ -125,6 +125,7 @@ let vale = async (
     'x-store': 'ada/vale',
     'x-yak-app': app.eid,
     'x-yak-access': access,
+    'x-yak-policy': String(app.policy),
     ...(person ? { 'x-yak-person': person, 'x-yak-role': 'owner' } : {}),
     ...(via ? { 'x-yak-via': via } : {}),
   })

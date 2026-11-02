@@ -66,7 +66,7 @@ let MAKES_ONE: Turn[] = [
 ]
 
 let dirOf = (env: Env) =>
-  directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 
 // A space with Ada in it, and her builder's object.
 let seeded = async (script: Turn[] = []) => {

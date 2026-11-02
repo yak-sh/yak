@@ -47,7 +47,7 @@ let setup = async (words = false) => {
     VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
   })
   let at = meta(p.env)
-  let dir = directory({ fetch: over(at) }, true)
+  let dir = directory({ fetch: over(at) })
   let people = [crypto.randomUUID(), crypto.randomUUID()]
   await at.apply(
     people.flatMap((person, n) => [

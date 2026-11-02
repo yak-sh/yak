@@ -2,7 +2,7 @@
 import type { ReadTx } from '@yaks/graph'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
-import { appOf, spaceOf, storeName } from './directory.ts'
+import { appAbout, spaceOf, storeName } from './directory.ts'
 import type { Namespace } from './door.ts'
 
 /** The trash's calendar cadence; Cron Triggers only supply its heartbeat. */
@@ -13,7 +13,7 @@ export let DAILY = '20 4 * * *'
 let stateOf = async (tx: ReadTx, eid: string) => {
   let [row] = await tx.get([eid])
   if (!row?.app || row.tombstone) return null
-  let app = appOf(row as Parameters<typeof appOf>[0])
+  let app = appAbout(row as Parameters<typeof appAbout>[0])
   let [parent] = await tx.get([app.space])
   if (!parent?.space || parent.tombstone) return null
   let space = spaceOf(parent as Parameters<typeof spaceOf>[0])

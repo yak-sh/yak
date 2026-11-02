@@ -49,7 +49,7 @@ let fixture = async (active = true, vault = false) => {
       : {},
   })
   let { env } = scenario
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: PERSON }, person: {} },

@@ -19,7 +19,7 @@ import type { Rule } from './mover.ts'
 
 let fixture = async () => {
   await using p = platform('dormant mover secret')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('dormant-mover-owner', 'asleep')
   await dir.apply({
     entities: [{ entity: { eid: 'mover-admin' }, person: {} }, {

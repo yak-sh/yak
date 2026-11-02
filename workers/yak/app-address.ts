@@ -26,7 +26,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!/^[a-z0-9-]+(?:\/[a-z0-9-]+)?$/.test(said)) {
     return no(400, 'arguments', 'name an app by its slug or <space>/<app>')
   }
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let all = await reachable({
     dir: who.space ? narrowed(dir, who.space, who.spaceEid) : dir,
     person: who.person,

@@ -65,7 +65,7 @@ let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let owner: Who = { person: ADA, role: 'owner' }
 
 let dirOf = (env: Env) =>
-  directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 
 // A space with Ada in it and one app of hers — the app a compile ships into.
 let seeded = async (vars: Partial<Env> = {}) => {

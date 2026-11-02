@@ -1,4 +1,4 @@
-import { copyOf, publicDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's pages drawn from directory listings (the gallery and the
 // integration directory and the home page fresh for thirty seconds, then
@@ -69,12 +69,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) return uncached(lost(env))
   path = path.slice(root.length)
   let c = clock()
-  let serving = publicDirectory(
+  let dir = directory(
     bound(env.DIRECTORY, dirPart.fetch, env),
-    req.headers.has('x-yak-no-copy') ? undefined : copyOf(env),
-    env.CLOCK,
+    {
+      copy: req.headers.has('x-yak-no-copy') ? undefined : copyOf(env),
+      time: env.CLOCK,
+      public: true,
+    },
   )
-  let dir = directory(serving)
   let page: Response
   if (path == '/gallery') {
     page = gallery.page(
@@ -98,7 +100,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) {
     return timed(uncached(page), c, 'site_')
   }
-  if ('stale' in serving && serving.stale) {
+  if (dir.stale) {
     c.include('copied;dur=1')
     return timed(uncached(page), c, 'site_')
   }

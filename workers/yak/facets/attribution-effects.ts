@@ -38,20 +38,13 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       // this run; the store pass itself is repeatable.
       if (!receipt) return
       let edge = receipt.edge as { from: string; to: string }
-      let [browser, app] = await tx.get([edge.from, edge.to])
+      let [browser] = await tx.get([edge.from])
       let by = (browser?.browser as Comp | undefined)?.by
       if (!by) return
-      if (app?.app && !app.tombstone) {
-        let { appOf, appStore, spaceOf } = await import('../directory.ts')
-        let a = appOf(app as Parameters<typeof appOf>[0])
-        let [space] = await tx.get([a.space])
-        if (!space?.space || space.tombstone) return
-        let door = appStore(
-          at.env.STORE!,
-          spaceOf(space as Parameters<typeof spaceOf>[0]),
-          a,
-          at.env,
-        )
+      let { appStore, directoryOf } = await import('../directory.ts')
+      let found = await directoryOf(at.env.STORE!).appAt(edge.to)
+      if (found) {
+        let door = appStore(at.env.STORE!, found.space, found.app, at.env)
         let result = await door.consume(
           '/attribute',
           async (r) => {

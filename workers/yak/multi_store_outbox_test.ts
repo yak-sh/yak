@@ -27,6 +27,7 @@ let space = (slug: string): Space => ({
 })
 
 let app = (slug: string, spaceEid: string): App => ({
+  policy: 0,
   eid: `app-${slug}`,
   slug,
   space: spaceEid,

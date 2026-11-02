@@ -7,7 +7,7 @@ import {
   type ReadAnswer,
   READS,
   released,
-  signedDirectory,
+  servingDirectory,
   Unfenced,
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
@@ -2300,23 +2300,26 @@ export class Store {
   #directoryTransport() {
     let ns = this.#bind.STORE
     if (!ns) throw new Refused('directory unavailable')
-    return signedDirectory(
+    return servingDirectory(
       {
         fetch: (req) => {
-          // Store authorization never takes the directory part's TTL, even in
-          // hosts without the independent-copy binding (including cold wakes).
-          let headers = new Headers(req.headers)
-          headers.set(EPOCH, '1')
-          return directoryFetch(new Request(req, { headers }), { STORE: ns })
+          return directoryFetch(req, { STORE: ns })
         },
       },
-      this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined,
-      clockOf(this.#time),
+      {
+        copy: this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined,
+        time: clockOf(this.#time),
+      },
     )
   }
 
   #directory() {
-    return directory(this.#directoryTransport(), true)
+    let ns = this.#bind.STORE
+    if (!ns) throw new Refused('directory unavailable')
+    return directory({ fetch: (req) => directoryFetch(req, { STORE: ns }) }, {
+      copy: this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined,
+      time: clockOf(this.#time),
+    })
   }
 
   #socketStanding = new Map<string, Promise<boolean>>()
@@ -5108,7 +5111,9 @@ export class Store {
     if (copy && new URL(request.url).searchParams.get('mend') == '1') {
       await mend(copy, this.#committed)
     }
-    let revision = copy ? this.#get('directory-revision') ?? '0' : null
+    let revision = this.#get('name') == PLATFORM_STORE
+      ? this.#get('directory-revision') ?? '0'
+      : null
     let answer = await (this.#get('name') == PLATFORM_STORE &&
         request.headers.get(STATIC_QUERY) == '1'
       ? this.#directoryRead(request)

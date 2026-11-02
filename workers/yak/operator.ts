@@ -12,7 +12,7 @@ import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
 import { directory, type Space } from './directory.ts'
 import * as directoryPart from './directory.ts'
-import { copyOf, signedDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { inReach } from './declared.ts'
 import { reaching } from './agent.ts'
@@ -39,14 +39,10 @@ let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
   let reopen = () =>
     narrowed(
-      directory(
-        signedDirectory(
-          bound(env.DIRECTORY, directoryPart.fetch, env),
-          copyOf(env),
-          env.CLOCK,
-        ),
-        true,
-      ),
+      directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
+        copy: copyOf(env),
+        time: env.CLOCK,
+      }),
       space.slug,
       space.eid,
       held.administrative,

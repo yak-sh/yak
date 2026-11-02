@@ -1,5 +1,5 @@
 import { CallError } from '@yaks/tools/errors'
-import { copyOf, signedDirectory } from './directory-copy.ts'
+import { copyOf } from './directory-copy.ts'
 // The connector (D-32318 §The agent door): `POST /mcp` at the apex, an MCP
 // server over Streamable HTTP — one JSON-RPC request in, one JSON reply out,
 // no session held — so a restart strands nobody and a Worker isolate holds
@@ -576,14 +576,10 @@ let stranger = async (
   }
   let ctx: Ctx = {
     env,
-    dir: directory(
-      signedDirectory(
-        bound(env.DIRECTORY, dirPart.fetch, env),
-        copyOf(env),
-        env.CLOCK,
-      ),
-      true,
-    ),
+    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+      copy: copyOf(env),
+      time: env.CLOCK,
+    }),
     // Nobody. Everything below reads this as no reach, no membership and no
     // mailbox rather than as a person whose eid happens to be empty
     // (directory.ts `member`, agent.ts `platform`).
@@ -645,14 +641,10 @@ let stranger = async (
 let CANARY = '/api/defect'
 let canary = async (req: Request, env: Env): Promise<Response> => {
   let { who } = await asking(env, req)
-  let dir = directory(
-    signedDirectory(
-      bound(env.DIRECTORY, dirPart.fetch, env),
-      copyOf(env),
-      env.CLOCK,
-    ),
-    true,
-  )
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   if (!who || !isTestAddress(await dir.emailAt(who.person) ?? '')) {
     return json(404, { error: { code: 'not_found' } })
   }
@@ -813,14 +805,10 @@ let answered = async (
   // have (C-32905 item 5). Within the request a line is read once, until the
   // request itself writes to the directory.
   let reopen = () => {
-    let dir = directory(
-      signedDirectory(
-        bound(env.DIRECTORY, dirPart.fetch, env),
-        copyOf(env),
-        env.CLOCK,
-      ),
-      true,
-    )
+    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+      copy: copyOf(env),
+      time: env.CLOCK,
+    })
     return auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir
   }
   let dir = reopen()

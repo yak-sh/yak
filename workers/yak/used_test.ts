@@ -81,7 +81,7 @@ test('directory use survives platform writes and excludes administrative work', 
 
 let visits = await (async () => {
   await using p = platform('directory use proof')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own(VISITOR, 'used-proof')
   await dir.apply({
     entities: [{
@@ -308,7 +308,7 @@ test('background receipt defect delivery does not delay the response', () => {
 
 let spoken = await (async () => {
   await using p = platform('retired spelling proof')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own(VISITOR, 'retired-proof')
   await dir.apply({
     entities: [{
@@ -436,7 +436,7 @@ test('a receipt whose answer a deploy cuts off is sent again and reported nowher
 
 test('a write to an app stamps when its store changed, and an install does not', async () => {
   await using p = platform('changed-proof')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own(VISITOR, 'changed-proof')
   await dir.apply({
     entities: [{

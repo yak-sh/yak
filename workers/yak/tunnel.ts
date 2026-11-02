@@ -49,8 +49,7 @@ import { adminWho } from './identity.ts'
 /** Where an app's worker asks for its space's machine. */
 export let TUNNELED = '/tunneled/'
 
-let dirOf = (env: Env) =>
-  directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })

@@ -53,7 +53,7 @@ let as = async (person: string) =>
 let spaces = async (vars: Partial<Env> = TOKENS) => {
   let scenario = platform(SECRET, vars)
   let { env } = scenario
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
@@ -187,6 +187,7 @@ let tunneled: Space = {
   tunnel: { id: T, service: S, adopted: true },
 }
 let mail: App = {
+  policy: 0,
   eid: 'a1',
   slug: 'mail',
   space: 's1',
