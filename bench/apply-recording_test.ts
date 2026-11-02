@@ -6,7 +6,7 @@ import { applyRecording } from './apply-recording.ts'
 
 test('apply recording summarizes all spans and samples one ordinary tree', () => {
   let target = {}
-  let c = channel(target)
+  let c = channel(target, () => 0)
   let recorder = applyRecording([target])
   for (let i = 0; i < 2; i++) {
     let root = c.begin({ kind: 'apply', name: 'apply' })!
@@ -39,6 +39,7 @@ test('apply recording summarizes all spans and samples one ordinary tree', () =>
 
 test('recording shares one ordinary quota across channel-local IDs', () => {
   let targets = [{}, {}]
+  for (let target of targets) channel(target, () => 0)
   let recorder = applyRecording(targets)
   for (let target of targets) {
     channel(target).instant({ kind: 'apply', name: 'apply' })
