@@ -7,7 +7,7 @@ import { refuse } from './tool.ts'
 
 /** The consent box's words, kept with each number that agreed to them. */
 export let CONSENT =
-  'I agree to receive text messages from yaks.app about my site, about 1-10 a month. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms Privacy: https://yaks.app/privacy'
+  'I agree to receive app notifications by text from yaks.app about my site: when the operator finishes a change, needs an answer from me, or my site needs attention. About 1-10 msgs/month. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms Privacy: https://yaks.app/privacy'
 
 export let textsEid = (person: string) => derivedEid('operator-texts|' + person)
 
