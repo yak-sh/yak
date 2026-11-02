@@ -6,7 +6,9 @@
 // except inside the statements SQLite keeps as text and runs later (a
 // trigger, a view, a column default, a check, a partial index's condition),
 // which bind nothing: there it is written as a literal, quoted the way SQLite
-// reads one back. The words a statement is built from that are not names — a
+// reads one back. A statement binds no more parameters than its engine allows
+// (`VARIABLES`); every value past that is written as a literal too, so no
+// statement is too big to bind, however many values a query compiles to. The words a statement is built from that are not names — a
 // function, an operator, a type, a pragma, a module — are checked against what
 // such a word can be before they are written, so text a caller passes in is
 // never taken for SQL.
@@ -35,9 +37,23 @@ import {
 } from './ast.ts'
 
 // What one rendering accumulates: the parameters in the order their `?`s were
-// written, whether values are being written as literals instead, and whether
-// the text must be stable whatever a collection's members (`renderStable`).
-type Ctx = { params: Param[]; inline: boolean; stable: boolean }
+// written, whether values are being written as literals instead, whether the
+// text must be stable whatever a collection's members (`renderStable`), and
+// how many parameters the engine binds at most.
+type Ctx = { params: Param[]; inline: boolean; stable: boolean; cap: number }
+
+/** How many parameters one statement may bind. Workerd, the SQLite under a
+ * Durable Object, allows 100, the lowest of any supported engine, and so the
+ * default: an engine that allows more passes its own. A value past it is
+ * written as a literal. */
+export let VARIABLES = 100
+
+/** What an embedded SQLite allows: the stock SQLITE_MAX_VARIABLE_NUMBER. */
+export let STOCK_VARIABLES = 32766
+
+// Whether a statement has bound all the parameters it may, so a value from
+// here on is written as a literal.
+let full = (c: Ctx, n = 1) => c.params.length + n > c.cap
 
 /** An identifier, quoted. */
 export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -122,7 +138,7 @@ let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
 let kept =
   <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>
   (n: N, c: Ctx): string => {
-    if (c.inline || LEAF.has(n.t)) return write(n, c)
+    if (c.inline || LEAF.has(n.t) || full(c)) return write(n, c)
     let texts = seen[c.stable ? 1 : 0]
     let text = texts.get(n)
     if (text != null) return text
@@ -135,13 +151,15 @@ let kept =
 let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
   switch (e.t) {
     case 'raw':
-      if (c.inline && e.params.length) return literals(e)
+      if (e.params.length && (c.inline || full(c, e.params.length))) {
+        return literals(e)
+      }
       c.params.push(...e.params)
       return e.sql
     case 'col':
       return e.of ? `${q(e.of)}.${q(e.name)}` : q(e.name)
     case 'val':
-      if (c.inline) return literal(e.v)
+      if (c.inline || full(c)) return literal(e.v)
       c.params.push(e.v)
       return '?'
     case 'lit':
@@ -463,12 +481,12 @@ let stmt = (s: Stmt, c: Ctx): string => {
 
 // The same accumulator, writing values as literals: what a statement SQLite
 // stores as text needs, since nothing will be bound to it when it runs.
-let lit = (c: Ctx): Ctx =>
-  c.inline ? c : { params: c.params, inline: true, stable: c.stable }
+let lit = (c: Ctx): Ctx => c.inline ? c : { ...c, inline: true }
 
 /**
  * A statement, or an expression, as the text SQLite runs and the parameters
- * it binds.
+ * it binds: at most `cap`, the engine's limit, and every value past it written
+ * as a literal.
  *
  * ```ts
  * import { col, eq, render, val } from '@yaks/sql'
@@ -482,7 +500,8 @@ let lit = (c: Ctx): Ctx =>
  * // s.sql == 'select "v" from "meta" where "k" = ?', s.params == ['epoch']
  * ```
  */
-export let render = (node: Stmt | Expr): Raw => rendered(node, false)
+export let render = (node: Stmt | Expr, cap = VARIABLES): Raw =>
+  rendered(node, false, cap)
 
 /** {@link render} for a host that keeps prepared statements by their text:
  * every collection (`each`) is bound as one JSON array, so a statement's text
@@ -495,10 +514,11 @@ export let render = (node: Stmt | Expr): Raw => rendered(node, false)
  * // 'select "value" from (select "value" from "json_each"(?))'
  * ```
  */
-export let renderStable = (node: Stmt | Expr): Raw => rendered(node, true)
+export let renderStable = (node: Stmt | Expr, cap = VARIABLES): Raw =>
+  rendered(node, true, cap)
 
-let rendered = (node: Stmt | Expr, stable: boolean): Raw => {
-  let c: Ctx = { params: [], inline: false, stable }
+let rendered = (node: Stmt | Expr, stable: boolean, cap: number): Raw => {
+  let c: Ctx = { params: [], inline: false, stable, cap }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
   return raw(
     sql,
@@ -596,7 +616,7 @@ let MEMO_SIZE = 1024, MEMO_TEXT = 4096
  * operator around it would take it apart: what an ORDER BY term or a derived
  * read is spliced into the binder's text as. */
 export let inline = (e: Expr): string =>
-  operand(e, { params: [], inline: true, stable: false })
+  operand(e, { params: [], inline: true, stable: false, cap: 0 })
 
 let EXPRS = new Set([
   'col',

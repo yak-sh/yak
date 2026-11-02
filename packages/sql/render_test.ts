@@ -1,5 +1,17 @@
 import { equal, test } from '@yaks/testing'
-import { as, col, eq, lit, render, select, table, val, when } from './mod.ts'
+import {
+  and,
+  as,
+  col,
+  eq,
+  lit,
+  render,
+  select,
+  table,
+  val,
+  when,
+} from './mod.ts'
+import { raw } from './ast.ts'
 import { inline } from './render.ts'
 
 test('compiled fragments inline values outside quoted text and names', () => {
@@ -51,4 +63,15 @@ test('a kept tree renders again around the values bound this time', () => {
     `as "label" from "t" where "id" = ?`
   equal(asked('a'), { sql, params: ['a'] })
   equal(asked('b'), { sql, params: ['b'] })
+})
+
+test('a fragment that would bind past the limit is written as literals', () => {
+  let { sql, params } = render(
+    and(eq(col('a'), val(1)), raw('"b" in (?, ?)', ["it's", 'x?'])),
+    2,
+  )
+  equal({ sql, params }, {
+    sql: `("a" = ? and "b" in ('it''s', 'x?'))`,
+    params: [1],
+  })
 })

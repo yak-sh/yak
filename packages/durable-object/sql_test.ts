@@ -2,7 +2,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
 import { during, peek, record } from '@yaks/trace'
-import { col, effect, insert, select, table, val } from '@yaks/sql'
+import { and, col, effect, eq, insert, or, select, table, val } from '@yaks/sql'
 import { driver, type DurableStorage } from './sql.ts'
 import { durable } from './testing.ts'
 
@@ -62,6 +62,29 @@ test('a resultless command changes its row with one engine operation', () => {
       from: table('resultless'),
     })),
     [{ price: 2 }],
+  )
+})
+
+test('a statement past the engine variable limit binds what it may and writes the rest', () => {
+  let big = driver(durable())
+  big.query({
+    t: 'create table',
+    name: 'many',
+    cols: [{ name: 'n', type: 'integer' }, { name: 'label' }],
+  })
+  effect(big, insert('many', { n: 250, label: "it's" }))
+  effect(big, insert('many', { n: 251, label: 'other' }))
+  let wanted = Array.from({ length: 300 }, (_, i) => eq(col('n'), val(i)))
+  equal(
+    big.query(select({
+      cols: [col('n')],
+      from: table('many'),
+      where: and(
+        or(...wanted),
+        eq(col('label'), val("it's")),
+      ),
+    })),
+    [{ n: 250 }],
   )
 })
 
