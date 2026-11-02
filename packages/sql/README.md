@@ -132,12 +132,14 @@ equal(schema.params, [])
 equal(shape(schema), 'create table "book" ("title" text default ?)')
 
 // What a trace keeps: the shape, cut short with how many parameters it binds.
+// A statement binds at most the engine's limit (100 by default); each value
+// past it is written as a literal.
 let batch = render(
   insert('book', ...Array.from({ length: 300 }, (_, i) => ({ title: `${i}` }))),
 )
 equal(
   excerpt(batch, 64),
-  'insert into "book" ("title") values (?), (?), … (300 parameters)',
+  'insert into "book" ("title") values (?), (?), … (100 parameters)',
 )
 ```
 
