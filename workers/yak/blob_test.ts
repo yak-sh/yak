@@ -146,7 +146,10 @@ test('a named media upload stays seekable when its metadata changes', async () =
     headers: { cookie: them.cookie },
   })
   assertEquals(owner.status, 200)
-  assertEquals(owner.headers.get('cache-control'), 'private, no-store')
+  assertEquals(
+    owner.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
   await owner.body?.cancel()
 })
 
