@@ -249,3 +249,35 @@ test('distance counts imports from a change, and stops at a module that loads a 
   equal(s.distance([at('kernel.ts')])(at('kernel_test.ts')), 1)
   ok(s.reaches([at('kernel_test.ts')], [at('subject.ts')]))
 })
+
+test('distance is 0 for the files of a changed package, and 1 for its importers and its files behind a whole platform', async () => {
+  let fixture = Array.from({ length: WIDE }, (_, i) => `world${i}.ts`)
+  let s = (await survey(
+    [
+      at('lib/README.md.ts'),
+      at('app/kernel_test.ts'),
+      at('use/lib_test.ts'),
+      at('use/far_test.ts'),
+    ],
+    deno({
+      'lib/README.md.ts': ['lib/mod.ts'],
+      'lib/mod.ts': ['lib/render.ts', 'lib/other.ts'],
+      'lib/render.ts': [],
+      'lib/other.ts': [],
+      'app/kernel_test.ts': ['app/kernel.ts'],
+      'app/kernel.ts': ['app/apps.ts', ...fixture],
+      'app/apps.ts': ['lib/render.ts'],
+      'use/lib_test.ts': ['lib/other.ts'],
+      'use/far_test.ts': ['use/helper.ts'],
+      'use/helper.ts': ['lib/mod.ts'],
+      ...Object.fromEntries(fixture.map((m) => [m, []])),
+    }),
+  ))!
+  let owner = (path: string) => path.slice(dir.length + 1).split('/')[0]
+  let far = s.distance([at('lib/render.ts'), at('app/apps.ts')], owner)
+  equal(far(at('lib/README.md.ts')), 0)
+  equal(far(at('use/lib_test.ts')), 1)
+  equal(far(at('use/far_test.ts')), 3)
+  equal(far(at('app/kernel_test.ts')), 1)
+  equal(s.distance([at('lib/render.ts')])(at('lib/README.md.ts')), 2)
+})

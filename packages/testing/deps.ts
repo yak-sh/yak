@@ -181,7 +181,11 @@ export let seal = (
  * (`loads`: its seal without what it imports only when it asks, by a literal
  * `import('…')`), and the seals of what a module imports (`next`). A file of
  * data is its bytes whether or not a module there imports it (a config read
- * as JSON), so it holds the same in every survey. */
+ * as JSON), so it holds the same in every survey. A file's `distance` from a
+ * change is the imports between them, never through a module wider than
+ * `WIDE`; given each path's package (`owner`), a file of a changed package
+ * is 0 when that distance reaches it and 1 when only a wide module does, and
+ * a file importing a changed package from another is at most 1. */
 export type Survey = {
   of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
@@ -192,7 +196,10 @@ export type Survey = {
     loaded?: boolean,
     runtime?: boolean,
   ) => boolean
-  distance: (changed: string[]) => (root: string) => number
+  distance: (
+    changed: string[],
+    owner?: (path: string) => string | undefined,
+  ) => (root: string) => number
 }
 
 /** How many modules a module may load and still say something about what its
@@ -357,7 +364,7 @@ export let survey = async (
       let reached = closures.get(cache)!
       return roots.some((p) => reached.has(p) || reached.has(at(url(p))))
     },
-    distance: (changed) => {
+    distance: (changed, owner = () => undefined) => {
       let edges = incoming(runtime)
       let far = new Map<string, number>()
       for (let p of changed) far.set(p, 0).set(at(url(p)), 0)
@@ -368,8 +375,20 @@ export let survey = async (
           if (!far.has(from)) far.set(from, d + 1)
         }
       }
-      return (root) =>
-        Math.min(far.get(root) ?? Infinity, far.get(at(url(root))) ?? Infinity)
+      let mine = new Set(changed.map(owner).filter(Boolean))
+      return (root) => {
+        let d = Math.min(
+          far.get(root) ?? Infinity,
+          far.get(at(url(root))) ?? Infinity,
+        )
+        let home = owner(root)
+        if (home && mine.has(home)) return d < Infinity ? 0 : 1
+        let uses = (runtime.get(at(url(root))) ?? []).some((n) => {
+          let to = owner(rel(n))
+          return to && to != home && mine.has(to)
+        })
+        return uses ? Math.min(d, 1) : d
+      }
     },
     next: (
       path,

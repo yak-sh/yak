@@ -41,8 +41,10 @@ ability to see the platform_" (15ce9bf9). He would rather recover than gate
 breaks live, and a failure is fixed forward.
 
 Run `deno task test` without paths on your finished change, then land with
-`yak land`. The command follows dependencies to the nearest consumers, as many
-as about eight seconds hold, and checks the changed files; a package-only run
+`yak land`. The command runs every test and README example of a changed
+package that its imports reach, then the files importing a changed package and
+the nearest consumers, as many as about eight seconds hold, and checks the
+changed files; a package-only run
 can miss a consumer outside that package. Main's CI runs every test after the
 push, and the closing line counts the consumers left to it. There is no
 pre-land gate. A check or landing wait must take less

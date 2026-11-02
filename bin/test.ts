@@ -1,7 +1,8 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects tests reached by branch and working changes, nearest first, as many
-// as a few seconds hold; main's CI runs the rest after the push. Cached passes
+// selects tests reached by branch and working changes: every one of a changed
+// workspace package, then those importing one and the nearest, as many as a
+// few seconds hold; main's CI runs the rest after the push. Cached passes
 // leave out tests already passed unchanged. Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).
@@ -324,6 +325,12 @@ export let expected =
   (list: Record<string, Record<string, number>>) => (file: string) =>
     Object.values(list[file] ?? {}).reduce((sum, ms) => sum + ms, 20)
 
+/// member('packages/sql/render.ts') -> 'packages/sql'
+/// member('bin/test.ts') -> undefined
+/** The workspace package a path belongs to. */
+export let member = (path: string): string | undefined =>
+  config.workspace.map((w) => w.slice(2)).find((w) => path.startsWith(`${w}/`))
+
 /** Relevant files, leaving out sources and observed dependencies already
  * passed, and those past what a change's own run has time for. */
 export let chosen = async (
@@ -343,6 +350,7 @@ export let chosen = async (
     kind: (f) => tested(f) ? platform(f) : 'deno',
     also: () => [...ALSO, ...also],
     runner: RUNS,
+    owner: member,
   })
 
 /** Plan and check a run before starting runtimes. A whole run needs no git

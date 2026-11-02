@@ -65,7 +65,9 @@ export let within = (
  * A narrowed run with a `budget` runs what fits it by what each file is
  * expected to `cost`, the nearest to the change first (./deps.ts `distance`,
  * `within`), and only those a distance reaches unless none is, and counts the
- * rest `beyond`: a run elsewhere with all of its files covers those.
+ * rest `beyond`: a run elsewhere with all of its files covers those. Given
+ * each path's package (`owner`), the files of a changed package its distance
+ * reaches always run, and those importing one come first of the rest.
  * When deno cannot say what a module imports, a narrowed run reports that
  * selection is unavailable; an explicit run has no keys and runs its files.
  */
@@ -81,6 +83,7 @@ export let choose = async (
     changed,
     budget,
     cost = () => 0,
+    owner,
   }: {
     all?: boolean
     observed?: boolean
@@ -91,6 +94,7 @@ export let choose = async (
     changed?: string[]
     budget?: number
     cost?: (file: string) => number
+    owner?: (path: string) => string | undefined
   } = {},
 ): Promise<Chosen> => {
   if (changed && !changed.length) {
@@ -187,7 +191,7 @@ export let choose = async (
         run.push(f)
       }
     }
-    let far = changed && s.distance(changed)
+    let far = changed && s.distance(changed, owner)
     let rank = (f: string) =>
       far ? Math.min(far(f), far(plans.get(f) ?? f)) : Infinity
     let near = run.filter((f) => rank(f) < Infinity)

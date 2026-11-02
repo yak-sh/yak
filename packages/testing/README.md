@@ -306,9 +306,13 @@ holding the key of each file given, from a caller that chose them already
 narrowed run to it. A file's rank is its **distance**: imports from a changed
 module to the file, never through a module that loads more than `WIDE` others.
 Such a module composes a platform, so nearly every change reaches its importers
-and that path says nothing about them. A changed file always runs, and others
-run nearest and cheapest first. A file with no distance runs only when no file
-has one (a change to the lock, say). What does not run is counted as `beyond`.
+and that path says nothing about them. Given each path's package (`owner`), the
+files of a changed package a distance reaches, its README examples among them,
+always run, as a changed file does. The files importing a changed package from
+another, and a changed package's files reached only through a wide module, come
+next; the rest run nearest and cheapest first. A file with no distance runs only
+when no file has one (a change to the lock, say). What does not run is counted
+as `beyond`.
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that
