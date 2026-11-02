@@ -2,7 +2,7 @@ import { equal, ok, test, throws } from '@yaks/testing'
 import { appStore } from './directory.ts'
 import { handler } from './kernel.ts'
 import { opened, seal } from './lib/token.ts'
-import { tools, viewport } from './preview.ts'
+import { fetch as preview, tools, viewport } from './preview.ts'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { homed } from './page-graph.ts'
@@ -54,6 +54,35 @@ let token = url.slice(mount.length).split('/')[0]
 let app = (await dir.app(space, 'draft'))!
 let request = (path = '', init: RequestInit = {}) =>
   kernel(new Request(new URL(path, url), init), env)
+
+test('preview forwards immutable WebSocket upgrades with their socket and private headers', async () => {
+  let socket = {}
+  let upgrade = Object.assign(new Response(null, { status: 101 }), {
+    webSocket: socket,
+  })
+  Object.defineProperty(upgrade, 'headers', { value: Response.error().headers })
+  let bindings = {
+    ...env,
+    STORE: {
+      ...env.STORE,
+      get: (id: unknown) => ({
+        fetch: (req: Request) =>
+          new URL(req.url).pathname == '/ws'
+            ? Promise.resolve(upgrade)
+            : env.STORE.get(id).fetch(req),
+      }),
+    },
+  }
+  let res = await preview(
+    new Request(new URL('api/ws', url), { headers: { upgrade: 'websocket' } }),
+    bindings,
+  )
+  equal(res.status, 101)
+  equal((res as Response & { webSocket: unknown }).webSocket, socket)
+  equal(res.headers.get('cache-control'), 'private, no-store')
+  equal(res.headers.get('referrer-policy'), 'no-referrer')
+  equal(res.headers.get('x-robots-tag'), 'noindex, nofollow')
+})
 
 test('preview serves an unreleased draft and leaves its release pointer alone', async () => {
   equal((await dir.app(space, 'draft'))!.version, 0)
@@ -128,7 +157,7 @@ test('a preview ticket never exposes server source or another app', async () => 
       .status,
     404,
   )
-  let tampered = token.slice(0, -1) + (token.endsWith('x') ? 'y' : 'x')
+  let tampered = (token.startsWith('x') ? 'y' : 'x') + token.slice(1)
   equal(
     (await kernel(new Request(url.replace(token, tampered)), env)).status,
     404,

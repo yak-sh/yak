@@ -26,7 +26,7 @@ import { countedSpend, refusedSpend } from './meter.ts'
 import { staged } from './release.ts'
 import { loaded, seedy } from './seed.ts'
 import { vouched, type Who } from './session.ts'
-import { clock } from './timing.ts'
+import { clock, headed } from './timing.ts'
 import {
   APP,
   type Args,
@@ -68,12 +68,11 @@ let privateHeaders = {
 }
 
 let privateResponse = (res: Response) => {
-  // WebSocket upgrade responses must keep their socket and status intact.
-  if (res.status != 101) res = new Response(res.body, res)
+  let headers = new Headers(res.headers)
   for (let [name, value] of Object.entries(privateHeaders)) {
-    res.headers.set(name, value)
+    headers.set(name, value)
   }
-  return walled(res)
+  return walled(headed(res, headers))
 }
 
 let no = (status = 404) =>
