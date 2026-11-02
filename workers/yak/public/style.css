@@ -712,6 +712,13 @@
     justify-self: center;
   }
 
+  /* The gallery (gallery.ts), a page kind on its <body>: a grid of cards
+     as wide as the home page's, so as many columns fit as the screen has
+     room for. */
+  .Gallery {
+    --measure: var(--wide-measure);
+  }
+
   .Make {
     display: grid;
     gap: 1.25rem;
@@ -724,7 +731,7 @@
 
   .Make_List {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
     gap: var(--gap);
   }
 
@@ -740,6 +747,17 @@
     background: var(--ground);
   }
 
+  /* On a card, the picture runs to the card's edges, so it is as large as
+     the card is wide; last on the card, it closes the card's foot too. */
+  .Card > .Make_Shot {
+    margin-inline: calc(-1 * var(--pad-inline));
+  }
+
+  .Card > .Make_Shot:last-child {
+    margin-bottom: calc(-1 * var(--pad-block));
+    border-radius: 0 0 var(--corner) var(--corner);
+  }
+
   .Make_Shot img {
     display: block;
     width: 100%;
@@ -749,7 +767,7 @@
 
   .Make_Shot .Make_Shot-none {
     object-fit: contain;
-    padding: 1rem;
+    padding: var(--half-gap);
   }
 
   /* A published app's own page (app-page.ts): its name, what it is and

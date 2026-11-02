@@ -439,7 +439,7 @@ ${
     }
 </script>
 </head>
-<body>
+<body class="Gallery">
 ${top}
 <main class="Page">
 <section class="Make" aria-labelledby="gallery">
