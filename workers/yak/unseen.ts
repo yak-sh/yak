@@ -166,6 +166,20 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 // its release is the platform build, the app's version beside it. Archiving
 // it there (the app's own code broke) leaves the owner's record open. Tagged
 // `source: app`, the space's tracker writes the one letter.
+//
+// A file the browser could not load says only its address, which a fault's
+// normalization erases, so every space's broken image would be one bug. Its
+// fault names the app instead: each app's missing file is its own bug.
+let missFault = (
+  message: string,
+  reached: Record<string, string | undefined>,
+) => {
+  let tag = /^failed to load (\w+)\b/.exec(message)?.[1]
+  return tag
+    ? `exception:failed to load ${tag}@${reached.space}/${reached.app}`
+    : undefined
+}
+
 let seenByPlatform = (
   error: Error,
   version: number | null | undefined,
@@ -183,6 +197,7 @@ let seenByPlatform = (
     ...place,
     ...page,
     sink: () => {},
+    fault: missFault(error.message, reached),
     version: version ?? undefined,
     environment: at.env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
     during: { ...place.during, kind: 'exception' },

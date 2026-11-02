@@ -686,6 +686,21 @@ test("a person's app break is the platform's to look at too", async () => {
   assertEquals([kept().length, shared().length, account], [1, 0, 'test'])
 })
 
+// A missing file's address normalizes away, so its fault names the app: one
+// app's broken image is never another space's bug.
+test("a person's missing file is that app's own bug on the platform", async () => {
+  let fault = async (message: string) => {
+    wrote = []
+    await workerBreak(envOf(mirror().get), space, app, visit(), Error(message))
+    return (shared()[0].error as { fault?: string }).fault
+  }
+  assertEquals(
+    await fault('failed to load img https://jeff.yaks.app/recipes/a.png'),
+    'exception:failed to load img@jeff/recipes',
+  )
+  assertEquals(await fault('worker fell over'), undefined)
+})
+
 // And the same rule the answered status reads: a no the app's worker relayed
 // by throwing what one of our doors told it is an answer carried out, not
 // something that fell over.
