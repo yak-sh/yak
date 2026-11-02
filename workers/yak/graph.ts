@@ -4978,25 +4978,32 @@ export class Store {
     }
     if (path == '/documents/search' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound' }, 404)
-      let { words, semantic, person } = await request.json() as {
+      let { words, semantic, scope, person } = await request.json() as {
         words: string
         semantic: boolean
+        scope?: string
         person: string | null
       }
+      let screen = (line: string) =>
+        this.#texts.screen(line, this.#graph.scope({ person }))
       return Response.json(
         await documentHits(
           {
-            read: (query, opts) => this.#graph.read(query, { ...opts, person }),
             get: (ids, comps, opts) =>
               this.#graph.get(ids, comps, { ...opts, person }),
           },
-          ranking(() => this.#embedder(), {
-            ...this.#texts,
-            screen: (line) =>
-              this.#texts.screen(line, this.#graph.scope({ person })),
-          }),
+          {
+            words: (text, { limit, within }) =>
+              Promise.resolve(this.#found(text, { person }, {
+                limit,
+                screen: within ? screen(within) ?? undefined : undefined,
+              })),
+            meaning: semantic
+              ? ranking(() => this.#embedder(), { ...this.#texts, screen })
+              : undefined,
+          },
           words,
-          semantic,
+          scope,
         ),
       )
     }
@@ -5266,21 +5273,9 @@ export class Store {
     let text = parse(line).clauses
       .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
     if (!text.trim() || !rows.length) return rows
-    // The same declared fields the boot schema and membership were cut from.
-    let searchable = fields(this.#vocab)
-    let hits = find(
-      this.#sql,
-      searchable,
-      text,
-      {
-        limit: Math.max(rows.length, 20),
-        screens: screens(
-          searchable,
-          this.#vocab,
-          this.#graph.scope(readOpts),
-        ),
-      },
-    )
+    let hits = this.#found(text, readOpts, {
+      limit: Math.max(rows.length, 20),
+    })
     let at = new Map(hits.map((h, i) => [h.entity, { i, h }]))
     return rows
       .map((b) => {
@@ -5293,6 +5288,22 @@ export class Store {
         (at.get(a.entity.eid)?.i ?? rows.length) -
         (at.get(b.entity.eid)?.i ?? rows.length)
       )
+  }
+
+  // The full-text hits for words, best first, over the text this reader may
+  // see: what a bare word in a query matches by, and what search and ask
+  // retrieve with (document-search.ts).
+  #found(
+    text: string,
+    readOpts: ReadOpts,
+    opts: { limit: number; screen?: Raw },
+  ) {
+    // The same declared fields the boot schema and membership were cut from.
+    let searchable = fields(this.#vocab)
+    return find(this.#sql, searchable, text, {
+      ...opts,
+      screens: screens(searchable, this.#vocab, this.#graph.scope(readOpts)),
+    })
   }
 
   async #kinded(

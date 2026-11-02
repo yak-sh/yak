@@ -110,6 +110,10 @@ await p.settled()
 let repeatedCalls = ocr
 let fts = await send('documents/search', { words: 'engine' })
 let ftsHits = await fts.json()
+let scoped = await (await send('documents/search', {
+  words: 'engine',
+  scope: '.doc',
+})).json()
 let response = await send('documents/ask', { words: 'fire engine costs' })
 let answer = await response.json()
 let spent = (await dir.space('ada'))!.meter!.models!
@@ -134,6 +138,7 @@ test('upload extraction is durable, automatic and repeated uploads reuse it', ()
 test('a private app searches and answers with page citations through its public API', () => {
   assertEquals(fts.status, 200, JSON.stringify(ftsHits))
   assertEquals(ftsHits.map((h: { page: number }) => h.page), [2])
+  assertEquals(scoped, [])
   assertEquals(response.status, 200, JSON.stringify(answer))
   assertStringIncludes(answer.answer, '500 dollars')
   assertEquals(answer.citations[0].document.name, 'Minutes.pdf')

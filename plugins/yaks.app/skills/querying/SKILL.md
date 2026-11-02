@@ -522,10 +522,11 @@ Uploaded PDFs and supported Office files become
 `document_page{document, blob,
 page, location, text}` rows. Their text
 participates in the same full-text search and `.near=<page eid>` searches as
-other searchable properties. For search words by meaning,
-`POST ./api/documents/search` with `{words, semantic:
-true}` returns page hits
-with the original document name and URL. `POST ./api/documents/ask` with
-`{words}` returns an answer and page citations.
+other searchable properties. `POST ./api/documents/search` with
+`{words,
+semantic: true}` searches the app's rows and document pages by words
+and by meaning together, and `POST ./api/documents/ask` with `{words}` answers
+from the same hits with citations. Either takes an optional `scope`, a filter
+line such as `.document_page`, that narrows what it reaches.
 [Files and Uploads](https://yaks.app/docs/files.md#searching-documents) covers
 extraction, scanned pages, permissions and costs.

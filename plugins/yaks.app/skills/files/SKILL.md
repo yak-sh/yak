@@ -425,30 +425,45 @@ An ordinary query finds pages:
 A page can request hits with citations directly:
 
 ```js ignore
-let searchDocuments = async (words, semantic = false) => {
+let searchDocuments = async (words, semantic = false, scope) => {
   let response = await fetch('./api/documents/search', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ words, semantic }),
+    body: JSON.stringify({ words, semantic, scope }),
   })
   if (!response.ok) throw await response.json()
   return response.json()
 }
 ```
 
-Each hit is `{eid, document: {eid, name, url}, page, location, text}`. Semantic
-hits also carry `score`. `document.url` opens the original PDF at `#page=N`.
+This search reaches everything an ordinary search does: the app's rows (a
+meeting, a notice, a page of the site) and the text inside its documents. It
+matches by words, the way a bare word in a query does, and with `semantic: true`
+by meaning too, the two rankings merged into one. A hit on a document page is
+`{eid, document: {eid, name, url}, page, location, text}`; `document.url` opens
+the original PDF at `#page=N`. A hit on a row is
+`{eid, title, components,
+text}`, where `text` is its components written out. A
+hit found by meaning also carries `score`. Each request returns up to ten hits.
+
+`scope` narrows what it reaches. It is a filter line, as a query takes, and
+everything is the default:
+
+```js ignore
+await searchDocuments('seconded', false, '.document_page') // documents only
+await searchDocuments('board', false, '.meeting') // meetings only
+```
+
 Full-text search is available to anyone who may read the app. Semantic search
 embeds the question and follows the same model permissions as `./api/ai/run`:
 members who may write, or a writable app with `models: 'open'`. Search words and
-questions are limited to 4,000 characters; each request returns up to eight
-pages.
+questions are limited to 4,000 characters.
 
-`POST ./api/documents/ask` with `{words: 'your question'}` retrieves relevant
-pages and answers from them. Its reply is `{answer, citations}`. Citations
-contain the hit's page and document fields, without the extracted text. Only
-retrieved page ids can be returned as citations. If there are no matching pages,
-the answer says so. The same model permissions apply.
+`POST ./api/documents/ask` with `{words: 'your question'}`, and an optional
+`scope`, retrieves by words and meaning together and answers from those hits.
+Its reply is `{answer, citations}`. Each citation is a hit as above, without its
+`text`: a document page or a row. Only retrieved hits can be cited. If nothing
+matches, the answer says so. The same model permissions apply.
 
 Text extraction itself makes no model call on a text-only PDF; Office conversion
 uses Workers AI's free `toMarkdown` conversion. A scanned page is transcribed

@@ -3,12 +3,12 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { open } from '@yaks/sqlite/db'
 import { statements, storage } from '@yaks/sqlite'
-import { adopt, fields, search } from '@yaks/fts'
+import { adopt, fields, find, search } from '@yaks/fts'
 import { hashEmbedder, meaning, schema, sweep } from '@yaks/embedding'
 import { storeWords } from './vocab.ts'
 import { type Extractor, indexDocument, pageBundle } from './documents.ts'
 import { documentPages } from './document-graph.ts'
-import { cited, hits } from './document-search.ts'
+import { cited, type Hit, hits, type PageHit } from './document-search.ts'
 
 let vocab = storeWords('app').vocab
 let fixture = async () => {
@@ -52,10 +52,15 @@ let a = await fixture(),
   d = await fixture()
 let index = (f: typeof a, pdf = true, source = f.source) =>
   indexDocument(f.g, f.document, f.blob, pdf, source)
+let lookup = (f: typeof a, words: string) =>
+  hits(f.g, {
+    words: (text, { limit }) =>
+      Promise.resolve(find(f.db, fields(vocab), text, { limit })),
+  }, words) as Promise<PageHit[]>
 
 test('text and scanned pages are searched with their document and parser page number', async () => {
   await index(a)
-  let found = await hits(a.g, () => Promise.resolve([]), 'fire')
+  let found = await lookup(a, 'fire')
   assertEquals(found.map((h) => [h.document.name, h.page, h.location]), [[
     'Minutes.pdf',
     2,
@@ -65,11 +70,13 @@ test('text and scanned pages are searched with their document and parser page nu
   await sweep(sql, fields(vocab), embed)
   let near = await hits(
     a.g,
-    (words, opts) =>
-      meaning(sql, fields(vocab), embed, words, { limit: opts?.limit }),
+    {
+      words: () => Promise.resolve([]),
+      meaning: (words, opts) =>
+        meaning(sql, fields(vocab), embed, words, { limit: opts?.limit }),
+    },
     'fire truck',
-    true,
-  )
+  ) as PageHit[]
   assertEquals(near[0].page, 2)
   assertEquals(near[0].document.url, './api/blob/' + a.blob + '#page=2')
 })
@@ -84,13 +91,13 @@ test('a repeated upload and rename reuse extracted pages; deleting bytes removes
   assertEquals(b.calls, [1, 2])
   assertEquals(b.ocr(), 1)
   assertEquals(
-    (await hits(b.g, () => Promise.resolve([]), 'zoning'))[0].document.name,
+    (await lookup(b, 'zoning'))[0].document.name,
     'Board minutes.pdf',
   )
   await b.g.apply([{ entity: { eid: b.blob }, $delete: true }], {
     trusted: true,
   })
-  assertEquals(await hits(b.g, () => Promise.resolve([]), 'zoning'), [])
+  assertEquals(await lookup(b, 'zoning'), [])
 })
 
 test('an interrupted extraction resumes after its committed pages and source changes hide old text', async () => {
@@ -106,18 +113,18 @@ test('an interrupted extraction resumes after its committed pages and source cha
     entity: { eid: c.document },
     attachment: { blob: 'b'.repeat(64) },
   }], { trusted: true })
-  assertEquals(await hits(c.g, () => Promise.resolve([]), 'zoning'), [])
+  assertEquals(await lookup(c, 'zoning'), [])
 })
 
 test('Office conversion is indexed once and citations can only name retrieved pages', async () => {
   await index(d, false)
-  let sources = await hits(d.g, () => Promise.resolve([]), 'repairs')
+  let sources = await lookup(d, 'repairs')
   assertEquals(sources[0].location, 'Document')
   let answer = (citations: unknown[]) => ({
     response: JSON.stringify({ answer: '500 dollars', citations }),
   })
   assertEquals(
-    cited(answer([1]), sources).citations[0].document.name,
+    (cited(answer([1]), sources).citations[0] as PageHit).document.name,
     'Minutes.pdf',
   )
   assertThrows(
@@ -153,4 +160,26 @@ test('removing and restoring a source extracts again; a late old completion cann
     }),
   ], { trusted: true })
   assertEquals(await e.g.read('zoning .document_page&*'), [])
+})
+
+test('a row matches beside document pages, and an answer cites it by title', async () => {
+  let meeting = crypto.randomUUID()
+  await d.g.apply([{
+    entity: { eid: meeting },
+    doc: { title: 'Board meeting', body: 'Road repairs are on the agenda.' },
+  }], { trusted: true })
+  let sources = await lookup(d, 'repairs') as Hit[]
+  assertEquals(sources.map((s) => 'document' in s ? 'page' : s.title).sort(), [
+    'Board meeting',
+    'page',
+  ])
+  let row = sources.findIndex((s) => !('document' in s)) + 1
+  assertEquals(
+    cited(
+      { response: JSON.stringify({ answer: 'Tuesday', citations: [row] }) },
+      sources,
+    )
+      .citations,
+    [{ eid: meeting, title: 'Board meeting', components: ['doc'] }],
+  )
 })
