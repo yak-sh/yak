@@ -60,6 +60,7 @@
     },
     "topic_new": {
       "tool": true,
+      "destructive": false,
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
@@ -111,6 +112,8 @@
     },
     "topic_add": {
       "tool": true,
+      "destructive": false,
+      "idempotent": true,
       "noun": "topic",
       "verb": "add",
       "title": "Add to a topic",

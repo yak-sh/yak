@@ -76,6 +76,7 @@
     },
     "sandbox_new": {
       "tool": true,
+      "destructive": false,
       "description": "Record a sandbox intention before external provisioning.",
       "input": {
         "provider": {

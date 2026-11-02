@@ -606,6 +606,7 @@
     },
     "claim_take": {
       "tool": true,
+      "destructive": false,
       "noun": "claim",
       "verb": "take",
       "title": "Claim an entity",
@@ -632,6 +633,7 @@
     },
     "claim_release": {
       "tool": true,
+      "destructive": false,
       "noun": "claim",
       "verb": "release",
       "title": "Release a claim",
@@ -653,6 +655,7 @@
     },
     "session_context": {
       "tool": true,
+      "destructive": false,
       "noun": "session",
       "verb": "context",
       "title": "Read a session\u2019s context",
@@ -679,6 +682,7 @@
     },
     "session_wrap": {
       "tool": true,
+      "destructive": false,
       "noun": "session",
       "verb": "wrap",
       "title": "Wrap up a session",
@@ -730,6 +734,7 @@
     },
     "session_brief": {
       "tool": true,
+      "destructive": false,
       "noun": "session",
       "verb": "brief",
       "title": "Record a session\u2019s brief",

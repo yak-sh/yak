@@ -163,6 +163,7 @@
     },
     "mail_show": {
       "tool": true,
+      "destructive": false,
       "noun": "mail",
       "verb": "show",
       "title": "Read a mail message",

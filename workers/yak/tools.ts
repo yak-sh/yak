@@ -2434,10 +2434,11 @@ let HINTS: Record<
   // (sandbox.ts BUDGET).
   shell: { destructive: true, openWorld: true, slots: { budget: `${BUDGET}` } },
   wait: { readOnly: true },
-  stop: { destructive: true },
+  stop: { destructive: false, idempotent: true },
   read: { readOnly: true },
-  // A path that already holds something is overwritten.
-  write: { destructive: true, idempotent: true },
+  // A path that already holds something is overwritten, but nothing of the
+  // app lives in the sandbox: only sandbox_ship copies out of it.
+  write: { destructive: false, idempotent: true },
 }
 
 let SANDBOX: Row[] = machineDeclared().map((t) => {
@@ -2807,7 +2808,7 @@ let OURS: Row[] = [
   },
   {
     name: 'space_delete',
-    destructive: true,
+    destructive: false,
     input: {
       type: 'object',
       properties: {
@@ -3508,7 +3509,7 @@ let OURS: Row[] = [
   ...SANDBOX,
   {
     name: 'sandbox_ship',
-    destructive: true,
+    destructive: false,
     openWorld: true,
     input: {
       type: 'object',
@@ -3688,8 +3689,8 @@ let OURS: Row[] = [
   // for on purpose, whenever a dataset needs to go in.
   {
     name: 'store_load',
-    // It patches rows already there in place, as store_restore does.
-    destructive: true,
+    // It patches rows already there in place, and store_restore takes it back.
+    destructive: false,
     input: {
       type: 'object',
       properties: {
@@ -3857,7 +3858,7 @@ let OURS: Row[] = [
   },
   {
     name: 'app_rollback',
-    destructive: true,
+    destructive: false,
     openWorld: true,
     input: {
       type: 'object',
@@ -3938,7 +3939,10 @@ let OURS: Row[] = [
   // app is made of: a rollback puts the files back, this puts the data back.
   {
     name: 'store_restore',
-    destructive: true,
+    // A restore records where the store stood first, so restoring again
+    // undoes it, and the same moment asked twice lands the same store.
+    destructive: false,
+    idempotent: true,
     input: {
       type: 'object',
       properties: {
@@ -4108,7 +4112,7 @@ let OURS: Row[] = [
   },
   {
     name: 'store_retry',
-    destructive: true,
+    destructive: false,
     input: {
       type: 'object',
       properties: {
@@ -5101,7 +5105,7 @@ let OURS: Row[] = [
   },
   {
     name: 'domain_detach',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     openWorld: true,
     input: {
@@ -5259,7 +5263,7 @@ let OURS: Row[] = [
   },
   {
     name: 'app_unpublish',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     openWorld: true,
     input: {
@@ -5495,10 +5499,10 @@ let OURS: Row[] = [
   },
   {
     name: 'app_update',
-    // The copy's files are replaced by the publisher's current ones and the
-    // version it was on is not offered again — app_rollback's shape, and its
-    // hint. Their data is untouched, which is a different promise.
-    destructive: true,
+    // The copy's files are replaced by the publisher's current ones, as a new
+    // version app_rollback takes back. Their data is untouched.
+    destructive: false,
+    idempotent: true,
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -5775,7 +5779,7 @@ let OURS: Row[] = [
   },
   {
     name: 'member_remove',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     input: {
       type: 'object',

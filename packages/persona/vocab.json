@@ -65,6 +65,7 @@
     },
     "persona_sync": {
       "tool": true,
+      "destructive": false,
       "noun": "persona",
       "verb": "sync",
       "title": "Write the persona files",

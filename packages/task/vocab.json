@@ -103,6 +103,7 @@
     },
     "task_new": {
       "tool": true,
+      "destructive": false,
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
@@ -255,6 +256,7 @@
     },
     "task_update": {
       "tool": true,
+      "destructive": false,
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
@@ -540,6 +542,7 @@
     },
     "decision_new": {
       "tool": true,
+      "destructive": false,
       "noun": "decision",
       "verb": "new",
       "title": "Ask a decision",
@@ -606,6 +609,7 @@
     },
     "decision_answer": {
       "tool": true,
+      "destructive": false,
       "noun": "decision",
       "verb": "answer",
       "title": "Answer a decision",

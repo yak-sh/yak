@@ -251,6 +251,7 @@
     },
     "effect_retry": {
       "tool": true,
+      "destructive": false,
       "noun": "effect",
       "verb": "retry",
       "title": "Retry failed effect runs",

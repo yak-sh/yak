@@ -294,6 +294,7 @@
     },
     "builder_build": {
       "tool": true,
+      "destructive": false,
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
@@ -432,6 +433,7 @@
     },
     "builder_supply": {
       "tool": true,
+      "destructive": false,
       "noun": "builder",
       "verb": "supply",
       "title": "Supply an existing artifact",
@@ -503,6 +505,7 @@
     },
     "builder_choose": {
       "tool": true,
+      "destructive": false,
       "noun": "builder",
       "verb": "choose",
       "title": "Choose an output take",

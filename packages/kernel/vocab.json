@@ -452,6 +452,7 @@
     },
     "comment_new": {
       "tool": true,
+      "destructive": false,
       "noun": "comment",
       "verb": "new",
       "title": "Comment on an entity",

@@ -586,7 +586,8 @@ let CONNECTIONS: Row[] = [
 
 let BUILDERS: Row[] = [{
   name: 'builder_choose',
-  destructive: true,
+  destructive: false,
+  idempotent: true,
   input: {
     type: 'object',
     properties: {
@@ -612,7 +613,7 @@ let BUILDERS: Row[] = [{
   },
 }, {
   name: 'builder_build',
-  destructive: true,
+  destructive: false,
   openWorld: true,
   input: {
     type: 'object',
@@ -693,7 +694,8 @@ let BUILDERS: Row[] = [{
   },
 }, {
   name: 'builder_supply',
-  destructive: true,
+  destructive: false,
+  idempotent: true,
   input: {
     type: 'object',
     properties: {

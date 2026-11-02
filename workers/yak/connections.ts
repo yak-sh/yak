@@ -1227,7 +1227,7 @@ let integrationOf = (b: Bundle | undefined) =>
 let CONNECTIONS: Row[] = [
   {
     name: 'connection_attach',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     input: {
       type: 'object',
@@ -1288,7 +1288,7 @@ let CONNECTIONS: Row[] = [
   },
   {
     name: 'connection_lend',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     input: {
       type: 'object',

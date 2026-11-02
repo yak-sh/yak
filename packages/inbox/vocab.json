@@ -16,6 +16,7 @@
     },
     "inbox_new": {
       "tool": true,
+      "destructive": false,
       "noun": "inbox",
       "verb": "new",
       "title": "Start a conversation",
@@ -125,6 +126,7 @@
     },
     "inbox_archive": {
       "tool": true,
+      "destructive": false,
       "noun": "inbox",
       "verb": "archive",
       "title": "Archive an inbox item",
@@ -182,6 +184,7 @@
     },
     "inbox_open": {
       "tool": true,
+      "destructive": false,
       "noun": "inbox",
       "verb": "open",
       "title": "Read an inbox thread",

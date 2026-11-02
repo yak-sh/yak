@@ -90,6 +90,7 @@
     },
     "code_sync": {
       "tool": true,
+      "destructive": false,
       "noun": "code",
       "verb": "sync",
       "title": "Sync the codebase",

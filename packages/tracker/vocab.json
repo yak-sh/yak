@@ -424,6 +424,7 @@
     },
     "bug_resolve": {
       "tool": true,
+      "destructive": false,
       "noun": "bug",
       "verb": "resolve",
       "title": "Resolve bugs",
@@ -475,6 +476,7 @@
     },
     "bug_archive": {
       "tool": true,
+      "destructive": false,
       "noun": "bug",
       "verb": "archive",
       "title": "Archive bugs",
@@ -503,6 +505,7 @@
     },
     "bug_reopen": {
       "tool": true,
+      "destructive": false,
       "noun": "bug",
       "verb": "reopen",
       "title": "Reopen bugs",

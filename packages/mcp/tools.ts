@@ -52,9 +52,9 @@ export type CoreOpts = {
    * to `graph_apply`'s description — "everything this store held can be put
    * back to any moment in the last 30 days with store_restore", say. A server
    * that offers one should describe it there, because that is where an agent
-   * reads it at the moment it is deciding whether to risk the write. Left out
-   * where there is no way back, since a promise nobody can keep is worse than
-   * silence. */
+   * reads it at the moment it is deciding whether to risk the write. Given,
+   * `graph_apply` is listed as not destructive. Left out where there is no way
+   * back, since a promise nobody can keep is worse than silence. */
   undo?: string
   /** how a read here is narrowed to one part of this graph, in its own words,
    * appended to `graph_query`'s description — yaks.app reads every app in a
@@ -179,6 +179,8 @@ export let core = (opts: CoreOpts): Tool[] =>
       return {
         ...t,
         ...(added ? { description: `${t.description} ${added}` } : {}),
+        // A server with a way back makes a delete one it can take back.
+        ...(t.name == 'graph_apply' && opts.undo ? { destructive: false } : {}),
         inputSchema: {
           ...said,
           properties: { ...scope, ...said.properties },

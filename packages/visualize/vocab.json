@@ -6,6 +6,7 @@
   "$defs": {
     "visualize_anatomy": {
       "tool": true,
+      "readOnly": true,
       "noun": "visualize",
       "verb": "anatomy",
       "title": "Read the platform's anatomy",
@@ -61,6 +62,7 @@
     },
     "visualize_activity": {
       "tool": true,
+      "readOnly": true,
       "noun": "visualize",
       "verb": "activity",
       "title": "Capture causal platform activity",

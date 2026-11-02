@@ -245,6 +245,7 @@
     },
     "connection_need": {
       "tool": true,
+      "destructive": false,
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",

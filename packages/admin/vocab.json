@@ -83,6 +83,7 @@
     },
     "admin_link": {
       "tool": true,
+      "destructive": false,
       "noun": "admin",
       "verb": "link",
       "title": "Make a standing sign-in link",
@@ -105,6 +106,8 @@
     },
     "admin_fee": {
       "tool": true,
+      "destructive": false,
+      "idempotent": true,
       "noun": "admin",
       "verb": "fee",
       "title": "Read or set the platform’s fee",

@@ -267,6 +267,7 @@
     },
     "cites_verify": {
       "tool": true,
+      "destructive": false,
       "noun": "cites",
       "verb": "verify",
       "title": "Verify a citation",

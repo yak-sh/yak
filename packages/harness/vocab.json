@@ -295,6 +295,8 @@
     },
     "session_home": {
       "tool": true,
+      "destructive": false,
+      "idempotent": true,
       "description": "Change a session default workspace without moving files, commands or permissions. Omitting cwd clears the previous directory.",
       "noun": "session",
       "verb": "home",
