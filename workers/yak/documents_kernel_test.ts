@@ -40,7 +40,10 @@ let p = platform({
       return {
         response: JSON.stringify({
           answer: 'The fire engine costs 500 dollars (Minutes.pdf, Page 2).',
-          citations: [sources.find((s: { page: number }) => s.page == 2).eid],
+          citations: [
+            sources.find((s: { location: string }) => s.location == 'Page 2')
+              .source,
+          ],
         }),
         usage: { prompt_tokens: 200, completion_tokens: 30 },
       }

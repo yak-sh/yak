@@ -113,15 +113,15 @@ test('Office conversion is indexed once and citations can only name retrieved pa
   await index(d, false)
   let sources = await hits(d.g, () => Promise.resolve([]), 'repairs')
   assertEquals(sources[0].location, 'Document')
-  let answer = (citations: string[]) => ({
+  let answer = (citations: unknown[]) => ({
     response: JSON.stringify({ answer: '500 dollars', citations }),
   })
   assertEquals(
-    cited(answer([sources[0].eid]), sources).citations[0].document.name,
+    cited(answer([1]), sources).citations[0].document.name,
     'Minutes.pdf',
   )
   assertThrows(
-    () => cited(answer(['invented-page']), sources),
+    () => cited(answer([sources.length + 1]), sources),
     Error,
     'invalid citations',
   )
