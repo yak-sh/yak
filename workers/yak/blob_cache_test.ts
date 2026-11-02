@@ -51,7 +51,10 @@ test('private app blobs keep the cache behind authorization', async () => {
 
   let whole = await get()
   assertEquals(whole.status, 200)
-  assertEquals(whole.headers.get('cache-control'), 'private, no-store')
+  assertEquals(
+    whole.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
   let etag = whole.headers.get('etag')!
   assertEquals(new Uint8Array(await whole.arrayBuffer()), body)
   assertEquals(calls.length, 1)

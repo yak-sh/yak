@@ -16,7 +16,7 @@ export type Served = {
   mime?: string | null
   name?: string | null
   etag?: string | null
-  cache?: 'immutable' | 'browser' | 'private'
+  cache?: 'immutable' | 'browser'
 }
 
 // A server may ignore malformed or multiple ranges and answer the whole file.
@@ -143,8 +143,6 @@ let headersOf = (meta: Served): HeadersInit => ({
     ? 'public, max-age=31536000, immutable'
     : meta.cache == 'browser'
     ? 'private, max-age=31536000, immutable'
-    : meta.cache == 'private'
-    ? 'private, no-store'
     : 'public, no-cache',
   // A sandbox makes Chrome's native media viewer an opaque origin. Its
   // crossorigin fetch of this same URL then fails. Inert media keeps its

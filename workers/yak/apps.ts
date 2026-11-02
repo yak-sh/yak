@@ -1591,9 +1591,7 @@ let gave = async (
       status: 302,
       headers: {
         location: to.href,
-        'cache-control': app.access == 'private'
-          ? 'private, no-store'
-          : 'private, no-cache',
+        'cache-control': 'private, no-cache',
       },
     })
   }
@@ -1609,7 +1607,7 @@ let gave = async (
     mime: rep.media_type,
     name: rep.name,
     etag: `"${eid}"`,
-    cache: app.access == 'private' ? 'private' : 'browser',
+    cache: 'browser',
   }
   return blobResponse(
     (seek) =>

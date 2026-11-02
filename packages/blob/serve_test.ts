@@ -183,15 +183,13 @@ test('cached bytes keep range and condition semantics under the response fence',
   assertEquals(await head.text(), '')
 })
 
-test('immutable and private policies follow the representation', () => {
+test('immutable and browser policies follow the representation', () => {
   let bytes = new Uint8Array([1, 2, 3])
   let immutable = served(bytes, { mime: 'image/png', cache: 'immutable' })
   assertEquals(
     immutable.headers.get('cache-control'),
     'public, max-age=31536000, immutable',
   )
-  let private_ = served(bytes, { mime: 'image/png', cache: 'private' })
-  assertEquals(private_.headers.get('cache-control'), 'private, no-store')
   let browser = served(bytes, { cache: 'browser' })
   assertEquals(
     browser.headers.get('cache-control'),

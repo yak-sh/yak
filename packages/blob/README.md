@@ -572,8 +572,7 @@ script-src 'none'`; audio and video keep
 their origin with `script-src 'none'` so a browser's native player can fetch
 them. A mutable response revalidates. A versioned public response can use
 `cache: 'immutable'` for a one-year cache; an app response can use `browser`,
-kept a year by the reader's own browser and by no shared cache, or `private`,
-kept by none, so a deletion or an access change stops every later read.
+kept a year by the reader's own browser and by no shared cache.
 `validator(address, meta)` makes the ETag for bytes and metadata. Scripts are
 blocked; the policy does not mean an HTML or SVG document cannot render.
 `ranged(bytes, request, headers)` serves the same byte-range behavior when a
