@@ -12,9 +12,16 @@ description: >
 
 A design is the graph's record of a proposed change (`design{}` + `doc{title,
 body}` + `proposed{}`), filed before the work. The repo documents what is; the
-design holds what's proposed. It makes the shape plain enough to build from and
-for the owner to skim, true enough to trust, so the walls are drawn before the
-crew moves them.
+design holds what's proposed. It is true enough to trust and short enough for
+the owner to read in a couple of minutes.
+
+He told us, about D-124238: "that design is too long for me to read". Designs
+written for him had grown to 10,000 to 15,000 characters. So the body is what
+he reads, and it holds three things: the proposal in a few sentences, what
+changes for a person, and his questions at the end, each with your
+recommendation. The detail an agent needs to build it (components, package
+boundaries, migration) goes into the tasks of the task tree, where the agent
+who builds it will look.
 
 He doesn't read them all and never blocks on one. When it looks good, decide it
 yourself, build, and adapt afterwards. Only a refactor of something key the
@@ -29,17 +36,17 @@ tree becomes work agents are briefed on (`agent-briefs`).
 ## What a design carries
 
 - **Where things live** (M-38025). Inside a package, mess is cheap to fix
-  later; the boundaries between packages are expensive to move. So every design
-  has a section naming each package or worker it touches or adds, what each
-  owns, what it offers others (verbs in words, not types), and what moves. An
-  existing package that owns the idea comes first; a new one is for an idea
-  nothing owns yet.
+  later; the boundaries between packages are expensive to move. So the tasks
+  name each package or worker the work touches or adds, what each owns, what
+  it offers others (verbs in words, not types), and what moves. An existing
+  package that owns the idea comes first; a new one is for an idea nothing
+  owns yet.
 - **What is in a component** (M-59030). He judges a component by its
-  properties when he skims, so each one is written out as `comp{prop, prop, …}`, in the
-  design and in what you tell him about it. The name alone gives him nothing
-  to judge.
-- **His own words** (M-31946), quoted verbatim at the end: every message that
-  shaped the design, with its date. Your summary of him is strictly less than
+  properties, so each one is written `comp{prop, prop, …}` wherever it
+  appears, in a task or in what you tell him. The name alone gives him
+  nothing to judge.
+- **His own words** (M-31946): the messages that shaped the design, verbatim
+  and dated, as comments on it. Your summary of him is strictly less than
   what he said.
 - **Your recommendation.** Each open question carries the option you'd pick and
   why. A question any reasonable reader would answer the same way is a
@@ -68,19 +75,17 @@ design drifts unless it's held against the code. The pulls to feel for:
 
 ## The shape of the body
 
-In order:
+What he reads, in order, in a page or less:
 
-1. A gist: what changes and why, in a short paragraph.
-2. The model: the components (`comp{…}`), how they behave, how they compose.
-3. Where things live: per package or worker, what it gains, offers and loses.
-4. Migration, when stored data changes: one shape after, proven on a copy,
-   with no yaks app taken down (his standing ask; `data-migration`).
-5. Open questions, each with a recommendation.
-6. A task tree (below), once the shape is settled.
-7. His words, verbatim and dated.
+1. The proposal: what changes and why, in a few sentences.
+2. What changes for a person: what they see or do differently.
+3. Open questions, each with a recommendation.
 
-The model sections are plain prose about what will be, with no dates or
-history; provenance lives in the commits and the quotes.
+Everything else (the model, where things live, migration with one shape after
+and no yaks app taken down, his words) is in the task tree's tasks and the
+comments, each task carrying what its builder needs. The body is plain prose
+about what will be, with no dates or history; provenance lives in the commits
+and the quotes.
 
 ## Filing it
 
@@ -90,8 +95,7 @@ history; provenance lives in the commits and the quotes.
 {"title":"<what it proposes, in one line>","project":"P-19","body":"<the proposal>"}
 ```
 
-Bodies are long, so the CLI mirror also reads a drafted body from a scratch
-file:
+The CLI mirror also reads a drafted body from a scratch file:
 
 ```sh
 yak design new "<what it proposes, in one line>" @/path/to/body.md --project P-19
@@ -181,8 +185,9 @@ owner can answer is its own task with `assignee: "U-3709"`.
 
 ## When an agent drafts it
 
-A long design is often drafted by an agent into a scratch file, and you read it
-before it goes on the design. Check its claims against the code wherever they
+A design is often drafted by an agent into a scratch file, and you read it
+before it goes on the design; a draft that runs past a page is cut, its detail
+moved into the tasks. Check its claims against the code wherever they
 decide anything, then file it and build. Tell the owner only what he asked for,
 or a refactor of something key, with the components written out.
 
