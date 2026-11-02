@@ -9,6 +9,7 @@ import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
+import { type Directory, directoryOf } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
 import { endpoints } from './endpoints.ts'
@@ -78,6 +79,7 @@ export type Door = ReturnType<typeof driven>
 /** A kernel's door, its meta-space owner, and its cleanup. */
 export type Kernel = Door & {
   owner: Person
+  dir: Directory
   stop: () => Promise<void>
   // In-process HTTP probes can inspect what crossed the tracker queue door.
   reported: Bundle[]
@@ -207,6 +209,7 @@ let boot = async (
     return {
       ...door,
       owner: await signIn(door, `owner@${apex()}`),
+      dir: directoryOf(p.env.STORE),
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,

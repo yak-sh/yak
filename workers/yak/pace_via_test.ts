@@ -178,14 +178,16 @@ test('stored pacing separates entities and sealed vias, keeps earlier writers, a
     await client(k, host, 'world', otherOld).applied([move(oldRow, 3)])
     await paced(await oldPage.post([move(oldRow, 4)]))
 
-    // Older app-worker grants still answer, each with a stable instrument
-    // derived from the verified credential when it names no via itself.
+    // A policy-bound app-worker grant with no via has a stable instrument
+    // derived from its verified credential.
     let legacyRow = crypto.randomUUID()
+    let current = await k.dir.appAt(owner.eids[`${at.space}/${at.app}`])
+    assert(current)
     let token = (person: string) =>
       granting(k.secret, store, {
         person,
         role: 'owner',
-      })
+      }, current.app.policy)
     let legacy = await token(owner.person)
     let second = await token(person.person)
     let granted = (grant: string, x: number) =>
