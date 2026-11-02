@@ -4,6 +4,7 @@
 // uploaded document cited with its document.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meaning } from '@yaks/host'
+import { keywords } from '@yaks/fts'
 import { ANSWER, speech } from './documents.ts'
 import type { Answer, Asked } from './apps.ts'
 import { appStore } from './directory.ts'
@@ -71,11 +72,19 @@ export let hits = async (
   scope = '',
 ): Promise<Hit[]> => {
   let opts = { limit: LIMIT, ...(scope ? { within: scope } : {}) }
-  let lists = await Promise.all([
-    find.words(words, opts),
+  // Full-text search wants every word, as a search box does; a question names
+  // its subject in a few of its words, so each of those is searched too, and a
+  // row matching several of them rises.
+  let each = keywords(words)
+  let [near, ...lists] = await Promise.all([
     find.meaning ? find.meaning(words, opts) : [],
+    find.words(words, opts),
+    ...each.length > 1
+      ? each.slice(0, 8).map((word) => find.words(word, opts))
+      : [],
   ])
-  let similar = new Map(lists[1].map((h) => [h.entity, h.similarity]))
+  let similar = new Map(near.map((h) => [h.entity, h.similarity]))
+  lists.push(near)
   let rows = await graph.get(fused(lists).slice(0, LIMIT))
   let sources = await graph.get([
     ...new Set(

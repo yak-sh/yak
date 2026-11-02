@@ -2,7 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { excerpt, match, named, term } from './term.ts'
+import { excerpt, keywords, match, named, term } from './term.ts'
 
 test('a word is quoted, so every character in it is literal', () => {
   assertEquals(term('dragon'), '"dragon"*')
@@ -71,4 +71,13 @@ test('excerpt retains useful terms without discarding search words', () => {
   assertEquals(excerpt('a with'), term('a'))
   assertEquals(excerpt('the "a dragon" with wings'), '"a dragon" "wings"*')
   assertEquals(excerpt('with* wings'), '"with"* "wings"*')
+})
+
+test('a question keeps its distinctive words and its quoted phrases', () => {
+  assertEquals(keywords('When is the next board meeting?'), [
+    'next',
+    'board',
+    'meeting?',
+  ])
+  assertEquals(keywords('"the board" seconded'), ['"the board"', 'seconded'])
 })

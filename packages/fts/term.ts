@@ -74,6 +74,13 @@ let COMMON = new Set(
     .split(' '),
 )
 
+// The distinctive words of a text, each a search of its own: what a question
+// is about once its grammatical words are gone. A quoted phrase stays whole.
+export let keywords = (text: string): string[] =>
+  split(text).filter((word) =>
+    word.startsWith('"') || !COMMON.has(word.toLowerCase().replace(/\W+$/, ''))
+  )
+
 // Mark distinctive words in a snippet, while still searching for *all* words.
 // Keep quoted phrases intact, even those made only of common words. If the
 // query has nothing else, marking one word is better than a blank excerpt
