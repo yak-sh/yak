@@ -2267,6 +2267,62 @@ export let patched = (
 }
 
 /**
+ * One `find` and `replace` in one file: what `op: patch` does, once or as a
+ * list (T-134951), so ten edits across an app are one call and one approval.
+ */
+export type Edit = { path: string; find: string; replace: string }
+
+/**
+ * A patch's edits, from either form of the call: `edits: [{path, find,
+ * replace}]`, or the lone `path`, `find` and `replace` it has always taken.
+ * Empty is a legal replacement — it is how a line is removed — so `replace`
+ * asks for a string rather than for something.
+ */
+export let edits = (args: Record<string, unknown>): Edit[] => {
+  let one = (f: Record<string, unknown>, at: string) => {
+    if (typeof f.replace != 'string') {
+      throw refuse(
+        'arguments',
+        `${at}replace is required (the empty string removes)`,
+      )
+    }
+    return {
+      path: text(f.path, `${at}path`).replace(/^\/+/, ''),
+      find: text(f.find, `${at}find`),
+      replace: f.replace,
+    }
+  }
+  if (args.edits == null) return [one(args, '')]
+  if (!Array.isArray(args.edits) || !args.edits.length) {
+    throw refuse('arguments', 'edits: a list of {path, find, replace}')
+  }
+  return args.edits.map((f, i) => {
+    if (!f || typeof f != 'object') {
+      throw refuse('arguments', `edits[${i}]: {path, find, replace}`)
+    }
+    return one(f as Record<string, unknown>, `edits[${i}].`)
+  })
+}
+
+/**
+ * Every edit of a patch applied in order to the files' texts, or none: one
+ * that refuses refuses the call, naming the edit, before anything is written.
+ * Edits to one file see the ones before them. Each answers the line its
+ * replacement starts on, the place to read back.
+ */
+export let patching = (texts: Record<string, string>, list: Edit[]) => {
+  let now = { ...texts }
+  let lines = list.map(({ path, find, replace }, i) => {
+    let was = now[path]
+    let at = list.length > 1 ? `${path} (edits[${i}])` : path
+    if (was == null) throw refuse('missing', `no file ${at}`)
+    now[path] = patched(was, find, replace, at)
+    return was.slice(0, was.indexOf(find)).split('\n').length
+  })
+  return { texts: now, lines }
+}
+
+/**
  * A file off the web, for `op: fetch` to write into an app — so vendoring a
  * library is one call and not a transcription of minified code (T-34337).
  *
@@ -3019,7 +3075,7 @@ let OURS: Row[] = [
   },
   {
     name: 'app_files',
-    destructive: true,
+    destructive: false,
     openWorld: true,
     input: {
       type: 'object',
@@ -3050,6 +3106,22 @@ let OURS: Row[] = [
           'for patch: the exact text to replace, which must appear exactly ' +
             'once in the file',
         ),
+        edits: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: str('path relative to the app root'),
+              find: str('the exact text, which must appear exactly once'),
+              replace: str('what goes in its place; empty removes it'),
+            },
+            required: ['path', 'find', 'replace'],
+          },
+          description: 'for patch: many edits in one call, instead of ' +
+            "path, find and replace, across any of the app's files. They " +
+            'apply in order, all or none, in one write. Send every edit a ' +
+            'change needs as one patch call rather than one call each',
+        },
         replace: str(
           'for patch: what goes in its place; the empty string removes the ' +
             'text',
@@ -3308,38 +3380,49 @@ let OURS: Row[] = [
       // A read-modify-write of one file, in one call: the loop an agent that
       // miscounted a bracket in a 46 KB file had no cheap way to run.
       if (op == 'patch') {
-        let path = named(text(args.path, 'path'))
+        let list = edits(args)
         let d = await draft()
-        let was = await d.view.read(at(d, path))
-        if (!was) throw refuse('missing', `no file ${path}`)
-        // Empty is a legal replacement — it is how a line is removed — so
-        // this asks for a string rather than for something.
-        if (typeof args.replace != 'string') {
-          throw refuse(
-            'arguments',
-            'replace is required (the empty string removes)',
-          )
-        }
-        let now = new TextEncoder().encode(patched(
-          decoded(was),
-          text(args.find, 'find'),
-          args.replace,
+        let paths = [...new Set(list.map((e) => e.path))]
+        let texts: Record<string, string> = {}
+        await Promise.all(paths.map(async (p) => {
+          let was = await d.view.read(at(d, p))
+          if (was) texts[p] = decoded(was)
+        }))
+        let done = patching(texts, list)
+        let sent = paths.map((path) => ({
           path,
-        ))
-        let { paths: [p], config } = await wroteAt(
+          bytes: new TextEncoder().encode(done.texts[path]),
+        }))
+        // Every file the edits touched, in one write to the draft.
+        let { paths: wrote, config } = await wroteAt(
           ctx.env,
           space,
           app,
           who,
-          [{ path, bytes: now }],
+          sent,
           c,
         )
         let where = placing(ctx, space, app, config)
+        let each = await Promise.all(
+          sent.map(async (f, i) =>
+            `${wrote[i]} → ${where(wrote[i])} — ${
+              stored(wrote[i], f.bytes, await sha256(f.bytes))
+            }`
+          ),
+        )
+        if (list.length == 1) {
+          return { text: `patched ${each[0]}; staged for app_deploy`, space }
+        }
         return {
-          text: `patched ${p} → ${where(p)} — ${
-            stored(p, now, await sha256(now))
-          }; staged for app_deploy`,
+          text: `patched ${list.length} places in ${sent.length} ` +
+            `file${sent.length == 1 ? '' : 's'}:\n` +
+            list.map((e, i) => `edits[${i}] ${e.path}: line ${done.lines[i]}`)
+              .join('\n') +
+            '\n' + each.join('\n') + '\nStaged for app_deploy.',
           space,
+          value: {
+            edits: list.map((e, i) => ({ path: e.path, line: done.lines[i] })),
+          },
         }
       }
       // A library vendored, rather than a minified file transcribed by hand.

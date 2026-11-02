@@ -111,6 +111,19 @@ saying how many matches there were, so lengthen `find` until it names one place.
 An empty `replace` removes the text. Use it to fix one wrong line without
 sending the whole file again.
 
+**Many edits are one patch call.** `edits` takes a list of
+`{path, find,
+replace}`, across any of the app's files, in place of `path`,
+`find` and `replace`. They apply in order, so a later edit to a file sees the
+earlier ones, and all or none: one that does not match refuses the call, naming
+the edit, and nothing is written. The reply gives the line each edit landed on.
+Ten changes to a stylesheet are one call, not ten:
+
+    app_files(app, op: 'patch', edits: [
+      { path: 'style.css', find: 'color: #333', replace: 'color: #222' },
+      { path: 'index.html', find: '<h1>Old</h1>', replace: '<h1>New</h1>' },
+    ])
+
 **`op: fetch` writes a URL's body to a path** — `path` and `url`, https only.
 Use it to vendor a third-party library into the app instead of writing it out by
 hand:

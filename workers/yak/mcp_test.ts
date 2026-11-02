@@ -705,12 +705,54 @@ test(
         Error,
         'find matched 0 times in index.html',
       )
+      // Many edits across files are one call, written together (T-134951).
       await agent.tool('app_files', {
         ...app,
-        op: 'patch',
-        path: 'index.html',
-        find: 'The recipe box',
-        replace: 'Our recipe box',
+        path: 'site.css',
+        content: 'h1 { color: red }',
+      })
+      assertStringIncludes(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'patch',
+          edits: [
+            {
+              path: 'index.html',
+              find: 'The recipe box',
+              replace: 'Our recipe box',
+            },
+            { path: 'site.css', find: 'red', replace: 'blue' },
+          ],
+        }),
+        'patched 2 places in 2 files:\nedits[0] index.html: line 1\n' +
+          'edits[1] site.css: line 1\nindex.html → ',
+      )
+      assertEquals(
+        await agent.tool('app_files', { ...app, op: 'read', path: 'site.css' }),
+        'h1 { color: blue }',
+      )
+      // One edit that misses writes none of them.
+      await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            op: 'patch',
+            edits: [
+              { path: 'site.css', find: 'blue', replace: 'green' },
+              { path: 'index.html', find: 'Nowhere', replace: 'x' },
+            ],
+          }),
+        Error,
+        'find matched 0 times in index.html (edits[1])',
+      )
+      assertEquals(
+        await agent.tool('app_files', { ...app, op: 'read', path: 'site.css' }),
+        'h1 { color: blue }',
+      )
+      await agent.tool('app_files', {
+        ...app,
+        op: 'delete',
+        path: 'site.css',
       })
       // A file that is NOT text goes as base64 (T-34263): the `.wasm` an
       // app's worker imports cannot be `content: string`, and a deploy that

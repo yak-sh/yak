@@ -14,12 +14,14 @@ import {
 import {
   call,
   type Ctx,
+  edits,
   fetched,
   type Listed,
   opOf,
   type Out,
   parses,
   patched,
+  patching,
   pinning,
   sri,
   stored,
@@ -281,6 +283,51 @@ test('a patch replaces exactly one match, or refuses saying how many', () => {
     'find matched 0 times in index.html — a patch replaces exactly one: ' +
       'read the file back',
   )
+})
+
+test('a patch takes a list of edits across files, in order, all or none', () => {
+  let texts = {
+    'a.css': 'h1 { color: red }\np { color: red }\n',
+    'b.html': '<h1>Old</h1>',
+  }
+  let list = edits({
+    edits: [
+      {
+        path: 'a.css',
+        find: 'h1 { color: red }',
+        replace: 'h1 { color: blue }',
+      },
+      { path: '/b.html', find: 'Old', replace: 'New' },
+      // A later edit to a file sees the earlier one.
+      { path: 'a.css', find: 'color: red', replace: 'color: green' },
+    ],
+  })
+  assertEquals(patching(texts, list), {
+    texts: {
+      'a.css': 'h1 { color: blue }\np { color: green }\n',
+      'b.html': '<h1>New</h1>',
+    },
+    lines: [1, 1, 2],
+  })
+  // The lone form is a list of one.
+  assertEquals(edits({ path: 'a', find: 'x', replace: '' }), [
+    { path: 'a', find: 'x', replace: '' },
+  ])
+  let refused = (args: Record<string, unknown>, t = texts) =>
+    assertThrows(() => patching(t, edits(args)), Error).message
+  assertStringIncludes(
+    refused({ edits: [list[0], { path: 'a.css', find: 'nope', replace: '' }] }),
+    'find matched 0 times in a.css (edits[1])',
+  )
+  assertStringIncludes(
+    refused({ edits: [list[0], { path: 'c.js', find: 'x', replace: '' }] }),
+    'no file c.js (edits[1])',
+  )
+  assertStringIncludes(
+    refused({ edits: [{ path: 'a.css', find: 'x' }] }),
+    'edits[0].replace is required',
+  )
+  assertStringIncludes(refused({ edits: [] }), 'edits: a list of')
 })
 
 let emptyDigest = await sha256(new Uint8Array())
