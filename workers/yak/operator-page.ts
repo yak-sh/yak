@@ -11,6 +11,38 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
+import { CONSENT } from './operator-texts.ts'
+
+type Consent = { number: string; at: string }
+
+let shown = (number: string) =>
+  number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
+
+// Where a person agrees to texts from the operator, or stops them.
+export let textsCard = (at: string, consent: Consent | null) =>
+  `<form class="Card Form" id="texts" method="post" action="${at}&texts=1">
+<h2 class="Card_Title">Text messages</h2>
+<p>The operator can text you when it finishes a change, needs an answer from you, or something about your site needs you. You can still use chat and email.</p>${
+    consent
+      ? `<p>Texts go to <b>${esc(shown(consent.number))}</b>. You agreed on ${
+        esc(new Date(consent.at).toLocaleDateString('en-US', {
+          dateStyle: 'long',
+          timeZone: 'UTC',
+        }))
+      }. <button class="Button Button-quiet" type="submit" name="stop" value="1">Stop texts</button></p>`
+      : ''
+  }
+<label class="Form_Field">${
+    consent ? 'Change your mobile number' : 'Mobile number'
+  }<input class="Field" type="tel" name="number" autocomplete="tel" inputmode="tel" placeholder="269-555-0142"></label>
+<label class="Choice" style="align-items:flex-start"><input type="checkbox" name="agreed" value="yes"><span>${
+    esc(CONSENT).replace(
+      /https:\/\/yaks\.app\/(terms|privacy)/g,
+      '<a href="/$1">yaks.app/$1</a>',
+    )
+  }</span></label>
+<p>Agreeing is not required to use yaks.app.</p>
+<button class="Button" type="submit">Save</button><p role="status" data-texts-status></p></form>`
 
 export let operatorDoor = async (
   env: Env,
@@ -111,6 +143,20 @@ export let operatorPage = async (
       },
     })
   }
+  if (url.searchParams.has('texts') && req.method == 'POST') {
+    let form = await req.formData()
+    try {
+      let consent = await operatorDoor(env, space, who, 'texts', {
+        number: form.has('stop') ? '' : String(form.get('number') ?? ''),
+        agreed: form.get('agreed') == 'yes',
+      }) as Consent | null
+      return Response.json(consent)
+    } catch (e) {
+      let status = (e as { status?: number }).status ?? 500
+      if (status >= 500) throw e
+      return Response.json({ message: (e as Error).message }, { status })
+    }
+  }
   if (url.searchParams.has('draft')) {
     return Response.json(
       await operatorDoor(
@@ -166,6 +212,9 @@ export let operatorPage = async (
     return new Response(null, { status: 303, headers: { location: at } })
   }
   let rows = await operatorDoor(env, space, who, 'messages', {}) as Bundle[]
+  let consent = await operatorDoor(env, space, who, 'texts', {}) as
+    | Consent
+    | null
   if (url.searchParams.has('messages')) {
     return new Response(conversation(rows, at), {
       headers: {
@@ -191,10 +240,25 @@ export let operatorPage = async (
 <label class="Form_Field">What would you like done?<textarea class="Field" name="say"></textarea></label>
 <label class="Form_Field">Documents or photos<input class="Field" type="file" name="file" multiple></label>
 <button class="Button" type="submit">Send</button><p role="status" data-send-status></p></form>
+${textsCard(at, consent)}
 <script type="module">
 import { browserDrafts } from '/_draft.js'
 let box = document.querySelector('[data-conversation]')
-let form = document.querySelector('form')
+let form = document.querySelector('form:not(#texts)')
+let texts = document.querySelector('#texts')
+texts.addEventListener('submit', async (e) => {
+  e.preventDefault()
+  let said = texts.querySelector('[data-texts-status]')
+  let body = new FormData(texts)
+  if (e.submitter?.name == 'stop') body.set('stop', '1')
+  said.textContent = 'Saving…'
+  try {
+    let response = await fetch(texts.action, { method: 'POST', body })
+    let answer = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')
+    location.reload()
+  } catch (error) { said.textContent = error.message }
+})
 let status = document.querySelector('[data-send-status]')
 let draftAt = '${at}&draft=1'
 let submission

@@ -220,6 +220,39 @@ test('the operator page names its email address, keeps a durable draft and draws
   )
 })
 
+let textsAt = 'https://yaks.app/manage/operator?space=clerk&texts=1'
+let choose = async (fields: Record<string, string>) => {
+  let body = new FormData()
+  for (let [k, v] of Object.entries(fields)) body.set(k, v)
+  let response = await operatorPage(
+    new Request(textsAt, { method: 'POST', body }),
+    f.env,
+    f.space,
+    f.held,
+  )
+  return { status: response.status, said: await response.json() }
+}
+let unticked = await choose({ number: '269-555-0142' })
+let wrong = await choose({ number: '555-0142', agreed: 'yes' })
+let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
+let textsHtml = await (await operatorPage(
+  new Request('https://yaks.app/manage/operator?space=clerk'),
+  f.env,
+  f.space,
+  f.held,
+)).text()
+let stopped = await choose({ stop: '1', number: '269-555-0142' })
+test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
+  assertEquals(unticked.status, 400)
+  assertStringIncludes(unticked.said.message, 'Tick the box')
+  assertEquals(wrong.status, 400)
+  assertEquals(agreed.said.number, '+12695550142')
+  assertStringIncludes(agreed.said.consent, 'Msg & data rates may apply')
+  assertStringIncludes(textsHtml, '269-555-0142')
+  assertEquals(textsHtml.includes('checked'), false)
+  assertEquals(stopped.said, null)
+})
+
 let draft = async (text?: string, over = '') => {
   let { operatorDoor } = await import('./operator-page.ts')
   return operatorDoor(

@@ -4,6 +4,7 @@ import type { Held } from './build.ts'
 import { readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
+import { texts, textsEid } from './operator-texts.ts'
 
 let drafts = (bundles: Bundle[], person: string) =>
   bundles.filter((b) => b.draft).map((b) => ({
@@ -32,6 +33,16 @@ export let operatorRequest = async (
       await store.g.apply(drafts(args.bundles as Bundle[], person))
     }
     return Response.json({ bundles: await store.g.get([eid]) })
+  }
+  if (path == '/operator/texts') {
+    if (typeof args.number == 'string') {
+      await store.g.apply([{
+        ...texts(person, args.number, args.agreed === true),
+        $actor: { by: person },
+      }])
+    }
+    let [row] = await store.g.get([textsEid(person)])
+    return Response.json(row?.sms_consent ?? null)
   }
   if (path == '/operator/receive') {
     let intake = {

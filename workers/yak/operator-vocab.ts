@@ -26,6 +26,17 @@ export let operatorDoc: VocabDoc = {
         message_id: { type: 'string' },
       },
     },
+    sms_consent: {
+      component: true,
+      description:
+        'A person agreed to texts from the operator at this number, in these words.',
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        number: { type: 'string' },
+        consent: { type: 'string' },
+        at: { type: 'string', format: 'date-time' },
+      },
+    },
     operator_receive: {
       effect: true,
       created: ['operator_request'],
