@@ -4,8 +4,8 @@ import {
   FENCE_WAIT,
   fenced,
   mend,
-  type ReadAnswer,
   READS,
+  readsAnswer,
   released,
   servingDirectory,
   Unfenced,
@@ -5062,23 +5062,18 @@ export class Store {
 
   // The directory's reads a request asked together, in one trip (directory-copy.ts
   // `gathered`): each line answered as `/query` answers it, a refusal or a
-  // failure staying that line's own.
+  // failure staying that line's own, but a reset failing the trip.
   async #reads(request: Request): Promise<Response> {
     let url = new URL(request.url)
-    let answers: ReadAnswer[] = []
+    let answers: Response[] = []
     for (let q of url.searchParams.getAll('q')) {
       let line = new URL('/query', url)
       line.searchParams.set('q', q)
-      let answer = await this.#asked(
-        new Request(line, { headers: request.headers }),
+      answers.push(
+        await this.#asked(new Request(line, { headers: request.headers })),
       )
-      answers.push({
-        status: answer.status,
-        epoch: answer.headers.get(EPOCH),
-        body: await answer.text(),
-      })
     }
-    return Response.json(answers)
+    return await readsAnswer(answers)
   }
 
   // A page's query asks with `uses=1` (page-graph.ts `queried`), so the one

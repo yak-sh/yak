@@ -5,7 +5,7 @@ import { cookieValue } from './lib/token.ts'
 // copy holds its revision current. Directory mutations fence that revision
 // before committing, not through cache purge. Cold/fenced copies still wait
 // for the directory; no TTL grants standing.
-import type { Fetcher } from './door.ts'
+import { type Fetcher, reset } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
@@ -266,6 +266,20 @@ export let gathered = (via: Fetcher): Fetcher => {
 
 /** One line of a READS answer: what `/query` would have answered it. */
 export type ReadAnswer = { status: number; epoch: string | null; body: string }
+
+/** The READS answer for what `/query` answered each line. A reset is the
+ * store's, not one line's, so it fails the whole trip: only the trip's answer
+ * reaches the door that sends it again (door.ts `thrown`). */
+export let readsAnswer = async (lines: Response[]): Promise<Response> => {
+  for (let line of lines) if (await reset(line)) return line
+  return Response.json(
+    await Promise.all(lines.map(async (line): Promise<ReadAnswer> => ({
+      status: line.status,
+      epoch: line.headers.get(EPOCH),
+      body: await line.text(),
+    }))),
+  )
+}
 
 export type ServingDirectoryOptions = {
   copy?: ServingCopyDoor

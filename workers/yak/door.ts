@@ -275,14 +275,20 @@ export let doorOf = (
  * words the runtime meant as "fetch again" would reach the caller as a failure
  * (T-40726). */
 export let thrown = async (r: Response): Promise<Response> => {
-  if (r.status < 500) return r
+  let e = await reset(r)
+  if (e) throw e
+  return r
+}
+
+/** The eviction an answer carries, as the runtime throws it, or null. */
+export let reset = async (r: Response): Promise<Error | null> => {
+  if (r.status < 500) return null
   let said: { message?: unknown; retryable?: unknown } | null = await r
     .clone().text().then((t) => JSON.parse(t)).catch(() => null)
   let e = typeof said?.message == 'string'
     ? Object.assign(new Error(said.message), { retryable: said.retryable })
     : null
-  if (evicted(e) || starved(e)) throw e
-  return r
+  return evicted(e) || starved(e) ? e : null
 }
 
 /** A request factory, not a spent Request: every send gets its own body.

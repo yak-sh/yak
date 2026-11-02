@@ -6,11 +6,13 @@ import {
   gathered,
   publicDirectory,
   READS,
+  readsAnswer,
   type ServingCopyDoor,
   STALL,
 } from './directory-copy.ts'
 import { ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
+import { type Namespace, storeOf } from './door.ts'
 
 let fixture = () => {
   let state = new ServingCopy({
@@ -289,6 +291,40 @@ test('reads asked in one turn are one trip, each answered its own line', async (
   // A read alone asks as it always did.
   assertEquals(await (await ask('.d')).text(), '.d')
   assertEquals(trips.at(-1), ['.d'])
+})
+test('a store reset mid-trip is read again whole, each caller its own line', async () => {
+  let said = (q: string, n: number) =>
+    n == 0 && q == '.b'
+      ? Response.json({
+        error: 'Error',
+        message: 'Durable Object reset because a newer deploy reached it: b',
+      }, { status: 500 })
+      : new Response(q, { headers: { [EPOCH]: '7' } })
+  let trips = 0
+  let store = storeOf(
+    {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: (r: Request) => {
+          let n = trips++
+          return readsAnswer(
+            new URL(r.url).searchParams.getAll('q').map((q) => said(q, n)),
+          )
+        },
+      }),
+    } as unknown as Namespace,
+    'meta',
+    undefined,
+    () => Promise.resolve(),
+  )
+  let via = gathered({
+    fetch: (r) => store(new URL(r.url).pathname + new URL(r.url).search),
+  })
+  let ask = (q: string) =>
+    via.fetch(new Request(`http://directory/query?q=${q}`))
+  let rs = await Promise.all([ask('.a'), ask('.b')])
+  assertEquals(await Promise.all(rs.map((r) => r.text())), ['.a', '.b'])
+  assertEquals([trips, rs[0].headers.get(EPOCH)], [2, '7'])
 })
 test('a store on the code before the door is read one line at a time', async () => {
   let { trips, ask, answers } = reading(() =>
