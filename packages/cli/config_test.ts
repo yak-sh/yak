@@ -14,7 +14,10 @@ test('a line says where it runs: a config it opens, or a door it talks to', () =
   let bare = Deno.makeTempDirSync()
   let env = envOf({ HOME: bare })
   // Nothing said: the platform this command came with.
-  assertEquals(aimed({}, 'yaks.app', env), { host: 'yaks.app' })
+  assertEquals(aimed({}, 'yaks.app', env), {
+    host: 'yaks.app',
+    unplaced: true,
+  })
   // A config is a file this process opens; the door comes back too, because
   // it is also the name a bearer is kept under.
   assertEquals(aimed({ config: 'yak.json' }, 'yaks.app', env), {
@@ -62,7 +65,10 @@ test('a box that keeps a graph of its own is where a bare line runs', () => {
   let env = envOf({ HOME: home })
   // Nothing there is nothing said.
   assertEquals(configPath(undefined, env), undefined)
-  assertEquals(aimed({}, 'yaks.app', env), { host: 'yaks.app' })
+  assertEquals(aimed({}, 'yaks.app', env), {
+    host: 'yaks.app',
+    unplaced: true,
+  })
   Deno.mkdirSync(own.slice(0, own.lastIndexOf('/')), { recursive: true })
   Deno.writeTextFileSync(own, '{"db": "./yak.db"}')
   assertEquals(configPath(undefined, env), own)

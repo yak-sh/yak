@@ -267,6 +267,38 @@ test('a table that cannot be had is a reason on the page, not no page', async ()
   assert(page.includes('(no server)'), page)
 })
 
+test('a line nothing placed, on a machine with no graph, is told how to start one', async () => {
+  let more = () => {
+    throw new Error('sign in')
+  }
+  let nowhere = 'no graph here: init one'
+  // The page and a line the host would have answered both say it, in place of
+  // the host's refusal.
+  await ran(one, [], { more, nowhere })
+  assert(printed.join('\n').endsWith(`(${nowhere})`), printed.join('\n'))
+  assertEquals(await ran(one, ['task', 'list'], { more, nowhere }), 1)
+  assertEquals(printed, [`yak: ${nowhere}`])
+  // A line that named its host hears the host.
+  await ran(one, ['--host', 'yaks.test', 'task', 'list'], { more, nowhere })
+  assertEquals(printed, ['yak: sign in'])
+})
+
+test('a command not offered here is off the page, and still runs and helps', async () => {
+  let box: Command = {
+    name: 'restart',
+    description: 'roll the box',
+    offered: () => false,
+    run: () => (printed.push('rolled'), 0),
+  }
+  let help = helpTool()
+  await ran([help, ...one, box], [])
+  assert(!printed.join('\n').includes('roll the box'), printed.join('\n'))
+  await ran([help, ...one, box], ['help', 'restart'])
+  assert(printed.join('\n').includes('roll the box'), printed.join('\n'))
+  assertEquals(await ran([help, ...one, box], ['restart']), 0)
+  assertEquals(printed, ['rolled'])
+})
+
 test('a table that costs a round trip is not asked on a line that misses it', async () => {
   let asks = 0
   let more = () => {

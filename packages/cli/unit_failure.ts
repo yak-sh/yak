@@ -8,7 +8,7 @@
 // seconds gives up for good. `yak restart` stops old units only once their
 // replacements are ready (./restart.ts), so a handover reports nothing.
 import type { Command } from './run.ts'
-import { read } from './config.ts'
+import { names, read } from './config.ts'
 import { reporter } from './report.ts'
 import { ready, readyFile } from './restart.ts'
 
@@ -164,6 +164,7 @@ export let unitFailureCommand: Command = {
   description:
     'Report a systemd unit that failed, or stopped with no other instance of its template ready, from ExecStopPost to the configured tracker spool',
   positional: ['unit'],
+  offered: (c) => names(c.config, 'tracker'),
   inputSchema: {
     type: 'object',
     additionalProperties: false,

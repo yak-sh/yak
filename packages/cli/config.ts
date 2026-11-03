@@ -238,6 +238,24 @@ let resolved = (plug: Plug, base: URL): Plug =>
     ? near(plug, base)
     : { ...plug, use: near(plug.use, base) }
 
+/** Whether the config at `path` names `part`: a command about that part of a
+ * config (a box's process plan, its tracker) is offered only where it does.
+ * No config, or one that cannot be read, names nothing.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(names(undefined, 'processes'), false)
+ * ```
+ */
+export let names = (path: string | undefined, part: keyof Config): boolean => {
+  if (!path) return false
+  try {
+    return read(path)[part] !== undefined
+  } catch {
+    return false
+  }
+}
+
 /**
  * Read a config file. Paths inside it — the database, a relative plugin — are
  * resolved against the file itself.

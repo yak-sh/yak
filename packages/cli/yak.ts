@@ -40,7 +40,7 @@ import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { closeAccounts, personal } from './accounts.ts'
-import { configPath, ownConfig, read } from './config.ts'
+import { configPath, names, ownConfig, read } from './config.ts'
 import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
@@ -53,7 +53,7 @@ export let HOST = 'yaks.app'
 let HEAD = 'yak — the tools of the graph this command runs against'
 
 let TAIL =
-  `  --config <path> the config file naming the graph to OPEN — its db and
+  `  --config <path> the config file naming the graph to open: its db and
                   its plugins, imported in this process (default $YAK_CONFIG)
   --host <host>   an MCP server to call over /mcp instead, for a graph this
                   machine cannot open as a file (default $YAKS_HOST, else
@@ -149,6 +149,8 @@ export let YAK: Opts = {
     'help',
   ],
   host: HOST,
+  nowhere: 'no graph on this machine yet: `yak init <your name>` starts one, ' +
+    'and `yak auth yaks.app` signs in to your yaks.app apps',
   more: table,
   stray: appStray,
 }
@@ -203,6 +205,7 @@ export let own: Command[] = [
   {
     name: 'work',
     description: 'Run the effects pool and plugin services without the web',
+    offered: (c) => names(c.config, 'processes'),
     inputSchema: {
       type: 'object',
       properties: {
@@ -242,6 +245,7 @@ export let own: Command[] = [
     name: 'restart',
     description:
       "Queue a ready-first handover of the box's workers and webs in the background",
+    offered: (c) => names(c.config, 'processes'),
     inputSchema: {
       type: 'object',
       properties: {
@@ -288,6 +292,7 @@ export let own: Command[] = [
     name: 'init',
     description:
       "start this machine's own graph: write its config and make you its person",
+    offered: (c) => !c.config,
     inputSchema: {
       type: 'object',
       additionalProperties: false,

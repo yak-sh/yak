@@ -31,7 +31,7 @@ import { argsFor, commandFor, type Grammar, type Reads, Usage } from './args.ts'
 import { lineOf, safe, sketch, toolHelp } from './show.ts'
 import { commandOf, titleOf } from './tool.ts'
 import { timed } from '@yaks/api/timing'
-import { doorUrl, type Rpc, rpc } from './rpc.ts'
+import { doorUrl, type Rpc, rpc, Unauthorized } from './rpc.ts'
 import { configPath } from './config.ts'
 import { type Env, stateDir, tokenFor } from './store.ts'
 
@@ -103,6 +103,10 @@ let terminal = (env: Env): Tty | undefined =>
 export type Command = Omit<Tool<number>, 'run'> & {
   /** Global flags explicitly bound to this command's input properties. */
   globals?: readonly GlobalFlag[]
+  /** Whether the usage page lists it here: a command for something this
+   * line's graph does not have (a box's process plan) is still run when
+   * typed and still has its own page, but is not offered. */
+  offered?: (c: Ctx) => boolean
   run: (
     args: Record<string, unknown>,
     c: Ctx,
@@ -137,6 +141,9 @@ export type Opts = {
   /** More commands, where gathering them costs a composition or a round
    * trip. `fresh` asks past any cache the list is kept in. */
   more?: (c: Ctx, o?: { fresh?: boolean }) => Command[] | Promise<Command[]>
+  /** What to say where a line named no place and this machine keeps no graph,
+   * and the host it fell to would not answer it (`aimed`'s `unplaced`). */
+  nowhere?: string
   /** A command for a first word nothing else claimed. */
   stray?: (
     word: string,
@@ -383,8 +390,13 @@ export let globals = (
  * its graph lacks goes `onward`, to the host: `yak app_list` on a machine that
  * keeps a graph of its own still reaches the platform.
  *
+ * A line that said nothing, on a machine that keeps no graph, falls to the
+ * platform only by default: it is `unplaced`, and a platform that will not
+ * answer it is not what the person was asking about.
+ *
  * ```ts
  * aimed({ host: 'yaks.app' }) // { host: 'yaks.app' }
+ * aimed({}, 'yaks.app', () => undefined) // { host: 'yaks.app', unplaced: true }
  * aimed({}, 'yaks.app', (n) => n == 'YAK_CONFIG' ? 'yak.json' : undefined)
  * // { config: 'yak.json', host: 'yaks.app', onward: true }
  * ```
@@ -393,7 +405,7 @@ export let aimed = (
   said: { host?: string; config?: string },
   dflt = 'yaks.app',
   env: Env = own,
-): { config?: string; host: string; onward?: boolean } => {
+): { config?: string; host: string; onward?: boolean; unplaced?: boolean } => {
   if (said.host && said.config) {
     throw new Usage('--host and --config name two places — a line names one')
   }
@@ -401,7 +413,9 @@ export let aimed = (
   let door = said.host ?? env('YAKS_HOST')
   if (door) return { host: door }
   let path = configPath(undefined, env)
-  return path ? { config: path, host: dflt, onward: true } : { host: dflt }
+  return path
+    ? { config: path, host: dflt, onward: true }
+    : { host: dflt, unplaced: true }
 }
 
 /**
@@ -460,11 +474,19 @@ export let cli = async (
   let env = opts.env ?? own
   let said = globals(opts.argv ?? Deno.args, env)
   let { duties, json, tui, help, timing, rest, as } = said
+  // Where nothing placed this line, the host's refusal is not the answer: the
+  // program's own word for a machine with no graph is.
+  let lost = (why: string) => why
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
     // things.
-    let { config, host, onward } = aimed(said, opts.host ?? 'yaks.app', env)
+    let { config, host, onward, unplaced } = aimed(
+      said,
+      opts.host ?? 'yaks.app',
+      env,
+    )
+    lost = (why: string) => unplaced && opts.nowhere ? opts.nowhere : why
     let state = stateDir(env)
     // A list that cannot be fetched is a reason printed on the page, not a
     // page nobody gets: `yak` with no argument is what a person types when
@@ -509,7 +531,8 @@ export let cli = async (
       note,
       all: async () => [...tools, ...await fetched()],
       page: async () =>
-        usage(await c.all(), opts) + (why ? `\n\n  (${why})` : ''),
+        usage((await c.all()).filter((t) => t.offered?.(c) ?? true), opts) +
+        (why ? `\n\n  (${lost(why)})` : ''),
     }
     // The one thing that must work with no network and nobody signed in.
     if (!rest.length) {
@@ -533,7 +556,7 @@ export let cli = async (
       // A host whose list never came is the answer: past this point a line
       // it would have understood reads as an app's stray, and its words as
       // that app's arguments.
-      if (why) throw new Error(why)
+      if (why) throw new Error(lost(why))
       let stray = config
         ? undefined
         : await opts.stray?.(rest[0], rest.slice(1), c)
@@ -616,7 +639,12 @@ export let cli = async (
       return 2
     }
   } catch (e) {
-    note(`${opts.name ?? 'yak'}: ${(e as Error).message}`)
+    let message = (e as Error).message
+    note(
+      `${opts.name ?? 'yak'}: ${
+        e instanceof Unauthorized ? lost(message) : message
+      }`,
+    )
     return e instanceof Usage ? 2 : 1
   }
 }
