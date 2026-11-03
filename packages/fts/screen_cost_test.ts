@@ -10,6 +10,8 @@ import {
   col,
   cross,
   eq,
+  exists,
+  gt,
   insert,
   lit,
   op,
@@ -174,5 +176,44 @@ test('a CPU sorted search evaluates a filtered listing once across its hits', ()
     assert(steps < history * 200, `${steps} VM instructions`)
   } finally {
     sortedRanked.finalize()
+  }
+})
+
+// The screen of a query that narrows nothing but visibility is the whole graph.
+// Its keyed probe tests each matching posting; nothing walks or copies it, and
+// an index whose component few owners wear is proven live from those owners.
+let wide = new Database(':memory:'), wideSql = driver(wide)
+seed(wideSql, largeHistory)
+let last = 2 * largeHistory + 2
+wideSql.query(insert('extra', { entity: last, body: 'different' }))
+let beyond = (id: ReturnType<typeof col>) => gt(id, lit(2))
+let everyone = {
+  ...render(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: beyond(col('id')),
+  })),
+  probe: (owner: ReturnType<typeof col>) =>
+    exists(select({
+      cols: [lit(1)],
+      from: table('entity', 'p'),
+      where: eq(col('id', 'p'), owner),
+    })),
+}
+let broad = render(
+  hits(text, 'different', { plan: 'sort', limit: 2, screen: everyone })!,
+)
+let broadRanked = wide.prepare(broad.sql)
+test('a CPU search probes a whole-graph screen rather than enumerating it', () => {
+  try {
+    assertEquals(broadRanked.all(...broad.params).length, 2)
+    let steps = counters.symbols.sqlite3_stmt_status(
+      broadRanked.unsafeHandle,
+      4,
+      0,
+    )
+    assert(steps < largeHistory * 60, `${steps} VM instructions`)
+  } finally {
+    broadRanked.finalize()
   }
 })

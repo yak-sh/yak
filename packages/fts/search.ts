@@ -20,7 +20,6 @@ import {
   type BindOpts,
   catalogue,
   col,
-  cross,
   type Cte,
   desc,
   type Driver,
@@ -29,7 +28,9 @@ import {
   type Expr,
   fn,
   from,
+  join,
   lit,
+  member,
   not,
   op,
   or,
@@ -39,6 +40,7 @@ import {
   render,
   type Select,
   select,
+  type Selection,
   sourceScreen,
   sub,
   table,
@@ -70,8 +72,8 @@ export type SearchOpts = {
   plan?: 'index' | 'sort'
   // a statement selecting the ids of the entities a hit must be among — pass
   // @yaks/sql's `screen` of the rest of the query, and only rows the filters
-  // already allow are ranked
-  screen?: Raw
+  // already allow are ranked. One the compiler made carries its keyed `probe`
+  screen?: Selection
   // the owner ids permitted to contribute matching text, per index
   screens?: Record<string, Raw>
   // how many words of context a snippet carries (default 10)
@@ -270,13 +272,18 @@ let chosen = (
   let b = at('best')
   // A kind can have no owners in an index at all. Prove that through the
   // selected owners' component keys before opening a CPU-sorted FTS cursor.
+  // Joined, not crossed: SQLite drives from the smaller side, so a broad
+  // screen seeks a rare component's few owners rather than walking the graph
+  // in id order to find one.
   let guarded = sorting && !!opts.screen
   let active = (arm: Index) =>
     exists(select({
       cols: [lit(1)],
       from: table('__fts_screen'),
-      joins: [cross(table(arm.on ?? arm.comp, '__source'))],
-      where: eq(col('entity', '__source'), col('id', '__fts_screen')),
+      joins: [join(
+        table(arm.on ?? arm.comp, '__source'),
+        eq(col('entity', '__source'), col('id', '__fts_screen')),
+      )],
     }))
   let take = (i: number, n: number): Expr =>
     guarded
@@ -285,8 +292,11 @@ let chosen = (
         lit(n),
       ]], lit(0))
       : lit(n)
+  // A screen the compiler made tests one owner by its keyed form, a seek per
+  // posting however many owners it admits. A bare relation is read whole.
+  let probed = !!opts.screen?.probe
   let eligible = (owner: Expr) =>
-    exists(select({
+    probed ? member(opts.screen!, owner) : exists(select({
       cols: [lit(1)],
       from: table('__fts_screen'),
       where: eq(col('id', '__fts_screen'), owner),
@@ -358,10 +368,11 @@ let chosen = (
           name: '__fts_screen',
           cols: ['id'],
           q: opts.screen,
-          // A CPU sort visits every matching posting. Share its admission
-          // set rather than re-running an indexed listing for every hit.
+          // A CPU sort visits every matching posting. A bare relation is
+          // shared rather than re-run for every hit; a probed one is never
+          // enumerated, since the screen of a broad query is the whole graph.
           // Index-order pages keep candidate seeks for sparse paid reads.
-          materialized: sorting,
+          materialized: sorting && !probed,
         }]
         : [],
       ...guarded
