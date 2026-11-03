@@ -1450,7 +1450,7 @@ let published = async (
   // Recording the release changed the directory epoch. Replace the app,
   // caller and Store door together before any protected follow-up work.
   if (ctx.reopen) {
-    let current = await reacquire(ctx, space, app)
+    let current = await reacquire(ctx, space, app, true, !!who.administrative)
     if (
       current.app!.source != release || current.app!.declaration != pointer ||
       current.app!.version != version
@@ -1576,7 +1576,7 @@ let released = async (
 > => {
   let c = ctx.clock ?? clock()
   if (ctx.reopen) {
-    let current = await reacquire(ctx, space, app)
+    let current = await reacquire(ctx, space, app, true, !!who.administrative)
     space = current.space
     app = current.app!
     who = current.who
@@ -1601,7 +1601,7 @@ let released = async (
   // The fence is a directory commit. Acquire a new app and caller together;
   // none of the standing from before that commit authorizes the next phase.
   if (ctx.reopen) {
-    let current = await reacquire(ctx, space, app)
+    let current = await reacquire(ctx, space, app, true, !!who.administrative)
     if (current.app!.fence != fence) {
       throw refuse('conflict', 'release changed while acquiring authorization')
     }
@@ -3889,7 +3889,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who, store } = await inApp(ctx, args, true)
+      let { space, app, who, store } = await inApp(ctx, args, true, true)
       let all = await versions(ctx.dir, app)
       let live = all.find((v) => v.version == app.version)
       let want: Version | undefined

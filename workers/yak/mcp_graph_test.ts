@@ -1599,8 +1599,9 @@ test('an app store answers eids and no numbers, and refuses $num', async () => {
 
 // The platform's admin, an owner of `yak`, reads and fixes any app's rows by
 // naming its space and app, as its owner would: through the store's own
-// apply, recorded as the admin (T-63550). Anybody else gets nothing new.
-test('the platform admin reads and patches an app it holds no seat in', async () => {
+// apply, recorded as the admin (T-63550), and puts back the version that
+// should be live. Anybody else gets nothing new.
+test('the platform admin reads, patches and rolls back an app it holds no seat in', async () => {
   let k = await kernel()
   try {
     let theirs = connector(k, (await signIn(k)).cookie)
@@ -1641,9 +1642,20 @@ test('the platform admin reads and patches an app it holds no seat in', async ()
     assertEquals(row.sfx.notes, 'chime')
     assertStringIncludes(JSON.stringify(row.updated), k.owner.person)
 
+    // And moves the app back to a version, as its owner would.
+    await theirs.tool('app_files', { ...at, path: 'a.txt', content: 'a' })
+    await theirs.tool('app_deploy', at)
+    await admin.tool('app_rollback', { ...at, version: 1 })
+    assertStringIncludes(await theirs.tool('app_versions', at), 'v1')
+
     let stranger = connector(k, (await signIn(k)).cookie)
     await assertRejects(() => rows(stranger), Error, 'not a member')
     await assertRejects(() => patch(stranger), Error, 'not a member')
+    await assertRejects(
+      () => stranger.tool('app_rollback', { ...at, version: 2 }),
+      Error,
+      'not a member',
+    )
   } finally {
     await k.stop()
   }
