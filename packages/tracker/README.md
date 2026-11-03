@@ -469,9 +469,13 @@ mark is safe, including when the box copy is already marked.
 
 A config whose graph holds no bugs of its own, as the box's default yak composes
 the tracker's `vocab` and `tools` beside `admin errors`, names `yaks.app` its
-`source`: its bug tools read and mark the Worker with no `--source` named. The
-`code.cwd` option names the checkout a resolution's commits are read from, so
-`--since` and `--fix` take a short sha as Git reads it:
+`source`: its bug tools read and mark the Worker with no `--source` named. It
+names the box tracker's graph as `box`, its base URL, and `--source box` reads
+that graph through its `/query` and marks it through its `/apply`, by the
+references that graph keeps (`B-7`, a short handle, a title). So one set of
+tools serves both trackers. The `code.cwd` option names the checkout a
+resolution's commits are read from, so `--since` and `--fix` take a short sha as
+Git reads it:
 
 ```json
 {
@@ -479,6 +483,7 @@ the tracker's `vocab` and `tools` beside `admin errors`, names `yaks.app` its
   "facets": ["vocab", "tools"],
   "with": {
     "source": "yaks.app",
+    "box": "http://127.0.0.1:5175",
     "code": { "cwd": "/home/me/code/yak" },
     "remote": {
       "url": "https://tracker.example",
@@ -493,7 +498,8 @@ yak bug list --source yaks.app --limit 20
 yak bug list '.bug.status=resolved' --source yaks.app
 yak bug show <global-bug-eid> --source yaks.app
 yak bug resolve <global-bug-eid> --source yaks.app --broke '…' --cause '…' --fix <sha> --recur '…'
-yak bug archive <box-bug-id>
+yak bug show B-7 --source box
+yak bug archive <box-bug-id> --source box
 yak bug reopen <global-bug-eid> --source yaks.app
 ```
 

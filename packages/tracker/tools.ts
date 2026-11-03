@@ -10,11 +10,14 @@ import {
   every,
   fields,
   limit,
+  list,
   order,
   orderOf,
   parse,
   present,
   type Query,
+  stringify,
+  want,
 } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
 import { commitOf } from '@yaks/git/source'
@@ -25,7 +28,68 @@ import { type Explanation, explanation } from './resolution.ts'
 import { survivor } from './merge.ts'
 import { occurring } from './reading.ts'
 
-let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
+/** The part of a store the bug tools read and mark: this graph, or the box
+ * tracker's graph over its wire. */
+type Store = Pick<Graph, 'vocab' | 'get' | 'read' | 'address'> & {
+  /** apply a mark's patch where the store keeps it, or hand it back for the
+   * runner to apply here */
+  mark?: (bundles: Partial<Bundle>[]) => Promise<void>
+}
+
+/** The box tracker's graph at `url`, read through its `/query` and marked
+ * through its `/apply`, in this graph's vocabulary. A reference resolves the
+ * way that graph resolves one in a query. */
+export let wire = (
+  url: string,
+  vocab: Graph['vocab'],
+  go: typeof fetch = fetch,
+): Store => {
+  let at = (path: string) => `${url.replace(/\/$/, '')}${path}`
+  let send = async (path: string, body: unknown) => {
+    let response = await go(at(path), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    let said = await response.json().catch(() => null)
+    // A refusal of what was asked is the box's own answer; any other failure
+    // names where it failed.
+    let why = said?.message ?? said?.error
+    if (response.status == 400 && why) throw new CallError('bug', why)
+    if (!response.ok) {
+      throw new CallError('box', `${url} failed ${path} (${response.status})`)
+    }
+    return said
+  }
+  let read = async (q: string | Query): Promise<Bundle[]> => {
+    let rows = await send('/query', stringify(q))
+    if (!Array.isArray(rows)) {
+      throw new CallError('box', `${url} answered no rows`)
+    }
+    return rows
+  }
+  return {
+    vocab,
+    read: read as Graph['read'],
+    get: ((eids: string[], comps?: string[]) =>
+      eids.length
+        ? read(and(
+          eq('entity.eid', list(...eids)),
+          ...comps ? comps.map(want) : [every()],
+        ))
+        : []) as Graph['get'],
+    address: async (ids: string[]) =>
+      new Map(
+        await Promise.all(ids.map(async (id) => {
+          let rows = await read(and(eq('entity.eid', id), fields('entity.eid')))
+          return [id, rows.length == 1 ? rows[0].entity.eid : id] as const
+        })),
+      ),
+    mark: (bundles) => send('/apply', bundles),
+  }
+}
+
+let one = (g: Store, eid: string): Bundle | Promise<Bundle> =>
   after(survivor(g, eid), (row) => {
     if (!row?.bug) throw new CallError('bug', `not a bug: ${eid}`)
     return row
@@ -33,7 +97,7 @@ let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
 
 /** Bug reads preserve caller ordering, defaulting to worst first. */
 export let bugs = (
-  g: Graph,
+  g: Pick<Store, 'read'>,
   query: Query,
   count = 50,
 ): Bundle[] | Promise<Bundle[]> =>
@@ -46,7 +110,7 @@ export let bugs = (
   ))
 
 /** A bug and its retained occurrences, with no copies written locally. */
-export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
+export let bug = (g: Store, input: string): Bundle[] | Promise<Bundle[]> =>
   after(
     referenced(g, [input], 'bug'),
     ([eid]) =>
@@ -87,10 +151,14 @@ let answer = (
 }
 
 /** The tools' options: the tracker's remote, the store a call naming no
- * source reads and marks (`box` unless said), and the checkout whose commits a
- * resolution names, where a short sha is read as Git reads one. */
+ * source reads and marks (`box` unless said), the box tracker's graph where
+ * this one holds no bugs, and the checkout whose commits a resolution names,
+ * where a short sha is read as Git reads one. */
 export type ToolOptions = Options & {
   source?: 'box' | 'yaks.app'
+  /** the base URL of the box tracker's graph, such as
+   * `http://127.0.0.1:5175`; without it the box is this graph */
+  box?: string
   code?: { cwd?: string }
 }
 
@@ -101,6 +169,10 @@ export let runs = (
 ): Runs => {
   let source = (call: Bundle) =>
     str(argsOf(call).source) || options.source || 'box'
+  // Where the box source reads and marks: the box tracker's graph when one is
+  // named, else this graph, whose runner applies the marks a tool answers.
+  let box = (g: Graph): Store =>
+    options.box ? wire(options.box, g.vocab, go) : g
   let cwd = options.code?.cwd
   // A resolution's commits by their full shas; one Git cannot read stays as
   // said, for the graph to refuse.
@@ -113,9 +185,10 @@ export let runs = (
   }
   let mark =
     (name: 'resolved' | 'archived' | 'reopened') =>
-    async (call: Bundle, g: Graph): Promise<Bundle[]> => {
+    async (call: Bundle, here: Graph): Promise<Bundle[]> => {
       let args = argsOf(call)
       let remote = source(call) == 'yaks.app'
+      let g = box(here)
       let [address] = remote
         ? [str(args.bug)]
         : await referenced(g, [str(args.bug)], 'bug')
@@ -138,7 +211,9 @@ export let runs = (
           throw new CallError('remote', (error as Error).message)
         }
       }
-      if (bug) return [{ entity: bug.entity, ...written(name, said) }]
+      let patch = { entity: bug?.entity, ...written(name, said) } as Bundle
+      if (bug && !g.mark) return [patch]
+      if (bug) await g.mark!([patch])
       return answer(call, { bug: eid, mark: name }, source(call))
     }
   let remote = async (
@@ -163,7 +238,7 @@ export let runs = (
       }
       return after(
         bugs(
-          g,
+          box(g),
           parse(str(args.query) || '.bug.status=open'),
           Number(args.limit ?? 50),
         ),
@@ -175,7 +250,7 @@ export let runs = (
       if (source(call) == 'yaks.app') {
         return remote(call, new URLSearchParams({ bug: str(args.bug) }))
       }
-      return after(bug(g, str(args.bug)), (rows) => answer(call, { rows }))
+      return after(bug(box(g), str(args.bug)), (rows) => answer(call, { rows }))
     },
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),

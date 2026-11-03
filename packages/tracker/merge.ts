@@ -7,7 +7,7 @@ import { stablePlace } from './fault.ts'
 
 /** Follow a consolidated identity at the same boundary that reads its entity. */
 export let survivor = async (
-  g: Desk,
+  g: Pick<Desk, 'get'>,
   eid: string,
 ): Promise<Bundle | undefined> => {
   let seen = new Set<string>()

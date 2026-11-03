@@ -15,6 +15,7 @@ import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 import { trackerDoc } from './vocab.ts'
 import { runs, type ToolOptions } from './tools.ts'
 import { routes } from './routes.ts'
+import { api } from '@yaks/api'
 import { sign } from './ticket.ts'
 
 let ids = [1, 2, 3, 4, 5, 6].map((n) =>
@@ -432,4 +433,48 @@ test('a resolution names its commits by full sha, read from a short one', async 
   let [row] = await platformHome.worker.get([ids[0]], ['resolved'])
   let { since, fix } = row.resolved as Record<string, unknown>
   equal([since, fix], [head, head])
+})
+
+// A config naming the box tracker's graph reads and marks its bugs there, by
+// the references that graph keeps, and writes nothing to its own.
+let tracker = await marking(config, undefined, true, false)
+let [held] = await tracker.box.get([ids[0]], ['entity'])
+let served = api({ graph: tracker.box })
+let here = graph({ vocab: boxVocab, storage: ram(boxVocab, options) })
+let viaBox = loadTools(
+  trackerDoc,
+  runs(
+    {},
+    { box: 'http://box.test' },
+    ((url, init) => served(new Request(url, init))) as typeof fetch,
+  ),
+)
+let use = async (name: string, args: Record<string, unknown>) => {
+  let tool = viaBox.find((t) => t.name == name)!
+  let said = name == 'bug_resolve' ? why : {}
+  return valueIn(
+    await tool.run({
+      entity: { eid: ids[4] },
+      call: { args: validateToolInput(tool, { ...said, ...args }) },
+    }, here),
+  ) as Record<string, unknown>
+}
+let boxListed = await use('bug_list', {})
+let shown = await use('bug_show', { bug: `B-${held.entity.num}` })
+let resolved = await use('bug_resolve', { bug: `B-${held.entity.num}` })
+let afterResolve = await tracker.box.read('.bug.status=resolved')
+await use('bug_reopen', { bug: 'mark me' })
+let afterReopen = await tracker.box.read('.bug.status=open')
+test('a config naming the box tracker reads and marks its bugs there', async () => {
+  let eids = (rows: unknown) => (rows as Bundle[]).map((b) => b.entity.eid)
+  equal(eids(boxListed.rows), [ids[0]])
+  equal(eids(shown.rows), [ids[0]])
+  equal(resolved, { source: 'box', bug: ids[0], mark: 'resolved' })
+  equal(eids(afterResolve), [ids[0]])
+  equal(eids(afterReopen), [ids[0]])
+  equal(await here.read('.entity *'), [])
+})
+test('a config naming the box tracker refuses what it does not hold', async () => {
+  let refused = await use('bug_show', { bug: 'B-999999' }).catch((e) => e)
+  equal(refused.message, 'B-999999 names nothing')
 })

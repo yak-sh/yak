@@ -386,7 +386,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors). Reads return source-labelled data without importing bundles."
+          "description": "Read box bugs (this graph's, or the box tracker's graph the config names), or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors). Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,
@@ -412,7 +412,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors). Reads return source-labelled data without importing bundles."
+          "description": "Read box bugs (this graph's, or the box tracker's graph the config names), or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors). Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,
@@ -441,7 +441,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+          "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
         },
         "broke": {
           "type": "string",
@@ -493,7 +493,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+          "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
         }
       },
       "idempotent": true,
@@ -522,7 +522,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+          "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
         }
       },
       "idempotent": true,
