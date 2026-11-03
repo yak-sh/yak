@@ -10,7 +10,7 @@ export class Sandbox extends DurableObject<Env> {
   #ready: Promise<Box>
 
   constructor(
-    ctx: ConstructorParameters<typeof DurableObject<Env>>[0],
+    ctx: ConstructorParameters<Runtime['Sandbox']>[0],
     env: Env,
   ) {
     super(ctx, env)

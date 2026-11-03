@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./choose": "./choose.ts",
     "./deps": "./deps.ts",
+    "./examples": "./examples.ts",
     "./find": "./find.ts",
     "./main": "./main.ts",
     "./own": "./own.ts",

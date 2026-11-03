@@ -49,15 +49,16 @@ no browser tests or slow platform tier.
 
 ## Exports
 
-| Export                 | Provides                                                                                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/testing`        | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks`             |
-| `@yaks/testing/own`    | `own`, `waits`, `held`, `started`: a process's own time, for a coordinator that imports no tests                                                                         |
-| `@yaks/testing/find`   | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                            |
-| `@yaks/testing/choose` | `choose`: which of a run's files run, and each one's key                                                                                                                 |
-| `@yaks/testing/deps`   | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`, `remembered`; the pass record: `passed`, `remember`, `forget`, `recall`, `note`, `took`, `tally` |
-| `@yaks/testing/reads`  | `observe`, `path`: file reads and computed module loads seen at their boundaries                                                                                         |
-| `@yaks/testing/main`   | The Deno runner entry point                                                                                                                                              |
+| Export                   | Provides                                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/testing`          | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks`             |
+| `@yaks/testing/own`      | `own`, `waits`, `held`, `started`: a process's own time, for a coordinator that imports no tests                                                                         |
+| `@yaks/testing/find`     | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                            |
+| `@yaks/testing/examples` | `fences`, `doctests`, `typed`, `exported`, `declared`: a page's examples, compiled to run as tests or to type-check                                                      |
+| `@yaks/testing/choose`   | `choose`: which of a run's files run, and each one's key                                                                                                                 |
+| `@yaks/testing/deps`     | `survey`, `key`, `shared`, `proof`, `seal`, `digest`, `named`, `graph`, `remembered`; the pass record: `passed`, `remember`, `forget`, `recall`, `note`, `took`, `tally` |
+| `@yaks/testing/reads`    | `observe`, `path`: file reads and computed module loads seen at their boundaries                                                                                         |
+| `@yaks/testing/main`     | The Deno runner entry point                                                                                                                                              |
 
 ## Declaring tests
 

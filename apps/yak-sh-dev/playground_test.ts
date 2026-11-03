@@ -84,7 +84,7 @@ test('playground still accepts a JSON batch', async () => {
     ),
     0,
   )
-  equal((await batch.books())[0].book.pages, 600)
+  equal(((await batch.books())[0].book as { pages: number }).pages, 600)
 })
 
 const queryOutput: string[] = []

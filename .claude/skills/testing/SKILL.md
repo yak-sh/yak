@@ -128,8 +128,9 @@ formatting to changed files, lints them, and checks the public API of each
 changed package for slow types (`deno publish --dry-run`, a fifth of a second a
 package). Beside the tests it checks the types of source and doc comments the
 change reaches, each changed module and each importing one, as
-`deno task check:types` does alone: seconds where the whole repository takes a
-minute. Tests and examples run untyped, so a type error fails the run there.
+`deno task check:types` does alone: TypeScript's native compiler (tsgo) checks
+them in the project Deno's resolution describes, in seconds where the whole
+repository takes about fifteen. Tests and examples run untyped, so a type error fails the run there.
 Main's CI checks every module after the push (`deno task check:types --all`). Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.

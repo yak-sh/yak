@@ -1117,7 +1117,8 @@ export let routed = async (
       add(r, {
         entity: { ...e.entity, eid },
         ...Object.fromEntries(
-          keys.filter((n) => n in e).map((n) => [n, e[n]]),
+          keys.filter((n) => n in e)
+            .map((n) => [n, (e as Record<string, unknown>)[n]]),
         ),
         ...(Object.keys(was).length ? { $was: was } : {}),
         // and the alias the caller named it by, which every part carries:

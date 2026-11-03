@@ -25,7 +25,7 @@ export type Doctest = {
 export type Fence = { line: number; skip: boolean; lang: string; code: string }
 
 /** A fenced test's page and line for failures, and code digest for listings. */
-export let fenceName = async (page: string, fence: Fence) => {
+export let fenceName = async (page: string, fence: Fence): Promise<string> => {
   let digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(fence.code),
@@ -94,7 +94,7 @@ export let split = (
 let LANGS = /^(ts|tsx|js|jsx|mjs|mts|typescript|javascript)$/
 
 /** Whether a page is a module, whose doc comments hold its examples. */
-export let module = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
+export let module = (path: string): boolean => /\.[mc]?[jt]sx?$/.test(path)
 
 /// fences('```ts\nf()\n```')[0] -> { line: 1, skip: false, lang: 'ts', code: 'f()' }
 /// fences('/**\n * ```ts ignore\n * f()\n * ```\n */', 'a.ts')[0] ~> { line: 2, skip: true }
@@ -156,7 +156,7 @@ let ENDS =
  * it still declares, a default export is only evaluated, and a re-export is
  * gone.
  */
-export let unexport = (line: string) =>
+export let unexport = (line: string): string =>
   /^export\s+(\*|\{)/.test(line)
     ? ''
     : line.replace(/^export\s+default\s+/, 'void ').replace(/^export\s+/, '')
@@ -164,7 +164,7 @@ export let unexport = (line: string) =>
 /// hoist("import { a } from 'x'\nimport {\n  b,\n} from 'y'\na(b)") -> { imports: ["import { a } from 'x'", "import {\n  b,\n} from 'y'"], rest: ['', '', '', '', 'a(b)'] }
 /** An example's import statements, and the rest of its lines with blanks
  * where the imports stood, so the lines keep their numbers. */
-export let hoist = (code: string) => {
+export let hoist = (code: string): { imports: string[]; rest: string[] } => {
   let imports: string[] = [], rest: string[] = []
   let open: string[] | undefined
   for (let text of code.split('\n')) {
@@ -202,7 +202,7 @@ export let bound = (statement: string): string[] =>
 /// specifiers('await import(`./${name}.ts`)') -> []
 /** What an example's imports name: its import statements, and each
  * `import(…)` of a literal specifier. */
-export let specifiers = (code: string) => [
+export let specifiers = (code: string): string[] => [
   ...hoist(code).imports.map((s) =>
     s.match(/(?:^import|\bfrom)\s*['"]([^'"]+)/)?.[1]
   ).filter((s): s is string => !!s),
@@ -211,7 +211,7 @@ export let specifiers = (code: string) => [
 ]
 
 // Words that cannot be bound by a destructuring pattern.
-let RESERVED = new Set(
+let RESERVED: Set<string> = new Set(
   ('break case catch class const continue debugger default delete do else ' +
     'enum export extends false finally for function if import in ' +
     'instanceof new null return super switch this throw true try typeof ' +
@@ -220,7 +220,7 @@ let RESERVED = new Set(
 )
 
 /** The names a module exports that an example can use unimported. */
-export let usable = (exports: string[], taken: string[] = []) =>
+export let usable = (exports: string[], taken: string[] = []): string[] =>
   exports.filter((n) =>
     /^[A-Za-z_$][\w$]*$/.test(n) && !RESERVED.has(n) && !taken.includes(n)
   )
@@ -260,7 +260,7 @@ export let compileFence = (
   page: string,
   fence: Fence,
   exports: string[] = [],
-) => {
+): string => {
   let { imports, rest } = hoist(fence.code)
   let base = page.slice(page.lastIndexOf('/') + 1)
   let names = usable(exports, imports.flatMap(bound))
@@ -273,6 +273,54 @@ export let compileFence = (
     `\n}, { skip: ${fence.skip} })\n`
 }
 
+/// typed('m.ts', { line: 3, skip: false, lang: 'ts', code: "import { b } from 'b'\nf(b)" }, ['f']) -> "import { b } from 'b'; import { f } from './m.ts'; export {}\n\n\n\nf(b)\n"
+/// typed('m.ts', { line: 1, skip: false, lang: 'ts', code: 'declare let f: () => void\nf()' }, ['f']) -> "import './m.ts'; export {}\ndeclare let f: () => void\nf()\n"
+/**
+ * One fenced example as a module for a type checker, as `deno check --doc`
+ * reads it: its code at the top level, with the page's exports it neither
+ * imports nor declares imported, keeping the page's line numbers.
+ */
+export let typed = (
+  page: string,
+  fence: Fence,
+  exports: string[] = [],
+): string => {
+  let { imports, rest } = hoist(fence.code)
+  let base = page.slice(page.lastIndexOf('/') + 1)
+  let names = usable(exports, [
+    ...imports.flatMap(bound),
+    ...declared(rest.join('\n')),
+  ])
+  return head([
+    ...imports,
+    ...module(page) ? [imported(names, base)] : [],
+    'export {}',
+  ]) + pad(1, fence.line + 1) + rest.join('\n') + '\n'
+}
+
+/// declared('let a = 1\nexport async function b() {}\n  let c = 2\ndeclare const d: 1') -> ['a', 'b', 'd']
+/** The names code declares at its top level. */
+export let declared = (code: string): string[] =>
+  [...code.matchAll(
+    /^(?:export\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:let|const|var|function\*?|class|interface|type|enum|namespace)\s+([A-Za-z_$][\w$]*)/gm,
+  )].map((m) => m[1])
+
+/// exported('export let a = 1\nexport async function* b() {}\nexport type C = 1\nlet d = 2') -> ['a', 'b', 'C']
+/// exported("export { a, b as c } from './x.ts'\nexport { a }\nexport default 1") -> ['a', 'c']
+/** The names a module's source exports by declaration or by list, each
+ * once, for its examples to use unimported where they cannot load it. */
+export let exported = (source: string): string[] => [
+  ...new Set([
+    ...declared(source.replace(/^(?!export\s).*$/gm, '')),
+    ...[...source.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}/gm)]
+      .flatMap((m) =>
+        m[1].split(',').map((s) =>
+          s.trim().replace(/^type\s+/, '').split(/\s+as\s+/).at(-1)!
+        )
+      ).filter(Boolean),
+  ]),
+]
+
 /**
  * A page's doctests as one module: its statements run in order, and each
  * check declares a test named for its line and code.
@@ -281,7 +329,7 @@ export let compileDoctests = (
   page: string,
   tests: Doctest[],
   exports: string[] = [],
-) => {
+): string => {
   let base = page.slice(page.lastIndexOf('/') + 1)
   let lines = 1
   let body = ''

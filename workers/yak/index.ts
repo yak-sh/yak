@@ -19,6 +19,7 @@ import {
 } from 'cloudflare:workers'
 import { evaluator } from './code-runtime.ts'
 import type { Caller } from '@yaks/egress'
+import type { DurableStorage } from '@yaks/durable-object'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
 import { entry, instrument } from './defects-runtime.ts'
@@ -248,7 +249,7 @@ export default {
 class PublicDirectoryStore extends DurableObject<Env> {
   #copy: ServingCopy
   constructor(
-    ctx: ConstructorParameters<typeof DurableObject<Env>>[0],
+    ctx: { storage: DurableStorage },
     env: Env,
   ) {
     super(ctx, env)
@@ -258,9 +259,9 @@ class PublicDirectoryStore extends DurableObject<Env> {
           ctx.storage.sql.exec(
             'CREATE TABLE IF NOT EXISTS copy (id INTEGER PRIMARY KEY, body TEXT)',
           )
-          let [row] = ctx.storage.sql.exec<{ body: string }>(
+          let [row] = ctx.storage.sql.exec(
             'SELECT body FROM copy WHERE id = 1',
-          ).toArray()
+          ).toArray() as { body: string }[]
           return row ? JSON.parse(row.body) as ServingCopyState : undefined
         },
         write: (state) => {

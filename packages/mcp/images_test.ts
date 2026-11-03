@@ -48,7 +48,7 @@ let door = mcp({ graph: shopGraph(), ...options })
 
 test('MCP displays images beside text while preserving the declared structured answer', async () => {
   try {
-    equal(await client.callTool({ name: 'preview' }), expected)
+    equal<unknown>(await client.callTool({ name: 'preview' }), expected)
   } finally {
     await client.close()
   }

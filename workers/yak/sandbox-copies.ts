@@ -5,7 +5,8 @@
 type WorkspaceCopy = { id: string }
 
 type Copy = { done: boolean; processes: string[]; snapshot?: WorkspaceCopy }
-type Storage = {
+/** The slice of a Durable Object's storage the census uses. */
+export type Storage = {
   get<T>(key: string): Promise<T | undefined>
   put<T>(key: string, value: T): Promise<void>
   list<T>(options: { prefix: string }): Promise<Map<string, T>>

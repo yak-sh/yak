@@ -40,7 +40,11 @@ export let pooledHttp = (options: {
       g.active++
       let response: Response
       try {
-        response = await go(input, { ...init, client: g.client } as RequestInit)
+        let sent: RequestInit & { client: Client } = {
+          ...init,
+          client: g.client,
+        }
+        response = await go(input, sent)
       } catch (error) {
         let broken = !signal?.aborted && error instanceof TypeError
         if (broken) retire(g)

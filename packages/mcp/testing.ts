@@ -137,15 +137,15 @@ export let comp = (b: Bundle, name: string): Record<string, unknown> => {
 
 /** The bundles a tool returned — what is nested under `result` in the reply's
  * `structuredContent`. */
-export let result = (out: { structuredContent?: unknown }): unknown => {
-  let said = out.structuredContent
+export let result = (out: object): unknown => {
+  let said = 'structuredContent' in out ? out.structuredContent : undefined
   return said && typeof said == 'object' && 'result' in said
     ? said.result
     : undefined
 }
 
 /** The text of a reply: its first text content block. */
-export let text = (out: { content?: unknown }): string => {
-  let blocks = out.content
+export let text = (out: object): string => {
+  let blocks = 'content' in out ? out.content : undefined
   return Array.isArray(blocks) ? String(blocks[0]?.text ?? '') : ''
 }

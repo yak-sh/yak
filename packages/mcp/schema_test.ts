@@ -141,11 +141,12 @@ test('every tool publishes its answer, and its answers fit it', async () => {
   assertEquals(at(meta, '$id'), 'https://yak.sh/vocab/meta')
   // Compiled the way a host compiles it, off the listing and nothing else.
   let validator = new AjvJsonSchemaValidator()
-  let held = (out: { structuredContent?: unknown }, name: string) =>
+  let held = (out: object, name: string) =>
     assertEquals(
       validator.getValidator(
         schemas[name] as Parameters<AjvJsonSchemaValidator['getValidator']>[0],
-      )(out.structuredContent).errorMessage,
+      )('structuredContent' in out ? out.structuredContent : undefined)
+        .errorMessage,
       undefined,
       name,
     )
@@ -267,7 +268,7 @@ test('a JSON Schema input declaration reaches the listing unchanged', async () =
   })
   try {
     let { tools } = await client.listTools()
-    assertEquals(
+    assertEquals<unknown>(
       tools.find((t: { name: string }) => t.name == 'count_books')?.inputSchema,
       inputSchema,
     )

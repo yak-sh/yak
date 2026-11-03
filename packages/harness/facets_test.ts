@@ -340,7 +340,7 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
         limit: { type: 'integer', minimum: 1, default: 2 },
       },
     }
-    assertEquals(listed.inputSchema, published)
+    assertEquals<unknown>(listed.inputSchema, published)
     assertEquals<unknown>(inputSchemaOf(tool), published)
     const args = await argsFor(tool, ['root', '-n', '3'], reads)
     const response = await c.callTool({ name: 'example_list', arguments: args })

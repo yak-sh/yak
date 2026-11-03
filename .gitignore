@@ -10,6 +10,10 @@
 node_modules
 node_modules.lock/
 
+# check:types' TypeScript project (bin/check-types.ts): links into Deno's
+# caches and each run's tsconfig.
+.types/
+
 # wrangler dev's bundle scratch beside a Worker's config (workers/*)
 .wrangler/
 

@@ -118,8 +118,8 @@ test('MCP file reads retain the admitted schema and implementation during provid
   try {
     equal(JSON.parse(text(await pending)), { body })
     let current = (await swapping.listTools()).tools[0]
-    equal(current.inputSchema.properties.body, { type: 'number' })
-    equal(current.inputSchema.properties._files, { type: 'boolean' })
+    equal(current.inputSchema.properties?.body, { type: 'number' })
+    equal(current.inputSchema.properties?._files, { type: 'boolean' })
     equal(text(await call({ body: 7 }, swapping)), 'replacement 7')
   } finally {
     await swapping.close()
@@ -146,7 +146,7 @@ test('only a file-capable MCP door advertises file input', async () => {
     type: 'boolean',
   })
   equal(local.getInstructions()?.includes(FILES), true)
-  equal(
+  equal<unknown>(
     (await remote.listTools()).tools.find((t: { name: string }) =>
       t.name == 'echo_body'
     )!

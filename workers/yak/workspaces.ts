@@ -4,7 +4,7 @@
 // serves. The coordinator keeps the copy receipts and complete erase census.
 import { DurableObject } from 'cloudflare:workers'
 import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
-import { afterCompiles, copies } from './sandbox-copies.ts'
+import { afterCompiles, copies, type Storage } from './sandbox-copies.ts'
 import { retried } from '@yaks/durable-object'
 import type { Env } from './env.ts'
 import { TIMEOUT } from './sandbox.ts'
@@ -29,10 +29,10 @@ export type Workspaces = {
 export class WorkspaceStore extends DurableObject<Env> {
   #copies: ReturnType<typeof copies>
   #prefix: string
-  #storage: ConstructorParameters<typeof DurableObject<Env>>[0]['storage']
+  #storage: Storage
   #bucket: Env['BLOBS']
   constructor(
-    ctx: ConstructorParameters<typeof DurableObject<Env>>[0],
+    ctx: { id: { toString(): string }; storage: Storage },
     env: Env,
   ) {
     super(ctx, env)

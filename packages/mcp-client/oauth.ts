@@ -79,7 +79,8 @@ export const discover = async (
         : {},
       ...scope ? { scopes: scope.split(' ') } : {},
       resource: url,
-      ...meta.authorization_response_iss_parameter_supported
+      ...'authorization_response_iss_parameter_supported' in meta &&
+          meta.authorization_response_iss_parameter_supported
         ? { issuer: meta.issuer }
         : {},
       hosts: [new URL(url).hostname],
