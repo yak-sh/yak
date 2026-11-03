@@ -3068,9 +3068,11 @@ let OURS: Row[] = [
         app = current.app!
       }
       if (!apps.length) step(ctx.env, 'first_app')
-      // No link yet (T-135905): its address serves nothing until a version
-      // is released, and a link handed on now opens to nothing. app_deploy's
-      // answer carries it, once the page answers.
+      // No link to hand on yet (T-135905): its address serves nothing until
+      // a version is released, so the text says not to give it, and
+      // app_deploy's answer carries it once the page answers. The data keeps
+      // `url` beside `deployed: false`, as the published listing promises
+      // (T-136005).
       return {
         text: `app ${space.slug}/${s} (${app.eid}) is made but not deployed: ` +
           'its address serves nothing yet, so do not tell the person it ' +
@@ -3081,7 +3083,7 @@ let OURS: Row[] = [
             front ? `opens ${front.slug}` : "lists the space's apps"
           } — app_set(app, home: true) makes this one the front page there`,
         space,
-        value: { eid: app.eid, deployed: false },
+        value: { eid: app.eid, url: url(space, app, ctx.env), deployed: false },
       }
     },
   },

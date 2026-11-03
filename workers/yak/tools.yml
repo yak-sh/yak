@@ -92,10 +92,10 @@ app_new:
     able to write to it (vote, add a line, sign up), and 'private' if only
     the person and whoever they invite (member_add) should see it at all.
     The default access is 'public': anyone can read, but only members
-    allowed to write can change data. Returns the app's entity id and access
-    setting, and no link: its address serves nothing until app_deploy, whose
-    answer gives the link to hand the person. Documentation:
-    https://yaks.app/docs.
+    allowed to write can change data. Returns the app's entity id, URL and
+    access setting. The URL serves nothing until app_deploy releases a
+    version, so hand the person the link app_deploy answers, not this one.
+    Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
   description: >-
