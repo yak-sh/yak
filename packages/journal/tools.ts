@@ -5,11 +5,10 @@
 // The answer is bundles, and each bundle is the transaction: `applied()`
 // rebuilds what a write committed out of the log's own record, so a history row
 // has the same shape as the write that produced it — the components it patched,
-// or `$delete` if it deleted the entity. Who wrote it is carried on
-// `updated{at, by, via}`, a component this package neither declares nor
-// imports: a tool returns data, so naming another package's component costs
-// nothing, and a server whose vocabulary does not declare `updated` has those
-// properties dropped when the bundles are admitted.
+// or `$delete` if it deleted the entity. Which transaction it was — its place in
+// the log, when it committed, whom it acted for and through what — is carried on
+// `_tx`, this package's own word for a committed transaction, so a row reads as
+// the moment it was and draws as one (./views.ts).
 //
 // There is no `undo` tool here and no feed. Undo is `undo(g, j)` in ./undo.ts —
 // a write, and one a server has to decide it offers — and a feed is a cursor a
@@ -23,10 +22,10 @@ import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'
 import { type Bound, logFor } from './graph.ts'
 
-// Who wrote the transaction, when, and through what — the same stamp a graph
-// already carries for an entity's last write, reported here about a moment in
-// the past.
+// Which transaction it was: where it sits in the log, when it committed, whom
+// it acted for and through what.
 let stamp = (b: Batch): Comp => ({
+  seq: b.seq,
   at: b.at,
   ...(b.by ? { by: b.by } : {}),
   ...(b.via ? { via: b.via } : {}),
@@ -36,7 +35,7 @@ let stamp = (b: Batch): Comp => ({
 // log is cut to that entity first, so a transaction that also moved something
 // else reports only this entity's part of it.
 let said = (b: Batch): Bundle[] =>
-  applied(b).map((patch) => ({ ...patch, updated: stamp(b) }))
+  applied(b).map((patch) => ({ ...patch, _tx: stamp(b) }))
 
 /** The functions behind the tools ./vocab.json declares — read over this
  * host's storage, which is why this export is a factory. */

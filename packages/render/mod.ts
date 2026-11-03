@@ -44,10 +44,10 @@ import { Unknown } from '@yaks/vocab/runtime'
  * @module
  */
 
-import { type Bundle, type Filter, filter } from '@yaks/match'
+import type { Bundle, Filter } from '@yaks/match'
 import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab/runtime'
-import { type ArchetypeLookup, archetypeMatch } from './archetype.ts'
+import { type ArchetypeLookup, archetypeMatch, drawable } from './archetype.ts'
 export type { ArchetypeLookup } from './archetype.ts'
 import { projection, propVocab } from './prop.ts'
 import type {
@@ -118,7 +118,7 @@ let predicate = (match: Query, vocab: Vocab): Filter => {
   let byVocab = cache.get(match)
   if (!byVocab) cache.set(match, byVocab = new WeakMap())
   let f = byVocab.get(vocab)
-  if (!f) byVocab.set(vocab, f = filter(match, vocab))
+  if (!f) byVocab.set(vocab, f = drawable(match, vocab))
   return f
 }
 

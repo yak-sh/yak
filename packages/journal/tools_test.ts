@@ -62,8 +62,8 @@ test('a history is the batches that touched it, newest first', async () => {
   assertEquals(said.map((b) => b.entity.eid), ['p1', 'p1'])
   // Who wrote it, when, and through what — the unowned batch says the moment
   // alone rather than an actor nobody was.
-  assertEquals(comp(said[0], 'updated'), { at: NOW, by: 'ada', via: 'cli' })
-  assertEquals(comp(said[1], 'updated'), { at: NOW })
+  assertEquals(comp(said[0], '_tx'), { seq: 2, at: NOW, by: 'ada', via: 'cli' })
+  assertEquals(comp(said[1], '_tx'), { seq: 1, at: NOW })
 })
 
 test('a limit counts back from the newest', async () => {

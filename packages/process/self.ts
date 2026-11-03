@@ -63,9 +63,19 @@ export type SelfOpts = {
   roles?: string[]
 }
 
+// The program a person ran: the executable, or under `deno` the script it
+// runs — `yak.ts` is `yak` — since `deno run … yak.ts task new` is what a `yak`
+// on the PATH execs, and `yak task new` is what the person typed.
+let program = (): string => {
+  let exe = Deno.execPath().split('/').pop() ?? 'deno'
+  if (!/^deno(\.exe)?$/.test(exe)) return exe
+  let script = new URL(Deno.mainModule).pathname.split('/').pop() ?? ''
+  return script.replace(/\.[cm]?[jt]sx?$/, '') || exe
+}
+
 let line = (): string => {
   try {
-    return [Deno.execPath().split('/').pop(), ...Deno.args].join(' ')
+    return [program(), ...Deno.args].join(' ')
   } catch {
     return 'yak'
   }

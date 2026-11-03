@@ -98,12 +98,13 @@ Any other OS is refused at launch. `opts.os` picks another OS's launcher, which
 is how a Linux machine tests the macOS one.
 
 The process that opens a graph is the **host**. `started()` returns the bundle
-that records the host's process entity, `ended()` records its exit, and
-`selfEid()` returns the stable in-memory entity ID for that host run. The host
-can sign writes with this entity, so `created.by` identifies the specific
-program run that wrote a row. A host's row also says which roles it serves
-(`process.roles`, from @yaks/cli `compose`): `graph`, `web`, `effects`, or a
-plugin's service by its name.
+that records the host's process entity, named by the command a person ran
+(`yak task new Buy the cake`, which is also how it reads wherever it is named,
+./views.ts), `ended()` records its exit, and `selfEid()` returns the stable
+in-memory entity ID for that host run. The host can sign writes with this
+entity, so `created.by` identifies the specific program run that wrote a row. A
+host's row also says which roles it serves (`process.roles`, from @yaks/cli
+`compose`): `graph`, `web`, `effects`, or a plugin's service by its name.
 
 A Worker thread that opens a graph is a host of its own, with its own row in the
 pid it runs in. The pid lives on after the thread, so its `exit` is what
@@ -117,9 +118,12 @@ import { ended, started } from '@yaks/process'
 let beginning = started()
 let ending = ended(0)
 equal(ending.entity, beginning.entity)
+// The command is the program and its arguments; under `deno run`, the program
+// is the script, so `deno run -A yak.ts task new` is `yak task new`.
+let script = Deno.mainModule.split('/').pop()!.replace(/\.[cm]?[jt]sx?$/, '')
 equal(beginning.process, {
   pid: Deno.pid,
-  command: [Deno.execPath().split('/').pop(), ...Deno.args].join(' '),
+  command: [script, ...Deno.args].join(' '),
   cwd: Deno.cwd(),
 })
 equal(beginning.runtime, {

@@ -1,6 +1,6 @@
 // Relative timestamps keep the existing English wording at every unit boundary.
 import { equal, test } from '@yaks/testing'
-import { relative } from './Stamp.ts'
+import { relative } from './relative.ts'
 
 let now = Date.parse('2026-10-19T12:00:00Z')
 let native = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })

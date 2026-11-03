@@ -8,6 +8,12 @@ import type { Vocab } from '@yaks/vocab'
  * names. */
 export type ArchetypeLookup = (eid: string) => readonly string[] | undefined
 
+/** A registered query as a test of the bundle a view is handed. A view draws
+ * the bundle it is handed, a tombstone too (a history's deletion row): whether
+ * an entity still stands is a read's question, not a drawing's. */
+export let drawable = (query: Query, vocab: Vocab): ReturnType<typeof filter> =>
+  filter(query, vocab, { graves: true })
+
 let presence = (c: Clause, vocab: Vocab): boolean => {
   if (c.kind == 'and' || c.kind == 'or') {
     return c.clauses.every((c) => presence(c, vocab))
@@ -47,7 +53,7 @@ export let archetypeMatch = (
   let compiled = byVocab.get(vocab)
   if (compiled === undefined) {
     compiled = presence(query, vocab)
-      ? { test: filter(query, vocab), answers: new WeakMap() }
+      ? { test: drawable(query, vocab), answers: new WeakMap() }
       : null
     byVocab.set(vocab, compiled)
   }

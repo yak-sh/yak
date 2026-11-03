@@ -7,7 +7,8 @@
     "./graph": "./graph.ts",
     "./self": "./self.ts",
     "./wind": "./wind.ts",
-    "./isolate": "./isolate.ts"
+    "./isolate": "./isolate.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",

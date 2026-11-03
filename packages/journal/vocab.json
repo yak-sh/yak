@@ -136,7 +136,7 @@
       "tool": true,
       "noun": "history",
       "title": "Read an entity’s history",
-      "description": "List every committed transaction that touched one entity, newest first. Each is returned as the patch it applied (the named groups of fields it wrote, or $delete if it deleted the record) stamped with who wrote it, when, and through which tool or process. The journal is written inside the same transaction as the batch, so this gives attribution and a diff without a version table. It covers changes made since this graph started journaling.",
+      "description": "List every committed transaction that touched one entity, newest first. Each is returned as the patch it applied (the named groups of fields it wrote, or $delete if it deleted the record) stamped with `_tx`: the transaction's place in the journal (`seq`), when it committed (`at`), whom it acted for (`by`) and through what (`via`). The journal is written inside the same transaction as the batch, so this gives attribution and a diff without a version table. It covers changes made since this graph started journaling.",
       "input": {
         "entity": {
           "type": "string",

@@ -49,6 +49,7 @@ import {
 import { subpath, subpaths } from './config.ts'
 import type { AnatomyObserver } from '@yaks/code/anatomy'
 import { understood } from '@yaks/host/keywords'
+import { relative } from '@yaks/ui/relative'
 import type { Tty } from './run.ts'
 
 // What an answer wears in a terminal: @yaks/ui's components and these views'
@@ -246,7 +247,7 @@ export let terminal = async (
 
 // What a view cannot know from one bundle, for a terminal: an entity another
 // names reads as its id where the answer or `named` holds it, nothing links,
-// and a moment reads as written.
+// and a moment reads as a browser says it, `5 minutes ago`.
 let shown = <Node>(
   vocab: Vocab,
   answer: Bundle[],
@@ -272,7 +273,7 @@ let shown = <Node>(
       let b = held.get(eid)
       return b ? id(b) : short(eid)
     },
-    when: (at) => at,
+    when: (at) => relative(at),
     show: (b, view) => {
       demand?.(b.entity.eid)
       return draw(b, view, ctx)
