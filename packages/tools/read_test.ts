@@ -131,3 +131,43 @@ test('read runners share reference resolution, attribution, limits and receipts'
   }
   equal(answers[0], answers[1])
 })
+
+test('a tool is handed the process of the run that asked, where it has a cwd', async () => {
+  let vocab = loadVocab([kernelDoc, callDoc, toolDoc, {
+    $defs: {
+      process: {
+        component: true,
+        properties: { pid: { type: 'integer' }, cwd: { type: 'string' } },
+      },
+    },
+  }], [kernelKeywords])
+  let g = graph({ vocab, storage: ram(vocab) })
+  let worktree = mint(), bare = mint()
+  await g.apply([
+    { entity: { eid: worktree }, process: { pid: 2, cwd: '/worktree' } },
+    { entity: { eid: bare }, process: { pid: 3 } },
+  ])
+  let seen: unknown
+  let tool: Tool = {
+    name: 'where',
+    description: 'Say where it runs',
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    run: (call) => {
+      seen = call.process
+      return []
+    },
+  }
+  let server = { pid: 1, cwd: '/server' }
+  let r = reader(g, { tools: [tool], process: server, clock: clock() })
+  let asked = async (via: string) => {
+    await r.read({
+      entity: { eid: mint() },
+      call: { to: toolEid('where'), args: {}, actor: { by: 'person', via } },
+    })
+    return seen
+  }
+  equal(await asked(worktree), { pid: 2, cwd: '/worktree' })
+  equal(await asked(bare), server)
+  equal(await asked(mint()), server)
+})

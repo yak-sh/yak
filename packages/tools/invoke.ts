@@ -38,6 +38,21 @@ let measured = (answer: Bundle[], most: number) => {
   }
 }
 
+// The program on this machine that asked: the run a call came through, where
+// that run records a process with a working directory (a session started in
+// its worktree, @yaks/session), since that is the checkout a tool acting on
+// the machine means. An MCP server answers from its own directory, so its own
+// process is only where no run names one.
+let caller = async (
+  host: Graph,
+  via: string | undefined,
+): Promise<Comp | undefined> => {
+  if (!via || !host.vocab.comp('process')) return undefined
+  let [run] = await host.get([via], ['process'])
+  let process = run?.process as Comp | undefined
+  return process?.cwd ? process : undefined
+}
+
 /** Invoke once, letting the owner retain the answer or return it in memory. */
 export let invoke = async (
   call: Bundle,
@@ -87,11 +102,12 @@ export let invoke = async (
   try {
     let args = await resolved(tool, validated(tool, parsed(c.args)), host)
     let actor = who(call)
+    let process = opts.process && await caller(host, actor?.via)
     let asking: Bundle = {
       ...call,
       call: { ...c, args },
       ...!call.created && actor ? { created: { ...actor } } : {},
-      ...opts.process ? { process: opts.process } : {},
+      ...opts.process ? { process: process ?? opts.process } : {},
     }
     let made = await tool.run(asking, host)
     if (!tool.applied) made = signed(made, actor)
