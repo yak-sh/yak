@@ -47,6 +47,7 @@ import {
   appStore,
   type Directory,
   directory,
+  paid,
   type Space,
   stamp,
 } from './directory.ts'
@@ -261,10 +262,10 @@ export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
     ? 'ready'
     : 'setup'
 
-// New payments require the Plus plan. Existing orders and Stripe events still
+// New payments require a paid plan. Existing orders and Stripe events still
 // settle after a downgrade, and the seller can always disconnect their account.
 export let refusedSell = (space: Space, env: Host = {}) =>
-  space.tier == 'plus'
+  paid(space.tier)
     ? null
     : `Taking payments requires the Plus plan. Compare plans: ${
       hostUrl(env, '/pricing')

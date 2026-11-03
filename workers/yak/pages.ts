@@ -37,7 +37,8 @@ import {
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { links } from './sheets.ts'
-import { count, FREE, PLUS, PRICE, size } from './meter.ts'
+import { BUDGET, ceilings, count, PRICE, size, YEARLY } from './meter.ts'
+import type { Card, Want } from './billing.ts'
 import { columns } from '@yaks/ui/chart'
 import { h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -47,12 +48,21 @@ let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 // The meter's prices are whole US dollars, as on the public pricing page.
 let plusPrice = () => `$${count(PRICE.plus)}`
 
-let billButton = (door: string, label: string, target?: string) =>
+// What a plan costs, said on its button: "$49 a month", "$490 a year".
+let priced = (want: Want) =>
+  `$${count((want.per == 'year' ? YEARLY : PRICE)[want.tier]!)} a ${want.per}`
+
+let billButton = (
+  door: string,
+  label: string,
+  target?: string,
+  want?: Want,
+) =>
   `<button type="button" class="Button Bill_Go${
     door == 'portal' ? ' Button-quiet' : ''
-  }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}>${
-    esc(label)
-  }</button>`
+  }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}${
+    want ? ` data-plan="${want.tier}" data-per="${want.per}"` : ''
+  }>${esc(label)}</button>`
 
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
@@ -601,7 +611,8 @@ export type DeskPage = {
   sell?: 'none' | 'setup' | 'ready'
   plan?: Yours['plan']
   paid?: boolean
-  plus?: boolean
+  /** on a paid plan, which is what taking payments needs */
+  paying?: boolean
   fee?: string
   say?: string
   no?: boolean
@@ -811,8 +822,8 @@ let selling = (at: DeskPage, env: Host) => {
   if (!at.sell) return '<p>Selling is not available here yet.</p>'
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
-  let stop = ready || (!at.plus && connected)
-  let stripe = at.plus || connected
+  let stop = ready || (!at.paying && connected)
+  let stripe = at.paying || connected
     ? `<form method="post" action="${
       managePath('selling', at.pick)
     }"><input type="hidden" name="sell" value="${
@@ -825,14 +836,14 @@ let selling = (at: DeskPage, env: Host) => {
         : 'Connect Stripe'
     }</button></form>`
     : ''
-  let subscribe = at.plus ? '' : billButton(
+  let subscribe = at.paying ? '' : billButton(
     'checkout',
     `Subscribe — ${plusPrice()} a month`,
     managePath('selling', at.pick),
   )
   return `<section class="Card Bill">${
     heading(
-      !at.plus
+      !at.paying
         ? 'Take payments with Plus'
         : ready
         ? 'Payments are connected'
@@ -848,7 +859,7 @@ let selling = (at: DeskPage, env: Host) => {
     )
   }
 <p>${
-    !at.plus
+    !at.paying
       ? connected
         ? 'Your Stripe account is connected. Upgrade to Plus to accept new payments.'
         : 'Connect Stripe and accept payments from your customers on Plus.'
@@ -858,7 +869,7 @@ let selling = (at: DeskPage, env: Host) => {
       ? 'Finish connecting your Stripe account to start accepting payments.'
       : 'Connect your Stripe account to accept payments from your customers.'
   }</p>${
-    at.plus
+    at.paying
       ? `<p class="Form_Hint">yaks.app takes ${
         esc(at.fee ?? '')
       } of each sale. <a href="${
@@ -871,7 +882,7 @@ let selling = (at: DeskPage, env: Host) => {
           } per sale, plus Stripe processing fees.</p>`
           : ''
       }<p class="Say Bill_Say" role="status"></p>`
-  }</section>${at.plus ? '' : billing}`
+  }</section>${at.paying ? '' : billing}`
 }
 
 let trash = (at: DeskPage) =>
@@ -1570,7 +1581,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     body = plan(
       {
         slug: at.space,
-        plan: at.plan ?? { plus: false, ends: '', known: false },
+        plan: at.plan ?? { tier: 'free', ends: '', known: false },
         paid: at.paid,
       },
       env,
@@ -2131,12 +2142,10 @@ export type Yours = {
   said?: string
   say?: string
   no?: boolean
-  // What this space pays (billing.ts, T-33125): whether it is on Plus, the
-  // day it lapses if it is leaving, and whether Stripe has ever known this
-  // space — which is what makes the manage door worth offering. This is the
-  // surface that starts a purchase, and it is signed-in web only: the agent
-  // surface may name the pricing page and nothing else (C-33033).
-  plan: { plus: boolean; ends: string; known: boolean }
+  // What this space pays (billing.ts `Card`, T-33125). This is the surface
+  // that starts a purchase, and it is signed-in web only: the agent surface
+  // may name the pricing page and nothing else (C-33033).
+  plan: Card
   // `?paid=1` on the way back from Stripe. The webhook is what actually moves
   // the tier and it may not have landed yet, so the line says "in a moment"
   // rather than claiming something this request cannot see.
@@ -2172,10 +2181,11 @@ let MOVES = 'You can change it at any time. Every app moves with it, and ' +
   'the old address sends people to the new one until someone else takes ' +
   'that name.'
 
-// The plan card, for a person who is signed in (T-33125). One card with one
-// button: Plus when they are free, manage-billing when they are paying. The
-// button POSTs to billing.ts and follows the URL Stripe answers, so no Stripe
-// address is written into this page and nothing here knows a key.
+// The plan card, for a person who is signed in (T-33125). One card: the paid
+// plans when they are free, manage-billing when they are paying. Each button
+// POSTs to billing.ts and follows the URL Stripe answers, so no Stripe address
+// is written into this page and nothing here knows a key. The Organization
+// plan (D-134567) is offered only where its prices exist (billing.ts `Card`).
 //
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
@@ -2184,45 +2194,73 @@ let plan = (
   env: Host,
   target?: string,
 ) => {
+  let { tier } = y.plan
   let ends = y.plan.ends ? day(y.plan.ends) : ''
-  let limits = y.plan.plus ? PLUS : FREE
+  let limits = ceilings(tier)!
   let allowance = `${
     limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-  }, unlimited visitors, ${size(limits.bytes)} of app data`
-  let head = y.plan.plus
-    ? `<p>${esc(spaceHost(env, y.slug))} is on <b>Plus</b> — ${allowance}.${
-      ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
-    }</p>`
-    : `<p>${
-      esc(spaceHost(env, y.slug))
-    } is on the <b>free</b> plan — ${allowance}. <a href="${
+  }, unlimited visitors, ${size(limits.bytes)} of app data${
+    tier == 'organization'
+      ? `, $${count(BUDGET.organization)} a month of AI use, and email support`
+      : ''
+  }`
+  let host = esc(spaceHost(env, y.slug))
+  let head = tier == 'free'
+    ? `<p>${host} is on the <b>free</b> plan — ${allowance}. <a href="${
       url(env, '/pricing')
     }">Compare plans</a>.</p>`
+    : `<p>${host} is on <b>${NAMES[tier]}</b> — ${allowance}.${
+      ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
+    }</p>`
+  let buy = (want: Want) =>
+    billButton(
+      'checkout',
+      `Get ${NAMES[want.tier]} — ${priced(want)}`,
+      target,
+      want,
+    )
   // Someone Stripe has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
   let doors = [
-    y.plan.plus
-      ? ''
-      : billButton('checkout', `Get Plus — ${plusPrice()} a month`, target),
+    ...(tier == 'free'
+      ? [
+        buy({ tier: 'plus', per: 'month' }),
+        ...(y.plan.organization ?? []).map((per) =>
+          buy({ tier: 'organization', per })
+        ),
+      ]
+      : []),
     y.plan.known ? billButton('portal', 'Manage billing', target) : '',
   ].filter(Boolean).join('')
+  // Where the Organization plan has no price yet, a free space still hears
+  // how to get it: the pricing page offers it everywhere.
+  let ask = tier == 'free' && !y.plan.organization?.length
+    ? `<p class="Form_Hint">The Organization plan is not on sale here yet. ` +
+      `Email <a href="mailto:hello@yaks.app">hello@yaks.app</a> to start ` +
+      `on it.</p>`
+    : ''
   return `<section class="Card Bill" id="plan">${
     heading('Your plan', {
-      status: y.plan.plus ? status('Plus', 'good') : status('Free'),
+      status: tier == 'free'
+        ? status('Free')
+        : status(tier == 'plus' ? 'Plus' : 'Organization', 'good'),
       actions: doors,
     })
   }
-${head}
+${head}${ask}
 ${
     y.paid
-      ? '<p class="Say">Thanks — that went through. Your space moves to Plus ' +
-        'in a moment.</p>'
+      ? '<p class="Say">Thanks — that went through. Your space moves to its ' +
+        'new plan in a moment.</p>'
       : ''
   }
 <p class="Say Bill_Say" role="status"></p>
 </section>`
 }
+
+// A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).
+let NAMES = { plus: 'the Plus plan', organization: 'the Organization plan' }
 
 // Connector forms do not ask the same questions. Keep each answer beside the
 // provider step that asks for it, so a person never has to work out whether a
@@ -2561,7 +2599,10 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
     try {
       let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
         method: 'POST',
-        body: new URLSearchParams({ billing: b.dataset.door }),
+        body: new URLSearchParams({
+          billing: b.dataset.door,
+          ...(b.dataset.plan ? { plan: b.dataset.plan, per: b.dataset.per } : {}),
+        }),
       })
       let out = await r.json()
       if (out.url) { location = out.url; return }

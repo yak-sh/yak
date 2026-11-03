@@ -317,7 +317,11 @@ test('Billing is a management page beside Settings with space checkout and porta
   for (let plus of [false, true]) {
     let page = await block({
       view: 'billing',
-      plan: { plus, known: true, ends: '2026-10-01T00:00:00Z' },
+      plan: {
+        tier: plus ? 'plus' : 'free',
+        known: true,
+        ends: '2026-10-01T00:00:00Z',
+      },
     })
     let { document } = parseHTML(page)
     assertEquals(!!document.querySelector('[data-door="checkout"]'), !plus)

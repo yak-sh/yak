@@ -51,6 +51,7 @@ import {
   daysLeft,
   directory,
   META,
+  paid,
   type Role,
   type Space,
   storeAt,
@@ -62,7 +63,7 @@ import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Mail } from './mail.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
-import { checkout, portal } from './billing.ts'
+import { checkout, planCard, portal, wanted } from './billing.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
   buying,
@@ -2625,12 +2626,8 @@ let desk = async (
     // the platform has a Stripe key at all, since a button that cannot work
     // is worse than no block.
     sell: env.STRIPE_KEY ? selling(space) : undefined,
-    plus: space.tier == 'plus',
-    plan: {
-      plus: space.tier == 'plus',
-      ends: space.plan?.ending ?? '',
-      known: !!space.plan?.customer,
-    },
+    paying: paid(space.tier),
+    plan: planCard(env, space),
     paid: q.get('paid') == '1',
     fee: rate(fee),
     name: name ?? '',
@@ -2827,7 +2824,9 @@ let saved = async (
     to.searchParams.set('saved', '1')
     return redirect(to.href, 303)
   }
-  if (form.get('billing') == 'checkout') return checkout(env, req, space)
+  if (form.get('billing') == 'checkout') {
+    return checkout(env, req, space, wanted(form))
+  }
   if (form.get('billing') == 'portal') return portal(env, req, space)
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no

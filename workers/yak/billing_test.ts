@@ -9,10 +9,14 @@ import {
   lost,
   moved,
   periodEnd,
+  planCard,
   planOf,
+  priceFor,
   stale,
   type Sub,
+  wanted,
 } from './billing.ts'
+import type { Env } from './env.ts'
 import type { Plan } from './directory.ts'
 
 // --- the plan, derived --------------------------------------------------
@@ -53,6 +57,75 @@ test('a paying subscription is plus, and the rest are free', () => {
   ) {
     assertEquals(planOf(sub({ status }), AT).tier, 'free', status)
   }
+})
+
+// --- the Organization plan, read off the price (D-134567) ----------------
+
+let ORG = ['price_org_month', 'price_org_year']
+let priced = (price: unknown, over: Partial<Sub> = {}) =>
+  sub({
+    items: { data: [{ current_period_end: PERIOD, price } as never] },
+    ...over,
+  })
+
+test('a subscription to an Organization price is the Organization plan', () => {
+  for (let price of [...ORG, { id: ORG[1] }]) {
+    assertEquals(planOf(priced(price), AT, ORG).tier, 'organization')
+  }
+  assertEquals(
+    planOf(priced(ORG[0], { status: 'canceled' }), AT, ORG).tier,
+    'free',
+  )
+})
+
+test('every other paying subscription stays on the Plus plan', () => {
+  // A Plus price, no price at all, and a deployment with no Organization
+  // prices yet: each reads exactly as it did before the plan existed.
+  assertEquals(planOf(priced('price_plus'), AT, ORG).tier, 'plus')
+  assertEquals(planOf(sub(), AT, ORG).tier, 'plus')
+  assertEquals(planOf(priced(ORG[0]), AT).tier, 'plus')
+  assertEquals(planOf(priced(ORG[0]), AT, []).tier, 'plus')
+})
+
+let ENV = {
+  STRIPE_KEY: 'sk',
+  STRIPE_PRICE: 'price_plus',
+  STRIPE_PRICE_ORGANIZATION: ORG[0],
+  STRIPE_PRICE_ORGANIZATION_YEAR: ORG[1],
+} as Env
+let form = (o: Record<string, string>) => {
+  let f = new FormData()
+  for (let [k, v] of Object.entries(o)) f.set(k, v)
+  return f
+}
+
+test('a checkout form names the price it buys', () => {
+  let price = (o: Record<string, string>, env = ENV) =>
+    priceFor(env, wanted(form(o)))
+  assertEquals(price({}), 'price_plus')
+  assertEquals(priceFor(ENV, wanted(null)), 'price_plus')
+  assertEquals(price({ plan: 'organization' }), ORG[0])
+  assertEquals(price({ plan: 'organization', per: 'year' }), ORG[1])
+  assertEquals(price({ per: 'year' }), undefined)
+  assertEquals(
+    price({ plan: 'organization' }, { STRIPE_KEY: 'sk' } as Env),
+    undefined,
+  )
+})
+
+test('the plan card offers the Organization plan by what is priced', () => {
+  let space = { tier: null, plan: null } as never
+  assertEquals(planCard(ENV, space).organization, ['month', 'year'])
+  assertEquals(
+    planCard({ ...ENV, STRIPE_KEY: undefined }, space).organization,
+    [],
+  )
+  assertEquals(
+    planCard({ ...ENV, STRIPE_PRICE_ORGANIZATION_YEAR: undefined }, space)
+      .organization,
+    ['month'],
+  )
+  assertEquals(planCard(ENV, space).tier, 'free')
 })
 
 test('cancelled but paid through says both, in one row', () => {

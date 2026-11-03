@@ -289,10 +289,11 @@
           "type": "string",
           "enum": [
             "free",
-            "plus"
+            "plus",
+            "organization"
           ],
           "stamped": true,
-          "description": "free or plus: the tier every ceiling the space meets is read from"
+          "description": "free, plus or organization: the tier every ceiling the space meets is read from"
         },
         "customer": {
           "type": "string",

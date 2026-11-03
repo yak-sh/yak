@@ -55,7 +55,7 @@ export let transports = ['process', 'http'] as const
 export let signalKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 export let appAccess = ['public', 'open', 'private'] as const
-export let planTiers = ['free', 'plus'] as const
+export let planTiers = ['free', 'plus', 'organization'] as const
 export let hostnameStages = ['pending', 'active', 'error'] as const
 
 // The keyword vocabularies the documents are written with: every set the

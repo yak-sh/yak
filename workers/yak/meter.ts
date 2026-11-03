@@ -10,6 +10,7 @@ import {
   type Directory,
   directoryOf,
   type Meter,
+  paid,
   type Space,
   stamp,
   type Tier,
@@ -118,53 +119,89 @@ export let PLUS = {
   bytes: 10 * GB,
   files: 50 * GB,
 }
+// The Organization plan (D-134567) carries the Plus plan's allowances; what it
+// adds is a bigger model budget, the operator and support.
+export let ORGANIZATION = PLUS
 
 // Photos and files, including on comped spaces (only apps/data are exempt).
 // Free: proposed 1 GB allowance (T-37149), pending owner feedback.
-export let FILES: Record<Tier, number> = { free: FREE.files, plus: PLUS.files }
+export let FILES: Record<Tier, number> = {
+  free: FREE.files,
+  plus: PLUS.files,
+  organization: ORGANIZATION.files,
+}
 
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN = 0.8
 
 // Comped spaces retain their app/data/visit exemption independently of Plus.
 export let ceilings = (tier: Tier | null, slug = '') =>
-  COMPED.includes(slug) ? null : tier == 'plus' ? PLUS : FREE
+  COMPED.includes(slug)
+    ? null
+    : tier == 'organization'
+    ? ORGANIZATION
+    : tier == 'plus'
+    ? PLUS
+    : FREE
 
 // The letters, both directions, a space may spend in a month — the one
 // allowance both tiers carry, because a letter costs money to carry however
 // the plan is paid for, and the pricing page sells a number on each
 // (public/pricing.html). Counted at the two mail doors as they happen:
 // `metering` below for a letter that left, inbox.ts for one that arrived.
-export let LETTERS: Record<Tier, number> = { free: 100, plus: 2_500 }
+export let LETTERS: Record<Tier, number> = {
+  free: 100,
+  plus: 2_500,
+  organization: 2_500,
+}
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
 // Monthly allowances for the optional built-in builder. Making and changing
 // apps through a connected agent (app_new, app_files) is not metered here.
-export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
+export let BUILDS: Record<Tier, number> = {
+  free: 5,
+  plus: 100,
+  organization: 100,
+}
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// Each space's models and voice spend its one monthly dollar budget.
-export let BUDGET: Record<Tier, number> = { free: 0.2, plus: 3 }
+// Each space's models and voice spend its one monthly dollar budget. The
+// Organization plan's $15 pays for the operator and document search
+// (D-134567).
+export let BUDGET: Record<Tier, number> = {
+  free: 0.2,
+  plus: 3,
+  organization: 15,
+}
 
 // Build seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
 // budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is about $1.30 of
 // standard-2 time at Cloudflare's rates (wrangler.toml). A compile's second
 // costs less than a container's, so the one allowance bounds both.
-export let SECONDS: Record<Tier, number> = { free: 3_600, plus: 36_000 }
+export let SECONDS: Record<Tier, number> = {
+  free: 3_600,
+  plus: 36_000,
+  organization: 36_000,
+}
 
 // What a tier costs a month, in whole dollars (D-32751). The number is
 // tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
 // price rather than a subtotal something is added to. Stripe holds the same
-// number as a price id (wrangler.toml STRIPE_PRICE) and that is what a card is
-// charged against; this is the number the site says out loud — the pricing
+// number as a price id (wrangler.toml STRIPE_PRICE, and STRIPE_PRICE_ORGANIZATION
+// for the Organization plan) and that is what a card is charged against; this is the number the site says out loud — the pricing
 // copy, and the `Offer`s in the home page's JSON-LD, which is what a search
 // engine shows beside the result. A price change also updates the static HTML
 // in public/index.html and public/pricing.html, billing_kernel_test.ts, and
 // bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
-export let PRICE: Record<Tier, number> = { free: 0, plus: 9 }
+export let PRICE: Record<Tier, number> = { free: 0, plus: 9, organization: 49 }
+
+// What a year costs, for a plan sold by the year as well (D-134567: an
+// organization budgets by the year). Stripe holds it as
+// STRIPE_PRICE_ORGANIZATION_YEAR.
+export let YEARLY: Partial<Record<Tier, number>> = { organization: 490 }
 
 export let CURRENCY = 'USD'
 
@@ -176,7 +213,7 @@ export let CURRENCY = 'USD'
 // be encouraged! and yeah, limit anything currently uncapped"
 //
 // A person owns at most {@link SPACES} free spaces. Their letter, build and
-// second allowances pool over those free spaces; a Plus space has its own.
+// second allowances pool over those free spaces; a paid space has its own.
 // Model and voice dollars belong to each space independently of its owners.
 // Every spend stays on its source space's meter.
 
@@ -204,9 +241,9 @@ let used = (m: Meter, what: Spend) =>
 export let allowance = (what: Limited, tier: Tier | null) =>
   ALLOWANCE[what][tier ?? 'free']
 
-/** A space its owners' free allowance covers: not on the Plus plan, and not
+/** A space its owners' free allowance covers: not on a paid plan, and not
  * comped (directory.ts `tierOf` reads a comp as the Plus plan). */
-export let free = (space: Space) => space.tier != 'plus'
+export let free = (space: Space) => !paid(space.tier)
 
 /** The directory, as far as the account reads it. */
 export type Owned = Pick<Directory, 'owners' | 'spaces'>
@@ -587,7 +624,7 @@ export let atCeiling = (
 // Where every refusal ends: the page that describes the plans.
 let plans = (space: Space, env: Host) =>
   `${
-    space.tier == 'plus'
+    paid(space.tier)
       ? `Manage usage and plan settings`
       : `The Plus plan allows more. Compare paid plans in settings`
   }: ${planSettings(space.slug, env)}`
@@ -656,7 +693,7 @@ export let atStored = (
  * frees one. Sharing is never what stops them, so it says so. */
 export let tooManySpaces = (held: Space[], env: Host = {}) =>
   `you own ${held.length} free spaces, which is what one person gets for ` +
-  `nothing — delete one (space_delete) to make another. A space on the Plus ` +
+  `nothing — delete one (space_delete) to make another. A space on a paid ` +
   `plan does not count toward them, and neither does a space somebody else ` +
   `invited you into. The Plus plan allows more. Compare paid plans in ` +
   `settings: ${planSettings(held[0].slug, env)}`

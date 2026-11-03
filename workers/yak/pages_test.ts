@@ -88,7 +88,7 @@ test('pages: staging space management and connector forms keep their host', asyn
     connect(
       {
         slug: 'ada',
-        plan: { plus: false, ends: '', known: false },
+        plan: { tier: 'free' as const, ends: '', known: false },
       },
       200,
       env,
@@ -111,7 +111,7 @@ test('pages: only production offers its repository marketplace shortcut', async 
   let yours = {
     slug: 'ada',
     fixed: true,
-    plan: { plus: false, ends: '', known: false },
+    plan: { tier: 'free' as const, ends: '', known: false },
   }
   for (let host of [{}, env]) {
     let html = await connect(yours, 200, host).text()
@@ -556,11 +556,32 @@ test('connections: a built integration is offered by its face, and a site is lin
 })
 
 test('paid plan settings describe unlimited apps', async () => {
-  const html = await desk({
-    ...page,
-    view: 'billing',
-    plan: { plus: true, ends: '', known: true },
-  }, env).text()
-  assertStringIncludes(html, 'Unlimited apps')
-  assertEquals(html.includes('null apps'), false)
+  for (let tier of ['plus', 'organization'] as const) {
+    const html = await desk({
+      ...page,
+      view: 'billing',
+      plan: { tier, ends: '', known: true },
+    }, env).text()
+    assertStringIncludes(html, 'Unlimited apps')
+    assertEquals(html.includes('null apps'), false)
+    assertEquals(html.includes('data-door="checkout"'), false, tier)
+  }
+})
+
+test('the plan card offers the Organization plan only where it is on sale', async () => {
+  let card = (organization: ('month' | 'year')[]) =>
+    desk({
+      ...page,
+      view: 'billing',
+      plan: { tier: 'free', ends: '', known: false, organization },
+    }, env).text()
+  let none = await card([])
+  assertStringIncludes(none, 'Get the Plus plan — $9 a month')
+  assertEquals(none.includes('data-plan="organization"'), false)
+  assertStringIncludes(none, 'The Organization plan is not on sale here yet')
+  let both = await card(['month', 'year'])
+  assertStringIncludes(both, 'Get the Organization plan — $49 a month')
+  assertStringIncludes(both, 'data-plan="organization" data-per="year"')
+  assertStringIncludes(both, 'Get the Organization plan — $490 a year')
+  assertEquals(both.includes('not on sale'), false)
 })

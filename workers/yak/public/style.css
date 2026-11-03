@@ -885,12 +885,12 @@
     margin-top: var(--quarter-gap);
   }
 
-  /* The pricing page (pricing.html): two plans side by side on a
-     laptop, stacked on a phone. A wider column than a letter, because two
-     columns of numbers is the one thing here that is not prose — and no
-     wider, because there are only two. */
+  /* The pricing page (pricing.html): three plans side by side on a
+     laptop, stacked on a phone. A wider column than a letter, because
+     columns of numbers are the one thing here that is not prose — and no
+     wider than three of them need. */
   .Pricing {
-    --measure: 44rem;
+    --measure: 52rem;
     --rhythm: 3rem;
   }
 
@@ -908,7 +908,8 @@
     text-align: left;
   }
 
-  .Plan-plus {
+  .Plan-plus,
+  .Plan-organization {
     --pencil: var(--accent);
   }
 

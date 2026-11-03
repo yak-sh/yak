@@ -216,6 +216,11 @@ export type Env = {
   STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string
+  // The Organization plan's two recurring prices (D-134567), by the month and
+  // by the year, `[vars]` like STRIPE_PRICE. Unset, checkout says the plan is
+  // not on sale here and the plan card does not offer it.
+  STRIPE_PRICE_ORGANIZATION?: string
+  STRIPE_PRICE_ORGANIZATION_YEAR?: string
   // Selling (sell.ts, T-34523): what the events from a seller's connected
   // account are verified against. A second secret, not the one above, because
   // Stripe delivers connected-account events to their own endpoint with their

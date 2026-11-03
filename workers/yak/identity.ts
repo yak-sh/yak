@@ -97,6 +97,7 @@ import {
   spender,
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
+import { planCard } from './billing.ts'
 import {
   daysLeft,
   directory,
@@ -524,11 +525,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
       // What they pay, and the two doors that change it (billing.ts, T-33125).
       // `known` is whether Stripe has ever met this space: somebody who
       // cancelled still reaches their own invoices.
-      plan: {
-        plus: space.tier == 'plus',
-        ends: space.plan?.ending ?? '',
-        known: !!space.plan?.customer,
-      },
+      plan: planCard(env, space),
       paid: new URL(req.url).searchParams.get('paid') == '1',
     },
     say ? 400 : 200,

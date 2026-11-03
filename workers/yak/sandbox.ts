@@ -164,7 +164,7 @@ export let NO_BOX =
  * space they are working in (T-37883). A sandbox is keyed per person and space, so
  * without this a person owning five spaces holds five containers, which is
  * every one the deploy runs (wrangler.toml `max_instances`). */
-export let AWAKE: Record<Tier, number> = { free: 1, plus: 2 }
+export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, organization: 2 }
 
 /** How long one call keeps a sandbox awake, in seconds: the longest command,
  * then the nap before it sleeps on its own. */
@@ -189,7 +189,11 @@ export let tooAwake = (awake: number, tier: Tier | null) =>
   `you already have ${awake} sandbox${
     awake == 1 ? '' : 'es'
   } awake in another space, and the ${
-    tier == 'plus' ? 'Plus plan' : 'free tier'
+    tier == 'organization'
+      ? 'Organization plan'
+      : tier == 'plus'
+      ? 'Plus plan'
+      : 'free tier'
   } allows ${AWAKE[tier ?? 'free']} at a time — finish there, or wait: a ` +
   `sandbox sleeps ${NAP / 60} minutes after its last command`
 

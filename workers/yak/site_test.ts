@@ -19,10 +19,13 @@ import {
   FILES,
   FREE,
   LETTERS,
+  ORGANIZATION,
   PLUS,
   PRICE,
   size,
+  YEARLY,
 } from './meter.ts'
+import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
@@ -247,8 +250,8 @@ test('the frame is asked for on the body, above what it frames', () => {
 let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
 // The copy each tier's allowances should read as, off the meter's own numbers.
-let allowance = (tier: 'free' | 'plus') => {
-  let limits = tier == 'plus' ? PLUS : FREE
+let allowance = (tier: 'free' | 'plus' | 'organization') => {
+  let limits = { free: FREE, plus: PLUS, organization: ORGANIZATION }[tier]
   return {
     apps: limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
     visitors: 'Unlimited visitors',
@@ -259,7 +262,11 @@ let allowance = (tier: 'free' | 'plus') => {
       : { files: `${size(FILES[tier])} of photos and files` }),
   }
 }
-let allowances = { free: allowance('free'), plus: allowance('plus') }
+let allowances = {
+  free: allowance('free'),
+  plus: allowance('plus'),
+  organization: allowance('organization'),
+}
 
 test('the plan pages carry the email allowance the code enforces', () => {
   let free = allowances.free.emails
@@ -274,14 +281,17 @@ test('the plan pages carry the email allowance the code enforces', () => {
   }
 })
 
-test('the plan cards and Plus offer carry the meter allowances', () => {
+test('the plan cards and paid offers carry the meter allowances', () => {
+  let cards = {
+    free: '.Plan:not(.Plan-plus):not(.Plan-organization)',
+    plus: '.Plan-plus',
+    organization: '.Plan-organization',
+  }
   for (let page of ['index.html', 'pricing.html']) {
     let { document } = parseHTML(read(page))
-    for (let tier of ['free', 'plus'] as const) {
-      let card = document.querySelector(
-        tier == 'plus' ? '.Plan-plus' : '.Plan:not(.Plan-plus)',
-      )!
-      for (let text of Object.values(allowances[tier])) {
+    for (let [tier, selector] of Object.entries(cards)) {
+      let card = document.querySelector(selector)!
+      for (let text of Object.values(allowances[tier as Tier])) {
         assertStringIncludes(flat(card.textContent!), text, `${page}: ${tier}`)
       }
     }
@@ -290,9 +300,15 @@ test('the plan cards and Plus offer carry the meter allowances', () => {
   let app = doc['@graph'].find((n: { '@type': string }) =>
     n['@type'] == 'SoftwareApplication'
   )
-  let offer = app.offers.find((o: { name: string }) => o.name == 'Plus')
-  for (let text of Object.values(allowances.plus)) {
-    assertStringIncludes(offer.description.toLowerCase(), text.toLowerCase())
+  for (let name of ['Plus', 'Organization']) {
+    let offer = app.offers.find((o: { name: string }) => o.name == name)
+    for (let text of Object.values(allowances[name.toLowerCase() as Tier])) {
+      assertStringIncludes(
+        offer.description.toLowerCase(),
+        text.toLowerCase(),
+        name,
+      )
+    }
   }
 })
 
@@ -468,6 +484,7 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     '/login',
     '/login',
     '/login?return=%2Fconnect%23plan',
+    '/login?return=%2Fconnect%23plan',
     '/login',
   ], 'a home-page door misses sign-in')
 })
@@ -607,13 +624,19 @@ test('the home page describes itself at the prices the code charges', () => {
     assertEquals(offers[tier].priceCurrency, CURRENCY, tier)
     assertEquals(offers[tier]['@type'], 'Offer', tier)
   }
-  assertEquals(offers.plus.priceSpecification.price, String(PRICE.plus))
-  assertEquals(offers.plus.priceSpecification.valueAddedTaxIncluded, true)
+  for (let tier of ['plus', 'organization'] as const) {
+    let { priceSpecification } = offers[tier]
+    assertEquals(priceSpecification.price, String(PRICE[tier]), tier)
+    assertEquals(priceSpecification.valueAddedTaxIncluded, true, tier)
+  }
 })
 
-test('the plan pages quote the price the offer names', () => {
+test('the plan pages quote the prices the offers name', () => {
   for (let page of ['index.html', 'pricing.html']) {
-    assertStringIncludes(flat(read(page)), `$${PRICE.plus} a month`)
+    let html = flat(parseHTML(read(page)).document.body.textContent!)
+    assertStringIncludes(html, `$${PRICE.plus} a month`)
+    assertStringIncludes(html, `$${PRICE.organization} a month`)
+    assertStringIncludes(html, `$${YEARLY.organization} a year`)
   }
 })
 
@@ -767,7 +790,7 @@ let panel = (html: string, key: string) => {
 let page = () =>
   connect({
     slug: 'dana',
-    plan: { plus: false, ends: '', known: false },
+    plan: { tier: 'free' as const, ends: '', known: false },
   }).text()
 
 test('ChatGPT gets a downloadable icon within its upload limit', async () => {
@@ -788,12 +811,12 @@ test('ChatGPT gets a downloadable icon within its upload limit', async () => {
 })
 
 test('the signed-in plan copy derives both tiers from the meter', async () => {
-  for (let plus of [false, true]) {
-    let { apps, data } = allowances[plus ? 'plus' : 'free']
+  for (let tier of ['free', 'plus'] as const) {
+    let { apps, data } = allowances[tier]
     let html = flat(
       await connect({
         slug: 'dana',
-        plan: { plus, ends: '', known: plus },
+        plan: { tier, ends: '', known: tier != 'free' },
       }).text(),
     )
     assertStringIncludes(
@@ -807,15 +830,17 @@ test('pricing cards offer signup and omit build quotas', () => {
   for (let page of ['index.html', 'pricing.html']) {
     let { document } = parseHTML(read(page))
     let cards = [...document.querySelectorAll('.Plan')]
-    assertEquals(cards.length, 2)
+    assertEquals(cards.length, 3)
     assertEquals(cards.map((c) => c.querySelector('.Button')?.textContent), [
       'Start Free',
+      'Get Started',
       'Get Started',
     ])
     assertEquals(
       cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
       [
         '/login',
+        '/login?return=%2Fconnect%23plan',
         '/login?return=%2Fconnect%23plan',
       ],
     )

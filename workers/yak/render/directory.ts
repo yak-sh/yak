@@ -58,10 +58,12 @@ let spend = (s?: Uses['spend']) =>
     : `${dollars(s.spent)} of ${dollars(s.limit)}`
 let when = (iso?: string | null, month: 'long' | 'short' = 'long') =>
   iso ? day(iso, month) : 'never'
-// What a space pays: the Plus plan, or the Plus plan given (a comp).
+// What a space pays: a paid plan, or the Plus plan given (a comp).
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
     ? 'Plus, comped'
+    : str((b.plan as Comp)?.tier) == 'organization'
+    ? 'Organization'
     : str((b.plan as Comp)?.tier) == 'plus'
     ? 'Plus'
     : 'Free'

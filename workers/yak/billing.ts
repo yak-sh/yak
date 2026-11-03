@@ -1,4 +1,5 @@
-// The paid tier (D-32751, T-33125): what a space pays, and the three doors it
+// The paid tiers (D-32751, T-33125; the Organization plan, D-134567): what a
+// space pays, and the three doors it
 // takes — checkout, the customer portal, and the webhook Stripe posts the
 // truth to. Stripe is the merchant of record here (Managed Payments): the
 // Checkout Session carries `managed_payments[enabled]=true`, Stripe sells,
@@ -34,9 +35,22 @@
 // the vocabulary, so `admitted()` drops them off any write that does not carry
 // the kernel flag. `tier` is what usage.ts `ceilings()` reads, and a tier a
 // person could write is a person who can lift their own ceilings.
+//
+// Which paid tier a subscription buys is read off its price, never off
+// metadata a checkout wrote: a plan changed in Stripe's portal moves the price
+// and nothing else. A price that is not one of the Organization plan's is the
+// Plus plan, so every subscription made before the Organization plan existed
+// reads exactly as it did.
 import { planSettings } from './route.ts'
 import * as dirPart from './directory.ts'
-import { directory, type Plan, type Space, stamp } from './directory.ts'
+import {
+  directory,
+  paid,
+  type Plan,
+  type Space,
+  stamp,
+  type Tier,
+} from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 
@@ -65,7 +79,12 @@ export type Sub = {
   canceled_at?: number | null
   ended_at?: number | null
   current_period_end?: number | null
-  items?: { data?: { current_period_end?: number | null }[] }
+  items?: {
+    data?: {
+      current_period_end?: number | null
+      price?: string | { id?: string } | null
+    }[]
+  }
 }
 
 // What a subscription is worth paying attention to for. `past_due` keeps the
@@ -101,9 +120,23 @@ export let periodEnd = (sub: Sub) => {
 let idOf = (v: string | { id?: string } | undefined) =>
   typeof v == 'string' ? v : v?.id ?? ''
 
+// The paid tier a subscription buys: the Organization plan when one of its
+// items is one of `organization`'s prices, and the Plus plan otherwise.
+export let tierFor = (sub: Sub, organization: string[] = []): Tier =>
+  (sub.items?.data ?? []).some((i) =>
+      organization.includes(idOf(i.price ?? undefined))
+    )
+    ? 'organization'
+    : 'plus'
+
 // One subscription, as the whole plan row. `at` is the moment of the Stripe
 // event this was derived from — the row's own marker for how new it is.
-export let planOf = (sub: Sub, at: string): Plan => {
+// `organization` is the Organization plan's prices ({@link organizationPrices}).
+export let planOf = (
+  sub: Sub,
+  at: string,
+  organization: string[] = [],
+): Plan => {
   let status = sub.status ?? ''
   let end = periodEnd(sub)
   // Set only when the subscription will not renew, so "cancelled, but paid
@@ -113,7 +146,7 @@ export let planOf = (sub: Sub, at: string): Plan => {
     (sub.cancel_at_period_end ? end : null) ??
     (ending(status) ? sub.ended_at ?? sub.canceled_at ?? end : null)
   return {
-    tier: PAYING.includes(status) ? 'plus' : 'free',
+    tier: PAYING.includes(status) ? tierFor(sub, organization) : 'free',
     customer: idOf(sub.customer),
     subscription: sub.id ?? '',
     status,
@@ -262,6 +295,62 @@ let payerFor = async (env: Env, space: Space, email: string) => {
   return customer
 }
 
+// ---- what is for sale -----------------------------------------------------
+
+/** A plan a person can buy, and how often it is paid for. */
+export type Want = { tier: 'plus' | 'organization'; per: 'month' | 'year' }
+
+/** What a checkout form asks for: `plan=organization` and `per=year`, each
+ * optional, so a form that names neither buys the Plus plan by the month as
+ * it always has. */
+export let wanted = (form: FormData | null): Want => ({
+  tier: form?.get('plan') == 'organization' ? 'organization' : 'plus',
+  per: form?.get('per') == 'year' ? 'year' : 'month',
+})
+
+/** The Organization plan's Stripe prices on this deployment, by month and
+ * by year; empty until they exist. */
+export let organizationPrices = (env: Env) =>
+  [env.STRIPE_PRICE_ORGANIZATION, env.STRIPE_PRICE_ORGANIZATION_YEAR]
+    .filter((p): p is string => !!p)
+
+/** The Stripe price a want is charged against here, or none when it is not
+ * on sale. The Plus plan is sold by the month only. */
+export let priceFor = (env: Env, want: Want) =>
+  want.tier == 'plus'
+    ? want.per == 'month' ? env.STRIPE_PRICE : undefined
+    : want.per == 'year'
+    ? env.STRIPE_PRICE_ORGANIZATION_YEAR
+    : env.STRIPE_PRICE_ORGANIZATION
+
+/** What the signed-in plan card shows (pages.ts `plan`): the space's tier,
+ * the day it lapses if it is leaving, whether Stripe has ever known it — which
+ * is what makes the manage door worth offering — and how the Organization plan
+ * is sold here: by the month, by the year, or not yet at all. */
+export type Card = {
+  tier: Tier
+  ends: string
+  known: boolean
+  organization?: Want['per'][]
+}
+
+export let planCard = (env: Env, space: Space): Card => ({
+  tier: space.tier ?? 'free',
+  ends: space.plan?.ending ?? '',
+  known: !!space.plan?.customer,
+  organization: (['month', 'year'] as const).filter((per) =>
+    !!env.STRIPE_KEY && !!priceFor(env, { tier: 'organization', per })
+  ),
+})
+
+/** A tier as its plan is said: "the Plus plan", never bare "Plus". */
+export let planName = (tier: Tier) =>
+  tier == 'organization'
+    ? 'the Organization plan'
+    : tier == 'plus'
+    ? 'the Plus plan'
+    : 'the free plan'
+
 // Where checkout hands somebody back. Both are on our own zone, and both are
 // the connector page, which is where a signed-in person manages their space.
 let backTo = (done: boolean, env: Host) =>
@@ -269,11 +358,23 @@ let backTo = (done: boolean, env: Host) =>
 
 // Start a subscription. Answers the URL to send the person to, and nothing
 // else: this door is reachable from a signed-in page only, never from a tool.
-export let checkout = async (env: Env, req: Request, at?: Space) => {
+export let checkout = async (
+  env: Env,
+  req: Request,
+  at?: Space,
+  want: Want = { tier: 'plus', per: 'month' },
+) => {
   let person = await buyer(env, req)
   if (!person) return json(401, 'unauthorized', 'sign in first')
-  if (!env.STRIPE_KEY || !env.STRIPE_PRICE) {
-    return json(503, 'no_billing', 'the paid tier is not switched on here')
+  let price = priceFor(env, want)
+  if (!env.STRIPE_KEY || !price) {
+    return json(
+      503,
+      'no_billing',
+      `${planName(want.tier)} is not on sale here${
+        want.per == 'year' ? ' by the year' : ''
+      }`,
+    )
   }
   let dir = dirOf(env)
   let space = at ?? await dir.own(person)
@@ -284,8 +385,16 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
       `only ${space.slug}'s owner may pay for it`,
     )
   }
-  if (space.tier == 'plus') {
-    return json(409, 'already_plus', `${space.slug} is already on Plus`)
+  // One subscription per space: a second would charge twice. A change of
+  // plan is the portal's, where Stripe prorates it.
+  if (paid(space.tier)) {
+    return json(
+      409,
+      'already_paid',
+      `${space.slug} is already on ${
+        planName(space.tier!)
+      }; Manage billing changes it`,
+    )
   }
   let email = await dir.emailAt(person) ?? ''
   try {
@@ -303,7 +412,7 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
     let made = await ask(env, '/v1/checkout/sessions', {
       mode: 'subscription',
       customer,
-      line_items: { 0: { price: env.STRIPE_PRICE, quantity: 1 } },
+      line_items: { 0: { price, quantity: 1 } },
       success_url: at
         ? `${planSettings(at.slug, env)}&paid=1`
         : backTo(true, env),
@@ -432,7 +541,7 @@ export let apply = async (env: Env, event: Event) => {
   let subject = await subjectOf(env, event)
   if (!subject) return 'nothing to do'
   if (elsewhere(subject.sub, here)) return 'elsewhere'
-  let next = planOf(subject.sub, at)
+  let next = planOf(subject.sub, at, organizationPrices(env))
   let dir = dirOf(env)
   let space = await whose(dir, {
     space: subject.space,
@@ -516,7 +625,11 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
       json(405, 'method_not_allowed', 'post to this door'),
     )
   }
-  if (path == '/api/billing/checkout') return checkout(env, req)
+  if (path == '/api/billing/checkout') {
+    return req.formData().catch(() => null).then((form) =>
+      checkout(env, req, undefined, wanted(form))
+    )
+  }
   if (path == '/api/billing/portal') return portal(env, req)
   return Promise.resolve(json(404, 'not_found', 'no door here'))
 }

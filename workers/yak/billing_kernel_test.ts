@@ -207,7 +207,10 @@ test('the billing doors say no before they say anything else', async () => {
     assertEquals(mine.status, 200)
     let card = await mine.text()
     assert(card.includes('Your plan'), 'the card is on the connector page')
-    assert(card.includes('Get Plus'), 'and it offers Plus to a free space')
+    assert(
+      card.includes('Get the Plus plan'),
+      'and it offers the Plus plan to a free space',
+    )
     assert(
       !card.includes('Manage billing'),
       'but not billing nobody has ever had',

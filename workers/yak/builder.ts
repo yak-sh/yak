@@ -52,7 +52,7 @@ import { valueIn } from '@yaks/tools/value'
 import { worded } from '@yaks/tools/result'
 import { workersAi } from '@yaks/workers-ai'
 import { running } from './agent.ts'
-import { directory, type Space } from './directory.ts'
+import { directory, paid, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { instructions, whole } from './guide.ts'
@@ -483,9 +483,7 @@ export let openai = (env: Env, id: string): Model => ({
 
 /** Which model this space builds on: its tier picks, config overrides. */
 export let idOf = (env: Env, space: Space): string =>
-  space.tier == 'plus'
-    ? env.BUILDER_MODEL_PAID ?? ''
-    : env.BUILDER_MODEL_FREE ?? ''
+  paid(space.tier) ? env.BUILDER_MODEL_PAID ?? '' : env.BUILDER_MODEL_FREE ?? ''
 
 /** The provider an id names: a Workers AI model is always `@cf/…`. */
 export let modelOf = (env: Env, id: string): Model =>

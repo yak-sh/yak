@@ -4970,7 +4970,7 @@ let OURS: Row[] = [
             `at https://${spaceHost(ctx.env, space.slug)}/`,
         )
       }
-      if (space.tier != 'plus' && ceilings(space.tier, space.slug)) {
+      if (!dirPart.paid(space.tier) && ceilings(space.tier, space.slug)) {
         const settings = planSettings(space.slug, ctx.env)
         return {
           text:
