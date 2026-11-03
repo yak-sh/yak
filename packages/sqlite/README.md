@@ -533,12 +533,15 @@ size, defaulting to `@yaks/sql`'s conservative `ARMS`; the embedded driver uses
 itself, so a driver swap touches only this package. `open` creates a missing
 directory and turns on foreign keys; a file also runs in WAL mode with
 `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
-timeout, and a new file starts in incremental auto-vacuum mode, so the pages a
-delete frees can be given back (`reclaim`, under Owed work). A file made before
-keeps its mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise
-selecting the platform's system library. This module uses Deno environment/FFI
-APIs. The root adapter can instead receive another runtime's synchronous SQLite
-driver.
+timeout. A connection closes without checkpointing, so a command ends without
+syncing and the next one appends to the log it left; SQLite checkpoints on its
+own every thousand pages, and a copy of the file takes its `-wal` beside it (or
+uses `.backup`, which reads it). A new file starts in incremental auto-vacuum
+mode, so the pages a delete frees can be given back (`reclaim`, under Owed
+work). A file made before keeps its mode until a `VACUUM`. It honors
+`DENO_SQLITE_PATH`, otherwise selecting the platform's system library. This
+module uses Deno environment/FFI APIs. The root adapter can instead receive
+another runtime's synchronous SQLite driver.
 
 A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
 which moves when another connection commits, and calls back when it moved. A
