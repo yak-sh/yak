@@ -163,7 +163,9 @@ let open = async (
         await coverage.close()
         await close(code)
       }
-      await coverage.checked
+      // Not awaited: the duty workers it starts come up beside the web, which
+      // listens without waiting for them, and what fails is reported.
+      void coverage.checked
     } catch (error) {
       await host.close()
       await reader?.close()
