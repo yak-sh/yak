@@ -1,11 +1,13 @@
 // Bug tools speak the same graph queries and mark patches as every other door.
 
-import type { Bundle, Graph } from '@yaks/graph'
+import { type Bundle, type Graph, reduced } from '@yaks/graph'
 import { argsOf, referenced, who } from '@yaks/graph/call'
 import { after } from '@yaks/fp'
 import type { Runs } from '@yaks/graph/tools'
 import {
+  after as past,
   and,
+  count,
   eq,
   every,
   fields,
@@ -31,6 +33,10 @@ import { occurring } from './reading.ts'
 /** The part of a store the bug tools read and mark: this graph, or the box
  * tracker's graph over its wire. */
 type Store = Pick<Graph, 'vocab' | 'get' | 'read' | 'address'> & {
+  /** how many entities a query selects, where the store is not a graph that
+   * counts its own rows */
+  count?: (q: Query) => Promise<number>
+  rows?: Graph['rows']
   /** apply a mark's patch where the store keeps it, or hand it back for the
    * runner to apply here */
   mark?: (bundles: Partial<Bundle>[]) => Promise<void>
@@ -90,9 +96,15 @@ export let wire = (
           return [id, rows.length == 1 ? rows[0].entity.eid : id] as const
         })),
       ),
+    count: async (q) => Number((await send('/query', stringify(q)))?.count),
     mark: (bundles) => send('/apply', bundles),
   }
 }
+
+let counted = async (g: Store, q: Query): Promise<number> =>
+  g.count
+    ? g.count(q)
+    : (reduced('count', await g.rows!(q)) as { count: number }).count
 
 let one = (g: Store, eid: string): Bundle | Promise<Bundle> =>
   after(survivor(g, eid), (row) => {
@@ -114,28 +126,43 @@ export let bugs = (
     limit(count),
   ))
 
-/** A bug and its retained occurrences, with no copies written locally. */
-export let bug = (g: Store, input: string): Bundle[] | Promise<Bundle[]> =>
-  after(
-    referenced(g, [input], 'bug'),
-    ([eid]) =>
-      after(one(g, eid), (row) =>
-        after(
-          g.read(occurring(row.entity.eid)),
-          (occurrences) => {
-            let requests = [
-              ...new Set(
-                occurrences.map((e) => str(comp(e, 'during').request))
-                  .filter(Boolean),
-              ),
-            ]
-            return after(
-              requests.length ? g.get(requests, ['request']) : [],
-              (companions) => [row, ...occurrences, ...companions],
-            )
-          },
-        )),
-  )
+/** A bug read: the bug, a page of its retained occurrences, newest first,
+ * and the requests they ran during; how many occurrences it retains; and,
+ * where older ones remain, the last one read, which `after` reads past. */
+export type Shown = { rows: Bundle[]; occurrences: number; next?: string }
+
+/** A bug and its `size` newest retained occurrences past the one `cursor`
+ * names, at most 100, with no copies written locally. */
+export let bug = async (
+  g: Store,
+  input: string,
+  size = 5,
+  cursor?: string,
+): Promise<Shown> => {
+  let [eid] = await referenced(g, [input], 'bug')
+  let row = await one(g, eid)
+  let n = Math.min(Math.max(size, 1), 100)
+  let read = await g.read(and(
+    ...occurring(row.entity.eid).clauses,
+    ...cursor ? [past(cursor)] : [],
+    limit(n + 1),
+  ))
+  let page = read.slice(0, n)
+  let requests = [
+    ...new Set(
+      page.map((e) => str(comp(e, 'during').request)).filter(Boolean),
+    ),
+  ]
+  let companions = requests.length ? await g.get(requests, ['request']) : []
+  return {
+    rows: [row, ...page, ...companions],
+    occurrences: await counted(
+      g,
+      and(eq('error.bug', row.entity.eid), count()),
+    ),
+    ...read.length > n ? { next: page[n - 1].entity.eid } : {},
+  }
+}
 // What a mark writes on its bug: a resolution with its explanation, an
 // archival, or a reopening, which takes the resolution back.
 let written = (
@@ -222,25 +249,21 @@ export let runs = (
       if (bug) await g.mark!([patch])
       return answer(call, { bug: eid, mark: name }, source(call))
     }
-  let remote = async (
-    call: Bundle,
-    params: URLSearchParams,
-  ): Promise<Bundle[]> => {
+  let remote = async (params: URLSearchParams) => {
     let result = await read(options, 'bugs', params, undefined, go)
     if (!result.ok) throw new CallError('remote', result.error)
-    return answer(call, { rows: result.value }, 'yaks.app')
+    return result.value
   }
   return {
     bug_list: (call, g) => {
       let args = argsOf(call)
       if (source(call) == 'yaks.app') {
         return remote(
-          call,
           new URLSearchParams({
             query: str(args.query) || '.bug.status=open',
             limit: String(args.limit ?? 50),
           }),
-        )
+        ).then((rows) => answer(call, { rows }, 'yaks.app'))
       }
       return after(
         bugs(
@@ -251,12 +274,20 @@ export let runs = (
         (rows) => answer(call, { rows }),
       )
     },
-    bug_show: (call, g) => {
+    bug_show: async (call, g) => {
       let args = argsOf(call)
+      let size = Number(args.limit ?? 5), cursor = str(args.after) || undefined
       if (source(call) == 'yaks.app') {
-        return remote(call, new URLSearchParams({ bug: str(args.bug) }))
+        let shown = await remote(
+          new URLSearchParams({
+            bug: str(args.bug),
+            limit: String(size),
+            ...cursor ? { after: cursor } : {},
+          }),
+        )
+        return answer(call, shown as Shown, 'yaks.app')
       }
-      return after(bug(box(g), str(args.bug)), (rows) => answer(call, { rows }))
+      return answer(call, await bug(box(g), str(args.bug), size, cursor))
     },
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),

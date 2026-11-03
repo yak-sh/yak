@@ -144,7 +144,7 @@ async (request: Request): Promise<Response> => {
     if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
       return json({ error: 'limit must be 1..100' }, 400)
     }
-    for (let key of ['app', 'bug']) {
+    for (let key of ['app', 'bug', 'after']) {
       if (params.has(key) && !minted(params.get(key)!)) {
         return json({ error: `${key} must be a global eid` }, 400)
       }
@@ -173,7 +173,11 @@ async (request: Request): Promise<Response> => {
     try {
       let answer = json(
         params.has('bug')
-          ? await tracker.bug(params.get('bug')!)
+          ? await tracker.bug(
+            params.get('bug')!,
+            n,
+            params.get('after') ?? undefined,
+          )
           : await tracker.bugs(
             params.get('app') ?? undefined,
             params.get('query') ?? '.bug',

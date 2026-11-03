@@ -125,7 +125,7 @@ test('box bug reads still resolve numbered ids and titles locally', async () => 
   equal(valueIn(boxList)?.source, 'box')
   equal(boxBug.entity.eid, ids[4])
   for (let answer of boxShows) {
-    equal(valueIn(answer), { source: 'box', rows: [boxBug] })
+    equal(valueIn(answer), { source: 'box', rows: [boxBug], occurrences: 0 })
     equal(
       JSON.parse((answer[0].content as { body: string }).body),
       valueIn(answer),

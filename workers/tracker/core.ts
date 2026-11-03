@@ -355,7 +355,8 @@ export let store = (storage: Storage, config: Config) => {
     },
     bugs: (app?: string, query = '.bug', count = 50) =>
       bugs(g, parse(conjoin(query, app ? `.bug.app=${app}` : '')), count),
-    bug: (eid: string) => bug(g, eid),
+    bug: (eid: string, size?: number, cursor?: string) =>
+      bug(g, eid, size, cursor),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
   }

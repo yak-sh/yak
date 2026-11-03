@@ -54,7 +54,7 @@ test('regroup preserves historical hits, capture bytes, marks and issued address
     comp(errors.find((r) => r.entity.eid == ids[5]), 'exception').stack,
     'at elapsed (kernel-2.js:82)',
   )
-  equal((await bug(g, ids[2]))[0].entity.eid, ids[0])
+  equal((await bug(g, ids[2])).rows[0].entity.eid, ids[0])
   await g.apply(
     await runs().bug_archive({
       entity: { eid: crypto.randomUUID() },

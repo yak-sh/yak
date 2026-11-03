@@ -170,7 +170,11 @@ test('queue commits full bundles then acks, duplicates preserve grouping and hit
   equal((bug.bug as Comp)?.hits, 1)
   let retained = await g.bug(bug.entity.eid)
   equal(await g.bug(String((bug.doc as Comp).title)), retained)
-  equal(retained.map((row) => row.entity.eid), [bug.entity.eid, occurrence])
+  equal(retained.rows.map((row) => row.entity.eid), [
+    bug.entity.eid,
+    occurrence,
+  ])
+  equal(retained.occurrences, 1)
   await consume([message, message], () => g, async () => {}, async () => {})
   await g.drain()
   equal(((await g.bugs())[0].bug as Comp)?.hits, 1)

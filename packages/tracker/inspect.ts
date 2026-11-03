@@ -562,7 +562,7 @@ let ErrorPage = ({ e, io, got }: Props): JSX.Element => {
 }
 
 /** What the box's tracker doors (./routes.ts) answered for one bug: the bug,
- * its kept occurrences and their requests. */
+ * its newest kept occurrences and their requests. */
 type Read = { bug: string; rows?: Bundle[]; error?: string }
 
 /** A bug on another side (the platform tracker), read through the box's
@@ -585,7 +585,7 @@ let RemoteBug = (
     }).then(async (r) => {
       let body = await r.json()
       if (!r.ok) throw Error(body.error ?? `the tracker answered ${r.status}`)
-      if (!abort.signal.aborted) set({ bug, rows: body })
+      if (!abort.signal.aborted) set({ bug, rows: body.rows })
     }).catch((e) => {
       if (!abort.signal.aborted) set({ bug, error: String(e?.message ?? e) })
     })

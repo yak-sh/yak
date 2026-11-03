@@ -400,11 +400,21 @@
       "noun": "bug",
       "verb": "show",
       "title": "Show bugs",
-      "description": "Read a bug and its retained occurrences. Answers source-labelled rows as text and output.value for either store.",
+      "description": "Read a bug, its marks and its newest retained occurrences in full, with the requests they ran during. Answers source-labelled rows, occurrences (how many it retains) and, where older ones remain, next: pass it as after to read the next page. Text and output.value for either store.",
       "input": {
         "bug": {
           "type": "string",
           "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "How many occurrences to read, newest first; 5 by default."
+        },
+        "after": {
+          "type": "string",
+          "description": "The next a previous answer named: reads the occurrences older than it."
         },
         "source": {
           "type": "string",

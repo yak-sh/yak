@@ -227,6 +227,28 @@ test('open list and tools take worst first, and bug errors newest first', async 
     )?.rows as Bundle[]).map((b) => b.entity.eid),
     ['worst', 'new', 'old'],
   )
+  let page = async (
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    let { rows, ...rest } = valueIn(
+      await runs().bug_show({
+        entity: { eid: 'call' },
+        call: { args: { bug: 'worst', limit: 1, ...args } },
+      }, g),
+    ) as Record<string, unknown> & { rows: Bundle[] }
+    return { rows: rows.map((b) => b.entity.eid), ...rest }
+  }
+  equal(await page({}), {
+    rows: ['worst', 'new'],
+    source: 'box',
+    occurrences: 2,
+    next: 'new',
+  })
+  equal(await page({ after: 'new' }), {
+    rows: ['worst', 'old'],
+    source: 'box',
+    occurrences: 2,
+  })
 })
 
 test('occurrence traces use request identity or bounded shared context, never arbitrary neighbours', async () => {

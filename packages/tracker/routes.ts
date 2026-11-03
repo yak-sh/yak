@@ -56,7 +56,7 @@ export let read = async (
     let key of path == 'trace'
       ? ['eid', 'after']
       : path == 'bugs'
-      ? ['app', 'bug']
+      ? ['app', 'bug', 'after']
       : ['app', 'after']
   ) {
     let value = query.get(key)
