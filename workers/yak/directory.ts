@@ -225,6 +225,10 @@ export type AppInfo = {
   declaration?: string | null
   source?: string | null
   files?: string | null
+  // Where its uploads are kept (blob-key.ts `blobPrefix`): written once at
+  // birth with its store, so an app given a store it did not make keeps the
+  // bytes that store names. Null where the mover has not reached the row.
+  blobs?: string | null
   draft?: string | null
   fence?: string | null
   script?: string | null
@@ -443,6 +447,7 @@ export type Row = {
     declaration?: string | null
     source?: string | null
     files?: string | null
+    blobs?: string | null
     draft?: string | null
     fence?: string | null
     script?: string | null
@@ -997,6 +1002,7 @@ export let appAbout = (r: Row): AppInfo => ({
   declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
   files: r.app!.files ?? null,
+  blobs: r.app!.blobs ?? null,
   draft: r.app!.draft ?? null,
   fence: r.app!.fence ?? null,
   script: r.app!.script ?? null,

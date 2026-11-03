@@ -1109,9 +1109,9 @@ let flooding = (space: Space, app: App) => {
 let useOf = (sha: string) =>
   sha256(new TextEncoder().encode(`attachment:${sha}`))
 
-// Where an app's uploaded bytes live: under the app's own prefix, beside its
-// files, so throwing the app away takes them with it (tools.ts app_delete)
-// and a rename carries them along. Deleting the upload's content row deletes
+// Where an app's uploaded bytes live: the prefix its row was born with
+// (blob-key.ts `blobPrefix`), which no rename moves and erasing the app
+// empties (erase.ts `emptied`). Deleting the upload's content row deletes
 // them sooner (facets/app-effects.ts `delete_upload`).
 let blobKey = (space: Space, app: App, sha: string) =>
   blobPrefix(space, app) + sha

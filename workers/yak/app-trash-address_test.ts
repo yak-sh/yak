@@ -49,7 +49,7 @@ let fixture = async (reuse = false) => {
   // A legacy app's mutable files, uploads and published bytes all shared its
   // address prefix. This is the shape a deployed directory already holds.
   await dir.apply({
-    entities: [{ entity: { eid: app.eid }, app: { files: null } }],
+    entities: [{ entity: { eid: app.eid }, app: { files: null, blobs: null } }],
   })
   app = (await dir.app(space, 'notes'))!
   let blobs = r2Objects(env.BLOBS)

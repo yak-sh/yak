@@ -1884,6 +1884,7 @@ let born = (
   o: { title: string; access: Access },
 ): Bundle => {
   let eid = crypto.randomUUID()
+  let files = rootedPrefix(space, { eid })
   return {
     entity: { eid },
     doc: { title: o.title },
@@ -1893,7 +1894,8 @@ let born = (
       version: 0,
       access: o.access,
       store: handle(space, slug, eid),
-      files: rootedPrefix(space, { eid }),
+      files,
+      blobs: blobPrefix(space, { slug, files }),
     },
     former: { slug },
   }

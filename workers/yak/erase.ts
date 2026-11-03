@@ -58,7 +58,7 @@ import { ownedPrefix } from './file-root.ts'
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { receiptPrefix, uploadPrefix } from './blob-key.ts'
+import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
@@ -343,6 +343,11 @@ export let emptied = async (
   }
   await deleteBindings(env, app)
   await swept(env, under(space, app))
+  // Uploads beside its files went with them; a store it was given at
+  // adoption keeps its uploads where the store was born.
+  if (!blobPrefix(space, app).startsWith(under(space, app))) {
+    await swept(env, blobPrefix(space, app))
+  }
   await swept(env, `${space.store}/.releases/${app.eid}/`)
   await swept(env, `${space.store}/.declarations/${app.eid}/`)
   await swept(env, receiptPrefix(app))

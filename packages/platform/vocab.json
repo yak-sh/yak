@@ -75,6 +75,10 @@
         "files": {
           "type": "string",
           "description": "the app-owned bucket prefix, independent of its address and served source"
+        },
+        "blobs": {
+          "type": "string",
+          "description": "the bucket prefix its uploads are kept under, written once at birth with its store, so an app given a store it did not make keeps the bytes that store names"
         }
       },
       "description": "one app in a space: its slug, the version currently served, and who may open it",

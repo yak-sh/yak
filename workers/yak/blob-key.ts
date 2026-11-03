@@ -1,11 +1,27 @@
 import { ownedPrefix } from './file-root.ts'
 import { type Objects, type Representation, represents } from '@yaks/blob'
 import type { Bundle, Graph } from '@yaks/graph'
-// An app owns its uploads even when its served files come from another app.
+/** Where an app keeps its uploads: the prefix its row was born with
+ * (`app.blobs`), which stays with its store, so a store adopted from a visit
+ * still finds the bytes its rows name. A row the mover has not reached yet
+ * (blobs-move.ts) keeps them where they always were, beneath its own files,
+ * even when its served files come from another app.
+ *
+ * ```ts
+ * import { blobPrefix } from './blob-key.ts'
+ * import { assertEquals } from '@std/assert'
+ * let space = { store: 'ada' }
+ * assertEquals(blobPrefix(space, { slug: 'notes' }), 'ada/notes/blobs/')
+ * assertEquals(
+ *   blobPrefix(space, { slug: 'notes', blobs: 'bo/.apps/b/blobs/' }),
+ *   'bo/.apps/b/blobs/',
+ * )
+ * ```
+ */
 export let blobPrefix = (
   space: { store: string },
-  app: { slug: string; files?: string | null },
-) => `${ownedPrefix(space, app)}/blobs/`
+  app: { slug: string; files?: string | null; blobs?: string | null },
+) => app.blobs ?? `${ownedPrefix(space, app)}/blobs/`
 
 /** What in an app's store still names bytes it keeps at `sha`: the content
  * row while it carries them (an upload's `blob`, a model's `artifact`), and
