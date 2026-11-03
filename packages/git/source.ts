@@ -75,6 +75,23 @@ export let trees = (
   }
 }
 
+/// await commitOf('.', 'zz') -> undefined
+/** The full sha of the commit an abbreviated or full sha names in the
+ * repository at `cwd`, as Git reads one, or undefined where it names none or
+ * more than one. */
+export let commitOf = async (
+  cwd: string,
+  sha: string,
+  ask: Run = run,
+): Promise<string | undefined> => {
+  if (!/^[0-9a-f]{4,64}$/.test(sha)) return
+  let got = await ask(
+    ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
+    cwd,
+  )
+  return got.ok ? got.out.trim() : undefined
+}
+
 /** All checkout roots, including the primary; observation never prunes Git. */
 export let rootsOf = async (
   common: string,

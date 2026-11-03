@@ -35,11 +35,12 @@ A bug is resolved only by an agent that fixed its cause and saw the fix live,
 and every resolved bug says how. The resolver writes the explanation on its
 mark, `resolved{at, by, via, broke, cause, since, fix, recur}`: what broke and
 whom it reached, in plain words (`broke`); why (`cause`); the commits that
-introduced it (`since`) and fixed it (`fix`), each by its full sha; and whether
-it can come back, and why (`recur`). A fix that is not a commit, such as a key
-put in the vault, is said in `cause`. The `./graph` facet refuses a bug's
-resolution without `cause` and `recur`, or with a commit named by anything but a
-full sha, at every door. The tool asks for `broke` too:
+introduced it (`since`) and fixed it (`fix`), each by its full sha (the tool
+reads a short one as Git does); and whether it can come back, and why (`recur`).
+A fix that is not a commit, such as a key put in the vault, is said in `cause`.
+The `./graph` facet refuses a bug's resolution without `cause` and `recur`, or
+with a commit named by anything but a full sha, at every door. The tool asks for
+`broke` too:
 
 ```sh
 yak bug resolve <bug> --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'
@@ -465,6 +466,26 @@ copy. Without a remote configuration, box marks remain local. A `yaks.app` mark
 requires remote configuration and marks the Worker; the standing pass brings its
 marks to a matching box group without importing remote-only bugs. Retrying a
 mark is safe, including when the box copy is already marked.
+
+A config that composes the tracker's `vocab` and `tools` facets without its
+`graph`, as the box's default yak does beside `admin errors`, holds no bugs of
+its own: its bug tools read and mark the Worker with no `--source` named. The
+`code.cwd` option names the checkout a resolution's commits are read from, so
+`--since` and `--fix` take a short sha as Git reads it:
+
+```json
+{
+  "use": "@yaks/tracker",
+  "facets": ["vocab", "tools"],
+  "with": {
+    "code": { "cwd": "/home/me/code/yak" },
+    "remote": {
+      "url": "https://tracker.example",
+      "secret": { "secret": "TRACKER_SECRET" }
+    }
+  }
+}
+```
 
 ```sh
 yak bug list --source yaks.app --limit 20

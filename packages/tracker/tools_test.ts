@@ -13,7 +13,7 @@ import { valueIn } from '@yaks/tools/value'
 import { door } from '../../workers/tracker/door.ts'
 import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 import { trackerDoc } from './vocab.ts'
-import { runs } from './tools.ts'
+import { runs, type ToolOptions } from './tools.ts'
 import { routes } from './routes.ts'
 import { sign } from './ticket.ts'
 
@@ -207,11 +207,14 @@ let why = {
 // What a Worker no attempt reaches answers each one.
 let offline = Error('offline')
 let marking = async (
-  config = { remote: { url: 'https://tracker.test', secret: 'test-only' } },
+  config: ToolOptions = {
+    remote: { url: 'https://tracker.test', secret: 'test-only' },
+  },
   transport?: typeof fetch,
   local = true,
   held = true,
   prior?: string,
+  host = {},
 ) => {
   let worker = store(ram(vocab, options), { sink: () => {} })
   let graphOnBox = graph({
@@ -234,7 +237,7 @@ let marking = async (
   let receive = door(worker, platform, 'test-only')
   let send = transport ??
     (((url, init) => receive(new Request(url, init))) as typeof fetch)
-  let tools = loadTools(trackerDoc, runs({}, config, send))
+  let tools = loadTools(trackerDoc, runs(host, config, send))
   return {
     box: graphOnBox,
     worker: worker.graph,
@@ -401,3 +404,42 @@ for (let source of ['box', 'yaks.app']) {
     }
   })
 }
+
+// The box's default yak composes the tracker's vocab and tools without its
+// graph: its bugs are the Worker's, marked with no source named, and a commit
+// it names by a short sha is read as Git reads one.
+let head = new TextDecoder().decode(
+  (await new Deno.Command('git', { args: ['rev-parse', 'HEAD'] }).output())
+    .stdout,
+).trim()
+let tasks = {
+  config: {
+    plugins: [{ use: '@yaks/tracker', facets: ['vocab', 'tools'] as const }],
+  },
+}
+let platformHome = await marking(
+  { ...config, code: { cwd: '.' } },
+  undefined,
+  false,
+  true,
+  undefined,
+  tasks,
+)
+let homeMark = await platformHome.call('bug_resolve', {
+  bug: ids[0],
+  since: head.slice(0, 7),
+  fix: head.slice(0, 9),
+})
+test('a host without the tracker graph marks the Worker by default', async () => {
+  equal(valueIn(homeMark), {
+    source: 'yaks.app',
+    bug: ids[0],
+    mark: 'resolved',
+  })
+  equal(await platformHome.box.read('.bug'), [])
+})
+test('a resolution names its commits by full sha, read from a short one', async () => {
+  let [row] = await platformHome.worker.get([ids[0]], ['resolved'])
+  let { since, fix } = row.resolved as Record<string, unknown>
+  equal([since, fix], [head, head])
+})

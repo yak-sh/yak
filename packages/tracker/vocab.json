@@ -386,7 +386,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs (default) or the platform tracker on yaks.app. Reads return source-labelled data without importing bundles."
+          "description": "Read box bugs, or the platform tracker on yaks.app; the default is box where this graph holds the tracker's bugs, else yaks.app (the box's default yak, beside admin_errors). Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,
@@ -412,7 +412,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs (default) or the platform tracker on yaks.app. Reads return source-labelled data without importing bundles."
+          "description": "Read box bugs, or the platform tracker on yaks.app; the default is box where this graph holds the tracker's bugs, else yaks.app (the box's default yak, beside admin_errors). Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,
@@ -441,7 +441,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs (default), including their remote copy when configured, or the platform tracker on yaks.app."
+          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is box where this graph holds the tracker's bugs, else yaks.app (the box's default yak, beside admin_errors)."
         },
         "broke": {
           "type": "string",
@@ -453,11 +453,11 @@
         },
         "since": {
           "type": "string",
-          "description": "The full sha of the commit that introduced it, when known."
+          "description": "The sha of the commit that introduced it, when known; a short one is read as Git reads it."
         },
         "fix": {
           "type": "string",
-          "description": "The full sha of the commit that fixed it, live. A fix that is not a commit (a key put in the vault, a row repaired) is said in cause."
+          "description": "The sha of the commit that fixed it, live; a short one is read as Git reads it. A fix that is not a commit (a key put in the vault, a row repaired) is said in cause."
         },
         "recur": {
           "type": "string",
@@ -493,7 +493,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs (default), including their remote copy when configured, or the platform tracker on yaks.app."
+          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is box where this graph holds the tracker's bugs, else yaks.app (the box's default yak, beside admin_errors)."
         }
       },
       "idempotent": true,
@@ -522,7 +522,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Mark box bugs (default), including their remote copy when configured, or the platform tracker on yaks.app."
+          "description": "Mark box bugs, including their remote copy when configured, or the platform tracker on yaks.app; the default is box where this graph holds the tracker's bugs, else yaks.app (the box's default yak, beside admin_errors)."
         }
       },
       "idempotent": true,
