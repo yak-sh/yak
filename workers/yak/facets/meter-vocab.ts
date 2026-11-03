@@ -23,6 +23,8 @@ export let docs: VocabDoc[] = [{
         requests: { type: 'number' },
         rows_read: { type: 'number' },
         duration: { type: 'number' },
+        workers: { type: 'number' },
+        cpu: { type: 'number' },
       },
     },
     account_alert: {
@@ -34,6 +36,8 @@ export let docs: VocabDoc[] = [{
         requests: { type: 'string' },
         rows_read: { type: 'string' },
         duration: { type: 'string' },
+        workers: { type: 'string' },
+        cpu: { type: 'string' },
         rate: { type: 'string' },
       },
     },

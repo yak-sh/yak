@@ -92,6 +92,7 @@ let ANSWER = {
           },
         ],
         accountInvocations: [{ sum: { requests: 2240 } }],
+        accountWorkers: [{ sum: { requests: 30000, cpuTimeUs: 45_000_000 } }],
         accountPeriodic: [{
           sum: {
             rowsRead: 920783,
@@ -245,6 +246,8 @@ test('account usage includes the directory and active-socket messages', () => {
     requests: 2251,
     rows_read: 920783,
     duration: 125,
+    workers: 30000,
+    cpu: 45000,
   })
 })
 

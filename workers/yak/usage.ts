@@ -111,6 +111,10 @@ export let QUERY =
         limit: 1
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) { sum { rowsRead duration inboundWebsocketMsgCount } }
+      accountWorkers: workersInvocationsAdaptive(
+        limit: 1
+        filter: {datetime_geq: $since, datetime_lt: $until}
+      ) { sum { requests cpuTimeUs } }
     }
   }
 }`
@@ -123,6 +127,7 @@ type Group = {
     rowsWritten?: number
     duration?: number
     inboundWebsocketMsgCount?: number
+    cpuTimeUs?: number
   }
 }
 type Data = {
@@ -133,6 +138,7 @@ type Data = {
       days?: Group[]
       accountInvocations?: Group[]
       accountPeriodic?: Group[]
+      accountWorkers?: Group[]
     }[]
   }
 }
@@ -183,7 +189,9 @@ export let daysOfAnswer = (answer: Answer): Map<string, ByDay> => {
 }
 
 // Unlike the app meter, the alert covers the whole Cloudflare account: its
-// directory object, other Workers and any object not named by this deploy.
+// directory object, other Workers and any object not named by this deploy,
+// and every Worker's requests and CPU, which is where a spike of visits to a
+// published app lands: yak-front answers it from the cache and no store hears.
 // The ungrouped aliases are one row each, so the 10,000-app meter limit cannot
 // truncate these totals. Active-socket messages live in periodic metrics;
 // hibernated-socket messages live in invocations. Add both as raw events so
@@ -201,6 +209,8 @@ export let accountOf = (answer: Answer, now: Date): Usage | null => {
       (account.accountPeriodic[0]?.sum?.inboundWebsocketMsgCount ?? 0),
     rows_read: account.accountPeriodic[0]?.sum?.rowsRead ?? 0,
     duration: account.accountPeriodic[0]?.sum?.duration ?? 0,
+    workers: account.accountWorkers?.[0]?.sum?.requests ?? 0,
+    cpu: (account.accountWorkers?.[0]?.sum?.cpuTimeUs ?? 0) / 1000,
   }
 }
 
@@ -218,7 +228,7 @@ let accountAlert = async (env: Env, usage: Usage) => {
   if (body) {
     await mail(env)({
       to: [replyTo(env)],
-      subject: 'Cloudflare Durable Object usage alert',
+      subject: 'Cloudflare usage alert',
       body,
     })
   }

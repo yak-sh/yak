@@ -20,6 +20,8 @@ let usage = (hour: number, values: Partial<Usage> = {}): Usage => ({
   requests: 0,
   rows_read: 0,
   duration: 0,
+  workers: 0,
+  cpu: 0,
   ...values,
 })
 
@@ -61,6 +63,23 @@ test('account warning rises once per threshold and rearms after a rate spike', (
   let requests = warning(null, usage(10, { requests: 800_000 }), null)
   assertStringIncludes(requests.body, '800,000 raw')
   assertStringIncludes(requests.body, 'early-warning proxy')
+})
+
+test('a spike of visits through the Workers is a letter before it is money', () => {
+  let near = warning(null, usage(10, { workers: 8_000_000 }), null)
+  assertStringIncludes(near.body, 'Workers requests: 8,000,000 of 10,000,000')
+  let spike = warning(
+    usage(10, { workers: 8_000_000 }),
+    usage(11, { workers: 12_000_000, cpu: 20_000_000 }),
+    near.next,
+  )
+  assertStringIncludes(spike.body, 'Workers requests: 12,000,000')
+  assertStringIncludes(spike.body, 'Recent rate projects up to $')
+  let { workers: _, cpu: __, ...kept } = usage(10, { workers: 8_000_000 })
+  assertEquals(
+    warning(kept as Usage, usage(11, { workers: 8_000_000 }), near.next).body,
+    '',
+  )
 })
 
 test('hourly account alert is mailed once and kept on the wake row', async () => {

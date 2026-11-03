@@ -512,6 +512,55 @@ npx wrangler secret put CF_ANALYTICS_TOKEN
 Page views are collected through the `VIEWS` binding independently of this
 reader. Without the token, Visits and `app_stats` report that counts are off.
 
+## What a million views cost
+
+A visit is never refused to keep a bill down: a published app takes all the
+traffic it gets, and what reaches the owner is a letter (below). Prices are
+Cloudflare's published Workers Paid rates (Workers, Durable Objects, R2 and
+Analytics Engine pricing pages, read 2026-11-02); CPU figures are this account's
+own, from `workersInvocationsAdaptive`.
+
+| What one request uses                    | Price                       | Per million requests |
+| ---------------------------------------- | --------------------------- | -------------------- |
+| a yak-front request                      | $0.30 per million           | $0.30                |
+| a Site cache hit behind it               | $0.30 per million, or none  | $0 to $0.30          |
+| yak-front CPU, about 1 ms on average     | $0.02 per million CPU ms    | $0.02                |
+| a page's view point (`VIEWS`, html only) | $0.25 per million, unbilled | $0.25 (pages only)   |
+| a use receipt (`USES`)                   | once per app, isolate, hour | about $0             |
+| R2 class B read, on a cache miss only    | $0.36 per million           | about $0             |
+
+So a page or file yak-front answers from Site's cache costs **$0.32 to $0.62 per
+million**, and a page view adds $0.25 for its view point once Cloudflare
+starts billing Analytics Engine (it says it does not yet). A million views of a
+page that loads four files from the cache cost **$1.60 to $3.10**, plus $0.25.
+Which Site row applies is not confirmed: the Workers pricing page says a
+response from a Worker's cache is billed as a request, and also that a call
+through a service binding adds no request fee; a hit through `SITE` is both.
+
+A request yak-front hands to the kernel (anything `spaceDoor` claims, such as
+`/<app>/api/assets/…`) costs about **$1 per million**: the front request, the
+kernel's CPU (13 ms on average, 5.5 ms median, Oct 28 to Nov 2: $0.26), a
+directory and a store Durable Object request ($0.30), and their duration (a
+guess, about $0.10).
+
+The plan includes, each month and for the whole account: 10 million Workers
+requests, 30 million CPU ms, 1 million Durable Object requests, 400,000 GB-s, 25
+billion rows read, 10 million Analytics Engine points and 10 million R2 class B
+reads. October used 2.7 million requests and 21 million CPU ms. The busiest day
+so far, the Hacker News share of companygardener/openai-math on Oct 15 (before
+yak-front), was 748,000 kernel requests, 5 million CPU ms, 1.43 million Durable
+Object requests, 24,700 GB-s and 1.1 million rows written: about $2 at overage
+rates even if none of it had been included.
+
+**The alert.** Every hour the meter's sweep (usage.ts, usage-alert.ts) reads the
+account's Durable Object requests, rows read and duration, and every Worker's
+requests and CPU, and mails `hello@yaks.app` (Email Routing hands it to
+holdco-inbox) when one passes 80% and again 100% of what the plan includes, or
+when the last hour's rate projects $25 a day or more at overage prices.
+Cloudflare's own Billing Budget Alerts (dashboard, Notifications) mail too, when
+the month's usage charges reach $0.01, $20 and $50; Cloudflare offers no
+spending cap to set beside them.
+
 ## A reviewer's sign-in link
 
 An app directory's reviewer gets a link, never a mailbox: OpenAI rejects
