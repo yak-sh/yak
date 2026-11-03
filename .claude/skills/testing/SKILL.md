@@ -126,8 +126,10 @@ doctests the branch and working changes reach, including consumers, the nearest
 first and the rest of them left to main's CI (`--all` runs them here). It applies
 formatting to changed files, lints them, and checks the public API of each
 changed package for slow types (`deno publish --dry-run`, a fifth of a second a
-package). Full source and doc comment type checking runs in main's CI after
-the push; `deno task check:types` runs it explicitly when needed. Markdown
+package). `deno task check:types` checks the types of source and doc comments
+the change reaches: each changed module and each importing one, seconds where
+the whole repository takes a minute. Main's CI checks every module after the
+push (`deno task check:types --all`). Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.
 Cached passing dependencies can narrow execution further.

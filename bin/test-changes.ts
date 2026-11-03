@@ -1,7 +1,8 @@
 // Git supplies the changed paths; dependency selection stays in @yaks/testing.
 type Run = (args: string[]) => Promise<string>
 
-let git: Run = async (args) => {
+/** Git's answer to `args`, or why it refused. */
+export let git: Run = async (args) => {
   let result = await new Deno.Command('git', {
     args,
     stdout: 'piped',
@@ -9,7 +10,7 @@ let git: Run = async (args) => {
   }).output()
   if (!result.success) {
     throw new Error(
-      `Cannot select relevant tests: ${
+      `git ${args[0]} refused: ${
         new TextDecoder().decode(result.stderr).trim()
       }`,
     )

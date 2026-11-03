@@ -4,7 +4,8 @@
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
-    "check:types": "bash bin/check-types",
+    "check:types": "deno run -A bin/check-types.ts",
+    "check:types:all": "deno run -A bin/check-types.ts --all",
     "check:raycast": {
       "command": "npm --prefix raycast ci --ignore-scripts --no-audit --no-fund && npm --prefix raycast run typecheck && npm --prefix raycast test",
       "files": [
@@ -96,7 +97,7 @@
         "check:fmt",
         "check:lint",
         "check:bytes",
-        "check:types",
+        "check:types:all",
         "check:raycast",
         "check:publish",
         "check:browser",
