@@ -42,6 +42,8 @@ export type Spelling = {
   positional?: readonly string[]
   forward?: string
   input?: Record<string, { short?: string }>
+  /** a lone entity it answers is drawn whole (@yaks/vocab `page`) */
+  page?: boolean
 }
 
 /** A tool as an MCP server lists it. */
@@ -76,6 +78,7 @@ export let spelling = (
   positional?: readonly string[]
   forward?: string
   inputSchema?: Schema
+  page: boolean
 } => {
   let said = t._meta?.[COMMAND] as
     | (Spelling & {
@@ -120,6 +123,7 @@ export let spelling = (
     positional,
     forward: said?.forward ?? said?.options?.forward,
     inputSchema,
+    page: said?.page === true,
   }
 }
 

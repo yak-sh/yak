@@ -104,6 +104,7 @@
     },
     "session_peek": {
       "tool": true,
+      "page": true,
       "noun": "session",
       "verb": "peek",
       "title": "Read the end of a session",

@@ -11,9 +11,11 @@
 // The views are every configured plugin's `./views`, then @yaks/tools' (the
 // host always carries its `content`), then the generic ones any entity has
 // (@yaks/render/views). A server names no plugins, so its answers get the last
-// two. A lone entity is shown whole, as its `Page`, beside the links
-// and comments the page asks for itself, since a tool answers only what it
-// was asked; several are a `Tile` each, one line apiece.
+// two. An answer is a `Tile` per entity, one line apiece, whatever its length:
+// a list of one is still a list, and a write says what it changed in a line.
+// Only a tool that declares its answer a `page` (`graph show`, `mail show`)
+// has a lone entity shown whole, as its `Page`, beside the links and comments
+// the page asks for itself, since a tool answers only what it was asked.
 //
 // A terminal can hold more than a printout: a plugin's `./tui` exports views
 // that are Preact components of their own — the harness's session, which is
@@ -291,7 +293,15 @@ let shown = <Node>(
   return ctx
 }
 
-let viewOf = (answer: Bundle[]) => answer.length == 1 ? 'Page' : 'Tile'
+/** What a tool declared that decides how its answer is drawn: one that is not
+ * `readOnly` wrote, so its answer is drawn as its entities now stand
+ * ({@link standing}); a `page` tool's lone entity is drawn whole. */
+export type Drawn = { readOnly?: boolean; page?: boolean }
+
+// The view each entity of an answer is drawn as: a `Page` for the lone entity
+// of an answer drawn as a page, a `Tile` otherwise.
+let viewOf = (them: Bundle[], page: boolean) =>
+  page && them.length == 1 ? 'Page' : 'Tile'
 
 // The relation an edge states: the component beside `edge` that the
 // vocabulary declares one (@yaks/edge).
@@ -312,20 +322,21 @@ let refsOf = (vocab: Vocab, b: Bundle): [string, string, string][] =>
 
 /** The entities an answer's references point at that the answer does not
  * carry itself: what a printed reference needs looked up to read as `P-19`
- * rather than as its handle. */
+ * rather than as its handle. `page` is the eid of the entity drawn whole, if
+ * one is; every other is drawn as its `Tile`. */
 export let referenced = (
   vocab: Vocab,
   answer: Bundle[],
   views?: Held,
+  page?: string,
 ): string[] => {
   let held = new Set(answer.map((b) => b.entity.eid))
   let out = new Set<string>()
   for (let b of answer) {
+    let view = b.entity.eid == page ? 'Page' : 'Tile'
     for (let [, , eid] of refsOf(vocab, b)) if (!held.has(eid)) out.add(eid)
     for (
-      let eid of views
-        ? resolve(views, b, viewOf(answer), vocab)?.needs?.(b) ?? []
-        : []
+      let eid of views ? resolve(views, b, view, vocab)?.needs?.(b) ?? [] : []
     ) if (!held.has(eid)) out.add(eid)
   }
   return [...out]
@@ -419,17 +430,18 @@ let parted = (answer: Bundle[]) => ({
 })
 
 // What an answer draws, in whatever tree `draw` builds, as groups of lines: a
-// lone entity as its `Page`, with what `near` holds beside it, or else every
-// entity as its view, a line apiece; then every hit, a line apiece. The one
-// composition every lowering shares.
+// lone entity drawn as a `page` as its `Page`, with what the page holds beside
+// it, or else every entity as its `Tile`, a line apiece; then every hit, a
+// line apiece. The one composition every lowering shares.
 let drawn = <Node>(
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[],
-  near: Near,
+  page: Near | undefined,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
   demand?: (eid: string) => void,
 ): (Node | null)[][] => {
+  let near = page ?? nothing
   let ctx = shown(
     vocab,
     answer,
@@ -442,9 +454,9 @@ let drawn = <Node>(
   let found = hits.map((b) => draw(b, 'Search.Tile', ctx))
   let [lone] = them
   let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
-  let drew = them.length == 1
+  let drew = viewOf(them, !!page) == 'Page'
     ? [draw(lone, 'Page', { ...ctx, ...around(vocab, lone, near, held) })]
-    : them.map((b) => draw(b, viewOf(them), ctx))
+    : them.map((b) => draw(b, 'Tile', ctx))
   return [drew, found].filter((g) => g.length)
 }
 
@@ -457,21 +469,22 @@ let nothing: Near = { links: [], comments: [] }
 
 // The token belongs to the body a page just showed, not to related entities
 // or compact tiles that show no body.
-let freshness = (answer: Bundle[]): string => {
+let freshness = (answer: Bundle[], page?: Near): string => {
   let { them } = parted(answer)
-  let was = them.length == 1 ? them[0].$was?.doc?.body : undefined
+  let was = viewOf(them, !!page) == 'Page' ? them[0].$was?.doc?.body : undefined
   return was === undefined ? '' : `was: ${was}`
 }
 
 /** An answer as the lines a terminal prints. `named` holds the entities its
  * references point at, so each prints as its id; one not there prints as its
- * handle. A lone entity is its `Page`, with what `near` holds beside it. */
+ * handle. Each entity is a line, unless the answer is drawn as a `page`: then
+ * a lone entity is its `Page`, with what the page holds beside it. */
 export let printed = (
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[] = [],
-  near: Near = nothing,
+  page?: Near,
   demand?: (eid: string) => void,
   deferred?: (renderer: Renderer) => void,
 ): string => {
@@ -479,13 +492,13 @@ export let printed = (
     vocab,
     answer,
     named,
-    near,
+    page,
     (b, v, c) => tree(views, b, v, vocab, { ...c, deferred }),
     demand,
   )
   return joined([
     ...groups.map((g) => g.map((n) => plain(n))),
-    [freshness(answer)],
+    [freshness(answer, page)],
   ])
 }
 
@@ -499,7 +512,7 @@ export let painted = async (
   answer: Bundle[],
   named: Bundle[],
   columns: number,
-  near: Near = nothing,
+  page?: Near,
 ): Promise<string> => {
   let [{ render: mount }, { print }, dress] = await Promise.all([
     import('@yaks/preact'),
@@ -510,28 +523,29 @@ export let painted = async (
     vocab,
     answer,
     named,
-    near,
+    page,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
   )
   return joined([
     ...groups.map((g) => g.map((n) => print(n, columns, dress))),
-    [freshness(answer)],
+    [freshness(answer, page)],
   ])
 }
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
  * printout draws it ({@link painted}). Loaded only when asked for, so a
  * printed answer never pays for a terminal app. `config` is the config file
- * naming the graph the answer came from, for a view that keeps reading it. A lone answer drawn by a
- * component of its own (a plugin's `./tui`) is an app, and has the whole
- * terminal; anything else scrolls. */
+ * naming the graph the answer came from, for a view that keeps reading it. A
+ * lone answer whose page is a component of its own (a plugin's `./tui`) is an
+ * app, and has the whole terminal, whether or not the answer was drawn as a
+ * `page`; anything else scrolls. */
 export let hold = async (
   views: Held,
   vocab: Vocab,
   answer: Bundle[],
   config?: string,
   named: Bundle[] = [],
-  near: Near = nothing,
+  page?: Near,
 ): Promise<void> => {
   let [{ h }, { render: mount }, { run, Scroll }, dress] = await Promise.all([
     import('preact'),
@@ -541,13 +555,13 @@ export let hold = async (
   ])
   let [lone] = answer
   let app = answer.length == 1 && 'Render' in
-      (resolve(views, lone, viewOf(answer), vocab, { config }) ?? {})
+      (resolve(views, lone, 'Page', vocab, { config }) ?? {})
   await run(() => {
     let nodes = drawn<ComponentChild>(
       vocab,
       answer,
       named,
-      near,
+      app ? page ?? nothing : page,
       (b, v, c) => mount(views, b, v, vocab, { ...c, config }),
     ).flat()
     return app ? nodes[0] : h(
@@ -620,7 +634,9 @@ export let standing = async (
 /** An answer shown the way the command asked — held in the terminal under
  * `--tui`, drawn by `held` where the command has terminal views and a config
  * to read ({@link terminal}), painted where stdout is a terminal, and printed
- * otherwise. The answer of a tool that `wrote` is drawn {@link standing}. */
+ * otherwise — and the way its `tool` was declared ({@link Drawn}): the answer
+ * of one that wrote is drawn {@link standing}, and a page tool's lone entity
+ * whole, beside the links and comments its page asks for. */
 export let show = async (
   c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
@@ -628,12 +644,18 @@ export let show = async (
   said: Bundle[],
   held: { views?: Held; config?: string } = {},
   from: Source = none,
-  wrote = false,
+  tool: Drawn = { readOnly: true },
 ): Promise<void> => {
-  let answer = wrote ? await standing(said, from) : said
-  let [lone, ...more] = parted(answer).them
-  let asked = lone && !more.length ? nearQuery(vocab, lone.entity.eid) : null
-  let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
+  let answer = tool.readOnly ? said : await standing(said, from)
+  let them = parted(answer).them
+  let lone = viewOf(them, !!tool.page) == 'Page' ? them[0] : undefined
+  let asked = lone ? nearQuery(vocab, lone.entity.eid) : null
+  let page = !lone
+    ? undefined
+    : asked
+    ? nearOf(lone.entity.eid, await from.query(asked))
+    : nothing
+  let near = page ?? nothing
   if (!c.tui && !c.tty) {
     // Portable renderers are pure. Discover the references the actual drawing
     // reads, including nested views and declared needs, rather than fetching
@@ -647,7 +669,7 @@ export let show = async (
       let pending = new Set<string>()
       let loading = new Set<Renderer>()
       try {
-        text = printed(views, vocab, answer, named, near, (eid) => {
+        text = printed(views, vocab, answer, named, page, (eid) => {
           if (eid && !known.has(eid)) pending.add(eid)
         }, (r) => loading.add(r))
       } catch (error) {
@@ -674,6 +696,7 @@ export let show = async (
     vocab,
     [...answer, ...near.links, ...near.comments],
     held.views ?? views,
+    lone?.entity.eid,
   )
   let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
@@ -683,7 +706,7 @@ export let show = async (
       answer,
       held.config,
       named,
-      near,
+      page,
     )
   }
   if (c.tty) {
@@ -693,7 +716,7 @@ export let show = async (
       answer,
       named,
       c.tty.columns,
-      near,
+      page,
     )
     if (text) c.tty.write(text)
     return

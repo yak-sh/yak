@@ -331,6 +331,7 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
     ...(tool.verb ? { verb: tool.verb } : {}),
     ...(tool.positional ? { positional: tool.positional } : {}),
     ...(tool.forward ? { forward: tool.forward } : {}),
+    ...(tool.page ? { page: true } : {}),
     ...(Object.keys(input).length ? { input } : {}),
     ...(Object.keys(options).length ? { options } : {}),
   }

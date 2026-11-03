@@ -35,7 +35,7 @@ export let lifecycle = async (
   })
   if (faulted(landed, id)) return new Response('', { status: 500 })
   if (!host.text) throw new Error('lifecycle hooks need a text renderer')
-  let text = await host.text(answerOf(landed, id), true)
+  let text = await host.text(answerOf(landed, id), { readOnly: false })
   return Response.json(
     text && event != 'SessionEnd'
       ? {

@@ -20,6 +20,7 @@ import { commands, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import type { Ctx } from './run.ts'
 import { cached } from './store.ts'
+import { spelling } from './tool.ts'
 
 // A server's graph as a host composes one: each document stamped with the
 // package that declared it, including a server-only package with no local views.
@@ -82,7 +83,12 @@ let asking = async (
       said.length = 0
       let roster = await rosterOf(c.host, ask, home)
       let result = await ask('tools/call', { name, arguments: args })
-      await printed(c, roster, name, result as Result)
+      // Drawn as the server listed the tool, as a command made of it draws.
+      let listed = roster.tools.find((t) => t.name == name)!
+      await printed(c, roster, name, result as Result, args, {
+        readOnly: listed.annotations?.readOnlyHint,
+        page: spelling(listed).page,
+      })
       return said.join('\n')
     }
     await go(c, call)
@@ -106,9 +112,16 @@ test('a server’s answer is drawn through its packages’ views', async () => {
   })
 })
 
-test('a lone entity is shown whole, as its page', async () => {
-  await asking(async (_c, call) => {
-    let page = await call('graph_query', { q: '.completed&*' })
+test('a list of one is a line, and a page tool’s lone entity a page', async () => {
+  await asking(async (c, call) => {
+    let line = await call('graph_query', { q: '.completed&*' })
+    assert(/^T-(\d+) Ship it done$/.test(line), line)
+    let said = await c.ask('tools/call', {
+      name: 'graph_query',
+      arguments: { q: '.completed&*' },
+    }) as { structuredContent: { result: { entity: { eid: string } }[] } }
+    let [done] = said.structuredContent.result
+    let page = await call('graph_show', { ids: [done.entity.eid] })
     assert(/^task T-\d+ done\n\nShip it\n/.test(page), page)
   })
 })

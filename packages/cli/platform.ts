@@ -20,6 +20,7 @@
 import type { Bundle } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Command, Ctx } from './run.ts'
+import type { Drawn } from './answer.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
@@ -107,9 +108,9 @@ let preparing = (
 /**
  * Show a tool's result, and the roster notice the server added beside it
  * (roster.ts). Returns the exit code. A caller holding no tool list passes
- * `null` — a staleness notice still drops the cache. A tool the server did not
- * mark read-only `wrote`, so its answer is drawn as its entities now stand
- * (./answer.ts `standing`).
+ * `null` — a staleness notice still drops the cache. `tool` is what the server
+ * listed about the tool that decides how its answer is drawn (./answer.ts
+ * `Drawn`).
  */
 export let printed = async (
   c: Ctx,
@@ -117,7 +118,7 @@ export let printed = async (
   name: string,
   said: Result,
   args: Record<string, unknown> = {},
-  wrote = false,
+  tool: Drawn = { readOnly: true },
   drawing?: Drawing,
 ): Promise<number> => {
   let { text, stale } = saidBy(said)
@@ -171,7 +172,7 @@ export let printed = async (
         lookup: (ids) => asked('graph_show', { ids }),
         query: (q) => asked('graph_query', { q }),
       },
-      wrote,
+      tool,
     )
   } else if (text) c.out(text)
   return 0
@@ -201,7 +202,7 @@ let toolOf = (roster: Roster, t: Listed, load: Prepare): Command => ({
         arguments: args,
       }) as Result,
       args,
-      !t.annotations?.readOnlyHint,
+      { readOnly: t.annotations?.readOnlyHint, page: spelling(t).page },
       drawing,
     )
   },

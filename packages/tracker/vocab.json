@@ -396,6 +396,7 @@
     },
     "bug_show": {
       "tool": true,
+      "page": true,
       "noun": "bug",
       "verb": "show",
       "title": "Show bugs",

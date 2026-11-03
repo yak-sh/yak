@@ -399,7 +399,7 @@ export let tool = async (
   if (c.json) {
     c.out(JSON.stringify(structured(declared, answer), null, 2))
   } else if (!c.tui && !c.tty && host.text) {
-    let text = await host.text(answer, !declared.readOnly)
+    let text = await host.text(answer, declared)
     if (text) c.out(text)
   } else {
     await show(
@@ -422,7 +422,7 @@ export let tool = async (
         lookup: (eids) => host.graph.get(eids),
         query: (q) => host.graph.read(q),
       },
-      !declared.readOnly,
+      declared,
     )
   }
   // A refusal is data, not an exception: the text is printed either way

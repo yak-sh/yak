@@ -44,6 +44,7 @@
     },
     "persona_read": {
       "tool": true,
+      "page": true,
       "noun": "persona",
       "verb": "read",
       "title": "Read a persona",

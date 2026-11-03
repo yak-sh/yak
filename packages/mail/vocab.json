@@ -163,6 +163,7 @@
     },
     "mail_show": {
       "tool": true,
+      "page": true,
       "destructive": false,
       "noun": "mail",
       "verb": "show",

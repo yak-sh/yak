@@ -200,6 +200,7 @@
     },
     "graph_show": {
       "tool": true,
+      "page": true,
       "noun": "graph",
       "verb": "show",
       "title": "Show entities",

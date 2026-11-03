@@ -204,9 +204,10 @@ test('search excerpts strip raw controls and compact multiple kinds', () => {
   assert(!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(lines))
 })
 
-test('a lone entity is shown whole', () => {
+test('a lone entity is a line, and a page tool’s is shown whole', () => {
+  assertEquals(said(t10), 'T-10 Ship it done')
   assertEquals(
-    said(t10),
+    printed(views, vocab, [t10] as never, [], { links: [], comments: [] }),
     'task T-10 done\n\nShip it\n\nDetails\n\ntask: ✓\ncompleted: ✓',
   )
 })
@@ -219,7 +220,10 @@ test('a reference prints as the id of the entity looked up for it', () => {
   let done = { ...t10, completed: { by: t11.entity.eid } }
   assertEquals(referenced(vocab, [done as never]), [t11.entity.eid])
   let facts = (named: unknown[]) =>
-    printed(views, vocab, [done as never], named as never).split('\n').pop()
+    printed(views, vocab, [done as never], named as never, {
+      links: [],
+      comments: [],
+    }).split('\n').pop()
   // Not looked up: its handle, which a shell reads as a comment from the `#`.
   assertEquals(facts([]), 'completed: by #3333333333')
   assertEquals(facts([t11]), 'completed: by T-11')
@@ -273,6 +277,7 @@ test('a lone entity’s page asks for its links and comments, and leaves bookkee
     [t9] as never,
     {},
     { lookup: () => [t10] as never, query: (q) => g.read(q) },
+    { readOnly: true, page: true },
   )
   let page = lines.join('\n').split('\n\nDetails')[0]
   let parts = page.split('\n\n')
@@ -285,8 +290,8 @@ test('a lone entity’s page asks for its links and comments, and leaves bookkee
   assertStringIncludes(page, 'looks good')
 })
 
-test('a write’s answer is drawn as its entities now stand', async () => {
-  let shown = async (answer: unknown[], wrote: boolean) => {
+test('a write’s answer is a line per entity as it now stands', async () => {
+  let shown = async (answer: unknown[], readOnly: boolean) => {
     let lines: string[] = []
     await show(
       { tui: false, out: (line) => lines.push(line) },
@@ -295,18 +300,18 @@ test('a write’s answer is drawn as its entities now stand', async () => {
       answer as never,
       {},
       { lookup: () => [t10] as never, query: () => [] },
-      wrote,
+      { readOnly },
     )
-    return lines.join('\n').split('\n')[0]
+    return lines.join('\n')
   }
   let moved = { entity: { eid: t10.entity.eid }, completed: {} }
-  assertEquals(await shown([moved], true), 'task T-10 done')
+  assertEquals(await shown([moved], false), 'T-10 Ship it done')
   // Nothing stands under a tombstone's eid: the answer is drawn as it came.
   let gone = { entity: { eid: t9.entity.eid }, tombstone: {} }
-  assertEquals(await shown([gone], true), await shown([gone], false))
+  assertEquals(await shown([gone], false), await shown([gone], true))
 })
 
-test('a new entity is drawn whole, and what it was found near a line apiece', async () => {
+test('a new entity is a line, and what it was found near a line apiece', async () => {
   let made = { entity: { eid: t9.entity.eid }, doc: t9.doc, task: {} }
   let near = {
     entity: t10.entity,
@@ -331,10 +336,10 @@ test('a new entity is drawn whole, and what it was found near a line apiece', as
     [made, near] as never,
     {},
     { lookup: (eids) => eids.map((e) => stand[e]) as never, query: () => [] },
-    true,
+    { readOnly: false },
   )
-  let [page, found] = lines.join('\n').split('\n\nnear ')
-  assertEquals(page, said(t9))
+  let [line, found] = lines.join('\n').split('\n\nnear ')
+  assertEquals(line, 'T-9 Fix the bar open')
   assertEquals(found, 'T-9: T-10 Ship it · task done (meaning)')
 })
 
@@ -575,9 +580,11 @@ test('portable preparation follows selected and nested views, preserving require
 test('a shown body carries the token a replacement can pass back', () => {
   let body = 'Draft with **emphasis**'
   let was = token(body)
-  assertStringIncludes(
-    said({ ...t9, doc: { body }, $was: { doc: { body: was } } }),
-    `was: ${was}`,
-  )
-  assertEquals(said({ ...t9, doc: { body } }).includes('was:'), false)
+  let paged = (b: unknown) =>
+    printed(views, vocab, [b] as never, [], { links: [], comments: [] })
+  let kept = { ...t9, doc: { body }, $was: { doc: { body: was } } }
+  assertStringIncludes(paged(kept), `was: ${was}`)
+  assertEquals(paged({ ...t9, doc: { body } }).includes('was:'), false)
+  // A line shows no body, so it carries no token for one.
+  assertEquals(said(kept).includes('was:'), false)
 })

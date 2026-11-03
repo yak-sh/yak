@@ -249,6 +249,10 @@ export type Tool<R = Bundle[]> = {
    * web can then read, a record at another company. A tool that only touches
    * what is stored here is closed-world, whatever it writes. */
   openWorld?: boolean
+  /** its answer is one entity to read whole (`graph show`, `mail show`), so a
+   * person is shown a lone one as its page; any other answer reads a line per
+   * entity, a list of one included */
+  page?: boolean
   /** what the transport should send about this tool beside its schemas, handed
    * to the client verbatim — an MCP `_meta`, say, naming the page the client
    * should render the result in. Opaque here, like {@link Schema}. */

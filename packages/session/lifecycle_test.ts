@@ -24,7 +24,7 @@ let host = await compose({
 let views = await registry((host.config.plugins ?? []).map(used))
 let prior: string[] = []
 let render = host.text!
-host.text = async (answer, wrote) => {
+host.text = async (answer, tool) => {
   let lines: string[] = []
   await show(
     { tui: false, out: (s) => lines.push(s) },
@@ -33,10 +33,10 @@ host.text = async (answer, wrote) => {
     answer,
     {},
     { lookup: (ids) => host.graph.get(ids), query: (q) => host.graph.read(q) },
-    wrote,
+    tool,
   )
   prior.push(lines.join('\n'))
-  return render(answer, wrote)
+  return render(answer, tool)
 }
 let door = routes(host).find((r) => r.path == '/session/hook')!
 let run = async (hook: object) => {

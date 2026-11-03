@@ -840,9 +840,9 @@ let composed = async (
     host = built.host
     g = host.graph
     let worded: import('@yaks/host').Host['text']
-    host.text = async (answer, wrote) => {
+    host.text = async (answer, tool) => {
       worded ??= (await import('./text.ts')).text(host)
-      return worded(answer, wrote)
+      return worded(answer, tool)
     }
     let fx = host.fx
     let effecting = roles.includes('effects')

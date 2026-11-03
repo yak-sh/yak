@@ -82,10 +82,15 @@ export type Ctx = {
 /** A terminal an answer is painted on: how wide it is, and where its bytes go. */
 export type Tty = { columns: number; write: (text: string) => void }
 
-// This process's stdout, where it is a terminal a person reads in color.
+// This process's stdout, where it is a terminal a person reads in color. A
+// terminal that reports no size (`script` run without one) is the usual 80
+// wide, rather than a width nothing fits in.
 let terminal = (env: Env): Tty | undefined =>
   Deno.stdout.isTerminal() && !env('NO_COLOR')
-    ? { columns: Deno.consoleSize().columns, write: (t) => console.log(t) }
+    ? {
+      columns: Deno.consoleSize().columns || 80,
+      write: (t) => console.log(t),
+    }
     : undefined
 
 /**

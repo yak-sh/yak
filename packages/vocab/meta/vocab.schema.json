@@ -468,6 +468,10 @@
         "openWorld": {
           "type": "boolean"
         },
+        "page": {
+          "description": "Its answer is one entity to read whole, so a person is shown a lone one as its page; any other answer reads a line per entity, a list of one included.",
+          "type": "boolean"
+        },
         "scope": {
           "description": "Arguments selecting another graph, which resolves its own references.",
           "type": "array",

@@ -39,6 +39,7 @@
     },
     "topic_read": {
       "tool": true,
+      "page": true,
       "noun": "topic",
       "verb": "read",
       "title": "Read a topic as a session's context",

@@ -377,6 +377,9 @@ export type ToolDefinition = {
   destructive?: boolean
   idempotent?: boolean
   openWorld?: boolean
+  /** its answer is one entity to read whole, so a person is shown a lone one
+   * as its page; any other answer reads a line per entity */
+  page?: boolean
   /** where it is offered — `cli`, `mcp`; every surface when absent */
   surfaces?: ('cli' | 'mcp')[]
   /** the roles the process running it serves (@yaks/cli `ROLES`), where it
@@ -442,6 +445,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     destructive: { type: 'boolean' },
     idempotent: { type: 'boolean' },
     openWorld: { type: 'boolean' },
+    page: { type: 'boolean' },
     surfaces: SURFACES,
     roles: ROLES,
     scope: { type: 'array', uniqueItems: true, items: { type: 'string' } },
@@ -576,6 +580,7 @@ let HINTS = [
   'destructive',
   'idempotent',
   'openWorld',
+  'page',
   'outputSchema',
   'surfaces',
   'roles',

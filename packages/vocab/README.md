@@ -699,8 +699,11 @@ await throws(() => validateToolOutput(tool, [12]))
 ```
 
 `surfaces` selects `cli`, `mcp`, both when omitted, or neither with `[]`.
-`roles` declares process roles: `graph`, `web` or `effects`. These are metadata
-for consumers; this package does not run tools or expose a command line.
+`roles` declares process roles: `graph`, `web` or `effects`. `page: true` says
+the answer is one entity to read whole (`graph show`, `mail show`), so a person
+is shown a lone one as its page; any other answer reads a line per entity, a
+list of one included. These are metadata for consumers; this package does not
+run tools or expose a command line.
 
 `noun` and `verb` are lowercase words with digits and hyphens allowed. Either
 may stand alone or both may be supplied. `positional` orders input property
