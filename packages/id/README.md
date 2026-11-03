@@ -195,11 +195,12 @@ equal(Object.fromEntries(resolved), {
 ```
 
 Allocation policy does not invalidate an address already given out. The CLI
-leaves existing numbers intact when excluding sessions, letters, knocks and
-internal records from new allocations. Old `S-…`, `E-…` and `K-…` references
-keep resolving; new unnumbered entities use the short handles above, including
-in `yak session peek '#…'`, the same hex without its `#`, and web paths with
-`%23` in place of `#`.
+leaves existing numbers intact when excluding people, sessions, letters, knocks
+and internal records from new allocations. Old `U-…`, `S-…`, `E-…` and `K-…`
+references keep resolving; a person is also called by name, and other new
+unnumbered entities use the short handles above, including in
+`yak session peek '#…'`, the same hex without its `#`, and web paths with `%23`
+in place of `#`.
 
 Numbers are opt in. Without `numbers()`, a graph refuses `$num` unless another
 plugin declares it. A storage adapter can instead number every entity when

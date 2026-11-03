@@ -40,12 +40,13 @@ export let STARTER = [
   '@yaks/canvas',
 ]
 
-/** What nobody needs a new number for: sessions, letters, knocks and internal
- * records, the vocabulary's description among them (@yaks/vocab).
- * Content-addressed artifacts and Git objects already have addresses.
- * Numbered, these would spend the numbers a person reads — a first task would
- * be T-27. A name here no plugin declares excepts nothing. Existing numbers
- * remain addresses; this policy only governs allocation. */
+/** What nobody needs a new number for: people, sessions, letters, knocks and
+ * internal records, the vocabulary's description among them (@yaks/vocab). A
+ * person is called by name (@yaks/persona's `by_name`); content-addressed
+ * artifacts and Git objects already have addresses. Numbered, these would
+ * spend the numbers a person reads — a first task would be T-27, or T-2 after
+ * the person `yak init` makes. A name here no plugin declares excepts nothing.
+ * Existing numbers remain addresses; this policy only governs allocation. */
 export let UNNUMBERED = [
   '_comp',
   '_effect',
@@ -72,6 +73,7 @@ export let UNNUMBERED = [
   'module',
   'output',
   'package',
+  'person',
   'process',
   'ref',
   'result',
