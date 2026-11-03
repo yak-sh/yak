@@ -613,6 +613,9 @@ export type Source = {
   query: (q: string) => Bundle[] | Promise<Bundle[]>
 }
 
+/** What a read that found nothing prints. */
+export let NONE = 'none'
+
 let none: Source = { lookup: () => [], query: () => [] }
 
 /** A write's answer as a person reads it: each entity it changed as that
@@ -648,6 +651,11 @@ export let show = async (
   tool: Drawn = { readOnly: true },
 ): Promise<void> => {
   let answer = tool.readOnly ? said : await standing(said, from)
+  // A read that found nothing says so: a blank answer reads as a command
+  // that did nothing, or one still working.
+  if (tool.readOnly && !answer.length && !c.tui) {
+    return c.tty ? c.tty.write(NONE) : c.out(NONE)
+  }
   let them = parted(answer).them
   let lone = viewOf(them, !!tool.page) == 'Page' ? them[0] : undefined
   let asked = lone ? nearQuery(vocab, lone.entity.eid) : null

@@ -27,7 +27,14 @@ import type { Shown } from '@yaks/render/views'
 import { graph, token } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
-import { printed, referenced, registry, show, terminal } from './answer.ts'
+import {
+  NONE,
+  printed,
+  referenced,
+  registry,
+  show,
+  terminal,
+} from './answer.ts'
 
 let vocab = loadVocab([kernelDoc, edgeDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,
@@ -587,4 +594,35 @@ test('a shown body carries the token a replacement can pass back', () => {
   assertEquals(paged({ ...t9, doc: { body } }).includes('was:'), false)
   // A line shows no body, so it carries no token for one.
   assertEquals(said(kept).includes('was:'), false)
+})
+
+test('a read that found nothing says none, and a write that changed nothing says nothing', async () => {
+  let drawn = async (tool: { readOnly?: boolean }) => {
+    let lines: string[] = [], painted: string[] = []
+    await show(
+      { tui: false, out: (s) => lines.push(s) },
+      views,
+      vocab,
+      [],
+      {},
+      undefined,
+      tool,
+    )
+    await show(
+      {
+        tui: false,
+        tty: { columns: 80, write: (s) => painted.push(s) },
+        out: () => {},
+      },
+      views,
+      vocab,
+      [],
+      {},
+      undefined,
+      tool,
+    )
+    return [lines, painted]
+  }
+  assertEquals(await drawn({ readOnly: true }), [[NONE], [NONE]])
+  assertEquals(await drawn({}), [[], []])
 })

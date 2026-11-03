@@ -45,7 +45,8 @@ export let STARTER = [
 
 /** What nobody needs a new number for: people, integrations and connections,
  * sessions, letters, knocks and internal records, the vocabulary's description
- * among them (@yaks/vocab). A person, an integration and a connection are
+ * among them (@yaks/vocab), and the rows a server writes on its own, the
+ * machine it runs on and the store's daily measure. A person, an integration and a connection are
  * called by name; content-addressed artifacts and Git objects already have
  * addresses. Numbered, these would spend the numbers a person reads: a first
  * task would be T-27, or T-2 after the person `yak init` makes. A name here no
@@ -72,9 +73,11 @@ export let UNNUMBERED = [
   'file',
   'gitobj',
   'integration',
+  'kept',
   'key',
   'knock',
   'lease',
+  'machine',
   'mail',
   'module',
   'output',
