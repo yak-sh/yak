@@ -1,6 +1,6 @@
 // The CI watcher (ci.ts) over runs on main: which red runs it reports.
 import { equal, test } from '@yaks/testing'
-import { type Run, type Seen, watch } from './ci.ts'
+import { predates, type Run, type Seen, watch } from './ci.ts'
 
 let CONCLUSION: Record<string, string> = {
   ok: 'success',
@@ -105,4 +105,37 @@ test('a listing older than the newest run seen reports nothing', async () => {
     report,
   )
   equal([reported, seen], [[10], { gate: 10 }])
+})
+
+test('a failure on a commit before its resolution’s fix is dropped; one containing it reopens', async () => {
+  // Main is a line of commits a → b → c; the bug was resolved with fix b.
+  let line = ['a', 'b', 'c']
+  let has = (commit: string, fix: string) =>
+    Promise.resolve(line.indexOf(commit) >= line.indexOf(fix))
+  let reported: string[] = []
+  let poll = (heads: string[], fix?: string) =>
+    watch(
+      ['gate'],
+      {},
+      () =>
+        Promise.resolve(heads.map((headSha, i) => ({
+          databaseId: heads.length - i,
+          conclusion: 'failure',
+          displayTitle: headSha,
+          headSha,
+          url: '',
+        }))),
+      (_, __, run) => {
+        reported.push(run.headSha)
+        return Promise.resolve()
+      },
+      predates(() => Promise.resolve(fix), has),
+    )
+  await poll(['a'], 'b')
+  equal(reported, [])
+  await poll(['c', 'b', 'a'], 'b')
+  equal(reported, ['b', 'c'])
+  reported = []
+  await poll(['a'])
+  equal(reported, ['a'])
 })
