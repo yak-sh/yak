@@ -24,7 +24,10 @@ test('connection authorize lists targets without starting a sign-in', async () =
       return Promise.resolve()
     },
   }
-  assertEquals(await authorizeCLI(auth), 'site [site]\nOpenAI')
+  assertEquals(
+    await authorizeCLI(auth),
+    'site [site]\nOpenAI\n\nsign in to one with: yak auth <name>',
+  )
   assertEquals(calls, ['list', 'close'])
 })
 

@@ -24,6 +24,11 @@ test('auth starts OpenAI without a harness or provider owner', async () => {
   let auth = authorize({ graph: host.graph, vault: host.vault, owner })
   try {
     ok((await auth.run('list')).servers?.includes('OpenAI'))
+    // What it can discover is offered before the graph holds it.
+    let offering = authorize({ graph: host.graph, vault: host.vault }, {
+      offers: ['yaks.app'],
+    })
+    equal((await offering.run('list')).servers?.[0], 'yaks.app')
     let begun = await auth.run('begin', 'openai')
     let url = new URL(begun.url!)
     equal(url.origin, 'https://auth.openai.com')

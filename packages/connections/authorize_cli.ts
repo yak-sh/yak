@@ -101,9 +101,11 @@ export let authorizeCLI = async (
   try {
     if (!name) {
       let listed = await auth.run('list')
+      let servers = listed.servers ?? []
       return [
-        ...(listed.servers ?? []),
+        ...servers,
         ...(listed.message ? [listed.message] : []),
+        ...(servers.length ? ['', 'sign in to one with: yak auth <name>'] : []),
       ].join('\n') || 'No connections to authorize.'
     }
     let begun = await auth.run('begin', name, undefined, as)

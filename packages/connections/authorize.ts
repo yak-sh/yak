@@ -28,6 +28,9 @@ export type AuthTarget = { integration: string; redirect?: string }
 export type AuthOptions = {
   /** Transport for discovery, token exchange and account reads. */
   fetch?: typeof fetch
+  /** The integrations `prepare` can sign in to before the graph holds them,
+   * listed beside the ones it does. */
+  offers?: string[]
   /** Discover/register an unknown integration, returning its name and redirect. */
   prepare?: (name: string, as?: string) => Promise<AuthTarget | undefined>
   /** An unattended sign-in returns its private callback and optional website session. */
@@ -59,7 +62,11 @@ export let authorize = (
       b.integration as Integration
     )
     if (action == 'list') {
-      return { servers: integrations.map((i) => i.title ?? i.name) }
+      let held = integrations.map((i) => i.title ?? i.name)
+      let offered = (options.offers ?? []).filter((name) =>
+        !integrations.some((i) => i.name == name)
+      )
+      return { servers: [...offered, ...held] }
     }
     if (!h.owner) {
       throw new Refused('A configured person is required to sign in')
