@@ -135,6 +135,11 @@ CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 # Existing subscriptions stay on their old price unless migrated in Stripe.
 STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
 
+# The Organization plan's live prices (billing.ts, T-135234): $49 a month and
+# $490 a year. Staging has none, so its checkout for the plan stays off.
+STRIPE_PRICE_ORGANIZATION = "price_1UXaBQITlUS6lUlgf2JQems1"
+STRIPE_PRICE_ORGANIZATION_YEAR = "price_1UXaBRITlUS6lUlg1fWc2Bdv"
+
 # The per-deploy version id (stream.ts, T-33013): Cloudflare mints a fresh id on
 # every `wrangler deploy`, so it is the marker a resumed MCP stream compares to
 # know the platform's tool/resource/prompt lists moved — automatic, with no file
