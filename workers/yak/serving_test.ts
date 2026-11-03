@@ -1376,90 +1376,24 @@ test('worker non-HTML and bodyless answers are not rewritten', async () => {
   }
 })
 
-test('visitors are served past the allowance, and twice it pauses all app serving before dispatch or files', async () => {
+test('visitors are served however many request units a month has seen', async () => {
   for (let tier of ['free', 'plus'] as const) {
-    let calls = 0
-    await using k = await router(() => {
-      calls++
-      return new Response('the router')
-    }, ['/garden/*'])
-    k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+    await using k = await router(() => new Response('the router'), [
+      '/garden/*',
+    ])
     let limit = tier == 'plus' ? PLUS.requests : FREE.requests
-    let meter = async (requests: number, month = monthOf(new Date())) =>
-      await stamp(k.env, {
-        entities: [{
-          entity: { eid: k.space.eid },
-          plan: { tier },
-          meter: { month, requests },
-        }],
-      })
-    await meter(limit)
-    assertEquals(await (await k.at('/')).text(), 'the router')
-    assertEquals(calls, 1)
-    await meter(limit * 2)
-    for (
-      let path of [
-        '/',
-        '/garden/',
-        '/cookbook/style.css',
-        '/api/graph',
-        '/garden/api/query',
-      ]
-    ) {
-      let res = await k.at(path)
-      assertEquals(res.status, 429, path)
-      assertStringIncludes(await res.text(), 'paused for visitors until')
-    }
-    // A browser is shown a page that says when, and how its people get in.
-    let page = await apps.fetch(
-      visit('/garden/', { headers: { accept: 'text/html' } }),
-      k.env,
-    )
-    assertEquals(page.status, 429)
-    assertStringIncludes(page.headers.get('content-type')!, 'text/html')
-    assertStringIncludes(await page.text(), 'sign in')
-    // Neither a claimed internal request nor a socket upgrade skips the gate.
-    for (
-      let headers of [
-        new Headers({ 'x-yak-grant': 'forged' }),
-        new Headers({ upgrade: 'websocket' }),
-      ]
-    ) {
-      let res = await apps.fetch(visit('/garden/api/ws', { headers }), k.env)
-      assertEquals(res.status, 429)
-      await res.body?.cancel()
-    }
-    assertEquals(calls, 1, 'over-quota traffic invoked app code')
-    // Strangers spent the visits; the space's own people still get their app.
-    let mine = await apps.fetch(
-      visit('/', { headers: { cookie: await as(ADA) } }),
-      k.env,
-    )
-    assertEquals(await mine.text(), 'the router')
-    calls--
-    // The dashboard's old address still moves to the apex, over quota.
-    let manage = await k.at('/_yaks')
-    assertEquals(manage.status, 301)
-    assertStringIncludes(
-      manage.headers.get('location')!,
-      'https://yaks.app/manage?space=',
-    )
-    await manage.body?.cancel()
-    // A prior month's count cannot keep serving blocked before the next sweep.
-    await meter(limit * 2, '2020-01')
-    assertEquals(await (await k.at('/')).text(), 'the router')
-    await meter(limit * 2)
     await stamp(k.env, {
       entities: [{
         entity: { eid: k.space.eid },
-        space: { slug: 'yourname', store: 'yourname' },
+        plan: { tier },
+        meter: { month: monthOf(new Date()), requests: limit * 10 },
       }],
     })
-    let comped = await apps.fetch(
-      new Request('https://yourname.yaks.app/'),
-      k.env,
-    )
-    assertEquals(await comped.text(), 'the router')
+    for (let path of ['/', '/garden/', '/cookbook/style.css']) {
+      let res = await k.at(path)
+      assertEquals(res.status, 200, path)
+      await res.body?.cancel()
+    }
   }
 })
 

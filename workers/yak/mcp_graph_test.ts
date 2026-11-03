@@ -902,23 +902,11 @@ test('the free tier: a warning once, then the refusals', async () => {
       slug: quotaCache,
       title: 'Quota',
     })
-    let over = await k.at(`${brim36}.yaks.app`, '/one/')
-    assertEquals(over.status, 429)
-    assertStringIncludes(await over.text(), 'paused for visitors until')
-    let manage = await k.at('yaks.app', `/manage?space=${brim36}`, {
-      headers: { cookie },
-    })
-    assertEquals(manage.status, 200)
-    await manage.body?.cancel()
-    // MCP management still works, and raising the allowance reopens serving.
-    assertStringIncludes(
-      await agent.tool('app_list', { space: brim36 }),
-      'one',
-    )
-    await onPlus(k, eids[brim36])
-    let reopened = await k.at(`${brim36}.yaks.app`, '/one/api/graph')
-    assertEquals(reopened.status, 200)
-    await reopened.body?.cancel()
+    // A month of visitors past the allowance is news for the owner, never a
+    // closed door for the next visitor.
+    let over = await k.at(`${brim36}.yaks.app`, '/one/api/graph')
+    assertEquals(over.status, 200)
+    await over.body?.cancel()
   } finally {
     await k.stop()
   }

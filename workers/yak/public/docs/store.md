@@ -790,8 +790,8 @@ The codes these endpoints answer, and their statuses:
 
 [Errors and Rollback](./errors.md) says what each code means.
 
-Two answers are not JSON. A space past twice its monthly request units answers
-anyone who is not one of its signed-in people with a plain-text 429, and a
+Two answers are not JSON. A visitor who is not signed in and passes the
+per-minute rate for an app's data from one place gets a plain-text 429, and a
 failure of yaks.app itself answers the platform's HTML error page with a 500.
 For a body that is not a JSON error, `client.js` throws the status followed by
 the first 120 characters of the body's text, with any HTML tags removed. A write

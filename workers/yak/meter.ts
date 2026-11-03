@@ -105,8 +105,8 @@ export let requestUnits = (
 // ---- the ceilings (T-32758) ------------------------------------------------
 //
 // At 80% the agent gets one line on the unseen channel (unseen.ts `ceiling`).
-// At the monthly request ceiling, apps.ts refuses serving with 429 (T-37150).
-// This is a soft quota: the hourly analytics reading can lag live traffic.
+// Request units are never a ceiling on visitors: however many come, they are
+// served, and the owner is told when a month's units pass the plan's figure.
 
 let GB = 1024 ** 3
 
@@ -354,24 +354,6 @@ export let trended = (
   return cost ? { spend: kept(trend?.spend as ByDay, cost, now) } : {}
 }
 
-// How many times its monthly request units a space is served before serving
-// pauses for visitors (D-131886): past the allowance its owner is told and
-// visitors keep coming, which is how the next person finds yaks.app; twice it
-// is a ceiling against abuse, not a plan's limit.
-let PAUSED = 2
-
-/** When serving resumes for a space's visitors, if the hourly reading has
- * them paused: twice its monthly request units, until the UTC month turns or
- * the plan changes. Under that, or with no reading, it is null. Management
- * stays outside this, so an owner can still change plans or work on their
- * apps. */
-export let pausedUntil = (space: Space, now = new Date()) => {
-  let limit = ceilings(space.tier, space.slug)
-  return limit && requestUnits(spent(space, now)) >= limit.requests * PAUSED
-    ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-    : null
-}
-
 /** A ceiling a space answers to: what it has used and what it is allowed. */
 export type Gauge = { used: number; limit: number }
 export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited
@@ -473,11 +455,11 @@ export let standingOf = (
 }
 
 // Each ceiling as a person reads it: what it is called, and how much of it.
-// Request units say what happens past the limit, since what happens there
-// reaches visitors, not whoever reads this line (apps.ts).
+// Request units say that visitors are served past it, since a spike is news to
+// the owner, never a reason to stop serving.
 let NAME: Record<Ceiling, string> = {
   apps: 'apps',
-  requests: 'request units (visitors are still served up to twice the limit)',
+  requests: 'request units (visitors are always served)',
   bytes: 'app data',
   files: 'photos and files',
   emails: 'emails',

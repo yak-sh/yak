@@ -126,16 +126,14 @@ The free plan allows five apps, 1 GB of app data, and 100 emails a month. A
 person owns up to five free spaces, and their emails, builds, model use and
 build time are shared by all of them; a space somebody invited you into, or one
 on the Plus plan, does not count toward yours. Plus allows unlimited apps, 10 GB
-of app data, 50 GB of photos and files, and 2,500 emails a month. App serving
-allows 50,000 estimated request units a month on Free and 1,000,000 on the Plus
-plan. An ordinary request uses one unit; incoming WebSocket messages use one
-unit per 20 messages, as Cloudflare bills them. The hourly meter keeps a
-conservative estimate when Cloudflare's analytics has not classified an
-invocation. Past the allowance, visitors are still served and your assistant is
-told; only past twice it does an app answer visitors 429 until the 1st, while
-the space's own people, signed in, are still served. Operations that exceed a
-limit are refused, but existing apps and data are not deleted. Your assistant
-receives a notice when usage reaches 80% of a limit.
+of app data, 50 GB of photos and files, and 2,500 emails a month. Visitors are
+never capped on any plan: an app is served to however many people come. The
+hourly meter estimates each space's request units (an ordinary request uses one
+unit; incoming WebSocket messages use one unit per 20 messages, as Cloudflare
+bills them), and your assistant is told when a month passes 50,000 on Free or
+1,000,000 on the Plus plan. Operations that exceed a limit are refused, but
+existing apps and data are not deleted. Your assistant receives a notice when
+usage reaches 80% of a limit.
 
 Every page an app serves on the free plan wears a small "Made with yaks.app"
 badge in a corner. On a published app it opens the app's own page on yaks.app,

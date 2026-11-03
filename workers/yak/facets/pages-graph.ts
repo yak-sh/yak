@@ -18,14 +18,13 @@
 // app_deploy answers once that first purge has.
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
-import { APP_PARTS, idOf, SPACE_PARTS, spaceOf } from '../directory.ts'
-import { pausedUntil } from '../meter.ts'
+import { APP_PARTS, idOf, SPACE_PARTS } from '../directory.ts'
 import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
 // these: an app's draft, its counters and its gallery listing, and a space's
 // bills and letters. A part added to either row is purged until it is named
-// here. A space's meter is read for its quota below.
+// here.
 let UNSEEN = ['meter', 'gallery', 'screenshot', 'notified', 'stripe', 'fee']
 let DRAFT = ['draft', 'fence']
 // A space's routing: which app answers which path, and whether any does.
@@ -97,9 +96,7 @@ export let owed = async (
     tags.add(appTag(b.entity.eid))
     tags.add(spaceTag(b.entity.eid))
   }
-  let touched = applied.filter((b) =>
-    !b.tombstone && (shows(b) || sets(b.meter, ['requests']))
-  )
+  let touched = applied.filter((b) => !b.tombstone && shows(b))
   let now = new Map(
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
       .map((row) => [row.entity.eid, row]),
@@ -114,13 +111,7 @@ export let owed = async (
       } else if (shows(b) && !lowers(b)) tags.add(appTag(b.entity.eid))
     } else if (row?.space) {
       if (sets(b.space, ['slug']) || has(b, ROUTING)) tags.add(SITE_TAG)
-      // The hourly reading is what pauses a space for its visitors, and a
-      // page kept for a stranger must not outlive that. Said again every hour
-      // while paused, which is one purge an hour for a space nobody is served
-      // in.
-      let over = sets(b.meter, ['requests']) &&
-        !!pausedUntil(spaceOf(row as Parameters<typeof spaceOf>[0]))
-      if (shows(b) || over) tags.add(spaceTag(b.entity.eid))
+      if (shows(b)) tags.add(spaceTag(b.entity.eid))
     }
   }
   return [...tags]

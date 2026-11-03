@@ -43,7 +43,6 @@ import {
   gauged,
   LETTERS,
   level,
-  pausedUntil,
   PLUS,
   pooled,
   refusedSpend,
@@ -346,38 +345,10 @@ test('a space is near a ceiling at 80% and over it at 100%', () => {
   )
 })
 
-test('visitors are served past the allowance and pause only at twice it', () => {
-  let until = (meter: Partial<Meter>, tier: Tier | null = null, now = NOW) =>
-    pausedUntil(space(meter, tier), now)?.toISOString() ?? null
-  let october = '2026-10-01T00:00:00.000Z'
-  for (let tier of [null, 'free', 'plus'] as const) {
-    let limit = tier == 'plus' ? PLUS.requests : FREE.requests
-    for (let requests of [0, limit, limit * 2 - 1]) {
-      assertEquals(until({ requests }, tier), null)
-    }
-    for (let requests of [limit * 2, limit * 3]) {
-      assertEquals(until({ requests }, tier), october)
-      let full = space({ requests }, tier)
-      for (let slug of ['yourname', 'yak']) {
-        assertEquals(pausedUntil({ ...full, slug }, NOW), null)
-      }
-      assertEquals(pausedUntil({ ...full, meter: null }, NOW), null)
-      assertEquals(until({ requests }, tier, new Date('2026-10-01')), null)
-    }
-  }
-  // Twenty WebSocket messages are one unit.
-  assertEquals(until({ ws_messages: FREE.requests * 40 - 20 }), null)
-  assertEquals(until({ ws_messages: FREE.requests * 40 }), october)
-  // A plan change raises the ceiling at once.
-  assertEquals(until({ requests: FREE.requests * 2 }, 'plus'), null)
-  assertEquals(
-    until(
-      { month: '2026-12', requests: FREE.requests * 2 },
-      null,
-      new Date('2026-12-31T23:59:59Z'),
-    ),
-    '2027-01-01T00:00:00.000Z',
-  )
+test('twenty WebSocket messages are one request unit', () => {
+  assertEquals(requestUnits({ requests: 0, ws_messages: 40 }), 2)
+  assertEquals(requestUnits({ requests: 3, ws_messages: 21 }), 5)
+  assertEquals(requestUnits({ requests: 5, ws_hibernated: 2 }), 3)
 })
 
 test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {

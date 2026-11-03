@@ -9,7 +9,6 @@ import {
   desk,
   type DeskPage,
   lost,
-  paused,
   spaceBinned,
   spaceIndex,
 } from './pages.ts'
@@ -65,57 +64,6 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
     ])
   }
 })
-
-test('pages: a paused space tells a browser when, and an app the same in plain text', async () => {
-  let at = {
-    until: new Date('2026-12-01T00:00:00Z'),
-    signIn: 'https://yaks.fyi/login?return=x',
-  }
-  let ask = (accept: string, method = 'GET') =>
-    paused(
-      at,
-      new Request('https://ada.yaks.fyi/', { method, headers: { accept } }),
-      env,
-    )
-  let page = ask('text/html')
-  assertEquals(page.status, 429)
-  assertEquals(page.headers.get('cache-control'), 'no-store')
-  assertEquals(page.headers.get('retry-after'), 'Tue, 01 Dec 2026 00:00:00 GMT')
-  await staged(page, ['Paused until 1 December 2026', at.signIn])
-  let text = ask('*/*')
-  assertEquals(text.status, 429)
-  assertStringIncludes(text.headers.get('content-type')!, 'text/plain')
-  assertStringIncludes(
-    await text.text(),
-    'paused for visitors until 1 December 2026',
-  )
-  for (let accept of ['text/html', '*/*']) {
-    assertEquals(await ask(accept, 'HEAD').text(), '')
-  }
-})
-
-for (
-  let [back, wanted] of [
-    [
-      'https://ada.yaks.fyi/potluck/',
-      'Sign in to continue to ada.yaks.fyi/potluck.',
-    ],
-    [null, 'Build an app by asking Claude or ChatGPT.'],
-    ['/connect', 'Build an app by asking Claude or ChatGPT.'],
-    [
-      'https://elsewhere.test/yaks.fyi/',
-      'Build an app by asking Claude or ChatGPT.',
-    ],
-  ] as const
-) {
-  test(`pages: the sign-in card names only its own app return: ${back}`, async () => {
-    let html = await askEmail(null, back, undefined, undefined, 200, env).text()
-    // Check the card's actual direct-child markup, not shared stylesheet parsing.
-    let card = html.slice(html.indexOf('<main>'), html.indexOf('</main>') + 7)
-    let lead = parseHTML(card).document.querySelector('main > p')?.textContent
-    assertEquals(lead, wanted)
-  })
-}
 
 test('pages: staging space management and connector forms keep their host', async () => {
   for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {

@@ -251,7 +251,7 @@ let allowance = (tier: 'free' | 'plus') => {
   let limits = tier == 'plus' ? PLUS : FREE
   return {
     apps: limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
-    requests: `${count(limits.requests)} request units a month`,
+    visitors: 'Unlimited visitors',
     data: `${size(limits.bytes)} of app data`,
     emails: `${count(LETTERS[tier])} emails a month`,
     ...(FILES[tier] == null
@@ -292,7 +292,7 @@ test('the plan cards and Plus offer carry the meter allowances', () => {
   )
   let offer = app.offers.find((o: { name: string }) => o.name == 'Plus')
   for (let text of Object.values(allowances.plus)) {
-    assertStringIncludes(offer.description, text)
+    assertStringIncludes(offer.description.toLowerCase(), text.toLowerCase())
   }
 })
 
@@ -789,7 +789,7 @@ test('ChatGPT gets a downloadable icon within its upload limit', async () => {
 
 test('the signed-in plan copy derives both tiers from the meter', async () => {
   for (let plus of [false, true]) {
-    let { apps, requests, data } = allowances[plus ? 'plus' : 'free']
+    let { apps, data } = allowances[plus ? 'plus' : 'free']
     let html = flat(
       await connect({
         slug: 'dana',
@@ -798,7 +798,7 @@ test('the signed-in plan copy derives both tiers from the meter', async () => {
     )
     assertStringIncludes(
       html,
-      `${apps}, ${requests}, ${data}`,
+      `${apps}, unlimited visitors, ${data}`,
     )
   }
 })

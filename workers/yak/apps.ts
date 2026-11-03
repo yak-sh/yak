@@ -103,7 +103,6 @@ import {
   editor,
   invitedTo,
   nothingHere,
-  paused,
   sentence,
   spaceBinned,
   spaceIndex,
@@ -176,7 +175,7 @@ import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
-import { free, pausedUntil, size } from './meter.ts'
+import { free, size } from './meter.ts'
 import { scheduleBy } from './used.ts'
 import { sha256 } from './versions.ts'
 import { DAYS, NOT_ON, seen, stats, statsFor, viewed } from './views.ts'
@@ -3145,22 +3144,6 @@ let served = async (
     return posts
       ? posting(env, space, req, who)
       : joining(env, space.eid, req, who)
-  }
-  // Before home routing, speculative file reads, dispatch and app APIs alike.
-  // A forged worker grant must not bypass the space's pause.
-  //
-  // Visitors keep being served past a space's monthly request units while
-  // its owner is told (D-131886); only past twice them does serving pause,
-  // against abuse. What strangers must not do by it is lock the space's own
-  // people out of their apps (T-37884): someone signed in with a seat here is
-  // still served. Their session cookie is the only thing asked, never a
-  // grant, and only once the space is paused.
-  let until = pausedUntil(space)
-  if (until) {
-    let who = await whoIs(req, env.SESSION_SECRET, seatOf, space!.eid)
-    if (!who.role) {
-      return paused({ until, signIn: signInAt(url.href, env) }, req, env)
-    }
   }
   // The app at the address and the space's front page, in one read: every
   // rung below that needs the front page (rung 1½, rung 3) has it already.
