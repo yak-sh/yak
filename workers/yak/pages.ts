@@ -623,6 +623,9 @@ export type DeskPage = {
   /** what was typed into the invitation form, when the invitation was
    * refused and the page is drawn again */
   invite?: { email: string; app: string; role: string; note: string }
+  /** what was typed into the settings form, when a change was refused and
+   * the page is drawn again */
+  typed?: { name: string; space: string; home: string }
   /** the apps of other people's spaces this person may open, each with the
    * slug of the space it lives in */
   shared?: (Listed & { space: string })[]
@@ -770,52 +773,58 @@ export let library = (at: DeskPage, env: Host) => {
   }${copying}`
 }
 
+// Settings: one form and one Save button for everything on the page, the
+// person's own name apart from the space's address and homepage, so it is
+// plain which of the two each field changes. A refusal draws the page again
+// with what was typed still in the fields (`at.typed`).
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
-  let to = managePath('settings', at.pick)
-  return `<section class="Card">${heading('Profile')}
-<form class="Form" method="post" action="${to}">${
+  let was = at.typed ?? {
+    name: at.name ?? '',
+    space: at.space,
+    home: home?.slug ?? '',
+  }
+  let host = esc(spaceHost(env, at.space))
+  return `<form class="Form" method="post" action="${
+    managePath('settings', at.pick)
+  }"><section class="Card">${heading('Your account')}${
     labeled(
       'your-name',
       'Your name',
-      `<div class="Form_Line"><input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
-        esc(at.name ?? '')
-      }"><button class="Button" type="submit">Save name</button></div>`,
+      `<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
+        esc(was.name)
+      }">`,
+      'Yours in every space, not only this one.',
     )
-  }</form></section>
-<section class="Card">${heading('App address')}
-<form class="Form" method="post" action="${to}">${
+  }</section>
+<section class="Card">${heading(`This space: ${host}`)}<div class="Form">${
     labeled(
       'your-address',
-      'Your address',
-      `<div class="Form_Line"><span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
-        esc(at.space)
-      }"><span>.${
-        apex(env)
-      }</span></span><button class="Button" type="submit">Save address</button></div>`,
+      'Address',
+      `<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
+        esc(was.space)
+      }"><span>.${apex(env)}</span></span>`,
       MOVES,
     )
-  }</form></section>
-<section class="Card">${heading('Homepage')}${
+  }${
     at.apps.length
-      ? `<form class="Form" method="post" action="${to}">${
-        labeled(
-          'your-home',
-          `What ${esc(spaceHost(env, at.space))} opens`,
-          `<div class="Form_Line"><select class="Field" id="your-home" name="home">${
-            option('', 'Your app library', !home)
-          }${
-            at.apps.map((a) =>
-              option(a.slug, esc(a.title || a.slug), a.slug == home?.slug)
-            ).join('')
-          }</select><button class="Button" type="submit">Save homepage</button></div>`,
-          `Manage your apps anytime at <a href="${url(env, MANAGE)}">${
-            apex(env)
-          }${MANAGE}</a>.`,
-        )
-      }</form>`
+      ? labeled(
+        'your-home',
+        `What ${host} opens`,
+        `<select class="Field" id="your-home" name="home">${
+          option('', 'Your app library', !was.home)
+        }${
+          at.apps.map((a) =>
+            option(a.slug, esc(a.title || a.slug), a.slug == was.home)
+          ).join('')
+        }</select>`,
+        `Manage your apps anytime at <a href="${url(env, MANAGE)}">${
+          apex(env)
+        }${MANAGE}</a>.`,
+      )
       : '<p>Your address opens your app library.</p>'
-  }</section>`
+  }</div></section>
+<div class="Form_Actions"><button class="Button" type="submit">Save changes</button></div></form>`
 }
 
 let selling = (at: DeskPage, env: Host) => {

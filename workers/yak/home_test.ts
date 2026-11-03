@@ -50,18 +50,19 @@ test('the app library has navigation, not account forms', async () => {
   assert(!page.includes('src="/api/build.js"'), page)
 })
 
-test('profile and address save independently in settings', async () => {
+test('settings save the name and the space in one form', async () => {
   let page = await block({ view: 'settings' })
-  let forms = page.match(/<form[\s\S]*?<\/form>/g) ?? []
-  assertEquals(forms.length, 2)
-  assert(forms[0] && forms[1])
-  assert(forms[0].includes('name="name"'), forms[0])
-  assert(!forms[0].includes('name="space"'), forms[0])
-  assert(forms[1].includes('name="space"'), forms[1])
-  assert(!forms[1].includes('name="name"'), forms[1])
-  for (let form of forms) {
-    assertStringIncludes(form, `action="${managePath('settings')}"`)
-  }
+  let { document } = parseHTML(page)
+  let forms = document.querySelectorAll('form')
+  assertEquals(forms.length, 1)
+  let [form] = forms
+  assertEquals(form.getAttribute('action'), managePath('settings'))
+  assertEquals(form.querySelectorAll('[type=submit]').length, 1)
+  let card = (field: string) =>
+    form.querySelector(`[name=${field}]`)?.closest('section')
+      ?.querySelector('h2')?.textContent
+  assertEquals(card('name'), 'Your account')
+  assertEquals(card('space'), 'This space: dana.yaks.app')
 })
 
 test('new app exposes separate build and upload forms below the agent route', async () => {

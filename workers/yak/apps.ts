@@ -2532,7 +2532,7 @@ let desk = async (
   who: Owner,
   view: ManageView,
   said?: { say: string; no: boolean },
-  invite?: DeskPage['invite'],
+  typed?: Pick<DeskPage, 'invite' | 'typed'>,
 ): Promise<Response> => {
   let owner = who.person
   let q = new URL(req.url).searchParams
@@ -2636,7 +2636,7 @@ let desk = async (
     shared: theirs,
     people: people?.[0],
     connections,
-    invite,
+    ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
   }, env)
@@ -2788,7 +2788,9 @@ let saved = async (
       ...asked.role ? { role: asked.role } : {},
       ...asked.note ? { note: asked.note } : {},
     })
-    if (said) return desk(req, env, dir, space, who, 'people', said, asked)
+    if (said) {
+      return desk(req, env, dir, space, who, 'people', said, { invite: asked })
+    }
     let to = sentFrom(req, env)
     to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
     return redirect(to.href, 303)
@@ -2805,24 +2807,6 @@ let saved = async (
     if (said) return desk(req, env, dir, space, who, 'people', said)
     let to = sentFrom(req, env)
     to.searchParams.set('removed', '1')
-    return redirect(to.href, 303)
-  }
-  // Settings' homepage: app_set's `home`, as the assistant asks it. The
-  // library is no app at all, so choosing it takes the word off the app that
-  // has it.
-  if (form.has('home')) {
-    let want = String(form.get('home') ?? '').trim()
-    let now = await dir.home(space)
-    let { said } = want == (now?.slug ?? '')
-      ? {}
-      : await pressed(env, dir, who, 'app_set', {
-        space: space.slug,
-        app: want || now!.slug,
-        home: !!want,
-      })
-    if (said) return desk(req, env, dir, space, who, 'settings', said)
-    let to = sentFrom(req, env)
-    to.searchParams.set('saved', '1')
     return redirect(to.href, 303)
   }
   if (form.get('billing') == 'checkout') {
@@ -2865,16 +2849,29 @@ let saved = async (
       })
     }
   }
-  let name = String(form.get('name') ?? '').trim().slice(0, 60)
-  let want = String(form.get('space') ?? '').trim().toLowerCase()
-  let moved = want && want != space.slug
-    ? await (await identity()).choose(env, who.person, want, space)
-    : null
-  if (moved?.error) {
-    return desk(req, env, dir, space, who, 'settings', {
-      say: moved.error,
-      no: true,
-    })
+  // Settings: the person's name, the space's homepage and its address, one
+  // form and one Save. A refusal draws the page again with everything typed
+  // still in the fields, and the address goes last because moving renames the
+  // space the others are written against.
+  let typed = {
+    name: String(form.get('name') ?? '').trim().slice(0, 60),
+    space: String(form.get('space') ?? '').trim().toLowerCase(),
+    home: String(form.get('home') ?? '').trim(),
+  }
+  let refused = (said: { say: string; no: boolean }) =>
+    desk(req, env, dir, space, who, 'settings', said, { typed })
+  // The homepage is app_set's `home`, as the assistant asks it. The library is
+  // no app at all, so choosing it takes the word off the app that has it.
+  if (form.has('home')) {
+    let now = await dir.home(space)
+    let { said } = typed.home == (now?.slug ?? '')
+      ? {}
+      : await pressed(env, dir, who, 'app_set', {
+        space: space.slug,
+        app: typed.home || now!.slug,
+        home: !!typed.home,
+      })
+    if (said) return refused(said)
   }
   // Cleared, the front of their address comes back — a person always has a
   // title, because a member row names them by it and a titleless one reads
@@ -2885,11 +2882,16 @@ let saved = async (
       entities: [{
         entity: { eid: who.person },
         doc: {
-          title: name || nameOf(null, await dir.emailAt(who.person) ?? ''),
+          title: typed.name ||
+            nameOf(null, await dir.emailAt(who.person) ?? ''),
         },
       }],
     }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
   }
+  let moved = typed.space && typed.space != space.slug
+    ? await (await identity()).choose(env, who.person, typed.space, space)
+    : null
+  if (moved?.error) return refused({ say: moved.error, no: true })
   // A page that named the space by its old address names it by its new one.
   let to = sentFrom(req, env)
   if (moved?.slug && to.searchParams.has('space')) {

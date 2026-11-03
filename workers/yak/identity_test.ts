@@ -1193,15 +1193,17 @@ test('account settings save the name and address', async () => {
     assertEquals((quiet.doc as { title: string }).title, slug)
 
     // A taken address is refused in the sentence `/connect` says, and the page
-    // comes back around it — nothing has moved.
+    // comes back around it with everything typed still in the one form —
+    // nothing has moved.
     let theirs = await signIn(k, `rex-${uniq()}@yaks.app`)
-    let taken = await post(
-      slug,
-      { space: theirs.email.split('@')[0] },
-      cookie,
-    )
+    let other = theirs.email.split('@')[0]
+    let taken = await post(slug, { name: 'Dana Q', space: other }, cookie)
     assertEquals(taken.status, 400)
-    assertMatch(await taken.text(), /is taken/)
+    let again = await taken.text()
+    assertMatch(again, /is taken/)
+    assertMatch(again, new RegExp(`name="space"[^>]*value="${other}"`))
+    assertMatch(again, /name="name"[^>]*value="Dana Q"/)
+    assertEquals(again.match(/type="submit">Save/g)?.length, 1)
 
     // A badly shaped one says what an address is.
     let bad = await post(slug, { space: 'Not An Address' }, cookie)
