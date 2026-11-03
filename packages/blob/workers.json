@@ -1,5 +1,5 @@
 {
-  "_": "The Cloudflare gate: `objectBlobs`' structural Bucket must accept the runtime's own R2Bucket. `deno check --config packages/blob/workers.json packages/blob/conform.ts` is the check; it is part of `deno task check`.",
+  "_": "The Cloudflare gate: `objectBlobs`' structural Bucket must accept the runtime's own R2Bucket. `deno task check:types` checks conform.ts in the Workers program on any change it reaches.",
   "compilerOptions": {
     "lib": ["esnext", "dom"],
     "strict": true

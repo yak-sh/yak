@@ -15,8 +15,10 @@
 //   name, laid over the checkout through `rootDirs`;
 // - a module Deno leaves to its host (`cloudflare:workers`) is declared with
 //   every import `any`, as Deno types a dependency it cannot load, never as the
-//   file a scope maps it to for some importer;
-// - Deno's globals are `deno types`, written beside.
+//   file a scope maps it to for some importer, unless the platform's types
+//   declare those modules (the Workers types declare `cloudflare:workers`);
+// - a `/// <reference types>` names a package of that `node_modules`;
+// - the platform's globals (Deno's are `deno types`) are written beside.
 //
 // TODO(D-135458 step 3): once packages resolve through package.json, tsc reads
 // them itself and this goes.
@@ -174,7 +176,9 @@ export let npmFiles = (
 /**
  * The project at `dir` checking `roots`, files under `checkout`: Deno's
  * resolution of their graph (`info`), the manifest of each npm package by id,
- * and the compiler options Deno is configured with.
+ * the compiler options Deno is configured with, the files of `dir`
+ * declaring the platform's globals, and whether those declare the modules
+ * Deno leaves to its host.
  */
 export let project = (
   info: Info,
@@ -183,6 +187,8 @@ export let project = (
   roots: string[],
   manifests: Record<string, Record<string, unknown>>,
   options: Record<string, unknown> = {},
+  globals: string[] = [],
+  hosted = false,
 ): Project => {
   let base = `file://${checkout}/`
   let modules = new Map(info.modules.map((m) => [m.specifier, m]))
@@ -219,7 +225,7 @@ export let project = (
   for (let m of info.modules) {
     let remote = /^https?:/.test(m.specifier)
     if (remote && m.local) links[within(m.specifier)] = m.local
-    if (m.kind == 'external') external.add(m.specifier)
+    if (m.kind == 'external' && !hosted) external.add(m.specifier)
     let script = /^(TypeScript|JavaScript|TSX|JSX)$/.test(m.mediaType ?? '') &&
       m.specifier.startsWith(base) && !/\.[mc]?[jt]sx?$/.test(m.specifier)
     if (script) {
@@ -280,12 +286,12 @@ export let project = (
         strict: true,
         noImplicitOverride: true,
         types: node ? ['node'] : [],
-        typeRoots: ['./node_modules/@types'],
+        typeRoots: ['./node_modules/@types', './node_modules'],
         rootDirs: [relative(dir, checkout), './overlay'],
         paths,
       },
       files: [
-        './deno.d.ts',
+        ...globals.map((g) => `./${g}`),
         './externals.d.ts',
         ...roots.map((r) => relative(dir, `${checkout}/${r}`)),
       ],

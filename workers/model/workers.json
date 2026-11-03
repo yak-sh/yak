@@ -1,5 +1,5 @@
 {
-  "_": "The runtime gate for the executor Workflow and service entrypoints. deno task check:workers includes conform.ts with Cloudflare's own types and keeps those globals out of the Deno program.",
+  "_": "The runtime gate for the executor Workflow and service entrypoints. `deno task check:types` checks conform.ts in the Workers program, with Cloudflare's own types, on any change it reaches, and keeps those globals out of the Deno program.",
   "compilerOptions": {
     "lib": ["esnext", "dom"],
     "strict": true

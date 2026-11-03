@@ -1,6 +1,7 @@
 // One TypeScript program per platform, not one per package. Keep each package's
 // standalone config as the source of truth; resolve its relative import map
-// before merging. The browser program may use any declared web-platform lib,
+// before merging. `deno task check:browser` checks the browser program here;
+// the Workers program is check-types.ts's, beside Deno's. The browser program may use any declared web-platform lib,
 // but never gains Deno, Node or Workers globals from the root configuration.
 //
 // What the browser program checks is a package's browser-facing exports, not
@@ -117,19 +118,6 @@ export async function platformConfig(root: URL, platform: string) {
 }
 
 if (import.meta.main) {
-  // Workers' program reaches the kernel's deployment catalog. Prepare that
-  // input here too: this check runs alone and beside the other checks.
-  if (Deno.args[0] == 'workers') {
-    let status = await new Deno.Command('deno', {
-      args: [
-        'run',
-        '--no-lock',
-        '-A',
-        new URL('./compiler-packages.ts', import.meta.url).pathname,
-      ],
-    }).spawn().status
-    if (!status.success) throw new Error('Compiler catalog generation failed')
-  }
   let { config, entries } = await platformConfig(
     new URL('../', import.meta.url),
     Deno.args[0],

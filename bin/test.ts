@@ -651,5 +651,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let left = files.length - run.length - beyond
   let measured = await measure(suite, whole)
   let code = await say(b, { ...measured, left, beyond }, Deno.args)
+  // The tests' line closes on their own verdict; a failed source check says
+  // its own last, so the run's last line is the run's verdict.
+  if (!await ok) console.error('FAILED | the source checks above failed')
   Deno.exit(await ok ? code : 1)
 }

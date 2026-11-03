@@ -6,8 +6,7 @@
 // is an assignment: if the runtime's types stop satisfying the class, the check
 // fails here rather than `wrangler deploy` failing later.
 //
-// It is checked on its own (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as globals — the
+// `deno task check:types` checks it in the Workers program, apart from Deno's, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
 // friends for every other file in it. @yaks/durable-object and @yaks/workerd

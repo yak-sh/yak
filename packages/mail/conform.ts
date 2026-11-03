@@ -6,8 +6,7 @@
 // runtime's types stop satisfying ours, the type check fails here rather than
 // a letter failing to arrive in production.
 //
-// It is checked on its own (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as globals — the
+// `deno task check:types` checks it in the Workers program, apart from Deno's, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `Headers` and friends
 // for every other file in it. This one file includes them; the rest of the

@@ -51,30 +51,6 @@
         "!workers/yak/.content.gen.ts"
       ]
     },
-    "check:workers": {
-      "command": "deno run --allow-read --allow-write --allow-run=deno bin/check-platform.ts workers",
-      "files": [
-        "deno.json",
-        "deno.lock",
-        "bin/check-platform.ts",
-        "bin/compiler-packages.ts",
-        "packages/**/*.ts",
-        "packages/**/*.tsx",
-        "packages/**/*.js",
-        "packages/**/*.mjs",
-        "packages/**/*.json",
-        "packages/**/*.jsonc",
-        "workers/**/*.ts",
-        "workers/**/*.tsx",
-        "workers/**/*.js",
-        "workers/**/*.mjs",
-        "workers/**/*.json",
-        "workers/**/*.jsonc",
-        "!**/node_modules/**",
-        "!**/.wrangler/**",
-        "!workers/yak/.content.gen.ts"
-      ]
-    },
     "check:content": "deno task content --check",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
     "dev": "deno run -A --unstable-no-legacy-abort --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
@@ -101,7 +77,6 @@
         "check:raycast",
         "check:publish",
         "check:browser",
-        "check:workers",
         "check:content"
       ]
     }

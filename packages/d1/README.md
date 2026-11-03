@@ -221,11 +221,12 @@ gather are not one read snapshot.
 by `prepare` and accepted by `batch`; this preserves compatibility with the
 binding's own statement type.
 
-`conform.ts` checks these interfaces against `@cloudflare/workers-types` in an
-isolated type-check, keeping Workers globals out of other packages:
+`conform.ts` checks these interfaces against `@cloudflare/workers-types` in the
+Workers program of `deno task check:types`, keeping Workers globals out of other
+packages:
 
 ```sh
-deno check --config packages/d1/workers.json packages/d1/conform.ts
+deno task check:types packages/d1/conform.ts
 ```
 
 ## Compatibility

@@ -1,4 +1,4 @@
-/// <reference types="npm:@cloudflare/workers-types@^4" />
+/// <reference types="@cloudflare/workers-types/index.d.ts" />
 // The Cloudflare type check (not published — see deno.json). Every Workers type
 // this package uses is declared structurally, so that the published source
 // imports nothing and `deno check` passes with no Cloudflare package installed.
@@ -10,8 +10,7 @@
 // Nothing here runs. Each line is an assignment the type-checker either accepts
 // or rejects, and that is the whole assertion.
 //
-// It is checked on its own (`deno task check:workers`) and excluded from the
-// repo-wide check, because those runtime types are global: with them in scope,
+// `deno task check:types` checks it in the Workers program, apart from Deno's, because those runtime types are global: with them in scope,
 // `Response.json()` returns `unknown` and every other file in the repo would be
 // type-checked against a Worker it does not run in.
 

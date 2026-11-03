@@ -270,11 +270,12 @@ with the embedded SQLite adapter using the same sequence of graph operations.
 The adapter targets Cloudflare Durable Objects with SQLite storage and
 hibernatable sockets. Its published code imports no Deno or Node globals and
 uses structural types instead of importing Cloudflare runtime code. `conform.ts`
-checks compatibility with `@cloudflare/workers-types` separately to keep Workers
-globals out of unrelated type-checks:
+checks compatibility with `@cloudflare/workers-types` in the Workers program of
+`deno task check:types`, apart from Deno's, to keep Workers globals out of
+unrelated type-checks:
 
 ```sh
-deno check --config packages/durable-object/workers.json packages/durable-object/conform.ts
+deno task check:types packages/durable-object/conform.ts
 ```
 
 ## Related packages

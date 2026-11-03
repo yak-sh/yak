@@ -7,6 +7,13 @@
 // runs `--all`, every module, after the push. Raycast is a Node/React host
 // with its own tsconfig, checked by check:raycast, so it is not among DIRS.
 //
+// Two platforms, two programs, checked at once. Deno's holds the modules with
+// Deno's globals. The Workers program holds each `conform.ts` a `workers.json`
+// lies beside, under Cloudflare's own Workers types (check-platform.ts merges
+// those configs): what a change reaches from there, it checks as the runtime
+// types it, `cloudflare:workers` included, which Deno's program can only call
+// `any`. Those types are globals, so they never share a program with Deno's.
+//
 // tsc checks a fresh worktree's Worker change in seconds where `deno check`
 // took 17 s, needs no build info from an earlier run and keeps no lock. Each
 // run's project lies in `.types/` with its process id; the links into Deno's
@@ -16,7 +23,8 @@ import config from '../deno.json' with { type: 'json' }
 import { survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git } from './test-changes.ts'
-import { type Info, type Project, project } from './tsconfig.ts'
+import { type Info, type Project, project, relative } from './tsconfig.ts'
+import { platformConfig } from './check-platform.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -52,10 +60,61 @@ let every = async () =>
   (await git(['ls-files', '-co', '--exclude-standard', ...DIRS]))
     .split('\n').filter(checked)
 
-/** The modules a change reaches: those changed and their importers. */
-let reached = async (changed: string[]) => {
+/** A platform's program: where its project lies, the Deno configuration
+ * resolving it (the checkout's when none), its compiler options, its globals
+ * by file name, whether its types declare the modules Deno leaves to the host,
+ * and whether its roots' doc comment examples are checked. */
+type Platform = {
+  dir: string
+  config?: string
+  options: Record<string, unknown>
+  globals: () => Promise<Record<string, string>>
+  hosted: boolean
+  examples: boolean
+}
+
+let deno = (): Platform => {
+  let { lib, ...options } = config.compilerOptions
+  return {
+    dir: DIR,
+    options: {
+      ...options,
+      lib: [...lib.filter((l) => !l.startsWith('deno.')), 'esnext'],
+    },
+    globals: async () => ({ 'deno.d.ts': (await output(['types'])).out }),
+    hosted: false,
+    examples: true,
+  }
+}
+
+/** The Workers program, and the modules it checks: its globals arrive by
+ * each entry's `/// <reference types>`. */
+let workers = async () => {
+  let { config, entries } = await platformConfig(
+    new URL(`file://${CHECKOUT}/`),
+    'workers',
+  )
+  let dir = `${DIR}/workers`
+  put(`${dir}/config.json`, JSON.stringify(config))
+  let platform: Platform = {
+    dir,
+    config: `${dir}/config.json`,
+    options: config.compilerOptions,
+    globals: () => Promise.resolve({}),
+    hosted: true,
+    examples: false,
+  }
+  return {
+    platform,
+    entries: entries.map((e) => e.slice(`file://${CHECKOUT}/`.length)),
+  }
+}
+
+/** The modules a change reaches: those changed and their importers, and the
+ * Workers entries reaching one. */
+let reached = async (changed: string[], hosted: string[]) => {
   let all = await every()
-  let s = await survey(all)
+  let s = await survey([...all, ...hosted])
   if (!s) {
     throw new Error(
       'Cannot say what the change reaches: dependency graph unavailable. ' +
@@ -64,10 +123,11 @@ let reached = async (changed: string[]) => {
   }
   let far = s.distance(changed)
   let roots = all.filter((f) => far(f) <= 1)
+  let entries = hosted.filter((e) => s.reaches([e], changed))
   let made = Object.entries(MADE)
-    .filter(([, out]) => s.reaches(roots, out))
+    .filter(([, out]) => s.reaches([...roots, ...entries], out))
     .map(([generator]) => generator)
-  return { roots, made }
+  return { roots, entries, made }
 }
 
 /// beside('a/b.ts', 3, 'tsx') -> `a/.b.ts.t3.${Deno.pid}.example.tsx`
@@ -93,6 +153,7 @@ export let paged = (path: string) =>
 /// reported("b.ts(1,1): error TS2726: Cannot find lib definition for 'deno.ns'.\n") -> []
 /// reported("b.ts(1,1): error TS7016: Could not find a declaration file for module 'x'. '/c/.types/node_modules/x/i.js' implicitly has an 'any' type.") -> []
 /// reported('a/.b.ts.t3.42.example.ts(4,1): error TS2: x\n') -> ['a/b.ts(4,1): error TS2: x']
+/// reported('.types/workers/node_modules/x/i.d.ts(1,1): error TS2: x\n') -> []
 /**
  * The diagnostics tsc printed (`--pretty false`) that are the checkout's: not
  * those in Deno's modules or packages, which Deno does not report either, and
@@ -102,17 +163,16 @@ export let paged = (path: string) =>
 export let reported = (output: string) =>
   output.split(/\n(?=\S)/).map((d) => d.trimEnd()).filter((d) =>
     /error TS\d+/.test(d) &&
-    !/^(\.types\/(jsr|node_modules)\/|\.types\/deno\.d\.ts|\.\.\/|\/)/.test(
-      d,
-    ) &&
+    !/^(\.types\/([^/]+\/)?(jsr|node_modules)\/|\.types\/deno\.d\.ts|\.\.\/|\/)/
+      .test(d) &&
     !/error TS2726: Cannot find lib definition for 'deno\./.test(d) &&
-    !/error TS7016: .*\/\.types\/node_modules\//.test(d)
+    !/error TS7016: .*\/\.types\/([^/]+\/)?node_modules\//.test(d)
   ).map((d) => d.replace(/^[^(]+/, paged))
 
 /** Runs `deno` with these arguments, and says whether it succeeded. */
 export type Run = (args: string[]) => Promise<boolean>
 
-let deno: Run = async (args) =>
+let spawn: Run = async (args) =>
   (await new Deno.Command(Deno.execPath(), { args }).spawn().status).success
 
 let output = async (args: string[]) => {
@@ -176,12 +236,12 @@ let there = (path: string) => {
   }
 }
 
-/** Lays a project out under DIR. A package Deno never downloaded (another
+/** Lays a project out under `dir`. A package Deno never downloaded (another
  * platform's build) is left out. */
-let lay = (p: Project) => {
+let lay = (p: Project, dir: string) => {
   for (let [path, from] of Object.entries(p.spread).sort()) {
     if (!there(from)) continue
-    let at = `${DIR}/${path}`
+    let at = `${dir}/${path}`
     try {
       if (Deno.lstatSync(at).isSymlink) Deno.removeSync(at)
     } catch { /* not there yet */ }
@@ -191,9 +251,9 @@ let lay = (p: Project) => {
     }
   }
   for (let [path, target] of Object.entries(p.links)) {
-    link(`${DIR}/${path}`, target)
+    link(`${dir}/${path}`, target)
   }
-  for (let [path, text] of Object.entries(p.files)) put(`${DIR}/${path}`, text)
+  for (let [path, text] of Object.entries(p.files)) put(`${dir}/${path}`, text)
 }
 
 let manifest = (path: string) => {
@@ -204,21 +264,27 @@ let manifest = (path: string) => {
   }
 }
 
-/** Check the types of `roots` and their doc comment examples, after making
- * what they import. */
-let check = async (roots: string[], made: string[], run: Run) => {
-  if (
-    !(await Promise.all(made.map((g) => run(['run', '--no-lock', '-A', g]))))
-      .every(Boolean)
-  ) return false
-  let docs = await examples(roots)
-  let graph = `${DIR}/graph.${Deno.pid}.ts`
-  let tsconfig = `${DIR}/tsconfig.${Deno.pid}.json`
+/** Check the types of `roots` in a platform's program, and of their doc
+ * comment examples where it checks those. */
+let program = async (on: Platform, roots: string[]) => {
+  let docs = on.examples ? await examples(roots) : []
+  let graph = `${on.dir}/graph.${Deno.pid}.ts`
+  let tsconfig = `${on.dir}/tsconfig.${Deno.pid}.json`
   try {
-    put(graph, [...roots, ...docs].map((r) => `import '../${r}'\n`).join(''))
-    let [info, types] = await Promise.all([
-      output(['info', '--json', graph]),
-      output(['types']),
+    put(
+      graph,
+      [...roots, ...docs]
+        .map((r) => `import '${relative(on.dir, `${CHECKOUT}/${r}`)}'\n`)
+        .join(''),
+    )
+    let [info, globals] = await Promise.all([
+      output([
+        'info',
+        '--json',
+        ...on.config ? ['--no-lock', '--config', on.config] : [],
+        graph,
+      ]),
+      on.globals(),
     ])
     if (!info.success) throw new Error(info.err)
     let graphed: Info = JSON.parse(info.out)
@@ -226,13 +292,20 @@ let check = async (roots: string[], made: string[], run: Run) => {
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),
     )
-    let { lib, ...options } = config.compilerOptions
-    let p = project(graphed, CHECKOUT, DIR, [...roots, ...docs], manifests, {
-      ...options,
-      lib: [...lib.filter((l) => !l.startsWith('deno.')), 'esnext'],
-    })
-    lay(p)
-    put(`${DIR}/deno.d.ts`, types.out)
+    let p = project(
+      graphed,
+      CHECKOUT,
+      on.dir,
+      [...roots, ...docs],
+      manifests,
+      on.options,
+      Object.keys(globals),
+      on.hosted,
+    )
+    lay(p, on.dir)
+    for (let [name, text] of Object.entries(globals)) {
+      put(`${on.dir}/${name}`, text)
+    }
     put(tsconfig, JSON.stringify(p.config, null, 1))
     let tsc = await output([
       'run',
@@ -256,18 +329,45 @@ let check = async (roots: string[], made: string[], run: Run) => {
   }
 }
 
+/** Check the types of `roots` in Deno's program and of `entries` in the
+ * Workers program, after making what they import. */
+let check = async (
+  roots: string[],
+  entries: string[],
+  made: string[],
+  run: Run,
+) => {
+  let ok = await Promise.all(
+    made.map((g) => run(['run', '--no-lock', '-A', g])),
+  )
+  if (!ok.every(Boolean)) return false
+  let hosted = entries.length ? (await workers()).platform : undefined
+  return (await Promise.all([
+    roots.length ? program(deno(), roots) : true,
+    hosted ? program(hosted, entries) : true,
+  ])).every(Boolean)
+}
+
 /** Check the types of the modules the `changed` paths reach. */
-export let types = async (changed: string[], run: Run = deno) => {
-  if (!changed.some(checked)) return true
-  let { roots, made } = await reached(changed)
-  return !roots.length || await check(roots, made, run)
+export let types = async (changed: string[], run: Run = spawn) => {
+  let { entries: hosted } = await workers()
+  if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
+  let { roots, entries, made } = await reached(changed, hosted)
+  return !roots.length && !entries.length ||
+    await check(roots, entries, made, run)
 }
 
 if (import.meta.main) {
   let all = Deno.args.includes('--all')
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
+  let { entries } = await workers()
   let ok = all || paths.length
-    ? await check(all ? await every() : paths, Object.keys(MADE), deno)
+    ? await check(
+      all ? await every() : paths.filter((p) => !entries.includes(p)),
+      all ? entries : paths.filter((p) => entries.includes(p)),
+      Object.keys(MADE),
+      spawn,
+    )
     : await types(await changes())
   if (!ok) Deno.exit(1)
 }

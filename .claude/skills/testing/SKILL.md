@@ -130,7 +130,9 @@ package). Beside the tests it checks the types of source and doc comments the
 change reaches, each changed module and each importing one, as
 `deno task check:types` does alone: TypeScript's native compiler (tsgo) checks
 them in the project Deno's resolution describes, in seconds where the whole
-repository takes about fifteen. Tests and examples run untyped, so a type error fails the run there.
+repository takes about fifteen. Each `conform.ts` beside a `workers.json` that
+reaches the change is checked at once in a second program, under Cloudflare's
+Workers types, where `cloudflare:workers` is typed. Tests and examples run untyped, so a type error fails the run there.
 Main's CI checks every module after the push (`deno task check:types --all`). Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.
