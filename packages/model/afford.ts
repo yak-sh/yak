@@ -1,8 +1,56 @@
 // A caller supplies an upper bound on every input token the provider may bill,
 // including retained history and provider framing. Estimates are not bounds.
+import type { Request } from './mod.ts'
 import { type Price, type Usage, weigh } from './vocab.ts'
 
 export type Affordable = { tokens: number; dollars: number }
+
+/** Tokens a provider may add around a prompt: role markers, a chat template's
+ * own system text, tool framing. */
+export let FRAMING = 1024
+
+let media = new Set([
+  'image',
+  'image_url',
+  'input_image',
+  'audio',
+  'input_audio',
+  'video',
+])
+let textual = (value: unknown): boolean =>
+  value == null || typeof value != 'object' ||
+  !ArrayBuffer.isView(value) && !(value instanceof ArrayBuffer) &&
+    (Array.isArray(value) ? value.every(textual) : Object.entries(value).every(
+      ([k, v]) => !media.has(k) && !(k == 'kind' && v == 'image') && textual(v),
+    ))
+
+/** An upper bound on the input tokens a text prompt can bill, never above the
+ * model's context window. A text token covers at least one UTF-8 byte, so the
+ * prompt's compact JSON bounds its text; doubling it covers a template that
+ * re-renders that JSON with spaces and indentation, and FRAMING the markers
+ * around it. Media is tokenized by its pixels or samples, not its bytes, so a
+ * prompt carrying any is bounded by the context window alone. */
+export let promptBound = (prompt: unknown, context: number): number =>
+  textual(prompt)
+    ? Math.min(
+      context,
+      2 * new TextEncoder().encode(JSON.stringify(prompt) ?? '').length +
+        FRAMING,
+    )
+    : context
+
+/** A request's input bound. An anchor continues a conversation the provider
+ * holds, whose earlier turns this side cannot measure. */
+export let requestBound = (
+  req:
+    & Pick<Request, 'anchor' | 'instructions' | 'tools' | 'questions' | 'input'>
+    & { items: unknown[] },
+  context: number,
+): number =>
+  req.anchor ? context : promptBound(
+    [req.instructions, req.items, req.tools, req.questions, req.input],
+    context,
+  )
 
 let valid = (n: number) => Number.isFinite(n) && n >= 0
 let upward = (dollars: number) => Math.ceil(dollars * 1e12) / 1e12

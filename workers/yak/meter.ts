@@ -28,6 +28,8 @@ import {
   type Model,
   ModelError,
   type Price,
+  promptBound,
+  requestBound,
 } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import {
@@ -998,14 +1000,15 @@ export let metered = (
       )
     let hold = await reserved({ STORE: ns }, space, (remaining) => {
       if (music(model)) return musicQuote(model, sent, remaining)
-      let bound = info.context
-      if (bound == null) return null
+      if (info.context == null) return null
+      // Every choice bills the prompt again; each embedded text fills at
+      // most its own context window.
+      let texts = price!.output == 0 && Array.isArray(sent.text)
+        ? sent.text.length
+        : 1
       let quote = affordable(
         { ...price!, output: price!.output * choices },
-        bound * choices *
-          (price!.output == 0 && Array.isArray(sent.text)
-            ? sent.text.length
-            : 1),
+        choices * promptBound(sent, info.context * texts),
         remaining,
         desired,
       )
@@ -1077,11 +1080,11 @@ export let accounted = (
         if (
           req.modalities?.some((m) => m != 'text')
         ) return null
-        let bound = info?.context ??
+        let window = info?.context ??
           (tariff && Object.values(tariff).every((p) => p == 0) ? 0 : undefined)
-        let output = req.questions ? bound : req.tokens
-        let quote = tariff && bound != null
-          ? affordable(tariff, bound, remaining, output)
+        let output = req.questions ? window : req.tokens
+        let quote = tariff && window != null
+          ? affordable(tariff, requestBound(req, window), remaining, output)
           : null
         return req.questions && quote?.tokens != output ? null : quote
       }, call)

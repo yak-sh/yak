@@ -18,6 +18,7 @@ import {
   type MediaReceipt,
   ModelError,
   type Price,
+  requestBound,
   submitCall,
 } from '@yaks/model'
 import { endpoint } from '@yaks/openai'
@@ -165,7 +166,9 @@ let providerAt = async (
 }
 
 let quoted = (
-  req: Pick<PrivateRequest['request'], 'modalities' | 'tokens'>,
+  req:
+    & Parameters<typeof requestBound>[0]
+    & Pick<PrivateRequest['request'], 'modalities' | 'tokens'>,
   price: Price | undefined,
   context: number | undefined,
   remaining: number,
@@ -173,7 +176,7 @@ let quoted = (
   price && context != null &&
     !(price.output > 0 && req.tokens != null && req.tokens <= 0) &&
     !req.modalities?.some((m) => m != 'text')
-    ? affordable(price, context, remaining, req.tokens)
+    ? affordable(price, requestBound(req, context), remaining, req.tokens)
     : null
 
 let matching = (

@@ -1012,7 +1012,7 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
   let answer = {
     shape: [1, 3],
     data: [[0.1, 0.2, 0.3]],
-    usage: { prompt_tokens: 2000 },
+    usage: { prompt_tokens: 3 },
   }
   let v = await vale(() => answer, {
     env: {
@@ -1035,7 +1035,7 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
     },
   )
   assertEquals(v.asked.length, 1)
-  assertAlmostEquals((await v.spent()).meter!.models, 0.0118 * 2000 / 1_000_000)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.0118 * 3 / 1_000_000)
 })
 
 for (let priced of [false, true]) {

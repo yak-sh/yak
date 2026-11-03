@@ -1,5 +1,5 @@
 // A builder turn reserves the same dollars as every other model consumer.
-import { affordable, charged, ModelError } from '@yaks/model'
+import { affordable, charged, ModelError, promptBound } from '@yaks/model'
 import type { Answer, Ask, Model } from './builder.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -21,7 +21,12 @@ export let turn = async (
       model.quote
         ? model.quote(ask, remaining)
         : price && input != null
-        ? affordable(price, input, remaining, ask.tokens)
+        ? affordable(
+          price,
+          promptBound([ask.system, ask.said, ask.fns], input),
+          remaining,
+          ask.tokens,
+        )
         : null,
   )
   let submitted = false

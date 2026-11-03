@@ -853,14 +853,13 @@ keeps its maximum unavailable until its receipt can settle. A late receipt never
 resets or refunds another month's meter. Provider-reported cost exceeding the
 quoted maximum is a defect, not a charge silently clamped to the cap.
 
-Token-model bounds currently use the published context window and the most
-expensive input/cache tariff, then limit output to what remains. Workers AI
-offers no documented input-count endpoint, and its server-rendered chat template
-is not a verified local tokenizer input. This conservative bound can refuse a
-small request whose measured cost would fit: GLM-5.3's published 1,048,576-token
-window reserves $1.4680064 for input at $1.40 per million, beyond the free
-space's $0.20 budget. GLM-5.3 Flash reserves $0.1572864 for input at $0.15 per
-million. Unknown bounds refuse before generation. MiniMax music's fixed
-per-track tariff is bounded; speech with post-generation-only pricing and
-ElevenLabs' measured output-duration tariff require a verified bound before a
-new call can be bought. Existing paid receipts remain recoverable.
+Token-model bounds reserve the prompt's own input bound (@yaks/model
+`promptBound`: its size, built before the call, never above the published
+context window) at the most expensive input/cache tariff, then limit output to
+what remains. A prompt with media, or one continuing provider-held history,
+reserves the whole context window: GLM-5.3's 1,048,576 tokens at $1.40 per
+million is $1.4680064, beyond the free space's $0.20 budget. Unknown bounds
+refuse before generation. MiniMax music's fixed per-track tariff is bounded;
+speech with post-generation-only pricing and ElevenLabs' measured
+output-duration tariff require a verified bound before a new call can be bought.
+Existing paid receipts remain recoverable.

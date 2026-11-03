@@ -308,6 +308,14 @@ a token estimate is insufficient. It reserves input at the highest applicable
 cache tariff, rounds the maximum cost upward, and requires the provider to
 enforce the returned output limit.
 
+`promptBound(prompt, context)` is that bound for a text prompt, built before the
+call: twice its compact JSON's UTF-8 bytes (a text token covers at least one
+byte; doubling covers a template's spaces and indentation) plus `FRAMING`
+tokens, and never more than `context`. A prompt carrying media is bounded by
+`context` alone. `requestBound(request, context)` applies it to a `Request`'s
+instructions, items, tools, questions and input, or gives `context` when an
+`anchor` continues history the provider holds.
+
 `charged(reply, price, maximumReservedDollars)` settles reported dollars or
 complete usage conservatively. Missing usage retains the reserved maximum;
 unclassified input uses the highest cache tariff.

@@ -1,6 +1,12 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { affordable, charged } from './afford.ts'
+import {
+  affordable,
+  charged,
+  FRAMING,
+  promptBound,
+  requestBound,
+} from './afford.ts'
 import { weigh } from './vocab.ts'
 
 test('the final answered call fits the pilot headroom, including its output limit', () => {
@@ -116,4 +122,45 @@ test('invalid provider token counts never refund a reservation', () => {
       { dollars: 0.2, reported: false },
     )
   }
+})
+
+test('a text prompt bounds its input by its own size, never past the context window', () => {
+  let prompt = { items: [{ kind: 'user', text: 'é'.repeat(100) }] }
+  let bytes = new TextEncoder().encode(JSON.stringify(prompt)).length
+  assertEquals(promptBound(prompt, 1_048_576), 2 * bytes + FRAMING)
+  assertEquals(promptBound(prompt, 500), 500)
+  // GLM-5.3's window would reserve $1.4680064; this prompt reserves cents.
+  let quote = affordable(
+    { input: 1.4, output: 4.4 },
+    promptBound(prompt, 1_048_576),
+    0.20,
+    4096,
+  )!
+  assertEquals(quote.tokens, 4096)
+  assert(quote.dollars < 0.03)
+})
+
+test('media, or history the provider holds, is bounded by the context window', () => {
+  for (
+    let items of [
+      [{
+        kind: 'image',
+        bytes: new Uint8Array(4),
+        mediaType: 'image/png',
+        label: 'a',
+      }],
+      [{ kind: 'image', bytes: [1, 2], mediaType: 'image/png', label: 'a' }],
+    ]
+  ) assertEquals(requestBound({ items, tools: [] }, 9000), 9000)
+  assertEquals(
+    promptBound({
+      messages: [{ content: [{ type: 'image_url', image_url: { url: 'x' } }] }],
+    }, 9000),
+    9000,
+  )
+  assertEquals(requestBound({ items: [], tools: [], anchor: 'r1' }, 9000), 9000)
+  assertEquals(
+    requestBound({ items: [], tools: [] }, 9000),
+    2 * '[null,[],[],null,null]'.length + FRAMING,
+  )
 })
