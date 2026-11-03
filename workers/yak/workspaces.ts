@@ -32,7 +32,11 @@ export class WorkspaceStore extends DurableObject<Env> {
   #storage: Storage
   #bucket: Env['BLOBS']
   constructor(
-    ctx: { id: { toString(): string }; storage: Storage },
+    // The runtime's state (unknown where `cloudflare:workers` is untyped), and
+    // the slice of it this object reads.
+    ctx:
+      & ConstructorParameters<typeof DurableObject>[0]
+      & { id: { toString(): string }; storage: Storage },
     env: Env,
   ) {
     super(ctx, env)

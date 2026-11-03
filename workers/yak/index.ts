@@ -249,7 +249,9 @@ export default {
 class PublicDirectoryStore extends DurableObject<Env> {
   #copy: ServingCopy
   constructor(
-    ctx: { storage: DurableStorage },
+    ctx:
+      & ConstructorParameters<typeof DurableObject>[0]
+      & { storage: DurableStorage },
     env: Env,
   ) {
     super(ctx, env)
