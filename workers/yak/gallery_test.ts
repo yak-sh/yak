@@ -24,6 +24,7 @@ import {
   install,
   letter,
   LIFE,
+  LIST,
   listed,
   made,
   page,
@@ -319,10 +320,10 @@ test('the gallery page carries the listings and its own metadata', async () => {
   assertEquals(cards(await page([]).text()), 0)
 })
 
-// The home page keeps its own examples in the file, and gives the space up to
-// the newest three listings when there are any.
-test('the showcase keeps the chosen demo order and featured image', () => {
-  let file = `<ul class="Make_List"><li>A recipe box</li></ul><p>after</p>`
+// The home page keeps its own examples in the file, and gives the carousel
+// the chosen demos' cards when the directory answers.
+test('the showcase keeps the chosen demo order', () => {
+  let file = `${LIST}<li>A recipe box</li></ul><p>after</p>`
   assertEquals(showcase(file, []), file)
   let all = showcase(
     file,
@@ -331,15 +332,6 @@ test('the showcase keeps the chosen demo order and featured image', () => {
   assertEquals(cards(all), DEMOS.length)
   assert(all.indexOf('App recipes') < all.indexOf('App chores'))
   assertStringIncludes(all, '<p>after</p>')
-  let hero = showcase(
-    '<img src="mossvale.webp" data-feature-shot="vale">',
-    [],
-    'https://yourname.yaks.app/vale/api/blob/abc',
-  )
-  assertStringIncludes(
-    hero,
-    'src="https://yourname.yaks.app/vale/api/blob/abc"',
-  )
   // A file whose showcase has moved is left exactly as it is.
   assertEquals(
     showcase('<p>no list here</p>', [shown()]),
@@ -347,24 +339,17 @@ test('the showcase keeps the chosen demo order and featured image', () => {
   )
 })
 
-test('the homepage paints every chosen screenshot and Mossvale', async () => {
-  let apps = [
-    ...DEMOS.map((slug) =>
-      app({ slug, gallery: null, screenshot: `${slug}-image` })
-    ),
-    app({ slug: 'vale', published: null, screenshot: 'abc' }),
-  ]
+test('the homepage paints every chosen screenshot', async () => {
+  let apps = DEMOS.map((slug) =>
+    app({ slug, gallery: null, screenshot: `${slug}-image` })
+  )
   let dir = {
     space: () => Promise.resolve(space({ slug: 'yourname' })),
     apps: () => Promise.resolve(apps),
   } as unknown as Directory
   let found = await examples(dir)
-  assertEquals(found.demos.map((a) => a.app.slug), DEMOS)
-  assertEquals(found.feature, 'https://yourname.yaks.app/vale/api/blob/abc')
-  let file = new Response(
-    '<img src="mossvale.webp" data-feature-shot="vale">' +
-      '<ul class="Make_List"><li>fallback</li></ul>',
-  )
+  assertEquals(found.map((a) => a.app.slug), DEMOS)
+  let file = new Response(`${LIST}<li>fallback</li></ul>`)
   let html = await (await made({} as Env, dir, file)).text()
   assertEquals(cards(html), DEMOS.length)
   for (let slug of DEMOS) {
@@ -373,7 +358,6 @@ test('the homepage paints every chosen screenshot and Mossvale', async () => {
       `https://yourname.yaks.app/${slug}/api/blob/${slug}-image`,
     )
   }
-  assertStringIncludes(html, 'https://yourname.yaks.app/vale/api/blob/abc')
 })
 
 test('a card offers installation separately from opening the app', () => {

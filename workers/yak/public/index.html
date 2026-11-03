@@ -40,6 +40,7 @@
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="stylesheet" href="style.css" />
+    <script src="carousel.js" defer></script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -69,7 +70,7 @@
           "url": "https://yaks.app/",
           "applicationCategory": "DeveloperApplication",
           "operatingSystem": "Web browser",
-          "description": "Ask Claude or ChatGPT for a web app — from a recipe box to a slideshow for your shop — and yaks.app hosts it at yourname.yaks.app, with its own data store, file uploads, email address and optional custom domain. No install, no build step.",
+          "description": "Ask Claude or ChatGPT for a web app — from a practice planner for your team to a recipe box for your family — and yaks.app hosts it at yourname.yaks.app, with its own data store, file uploads, email address and optional custom domain. No install, no build step.",
           "featureList": [
             "Apps built by your own AI assistant over MCP",
             "A graph data store per app, shared across devices",
@@ -177,33 +178,102 @@
           </p>
         </div>
 
-        <div class="Demo" aria-labelledby="demo">
-          <h2 id="demo"
-            class="Demo_Title">A slideshow made with yaks.app</h2>
-          <div class="Window"
-            aria-label="A bakery's slideshow, built with yaks.app">
-            <div class="Window_Bar">
-              <a class="Pill Pill-quiet"
-                href="https://yourname.yaks.app/slides/">
-                <span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/slides</span> <span aria-hidden="true">↗</span>
-              </a>
-            </div>
-            <a class="Demo_Shot"
-              href="https://yourname.yaks.app/slides/#/play/11c9dc1c-69a7-4efc-bf33-a5fd8dabb9df">
-              <img src="slides.webp"
-                width="1600" height="900"
-                alt="A slide with a seeded sourdough loaf and the words Wren's Bakery, Riverside Market, stall 14, weekends, 8am until it's gone" />
-              <span
-                class="Button Demo_Play">Watch the slideshow <span aria-hidden="true">↗</span></span>
-            </a>
+        <section class="Demo" aria-labelledby="examples"
+          aria-roledescription="carousel" data-carousel>
+          <h2 id="examples" class="Demo_Title">Apps made with yaks.app</h2>
+          <ul class="Demo_Slides">
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/practice/">A practice planner
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Plan each practice minute by minute, and keep your drills in one place.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/handouts/">A handout library
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Handouts for athletes, parents and coaches, to read, print or download.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/menu/">A bakery's menu
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Prices for a market stall, marked sold out from your phone.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/recipes/">A recipe box
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Save recipes and share them with family.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/garden/">A garden diary
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Note what you planted and how it grew.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/bookclub/">A book club page
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Choose books and plan your next meeting.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/trip/">A trip planner
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Plan the days, who's coming and what to pack.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/guestbook/">A birthday guestbook
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Collect birthday messages from friends.</p>
+            </li>
+            <li class="Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/chores/">A chore chart
+                    <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Keep track of whose turn it is.</p>
+            </li>
+          </ul>
+          <div class="Demo_Controls" hidden>
+            <button class="Button Button-quiet Demo_Step" type="button"
+              data-step="-1" aria-label="Previous app">‹</button>
+            <div class="Demo_Dots"></div>
+            <button class="Button Button-quiet Demo_Step" type="button"
+              data-step="1" aria-label="Next app">›</button>
+            <button class="Button Button-quiet Demo_Pause"
+              type="button">Pause</button>
           </div>
           <p class="Note Note-small">
-            A bakery's photos and prices, for the screen at its market stall.
-            Change a slide from your phone, and the screen shows the change a
-            moment later. This slideshow runs on yaks.app, like the apps you'll
-            make.
+            Each of these apps runs on yaks.app. Open one to try it, or get a
+            copy of your own and ask the assistant you use to change the copy.
+            <a href="/gallery">See more in the gallery</a>.
           </p>
-        </div>
+        </section>
       </section>
 
       <section class="Yours" aria-labelledby="yours">
@@ -233,95 +303,6 @@
             </dd>
           </div>
         </dl>
-      </section>
-
-      <section class="Make" aria-labelledby="examples">
-        <div class="Make_Intro">
-          <h2 id="examples" class="Title">Example apps</h2>
-          <p class="Note">
-            Each of these is a working app. Open one to try it, or get your
-            own copy and ask your assistant to change it.
-            <a href="/gallery">See more in the gallery</a>.
-          </p>
-        </div>
-        <ul class="Make_List">
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/practice/">A practice planner
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p
-              class="Card_Sub">Plan each practice minute by minute, and keep your drills in one place.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/handouts/">A handout library
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p
-              class="Card_Sub">Handouts for athletes, parents and coaches, to read, print or download.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/menu/">A bakery's menu
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p
-              class="Card_Sub">Prices for a market stall, marked sold out from your phone.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/recipes/">A recipe box
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p class="Card_Sub">Save recipes and share them with family.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/garden/">A garden diary
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p class="Card_Sub">Note what you planted and how it grew.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/bookclub/">A book club page
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p class="Card_Sub">Choose books and plan your next meeting.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/trip/">A trip planner
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p
-              class="Card_Sub">Plan the days, who's coming and what to pack.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/guestbook/">A birthday guestbook
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p class="Card_Sub">Collect birthday messages from friends.</p>
-          </li>
-          <li class="Card Make_Card">
-            <header class="Card_Head">
-              <h3
-                class="Card_Title"><a href="https://yourname.yaks.app/chores/">A chore chart
-                  <span aria-hidden="true">↗</span></a></h3>
-            </header>
-            <p class="Card_Sub">Keep track of whose turn it is.</p>
-          </li>
-        </ul>
       </section>
 
       <section class="How" aria-labelledby="how">

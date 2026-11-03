@@ -838,28 +838,20 @@ export let DEMOS = [
 
 export let examples = async (dir: Directory, env: Host = {}) => {
   let space = await dir.space('yourname')
-  if (!space) return { demos: [] as Shown[], feature: '' }
+  if (!space) return [] as Shown[]
   let apps = await dir.apps(space)
   let chosen = DEMOS.map((slug) => apps.find((app) => app.slug == slug))
-  let demos = chosen.every((app) => app?.published && !app.trashed)
+  return chosen.every((app) => app?.published && !app.trashed)
     ? chosen.map((app) => shownOf(space, app!, env))
     : []
-  let vale = apps.find((app) => app.slug == 'vale' && !app.trashed)
-  return { demos, feature: vale ? screenshot(space, vale, env) : '' }
 }
 //
 // A string splice rather than a template, because the page is a file: it is
 // the one every crawler and every reader gets, it is edited by hand, and the
-// showcase is one `<ul>` in it.
-export let LIST = '<ul class="Make_List">'
+// showcase is one `<ul>` in it, the carousel beside the hero.
+export let LIST = '<ul class="Demo_Slides">'
 
-export let showcase = (file: string, all: Shown[], feature = '') => {
-  if (feature) {
-    file = file.replace(
-      'src="mossvale.webp" data-feature-shot="vale"',
-      `src="${esc(feature)}" data-feature-shot="vale"`,
-    )
-  }
+export let showcase = (file: string, all: Shown[]) => {
   if (!all.length) return file
   let from = file.indexOf(LIST)
   if (from < 0) return file
@@ -870,21 +862,18 @@ export let showcase = (file: string, all: Shown[], feature = '') => {
     file.slice(to)
 }
 
-// The home page as served: every demo and the featured Mossvale image come
-// from the apps' chosen screenshots. The file remains the fallback when the
-// directory does not answer.
+// The home page as served: every demo is its app's card, with the app's chosen
+// screenshot. The file remains the fallback when the directory does not
+// answer.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
-  let { demos: shown, feature } = await examples(dir, env)
-    .then(async ({ demos, feature }) => ({
-      demos: await pictures(env, demos),
-      feature,
-    }))
+  let shown = await examples(dir, env)
+    .then((demos) => pictures(env, demos))
     .catch((e) => {
       failed = true
       caught(e, { request: 'home showcase' })
-      return { demos: [] as Shown[], feature: '' }
+      return [] as Shown[]
     })
   // The headers the assets door set, minus those that describe the bytes: the
   // body just changed length, it is no longer the file that etag names, and the
@@ -894,7 +883,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   headers.delete('etag')
   headers.delete('cf-cache-status')
   if (failed) headers.set('cache-control', 'private, no-store')
-  return new Response(showcase(html, shown, feature), {
+  return new Response(showcase(html, shown), {
     status: file.status,
     headers,
   })

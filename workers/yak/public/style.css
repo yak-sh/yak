@@ -600,36 +600,85 @@
     font-weight: 700;
   }
 
-  .Demo_Shot {
-    position: relative;
-    display: block;
-    overflow: hidden;
-    color: var(--on-accent);
+  /* The examples, one card at a time: a row that scrolls sideways and stops
+     on each card, by swipe, by keys or by itself (carousel.js). The room
+     around it keeps the cards' pencil lines and focus rings inside the
+     scroll box, which clips them. */
+  .Demo_Slides {
+    --room-around: 4px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    gap: var(--gap);
+    margin: calc(-1 * var(--room-around));
+    padding: var(--room-around);
+    list-style: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--room-around);
+    scrollbar-width: none;
   }
 
-  .Demo_Shot img {
-    display: block;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-    object-position: left top;
+  .Demo_Slides::-webkit-scrollbar {
+    display: none;
   }
 
-  /* A button laid on the picture's corner, clear of the slide's words. */
-  .Demo_Play {
-    position: absolute;
-    inset: auto 1rem 1rem auto;
+  .Demo_Slides > li {
+    scroll-snap-align: start;
   }
 
-  .Demo_Shot:hover .Demo_Play {
-    text-decoration: underline;
-  }
-
-  @media (max-width: 35rem) {
-    .Demo_Shot img {
-      aspect-ratio: 5 / 4;
+  @media (prefers-reduced-motion: no-preference) {
+    .Demo_Slides {
+      scroll-behavior: smooth;
     }
+  }
+
+  .Demo_Controls {
+    --control-height: 2rem;
+    --control-pad-inline: .7rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--half-gap);
+  }
+
+  .Demo_Controls[hidden] {
+    display: none;
+  }
+
+  .Demo_Pause {
+    margin-inline-start: auto;
+    font-size: var(--fine);
+  }
+
+  .Demo_Dots {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  /* A dot is small, but the button around it is a fingertip wide. */
+  .Demo_Dot {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .Demo_Dot::before {
+    content: '';
+    width: .55rem;
+    height: .55rem;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: 50%;
+  }
+
+  .Demo_Dot[aria-current='true']::before {
+    border-color: var(--accent);
+    background: var(--accent);
   }
 
   @media (min-width: 60rem) {
