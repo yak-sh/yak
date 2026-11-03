@@ -11,7 +11,8 @@
 //
 // So: every tracked file that is not a known binary asset must hold only tab,
 // newline and printable bytes. Cheap enough to run in `deno task check` —
-// ~1200 files, read once.
+// ~1200 files, read once. Given paths, it checks those alone: the test run
+// passes its change.
 
 // Assets that are binary on purpose. Everything else is source and is checked.
 let BINARY = new Set([
@@ -61,7 +62,7 @@ let hex = (ch: string) => '\\x' + ch.charCodeAt(0).toString(16).padStart(2, '0')
 
 if (import.meta.main) {
   let offenders: string[] = []
-  for (let path of await tracked()) {
+  for (let path of Deno.args.length ? Deno.args : await tracked()) {
     if (BINARY.has(ext(path))) continue
     let bytes: Uint8Array
     try {

@@ -1,21 +1,28 @@
-// Local source checks cover the change: its lint, the workspace's public APIs
-// when it touches a package, and the types of what it reaches. Runtime tests
+// Local source checks cover the change: its lint, its raw bytes, the
+// workspace's public APIs when it touches a package, the Worker's generated
+// content when it touches a source of it, and the types of what it reaches. Runtime tests
 // follow consumers. Main CI checks every module's types after the push.
 
 import { publishing } from './release.ts'
 import { types } from './check-types.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
+// What workers/yak/gen.ts reads or writes: the Worker's words and config, the
+// plugin it packs, and every workspace manifest, whose exports load.ts lists.
+let generated = (path: string) =>
+  /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)deno\.json$/.test(path)
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 
 export type Check = { name: string; args: string[] }
 
-/** Format and lint existing changed files, and, when the change touches a
- * package in `configs`, check every package's public API as one workspace: a
- * package checked alone cannot see the cycle its new import closes with
- * another (`Circular package dependency detected`), which publishing the
- * workspace refuses. */
+/** Format, lint and byte-check existing changed files, and, when the change
+ * touches a package in `configs`, check every package's public API as one
+ * workspace: a package checked alone cannot see the cycle its new import
+ * closes with another (`Circular package dependency detected`), which
+ * publishing the workspace refuses. A change to what workers/yak/content.ts,
+ * load.ts or plugins/yaks.app is generated from checks they are fresh, and
+ * fails naming `deno task content`. */
 export let checks = (changed: string[], configs: string[] = []): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
@@ -29,6 +36,25 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
       : [],
     ...lint.length
       ? [{ name: 'lint', args: ['lint', '--permit-no-files', ...lint] }]
+      : [],
+    ...changed.length
+      ? [{
+        name: 'bytes',
+        args: ['run', '--allow-read', 'bin/check-bytes.ts', ...changed],
+      }]
+      : [],
+    ...changed.some(generated)
+      ? [{
+        name: 'content',
+        args: [
+          'run',
+          '--allow-read',
+          '--allow-write',
+          '--allow-run=deno',
+          'workers/yak/gen.ts',
+          '--check',
+        ],
+      }]
       : [],
     ...touched
       ? [{

@@ -3,15 +3,45 @@ import { type Check, check, checks, format } from './test-checks.ts'
 
 let planned = checks(['a.ts', 'doc.md', 'data.json', 'image.png'])
 
-test('source checks format and lint the change', () => {
+test('source checks format, lint and byte-check the change', () => {
   equal(planned, [
     {
       name: 'format',
       args: ['fmt', '--permit-no-files', 'a.ts', 'doc.md', 'data.json'],
     },
     { name: 'lint', args: ['lint', '--permit-no-files', 'a.ts'] },
+    {
+      name: 'bytes',
+      args: [
+        'run',
+        '--allow-read',
+        'bin/check-bytes.ts',
+        'a.ts',
+        'doc.md',
+        'data.json',
+        'image.png',
+      ],
+    },
   ])
   equal(checks([]), [])
+})
+
+test("a change to a source of the Worker's generated content checks it is fresh", () => {
+  let content = (path: string) =>
+    checks([path]).some((c) => c.name == 'content')
+  equal(
+    [
+      'workers/yak/prompts/make.md',
+      'workers/yak/public/docs/a.md',
+      'workers/yak/tools.yml',
+      'workers/yak/content.ts',
+      'plugins/yaks.app/skills/a/SKILL.md',
+      'packages/a/deno.json',
+      'deno.json',
+    ].map(content),
+    Array(7).fill(true),
+  )
+  equal(['packages/a/a.ts', 'plugins/other/a.md'].map(content), [false, false])
 })
 
 test("a change touching a package checks the whole workspace's public API", () => {
@@ -60,7 +90,7 @@ Deno.removeSync(file)
 
 test('deleted files are omitted and a lint failure fails the run', () => {
   equal(files, [file])
-  equal(called.map((c) => c.name), ['format', 'lint'])
+  equal(called.map((c) => c.name), ['format', 'lint', 'bytes'])
   equal(failed, false)
 })
 
