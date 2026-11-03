@@ -37,15 +37,28 @@ let reached = (
     (id ? ` (${id.slice(0, 12)}…)` : '')
 }
 
+let bound = (v: unknown) => {
+  let n = Number(v)
+  return Number.isSafeInteger(n) && n > 0 ? n : Infinity
+}
+
+// Full prose up to `maxLines` lines and `maxChars` characters; a cut says how
+// long the whole is and the entry that holds it, one read away.
+let preview = (b: Bundle, body: string, ctx: Record<string, unknown>) => {
+  let lines = body.split('\n')
+  let kept = lines.slice(0, bound(ctx.maxLines)).join('\n')
+    .slice(0, bound(ctx.maxChars))
+  return kept.length < body.length
+    ? `${kept}\n… [${body.length} characters total; ${b.entity.eid}]`
+    : body
+}
+
 /** Shared prose tree; renderers keep metadata structural rather than stripping
  * text. */
 export let entryBody: Rendering = (b, h, ctx) => {
   let body = textOf(b)
-  let max = Number(ctx.maxChars)
   let first = ctx.full
-    ? Number.isSafeInteger(max) && max > 0 && body.length > max
-      ? body.slice(0, max) + `\n… [${body.length} characters total]`
-      : body
+    ? preview(b, body, ctx)
     : body.split('\n')[0].slice(0, 70)
   let names = (ctx.names ?? {}) as Record<string, string>
   let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
@@ -134,7 +147,8 @@ let said = passage({
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
- * `Status`), `full` (entry prose), `maxChars` (a full prose preview bound). In a list
+ * `Status`), `full` (entry prose), `maxLines` and `maxChars` (bounds on that
+ * prose's preview). In a list
  * of answers, words someone said in a transcript are a passage (`words`, the
  * words sought, marks them), any other entry's `Tile` is its line, and a
  * transcript's is its status as the store computed it. A transcript's `Title`

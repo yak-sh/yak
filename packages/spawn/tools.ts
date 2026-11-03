@@ -64,6 +64,14 @@ export type Host = { graph: Graph; stopping?: AbortSignal }
 let uuid = () => crypto.randomUUID() as string
 let str = (v: unknown): string => v == null ? '' : String(v)
 
+// How much of an entry a peek shows: what a session answered stays readable
+// whole, and any other entry (an input that carries a whole persona, a tool's
+// result) is a few lines that name the entry holding the rest.
+let PREVIEW = {
+  output: { maxChars: 16_384 },
+  other: { maxLines: 4, maxChars: 480 },
+}
+
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
@@ -387,7 +395,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
           ...shown.map((b) =>
             render(sessionViews, b, 'Line', graph.vocab, {
               full: true,
-              maxChars: 16_384,
+              ...OUTPUT in b ? PREVIEW.output : PREVIEW.other,
             }, 'plain')
               .trim()
           ),

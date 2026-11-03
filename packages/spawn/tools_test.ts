@@ -490,6 +490,24 @@ test('a peek bounds transcript reads and previews a large entry', async () => {
   assert(!seen.includes('earlier'))
 })
 
+test('a peek previews an input to a few lines that name the entry holding it whole', async () => {
+  let { g } = host()
+  let persona = Array.from({ length: 900 }, (_, i) => `persona line ${i}`)
+    .join('\n')
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'e1' },
+      entry: { session: 's' },
+      content: { body: persona },
+    },
+  ])
+  let seen = body(await through(g, 'session_peek', { session: 's', lines: 1 }))
+  assertStringIncludes(seen, 'persona line 3')
+  assert(!seen.includes('persona line 4'))
+  assertStringIncludes(seen, `[${persona.length} characters total; e1]`)
+})
+
 test('a transcript-only wait returns when its output settles', async () => {
   let { g } = host()
   await g.apply([

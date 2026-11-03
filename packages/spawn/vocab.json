@@ -108,7 +108,7 @@
       "noun": "session",
       "verb": "peek",
       "title": "Read the end of a session",
-      "description": "Return the last entries of an agent work session as stored in the graph, plus where it stands: its status, or that it is parked and on what. Returns at most lines entries (40 by default, 256 maximum), with long entry bodies previewed, as text in content.body; never the provider’s own log file.",
+      "description": "Return the last entries of an agent work session as stored in the graph, plus where it stands: its status, or that it is parked and on what. Returns at most lines entries (40 by default, 256 maximum), with each entry previewed to a few lines (an output to 16,384 characters) and a cut one naming the entry eid that graph_show reads whole, as text in content.body; never the provider’s own log file.",
       "input": {
         "session": {
           "type": "string",
