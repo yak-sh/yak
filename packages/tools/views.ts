@@ -14,7 +14,8 @@
 // A text kept in the graph (it has a maker, `created`) is a record among
 // others, so in a list it is a passage (@yaks/render's `passage`): who wrote
 // it, when, its title where it has one, and the words around what was sought.
-// Its `Page` is still the text whole.
+// Its `Page` is still the text whole. A tool's answer (`output`) is said whole
+// however it was kept.
 
 import { parse } from '@yaks/query/core'
 import {
@@ -106,7 +107,7 @@ export let views: Registry = define<Renderer>([
   { view: 'List.Tile', match: tool, render: tile },
   {
     view: 'Tile',
-    match: parse('.created .content.body'),
+    match: parse('.created .content.body !output'),
     ...passage({
       texts: (b) => [text(b, 'content', 'body'), text(b, 'doc', 'body')],
       title: (b) => text(b, 'doc', 'title'),

@@ -53,3 +53,8 @@ test('a kept text in a list is its title, who, when and the passage sought', () 
   ok(tile.length < 250)
   equal(said(kept, 'Page'), body)
 })
+
+test('a tool’s answer is said whole, though a write keeps it', () => {
+  let answer = { ...kept, doc: undefined, output: { source: 'c1' } }
+  equal(said(answer, 'Tile'), body)
+})
