@@ -13,7 +13,7 @@
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { type Driver, render } from '@yaks/sql'
-import { driver } from './native.ts'
+import { configure, driver } from './native.ts'
 
 import { open as reader } from './read-db.ts'
 
@@ -30,9 +30,9 @@ export type Opened = Driver & { close: () => void }
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
- * `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
- * timeout, and a new file starts in incremental auto-vacuum mode, so the pages
- * a delete frees can be given back (./owe.ts `reclaim`); a database in memory
+ * `synchronous = normal`, a 64 MiB retained WAL limit, no checkpoint on close,
+ * and a one-minute busy timeout, and a new file starts in incremental
+ * auto-vacuum mode, so the pages a delete frees can be given back (./owe.ts `reclaim`); a database in memory
  * belongs to this process alone and needs none of that. A graph batch may be large, so contention gives
  * the one writer that bounded minute to finish. A writer held longer is a
  * performance failure, not a reason for every other process to wait forever.
@@ -74,6 +74,12 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
     set('journal_size_limit', 64 * 1024 * 1024)
+    // The last connection to close leaves the WAL for the next to append to.
+    // A checkpoint on close syncs both files, and the next process's first
+    // commit then starts the WAL afresh and syncs its header: together a
+    // short command's slowest steps. The automatic checkpoint still moves
+    // pages into the file every thousand.
+    configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
   }
   return Object.assign(d, {
     extension: (file: string) => {

@@ -273,6 +273,27 @@ let listen = (version: () => unknown) => (changed: () => void): () => void => {
   return () => clearInterval(timer)
 }
 
+// The `sqlite3_db_config` switches this package turns, by their C names.
+let CONFIGS = {
+  SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE: 1006,
+  SQLITE_DBCONFIG_DQS_DDL: 1014,
+}
+
+/** Turn one of a connection's `sqlite3_db_config` switches on or off. */
+export let configure = (
+  db: Database,
+  name: keyof typeof CONFIGS,
+  on: boolean,
+): void => {
+  let code = (steps ??= bindSteps()).symbols.sqlite3_db_config(
+    db.unsafeHandle,
+    CONFIGS[name],
+    on ? 1 : 0,
+    null,
+  )
+  if (code) throw new Error(`SQLite refused ${name} (${code})`)
+}
+
 /**
  * The {@link Driver} over one open embedded database.
  *
@@ -296,15 +317,7 @@ export let driver = (db: Database): Driver => {
   // Refuse unknown double-quoted columns in DDL rather than letting SQLite
   // interpret them as string literals. The parser checks expressions and WHERE
   // clauses too, without one table_info query per index on every startup.
-  let code = (steps ??= bindSteps()).symbols.sqlite3_db_config(
-    db.unsafeHandle,
-    1014,
-    0,
-    null, // SQLITE_DBCONFIG_DQS_DDL
-  )
-  if (code) {
-    throw new Error(`SQLite cannot disable DDL string fallback (${code})`)
-  }
+  configure(db, 'SQLITE_DBCONFIG_DQS_DDL', false)
   let d = connection(run, { file, changes: () => db.changes })
   let query = d.query
   let watch = listen(() => run(version.sql, version.params)[0]?.data_version)
