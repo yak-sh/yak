@@ -395,6 +395,7 @@ let mistaken = async (
         request: `${req.method} ${url.pathname}${url.search}`,
         version,
         message: e instanceof Error ? e.message : String(e),
+        mistake: true,
       },
       { env, space, app, request: req, entrypoint },
     )

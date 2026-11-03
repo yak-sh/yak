@@ -165,7 +165,9 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 // the space's: no space or app in `during`, so it groups by fault alone, and
 // its release is the platform build, the app's version beside it. Archiving
 // it there (the app's own code broke) leaves the owner's record open. Tagged
-// `source: app`, the space's tracker writes the one letter.
+// `source: app`, the space's tracker writes the one letter. A `mistake` is the
+// page's code wrong about its own words, as the store refused it (apps.ts
+// `mistaken`): a refusal of the caller's own input, so the owner's alone.
 //
 // A file the browser could not load says only its address, which a fault's
 // normalization erases, so every space's broken image would be one bug. Its
@@ -221,6 +223,8 @@ export let noted = async (
     stack?: string
     mechanism?: Break['mechanism']
     breadcrumbs?: Break['breadcrumbs']
+    // The app's own write or query refused at its door: never the platform's.
+    mistake?: boolean
   },
   at: {
     env: Env
@@ -268,7 +272,7 @@ export let noted = async (
       },
       tags: { ...place.tags, ...reached },
     }))
-    if (account == 'person') {
+    if (account == 'person' && !broke.mistake) {
       await queue(at.env.ERRORS)(
         seenByPlatform(error, broke.version, at, reached, page),
       )

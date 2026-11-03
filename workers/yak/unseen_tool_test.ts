@@ -62,6 +62,38 @@ test('app_errors lists a break whose stored stack is null', async () => {
   )
 })
 
+// A person's app break is also the platform's, since yaks.app may have caused
+// it; the page's own write its words refuse is the owner's alone.
+test("an app's own mistake reaches its owner, never the platform", async () => {
+  await using p = platform()
+  let { env } = p
+  let { space, app } = await seeded(env)
+  let sent: Record<string, unknown>[] = []
+  let send = env.ERRORS!.send.bind(env.ERRORS)
+  env.ERRORS = {
+    send: (
+      rows,
+    ) => (sent.push(...rows as Record<string, unknown>[]), send(rows)),
+  }
+  let sources = async (mistake: boolean) => {
+    sent.length = 0
+    await noted(
+      { request: 'POST /cookbook/api/apply', message: 'no', mistake },
+      {
+        env,
+        space,
+        app,
+      },
+    )
+    return sent.flatMap((r) => {
+      let tags = (r.error as { tags: { source?: string } } | undefined)?.tags
+      return tags ? [tags.source ?? 'space'] : []
+    })
+  }
+  assertEquals(await sources(false), ['space', 'app'])
+  assertEquals(await sources(true), ['space'])
+})
+
 // A tracker occurrence as the space's tracker answers a query for it.
 let row = (
   eid: string,
