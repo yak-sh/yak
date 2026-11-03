@@ -6,14 +6,18 @@ let get = (handle: (r: Request) => Promise<Response>) =>
   handle(new Request('http://x/x'))
 
 // Answers each make from the list in turn: a string is the body, an Error a
-// failure, and `hang` a make that never settles (and notes being aborted).
+// failure, and `hang` a make that settles only once aborted (and notes it).
 let makes = (...plan: (string | Error | 'hang')[]) => {
   let seen = { tries: 0, aborted: false }
   let make = (signal: AbortSignal): Promise<Body> => {
     let next = plan[seen.tries++]
     if (next == 'hang') {
-      signal.onabort = () => seen.aborted = true
-      return new Promise(() => {})
+      return new Promise((_, reject) =>
+        signal.onabort = () => {
+          seen.aborted = true
+          reject(new Error('aborted'))
+        }
+      )
     }
     return next instanceof Error ? Promise.reject(next) : Promise.resolve(next)
   }

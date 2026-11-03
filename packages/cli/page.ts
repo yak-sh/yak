@@ -56,8 +56,13 @@ export let within = <T>(
 ): Promise<T> =>
   new Promise((resolve, reject) => {
     let stop = new AbortController()
+    let made: Promise<void> | undefined
+    // Answered at once when given up on, and let finish what it spawned
+    // before the process ends (./held.ts). Only a make it stopped: one still
+    // going is its own host's, not a closing process's to wait on.
     let quit = (why: string) => {
       stop.abort()
+      if (made) settling.add(made)
       reject(new Error(why))
     }
     if (closing?.aborted) return quit('the host is closing')
@@ -67,14 +72,11 @@ export let within = <T>(
     )
     let close = () => quit('the host is closing')
     closing?.addEventListener('abort', close, { once: true })
-    // Answered at once when given up on, and let finish what it spawned
-    // before the process ends (./held.ts).
-    let made = make(stop.signal).then(resolve, reject).finally(() => {
+    made = make(stop.signal).then(resolve, reject).finally(() => {
       clearTimeout(timer)
       closing?.removeEventListener('abort', close)
-      settling.delete(made)
+      settling.delete(made!)
     })
-    settling.add(made)
   })
 
 /** The handler that answers `where` with the body `make` makes. `early` starts

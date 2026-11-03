@@ -16,10 +16,14 @@ export let hosts = new Map<string, Promise<Served>>()
  * them. */
 export let asides = new Set<Aside<string>>()
 
-/** Work a closing graph stops but cannot wait on, let settle before the
+/** Work a closing graph stopped but cannot wait on, let settle before the
  * process ends: a page body still being made (./page.ts), which a host that
  * stops cancels, and whose compiler would otherwise outlive the process. */
 export let settling = new Set<Promise<unknown>>()
+
+// How long a close lets stopped work settle: a make that ignores its abort
+// never keeps the process from ending.
+let grace = 5_000
 
 /** Ask every graph this process opened to wind down (host.ts `stop`): it
  * takes no new request, effect or step, and the command in flight finishes
@@ -51,7 +55,12 @@ export let close = (code?: number): Promise<void> =>
     }
     hosts.clear()
     asides.clear()
-    await Promise.allSettled([...settling])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      Promise.allSettled([...settling]),
+      new Promise((done) => timer = setTimeout(done, grace)),
+    ])
+    clearTimeout(timer)
   })().finally(() => closing = undefined)
 
 let closing: Promise<void> | undefined
