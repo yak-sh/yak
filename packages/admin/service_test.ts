@@ -10,18 +10,11 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
-import {
-  BOUND,
-  type Build,
-  firstShown,
-  LATE,
-  PENDING,
-  SLOW,
-  WINDOW,
-} from './catchup.ts'
+import { BOUND, type Build, firstShown, LATE, SLOW, WINDOW } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 import { Unavailable } from '../../workers/yak/workers_api.ts'
+import { PENDING } from '../../workers/yak/hook.ts'
 
 // The words the catch-up writes, and the entity they sit on.
 let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({

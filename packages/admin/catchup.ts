@@ -11,7 +11,8 @@
 // builds main again through the deploy hook, a build no check run shows, and
 // files that build's failure; a look that started a second build beside it
 // would only race it. Otherwise the catch-up asks main's deploy hook for a
-// build once, marking the commit `rebuilt{said}` with what Builds answered.
+// build once, marking the commit `rebuilt{said}` with what Builds answered
+// (workers/yak/hook.ts reads the answer for the kernel's rebuild too).
 // The hook starts none while one is queued or initializing, so a build that is
 // merely waiting its turn costs nothing and is not reported; a build the hook
 // did start is. The hook would start a second build beside a running one
@@ -160,32 +161,6 @@ export let step = (
     : head.rebuilt && !(head.deferred && (head.broke ?? 0) > head.rebuilt)
     ? 'fail'
     : 'rebuild'
-
-type Answer = {
-  success?: boolean
-  errors?: { message?: string }[]
-  result?: { already_exists?: boolean; build_uuid?: string; status?: string }
-}
-
-/// said(200, { success: true, result: { build_uuid: 'aa194fb5-5e63', status: 'queued' } }) -> 'build aa194fb5 queued'
-/// said(200, { success: true, result: { already_exists: true } }) -> PENDING
-/// said(404, { success: false, errors: [{ message: 'Not found' }] }) -> 'refused 404: Not found'
-/** What the deploy hook says when a build of main is already queued or
- * running: the head's build exists and is only slow. */
-export let PENDING = 'a pending build of main already exists'
-
-/** What Workers Builds answered a deploy hook, in words. */
-export let said = (status: number, body: unknown): string => {
-  let a = (body && typeof body == 'object' ? body : {}) as Answer
-  let why = a.errors?.map((e) => e.message).filter(Boolean).join('; ')
-  return status >= 300 || !a.success
-    ? `refused ${status}${why ? `: ${why}` : ''}`
-    : a.result?.already_exists
-    ? PENDING
-    : `build ${a.result?.build_uuid?.slice(0, 8) ?? '(no id)'} ${
-      a.result?.status ?? 'started'
-    }`
-}
 
 /** A main commit that did not go live: the error the tracker is handed. */
 export class NotLive extends Error {

@@ -44,9 +44,7 @@ import {
   LATE,
   type Live,
   missed,
-  PENDING,
   ran,
-  said,
   slow,
   type Step,
   step,
@@ -75,6 +73,7 @@ import {
 } from './usage.ts'
 import { ask, said as answered } from '../../workers/yak/analytics.ts'
 import { Unavailable } from '../../workers/yak/workers_api.ts'
+import { hooked, PENDING } from '../../workers/yak/hook.ts'
 
 /** How long the service waits between looks at main. */
 export let EVERY = 60_000
@@ -275,7 +274,7 @@ export let box = (
           method: 'POST',
           signal: AbortSignal.any([stopping, AbortSignal.timeout(20_000)]),
         })
-        return said(r.status, await r.json().catch(() => null))
+        return hooked(r.status, await r.json().catch(() => null)).said
       } catch {
         // A transport error can carry the hook's URL, which is its credential.
         return 'the deploy hook could not be reached'

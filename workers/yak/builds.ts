@@ -15,7 +15,12 @@
 // the network's (Builds' own clone of the repo, a download that 404s for a
 // minute, a registry push that times out), so a commit's first failure is
 // built once more through the deploy hook, and while that build runs the
-// failure is a log line: nothing is lost yet. A failure our code causes fails
+// failure is a log line: nothing is lost yet. A hook that answers a build of
+// main is already pending started nothing (hook.ts), and that is a log line
+// too: the pending build deploys main's head, which holds the failed commit,
+// and reports its own failure. One that ends without a failure (Builds
+// terminates a build that never left initializing, and raises no
+// `build.failed` for it) leaves main's head not live, the catch-up's case. A failure our code causes fails
 // the rebuild too, and the rebuild's failure is filed with its diagnosis
 // minutes later. The deploy hook's builds carry an empty commit while their
 // event still says `push_event`, so the trigger source cannot tell a retry
@@ -42,6 +47,7 @@ import { Stale } from '@yaks/graph/errors'
 import { normalize } from '@yaks/tracker'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
+import { type Hooked, hooked, PENDING } from './hook.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'
 import { accountUrl, resent } from './workers_api.ts'
 
@@ -329,21 +335,21 @@ export let first = async (
 }
 
 /** Start {@link PRODUCTION}'s build again through its deploy hook, the
- * `BUILD_HOOK` secret, and say what came of it. The hook builds the branch's
- * head: when a push came after the failed one, the build Builds already has
- * for it is the one that deploys, and the hook answers `already_exists` while
- * that build is pending. */
-export let rebuild = async (env: Env): Promise<string> => {
-  if (!env.BUILD_HOOK) return 'no BUILD_HOOK'
+ * `BUILD_HOOK` secret, and say what came of it (hook.ts). The hook builds the
+ * branch's head: when a build of it is already pending, a push after the
+ * failed one or the catch-up's ask, the hook starts none and answers
+ * {@link PENDING}, and that pending build is the one that deploys. */
+export let rebuild = async (env: Env): Promise<Hooked> => {
+  if (!env.BUILD_HOOK) return { started: false, said: 'no BUILD_HOOK' }
   try {
     let r = await fetch(env.BUILD_HOOK, { method: 'POST' })
-    return r.ok ? 'started' : `refused ${r.status}`
+    return hooked(r.status, await r.json().catch(() => null))
   } catch {
     // Transport errors can include the deploy hook's credential-bearing URL.
     caught(new Error('failed to reach deploy hook'), {
       request: 'rebuild deploy hook',
     })
-    return 'failed to reach deploy hook'
+    return { started: false, said: 'failed to reach deploy hook' }
   }
 }
 
@@ -371,14 +377,16 @@ export let builds = async (batch: Batch, env: Env) => {
       let once = await noted(event, event.commit, false)
       let retry = once ? await rebuild(env) : undefined
       let b = await detail
-      if (retry == 'started') {
+      if (retry?.started) {
         console.log(`yak-builds: ${b.error.message}. Building it again.`)
+      } else if (retry?.said == PENDING) {
+        console.log(`yak-builds: ${b.error.message}. ${PENDING}.`)
       } else {
         defect(b.error, {
           request: b.request,
           ...b.tags,
           build_log: buildUrl(env, b),
-          retry,
+          retry: retry?.said,
         }, {
           fault: `build failed:${b.tags.worker}:${b.cause}`,
           commit: b.commit ?? b.build,

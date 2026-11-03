@@ -238,7 +238,11 @@ let receipts = (): Meta => {
 // What one Worker comes to when the queue hands it these events in these
 // batches: the builds the deploy hook is asked for, the failures filed, and
 // the lines logged. The hook answers `hook`, or is not configured.
-let consumed = async (batches: Built[][], hook: number | null = 200) => {
+let consumed = async (
+  batches: Built[][],
+  hook: number | null = 200,
+  answer: unknown = { success: true, result: { build_uuid: 'build-2' } },
+) => {
   let rows: Bundle[] = []
   let env = {
     META: receipts(),
@@ -255,7 +259,7 @@ let consumed = async (batches: Built[][], hook: number | null = 200) => {
   let logged = 0
   let [fetch, log] = [globalThis.fetch, console.log]
   globalThis.fetch = () => (
-    asked++, Promise.resolve(new Response('{}', { status: hook ?? 500 }))
+    asked++, Promise.resolve(Response.json(answer, { status: hook ?? 500 }))
   )
   console.log = () => void logged++
   try {
@@ -295,6 +299,21 @@ test('builds: a first failure whose rebuild started is a log line', async () => 
   assertEquals(await consumed([[event('failed')], [event('failed')]]), quiet)
 })
 
+test('builds: a hook that defers to a pending build of main is a log line', async () => {
+  let pending = { success: true, result: { already_exists: true } }
+  assertEquals(
+    await consumed([[event('failed')]], 200, pending),
+    { asked: 1, filed: 0, logged: 1 },
+  )
+})
+
+test('builds: a hook that answers 200 without success started nothing', async () => {
+  assertEquals(
+    await consumed([[event('failed')]], 200, { success: false }),
+    { asked: 1, filed: 1, logged: 0 },
+  )
+})
+
 test("builds: the rebuild's failure is filed", async () => {
   assertEquals(
     await consumed([[event('failed')], [hooked()]]),
@@ -325,7 +344,10 @@ test('builds: a build with no commit is never built again', async () => {
 })
 
 test('builds: with no hook there is nothing to start', async () => {
-  assertEquals(await rebuild({} as Env), 'no BUILD_HOOK')
+  assertEquals(await rebuild({} as Env), {
+    started: false,
+    said: 'no BUILD_HOOK',
+  })
 })
 
 test('builds: a failed hook request does not disclose its credential', async () => {
@@ -343,7 +365,7 @@ test('builds: a failed hook request does not disclose its credential', async () 
   globalThis.fetch = () => Promise.reject(new Error('https://hook.test/secret'))
   try {
     assertEquals(
-      await within(env, {}, () => rebuild(env), clock()),
+      (await within(env, {}, () => rebuild(env), clock())).said,
       'failed to reach deploy hook',
     )
     assertEquals(sent.length, 1)
