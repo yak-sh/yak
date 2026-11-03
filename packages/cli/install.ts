@@ -34,6 +34,45 @@ export let install = (version: string, config: string): string[] => [
   `jsr:${cli.name}@${version}/yak`,
 ]
 
+/** The `deno` arguments that run `yak` at `version` under `config`, with
+ * `args`: what the installed command runs, without installing it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(run('1.2.3', '/tmp/c.json', ['help']).slice(-2), ['jsr:@yaks/cli@1.2.3/yak', 'help'])
+ * ```
+ */
+export let run = (
+  version: string,
+  config: string,
+  args: string[],
+): string[] => [
+  'run',
+  '--allow-all',
+  '--config',
+  config,
+  `jsr:${cli.name}@${version}/yak`,
+  ...args,
+]
+
+/** A first `yak init` and `yak task list`, against a scratch graph in `dir`:
+ * a command imports the plugins a config names by name, which `deno install`
+ * never fetched, since it follows literal imports only. Run here, the wait to
+ * fetch and compile them is part of installing, and a person's first command
+ * finds them. */
+export let warming = (dir: string): string[][] => [
+  ['--config', `${dir}/warm/yak.json`, 'init', 'Warm'],
+  ['--config', `${dir}/warm/yak.json`, 'task', 'list'],
+]
+
+let deno = (args: string[], cwd: string, quiet = false) =>
+  new Deno.Command(Deno.execPath(), {
+    args,
+    cwd,
+    stdout: quiet ? 'null' : 'inherit',
+    stderr: quiet ? 'piped' : 'inherit',
+  }).output()
+
 if (import.meta.main) {
   let dir = await Deno.makeTempDir({ prefix: 'yak-install-' })
   try {
@@ -41,14 +80,22 @@ if (import.meta.main) {
     await Deno.writeTextFile(config, JSON.stringify(released))
     // Run from the empty directory, since `deno install` also folds in the
     // dependencies of any package.json it finds above where it runs.
-    let { code } = await new Deno.Command(Deno.execPath(), {
-      args: install(cli.version, config),
-      cwd: dir,
-      stdout: 'inherit',
-      stderr: 'inherit',
-    }).spawn().status
+    let { code } = await deno(install(cli.version, config), dir)
     if (code == 0) {
-      console.log(`yak ${cli.version} is installed: next, yak init`)
+      console.log('fetching the plugins a first command needs…')
+      for (let args of warming(dir)) {
+        let warmed = await deno(run(cli.version, config, args), dir, true)
+        // A warm-up that failed costs the first command its wait, and says
+        // why; the install itself stands.
+        if (!warmed.success) {
+          console.error(new TextDecoder().decode(warmed.stderr).trim())
+          break
+        }
+      }
+      console.log(
+        `yak ${cli.version} is installed. Next: yak init <your name>, ` +
+          'which starts a graph on this machine',
+      )
     }
     Deno.exitCode = code
   } finally {
