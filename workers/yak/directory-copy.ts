@@ -11,6 +11,7 @@ import { background, defect } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
+import { setImmediate } from 'node:timers'
 
 export type ServingCopyDoor = {
   read?(key: string): Promise<{ revision: number; body: string } | null>
@@ -180,8 +181,10 @@ let ROOM = 8_000
 
 // A task's worth of work, in which everything a page asks together is asked:
 // callers that split on a shared answer resume at different depths of the
-// same turn, so a microtask would see only the first of them.
-let turn = (then: () => void) => void setTimeout(then, 0)
+// same turn, so a microtask would see only the first of them. The next task,
+// not a zero timer: a timer set five timers deep waits at least 4 ms (HTML's
+// timer rule, which Deno keeps), and a request asks dozens of turns.
+let turn = (then: () => void) => void setImmediate(then)
 
 /** The directory door with reads gathered: the reads asked in one turn travel
  * as one trip, however many callers asked them, and each caller is answered
