@@ -162,10 +162,12 @@ let known = handles(knows('e854bf7dc0', 'dune'), knows('5580147472', 'dune'))
 let resolves = (said: string, to: string | undefined, one = plain) =>
   assertEquals((one.address([said]) as Map<string, string>).get(said), to)
 
-test('a handle without its #, as long as one is shown, names its entity', () => {
+test('a handle without its #, from an eid’s first segment on, names its entity', () => {
   resolves('e854bf7dc0', session)
   resolves('E854BF7DC0', session)
   resolves('e854bf7dc0d0469ba5c8557a2ce0dfe4', session)
+  // an eid's first segment, as an eid is most often quoted
+  resolves('e854bf7d', session)
   resolves('c0ffee01234', 'c0ffee012345')
   // digits alone are a number first, and no entity carries this one
   resolves('5580147472', digits)
@@ -174,7 +176,7 @@ test('a handle without its #, as long as one is shown, names its entity', () => 
 
 test('one without its # never takes what something else names', () => {
   resolves(session, undefined)
-  resolves('e854bf7d', undefined)
+  resolves('e854bf7', undefined)
   resolves('abcdef0123', undefined)
   resolves('c0ffee0123', undefined)
   resolves('ffffffffff', undefined)

@@ -220,8 +220,8 @@ references.
 A short handle's `#` must be encoded as `%23` in a URL path. Quote a short
 handle in a shell (`yak graph show '#a3f19c024b'`) so a leading `#` is not read
 as a comment, or leave the `#` off (`yak graph show a3f19c024b`). Without its
-`#`, a handle must be at least ten hex characters, and one of digits alone is
-read as a number first.
+`#`, a handle must be at least eight hex characters, a uuid's first segment, and
+one of digits alone is read as a number first.
 
 The formatting exports are pure TypeScript and depend on @yaks/vocab. The
 plugins accept synchronous or asynchronous graph reads and allocators, and

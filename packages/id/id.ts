@@ -20,12 +20,13 @@ export let short = (eid: string): string =>
 export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
 
 /** A short handle copied without its `#`, as a shell or a sentence leaves it:
- * hex at least as long as a handle is shown (`e854bf7dc0`). The `#` is what
+ * hex at least as long as a uuid's first segment (`e854bf7d`), which is how an
+ * eid is most often quoted, as a bug's letter names it. The `#` is what
  * makes a shorter fragment a handle; without it, a word somebody chose
  * (`facade`) must not be taken for one. A graph asks about it only after
  * every name, number and eid of that spelling (@yaks/graph `address`), so
  * digits alone are a handle only where no entity carries that number. */
-export let BARE: RegExp = /^[0-9a-f]{10,64}$/i
+export let BARE: RegExp = /^[0-9a-f]{8,64}$/i
 
 /** What an id is built from: the entity's eid, the component that gives it its
  * prefix, and the number the store assigned (absent until the entity is first
