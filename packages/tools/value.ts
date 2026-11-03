@@ -21,6 +21,39 @@ export let imagesIn = (answer: Bundle[]): Image[] =>
   })
 
 /**
+ * A tool's answer that is a value: one bundle aimed at the call, carrying the
+ * value once, in `output{value}`. A door that sends text says it as
+ * {@link json}; one that sends data sends it as it is.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(valued({ entity: { eid: 'c1' } }, { n: 1 }), {
+ *   entity: { eid: '$said' },
+ *   output: { source: 'c1', value: { n: 1 } },
+ * })
+ * ```
+ */
+export let valued = (call: Bundle, value: unknown): Bundle => ({
+  entity: { eid: '$said' },
+  output: { source: call.entity.eid, value },
+})
+
+/**
+ * A value as the text a door that sends text says: one line where it fits in
+ * 80 characters, indented JSON where it does not.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(json({ count: 2 }), '{"count":2}')
+ * assertEquals(json({ s: 'x'.repeat(80) }).split('\n').length, 3)
+ * ```
+ */
+export let json = (value: unknown): string => {
+  let line = JSON.stringify(value) ?? 'null'
+  return line.length <= 80 ? line : JSON.stringify(value, null, 2)
+}
+
+/**
  * The `output{value}` an answer carries: the same answer as data, beside the
  * words a person reads. A caller that wants the answer's facts reads them here,
  * never out of the words, which may carry more than the answer.

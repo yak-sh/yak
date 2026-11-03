@@ -174,10 +174,7 @@ test('cache graph reader and command return the same range without writing', asy
     entity: { eid: 'command' },
     call: { args: opts },
   }, g)
-  equal(
-    JSON.parse(String((answer.content as Record<string, unknown>).body)),
-    report,
-  )
+  equal(answer.content, undefined)
   equal((answer.output as Record<string, unknown>).value, report)
   equal(await g.read('.entity *'), before)
 })

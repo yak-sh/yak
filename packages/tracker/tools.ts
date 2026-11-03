@@ -22,6 +22,7 @@ import {
   want,
 } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
+import { valued } from '@yaks/tools/value'
 import { commitOf } from '@yaks/git/source'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
@@ -173,14 +174,7 @@ let answer = (
   call: Bundle,
   data: Record<string, unknown>,
   source = 'box',
-): Bundle[] => {
-  let value = { source, ...data }
-  return [{
-    entity: { eid: '$said' },
-    content: { body: JSON.stringify(value, null, 2) },
-    output: { source: call.entity.eid, value },
-  }]
-}
+): Bundle[] => [valued(call, { source, ...data })]
 
 /** The tools' options: the tracker's remote, the store a call naming no
  * source reads and marks (`box` unless said), the box tracker's graph where

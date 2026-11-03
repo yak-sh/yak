@@ -8,7 +8,7 @@ import { idDoc } from '@yaks/id/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { ram } from '@yaks/ram'
-import { runner, toolEid } from '@yaks/tools'
+import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { valueIn } from '@yaks/tools/value'
 import { door } from '../../workers/tracker/door.ts'
 import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
@@ -69,6 +69,8 @@ let ask = (name: string, args: Record<string, unknown> = {}) =>
     call: { to: toolEid(name), args },
   })
 let rows = (answer: Bundle[]) => valueIn(answer)?.rows as Bundle[]
+// The answer as a door that sends text says it, without the runner's record.
+let said = (answer: Bundle[]) => worded(answerOf(answer, ids[4]))
 
 // Prepare the signed read once, then check both the remote result and the box.
 let listed = await ask('bug_list', { source: 'yaks.app', limit: 1 })
@@ -76,10 +78,7 @@ test('platform bug list filters and sorts before its limit without importing row
   let answer = listed
   equal(valueIn(answer)?.source, 'yaks.app')
   equal(rows(answer).map((b) => b.entity.eid), [ids[1]])
-  ok(
-    String(answer[0].content && (answer[0].content as { body: string }).body)
-      .includes('yaks.app'),
-  )
+  ok(said(answer).includes('yaks.app'))
   equal(await box.read('.entity *'), before)
 })
 // The prepared read above crosses the door whole; the caller's own query is
@@ -126,10 +125,7 @@ test('box bug reads still resolve numbered ids and titles locally', async () => 
   equal(boxBug.entity.eid, ids[4])
   for (let answer of boxShows) {
     equal(valueIn(answer), { source: 'box', rows: [boxBug], occurrences: 0 })
-    equal(
-      JSON.parse((answer[0].content as { body: string }).body),
-      valueIn(answer),
-    )
+    equal(JSON.parse(said(answer)), valueIn(answer))
   }
   equal(await box.read('.entity *'), before)
 })
@@ -137,10 +133,7 @@ for (let source of ['box', 'yaks.app']) {
   let empty = await ask('bug_list', { source, query: '.bug.hits=999' })
   test(`${source} bug list answers an empty result as text and data`, () => {
     equal(valueIn(empty), { source, rows: [] })
-    equal(JSON.parse((empty[0].content as { body: string }).body), {
-      source,
-      rows: [],
-    })
+    equal(JSON.parse(said(empty)), { source, rows: [] })
   })
 }
 test('remote reads refuse box numbers and invalid limits explicitly', async () => {

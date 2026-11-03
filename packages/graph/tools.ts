@@ -287,7 +287,6 @@ export let runs = (seams: Seams = {}): Runs => {
       let value = reduced(op, await graph.rows(q))
       return [{
         entity: { eid: '$said' },
-        content: { body: JSON.stringify(value) },
         output: { source: call.entity.eid, value },
       }]
     },

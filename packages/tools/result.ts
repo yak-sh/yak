@@ -7,7 +7,7 @@ import { token } from '@yaks/graph/sha256'
 import { effectsIn, type Vocab } from '@yaks/vocab'
 import { toolsDoc } from './vocab.ts'
 import { executionState } from './state.ts'
-import { valueIn } from './value.ts'
+import { json, valueIn } from './value.ts'
 import { type Clock, system } from '@yaks/fp'
 
 /** A runner's clock unless it is given one: the runtime's timers, and
@@ -121,17 +121,26 @@ let SPOKEN = new Set([
   'exception',
 ])
 
-// A bundle said as a line of its own: the words a call said, or a hit. Words
-// are what a tool answered under a name of its own (`$said`) or aimed at the
-// call (`output{source}`, which a text answer keeps once it is written): a row
-// the answer read or wrote is data even when words are all it holds, since
-// its words alone would drop which entity it is. Null for data, said whole.
+// A bundle said as a line of its own: the words a call said, its value, or a
+// hit. Words are what a tool answered under a name of its own (`$said`) or
+// aimed at the call (`output{source}`, which a text answer keeps once it is
+// written): a row the answer read or wrote is data even when words are all it
+// holds, since its words alone would drop which entity it is. A value
+// answered without words (./value.ts `valued`) is said as its JSON:
+// the value travels once, and a door that sends text writes it. Null for
+// data, said whole.
 let line = (b: Bundle): string | null => {
   let body = (b.content as Comp | undefined)?.body
+  let value = (b.output as Comp | undefined)?.value
   if (
-    typeof body == 'string' && (b.entity.eid[0] == '$' || !!b.output) &&
+    (b.entity.eid[0] == '$' || !!b.output) &&
     Object.keys(b).every((k) => k[0] == '$' || SPOKEN.has(k))
-  ) return body
+  ) {
+    if (typeof body == 'string') return body
+    if (value !== undefined && !b.content) {
+      return json(value)
+    }
+  }
   let hit = hitOf(b)
   return hit ? hitLine(b, hit) : null
 }
@@ -157,6 +166,8 @@ let line = (b: Bundle): string | null => {
  *   output: { source: 'c1' },
  * })
  * assertEquals(worded([said('one'), said('two')]), 'one\ntwo')
+ * let value = { entity: { eid: '$said' }, output: { value: { n: 1 } } }
+ * assertEquals(worded([value]), '{"n":1}')
  * let entry = { ...said('hi'), entry: { session: 's', seq: 2 } }
  * assertEquals(
  *   worded([said('one'), entry, said('two')]),

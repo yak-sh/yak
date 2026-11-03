@@ -54,6 +54,7 @@ import { human } from '@yaks/id'
 import { and, eq, every, present } from '@yaks/query'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
+import { valued } from '@yaks/tools/value'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor, spawning } from './who.ts'
@@ -195,11 +196,7 @@ export let runs = (
       session: typeof args.session == 'string' ? args.session : undefined,
       requests: args.requests == true,
     })
-    return [{
-      entity: { eid: '$said' },
-      content: { body: JSON.stringify(value, null, 2) },
-      output: { source: call.entity.eid, value },
-    }]
+    return [valued(call, value)]
   },
 
   claim_take: async (call, graph): Promise<Bundle[]> => {

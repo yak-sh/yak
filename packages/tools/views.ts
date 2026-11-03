@@ -26,9 +26,13 @@ import {
   type Renderer,
 } from '@yaks/render'
 import { passage } from '@yaks/render/views'
+import { json } from './value.ts'
 
+// A tool's words, or the value it answered without any (./value.ts `valued`).
 let lines = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {
-  let body = (b.content as { body?: unknown } | undefined)?.body
+  let body = b.content
+    ? (b.content as { body?: unknown }).body
+    : json((b.output as { value?: unknown }).value)
   return h(
     'pre',
     null,
@@ -39,6 +43,7 @@ let lines = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {
 }
 
 let said = parse('.content.body')
+let valued = parse('.output.value !content')
 
 let named = (b: Record<string, unknown>, prop: string): string => {
   let v = (b.tool as Record<string, unknown> | undefined)?.[prop]
@@ -115,4 +120,6 @@ export let views: Registry = define<Renderer>([
   },
   { view: 'Tile', match: said, render: lines },
   { view: 'Page', match: said, render: lines },
+  { view: 'Tile', match: valued, render: lines },
+  { view: 'Page', match: valued, render: lines },
 ])
