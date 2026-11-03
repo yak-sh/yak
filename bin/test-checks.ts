@@ -1,7 +1,9 @@
-// Local source checks cover the change; runtime tests follow consumers.
-// Main CI checks all consumer types after the push.
+// Local source checks cover the change: its lint, its packages' public APIs,
+// and the types of what it reaches. Runtime tests follow consumers. Main CI
+// checks every module's types after the push.
 
 import { publishing } from './release.ts'
+import { types } from './check-types.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 let formatted = (path: string) =>
@@ -69,13 +71,17 @@ export let format = async (
   return files
 }
 
-/** Lint the change and check its packages' public APIs after formatting. */
+/** Lint the change, check its packages' public APIs and the types of what it
+ * reaches, after formatting. */
 export let check = async (
   changed: string[],
   run = command,
   packages = publishing,
+  typed = (changed: string[]) =>
+    types(changed, (args) => run({ name: 'types', args })),
 ) =>
-  (await Promise.all(
-    checks(changed, (await packages()).map((p) => p.config))
+  (await Promise.all([
+    ...checks(changed, (await packages()).map((p) => p.config))
       .filter((c) => c.name != 'format').map(run),
-  )).every(Boolean)
+    typed(changed),
+  ])).every(Boolean)

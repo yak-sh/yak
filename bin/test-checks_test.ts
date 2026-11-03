@@ -31,14 +31,31 @@ let files = await format([file, `${file}.deleted`], (c) => {
   called.push(c)
   return Promise.resolve(true)
 })
-let failed = await check(files, (c) => {
-  called.push(c)
-  return Promise.resolve(c.name != 'lint')
-}, () => Promise.resolve([]))
+let typed: string[][] = []
+let types = (pass: boolean) => (changed: string[]) => {
+  typed.push(changed)
+  return Promise.resolve(pass)
+}
+let failed = await check(
+  files,
+  (c) => {
+    called.push(c)
+    return Promise.resolve(c.name != 'lint')
+  },
+  () => Promise.resolve([]),
+  types(true),
+)
 let refused = await check(
   ['packages/a/a.md'],
   (c) => Promise.resolve(!c.name.startsWith('publish')),
   () => Promise.resolve([{ name: '@a/a', config: 'packages/a/deno.json' }]),
+  types(true),
+)
+let untyped = await check(
+  ['a.ts'],
+  () => Promise.resolve(true),
+  () => Promise.resolve([]),
+  types(false),
 )
 Deno.removeSync(file)
 
@@ -50,4 +67,9 @@ test('deleted files are omitted and a lint failure fails the run', () => {
 
 test('a package whose public API is refused fails the run', () => {
   equal(refused, false)
+})
+
+test('the types of what the change reaches are checked, and their failure fails the run', () => {
+  equal(typed, [[file], ['packages/a/a.md'], ['a.ts']])
+  equal(untyped, false)
 })

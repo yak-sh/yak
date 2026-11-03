@@ -85,20 +85,20 @@ let whole = await planned(['--all', '--verbose'], true)
 let local = await planned([])
 let failed = await planned([], false, false)
 
-test('--all in a shallow checkout runs every file without git history or duplicate source checks', () => {
+test('--all in a shallow checkout runs every file without git history or duplicate source checks', async () => {
   equal(whole.plan.run, ['a_test.ts', 'a.ts'])
-  equal(whole.plan.ok, true)
+  equal(await whole.plan.ok, true)
   equal(whole.selected, [{ all: true, changed: undefined, sources: [] }])
   equal(whole.git, [])
   equal(whole.checked, [])
 })
 
-test('local selection keeps consumer tests, checks changed sources and propagates failures', () => {
+test('local selection keeps consumer tests, checks changed sources and propagates failures', async () => {
   equal(local.selected, [{ all: false, changed: ['a.ts'], sources: ['a.ts'] }])
   equal(local.checked, [['a.ts']])
   equal(local.plan.run, ['a_test.ts', 'a.ts'])
-  equal(local.plan.ok, true)
-  equal(failed.plan.ok, false)
+  equal(await local.plan.ok, true)
+  equal(await failed.plan.ok, false)
 })
 
 test('dependency bookkeeping changes select their consumers without selecting unrelated tests', () => {
@@ -135,7 +135,7 @@ let readied = async (read: (file: string) => string[] | undefined) => {
       return Promise.resolve()
     },
   })
-  equal(plan.ok, true)
+  equal(await plan.ok, true)
   return made
 }
 

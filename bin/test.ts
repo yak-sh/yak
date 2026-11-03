@@ -120,7 +120,8 @@ export let runtime = (shared: string = denoDir()) => ({
   args: [
     'run',
     '--frozen',
-    // Main CI checks source types; local runs execute consumer behavior.
+    // The run's source checks type its change's reach (./test-checks.ts),
+    // and main's CI every module.
     '--no-check',
     '-A',
     // Every function compiled as its module loads. A test runs once, so V8's
@@ -372,8 +373,10 @@ export let chosen = async (
     owner: member,
   })
 
-/** Plan and check a run before starting runtimes. A whole run needs no git
- * history or source checks: the gate has already checked the sources. */
+/** Plan a run before starting runtimes, and start checking its sources: `ok`
+ * settles beside the tests, the types of what the change reaches taking
+ * seconds of one core. A whole run needs no git history or source checks: the
+ * gate has already checked the sources. */
 export let prepare = async (
   args: string[],
   sqlite: string,
@@ -423,7 +426,8 @@ export let prepare = async (
       run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
     )
   }
-  let ok = all || await effects.check(changedFiles)
+  let ok = all ? Promise.resolve(true) : effects.check(changedFiles)
+    .catch((e) => (console.error(e), false))
   return { flags, paths, tags, files, keys, run, beyond, ok }
 }
 
@@ -623,7 +627,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.args,
     sqlite,
   )
-  if (!ok) Deno.exit(1)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   let suite: Suite = async (more) => {
@@ -647,5 +650,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let whole = !paths.length && !tags.length && flags.includes('--all')
   let left = files.length - run.length - beyond
   let measured = await measure(suite, whole)
-  Deno.exit(await say(b, { ...measured, left, beyond }, Deno.args))
+  let code = await say(b, { ...measured, left, beyond }, Deno.args)
+  Deno.exit(await ok ? code : 1)
 }

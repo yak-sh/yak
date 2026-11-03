@@ -1,8 +1,9 @@
 // `deno task check:types [--all] [paths…]`: the types of source and of the
 // code in its doc comments (`deno check --doc`). With no paths it checks what
 // the branch and working changes reach: each changed module and each module
-// importing one. The consumers past those are main's CI's: `deno task check`
-// runs `--all`, every module, after the push. Raycast is a Node/React host
+// importing one (`types`), as `deno task test` does on every run with no
+// paths. The consumers past those are main's CI's: `deno task check` runs
+// `--all`, every module, after the push. Raycast is a Node/React host
 // with its own tsconfig, checked by check:raycast, so it is not among DIRS.
 import { matchesGlob } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
@@ -50,25 +51,29 @@ let reached = async (changed: string[]) => {
   return { roots, made }
 }
 
-let deno = async (args: string[]) => {
-  let { success } = await new Deno.Command(Deno.execPath(), { args }).spawn()
-    .status
-  if (!success) Deno.exit(1)
+/** Runs `deno` with these arguments, and says whether it succeeded. */
+export type Run = (args: string[]) => Promise<boolean>
+
+let deno: Run = async (args) =>
+  (await new Deno.Command(Deno.execPath(), { args }).spawn().status).success
+
+/** Check the types of `roots`, after making what they import. */
+let check = async (roots: string[], made: string[], run: Run) =>
+  (await Promise.all(made.map((g) => run(['run', '--no-lock', '-A', g]))))
+    .every(Boolean) && await run(['check', '--doc', ...roots])
+
+/** Check the types of the modules the `changed` paths reach. */
+export let types = async (changed: string[], run: Run = deno) => {
+  if (!changed.some(checked)) return true
+  let { roots, made } = await reached(changed)
+  return !roots.length || await check(roots, made, run)
 }
 
 if (import.meta.main) {
   let all = Deno.args.includes('--all')
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
-  let { roots, made } = all || paths.length
-    ? { roots: all ? DIRS : paths, made: Object.keys(MADE) }
-    : await reached(await changes())
-  if (!roots.length) {
-    console.log('check:types: the change reaches no module')
-    Deno.exit(0)
-  }
-  if (!all && !paths.length) {
-    console.log(`check:types: ${roots.length} modules the change reaches`)
-  }
-  await Promise.all(made.map((g) => deno(['run', '--no-lock', '-A', g])))
-  await deno(['check', '--doc', ...roots])
+  let ok = all || paths.length
+    ? await check(all ? DIRS : paths, Object.keys(MADE), deno)
+    : await types(await changes())
+  if (!ok) Deno.exit(1)
 }
