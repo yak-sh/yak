@@ -18,6 +18,7 @@
 
 import { fault } from '@yaks/api/refuse'
 import { released } from './release.ts'
+import { settling } from './held.ts'
 
 /** A body a page loads. */
 export type Body = string | Uint8Array<ArrayBuffer>
@@ -66,10 +67,14 @@ export let within = <T>(
     )
     let close = () => quit('the host is closing')
     closing?.addEventListener('abort', close, { once: true })
-    make(stop.signal).then(resolve, reject).finally(() => {
+    // Answered at once when given up on, and let finish what it spawned
+    // before the process ends (./held.ts).
+    let made = make(stop.signal).then(resolve, reject).finally(() => {
       clearTimeout(timer)
       closing?.removeEventListener('abort', close)
+      settling.delete(made)
     })
+    settling.add(made)
   })
 
 /** The handler that answers `where` with the body `make` makes. `early` starts
@@ -158,17 +163,6 @@ let configAt = async (at: URL): Promise<string | undefined> => {
   }
 }
 
-// esbuild's service is a child process that writes to this one's stderr. One
-// left behind mid-build, when this process exits, finds its input closed
-// while it waits on a plugin and prints every goroutine as it dies; stopped
-// as the process unloads, it ends quietly.
-let stopping = (stop: () => unknown) => {
-  if (stopped) return
-  stopped = true
-  addEventListener('unload', () => void stop(), { once: true })
-}
-let stopped = false
-
 /** One browser module, compiled by esbuild's JavaScript service bridge and
  * Deno's workspace resolver, replacing the `deno bundle` bridge that can
  * deadlock (T-38240). Each context owns its cancellation and cleanup, so
@@ -178,12 +172,11 @@ export let bundle = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
-  let [{ context, stop }, { denoPlugins, urlToEsbuildResolution }] =
-    await Promise.all([
+  let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
+    .all([
       import('esbuild'),
       import('@luca/esbuild-deno-loader'),
     ])
-  stopping(stop)
   let at = entry instanceof URL ? entry : entry.at
   let dir = at.protocol == 'file:'
     ? undefined

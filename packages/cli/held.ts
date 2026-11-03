@@ -16,6 +16,11 @@ export let hosts = new Map<string, Promise<Served>>()
  * them. */
 export let asides = new Set<Aside<string>>()
 
+/** Work a closing graph stops but cannot wait on, let settle before the
+ * process ends: a page body still being made (./page.ts), which a host that
+ * stops cancels, and whose compiler would otherwise outlive the process. */
+export let settling = new Set<Promise<unknown>>()
+
 /** Ask every graph this process opened to wind down (host.ts `stop`): it
  * takes no new request, effect or step, and the command in flight finishes
  * what it started and returns on its own. False when it opened none, and
@@ -46,6 +51,7 @@ export let close = (code?: number): Promise<void> =>
     }
     hosts.clear()
     asides.clear()
+    await Promise.allSettled([...settling])
   })().finally(() => closing = undefined)
 
 let closing: Promise<void> | undefined
