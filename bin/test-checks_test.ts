@@ -14,15 +14,14 @@ test('source checks format and lint the change', () => {
   equal(checks([]), [])
 })
 
-test('a change checks the public API of the packages it touches', () => {
-  let names = (changed: string[]) =>
+test("a change touching a package checks the whole workspace's public API", () => {
+  let publish = (changed: string[]) =>
     checks(changed, ['./packages/a/deno.json', './packages/ab/deno.json'])
-      .filter((c) => c.name.startsWith('publish')).map((c) => c.args.at(-1))
-  equal(names(['packages/a/a.ts', 'packages/a/b.ts']), [
-    './packages/a/deno.json',
-  ])
-  equal(names(['packages/ab/deno.json']), ['./packages/ab/deno.json'])
-  equal(names(['workers/yak/a.ts', 'packages/abc/a.ts']), [])
+      .filter((c) => c.name == 'publish').map((c) => c.args)
+  let workspace = [['publish', '--dry-run', '--allow-dirty', '--no-check']]
+  equal(publish(['packages/a/a.ts', 'packages/ab/b.ts']), workspace)
+  equal(publish(['packages/ab/deno.json']), workspace)
+  equal(publish(['workers/yak/a.ts', 'packages/abc/a.ts']), [])
 })
 
 let file = Deno.makeTempFileSync({ suffix: '.ts' })

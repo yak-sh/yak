@@ -334,16 +334,26 @@ export let SECONDS = 6_000
 /// expected({ 'a_test.ts': { x: 100, y: 5 } })('a_test.ts') -> 125
 /// expected({})('a_test.ts') -> 20
 /// expected({ 'a_test.ts': { x: 100 } }, { 'a_test.ts': 900 })('a_test.ts') -> 900
+/// expected({}, { 'b_test.ts': 10, 'c_test.ts': 290 })('a_test.ts') -> 150
 /** What a file is expected to take: what it took whole as it last ran here
  * (@yaks/testing/deps `took`), loading included; else what its tests over the
- * budget last took (bench/test-budget.json), and a short load. */
+ * budget last took (bench/test-budget.json) and a short load, or what a file
+ * that ran here took on average, if that is more. Most files take a few
+ * milliseconds and a few take seconds, so one costed at the typical file's
+ * load would let every file not yet timed into a run and overrun its budget. */
 export let expected = (
   list: Record<string, Record<string, number>>,
   took: Record<string, number> = {},
-) =>
-(file: string) =>
-  took[file] ??
-    Object.values(list[file] ?? {}).reduce((sum, ms) => sum + ms, 20)
+) => {
+  let times = Object.values(took)
+  let mean = times.reduce((sum, ms) => sum + ms, 0) / (times.length || 1)
+  return (file: string) =>
+    took[file] ??
+      Math.max(
+        Object.values(list[file] ?? {}).reduce((sum, ms) => sum + ms, 20),
+        mean,
+      )
+}
 
 /// member('packages/sql/render.ts') -> 'packages/sql'
 /// member('bin/test.ts') -> undefined

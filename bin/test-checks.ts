@@ -1,6 +1,6 @@
-// Local source checks cover the change: its lint, its packages' public APIs,
-// and the types of what it reaches. Runtime tests follow consumers. Main CI
-// checks every module's types after the push.
+// Local source checks cover the change: its lint, the workspace's public APIs
+// when it touches a package, and the types of what it reaches. Runtime tests
+// follow consumers. Main CI checks every module's types after the push.
 
 import { publishing } from './release.ts'
 import { types } from './check-types.ts'
@@ -11,12 +11,15 @@ let formatted = (path: string) =>
 
 export type Check = { name: string; args: string[] }
 
-/** Format and lint existing changed files, and check the public API of each
- * package in `configs` that holds one. */
+/** Format and lint existing changed files, and, when the change touches a
+ * package in `configs`, check every package's public API as one workspace: a
+ * package checked alone cannot see the cycle its new import closes with
+ * another (`Circular package dependency detected`), which publishing the
+ * workspace refuses. */
 export let checks = (changed: string[], configs: string[] = []): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
-  let touched = configs.filter((config) => {
+  let touched = configs.some((config) => {
     let dir = config.replace(/^\.\//, '').replace(/deno\.json$/, '')
     return changed.some((path) => path.startsWith(dir))
   })
@@ -27,17 +30,12 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
     ...lint.length
       ? [{ name: 'lint', args: ['lint', '--permit-no-files', ...lint] }]
       : [],
-    ...touched.map((config) => ({
-      name: `publish ${config}`,
-      args: [
-        'publish',
-        '--dry-run',
-        '--allow-dirty',
-        '--no-check',
-        '--config',
-        config,
-      ],
-    })),
+    ...touched
+      ? [{
+        name: 'publish',
+        args: ['publish', '--dry-run', '--allow-dirty', '--no-check'],
+      }]
+      : [],
   ]
 }
 
