@@ -53,9 +53,9 @@ export type SessionOpts = AuditOpts
  */
 export let sessions = (opts: SessionOpts = {}): Plugin => {
   let lease = leasing(opts)
-  let precondition: Hook = (bundles, tx, err) =>
+  let precondition: Hook = (bundles, tx, err, ctx) =>
     after(
-      lease(bundles, tx, err),
+      lease(bundles, tx, err, ctx),
       (b) =>
         after(naming(b, tx, err), (named) =>
           after(resultEntries(named, tx, err), (joined) =>

@@ -16,11 +16,19 @@
 // how a lock is handed over, and the start-up pass frees a dead session's locks
 // without impersonating that session.
 //
+// A new lock also leaves a `worked` edge from its session to what it took
+// (@yaks/edge `link`), so what a session worked on outlives the claim: its
+// name (./name.ts), its row and memory_session read it after the release. A
+// graph whose vocabulary declares no links gets none, as a rule about
+// components a vocabulary lacks never fires.
+//
 // The batch is checked as a whole, because a batch may take two locks, and the
 // verdict has to be about the batch rather than about each bundle in turn.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
+import { EDGE, link } from '@yaks/edge'
 import { CLAIM } from './comp.ts'
 import { Bounced } from './bounce.ts'
 
@@ -44,14 +52,18 @@ export let takes = (bundles: Bundle[]): [Eid, Eid][] =>
     return s ? [[b.entity.eid, String(s)] as [Eid, Eid]] : []
   })
 
+/** The relation a take leaves from its session to what it took. */
+export let WORKED = 'worked'
+
 /**
- * The `precondition` hook: refuse a take of a held lock ({@link Bounced}) and
- * stamp `at` on every lock the batch newly takes.
+ * The `precondition` hook: refuse a take of a held lock ({@link Bounced}),
+ * stamp `at` on every lock the batch newly takes, and link its session
+ * `worked` to what it took.
  *
  * Registered by {@link https://jsr.io/@yaks/session/doc/~/sessions | sessions};
  * exported on its own for a graph that wants the rule without the vocabulary.
  */
-export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
+export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx, _, ctx) => {
   let taken = takes(bundles)
   if (!taken.length) return bundles
   let now = opts.now ?? (() => new Date().toISOString())
@@ -78,11 +90,17 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
     // server-owned, so admission refuses it from an untrusted client; this
     // phase runs after admission, which is what lets a hook stamp at all.
     let stamp = now()
-    return bundles.map((b) => {
+    let vocab = (ctx?.graph as { vocab?: Vocab } | undefined)?.vocab
+    let links = !!vocab?.comp(EDGE) && !!vocab.comp(WORKED)
+    let worked = links
+      ? [...fresh].map((on) => link(held.get(on)!, WORKED, on))
+      : []
+    let stamped = bundles.map((b) => {
       let c = of(b, CLAIM)
       if (!c?.session || !fresh.has(b.entity.eid)) return b
       fresh.delete(b.entity.eid) // one stamp per lock, however it was stated
       return { ...b, [CLAIM]: { ...c, at: stamp } }
     })
+    return [...stamped, ...worked]
   })
 }

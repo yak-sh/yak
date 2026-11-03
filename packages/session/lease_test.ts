@@ -15,6 +15,15 @@ test('a lock lands, stamped with the moment it was taken', () => {
   assertEquals(lockOn(s, ids.p1), { session: ids.run1, at: AT })
 })
 
+test('a take leaves a worked edge from its run to what it took', () => {
+  let s = store()
+  let g = locked(s, clock)
+  g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
+  g.apply([{ entity: { eid: ids.p1 }, claim: null }])
+  let [e] = s.read(`.worked&.edge.from=${ids.run1}`) as Bundle[]
+  assertEquals(e?.edge, { from: ids.run1, to: ids.p1 })
+})
+
 test('the same run re-claiming is a refresh, not a take', () => {
   let s = store()
   let g = locked(s, clock)
