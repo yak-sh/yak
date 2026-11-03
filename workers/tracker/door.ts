@@ -236,7 +236,11 @@ async (request: Request): Promise<Response> => {
 }
 
 /** What is wrong with a mark's body, naming the field and what it accepts. */
-function refusal(body: any, said: Record<string, number>) {
+function refusal(
+  // deno-lint-ignore no-explicit-any
+  body: any,
+  said: Record<string, number>,
+) {
   if (!body || typeof body != 'object' || Array.isArray(body)) {
     return 'body must be an object naming the bug'
   }
