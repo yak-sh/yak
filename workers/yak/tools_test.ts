@@ -77,7 +77,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
     slug: 'recipes',
     title: 'Recipes',
   })
-  assertStringIncludes(made.text, 'https://ada.yaks.fyi/recipes/')
+  assertStringIncludes(made.text, 'https://ada.yaks.fyi/')
   let listed = await call(ctx, 'app_list', {})
   assertStringIncludes(listed.text, 'https://ada.yaks.fyi/recipes/')
   assertEquals(apps(listed)[0].mailbox, 'ada.recipes@yaks.fyi')

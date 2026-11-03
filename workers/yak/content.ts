@@ -225,7 +225,7 @@ export let SAYS: Record<string, Said> = {
       },
     ],
     'body':
-      "Make me something on yaks.app: {{what}}\n\nBuild it as an app there — its own address, its own store — and give me the link\nonce it works. Keep whatever it saves in the app's own store, so it is the same\non my phone. If other people are meant to use it, or it needs to be more than\none page, ask me before you deploy.",
+      "Make me something on yaks.app: {{what}}\n\nBuild it as an app there — its own address, its own store — and give me the link\nonce app_deploy has released it and it opens; don't tell me it exists before then. Keep whatever it saves in the app's own store, so it is the same\non my phone. If other people are meant to use it, or it needs to be more than\none page, ask me before you deploy.",
   },
   'publish': {
     'name': 'publish',
@@ -299,7 +299,7 @@ export let WORDS: Record<string, Words> = {
   'app_new': {
     'title': 'Create an app',
     'description':
-      "Create a new app, served at <space>.yaks.app/<slug>/. Pass its slug and its title (its name). Creating it does not choose a front page for the space; the owner can do that with app_set(home: true). app_files writes its files and app_deploy releases a version. Pass access when the app is for other people too: 'open' if anyone with the link should be able to write to it (vote, add a line, sign up), and 'private' if only the person and whoever they invite (member_add) should see it at all. The default access is 'public': anyone can read, but only members allowed to write can change data. Returns the app's entity id, URL and access setting. Documentation: https://yaks.app/docs.",
+      "Create a new app, served at <space>.yaks.app/<slug>/. Pass its slug and its title (its name). Creating it does not choose a front page for the space; the owner can do that with app_set(home: true). app_files writes its files and app_deploy releases a version. Pass access when the app is for other people too: 'open' if anyone with the link should be able to write to it (vote, add a line, sign up), and 'private' if only the person and whoever they invite (member_add) should see it at all. The default access is 'public': anyone can read, but only members allowed to write can change data. Returns the app's entity id and access setting, and no link: its address serves nothing until app_deploy, whose answer gives the link to hand the person. Documentation: https://yaks.app/docs.",
   },
   'app_files': {
     'title': 'Read or write app files',

@@ -3068,14 +3068,20 @@ let OURS: Row[] = [
         app = current.app!
       }
       if (!apps.length) step(ctx.env, 'first_app')
-      let at = url(space, app, ctx.env)
+      // No link yet (T-135905): its address serves nothing until a version
+      // is released, and a link handed on now opens to nothing. app_deploy's
+      // answer carries it, once the page answers.
       return {
-        text: `app ${space.slug}/${s} (${app.eid}): ${at}` +
-          ` — ${told(app.access)}. https://${spaceHost(ctx.env, space.slug)}/ ${
+        text: `app ${space.slug}/${s} (${app.eid}) is made but not deployed: ` +
+          'its address serves nothing yet, so do not tell the person it ' +
+          'exists or give them a link. app_files writes it, and app_deploy ' +
+          `releases it and answers its link. ${told(app.access)}. https://${
+            spaceHost(ctx.env, space.slug)
+          }/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
           } — app_set(app, home: true) makes this one the front page there`,
         space,
-        value: { eid: app.eid, url: at },
+        value: { eid: app.eid, deployed: false },
       }
     },
   },
@@ -4796,6 +4802,8 @@ let OURS: Row[] = [
             `- ${a.title}: ${a.url} — ${
               [
                 a.access,
+                // Its address serves nothing yet (T-135905).
+                a.version ? '' : 'not deployed: no link to give yet',
                 a.errors
                   ? `${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
                   : '',

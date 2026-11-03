@@ -85,7 +85,8 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
 (${url(env, '/docs/code.md')}). Five steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
-   one, and every tool uses it unless they have several.
+   one, and every tool uses it unless they have several. Its address serves
+   nothing until step 4, so say nothing to the person about the app yet.
 2. app_files — write index.html, and any css, js or images beside it; the
    whole set in one call, as files: [{path, content}, ...]. Write an icon.svg
    beside index.html as well, as content: a square viewBox, a background that
@@ -105,7 +106,8 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    {"properties": {"serves": {"type": "number"}}}}} gives the app a recipe
    component of its own, filterable like doc, and two commands of its own,
    add_recipe and find_recipe, so any agent finds the app later.
-5. Give the person the released URL.
+5. Give the person the URL app_deploy answered: that is when the app exists
+   for them, and the first time to say it was made.
 
 app_list is what they already have — every app, its address and what is
 broken in it. Before changing one, read it back in one call:

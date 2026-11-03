@@ -462,13 +462,13 @@ test(
           slug: 'recipes',
           title: 'Recipe box',
         }),
-        new RegExp(`${jeff54}\\.yaks\\.app\\/recipes\\/`),
+        /not deployed/,
       )
       // A space needs no naming: the caller's own is the default, and with
       // more than one the tools say which names there are (T-32482).
       assertMatch(
         await agent.tool('app_new', { slug: 'garden', title: 'Garden' }),
-        new RegExp(`${jeff54}\\.yaks\\.app\\/garden\\/`),
+        new RegExp(`app ${jeff54}/garden `),
       )
       assertEquals(
         paths(await agent.tool('app_files', { app: 'garden', op: 'list' })),
@@ -1506,7 +1506,7 @@ test(
       // need it, rather than being asked to invent a name.
       assertMatch(
         await stranger.tool('app_new', { slug: 'notes', title: 'Notes' }),
-        /\.yaks\.app\/notes\//,
+        /^app [^/]+\/notes /,
       )
       await assertRejects(
         () => stranger.tool('app_files', { ...app, op: 'list' }),
