@@ -1914,6 +1914,26 @@ test('env.APP: a private app is written by its own worker, and by nobody else', 
   assertEquals((await (await asAda('/api/query?.person')).json()).length, 0)
 })
 
+// A private app's worker serving its page to everyone: the page names its
+// files at their release's addresses, and those are the worker's to give a
+// stranger at the files' own paths, or to pass and leave refused.
+test("a private app's release asset is its worker's to give a stranger", async () => {
+  await using k = await router((req) => {
+    let { pathname } = new URL(req.url)
+    return pathname == '/site.css'
+      ? new Response('body{}', { headers: { 'content-type': 'text/css' } })
+      : new Response('no', { status: 404 })
+  })
+  await k.dir.apply({
+    entities: [{ entity: { eid: k.app.eid }, app: { access: 'private' } }],
+  }, ADA_OWNS)
+  let release = crypto.randomUUID()
+  let css = await k.at(`/api/assets/${release}/site.css`)
+  assertEquals([css.status, await css.text()], [200, 'body{}'])
+  let other = await k.at(`/api/assets/${release}/other.css`)
+  assertEquals((await other.json()).error.code, 'not_a_reader')
+})
+
 // Where Cloudflare refuses the hop to the cache in front of `Files`, as it
 // does inside an app worker's own call (files.ts `door`), the page and the
 // upload are still served, whoever asks.

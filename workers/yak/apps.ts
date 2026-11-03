@@ -1861,7 +1861,19 @@ export let api = async (
         },
       })
     }
-    if (!mayRead) return refused('not_a_reader')
+    // On a private app the worker is the gatekeeper (T-34303): a page it
+    // serves to someone who may not read the app was woven these addresses,
+    // and its files are the worker's to give or refuse at their own path, as
+    // that page would have asked before its addresses were the release's.
+    if (!mayRead) {
+      let url = new URL(req.url)
+      url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
+        versioned.path
+      return await c.time(
+        'worker',
+        () => ran(env, space, app, new Request(url, req), who),
+      ) ?? refused('not_a_reader')
+    }
     let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {
       return json(404, 'no_such_file')
