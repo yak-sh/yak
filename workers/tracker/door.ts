@@ -208,7 +208,7 @@ async (request: Request): Promise<Response> => {
     try {
       body = await request.json()
     } catch {
-      return json({ error: 'bug global eid required' }, 400)
+      return json({ error: 'body must be JSON naming the bug' }, 400)
     }
     // A fixer's mark names its task, a short name; a resolution says why, a
     // few sentences each. Neither is a body of text.
@@ -217,17 +217,8 @@ async (request: Request): Promise<Response> => {
       : name == 'resolved'
       ? { broke: 2000, cause: 2000, since: 64, fix: 64, recur: 2000 }
       : {}
-    if (
-      !body || typeof body != 'object' || Array.isArray(body) ||
-      Object.keys(body).some((key) => key != 'bug' && !(key in said)) ||
-      typeof body.bug != 'string' || !minted(body.bug) ||
-      Object.entries(said).some(([key, most]) =>
-        body[key] != undefined &&
-        (typeof body[key] != 'string' || body[key].length > most)
-      )
-    ) {
-      return json({ error: 'bug global eid required' }, 400)
-    }
+    let wrong = refusal(body, said)
+    if (wrong) return json({ error: wrong }, 400)
     let { bug, ...rest } = body
     try {
       await tracker.mark(bug, name, rest)
@@ -242,4 +233,25 @@ async (request: Request): Promise<Response> => {
     return json({ ok: true })
   }
   return json({ error: 'tracker route not found' }, 404)
+}
+
+/** What is wrong with a mark's body, naming the field and what it accepts. */
+function refusal(body: any, said: Record<string, number>) {
+  if (!body || typeof body != 'object' || Array.isArray(body)) {
+    return 'body must be an object naming the bug'
+  }
+  let fields = ['bug', ...Object.keys(said)].join(', ')
+  let stray = Object.keys(body).find((key) => key != 'bug' && !(key in said))
+  if (stray) return `${stray} is not a field here; it takes ${fields}`
+  if (typeof body.bug != 'string' || !minted(body.bug)) {
+    return 'bug global eid required'
+  }
+  for (let [key, most] of Object.entries(said)) {
+    let value = body[key]
+    if (value == undefined) continue
+    if (typeof value != 'string') return `${key} must be a string`
+    if (value.length > most) {
+      return `${key} is ${value.length} characters; it takes at most ${most}`
+    }
+  }
 }

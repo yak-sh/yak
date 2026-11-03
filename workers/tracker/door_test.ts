@@ -378,6 +378,23 @@ for (let path of ['/resolve', '/archive', '/take', '/reopen']) {
     ])
   })
 }
+for (
+  let [body, said] of [
+    [
+      { bug: other, fix: 'x'.repeat(65) },
+      'fix is 65 characters; it takes at most 64',
+    ],
+    [{ bug: other, cause: 7 }, 'cause must be a string'],
+    [{ bug: other, why: 'a' }, 'why is not a field here'],
+    [{ bug: 'B-1' }, 'bug global eid required'],
+  ] as const
+) {
+  test(`tracker /resolve names what it refuses: ${said}`, async () => {
+    let response = await markDoor(request('/resolve', marker, body))
+    equal(response.status, 400)
+    ok((await response.json()).error.includes(said))
+  })
+}
 test('bug marking tickets cannot submit error captures', async () => {
   equal((await markDoor(request('/errors', marker, []))).status, 403)
 })
