@@ -37,5 +37,6 @@ test('files load and execute in order, retaining reports without fixture bodies'
   ])
   ok(result.outcomes.every((o) => !Object.hasOwn(o.test, 'body')))
   equal(Object.keys(result.loads), ['first.ts', 'second.ts'])
+  equal(Object.keys(result.took), ['first.ts', 'second.ts'])
   equal(result.loading, Object.values(result.loads).reduce((a, b) => a + b, 0))
 })

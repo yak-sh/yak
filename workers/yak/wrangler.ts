@@ -199,8 +199,13 @@ export let READIED = 'YAK_WORKER_READIED'
 
 /** Prepare every prerequisite before a probe reads it, unless this process or
  * the one that started it already did. Answers whether npm installed. `quiet`
- * says only what failed: a test run's reader acts on nothing else. */
-export let ready = async (quiet = false, root = dir, timeout = 600_000) => {
+ * says only what failed: a test run's reader acts on nothing else. Without
+ * `assets`, only the npm tree: a run none of whose files read a generated
+ * asset leaves them as they are. */
+export let ready = async (
+  quiet = false,
+  { root = dir, timeout = 600_000, assets: made = true } = {},
+) => {
   if (Deno.env.get(READIED) == root) return false
   let dependencies = modules(root, timeout, quiet)
   let make = async () => {
@@ -208,13 +213,13 @@ export let ready = async (quiet = false, root = dir, timeout = 600_000) => {
   }
   let completed = await Promise.allSettled([
     dependencies,
-    assets(repo, root, make),
+    made && assets(repo, root, make),
   ])
   for (let result of completed) {
     if (result.status == 'rejected') throw result.reason
   }
   let changed = await dependencies
-  Deno.env.set(READIED, root)
+  if (made) Deno.env.set(READIED, root)
   return changed
 }
 

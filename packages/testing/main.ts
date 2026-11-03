@@ -26,7 +26,7 @@
 // `brief`) unless `--verbose`. The exit code is 1 when a test failed.
 import { choose } from './choose.ts'
 import { drive } from './drive.ts'
-import { note, proof, remember, survey } from './deps.ts'
+import { note, proof, remember, survey, tally } from './deps.ts'
 import { find, tested } from './find.ts'
 import { examples } from './load.ts'
 import { observe } from './reads.ts'
@@ -103,10 +103,11 @@ let load = async (path: string) => {
   return collected.splice(at).filter(picked)
 }
 // Examples load before test modules, while the runtime's import graph is small.
-let { outcomes, loading, loads } = await drive([...pages, ...modules], load, {
-  timeout,
-  verbose,
-})
+let { outcomes, loading, loads, took } = await drive(
+  [...pages, ...modules],
+  load,
+  { timeout, verbose },
+)
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some. Its pass is kept by its proof: its key, and
@@ -115,6 +116,7 @@ let failed = new Set(outcomes.filter((o) => !o.ok).map((o) => o.test.file))
 let passing = tags.length
   ? []
   : [...modules, ...pages].filter((p) => !failed.has(p) && key.has(p))
+tally(took)
 let seen = observation.reads()
 observation.close()
 let read = (p: string) => seen && (seen.get(p) ?? [])
@@ -130,7 +132,7 @@ let remembered: Record<string, string> = s
   : {}
 remember(Object.values(remembered))
 if (seen && s) {
-  note(Object.fromEntries(passing.map((p) => [key.get(p)!, read(p)!])))
+  note(Object.fromEntries(passing.map((p) => [p, read(p)!])))
 }
 let wall = performance.now() - started
 summary(outcomes, wall, { left, planned, loading }, verbose)

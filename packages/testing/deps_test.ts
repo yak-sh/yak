@@ -9,6 +9,7 @@ import {
   proof,
   recall,
   remember,
+  remembered,
   shared,
   survey,
   WIDE,
@@ -143,19 +144,42 @@ test('a file of data holds the same whether or not a module imports it', async (
   equal(await amid.of(at('data.json')), await alone.of(at('data.json')))
 })
 
+test('a remembered graph asks deno again only of the modules changed since', async () => {
+  let table = { 'g/x_test.ts': ['g/y.ts'], 'g/y.ts': [] }
+  for (let m of Object.keys(table)) write(m, m)
+  let asked: string[][] = []
+  let ask = remembered((roots) => {
+    asked.push(roots)
+    return deno(table)()
+  }, at('g/graph.json'))
+  let names = async () =>
+    (await ask([at('g/x_test.ts')]))!.modules.map((m) => m.specifier).sort()
+  let whole = await names()
+  equal(whole, [`file://${at('g/x_test.ts')}`, `file://${at('g/y.ts')}`])
+  equal(await names(), whole)
+  equal(asked, [[at('g/x_test.ts')]])
+  write('g/y.ts', 'changed')
+  equal(await names(), whole)
+  equal(asked.at(-1), [at('g/y.ts')])
+})
+
 let store = `${dir}/passed.json`
 let reads = `${dir}/read.json`
 remember(['a', 'b', 'c'], store)
 forget(['a', 'c', 'never'], store)
-note({ k1: ['x.json'], k2: [], k3: ['y'] }, reads)
-note({ k3: [] }, reads)
+note({ 'a_test.ts': ['x.json'], 'b_test.ts': [], 'c_test.ts': ['y'] }, reads)
+note({ 'c_test.ts': [] }, reads)
 
 test('a pass forgotten is no longer kept, and the others stay', () => {
   equal(Object.keys(passed(store)), ['b'])
 })
 
-test('what a file read is kept by its key, and a file that read nothing keeps no entry', () => {
-  equal(recall(reads), { k1: ['x.json'] })
+test('what a file read is kept by its name, reading nothing included', () => {
+  equal(recall(reads), {
+    'a_test.ts': ['x.json'],
+    'b_test.ts': [],
+    'c_test.ts': [],
+  })
 })
 
 test('relevance follows transitive imports and named data, with an empty pass cache', () => {

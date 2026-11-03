@@ -70,6 +70,7 @@ let planned = async (args: string[], shallow = false, pass = true) => {
         sources: ['a.ts'],
         beyond: 0,
         reaches: () => false,
+        read: () => undefined,
       })
     },
     check: (changed) => {
@@ -110,29 +111,39 @@ test('dependency bookkeeping changes select their consumers without selecting un
   )
 })
 
-test('a changed source can ready its generated imports without consumer tests or a source walk', async () => {
-  let readied = false
+let readied = async (read: (file: string) => string[] | undefined) => {
+  let made: boolean[] = []
   let plan = await prepare([], '/sqlite.so', {
     changes: () => Promise.resolve(['worker.ts', 'guide.md']),
     format: (files) => Promise.resolve(files),
-    find: () => Promise.resolve({ tests: [], pages: [] }),
+    find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
     chosen: (files, _all, _also, _changed, sources) => {
-      equal(files, [])
       equal(sources, ['worker.ts'])
       return Promise.resolve({
         keys: new Map(),
-        run: [],
-        affected: [],
+        run: files,
+        affected: files,
         sources: ['worker.ts'],
         beyond: 0,
         reaches: (paths) => paths.includes('workers/yak/testing.ts'),
+        read,
       })
     },
-    check: () => Promise.resolve(readied),
-    ready: () => {
-      readied = true
+    check: () => Promise.resolve(made.length > 0),
+    ready: (_quiet, assets) => {
+      made.push(assets)
       return Promise.resolve()
     },
   })
   equal(plan.ok, true)
+  return made
+}
+
+test('a changed source readies its generated imports before the checks', async () => {
+  equal(await readied(() => undefined), [true])
+})
+
+test('a run makes the generated assets only when a file it runs read one, or has no reads kept', async () => {
+  equal(await readied(() => ['workers/yak/public/docs.md']), [false])
+  equal(await readied(() => ['workers/yak/public/_client.js']), [true])
 })

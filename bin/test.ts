@@ -2,8 +2,9 @@
 // behavior runs in process on linkedom. With no paths, the dependency graph
 // selects tests reached by branch and working changes: every one of a changed
 // workspace package, then those importing one and the nearest, as many as a
-// few seconds hold; main's CI runs the rest after the push. Cached passes
-// leave out tests already passed unchanged. Paths narrow an explicit run.
+// few seconds hold by what each took as it last ran here; main's CI runs the
+// rest after the push. Cached passes leave out tests already passed unchanged.
+// Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).
 
@@ -34,6 +35,7 @@ let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
 let { find, tested } = await import('@yaks/testing/find')
+let { took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
@@ -313,16 +315,33 @@ export let READIES = [
   'workers/yak/testing.ts',
 ]
 
-/** What a change's own run may expect its tests to take, in milliseconds: the
- * rest of its consumers run in main's CI after the push. */
-export let SECONDS = 8_000
+/// MADE.test('workers/yak/public/_client.js') -> true
+/// MADE.test('workers/yak/public/_web/app.js') -> true
+/// MADE.test('workers/yak/public/_headers') -> false
+/// MADE.test('workers/yak/public/docs.md') -> false
+/** The generated assets among those: what public/ holds under a name
+ * beginning `_`, but `_headers`, which git keeps. A run makes them only when
+ * a file it runs read one as it last passed, or has no reads kept: bundling
+ * them is seconds a run whose files never read them need not wait. */
+export let MADE = /^workers\/yak\/public\/_(?!headers$)/
+
+/** What a change's own run may expect its tests to take, in milliseconds,
+ * loading included: with choosing and starting them, under the ten seconds an
+ * agent may wait. The rest of its consumers run in main's CI after the push. */
+export let SECONDS = 6_000
 
 /// expected({ 'a_test.ts': { x: 100, y: 5 } })('a_test.ts') -> 125
 /// expected({})('a_test.ts') -> 20
-/** What a file is expected to take: what its tests over the budget last took
- * (bench/test-budget.json), and its load. */
-export let expected =
-  (list: Record<string, Record<string, number>>) => (file: string) =>
+/// expected({ 'a_test.ts': { x: 100 } }, { 'a_test.ts': 900 })('a_test.ts') -> 900
+/** What a file is expected to take: what it took whole as it last ran here
+ * (@yaks/testing/deps `took`), loading included; else what its tests over the
+ * budget last took (bench/test-budget.json), and a short load. */
+export let expected = (
+  list: Record<string, Record<string, number>>,
+  took: Record<string, number> = {},
+) =>
+(file: string) =>
+  took[file] ??
     Object.values(list[file] ?? {}).reduce((sum, ms) => sum + ms, 20)
 
 /// member('packages/sql/render.ts') -> 'packages/sql'
@@ -342,7 +361,7 @@ export let chosen = async (
 ) =>
   await choose(files, {
     budget: SECONDS,
-    cost: expected((await budget()).tests),
+    cost: expected((await budget()).tests, took()),
     all,
     changed,
     sources,
@@ -364,9 +383,9 @@ export let prepare = async (
     find,
     chosen,
     check,
-    ready: async (quiet: boolean) => {
+    ready: async (quiet: boolean, assets: boolean) => {
       let { ready } = await import('../workers/yak/wrangler.ts')
-      await ready(quiet)
+      await ready(quiet, { assets })
     },
   },
 ) => {
@@ -388,7 +407,7 @@ export let prepare = async (
   ]
   // Choose files before starting runtimes; hand each its dependency keys.
   let changed = !paths.length && !all ? changedPaths : undefined
-  let { keys, run, beyond, reaches } = await effects.chosen(
+  let { keys, run, beyond, reaches, read } = await effects.chosen(
     files,
     all,
     [sqlite],
@@ -399,7 +418,10 @@ export let prepare = async (
     ),
   )
   if (reaches(READIES)) {
-    await effects.ready(!flags.includes('--verbose'))
+    await effects.ready(
+      !flags.includes('--verbose'),
+      run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
+    )
   }
   let ok = all || await effects.check(changedFiles)
   return { flags, paths, tags, files, keys, run, beyond, ok }

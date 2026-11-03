@@ -3,7 +3,8 @@
 import { file, type Outcome } from './run.ts'
 import type { Test } from './suite.ts'
 
-/** Load each file, then run its tests before loading the next. */
+/** Load each file, then run its tests before loading the next. Says what
+ * loading took in all and each file's load, and what each file took whole. */
 export let drive = async (
   paths: string[],
   load: (path: string) => Promise<Test[]>,
@@ -12,6 +13,7 @@ export let drive = async (
   let outcomes: Outcome[] = []
   let loading = 0
   let loads: Record<string, number> = {}
+  let took: Record<string, number> = {}
   for (let path of paths) {
     console.log(`loading ${path}`)
     let begun = performance.now()
@@ -20,6 +22,7 @@ export let drive = async (
     loading += loaded
     loads[path] = loaded
     outcomes.push(...await file(path, tests, timeout, loaded, verbose))
+    took[path] = Math.round(performance.now() - begun)
   }
-  return { outcomes, loading, loads }
+  return { outcomes, loading, loads, took }
 }

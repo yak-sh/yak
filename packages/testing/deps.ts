@@ -14,7 +14,8 @@
 // by its proof, the file's key with what each of those holds; a run that
 // could not see them keeps the key alone. The passes are kept in a file every
 // checkout on the machine shares, so the same sources passing in one worktree
-// count in another, and what each key's file read in a file beside it.
+// count in another, and what each file read as it last passed in a file
+// beside it.
 import { createHash } from 'node:crypto'
 import { written } from './find.ts'
 
@@ -46,6 +47,7 @@ let rel = (specifier: string) =>
     ? decodeURIComponent(new URL(specifier).pathname)
     : specifier
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
+let cache = Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
 
 /** The module graph reached from `roots`, or undefined when deno cannot
  * say. Deno resolves it by the checkout's lock, and writes what it resolved
@@ -72,6 +74,143 @@ export let graph = async (roots: string[]): Promise<Info | undefined> => {
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+}
+
+/** What a graph's caller can say of a path: what it holds now (`digest`). */
+export type Bytes = (path: string) => Promise<string>
+
+/** Where what deno said each module imports is kept, by the module's bytes,
+ * for every checkout on the machine. */
+export let GRAPH: string = `${cache}/yak/tests-graph.json`
+
+// What the store keeps of a module: what `Info` reads, without the source
+// spans and sizes deno says beside it.
+type Module = Info['modules'][number]
+type Kept = {
+  deno: string
+  configs: Record<string, string>
+  modules: Record<string, { digest: string; module: Module }>
+  redirects: Record<string, string>
+}
+
+let slim = (m: Module): Module => ({
+  specifier: m.specifier,
+  ...m.dependencies && {
+    dependencies: m.dependencies.map((d) => ({
+      ...d.code?.specifier && { code: { specifier: d.code.specifier } },
+      ...d.type?.specifier && { type: { specifier: d.type.specifier } },
+      ...d.isDynamic && { isDynamic: true },
+    })),
+  },
+})
+
+/** What may resolve the modules at `paths`: the lock, and each config
+ * (`deno.json`, `deno.jsonc`, `package.json`) in their directories and those
+ * above them, up to the checkout's, whether there or not. */
+let configs = (paths: string[]) => {
+  let dirs = new Set<string>(['.'])
+  for (let p of paths) {
+    if (p.startsWith('/')) continue
+    for (let at = p.lastIndexOf('/'); at > 0; at = p.lastIndexOf('/', at - 1)) {
+      if (dirs.has(p.slice(0, at))) break
+      dirs.add(p.slice(0, at))
+    }
+  }
+  return [
+    'deno.lock',
+    ...[...dirs].flatMap((d) =>
+      ['deno.json', 'deno.jsonc', 'package.json'].map((f) =>
+        d == '.' ? f : `${d}/${f}`
+      )
+    ),
+  ]
+}
+
+/**
+ * `info` (`deno info`), asked only of what changed: each module deno said
+ * before is kept by its bytes (`bytes`), and while those and what resolves
+ * them (`resolution`) hold, what it imports is what deno said then. A module
+ * changed or never seen is asked again, with what it reaches. The store
+ * names a checkout's files from the checkout, and the examples a process
+ * writes beside a page (./load.ts `beside`) without its pid, so every
+ * checkout and run shares it.
+ */
+export let remembered = (
+  info: (roots: string[]) => Promise<Info | undefined> = graph,
+  store = GRAPH,
+) =>
+async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
+  let here = `${Deno.cwd()}/`, pid = `.${Deno.pid}.example.`
+  let kept: Kept = { deno: '', configs: {}, modules: {}, redirects: {} }
+  try {
+    kept = {
+      ...kept,
+      ...JSON.parse(
+        Deno.readTextFileSync(store).replaceAll('<checkout>/', here)
+          .replaceAll('.<pid>.example.', pid),
+      ),
+    }
+  } catch { /* none kept */ }
+  let file = (s: string) => s.startsWith('file:')
+  let now = (s: string) => file(s) ? bytes(rel(s)) : Promise.resolve('')
+  let held = await Promise.all(
+    Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
+  )
+  let whole = kept.deno != Deno.version.deno || !held.every(Boolean)
+  let at = (s: string) => kept.redirects[s] ?? s
+  // Walked a wave at a time, each wave's bytes read together.
+  let reached = new Map<string, Module>()
+  let seen = new Set<string>(), stale = new Set<string>()
+  let wave = whole ? [] : roots.map((r) => at(url(r)))
+  while (wave.length) {
+    wave = [...new Set(wave)].filter((s) => !seen.has(s))
+    for (let s of wave) seen.add(s)
+    let digests = await Promise.all(wave.map(now))
+    let next: string[] = []
+    for (let [i, s] of wave.entries()) {
+      let k = kept.modules[s]
+      if (!k && !file(s)) whole = true
+      if (!k || k.digest != digests[i]) {
+        stale.add(rel(s))
+        continue
+      }
+      reached.set(s, k.module)
+      for (let d of k.module.dependencies ?? []) {
+        for (let to of [d.code?.specifier, d.type?.specifier]) {
+          if (to) next.push(at(to))
+        }
+      }
+    }
+    wave = next
+  }
+  if (whole) {
+    kept = { deno: Deno.version.deno, configs: {}, modules: {}, redirects: {} }
+    stale = new Set(roots)
+  }
+  if (!stale.size) {
+    return { modules: [...reached.values()], redirects: kept.redirects }
+  }
+  let fresh = await info([...stale])
+  if (!fresh) return undefined
+  let digests = await Promise.all(fresh.modules.map((m) => now(m.specifier)))
+  for (let [i, m] of fresh.modules.entries()) {
+    reached.set(m.specifier, m)
+    kept.modules[m.specifier] = { digest: digests[i], module: slim(m) }
+  }
+  Object.assign(kept.redirects, fresh.redirects)
+  let local = fresh.modules.map((m) => m.specifier).filter(file).map(rel)
+  let unseen = configs(local).filter((c) => !(c in kept.configs))
+  let found = await Promise.all(unseen.map(bytes))
+  for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
+  Deno.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+  let draft = `${store}.${Deno.pid}`
+  Deno.writeTextFileSync(
+    draft,
+    JSON.stringify(kept).replaceAll(here, '<checkout>/')
+      .replaceAll(pid, '.<pid>.example.'),
+  )
+  Deno.renameSync(draft, store)
+  return { modules: [...reached.values()], redirects: kept.redirects }
 }
 
 /// named("new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> ['x/a.json']
@@ -212,7 +351,8 @@ export const WIDE = 200
  * undefined when it cannot say what they import. */
 export let survey = async (
   paths: string[],
-  info: (roots: string[]) => Promise<Info | undefined> = graph,
+  info: (roots: string[], bytes: Bytes) => Promise<Info | undefined> =
+    remembered(),
 ): Promise<Survey | undefined> => {
   // What each file is and names: read once for the lot.
   let facts = new Map<string, Promise<{ digest: string; names: string[] }>>()
@@ -220,12 +360,15 @@ export let survey = async (
     if (!facts.has(path)) {
       facts.set(
         path,
-        digest(path, true).then(async (d) => ({
-          digest: d,
-          names: code(path)
-            ? named(await Deno.readTextFile(path).catch(() => ''), path)
-            : [],
-        })),
+        Deno.readFile(path).then(
+          (bytes) => ({
+            digest: hex(bytes),
+            names: code(path)
+              ? named(new TextDecoder().decode(bytes), path)
+              : [],
+          }),
+          async () => ({ digest: await digest(path, true), names: [] }),
+        ),
       )
     }
     return facts.get(path)!
@@ -233,7 +376,9 @@ export let survey = async (
   let named0 = (await Promise.all(paths.filter(code).map(fact)))
     .flatMap((f) => f.names)
   let roots = [...new Set([...paths, ...named0].filter(code))]
-  let found = roots.length ? await info(roots) : { modules: [], redirects: {} }
+  let found = roots.length
+    ? await info(roots, async (p) => (await fact(p)).digest)
+    : { modules: [], redirects: {} }
   if (!found) return undefined
   let { redirects } = found
   let at = (s: string) => redirects[s] ?? s
@@ -309,21 +454,24 @@ export let survey = async (
     return reverse.get(edges)!
   }
   let closures = new Map<string, Set<string>>()
-  let breadths = new Map<string, number>()
-  let breadth = (node: string) => {
-    if (!breadths.has(node)) {
+  // Whether a module loads more than `WIDE` others. The walk stops past
+  // `WIDE`: a whole platform is thousands of modules, and its importers are
+  // hundreds, each asking.
+  let wides = new Map<string, boolean>()
+  let wide = (node: string) => {
+    if (!wides.has(node)) {
       let seen = new Set([node])
       let go = [node]
-      while (go.length) {
+      while (go.length && seen.size <= WIDE) {
         for (let n of runtime.get(go.pop()!) ?? []) {
           if (seen.has(n)) continue
           seen.add(n)
           go.push(n)
         }
       }
-      breadths.set(node, seen.size)
+      wides.set(node, seen.size > WIDE)
     }
-    return breadths.get(node)!
+    return wides.get(node)!
   }
   return {
     of: (path, run = false) => {
@@ -370,7 +518,7 @@ export let survey = async (
       for (let p of changed) far.set(p, 0).set(at(url(p)), 0)
       for (let node of far.keys()) {
         let d = far.get(node)!
-        if (d && breadth(node) > WIDE) continue
+        if (d && wide(node)) continue
         for (let from of edges.get(node) ?? []) {
           if (!far.has(from)) far.set(from, d + 1)
         }
@@ -460,13 +608,11 @@ export let proof = async (
     )
     : key
 
-let cache = Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
-
 /** Where passes are kept, by proof, for every checkout on this machine. */
 export let STORE: string = `${cache}/yak/tests-passed.json`
 
-/** Where what each key's file read as it last passed is kept, beside them. */
-export let READS: string = `${cache}/yak/tests-read.json`
+/** Where what each file read as it last passed is kept, beside them. */
+export let READS: string = `${cache}/yak/tests-reads.json`
 
 // Enough passes for every file of many checkouts; the oldest go first.
 let KEEP = 100_000
@@ -482,9 +628,6 @@ let load = <T>(store: string): Record<string, T> => {
 /** The passes kept, each with when. */
 export let passed = (store = STORE): Record<string, number> => load(store)
 
-/** What each key's file read as it last passed. */
-export let recall = (store = READS): Record<string, string[]> => load(store)
-
 /** Adds passes made now to what the store holds. */
 export let remember = (proofs: string[], store = STORE): void => {
   if (!proofs.length) return
@@ -495,24 +638,46 @@ export let remember = (proofs: string[], store = STORE): void => {
   )
 }
 
-/**
- * Adds what each key's file read as it passed now. A file that read nothing
- * has no entry: what it read then is nothing, and its proof matches only a
- * pass that read nothing, so a lost entry costs a run, never a miss. The
- * newest are kept, last in the store.
- */
+// The reads store names each path once, and each file's reads by their
+// place in that list: files share most of what they read.
+type Reads = { paths?: string[]; files?: Record<string, number[]> }
+
+/** What each file read as it last passed, in any checkout. A proof holds
+ * the file's key, so reads kept from another version of it match only a
+ * pass of that version that read the same. */
+export let recall = (store = READS): Record<string, string[]> => {
+  let { paths = [], files = {} } = load(store) as Reads
+  return Object.fromEntries(
+    Object.entries(files).map(([f, at]) => [f, at.map((i) => paths[i])]),
+  )
+}
+
+/** Adds what each file read as it passed now, nothing included: a file kept
+ * as reading nothing is known to, where one with no entry is unknown. */
 export let note = (reads: Record<string, string[]>, store = READS): void => {
+  if (!Object.keys(reads).length) return
   let all = recall(store)
-  let changed = false
-  for (let [k, paths] of Object.entries(reads)) {
-    if (!paths.length && !(k in all)) continue
-    delete all[k]
-    if (paths.length) all[k] = paths
-    changed = true
+  for (let [f, paths] of Object.entries(reads)) {
+    delete all[f]
+    all[f] = paths
   }
-  if (changed) {
-    write(Object.fromEntries(Object.entries(all).slice(-KEEP)), store)
-  }
+  let index = new Map<string, number>()
+  let at = (p: string) => index.get(p) ?? index.set(p, index.size).get(p)!
+  let files = Object.fromEntries(
+    Object.entries(all).slice(-KEEP).map(([f, paths]) => [f, paths.map(at)]),
+  )
+  write({ paths: [...index.keys()], files }, store)
+}
+
+/** Where what each file last took to load and run is kept, beside them. */
+export let TOOK: string = `${cache}/yak/tests-took.json`
+
+/** What each file last took to load and run here, in milliseconds. */
+export let took = (store = TOOK): Record<string, number> => load(store)
+
+/** Adds what files took now to what the store holds. */
+export let tally = (times: Record<string, number>, store = TOOK): void => {
+  if (Object.keys(times).length) write({ ...took(store), ...times }, store)
 }
 
 /** Takes passes back out of what the store holds: those that a caller

@@ -18,8 +18,9 @@ import { plan, sweep } from './load.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 
-/** What a run chose: the key of each file it was given, those it runs, and
- * whether those import any of `paths` (true when the graph could not say). */
+/** What a run chose: the key of each file it was given, those it runs,
+ * whether those import any of `paths` (true when the graph could not say),
+ * and what a file read as it last passed, where that is known. */
 export type Chosen = {
   keys: Map<string, string>
   run: string[]
@@ -27,6 +28,7 @@ export type Chosen = {
   sources: string[]
   beyond: number
   reaches: (paths: string[]) => boolean
+  read: (file: string) => string[] | undefined
 }
 
 /// let rank = (f: string) => ({ own: 0, near: 1, slow: 1, far: Infinity })[f]!
@@ -44,12 +46,14 @@ export let within = (
 ): string[] => {
   let left = budget
   let kept = new Set<string>()
-  let order = files.toSorted((a, b) =>
-    rank(a) == rank(b) ? cost(a) - cost(b) : rank(a) - rank(b)
-  )
+  // Each file ranked and costed once: a sort asks again at every comparison.
+  let ranks = new Map(files.map((f) => [f, rank(f)]))
+  let costs = new Map(files.map((f) => [f, cost(f)]))
+  let r = (f: string) => ranks.get(f)!, c = (f: string) => costs.get(f)!
+  let order = files.toSorted((a, b) => r(a) == r(b) ? c(a) - c(b) : r(a) - r(b))
   for (let f of order) {
-    if (rank(f) && cost(f) > left) continue
-    left -= cost(f)
+    if (r(f) && c(f) > left) continue
+    left -= c(f)
     kept.add(f)
   }
   return files.filter((f) => kept.has(f))
@@ -105,6 +109,7 @@ export let choose = async (
       sources: [],
       beyond: 0,
       reaches: () => false,
+      read: () => undefined,
     }
   }
   let pages = files.filter((f) => !tested(f))
@@ -112,12 +117,17 @@ export let choose = async (
   let plans = new Map(await plan(pages))
   try {
     let kinds = [...new Set(files.map(kind))]
+    // What each file read as it last passed: the modules among them, imported
+    // by a computed specifier, are surveyed with the rest.
+    let read = observed ? recall() : {}
+    let reads = (f: string) => observed ? read[f] ?? [] : undefined
     let s = await survey([
       ...files.filter(tested),
       ...plans.values(),
       ...kinds.flatMap(also),
       ...runner,
       ...sources,
+      ...new Set(files.flatMap((f) => reads(f) ?? []).filter(code)),
     ])
     if (!s) {
       if (changed) {
@@ -132,6 +142,7 @@ export let choose = async (
         sources,
         beyond: 0,
         reaches: () => true,
+        read: () => undefined,
       }
     }
     let common = new Map(
@@ -148,19 +159,7 @@ export let choose = async (
         await key(s, common.get(kind(f))!, plans.get(f) ?? f, f, true),
       )
     }
-    // What each file read as it last passed, and a survey of the modules it
-    // imported by a computed specifier, each sealed with its graph.
-    let read = observed ? recall() : {}
-    let reads = (f: string) => observed ? read[keys.get(f)!] ?? [] : undefined
-    let imported = [...new Set(files.flatMap((f) => reads(f) ?? []))]
-      .filter(code)
-    let t = imported.length ? await survey(imported) : s
-    if (changed && !t) {
-      throw new Error(
-        'Cannot select relevant tests: observed dependency graph unavailable',
-      )
-    }
-    let before = all || !t ? {} : passed()
+    let before = all ? {} : passed()
     let run: string[] = []
     let reached: string[] = []
     for (let f of files) {
@@ -172,7 +171,6 @@ export let choose = async (
           runner,
           changed,
           reads(f),
-          t ?? s,
         )
       ) continue
       reached.push(f)
@@ -183,11 +181,11 @@ export let choose = async (
           runner,
           changed,
           reads(f),
-          t ?? s,
+          s,
           true,
         )
       ) continue
-      if (!(t && await proof(t, keys.get(f)!, reads(f), true) in before)) {
+      if (!(await proof(s, keys.get(f)!, reads(f), true) in before)) {
         run.push(f)
       }
     }
@@ -207,6 +205,7 @@ export let choose = async (
       sources: typed,
       beyond: run.length - kept.length,
       reaches: (paths) => s.reaches(roots, paths),
+      read: (f) => observed ? read[f] : undefined,
     }
   } finally {
     await Promise.all(
