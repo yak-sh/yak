@@ -37,7 +37,7 @@ import {
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { links } from './sheets.ts'
-import { BUDGET, ceilings, count, PRICE, size, YEARLY } from './meter.ts'
+import { ceilings, count, PRICE, size, YEARLY } from './meter.ts'
 import type { Card, Want } from './billing.ts'
 import { columns } from '@yaks/ui/chart'
 import { h, type VNode } from 'preact'
@@ -2200,9 +2200,7 @@ let plan = (
   let allowance = `${
     limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
   }, unlimited visitors, ${size(limits.bytes)} of app data${
-    tier == 'organization'
-      ? `, $${count(BUDGET.organization)} a month of AI use, and email support`
-      : ''
+    tier == 'organization' ? `, AI use included, and email support` : ''
   }`
   let host = esc(spaceHost(env, y.slug))
   let head = tier == 'free'
