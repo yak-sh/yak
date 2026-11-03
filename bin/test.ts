@@ -26,7 +26,7 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   }
 }
 
-let { relative, matchesGlob } = await import('node:path')
+let { relative } = await import('node:path')
 let { default: config } = await import('../deno.json', {
   with: { type: 'json' },
 })
@@ -34,6 +34,7 @@ let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
+let { excluded } = await import('./check-types.ts')
 let { find, tested } = await import('@yaks/testing/find')
 let { took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
@@ -425,10 +426,7 @@ export let prepare = async (
     all,
     [sqlite],
     changed,
-    changedFiles.filter((f) =>
-      /\.[mc]?[jt]sx?$/.test(f) &&
-      !config.exclude.some((p) => matchesGlob(f, p) || f.startsWith(`${p}/`))
-    ),
+    changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
   )
   if (reaches(READIES)) {
     await effects.ready(

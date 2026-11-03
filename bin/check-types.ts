@@ -18,7 +18,7 @@
 // took 17 s, needs no build info from an earlier run and keeps no lock. Each
 // run's project lies in `.types/` with its process id; the links into Deno's
 // caches there are shared, and the same for every run.
-import { dirname, matchesGlob } from 'node:path'
+import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
@@ -45,6 +45,32 @@ export const TSC = 'npm:typescript@7.0.2/tsc'
 let CHECKOUT = dirname(dirname(new URL(import.meta.url).pathname))
 let DIR = `${CHECKOUT}/.types`
 
+// The config's excludes, each compiled once: `matchesGlob` compiles its glob
+// on every call, and every module in the checkout is asked of each.
+let EXCLUDES = config.exclude.map((p) =>
+  new RegExp(
+    `^${
+      p.split(/(\*\*\/|\*)/).map((part) =>
+        part == '**/'
+          ? '(?:[^/]*/)*'
+          : part == '*'
+          ? '[^/]*'
+          : part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      ).join('')
+    }(?:/|$)`,
+  )
+)
+
+/// excluded('workers/yak/conform.ts') -> true
+/// excluded('workers/yak/fixtures/a.ts') -> true
+/// excluded('packages/web/.wrangler') -> true
+/// excluded('packages/sql/.README.md.12.345.example.ts') -> true
+/// excluded('workers/yak/conformed.ts') -> false
+/// excluded('packages/sql/render.ts') -> false
+/** Whether the config excludes a path: one it names or matches, or one under
+ * it. */
+export let excluded = (path: string) => EXCLUDES.some((x) => x.test(path))
+
 /// checked('packages/sql/render.ts') -> true
 /// checked('raycast/src/index.tsx') -> false
 /// checked('workers/yak/conform.ts') -> false
@@ -52,8 +78,7 @@ let DIR = `${CHECKOUT}/.types`
 /** Whether a path is a module the check checks. */
 export let checked = (path: string) =>
   /\.[mc]?[jt]sx?$/.test(path) &&
-  DIRS.some((d) => path.startsWith(`${d}/`)) &&
-  !config.exclude.some((p) => matchesGlob(path, p) || path.startsWith(`${p}/`))
+  DIRS.some((d) => path.startsWith(`${d}/`)) && !excluded(path)
 
 /** Every module the check checks. */
 let every = async () =>
