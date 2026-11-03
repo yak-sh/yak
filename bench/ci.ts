@@ -29,7 +29,8 @@ export type Seen = Record<string, number>
 
 /** Reports new failures since the latest success, oldest first, and repeats
  * the current failure until fixed. `runs` answers a workflow's newest finished
- * runs, newest first. */
+ * runs. A listing whose newest run is older than the newest seen is not main's
+ * present (GitHub answers so at times) and reports nothing. */
 export let watch = async (
   workflows: string[],
   seen: Seen,
@@ -38,8 +39,11 @@ export let watch = async (
 ): Promise<Seen> => {
   let next = { ...seen }
   for (let workflow of workflows) {
-    let rows = await runs(workflow)
+    let rows = (await runs(workflow)).toSorted((a, b) =>
+      b.databaseId - a.databaseId
+    )
     let since = next[workflow] ?? 0
+    if (!rows.length || rows[0].databaseId < since) continue
     let green = rows.findIndex((r) => r.conclusion == 'success')
     // A cancelled or skipped run says nothing either way.
     let failures = rows.slice(0, green < 0 ? rows.length : green)
@@ -55,8 +59,7 @@ export let watch = async (
         workflow,
       )
     }
-    let top = rows[0]?.databaseId
-    if (top) next[workflow] = Math.max(top, next[workflow] ?? 0)
+    next[workflow] = rows[0].databaseId
   }
   return next
 }

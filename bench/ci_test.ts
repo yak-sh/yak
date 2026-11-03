@@ -77,3 +77,32 @@ test('a success in one workflow does not suppress another workflow failing', asy
   equal(reported, ['publish'])
   equal(seen, { gate: 3, publish: 2 })
 })
+
+test('a listing older than the newest run seen reports nothing', async () => {
+  let reported: number[] = []
+  let run = (id: number, conclusion: string): Run => ({
+    databaseId: id,
+    conclusion,
+    displayTitle: `run ${id}`,
+    headSha: 'abc',
+    url: '',
+  })
+  let report = (error: Error) => {
+    reported.push(Number(error.message.match(/run (\d+)/)![1]))
+    return Promise.resolve()
+  }
+  let seen = await watch(
+    ['gate'],
+    { gate: 9 },
+    () => Promise.resolve([run(2, 'failure'), run(1, 'failure')]),
+    report,
+  )
+  equal([reported, seen], [[], { gate: 9 }])
+  seen = await watch(
+    ['gate'],
+    { gate: 9 },
+    () => Promise.resolve([run(9, 'success'), run(10, 'failure')]),
+    report,
+  )
+  equal([reported, seen], [[10], { gate: 10 }])
+})
