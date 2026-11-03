@@ -485,7 +485,7 @@ test('a peek bounds transcript reads and previews a large entry', async () => {
     })),
   )
   assertStringIncludes(seen, 'settled')
-  assertStringIncludes(seen, '[100000 characters total]')
+  assertStringIncludes(seen, '[100000 characters total; e2]')
   assert(seen.length < 17_000)
   assert(!seen.includes('earlier'))
 })
