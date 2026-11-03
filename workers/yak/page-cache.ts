@@ -57,17 +57,19 @@ import { seen, viewed } from './views.ts'
 export { KEPT, pageAt, shareable, visitor } from './kept-page.ts'
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
- * own 404), for the gateway's count, and the tags its purge names. An app
- * mid-release (its fence up, versions.ts `fenced`) had its pages purged as
- * the release began (tools.ts `released`), and its commit purges nothing
+ * own 404), for the gateway's count, and the tags its purge names. A page or
+ * a 404, unless the caller names other `statuses` the same for everyone. An
+ * app mid-release (its fence up, versions.ts `fenced`) had its pages purged
+ * as the release began (tools.ts `released`), and its commit purges nothing
  * more (facets/pages-graph.ts), so a page of it kept now would outlive the
  * release: it passes, and only for now. */
 export let keep = (
   page: Response,
   space: { eid: string; slug: string },
   app: { eid: string; slug: string; fence?: string | null } | null,
+  statuses = [200, 404],
 ) => {
-  if (![200, 404].includes(page.status) || page.headers.has('set-cookie')) {
+  if (!statuses.includes(page.status) || page.headers.has('set-cookie')) {
     return passed()
   }
   if (app?.fence) return passed(true)

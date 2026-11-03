@@ -4,6 +4,7 @@
 // Site keeps one. Nothing here reaches the graph stack or a secret, so the
 // front Worker's upload stays small.
 import { decodedPath } from './request-path.ts'
+import { assetPath } from './asset_url.ts'
 import { matches } from './public-cache.ts'
 import type { Fetcher } from './env.ts'
 import { bearing, MOUNT } from './route.ts'
@@ -78,15 +79,36 @@ export let visitor = (url: string): Request | null => {
   )
 }
 
+/** The platform's modules an app's pages import from its `/api/` (apps.ts
+ * `api`): one file for every app, from the platform's assets. */
+export let CLIENT = [
+  '/client.js',
+  '/storage.js',
+  '/_draft.js',
+  '/_outbox.js',
+  '/_wire.js',
+]
+
+/** Whether a path names bytes at an app's `/api/` that are the same for
+ * everyone who may read the app: a release's asset (asset_url.ts) or one of
+ * the platform's modules. A page's first paint loads them, so Site keeps them
+ * as it keeps the page. */
+export let fixed = (path: string) => {
+  let api = /^(?:\/[^/]+)?\/api(\/.+)$/.exec(path)?.[1]
+  return !!api && (CLIENT.includes(api) || !!assetPath(api))
+}
+
 /** Whether a request could be answered by a kept page: a read with nothing
  * that requires the gateway (a grant, a bearer, a byte range), and not an
- * app's `/api/` or a sandboxed page's token path, which never are. */
+ * app's `/api/` (but for its `fixed` bytes) or a sandboxed page's token
+ * path, which never are. */
 export let shareable = (req: Request, path = new URL(req.url).pathname) => {
   return (req.method == 'GET' || req.method == 'HEAD') &&
     !req.headers.has('authorization') && !req.headers.has('x-yak-caller') &&
     !req.headers.has('range') &&
     !req.headers.has('upgrade') && !bearing(req) &&
-    !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path) && !path.includes('/~')
+    (fixed(path) || !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
+    !path.includes('/~')
 }
 
 /** What a page may say of itself as it answers from the edge. */
@@ -128,7 +150,13 @@ export let asked = async (
   let got = await c.time(
     'page',
     () =>
-      site.fetch(new Request(key, { headers: pick ? { [PICK]: pick } : {} })),
+      site.fetch(
+        // A kept redirect is the visitor's to follow, not this fetch's.
+        new Request(key, {
+          headers: pick ? { [PICK]: pick } : {},
+          redirect: 'manual',
+        }),
+      ),
     (r) => r.headers.get('cf-cache-status'),
   )
   // A hit carries the old render's timing, not work done for this view.

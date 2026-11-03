@@ -132,6 +132,54 @@ test('what no kept page may answer goes to the kernel without asking Site', asyn
   }
 })
 
+test("an app's fixed bytes answer from the edge; its other API doors never do", async () => {
+  let release = 'fdcc9a38-0b6b-4f8c-bcbd-15bad97cee69'
+  let kept = [
+    `/cookbook/api/assets/${release}/app.js`,
+    `/api/assets/${release}/styles/main.css`,
+    '/cookbook/api/client.js',
+    '/cookbook/api/_wire.js',
+  ]
+  for (let path of kept) {
+    let f = front(() => page({ 'content-type': 'text/javascript' }))
+    let res = await f.go(`https://ada.yaks.app${path}`)
+    assertEquals(await res.text(), '<body>kept</body>', path)
+    assertEquals(f.forwarded.length, 0, path)
+    assertEquals(f.points.length, 0, path) // bytes, not a page view
+  }
+  // The hop a release's module takes back out to the API is kept as it is
+  // sent: the visitor's browser follows it.
+  let hop = front(() =>
+    new Response(null, {
+      status: 302,
+      headers: { location: '../../../client.js', [SEEN]: seen },
+    })
+  )
+  let res = await hop.go(
+    `https://ada.yaks.app/cookbook/api/assets/${release}/api/client.js`,
+  )
+  assertEquals([res.status, res.headers.get('location')], [
+    302,
+    '../../../client.js',
+  ])
+  for (
+    let path of [
+      `/cookbook/api/assets/${release}`,
+      '/cookbook/api/assets/not-a-release/app.js',
+      '/cookbook/api/blob/abc',
+      '/cookbook/api/client.json',
+    ]
+  ) {
+    let f = front(() => page())
+    assertEquals(
+      await (await f.go(`https://ada.yaks.app${path}`)).text(),
+      'kernel',
+      path,
+    )
+    assertEquals(f.asked, [], path)
+  }
+})
+
 test('an address Site passes goes to the kernel, and is not asked again', async () => {
   let f = front(() =>
     new Response(null, {

@@ -161,6 +161,7 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, USES, whole } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, told, unkept } from './page-cache.ts'
+import { CLIENT, fixed } from './kept-page.ts'
 import {
   brokenIn,
   fault,
@@ -1479,13 +1480,14 @@ export let servedTo = async (
 }
 
 /** Whether a request reads one of the app's files by its address: an upload
- * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`) or a release's
- * asset (`/api/assets/<release>/<path>`). Bytes, not the app's data. */
+ * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`), a release's
+ * asset (`/api/assets/<release>/<path>`) or a platform module its pages
+ * import (kept-page.ts `fixed`). Bytes, not the app's data. */
 let fileRead = (req: Request, path: string) =>
   (req.method == 'GET' || req.method == 'HEAD') &&
   (path.startsWith('/api/blob/')
     ? !!addressed(path.slice('/api/blob/'.length))
-    : !!assetPath(path.slice('/api'.length)))
+    : fixed(path))
 
 /** Whether the API door admits a request before any store traffic. Addressed
  * files are static reads, even when this stranger has exhausted API_RATE. */
@@ -1750,12 +1752,7 @@ export let api = async (
   // every app, so it comes from the platform's assets, not the app's blobs.
   // It is served as one module, its parts bundled in (client-assets.ts).
   if (path == '/client.js') return platformFile(req, env, '/_client.js')
-  if (
-    path == '/storage.js' || path == '/_draft.js' || path == '/_outbox.js' ||
-    path == '/_wire.js'
-  ) {
-    return platformFile(req, env, path)
-  }
+  if (CLIENT.includes(path)) return platformFile(req, env, path)
   let store = appStore(env.STORE, space, app, env)
   // What the page (or the browser itself) says broke. Anyone may report —
   // a break belongs to whoever was looking at the page, and asking a
@@ -2967,12 +2964,15 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     // runs. Page tokens and machine credentials have their own instrument
     // and may arrive with the ambient cookie stripped: never replace that
     // unseen cookie with a signed-out one, even on a failed token or redirect.
+    // Bytes the same for everyone (kept-page.ts `fixed`) set none either: a
+    // cookie would keep them out of every cache, and no door of theirs uses
+    // the instrument.
     let res = await browsing(
       req,
       env,
       (r) => served(r, env, c, false, undefined, req),
       !pagePath(new URL(req.url).pathname) && !bearing(req) &&
-        !req.headers.has('authorization'),
+        !req.headers.has('authorization') && !fixed(new URL(req.url).pathname),
     )
     return timed(told(res, c), c)
   })
@@ -3048,6 +3048,12 @@ let served = async (
     public: edge,
     used: copied,
   })
+  // What Site keeps from a directory copy says so, and is kept for now only
+  // (site.ts).
+  let marked = (answer: Response) => {
+    if (dir.stale) answer.headers.set('x-yak-directory-copy', '1')
+    return answer
+  }
   // The space, the app at the address, the front page and the seat of the
   // person the cookie names, in one read of the directory: every rung below
   // asks one of them, and asking each in turn was a round trip apiece.
@@ -3492,6 +3498,24 @@ let served = async (
   // A sandboxed app's answers, every one, are walled (installed.ts).
   let wall = (res: Response) => walls ? walled(res) : res
   if (path.startsWith('/api/')) {
+    // Site keeps an app's `fixed` bytes as it keeps its pages, the hop a
+    // release's module takes back out to the API included; every other door
+    // is the gateway's.
+    if (edge) {
+      if (!fixed(path)) return passed()
+      return marked(
+        keep(
+          reporting(
+            await api(req, env, dir, space, app, path.slice(4), who, c, at),
+            req,
+            at,
+          ),
+          space,
+          app,
+          [200, 302, 404],
+        ),
+      )
+    }
     // A stranger's reads are held to a rate per source (rate.ts), here and
     // before the store, so a refused one is never a store request the space's
     // meter counts. Not the space's people, and not the app's own worker,
@@ -3606,13 +3630,7 @@ let served = async (
     return edge ? passed() : await index(req, env, dir, space)
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts).
-  if (edge) {
-    let answer = keep(reporting(page, req, at), space, app)
-    if (dir.stale) {
-      answer.headers.set('x-yak-directory-copy', '1')
-    }
-    return answer
-  }
+  if (edge) return marked(keep(reporting(page, req, at), space, app))
   // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
