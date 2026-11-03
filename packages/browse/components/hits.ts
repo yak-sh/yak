@@ -28,6 +28,17 @@ export let rows = async (
   return await r.json()
 }
 
+/** The rows a query answers, read as it was asked: what a portable view asks
+ * the graph for (@yaks/render's `query`), a session's name among them. */
+export let read = async (
+  q: string,
+  signal?: AbortSignal,
+): Promise<Bundle[]> => {
+  let r = await fetch(`${base()}/query?q=${encodeURIComponent(q)}`, { signal })
+  if (!r.ok) throw new Error(await r.text())
+  return await r.json()
+}
+
 /** The graph's people, up to `limit`: none where the vocabulary declares no
  * `person` (a tracker store), whose server would refuse the line. */
 export let people = (limit: number, signal?: AbortSignal): Promise<Bundle[]> =>

@@ -35,6 +35,7 @@ import {
 import { SESSION } from './comp.ts'
 import { CALL, ENTRY, OUTPUT, RESULT } from './native.ts'
 import { kindOf, textOf } from './state.ts'
+import { asks, type Read, sessionName } from './name.ts'
 
 /** Where an entry sits: its transcript, and its place in it. */
 export type At = { session: string; seq: number }
@@ -310,23 +311,12 @@ export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
     : comp(e, SESSION).transcript
     ? 'imported'
     : 'unknown harness'
-  let work = str(rows(got.work)[0], 'edge', 'to') || str(e, SESSION, 'source')
-  let named = io.ask(
-    work ? { work: `.entity.eid=${work}&.fields=doc.title` } : {},
-  )
-  let task = rows(got.claim)[0] ?? rows(named.work)[0]
-  // Read components through the host bundle interface (which may be lazy).
-  // A child's starting instruction is a notice, rather than human input.
-  let prose = rows(got.first).filter((b) =>
-    b.content && !b.output && !b.call && !b.result && !b.reasoning &&
-    !b.prompt && !b.stop && !b.ask && !b.exception && !b.refusal &&
-    !b.interrupted
-  )
-  let first = str(prose.find((b) => !b.notice) ?? prose[0], 'content', 'body')
-  let brief = str(e, 'brief', 'text')
-  let title = str(task, 'doc', 'title') || str(e, 'doc', 'title') ||
-    cut((first || brief).trim().replace(/\s+/g, ' '), 180) ||
-    (comp(e, SESSION).operator ? 'Personal conversation' : io.id(e))
+  let read: Read = {
+    claim: rows(got.claim),
+    work: rows(got.work),
+    first: rows(got.first),
+  }
+  let title = sessionName(e, read) || io.id(e)
   let at = str(rows(got.last)[0], 'created', 'at')
   let ready = Object.values(got).every((a) => a.ready)
   return h(
@@ -365,10 +355,7 @@ let sessionTile: View = {
   asks: (e) => {
     let eid = e.entity.eid
     return {
-      claim: `.claim.session=${eid}&.fields=doc.title&.limit=1`,
-      work: `.worked&.edge.from=${eid}&.fields=edge.to&.limit=1`,
-      first:
-        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted&?using&?lines`,
+      ...asks(eid),
       last:
         `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq,created.at`,
     }

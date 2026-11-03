@@ -21,6 +21,7 @@ import { type ComponentRenderer, type Events, render } from '@yaks/preact'
 import type { Host } from '@yaks/ux'
 import { Float } from '@yaks/ui'
 import { type ComponentChild, h } from 'preact'
+import { type Signal, signal } from '@preact/signals'
 import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
 import {
@@ -45,7 +46,7 @@ import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
 import { drafts } from '@yaks/draft/input'
-import { rows } from './hits.ts'
+import { read, rows } from './hits.ts'
 import { useWell } from './wells.ts'
 import { type Offer, tabOffers } from './offers.ts'
 
@@ -224,6 +225,7 @@ let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
     show: (b: Bundle, view: string, extra: Context = {}) =>
       renderView(ent(b.entity.eid), view, extra),
     get: (eid: string) => row(eid).value ? bundle(ent(eid)) : undefined,
+    query: answered,
     related: (eid: string, relation: string) => {
       let type = edgeNames(vocab)[relation]
       let peers = parents(eid)
@@ -243,6 +245,23 @@ let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
     ...ctx,
   }
   return render(registry, bundle(e), view, vocab, context, { e, ...context })
+}
+
+// What a portable view asks the graph (`query`): each query read once, its
+// rows a signal, so a view drawn before they arrive draws again when they do.
+// What a view asks this way is a name, not live state; the newest KEPT are
+// held.
+let KEPT = 500
+let asked = new Map<string, Signal<Bundle[] | undefined>>()
+let answered = (q: string): Bundle[] | undefined => {
+  let held = asked.get(q)
+  if (!held) {
+    let rows = held = signal<Bundle[] | undefined>(undefined)
+    asked.set(q, rows)
+    if (asked.size > KEPT) asked.delete(asked.keys().next().value!)
+    read(q).then((found) => rows.value = found, () => rows.value = [])
+  }
+  return held.value
 }
 
 // What an entity is called: its title, or the id a person reads; one this

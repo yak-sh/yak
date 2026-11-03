@@ -57,6 +57,9 @@ export type Shown<Node> = {
   relation?: (b: Bundle) => string | undefined
   /** a reference's complete bundle, when this host holds it */
   get?: (eid: string) => Bundle | undefined
+  /** the rows a query answers, when this host holds them: a host that can
+   * read more reads what a view asked for and draws it again */
+  query?: (q: string) => Bundle[] | undefined
   /** Entities pointing here through a relation, where the host holds its links. */
   related?: (eid: string, relation: string) => Bundle[]
   /** the groups of entities related to this one, for `Page` */
@@ -227,6 +230,14 @@ let marks = <Node>(h: H<Node>, cut: string): Child<Node>[] =>
     return [h('mark', { class: 'Match' }, found), ...rest ? [rest] : []]
   })
 
+// What an entity is called in a line of text: its `Title`, where this host
+// holds it, so a package that names its entities better than by their id
+// (a session by what it works on) is heard; else what the host calls it.
+let called = <Node>(s: Ctx<Node>, eid: string): Child<Node> => {
+  let held = s.get?.(eid)
+  return (held && s.show(held, 'Title')) ?? s.name(eid)
+}
+
 /**
  * A long text as one row of a list (@yaks/ui's `Passage`): a line saying who
  * said it, when and where, then the words around what was sought, every match
@@ -294,7 +305,7 @@ export let passage = (
       by && h('span', { class: 'Passage_Who' }, s.name(by)),
       what && h('span', null, what),
       at && h('time', { datetime: at }, s.when(at)),
-      where && h('span', null, `${where[0]} ${s.name(where[1])}`),
+      where && h('span', null, `${where[0]} `, called(s, where[1])),
     ].filter((p): p is Node => !!p)
     return h(
       'a',

@@ -13,10 +13,11 @@ import {
   type Registry,
   type Rendering,
 } from '@yaks/render'
-import { passage } from '@yaks/render/views'
+import { passage, type Shown } from '@yaks/render/views'
 import { SESSION } from './comp.ts'
 import { ASK, CALL, ENTRY } from './native.ts'
 import { kindOf, statusOf, textOf } from './state.ts'
+import { asks, type Read, sessionName } from './name.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
@@ -93,6 +94,17 @@ let tile: Rendering = (b, h, ctx) => {
   )
 }
 
+// A session as it is named wherever one is mentioned: by what it works on
+// (./name.ts), read through the host's `query`, never by the command that
+// launched it. A host that holds none of it names it by its id.
+let title: Rendering = (b, h, ctx) => {
+  let s = ctx as typeof ctx & Shown<unknown>
+  let read = Object.fromEntries(
+    Object.entries(asks(b.entity.eid)).map(([k, q]) => [k, s.query?.(q)]),
+  ) as Read
+  return h('span', null, sessionName(b, read) || s.id(b))
+}
+
 // What kind of words an entry's are, where they are not a person's or a
 // model's prose: the same words a transcript says them by.
 let labels: [string, string][] = [
@@ -125,7 +137,8 @@ let said = passage({
  * `Status`), `full` (entry prose), `maxChars` (a full prose preview bound). In a list
  * of answers, words someone said in a transcript are a passage (`words`, the
  * words sought, marks them), any other entry's `Tile` is its line, and a
- * transcript's is its status as the store computed it. */
+ * transcript's is its status as the store computed it. A transcript's `Title`
+ * is its name (./name.ts), read through the host's `query`. */
 export let sessionViews: Registry = define([
   { view: 'Line', match: parse('.entry'), render: line },
   {
@@ -135,6 +148,8 @@ export let sessionViews: Registry = define([
   },
   { view: 'Tile', match: parse('.entry'), render: line },
   { view: 'Tile', match: parse(`.${SESSION}`), render: tile },
+  // Named ahead of @yaks/process's `Title`, the command a process runs.
+  { view: 'Title', match: parse(`.${SESSION}&?process`), render: title },
   { view: 'Body', match: parse('.entry'), render: entryBody },
   {
     view: 'Status',

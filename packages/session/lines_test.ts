@@ -7,8 +7,12 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessionViews } from './lines.ts'
+import { asks } from './name.ts'
+import { define } from '@yaks/render'
+import { views as processViews } from '@yaks/process/views'
+import { processDoc } from '@yaks/process/vocab'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, provenanceDoc])
+let vocab = loadVocab([sessionDoc, toolsDoc, provenanceDoc, processDoc])
 let body = 'x'.repeat(100) + '\nchild final output'
 let entry = {
   entity: { eid: 'e' },
@@ -82,4 +86,21 @@ test('words said in a transcript, in a list, are who said them, when, where, and
     ),
     true,
   )
+})
+
+test('a session’s Title is what it works on, never the command that launched it', () => {
+  let views = define([...processViews.renderers, ...sessionViews.renderers])
+  let s = {
+    entity: { eid: 's1' },
+    session: { id: 's1' },
+    process: { command: 'claude -p --append-system-prompt # persona' },
+  }
+  let task = { entity: { eid: 't1' }, doc: { title: 'Fix the cake' } }
+  let title = (answers: Record<string, Bundle[]>) =>
+    render(views, s, 'Title', vocab, {
+      id: () => '#s1',
+      query: (q: string) => answers[q],
+    }, 'plain')
+  assertEquals(title({ [asks('s1').claim]: [task] }), 'Fix the cake')
+  assertEquals(title({}), '#s1')
 })

@@ -499,6 +499,38 @@ test('a contributed drawing batches its used and declared references, including 
   assertEquals(lines, ['D-20 Alpha → D-21 → D-20\nD-20 Alpha → D-21 → D-20'])
 })
 
+test('a printout reads the queries its views ask once each, and draws with their rows', async () => {
+  let counted = await registry(
+    ['another-package'],
+    () =>
+      Promise.resolve({
+        views: define([{
+          view: 'Tile',
+          match: parse('.task'),
+          render: (b, h, ctx) => {
+            let s = ctx as Shown<ReturnType<typeof h>>
+            let rows = s.query?.(`.near=${b.entity.eid}`)
+            return h('span', {}, s.id(b), ' ', String(rows?.length ?? '…'))
+          },
+        }]),
+      }),
+  )
+  let asked: string[] = [], lines: string[] = []
+  await show(
+    { tui: false, out: (s) => lines.push(s) },
+    counted,
+    vocab,
+    [t9, t9],
+    {},
+    {
+      lookup: () => [],
+      query: (q) => (asked.push(q), [t9, t10]),
+    },
+  )
+  assertEquals(asked, [`.near=${t9.entity.eid}`])
+  assertEquals(lines, ['T-9 2\nT-9 2'])
+})
+
 test('portable preparation follows selected and nested views, preserving required references and failures', async () => {
   let loads = 0, lines: string[] = [], reads: string[][] = []
   let dependency = '33333333-3333-4333-8333-333333333333'

@@ -245,17 +245,30 @@ export let terminal = async (
   ]))
 }
 
+/** What a drawing has read beyond its answer, and how it asks for more:
+ * `answers` holds the rows each query a view asked answered; `eid` and `query`
+ * are told of each entity and query a view asked for, so a printout can read
+ * them and draw again; `deferred` of a renderer the host must prepare. */
+export type Wants = {
+  answers?: ReadonlyMap<string, Bundle[]>
+  eid?: (eid: string) => void
+  query?: (q: string) => void
+  deferred?: (renderer: Renderer) => void
+}
+
 // What a view cannot know from one bundle, for a terminal: an entity another
-// names reads as its id where the answer or `named` holds it, nothing links,
-// and a moment reads as a browser says it, `5 minutes ago`.
+// names reads as its id where the answer or `named` holds it, a query a view
+// asks answers what `want` holds, nothing links, and a moment reads as a
+// browser says it, `5 minutes ago`.
 let shown = <Node>(
   vocab: Vocab,
   answer: Bundle[],
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
   named: Bundle[] = [],
   links: Bundle[] = [],
-  demand?: (eid: string) => void,
+  want: Wants = {},
 ): Shown<Node> => {
+  let demand = want.eid
   let id = human(vocab)
   let idAs = idOf(vocab)
   let held = new Map(
@@ -282,6 +295,11 @@ let shown = <Node>(
     get: (eid) => {
       demand?.(eid)
       return held.get(eid)
+    },
+    query: (q) => {
+      let rows = want.answers?.get(q)
+      if (!rows) want.query?.(q)
+      return rows
     },
     related: (eid, relation) =>
       links.flatMap((b) => {
@@ -440,7 +458,7 @@ let drawn = <Node>(
   named: Bundle[],
   page: Near | undefined,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
-  demand?: (eid: string) => void,
+  want: Wants = {},
 ): (Node | null)[][] => {
   let near = page ?? nothing
   let ctx = shown(
@@ -449,7 +467,7 @@ let drawn = <Node>(
     draw,
     named,
     [...answer, ...near.links, ...near.comments],
-    demand,
+    want,
   )
   let { them, hits } = parted(answer)
   let found = hits.map((b) => draw(b, 'Search.Tile', ctx))
@@ -486,16 +504,15 @@ export let printed = (
   answer: Bundle[],
   named: Bundle[] = [],
   page?: Near,
-  demand?: (eid: string) => void,
-  deferred?: (renderer: Renderer) => void,
+  want: Wants = {},
 ): string => {
   let groups = drawn<Node>(
     vocab,
     answer,
     named,
     page,
-    (b, v, c) => tree(views, b, v, vocab, { ...c, deferred }),
-    demand,
+    (b, v, c) => tree(views, b, v, vocab, { ...c, deferred: want.deferred }),
+    want,
   )
   return joined([
     ...groups.map((g) => g.map((n) => plain(n))),
@@ -514,6 +531,7 @@ export let painted = async (
   named: Bundle[],
   columns: number,
   page?: Near,
+  answers?: ReadonlyMap<string, Bundle[]>,
 ): Promise<string> => {
   let [{ render: mount }, { print }, dress] = await Promise.all([
     import('@yaks/preact'),
@@ -526,6 +544,7 @@ export let painted = async (
     named,
     page,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
+    { answers },
   )
   return joined([
     ...groups.map((g) => g.map((n) => print(n, columns, dress))),
@@ -547,6 +566,7 @@ export let hold = async (
   config?: string,
   named: Bundle[] = [],
   page?: Near,
+  answers?: ReadonlyMap<string, Bundle[]>,
 ): Promise<void> => {
   let [{ h }, { render: mount }, { run, Scroll }, dress] = await Promise.all([
     import('preact'),
@@ -564,6 +584,7 @@ export let hold = async (
       named,
       app ? page ?? nothing : page,
       (b, v, c) => mount(views, b, v, vocab, { ...c, config }),
+      { answers },
     ).flat()
     return app ? nodes[0] : h(
       Scroll,
@@ -665,49 +686,65 @@ export let show = async (
     ? nearOf(lone.entity.eid, await from.query(asked))
     : nothing
   let near = page ?? nothing
-  if (!c.tui && !c.tty) {
-    // Portable renderers are pure. Discover the references the actual drawing
-    // reads, including nested views and declared needs, rather than fetching
-    // every reference carried by a bundle that a tile never shows.
-    let known = new Set(
-      [...answer, ...near.links, ...near.comments].map((b) => b.entity.eid),
+  // Portable renderers are pure. Discover the references and queries the
+  // drawing reads, including nested views and declared needs, rather than
+  // fetching every reference carried by a bundle that a tile never shows. A
+  // terminal paints with what the printout read, and the references its
+  // components may read beside it.
+  let known = new Set(
+    [...answer, ...near.links, ...near.comments].map((b) => b.entity.eid),
+  )
+  let painting = c.tui || c.tty
+  let refs = painting
+    ? referenced(
+      vocab,
+      [...answer, ...near.links, ...near.comments],
+      held.views ?? views,
+      lone?.entity.eid,
     )
-    let named: Bundle[] = []
-    let text = ''
-    while (true) {
-      let pending = new Set<string>()
-      let loading = new Set<Renderer>()
-      try {
-        text = printed(views, vocab, answer, named, page, (eid) => {
-          if (eid && !known.has(eid)) pending.add(eid)
-        }, (r) => loading.add(r))
-      } catch (error) {
-        // A drawing may require a declared or newly-read dependency before
-        // it can finish. Retry after those reads; failures without new reads
-        // remain drawing errors, including required references that are gone.
-        if (!pending.size && !loading.size) throw error
-      }
-      if (!pending.size && !loading.size) break
-      let ids = [...pending]
-      ids.forEach((id) => known.add(id))
-      let [ready, found] = await Promise.all([
-        loading.size ? prepared(views, [...loading]) : views,
-        ids.length ? from.lookup(ids) : [],
-      ])
-      views = ready
-      named.push(...found)
-      found.forEach((b) => known.add(b.entity.eid))
+    : []
+  let named: Bundle[] = refs.length ? await from.lookup(refs) : []
+  named.forEach((b) => known.add(b.entity.eid))
+  let answers = new Map<string, Bundle[]>()
+  let text = ''
+  while (true) {
+    let pending = new Set<string>()
+    let asking = new Set<string>()
+    let loading = new Set<Renderer>()
+    try {
+      text = printed(views, vocab, answer, named, page, {
+        answers,
+        eid: (eid) => eid && !known.has(eid) && pending.add(eid),
+        query: (q) => asking.add(q),
+        deferred: (r) => loading.add(r),
+      })
+    } catch (error) {
+      // A drawing may require a declared or newly-read dependency before
+      // it can finish. Retry after those reads; failures without new reads
+      // remain drawing errors, including required references that are gone.
+      if (!pending.size && !loading.size && !asking.size) throw error
     }
+    if (!pending.size && !loading.size && !asking.size) break
+    let ids = [...pending]
+    ids.forEach((id) => known.add(id))
+    let [ready, found, said] = await Promise.all([
+      loading.size ? prepared(views, [...loading]) : views,
+      ids.length ? from.lookup(ids) : [],
+      Promise.all(
+        [...asking].map(async (q) =>
+          [q, await Promise.resolve(from.query(q)).catch(() => [])] as const
+        ),
+      ),
+    ])
+    views = ready
+    named.push(...found)
+    found.forEach((b) => known.add(b.entity.eid))
+    said.forEach(([q, rows]) => answers.set(q, rows))
+  }
+  if (!painting) {
     if (text) c.out(text)
     return
   }
-  let refs = referenced(
-    vocab,
-    [...answer, ...near.links, ...near.comments],
-    held.views ?? views,
-    lone?.entity.eid,
-  )
-  let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
     return await hold(
       held.views ?? views,
@@ -716,6 +753,7 @@ export let show = async (
       held.config,
       named,
       page,
+      answers,
     )
   }
   if (c.tty) {
@@ -726,6 +764,7 @@ export let show = async (
       named,
       c.tty.columns,
       page,
+      answers,
     )
     if (text) c.tty.write(text)
     return
