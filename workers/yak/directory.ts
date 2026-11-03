@@ -277,6 +277,10 @@ export type AppInfo = {
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
+  // The sample a stranger at a private published app reads (sample.ts,
+  // D-134327): a store of its own holding the published version's seed and
+  // nothing else. Null for every app that keeps none.
+  demo?: Demo | null
   // In the trash, and since when (erase.ts, T-34430). Null for every app that
   // is not — which is almost all of them — and every reader of an app asks
   // it: a trashed app serves nothing, declares nothing, is nobody's front
@@ -363,6 +367,11 @@ export type Gallery = {
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
+
+// An app's sample store (sample.ts): its handle, and the sha of the
+// declaration and seed it was made from, so a republish that changed neither
+// keeps it.
+export type Demo = { store: string; seed: string }
 
 // When an app or a space was thrown away and by whom (erase.ts, T-34430,
 // T-34431). `at` is what the thirty days are counted from, and `by` is the
@@ -477,6 +486,7 @@ export type Row = {
   }
   screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
+  demo?: { store?: string | null; seed?: string | null }
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
@@ -885,6 +895,7 @@ export let APP_PARTS = [
   'gallery',
   'screenshot',
   'seeded',
+  'demo',
   'trashed',
   'theme',
   'rooted',
@@ -1044,6 +1055,7 @@ export let appAbout = (r: Row): AppInfo => ({
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,
+  demo: r.demo?.store ? { store: r.demo.store, seed: r.demo.seed ?? '' } : null,
   trashed: trashedOf(r),
   theme: r.theme
     ? {

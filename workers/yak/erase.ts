@@ -104,6 +104,7 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { asleep, destroyedAll } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
+import { cleared } from './sample.ts'
 import { answered } from './meta.ts'
 import { ending } from './billing.ts'
 import { own, type Pinner, versions } from './versions.ts'
@@ -360,6 +361,7 @@ export let emptied = async (
   }, { ...vouched(who), 'x-yak-kernel': '1' })
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
+  if (app.demo) await cleared(env, app.demo.store)
   return files
 }
 

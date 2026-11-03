@@ -226,6 +226,7 @@ import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
+import { sampled, unsampled } from './sample.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon, nameOf } from './signin.ts'
@@ -5181,6 +5182,14 @@ let OURS: Row[] = [
             'page of yaks apps. It appears there once yaks.app approves it; ' +
             'app_set(app, gallery: false) withdraws it at any time',
         },
+        demo: {
+          type: 'boolean',
+          description:
+            'false to keep no sample of a private app for people who are ' +
+            'not its members. By default a private published app keeps ' +
+            "one, made from the published version's seed and never from " +
+            "the app's own data",
+        },
         ...SKIP,
       },
       required: ['app'],
@@ -5222,12 +5231,25 @@ let OURS: Row[] = [
         ? (app.published?.about ?? '')
         : text(args.about, 'about')
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
+      let sample = args.demo == null || flag(args.demo, 'demo')
       await ctx.dir.apply({
         entities: [{
           entity: { eid: app.eid },
           published: { name, version, at: new Date().toISOString(), about },
         }],
       }, vouched(who))
+      // The sample a stranger reads, made from what was just published. The
+      // offer stands either way: a sample that could not be made is ours to
+      // fix, and strangers find the sign-in page until it is.
+      let offered = (await ctx.dir.app(space, app.slug))!
+      let demo =
+        await (sample
+          ? sampled(ctx.env, ctx.dir, space, offered, await byCaller(ctx, who))
+          : unsampled(ctx.env, ctx.dir, offered).then(() => null))
+          .catch((e) => {
+            caught(e, { tool: 'app_publish', space: space.slug, app: app.slug })
+            return undefined
+          })
       // What the answer has to carry is whether the name moved, because that
       // is the half nobody can see: a rename strands every link and every
       // instruction holding the old one.
@@ -5260,6 +5282,10 @@ let OURS: Row[] = [
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
           (about ? ` — ${about}` : '') + said +
+          (demo === undefined
+            ? '\nits sample for people who are not members could not be ' +
+              'made; yaks.app has the error, and app_publish again retries it'
+            : '') +
           `\nits page, to open it or make a copy: ${pageAt(name, ctx.env)}` +
           (shown ? `\n${saying(shown, ctx.env)}` : ''),
         space,
@@ -5287,6 +5313,8 @@ let OURS: Row[] = [
         { entities: [{ entity: { eid: app.eid }, published: null }] },
         vouched(who),
       )
+      // And its sample: an app nobody can install shows strangers nothing.
+      await unsampled(ctx.env, ctx.dir, app)
       // And the gallery with it (gallery.ts): the page shows what a person can
       // install, so an app nobody can install is not on it. The word comes
       // off rather than being remembered — being shown is a thing we agreed

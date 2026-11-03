@@ -265,6 +265,15 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, version: num },
     },
+    // A private published app's sample store (sample.ts, D-134327): the
+    // handle of the store holding its published seed, which strangers read,
+    // and the sha of the declaration and seed it was made from. Server-owned:
+    // a handle an app could write is a door into another app's store.
+    demo: {
+      component: true,
+      type: 'object',
+      properties: { store: owned(text), seed: owned(text) },
+    },
     // The Stripe account this space sells through (sell.ts, T-34524). Direct
     // charges: the connected account is the merchant, so this is the whole of
     // what the platform keeps about it — the id every call carries in its
