@@ -10,12 +10,17 @@ change is a batch of entity patches, and every list is a query.
 
 ## Start
 
+`yak` runs on [Deno](https://deno.com) 2.9 or later.
+
 ```sh
 deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
-yak init Ada   # ~/.yak/yak.json and its graph, worked at by Ada
+yak init Ada        # ~/.yak/yak.json and its graph, worked at by you, Ada
 yak task new 'Buy the cake'
 yak task list
-yak serve      # the canvas, /mcp and /query on http://127.0.0.1:8787
+yak serve           # the canvas, /mcp and /query on http://127.0.0.1:8787
+yak hooks install   # Claude Code sessions join the graph
+yak auth yaks.app   # sign in to yaks.app, to reach your apps from here
+yak help            # every command
 ```
 
 The installer puts `yak` on your PATH at its own release, so the command and
