@@ -225,7 +225,7 @@ export let SAYS: Record<string, Said> = {
       },
     ],
     'body':
-      "Make me something on yaks.app: {{what}}\n\nBuild it as an app there — its own address, its own store — and give me the link\nonce app_deploy has released it and it opens; don't tell me it exists before then. Keep whatever it saves in the app's own store, so it is the same\non my phone. If other people are meant to use it, or it needs to be more than\none page, ask me before you deploy.",
+      "Make me something on yaks.app: {{what}}\n\nBuild it as an app there — its own address, its own store — and give me the link\nonce app_deploy has released it and it opens; don't tell me it exists before\nthen. Keep whatever it saves in the app's own store, so it is the same on my\nphone. If other people are meant to use it, or it needs to be more than one\npage, ask me before you deploy.",
   },
   'publish': {
     'name': 'publish',

@@ -277,7 +277,7 @@ test('an invited person gets a space of their own', async () => {
     )
     assertStringIncludes(
       await agent.tool('app_new', { slug: 'notes', title: 'Notes' }),
-      `${hers}.yaks.app/notes/`,
+      `app ${hers}/notes `,
     )
   } finally {
     await k.stop()
