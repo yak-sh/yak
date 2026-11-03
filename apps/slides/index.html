@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Slideshow</title>
+    <meta
+      name="description"
+      content="A slideshow of your photos and words, for the screen at your shop, stall or event, or a link you send to people."
+    >
+    <meta name="theme-color" content="#3b2414">
+    <link rel="icon" href="./icon.svg">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <header class="top">
+      <div class="top__in">
+        <h1 class="top__title"><a href="#/">Slideshow</a></h1>
+        <p class="top__lede">
+          Your photos and words, on any screen or a link you send.
+        </p>
+      </div>
+    </header>
+    <main class="wrap" id="stage">
+      <p class="empty">Getting the slides&hellip;</p>
+    </main>
+    <footer class="foot" id="foot"></footer>
+    <section class="play" id="play" aria-label="Slideshow" hidden></section>
+    <dialog id="ask" aria-label="Edit"></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

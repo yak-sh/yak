@@ -1,0 +1,21 @@
+{
+  "$defs": {
+    "show": {
+      "description": "One slideshow. doc.title names it. seconds is how long each slide stays up when it plays, 0 to move on by hand; look is its colours and type: warm, night or paper.",
+      "properties": {
+        "seconds": { "type": "number" },
+        "look": { "type": "string" }
+      }
+    },
+    "slide": {
+      "description": "One slide in a slideshow, in playing order. doc.title is its heading and doc.body its words. photo is the eid of the uploaded picture, served at ./api/blob/<photo>; layout is photo (the words over the picture), side (the picture beside the words) or words (no picture).",
+      "properties": {
+        "show": { "type": "string", "ref": "show", "death": "cascade" },
+        "ord": { "type": "number" },
+        "photo": { "type": "string" },
+        "layout": { "type": "string" }
+      }
+    }
+  },
+  "blob": { "maxLength": 26214400 }
+}

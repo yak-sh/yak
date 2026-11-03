@@ -613,13 +613,13 @@
     height: auto;
     aspect-ratio: 16 / 9;
     object-fit: cover;
-    object-position: center top;
+    object-position: left top;
   }
 
-  /* A button laid on the picture's corner. */
+  /* A button laid on the picture's corner, clear of the slide's words. */
   .Demo_Play {
     position: absolute;
-    inset: auto auto 1rem 1rem;
+    inset: auto 1rem 1rem auto;
   }
 
   .Demo_Shot:hover .Demo_Play {
