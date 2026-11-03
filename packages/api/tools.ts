@@ -44,7 +44,7 @@ import type { Runs } from '@yaks/graph/tools'
 import type { Runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { denoListen, denoReady } from './deno.ts'
-import type { Handler } from './route.ts'
+import type { Handler, Route } from './route.ts'
 
 /** The port `serve` listens on when neither the call nor the config names
  * one. */
@@ -55,6 +55,29 @@ export let PORT = 8787
  * itself (@yaks/cli's `doorman`) is offered to a network only when a config
  * says so. */
 export let HOSTNAME = '127.0.0.1'
+
+/** Where a client on this machine reaches the server a config serves: its
+ * port, else {@link PORT}, at its hostname, or this machine's own address
+ * where it names none or every interface.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { served } from '@yaks/api/tools'
+ *
+ * assertEquals(served({}), 'http://127.0.0.1:8787')
+ * assertEquals(
+ *   served({ port: 5173, hostname: '0.0.0.0' }),
+ *   'http://127.0.0.1:5173',
+ * )
+ * ```
+ */
+export let served = (
+  config: { port?: number; hostname?: string },
+): string => {
+  let { hostname = HOSTNAME, port = PORT } = config
+  let any = ['0.0.0.0', '::', '[::]'].includes(hostname)
+  return `http://${any ? HOSTNAME : hostname}:${port}`
+}
 
 /** Seconds a stopping server lets requests finish before cancelling reads
  * and cutting streamed answers. Admitted writes drain even after this grace
@@ -70,6 +93,8 @@ export type Serving = {
    * a plugin built one, and ./routes.ts is that plugin — so a `Serving` put
    * together by hand may carry none. */
   handler?: Handler
+  /** the plugins' routes: each that `says` what it is is told on listening */
+  routes?: Pick<Route, 'path' | 'says'>[]
   runner: Runner
   duties: (signal?: AbortSignal) => Promise<void>
   /** close for the processes on this machine that ended without closing
@@ -79,6 +104,40 @@ export type Serving = {
 }
 
 let seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
+
+/** What a server says once it listens at `at`: the address and the graph,
+ * then each door a route says something about, at `origin`, where a client on
+ * this machine reaches it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { listening } from '@yaks/api/tools'
+ *
+ * assertEquals(
+ *   listening('http://0.0.0.0:80', 'http://127.0.0.1:80', {
+ *     config: { db: 'g.db' },
+ *     routes: [{ path: '/', says: 'the canvas' }, { path: '/ws' }],
+ *   }),
+ *   'serve — http://0.0.0.0:80 · g.db\n' +
+ *     '  http://127.0.0.1:80/  the canvas\n' +
+ *     'Ctrl-C stops it',
+ * )
+ * ```
+ */
+export let listening = (
+  at: string,
+  origin: string,
+  host: Pick<Serving, 'config' | 'routes'>,
+): string => {
+  let told = (host.routes ?? []).filter((r) => r.says)
+    .sort((a, b) => a.path.localeCompare(b.path))
+  let wide = Math.max(0, ...told.map((r) => r.path.length))
+  return [
+    `serve — ${at} · ${host.config.db ?? 'no db'}`,
+    ...told.map((r) => `  ${origin}${r.path.padEnd(wide)}  ${r.says}`),
+    'Ctrl-C stops it',
+  ].join('\n')
+}
 
 /** The implementation of the tool ./vocab.json declares. */
 export let runs = (host: Serving): Runs => ({
@@ -109,7 +168,7 @@ export let runs = (host: Serving): Runs => ({
           // The one thing printed while the call is still running, because a
           // person who just started a server wants the address now and the
           // result is a long way off.
-          console.error(`serve — ${at} · ${host.config.db ?? 'no db'}`)
+          console.error(listening(at, served(addr), host))
         },
       }, active.handle)
     } catch (error) {

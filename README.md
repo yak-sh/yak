@@ -29,9 +29,14 @@ it has no authentication of its own.
 Agents join the same graph:
 
 - **Claude Code**: `yak hooks install` writes lifecycle hooks into
-  `~/.claude/settings.json`. Each session becomes a session entity, is told its
-  claims when it starts, and releases them when it ends.
+  `~/.claude/settings.json`, posting to the `yak serve` of your config. Each
+  session becomes a session entity, is told its claims when it starts, and
+  releases them when it ends. Its answer names the next steps, among them
+  `claude mcp add --scope user --transport http yak http://127.0.0.1:8787/mcp`.
 - **Any MCP client**: `http://127.0.0.1:8787/mcp` serves the graph's tools.
+
+`yak auth yaks.app` signs in to yaks.app; the sign-in is a connection in your
+graph, which `yak init` composes with @yaks/connections.
 
 ## The model
 

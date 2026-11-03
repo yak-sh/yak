@@ -350,6 +350,9 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       Deno.execPath(),
       'run',
       '-A',
+      // TODO: deno.json's "no-legacy-abort" says this; Deno 2.9.1 ignores it
+      // there (./install.ts).
+      '--unstable-no-legacy-abort',
       ...Deno.env.get('YAK_WORK_INSPECT') && argv.includes('work')
         ? [inspector(Deno.env.get('YAK_WORK_INSPECT')!)]
         : [],

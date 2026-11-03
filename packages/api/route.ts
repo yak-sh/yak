@@ -30,6 +30,9 @@ export type Route = {
   method: string
   path: string
   handle: Handler
+  /** What a person reaching this path finds, said beside its address when a
+   * server starts listening: the few doors somebody starting one opens. */
+  says?: string
 }
 
 /** A check every request passes before any route or door answers it: a

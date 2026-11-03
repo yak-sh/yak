@@ -5,7 +5,9 @@
 //
 // The set is the graph, its tasks and projects, the people and sessions that
 // work on them and the processes a session runs in — so Claude Code or any MCP
-// agent can join through hooks and `/mcp` — and the web canvas `yak serve`
+// agent can join through hooks and `/mcp` — the person's connections to outside
+// services, so `yak auth yaks.app` signs in to this graph and every command
+// reaching yaks.app finds the token here, and the web canvas `yak serve`
 // answers with, whose session pages read those processes. Everything else is one
 // line added to `plugins` later. Pure data: yak.ts writes it and opens the
 // graph it names.
@@ -19,6 +21,7 @@ export let STARTER = [
   '@yaks/provenance',
   '@yaks/id',
   '@yaks/secrets',
+  '@yaks/connections',
   '@yaks/alias',
   '@yaks/edge',
   '@yaks/doc',

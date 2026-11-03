@@ -19,11 +19,7 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
   positional: ['what'],
   run: async (args, host, context) => {
     try {
-      let { PORT } = await import('@yaks/api/tools')
-      let hostname = host.config.hostname
-      let url = `http://${
-        !hostname || hostname == '0.0.0.0' ? '127.0.0.1' : hostname
-      }:${host.config.port ?? PORT}`
+      let url = (await import('@yaks/api/tools')).served(host.config)
       let connection = typeof args.app == 'string'
         ? await (await import('./remote.ts')).remote(
           args.app,

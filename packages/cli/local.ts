@@ -108,9 +108,8 @@ let open = async (
       await host.close()
       throw error
     }
-    console.info(
-      'main thread stack sampler ready (100 ms samples, 60 s rotation)',
-    )
+    // Silent once ready: a sampler that cannot start refuses the web above,
+    // and its samples are told only in a stall's report.
     let unwatch = stalls({
       sample: (ms, held) =>
         profile.take(ms, held)?.catch((error) => {

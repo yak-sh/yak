@@ -34,9 +34,6 @@ let post = (url: string, matcher?: string): Hook => ({
   hooks: [{ type: 'http', url, timeout: 2 }],
 })
 
-/** The server a session's hook door is on, unless the caller names another. */
-export let SERVER = 'http://localhost:5173'
-
 // Keep a failed/partial HTTP response out of stdout before trying the CLI.
 let quote = (s: string) => "'" + s.replaceAll("'", "'\"'\"'") + "'"
 let relay = (door: string, fallback: string, timeout?: number): Hook =>
@@ -59,12 +56,13 @@ let relay = (door: string, fallback: string, timeout?: number): Hook =>
 /**
  * The entries this package owns, keyed by the harness event each responds to.
  *
- * `yak` is the path to the command on this machine — a full path where it is
- * not on the harness's path. `server` is the `yak serve` the hook door is on.
+ * `server` is the origin of the `yak serve` the hook door is on. `yak` is the
+ * path to the command on this machine — a full path where it is not on the
+ * harness's path.
  */
 export let lifecycle = (
+  server: string,
   yak = 'yak',
-  server = SERVER,
 ): Record<string, Hook[]> => {
   let door = `${server.replace(/\/+$/, '')}${PATH}`
   return {
@@ -110,11 +108,27 @@ export let merged = (
   return out
 }
 
+/** What an install tells the person who ran it: what changed, and what to do
+ * next for Claude Code to work with this graph. */
+export let installed = (
+  path: string,
+  server: string,
+  removed = false,
+): string =>
+  removed ? `removed this graph's session hooks from ${path}` : [
+    `wrote the session hooks into ${path}.`,
+    'A Claude Code session started from now on, in any directory, is a ' +
+    'session in this graph.',
+    `next: yak serve, which the hooks post each tool call to (${server}${PATH}).`,
+    "To hand Claude Code this graph's tools too:",
+    `  claude mcp add --scope user --transport http yak ${server}/mcp`,
+  ].join('\n')
+
 /** Write the entries into a settings file, keeping everything else in it.
  * Answers the path written. */
 export let install = (
   path: string,
-  opts: { yak?: string; server?: string; remove?: boolean } = {},
+  opts: { server: string; yak?: string; remove?: boolean },
 ): string => {
   let settings: Record<string, unknown> = {}
   try {
@@ -124,7 +138,7 @@ export let install = (
   }
   let hooks = merged(
     settings.hooks as Record<string, unknown> | undefined,
-    lifecycle(opts.yak, opts.server),
+    lifecycle(opts.server, opts.yak),
     opts.remove,
   )
   let next: Record<string, unknown> = { ...settings, hooks }

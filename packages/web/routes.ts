@@ -165,7 +165,12 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       ? [authorization({ ...host, vault: host.vault })]
       : [],
     { method: 'GET', path: '/*', handle: named },
-    { method: 'GET', path: '/', handle: page },
+    {
+      method: 'GET',
+      path: '/',
+      handle: page,
+      says: 'the canvas: open it in a browser',
+    },
     {
       method: 'GET',
       path: '/inspect',

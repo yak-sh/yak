@@ -530,7 +530,11 @@ and `--json` delegate to the graph's tool runner.
 `yak hooks install` writes lifecycle hooks into a Claude-compatible settings
 file (default `~/.claude/settings.json`), replacing an earlier install and
 leaving every other entry alone. A harness runs each hook with the event as JSON
-on stdin.
+on stdin. The hooks post to the `yak serve` of the graph's config (`server`,
+default the config's `port` and `hostname`, else `http://127.0.0.1:8787`), and
+the answer says what to do next: start `yak serve`, and add its `/mcp` to Claude
+Code (`claude mcp add --scope user --transport http yak <server>/mcp`) to hand
+sessions the graph's tools.
 
 | Event                       | Command                        | Effect                                                                           |
 | --------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
@@ -567,14 +571,13 @@ Code's
 
 It also writes a PostToolUse HTTP hook posting each tool call to the server's
 hook door, `POST /session/hook` (`@yaks/session/routes`; `server` names the
-`yak serve`, default `http://localhost:5173`). A harness runs its subagents and
-forks under the session's own id, and only the hook event says which context a
-call came from (Claude Code's `agent_id`). So the door answers a call from the
-session's own line of work with what the bus owes the session, as the context
-the harness adds after the call, and a subagent's with nothing. The first event,
-a subagent's too, marks the session `hooked{}`, and from then on the bus says
-nothing beside a tool reply to it, since a tool call cannot say which context
-made it.
+`yak serve`). A harness runs its subagents and forks under the session's own id,
+and only the hook event says which context a call came from (Claude Code's
+`agent_id`). So the door answers a call from the session's own line of work with
+what the bus owes the session, as the context the harness adds after the call,
+and a subagent's with nothing. The first event, a subagent's too, marks the
+session `hooked{}`, and from then on the bus says nothing beside a tool reply to
+it, since a tool call cannot say which context made it.
 
 A PreToolUse HTTP hook on MCP tools (`mcp__.*`) posts to the same door before
 each call, which remembers the session or subagent making it under the call's

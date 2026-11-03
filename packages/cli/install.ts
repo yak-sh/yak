@@ -26,6 +26,8 @@ export let install = (version: string, config: string): string[] => [
   'install',
   '--global',
   '--allow-all',
+  // TODO: drop once Deno honors deno.json's "no-legacy-abort" (2.9.1 does not)
+  '--unstable-no-legacy-abort',
   '--force',
   '--name',
   'yak',

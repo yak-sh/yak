@@ -159,11 +159,7 @@ export let command = ({ fetch = globalThis.fetch, env }: {
       }
       let base = args.url
       if (typeof base != 'string') {
-        let { PORT } = await import('@yaks/api/tools')
-        let { hostname, port = PORT } = host.config
-        base = `http://${
-          !hostname || hostname == '0.0.0.0' ? '127.0.0.1' : hostname
-        }:${port}`
+        base = (await import('@yaks/api/tools')).served(host.config)
       }
       let origin = new URL(base as string)
       if (!['http:', 'https:'].includes(origin.protocol)) {

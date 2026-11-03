@@ -23,7 +23,8 @@ rm -rf "$bin/.yak"
 cat >"$bin/yak" <<EOF
 #!/bin/sh
 export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
-exec deno run -A --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
+exec deno run -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
 EOF
 chmod +x "$bin/yak"
+# TODO: drop --unstable-no-legacy-abort once Deno honors deno.json's (2.9.1 does not)
 ln -sf yak "$bin/task"

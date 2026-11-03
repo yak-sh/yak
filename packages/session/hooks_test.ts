@@ -2,10 +2,12 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { install, lifecycle, merged } from './hooks.ts'
 
+let at = 'http://127.0.0.1:8787'
+let ours = lifecycle(at)
 let theirs = { hooks: [{ type: 'command', command: 'say-hello' }] }
 
 test('an install leads each event and keeps everything else', () => {
-  let out = merged({ SessionStart: [theirs] }, lifecycle())
+  let out = merged({ SessionStart: [theirs] }, ours)
   assertEquals(out.SessionStart.length, 2)
   assertEquals(out.SessionStart[1], theirs)
   assert(
@@ -16,9 +18,9 @@ test('an install leads each event and keeps everything else', () => {
 test('a second install replaces the first, never doubles it', () => {
   let once = merged(
     { SessionStart: [theirs], UserPromptSubmit: [theirs] },
-    lifecycle(),
+    ours,
   )
-  let twice = merged(once, lifecycle('/usr/local/bin/yak', 'http://box:9'))
+  let twice = merged(once, lifecycle('http://box:9', '/usr/local/bin/yak'))
   assertEquals(twice.SessionStart.length, 2)
   let door = { type: 'http', url: 'http://box:9/session/hook', timeout: 2 }
   assertEquals(twice.PostToolUse, [{ hooks: [door] }])
@@ -33,8 +35,8 @@ test('a second install replaces the first, never doubles it', () => {
 })
 
 test('removing takes ours out and leaves theirs', () => {
-  let once = merged({ SessionStart: [theirs], Stop: [theirs] }, lifecycle())
-  let gone = merged(once, lifecycle(), true)
+  let once = merged({ SessionStart: [theirs], Stop: [theirs] }, ours)
+  let gone = merged(once, ours, true)
   assertEquals(gone, { SessionStart: [theirs], Stop: [theirs] })
 })
 
@@ -42,10 +44,10 @@ let settings = Deno.makeTempFileSync({ suffix: '.json' })
 Deno.writeTextFileSync(settings, JSON.stringify({ model: 'opus', hooks: {} }))
 let removable = Deno.makeTempFileSync({ suffix: '.json' })
 Deno.writeTextFileSync(removable, JSON.stringify({ model: 'opus', hooks: {} }))
-install(removable)
+install(removable, { server: at })
 
 test('a settings file keeps the keys nobody asked about', () => {
-  install(settings)
+  install(settings, { server: at })
   let said = JSON.parse(Deno.readTextFileSync(settings))
   assertEquals(said.model, 'opus')
   assertEquals(Object.keys(said.hooks).sort(), [
@@ -59,7 +61,7 @@ test('a settings file keeps the keys nobody asked about', () => {
 })
 
 test('uninstall leaves the settings outside hooks untouched', () => {
-  install(removable, { remove: true })
+  install(removable, { server: at, remove: true })
   assertEquals(JSON.parse(Deno.readTextFileSync(removable)), { model: 'opus' })
 })
 
@@ -73,8 +75,8 @@ test('an install takes out the turn hooks an older one wrote', () => {
   }
   let out = merged(
     { Stop: [spooled, theirs], UserPromptSubmit: [spooled] },
-    lifecycle(),
+    ours,
   )
   assertEquals(out.Stop, [theirs])
-  assertEquals(out.UserPromptSubmit, lifecycle().UserPromptSubmit)
+  assertEquals(out.UserPromptSubmit, ours.UserPromptSubmit)
 })

@@ -766,7 +766,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Writes on this machine; returns the settings path. remove uninstalls these hooks.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Writes on this machine; answers the settings path and what to do next, the MCP server to add among it. remove uninstalls these hooks.",
       "input": {
         "path": {
           "type": "string",
@@ -778,7 +778,7 @@
         },
         "server": {
           "type": "string",
-          "description": "Hook server (default http://localhost:5173)."
+          "description": "Hook server (default: where this graph's yak serve listens, the config's port or 8787)."
         },
         "remove": {
           "type": "boolean",

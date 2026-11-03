@@ -57,5 +57,10 @@ export let routes = (host: Hosting): Route[] => {
     )
       .filter((line): line is string => !!line).join('\n\n'),
   })
-  return [{ method: '*', path: PATH, handle }]
+  return [{
+    method: '*',
+    path: PATH,
+    handle,
+    says: "the graph's tools for agents, over MCP",
+  }]
 }

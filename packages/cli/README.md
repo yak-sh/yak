@@ -118,8 +118,9 @@ implementations, as do `help`, `init`, and `apply`.
 
 `yak init <your name>` starts a machine's own graph: it writes `~/.yak/yak.json`
 (or the path `--config` names) with the plugins a graph, its tasks, sessions,
-`/mcp` and the web canvas need, and makes you the graph's `person`. It never
-replaces a config that is already there.
+connections, `/mcp` and the web canvas need, and makes you the graph's `person`.
+It never replaces a config that is already there. Its connections are where
+`yak auth yaks.app` keeps your sign-in.
 
 A config is plain JSON, so a plugin is one more line. Pass another with
 `--config`, or set `$YAK_CONFIG`. This one adds @yaks/mail, with its options:
@@ -694,8 +695,9 @@ admission and journaling still run, and the journal records the current writer.
 
 Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
 `yak auth yaks.app` signs in through OAuth. The sign-in is a connection in the
-configured graph. A machine with no graph creates a small personal graph in its
-CLI state directory on its first `yak auth`.
+configured graph, which needs @yaks/connections among its plugins; `yak init`'s
+config has it. A machine with no graph creates a small personal graph in its CLI
+state directory on its first `yak auth`.
 
 `--as <account>` is optional on commands that reach yaks.app. Without it, the
 connection whose account matches the configured person's own address wins,

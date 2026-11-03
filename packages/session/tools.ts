@@ -183,7 +183,7 @@ export let runs = (
   host: {
     vocab: Vocab
     stopping?: AbortSignal
-    config?: { db?: string }
+    config?: { db?: string; port?: number; hostname?: string }
   },
   options: Options = {},
 ): Runs => ({
@@ -364,18 +364,18 @@ export let runs = (
 
   hooks_install: async (call): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let { install, settingsPath } = await hooks()
+    let { install, settingsPath, installed } = await hooks()
+    // The `yak serve` of this graph's config, where it would listen.
+    let server = str(args.server) ||
+      (await import('@yaks/api/tools')).served(host.config ?? {})
+    let path = install(str(args.path) || settingsPath(), {
+      server,
+      yak: str(args.yak) || undefined,
+      remove: !!args.remove,
+    })
     return [{
       entity: { eid: '$said' },
-      content: {
-        body: `${args.remove ? 'removed from' : 'wrote'} ${
-          install(str(args.path) || settingsPath(), {
-            yak: str(args.yak) || undefined,
-            server: str(args.server) || undefined,
-            remove: !!args.remove,
-          })
-        }`,
-      },
+      content: { body: installed(path, server, !!args.remove) },
       output: { source: call.entity.eid },
     }]
   },
