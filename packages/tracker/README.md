@@ -472,10 +472,13 @@ the tracker's `vocab` and `tools` beside `admin errors`, names `yaks.app` its
 `source`: its bug tools read and mark the Worker with no `--source` named. It
 names the box tracker's graph as `box`, its base URL, and `--source box` reads
 that graph through its `/query` and marks it through its `/apply`, by the
-references that graph keeps (`B-7`, a short handle, a title). So one set of
-tools serves both trackers. The `code.cwd` option names the checkout a
-resolution's commits are read from, so `--since` and `--fix` take a short sha as
-Git reads it:
+references that graph keeps (`B-7`, a short handle, a title), naming the calling
+run in `x-via`. The tracker's `box.json` composes `@yaks/api` with `who` set to
+the box's base URL, so its door asks the box who that run is and a mark records
+the agent in `by` and its session in `via`, whether it came this way or from
+`yak --config ~/.yak/tracker.json`. So one set of tools serves both trackers.
+The `code.cwd` option names the checkout a resolution's commits are read from,
+so `--since` and `--fix` take a short sha as Git reads it:
 
 ```json
 {

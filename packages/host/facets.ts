@@ -42,7 +42,7 @@ export type VocabFacet = {
  * because naming a caller is a read: @yaks/session resolves a request to the
  * session it claims to speak for, which it can only do through the host's own
  * graph. It is handed the host with nothing open on it yet — keep the
- * reference, do not call it. At most one plugin may export it. */
+ * reference, do not call it. At most one plugin may answer it. */
 export type GraphFacet = {
   /** The statements creating this plugin's own tables, each of which only adds
    * what is missing; a table that stands gains the columns it lacks. */
@@ -53,7 +53,8 @@ export type GraphFacet = {
   extend?: (host: Host, options: Options) => Extension[]
   /** Search a phrase by meaning through this plugin's own index. */
   meaning?: (host: Host, options: Options) => Meaning
-  authenticate?: (host: Host, options: Options) => Authenticate
+  /** who a request is from, or none where these options name nobody to ask */
+  authenticate?: (host: Host, options: Options) => Authenticate | undefined
   /** the commits other hosts make to this store (@yaks/journal's feed) */
   feed?: (host: Host, options: Options) => Feed
   /** Whether a store this plugin writes to, configured with `options`, is

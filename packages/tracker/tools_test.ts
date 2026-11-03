@@ -15,7 +15,7 @@ import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 import { trackerDoc } from './vocab.ts'
 import { runs, type ToolOptions } from './tools.ts'
 import { routes } from './routes.ts'
-import { api } from '@yaks/api'
+import { api, asking } from '@yaks/api'
 import { sign } from './ticket.ts'
 
 let ids = [1, 2, 3, 4, 5, 6].map((n) =>
@@ -439,7 +439,20 @@ test('a resolution names its commits by full sha, read from a short one', async 
 // the references that graph keeps, and writes nothing to its own.
 let tracker = await marking(config, undefined, true, false)
 let [held] = await tracker.box.get([ids[0]], ['entity'])
-let served = api({ graph: tracker.box })
+// The box door names the agent behind the run a request names, and the
+// tracker's door asks it, so a mark is signed as that agent and run.
+let agent = { by: crypto.randomUUID(), via: crypto.randomUUID() }
+let boxDoor = api({
+  graph: graph({ vocab: boxVocab, storage: ram(boxVocab, options) }),
+  authenticate: (r) => r.headers.get('x-via') == agent.via ? agent : null,
+})
+let served = api({
+  graph: tracker.box,
+  authenticate: asking(
+    'http://box.test',
+    ((url, init) => boxDoor(new Request(url, init))) as typeof fetch,
+  ),
+})
 let here = graph({ vocab: boxVocab, storage: ram(boxVocab, options) })
 let viaBox = loadTools(
   trackerDoc,
@@ -456,6 +469,7 @@ let use = async (name: string, args: Record<string, unknown>) => {
     await tool.run({
       entity: { eid: ids[4] },
       call: { args: validateToolInput(tool, { ...said, ...args }) },
+      $actor: agent,
     }, here),
   ) as Record<string, unknown>
 }
@@ -463,6 +477,7 @@ let boxListed = await use('bug_list', {})
 let shown = await use('bug_show', { bug: `B-${held.entity.num}` })
 let resolved = await use('bug_resolve', { bug: `B-${held.entity.num}` })
 let afterResolve = await tracker.box.read('.bug.status=resolved')
+let [signedBy] = await tracker.box.get([ids[0]], ['resolved'])
 await use('bug_reopen', { bug: 'mark me' })
 let afterReopen = await tracker.box.read('.bug.status=open')
 test('a config naming the box tracker reads and marks its bugs there', async () => {
@@ -471,6 +486,8 @@ test('a config naming the box tracker reads and marks its bugs there', async () 
   equal(eids(shown.rows), [ids[0]])
   equal(resolved, { source: 'box', bug: ids[0], mark: 'resolved' })
   equal(eids(afterResolve), [ids[0]])
+  let { by, via } = signedBy.resolved as Record<string, unknown>
+  equal({ by, via }, agent)
   equal(eids(afterReopen), [ids[0]])
   equal(await here.read('.entity *'), [])
 })

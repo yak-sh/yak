@@ -1,7 +1,7 @@
 // Bug tools speak the same graph queries and mark patches as every other door.
 
 import type { Bundle, Graph } from '@yaks/graph'
-import { argsOf, referenced } from '@yaks/graph/call'
+import { argsOf, referenced, who } from '@yaks/graph/call'
 import { after } from '@yaks/fp'
 import type { Runs } from '@yaks/graph/tools'
 import {
@@ -37,18 +37,23 @@ type Store = Pick<Graph, 'vocab' | 'get' | 'read' | 'address'> & {
 }
 
 /** The box tracker's graph at `url`, read through its `/query` and marked
- * through its `/apply`, in this graph's vocabulary. A reference resolves the
- * way that graph resolves one in a query. */
+ * through its `/apply`, in this graph's vocabulary, as the run `via` names in
+ * `x-via`, which that graph's door signs its marks with (@yaks/api `asking`).
+ * A reference resolves the way that graph resolves one in a query. */
 export let wire = (
   url: string,
   vocab: Graph['vocab'],
   go: typeof fetch = fetch,
+  via?: string,
 ): Store => {
   let at = (path: string) => `${url.replace(/\/$/, '')}${path}`
   let send = async (path: string, body: unknown) => {
     let response = await go(at(path), {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...via ? { 'x-via': via } : {},
+      },
       body: JSON.stringify(body),
     })
     let said = await response.json().catch(() => null)
@@ -170,9 +175,10 @@ export let runs = (
   let source = (call: Bundle) =>
     str(argsOf(call).source) || options.source || 'box'
   // Where the box source reads and marks: the box tracker's graph when one is
-  // named, else this graph, whose runner applies the marks a tool answers.
-  let box = (g: Graph): Store =>
-    options.box ? wire(options.box, g.vocab, go) : g
+  // named, as the run that called, else this graph, whose runner applies the
+  // marks a tool answers.
+  let box = (g: Graph, call?: Bundle): Store =>
+    options.box ? wire(options.box, g.vocab, go, call && who(call)?.via) : g
   let cwd = options.code?.cwd
   // A resolution's commits by their full shas; one Git cannot read stays as
   // said, for the graph to refuse.
@@ -188,7 +194,7 @@ export let runs = (
     async (call: Bundle, here: Graph): Promise<Bundle[]> => {
       let args = argsOf(call)
       let remote = source(call) == 'yaks.app'
-      let g = box(here)
+      let g = box(here, call)
       let [address] = remote
         ? [str(args.bug)]
         : await referenced(g, [str(args.bug)], 'bug')

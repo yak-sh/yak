@@ -63,7 +63,7 @@ export {
   type Route,
   routed,
 } from './route.ts'
-export { type Authenticate, signed } from './actor.ts'
+export { asking, type Authenticate, signed } from './actor.ts'
 export type { PeerWriter } from './save.ts'
 export type { Timer } from './relay.ts'
 export {

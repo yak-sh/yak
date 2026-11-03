@@ -119,23 +119,24 @@ export type AssemblyOpts = {
   part?: (name: string) => void
 }
 // At most one plugin may name the caller; two would mean the answer depends on
-// import order, which is not an answer. Whoever it is, this PROCESS is the
-// fallback: a request no plugin claimed is this machine's own writing, not
-// nobody's.
+// import order, which is not an answer. A plugin whose options give it nobody
+// to ask answers none. Whoever it is, this PROCESS is the fallback: a request
+// no plugin claimed is this machine's own writing, not nobody's.
 let doorman = (
   graphs: Taken<'graph'>,
   host: Host,
   self: Actor | null,
 ): Authenticate => {
-  let said = graphs.filter(([r]) => r.authenticate)
-  if (said.length > 1) {
+  let asks = graphs.flatMap(([r, options]) =>
+    r.authenticate?.(host, options ?? {}) ?? []
+  )
+  if (asks.length > 1) {
     throw new CallError(
       'config',
-      `${said.length} plugins authenticate — a door has one`,
+      `${asks.length} plugins authenticate — a door has one`,
     )
   }
-  let [mod, options] = said[0] ?? []
-  let ask = mod?.authenticate?.(host, options ?? {})
+  let [ask] = asks
   return ask
     ? async (request, message) => (await ask(request, message)) ?? self
     : () => self

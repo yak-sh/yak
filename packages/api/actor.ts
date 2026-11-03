@@ -50,3 +50,47 @@ export type Authenticate = (
 // fact about a graph, not about HTTP — and re-exported here, where `/apply`
 // reaches for it.
 export { signed } from '@yaks/graph/provenance'
+
+/** The run a request names, in the fleet's `x-via` header. */
+let VIA = 'x-via'
+
+/**
+ * Callers named by another graph's door: a request naming a run in `x-via` is
+ * whoever the door at `url` says it is (its `GET /who`), so a graph that keeps
+ * no sessions of its own, such as the box's tracker, signs a session's writes
+ * as the graph that keeps them does. A request naming none is nobody here.
+ *
+ * ```ts
+ * import { api, asking } from '@yaks/api'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * const vocab = loadVocab({ $defs: {} })
+ * const box = api({
+ *   graph: graph({ vocab, storage: ram(vocab) }),
+ *   authenticate: (r) => ({ by: 'agent', via: r.headers.get('x-via')! }),
+ * })
+ * const who = asking('http://box.test', (url, init) =>
+ *   box(new Request(url, init)))
+ * const request = new Request('http://tracker.test/apply', {
+ *   headers: { 'x-via': 'run' },
+ * })
+ * equal(await who(request), { by: 'agent', via: 'run' })
+ * equal(await who(new Request('http://tracker.test/apply')), null)
+ * ```
+ */
+export let asking = (url: string, go: typeof fetch = fetch): Authenticate => {
+  let at = `${url.replace(/\/$/, '')}/who`
+  return async (request) => {
+    let via = request.headers.get(VIA)
+    if (!via) return null
+    let response = await go(at, { headers: { [VIA]: via } })
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`${at} answered ${response.status}`)
+    }
+    return await response.json()
+  }
+}

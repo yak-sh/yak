@@ -84,11 +84,12 @@ export type Options = {
 let nobody: Authenticate = () => null
 
 /** The paths {@link api} answers itself. */
-export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab']
+export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab', '/who']
 
 /**
  * Build the request handler for a graph: `POST /apply`, `GET|POST /query`,
- * `/ws` for live subscriptions, and `GET /vocab`, the vocabulary. Everything
+ * `/ws` for live subscriptions, `GET /vocab`, the vocabulary, and `GET /who`,
+ * the actor `authenticate` names for the request. Everything
  * else is a 404, every thrown error becomes the refusal body it describes (see
  * the README's Refusals), and an answer at 500 or over goes to `report` as a
  * `request` bundle (./request.ts `served`).
@@ -149,6 +150,11 @@ export let api = (opts: Options): Handler => {
       return request.method == 'GET'
         ? json({ docs, keywords })
         : no('/vocab takes GET', 405)
+    }
+    // Who this door says is calling, for a graph that names its callers by
+    // asking this one (./actor.ts `asking`).
+    if (path == '/who') {
+      return request.method == 'GET' ? json(who) : no('/who takes GET', 405)
     }
     if (path == '/ws') {
       if (
