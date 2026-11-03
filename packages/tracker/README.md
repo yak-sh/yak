@@ -467,9 +467,9 @@ requires remote configuration and marks the Worker; the standing pass brings its
 marks to a matching box group without importing remote-only bugs. Retrying a
 mark is safe, including when the box copy is already marked.
 
-A config that composes the tracker's `vocab` and `tools` facets without its
-`graph`, as the box's default yak does beside `admin errors`, holds no bugs of
-its own: its bug tools read and mark the Worker with no `--source` named. The
+A config whose graph holds no bugs of its own, as the box's default yak composes
+the tracker's `vocab` and `tools` beside `admin errors`, names `yaks.app` its
+`source`: its bug tools read and mark the Worker with no `--source` named. The
 `code.cwd` option names the checkout a resolution's commits are read from, so
 `--since` and `--fix` take a short sha as Git reads it:
 
@@ -478,6 +478,7 @@ its own: its bug tools read and mark the Worker with no `--source` named. The
   "use": "@yaks/tracker",
   "facets": ["vocab", "tools"],
   "with": {
+    "source": "yaks.app",
     "code": { "cwd": "/home/me/code/yak" },
     "remote": {
       "url": "https://tracker.example",

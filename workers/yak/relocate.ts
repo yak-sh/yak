@@ -102,6 +102,7 @@ let named = (sql: ReturnType<typeof driver>, name: string, from: string) =>
 
 // What the far end says to each step. `written` is how many rows it wrote for
 // the step as the runtime counts (and bills) them, indexes included.
+type Arrived = { written: number; tallies?: Record<string, Copied> }
 let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
   let written = 0
   let measure = (_: unknown, w?: number) => written += w ?? 0
@@ -219,14 +220,13 @@ export let relocation = (o: {
     let { plan: made, sends, tallies } = snapshot(driver(o.storage()))
     let written = 0
     let told = async (said: Told) => {
-      let answer = await (await send(to, said)).json()
+      let answer: Arrived = await (await send(to, said)).json()
       written += answer.written
       return answer
     }
     await told({ op: 'begin', plan: made })
     for (let pages of sends) await told({ op: 'rows', pages })
-    let far: Record<string, Copied> =
-      (await told({ op: 'end', plan: made })).tallies
+    let far = (await told({ op: 'end', plan: made })).tallies ?? {}
     let differ = made.tables.map((t) => t.name).filter((t) =>
       far[t]?.rows != tallies[t].rows || far[t]?.digest != tallies[t].digest
     )

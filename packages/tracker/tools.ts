@@ -18,7 +18,6 @@ import {
 } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
 import { commitOf } from '@yaks/git/source'
-import { type Config, facetsOf, used } from '@yaks/host/config'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
@@ -87,25 +86,21 @@ let answer = (
   }]
 }
 
-/** Whether a host's graph holds bugs of its own: it does unless its config
- * composes the tracker without the tracker's graph, as the box's default yak
- * does to serve the platform tracker's bugs beside `admin errors`. */
-let holds = (host: { config?: Config }): boolean => {
-  let plug = host.config?.plugins?.find((p) => used(p) == '@yaks/tracker')
-  return !plug || (facetsOf(plug)?.includes('graph') ?? true)
+/** The tools' options: the tracker's remote, the store a call naming no
+ * source reads and marks (`box` unless said), and the checkout whose commits a
+ * resolution names, where a short sha is read as Git reads one. */
+export type ToolOptions = Options & {
+  source?: 'box' | 'yaks.app'
+  code?: { cwd?: string }
 }
 
-/** The tools' options: the tracker's remote, and the checkout whose commits a
- * resolution names, where a short sha is read as Git reads one. */
-export type ToolOptions = Options & { code?: { cwd?: string } }
-
 export let runs = (
-  host: { config?: Config } = {},
+  _host: unknown = {},
   options: ToolOptions = {},
   go: typeof fetch = fetch,
 ): Runs => {
-  let home = holds(host) ? 'box' : 'yaks.app'
-  let source = (call: Bundle) => str(argsOf(call).source) || home
+  let source = (call: Bundle) =>
+    str(argsOf(call).source) || options.source || 'box'
   let cwd = options.code?.cwd
   // A resolution's commits by their full shas; one Git cannot read stays as
   // said, for the graph to refuse.
