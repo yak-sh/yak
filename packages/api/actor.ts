@@ -65,20 +65,20 @@ let VIA = 'x-via'
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
  * import { loadVocab } from '@yaks/vocab'
- * import { equal } from '@yaks/testing'
+ * import { assertEquals } from '@std/assert'
  *
  * const vocab = loadVocab({ $defs: {} })
  * const box = api({
  *   graph: graph({ vocab, storage: ram(vocab) }),
  *   authenticate: (r) => ({ by: 'agent', via: r.headers.get('x-via')! }),
  * })
- * const who = asking('http://box.test', (url, init) =>
+ * const who = asking('http://box.test', async (url, init) =>
  *   box(new Request(url, init)))
  * const request = new Request('http://tracker.test/apply', {
  *   headers: { 'x-via': 'run' },
  * })
- * equal(await who(request), { by: 'agent', via: 'run' })
- * equal(await who(new Request('http://tracker.test/apply')), null)
+ * assertEquals(await who(request), { by: 'agent', via: 'run' })
+ * assertEquals(await who(new Request('http://tracker.test/apply')), null)
  * ```
  */
 export let asking = (url: string, go: typeof fetch = fetch): Authenticate => {
