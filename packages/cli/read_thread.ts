@@ -98,6 +98,10 @@ export let readThread = (
   } = {},
 ): Reader & {
   ready: () => Promise<void>
+  /** whether `ready` has settled: until it has, the graph lent this reader
+   * answers its reads on its own connection (@yaks/graph `Lent`), so no read
+   * waits on a worker starting */
+  answering: () => boolean
   close: () => Promise<void>
   /** where a read that runs past `slow` is told */
   overrun: (tell: (error: Error) => void) => void
@@ -128,6 +132,7 @@ export let readThread = (
     activity: ReturnType<typeof readActivity>
   }
   let told: (error: Error) => void = () => {}
+  let up = false
   let lanes = new Set<Lane>()
   let waiting: Job[] = []
   let next = 0
@@ -303,7 +308,8 @@ export let readThread = (
     ready: () =>
       Promise.all(
         [1, 2].map(() => ask({ op: 'read', query: parse('.limit=1') })),
-      ).then(() => {}),
+      ).then(() => void (up = true)),
+    answering: () => up,
     overrun: (tell) => void (told = tell),
     close: () => {
       closed = true

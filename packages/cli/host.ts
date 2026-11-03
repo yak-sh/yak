@@ -54,7 +54,7 @@ import { sandboxCapabilities } from './sandboxes.ts'
  */
 
 import { UNNUMBERED } from './init.ts'
-import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph, Lent } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
@@ -246,13 +246,15 @@ export type ComposeOpts = {
   /** the thread running the duties this host hands off */
   thread?: Thread
   /** The web read door; this host closes an owned reader before telemetry. */
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
+  reader?: Lent & {
     search?: Search
     meaning?: Meaning
     close?: () => void | Promise<void>
     /** where the reader tells of a read that runs on */
     overrun?: (tell: (error: Error) => void) => void
   }
+  /** what the host carries as {@link Host.warmed} */
+  warmed?: Promise<void>
   /** a reader beside a host records no process of its own */
   process?: boolean
   /** Open the graph as of a transaction, or on a branch, where its store
@@ -619,6 +621,7 @@ let composed = async (
         blobs: sqliteBlobs(sql),
         artifacts,
         reader: opts.reader,
+        warmed: opts.warmed,
         me: selfEid(),
         stopping: stopping.signal,
         report: (error, context = {}) =>

@@ -277,8 +277,30 @@ export type Options = {
   /** where this graph's committed reads are answered (default: here). A web
    * host's reads run beside its HTTP thread (@yaks/cli `readThread`), so no
    * read holds the thread; a write, and the reads it makes in its own
-   * transaction, still run here. */
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
+   * transaction, still run here. One with `answering` takes them only once it
+   * says it answers, and they are answered here until then: a web's read
+   * workers start beside it, and nothing waits on them. */
+  reader?: Lent
+}
+
+/** Reads answered on another connection, lent to a graph. */
+export type Lent = Pick<Graph, 'read' | 'rows' | 'get'> & {
+  /** whether it answers yet; absent, it always does */
+  answering?: () => boolean
+}
+
+// The reads a lent reader takes, from the moment it answers.
+let lending = (
+  reader: Lent | undefined,
+  own: Pick<Graph, 'read' | 'rows' | 'get'>,
+): Pick<Graph, 'read' | 'rows' | 'get'> => {
+  if (!reader?.answering) return reader ?? own
+  let by = () => reader.answering!() ? reader : own
+  return {
+    read: (query, opts) => by().read(query, opts),
+    rows: (query, opts) => by().rows(query, opts),
+    get: (eids, comps, opts) => by().get(eids, comps, opts),
+  }
 }
 
 /** A live graph: what it knows, and what you can do with it. */
@@ -1454,7 +1476,7 @@ export let graph = (opts: Options): Graph => {
       return g
     },
     install: () => storage.install(),
-    ...queries(() => g, opts.reader ?? reads),
+    ...queries(() => g, lending(opts.reader, reads)),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
   }

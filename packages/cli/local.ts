@@ -90,40 +90,42 @@ let open = async (
   let reader = roles.includes('web') && dbOf(config) != ':memory:'
     ? readThread(path)
     : undefined
-  // A web's reads are ready before it is: a server that just took over a port
-  // answers its first read as fast as its next. And a web tells of a main
-  // thread held so long that every request waited on it (./stall.ts).
-  let withReader = async (host: Served): Promise<Served> => {
-    try {
-      await reader?.ready()
-    } catch (error) {
-      await host.close()
-      throw error
-    }
+  // A web warms beside its listener: its reader's workers start, so its first
+  // read is as fast as its next, and then it tells of a main thread held so
+  // long that every request waited on it (./stall.ts). The host carries the
+  // warming as `warmed`, made before it is composed: a server taking over a
+  // port waits for it before it listens, and any other listens at once
+  // (@yaks/api `serve`). A warming that fails rejects it, and the server ends.
+  let warming = Promise.withResolvers<void>()
+  warming.promise.catch(() => {})
+  let warmed = reader && warming.promise
+  let warm = (host: Served): Served => {
     if (!reader) return host
-    let profile: Awaited<ReturnType<typeof sampler>>
-    try {
-      profile = await sampler()
-    } catch (error) {
-      await host.close()
-      throw error
-    }
-    // Silent once ready: a sampler that cannot start refuses the web above,
-    // and its samples are told only in a stall's report.
-    let unwatch = stalls({
-      sample: (ms, held) =>
-        profile.take(ms, held)?.catch((error) => {
-          void host.report?.(error, { tags: { step: 'main thread sampling' } })
-          return `stack sampling failed: ${String(error)}`
-        }),
-      report: (error) =>
-        void host.report?.(error, { tags: { step: 'main thread' } }),
-    })
+    let profile: Awaited<ReturnType<typeof sampler>> | undefined
+    let unwatch = () => {}
+    let done = (async () => {
+      await reader.ready()
+      let started = profile = await sampler()
+      // Silent once started: its samples are told only in a stall's report.
+      unwatch = stalls({
+        sample: (ms, held) =>
+          started.take(ms, held)?.catch((error) => {
+            void host.report?.(error, {
+              tags: { step: 'main thread sampling' },
+            })
+            return `stack sampling failed: ${String(error)}`
+          }),
+        report: (error) =>
+          void host.report?.(error, { tags: { step: 'main thread' } }),
+      })
+    })()
+    done.then(warming.resolve, warming.reject)
     let close = host.close
     host.close = async (code) => {
+      await done.catch(() => {})
       unwatch()
       try {
-        await profile.close()
+        await profile?.close()
       } finally {
         await close(code)
       }
@@ -133,15 +135,16 @@ let open = async (
   if (
     readOnly || config.duties === false || (!duties && !roles.includes('web'))
   ) {
-    return withReader(
+    return warm(
       await compose({ ...config, duties: false }, roles, facet, {
         reader,
+        warmed,
         readOnly,
       }),
     )
   }
   if (roles.includes('web')) {
-    let host = await compose(config, roles, facet, { reader })
+    let host = await compose(config, roles, facet, { reader, warmed })
     try {
       // Only a web host starts workers for its duties, so only it loads how.
       let { external } = await import('./external.ts')
@@ -171,7 +174,7 @@ let open = async (
       await reader?.close()
       throw error
     }
-    return withReader(host)
+    return warm(host)
   }
   let aside = thread<string>(new URL('./duties.ts', import.meta.url))
   asides.add(aside)
@@ -186,7 +189,7 @@ let open = async (
     await reader?.close()
     throw error
   }
-  return withReader(host)
+  return warm(host)
 }
 
 /** The graph a config names, open for the roles a command's own thread serves,

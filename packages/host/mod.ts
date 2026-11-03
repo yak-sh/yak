@@ -1,6 +1,14 @@
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
-import type { Bundle, Eid, Graph, NamedTool, News, Storage } from '@yaks/graph'
+import type {
+  Bundle,
+  Eid,
+  Graph,
+  Lent,
+  NamedTool,
+  News,
+  Storage,
+} from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import type { Derived, Raw, Statements } from '@yaks/sql'
@@ -94,11 +102,18 @@ export interface Host {
   derived: Derived
   graph: Graph
   /** A web role answers what only reads its store beside its HTTP thread:
-   * `graph`'s reads, `search` and `meaning` go through it. */
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
+   * `graph`'s reads, `search` and `meaning` go through it, the reads once it
+   * is `answering` (@yaks/graph `Lent`). */
+  reader?: Lent & {
     search?: Search
     meaning?: Meaning
   }
+  /** Settles once a web host has warmed: its first read answers as fast as
+   * its next, and its main thread is watched. A server taking over a port
+   * waits for it before it listens; any other listens at once (@yaks/api
+   * `serve`). It rejects with what kept the host from warming. Absent where
+   * there is nothing to warm. */
+  warmed?: Promise<void>
   /** the post-commit registry: what a commit owes, written down by every
    * process (@yaks/effects), and the observers a plugin registers while one of
    * its tools runs */
