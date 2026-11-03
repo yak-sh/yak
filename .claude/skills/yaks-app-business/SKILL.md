@@ -143,7 +143,9 @@ and an app someone shared with them.
   `yaks-app`.
 - **The site.** The home page is workers/yak/public/index.html, which carries a
   JSON-LD copy of the plans. Next to it are pricing.html, help.html and the
-  Limits section of docs/technical.md. The connector's skills in
+  Limits section of docs/technical.md. The link a person pastes into their
+  own agent to connect it is /agent, public/agent.md drawn by docs.ts, and the
+  home page, /connect and the dashboard offer it. The connector's skills in
   plugins/yaks.app mirror the guide. The plan card a signed-in person sees is
   /manage/billing, in workers/yak/pages.ts.
 - **The work.** T-131889 holds what's left to make yaks.app work as D-131886

@@ -59,6 +59,19 @@ let TECHNICAL: Page = {
     'and its current limitations.',
 }
 
+// The link a person pastes into their own agent (T-135903): the page tells
+// the agent how to connect itself to yaks.app, and which one step to hand back
+// to the person where it can't. It is public/agent.md, drawn here for a
+// browser. An agent's fetch that does not ask for HTML gets the markdown
+// itself, so the link a person pastes needs no `.md`.
+export let AGENT = {
+  path: '/agent',
+  title: 'Connect your AI agent to yaks.app',
+  description:
+    'Paste this link into Claude, ChatGPT or another AI agent, and it ' +
+    'connects itself to yaks.app.',
+}
+
 /** Every page of the documentation, in the order the contents offers them. */
 export let CONTENTS: Page[] = [...PAGES, TECHNICAL]
 
@@ -183,7 +196,8 @@ ${
 
 // One documentation page, drawn. `lead` is the document's own heading, kept
 // first so the page has exactly one h1; anything handed in as `under` sits
-// between it and the rest of the document.
+// between it and the rest of the document. A page outside the documentation
+// passes no `slug`, and wears no sidebar.
 let page = (
   md: Md,
   env: Host,
@@ -192,7 +206,7 @@ let page = (
   description: string,
   tokens: Token[],
   under = '',
-  slug = '',
+  slug?: string,
 ) => {
   let lead = tokens.findIndex((t) => t.type == 'heading' && t.depth == 1)
   let opening = tokens.slice(0, lead + 1)
@@ -202,7 +216,7 @@ let page = (
 <body class="Docs">
 ${top}
 <main class="Page">
-${side(slug)}
+${slug == null ? '' : side(slug)}
 ${onPage(md, tokens)}
 <article class="Page_Body Prose">
 ${markup(md, opening)}
@@ -260,8 +274,38 @@ export let answer = async (
         DOCS.description,
         tokens,
         contents(),
+        '',
       )
     })
+  }
+  if (path == AGENT.path) {
+    let raw = !(req.headers.get('accept') ?? '').includes('text/html')
+    return await publicPage(
+      req,
+      env,
+      path,
+      async () => {
+        let text = await source(env, `${AGENT.path}.md`)
+        if (!text) return null
+        let drawn = raw ? null : await marked()
+        let said = drawn
+          ? page(
+            drawn,
+            env,
+            url(env, AGENT.path),
+            AGENT.title,
+            AGENT.description,
+            drawn.parse(linked(text), { breaks: false }),
+          )
+          : new Response(text, {
+            headers: { 'content-type': 'text/markdown; charset=utf-8' },
+          })
+        said.headers.set('vary', 'accept')
+        return said
+      },
+      undefined,
+      raw ? 'md' : '',
+    )
   }
   let slug = path.startsWith(`${PATH}/`) ? path.slice(PATH.length + 1) : ''
   let row = CONTENTS.find((p) => p.slug == slug)

@@ -343,6 +343,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
     '/integrations',
     '/docs',
     '/docs/technical',
+    '/agent',
   ])
   let url = `https://yaks.app${GALLERY.path}`
   let one = flat(await galleryPage([]).text())

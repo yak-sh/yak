@@ -7,7 +7,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { headings, parse } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
-import { answer, CONTENTS, DOCS, PATH, pathOf } from './docs.ts'
+import { AGENT, answer, CONTENTS, DOCS, PATH, pathOf } from './docs.ts'
+import { claudeAdd } from './pages.ts'
 import type { Env } from './env.ts'
 import { PAGES } from './guide.ts'
 import { esc } from './html.ts'
@@ -205,6 +206,39 @@ test('the addresses the documentation moved from redirect to it', async () => {
     assertEquals(said.status, 301, was)
     assertEquals(said.headers.get('location'), `https://yaks.app${now}`, was)
   }
+})
+
+// The link a person pastes into their agent (T-135903): a browser gets the
+// page, an agent's fetch gets the markdown, and both are public/agent.md.
+let asked = async (accept: string) => {
+  let said = await answer(
+    new Request(`https://yaks.app${AGENT.path}`, { headers: { accept } }),
+    site(),
+    AGENT.path,
+  )
+  assert(said)
+  assertEquals(said.headers.get('vary'), 'accept')
+  return { type: said.headers.get('content-type'), text: await said.text() }
+}
+
+test('the agent link is the markdown to an agent and a page to a browser', async () => {
+  let text = sourceOf(`${AGENT.path}.md`)
+  for (let accept of ['', '*/*', 'text/markdown, text/plain']) {
+    assertEquals(await asked(accept), {
+      type: 'text/markdown; charset=utf-8',
+      text,
+    })
+  }
+  let page = await asked('text/html,application/xhtml+xml,*/*;q=0.8')
+  assertStringIncludes(page.type!, 'text/html')
+  assertStringIncludes(page.text, `<title>${esc(AGENT.title)}</title>`)
+  assertStringIncludes(page.text, '>Connect yaks.app</h1>')
+  assertEquals(page.text.includes('Docs_Nav'), false)
+  // The steps it hands Claude's person are the connect page's own link, and
+  // the jump it offers lands on a heading the page has.
+  assertStringIncludes(text, claudeAdd({}))
+  let jump = /\]\(#([\w-]+)\)/.exec(text)![1]
+  assertStringIncludes(page.text, `id="${jump}"`)
 })
 
 test('the drawn pages stop where the files start', async () => {

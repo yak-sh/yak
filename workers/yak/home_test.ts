@@ -111,6 +111,12 @@ test('the app address can be changed from settings whatever the space holds', as
   assertEquals(field(await block({ view: 'settings' }), 'space'), 'dana')
 })
 
+// The copy buttons outside the connect card, which holds the link for an
+// agent and stays on the page, hidden, until a connection drops.
+let asks = (html: string) =>
+  [...parseHTML(html).document.querySelectorAll('.Copy_Go')]
+    .filter((go) => !go.closest('[data-disconnected]')).length
+
 test('connected empty library offers a copyable request', async () => {
   let page = await block({
     agents: [{
@@ -120,7 +126,7 @@ test('connected empty library offers a copyable request', async () => {
       connectedAt: 1,
     }],
   })
-  assert(/class="[^"]*\bCopy_Go\b/.test(page), page)
+  assert(asks(page), page)
   assert(!page.includes('<textarea'), page)
   let built = await block({
     agents: [{
@@ -131,7 +137,7 @@ test('connected empty library offers a copyable request', async () => {
     }],
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
-  assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
+  assertEquals(asks(built), 0, built)
   for (let html of [page, built]) {
     let { document } = parseHTML(html)
     assertEquals(document.querySelector('.Agents'), null)

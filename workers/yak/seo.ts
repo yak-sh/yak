@@ -15,7 +15,7 @@
 // APEX ONLY. A space's hostname is the customer's face and its `robots.txt` is
 // its own (route.ts): what a person publishes there is theirs to say. The door
 // in kernel.ts calls `answer` only at the apex.
-import { DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
+import { AGENT, DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
@@ -109,7 +109,7 @@ export let GALLERY = {
 // `addresses` below rather than here, since a model asking llms.txt where the
 // guide is wants the `.md` addresses, which the index already gives it a
 // section of its own for.
-export let RENDERED = [GALLERY, INTEGRATIONS, DOCS, TECH]
+export let RENDERED = [GALLERY, INTEGRATIONS, DOCS, TECH, AGENT]
 
 // Every address the sitemap lists: the pages above, the ones the worker draws,
 // then the same documentation as the markdown it is drawn from — every page's
@@ -263,6 +263,7 @@ export let llms = (
       at('/mcp?auth=mixed', env)
     } for signed-out tools with mixed authentication.`,
     `${at('/mcp?auth=required', env)} also requires sign-in.`,
+    `An agent asked to connect itself reads ${at(AGENT.path, env)}.`,
     '',
     '## Pages',
     '',

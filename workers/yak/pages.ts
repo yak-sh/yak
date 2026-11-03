@@ -35,6 +35,7 @@ import {
   OAUTH,
 } from './route.ts'
 import { CONNECTOR } from './seo.ts'
+import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { links } from './sheets.ts'
 import { ceilings, count, PRICE, size, YEARLY } from './meter.ts'
@@ -683,12 +684,21 @@ ${link('billing', 'Billing')}${link('settings', 'Settings')}${
 let state = (connected: boolean, show: boolean) =>
   `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
 
-let connectCard = (at: DeskPage) =>
+// The one link a person pastes into their own agent, which reads from it how
+// to connect itself (docs.ts `AGENT`, public/agent.md).
+let pasteLink = (env: Host) =>
+  `<div class="Form_Field"><p class="Form_Label">Paste this link into your AI agent</p>${
+    copyable(url(env, AGENT.path), 'the link for your agent')
+  }<span class="Note">Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.</span></div>`
+
+let connectCard = (at: DeskPage, env: Host) =>
   `<section class="Card Desk_Connect" ${state(false, !at.agents?.length)}>
 <header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button" href="${
     managePath('connect', at.pick)
   }">Connect agent</a></div></header>
-<p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></section>`
+<p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p>${
+    pasteLink(env)
+  }</section>`
 
 // What broke in an app, for its owner: each break as its line says it to their
 // assistant, how often and when last, and the one thing to do, which is to
@@ -743,7 +753,7 @@ let sharedWith = (at: DeskPage, env: Host) =>
  * was shared comes first, above the way to make one. */
 export let library = (at: DeskPage, env: Host) => {
   let broken = at.apps.filter((a) => a.errors?.length)
-  return `${connectCard(at)}${
+  return `${connectCard(at, env)}${
     at.apps.length
       ? `<div class="Apps">${
         at.apps.map((a) =>
@@ -1572,7 +1582,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     }>${heading('Ask your agent for a new yaks app')}${
       agentList(at.agents ?? [], 'links')
     }<div class="Form_Field"><p class="Form_Label">Try this</p>${firstAsk}</div></section>${
-      connectCard(at)
+      connectCard(at, env)
     }
 <div class="Desk_Options">${chat(`${site}/api/build`)}
 <section class="Card">${heading('Upload your website')}${
@@ -2329,6 +2339,13 @@ let oauthHelp = (env: Host) =>
 // is a third route to the same server, not a different product.
 let REPO = 'yak-sh/yak'
 
+// Claude's Add custom connector dialog, opened with the name and URL filled in
+// (claude.com/docs/connectors/building/directory-vs-custom).
+export let claudeAdd = (env: Host) =>
+  'https://claude.ai/customize/connectors?modal=add-custom-connector' +
+  `&connectorName=${encodeURIComponent(CONNECTOR.title)}` +
+  `&connectorUrl=${encodeURIComponent(url(env, '/mcp'))}`
+
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that is a person's is escaped where it enters.
 //
@@ -2344,10 +2361,10 @@ let clients = (env: Host) => [
         title: 'Web + Desktop',
         steps: [
           'Open ' + external(
-            'https://claude.ai/customize/connectors/directory?modal=add-custom-connector',
+            claudeAdd(env),
             'Customize → Connectors → Add',
           ) + '.',
-          'Paste these values:' + fields(
+          'Check it has these values:' + fields(
             field('Name', CONNECTOR.title, 'the name') +
               field(
                 'Remote MCP server URL',
@@ -2534,6 +2551,8 @@ let agentSetup = (agents: Agent[], env: Host, back: string) =>
   }>Connect once, then build and keep improving your apps in your usual chats.</p>
 <section class="Connect_Setup">
 <h2 class="Group" ${state(true, !!agents.length)}>Connect another agent</h2>
+${pasteLink(env)}
+<p>Or connect it yourself, with the steps for your app:</p>
 ${doors(env)}</section>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
