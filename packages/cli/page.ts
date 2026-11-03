@@ -158,6 +158,17 @@ let configAt = async (at: URL): Promise<string | undefined> => {
   }
 }
 
+// esbuild's service is a child process that writes to this one's stderr. One
+// left behind mid-build, when this process exits, finds its input closed
+// while it waits on a plugin and prints every goroutine as it dies; stopped
+// as the process unloads, it ends quietly.
+let stopping = (stop: () => unknown) => {
+  if (stopped) return
+  stopped = true
+  addEventListener('unload', () => void stop(), { once: true })
+}
+let stopped = false
+
 /** One browser module, compiled by esbuild's JavaScript service bridge and
  * Deno's workspace resolver, replacing the `deno bundle` bridge that can
  * deadlock (T-38240). Each context owns its cancellation and cleanup, so
@@ -167,11 +178,12 @@ export let bundle = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
-  let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
-    .all([
+  let [{ context, stop }, { denoPlugins, urlToEsbuildResolution }] =
+    await Promise.all([
       import('esbuild'),
       import('@luca/esbuild-deno-loader'),
     ])
+  stopping(stop)
   let at = entry instanceof URL ? entry : entry.at
   let dir = at.protocol == 'file:'
     ? undefined
