@@ -49,6 +49,12 @@ let hashIds = await (async () => {
   }, secret)
   let byApp = await route(request(`/bugs?app=${app}`, auth))
   let byBug = await route(request(`/bugs?bug=${bug}`, auth))
+  let byHandle = await (await route(
+    request(`/bugs?bug=${bug.slice(0, 8)}`, auth),
+  )).json()
+  let reopened = await route(
+    request('/reopen', auth, { bug: bug.slice(0, 8) }),
+  )
   let archived = await route(request('/archive', auth, { bug }))
   let notified = await route(
     request('/app-errors', auth, { app, eids: [error], mark: 'notified' }),
@@ -66,18 +72,22 @@ let hashIds = await (async () => {
     error,
     byApp: byApp.status,
     byBug: byBug.status,
+    byHandle: byHandle.rows?.[0]?.entity.eid,
+    reopened: reopened.status,
     archived: archived.status,
     notified: notified.status,
     rows: await readError.json(),
   }
 })()
 test('tracker reads and marks preserve content-addressed global identities', async () => {
-  equal([hashIds.byApp, hashIds.byBug, hashIds.archived, hashIds.notified], [
-    200,
-    200,
-    200,
-    200,
-  ])
+  equal([
+    hashIds.byApp,
+    hashIds.byBug,
+    hashIds.reopened,
+    hashIds.archived,
+    hashIds.notified,
+  ], [200, 200, 200, 200, 200])
+  equal(hashIds.byHandle, hashIds.bug)
   equal(hashIds.rows[0].entity.eid, hashIds.error)
   equal((hashIds.rows[0].during as Comp).app, hashIds.app)
   let rows = await hashIds.g.graph.get([hashIds.bug, hashIds.error])
@@ -386,7 +396,7 @@ for (
     ],
     [{ bug: other, cause: 7 }, 'cause must be a string'],
     [{ bug: other, why: 'a' }, 'why is not a field here'],
-    [{ bug: 'B-1' }, 'bug global eid required'],
+    [{ bug: 'B-1' }, 'bug global eid or handle required'],
   ] as const
 ) {
   test(`tracker /resolve names what it refuses: ${said}`, async () => {

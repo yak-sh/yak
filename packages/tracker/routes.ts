@@ -2,6 +2,7 @@
  * every request so the CLI's vault-backed secret can rotate without a restart.
  * Remote bundles are never applied to the box's graph. */
 import type { Route } from '@yaks/api'
+import { BARE } from '@yaks/id'
 import {
   late,
   type Remote,
@@ -61,8 +62,16 @@ export let read = async (
   ) {
     let value = query.get(key)
     if (path == 'bugs' && key == 'app' && value == '') value = null
-    if (value != null && !uuid.test(value) || key == 'eid' && !value) {
-      return refused(`${key} must be a global eid`, 400)
+    // A bug may be named by the hex its eid starts with, as a knock quotes
+    // it (@yaks/id `BARE`); the Worker resolves it.
+    let handle = key == 'bug' && value != null && BARE.test(value)
+    if (
+      value != null && !uuid.test(value) && !handle || key == 'eid' && !value
+    ) {
+      return refused(
+        `${key} must be a global eid${key == 'bug' ? ' or its handle' : ''}`,
+        400,
+      )
     }
     if (value) params.set(key, value)
   }

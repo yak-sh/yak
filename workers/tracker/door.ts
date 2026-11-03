@@ -7,12 +7,16 @@ import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
 import { CallError } from '@yaks/tools/errors'
 import { minted } from '@yaks/graph/identity'
+import { BARE } from '@yaks/id'
 import { status } from '@yaks/graph/errors'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
 import { batch } from './queue.ts'
 
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// A bug is named by its eid or by the hex its eid starts with, the handle a
+// knock and a letter quote (@yaks/id `BARE`), which the graph resolves.
+let named = (bug: string) => minted(bug) || BARE.test(bug)
 
 export let json = (value: unknown, status = 200) =>
   Response.json(value, { status })
@@ -144,10 +148,13 @@ async (request: Request): Promise<Response> => {
     if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
       return json({ error: 'limit must be 1..100' }, 400)
     }
-    for (let key of ['app', 'bug', 'after']) {
+    for (let key of ['app', 'after']) {
       if (params.has(key) && !minted(params.get(key)!)) {
         return json({ error: `${key} must be a global eid` }, 400)
       }
+    }
+    if (params.has('bug') && !named(params.get('bug')!)) {
+      return json({ error: 'bug must be a global eid or its handle' }, 400)
     }
     // A reader that polls sends the tag it read: nothing it could read has
     // moved while the tag stands, so it is told so without a row read. The
@@ -251,8 +258,8 @@ function refusal(
   let fields = ['bug', ...Object.keys(said)].join(', ')
   let stray = Object.keys(body).find((key) => key != 'bug' && !(key in said))
   if (stray) return `${stray} is not a field here; it takes ${fields}`
-  if (typeof body.bug != 'string' || !minted(body.bug)) {
-    return 'bug global eid required'
+  if (typeof body.bug != 'string' || !named(body.bug)) {
+    return 'bug global eid or handle required'
   }
   for (let [key, most] of Object.entries(said)) {
     let value = body[key]

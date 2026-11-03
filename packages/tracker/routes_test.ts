@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { derivedEid } from '@yaks/graph'
 import { authorize } from '../../workers/tracker/auth.ts'
-import { routes } from './routes.ts'
+import { read, routes } from './routes.ts'
 import { sign } from './ticket.ts'
 let secret = 'test-only-tracker-secret'
 let id = '00000000-0000-4000-8000-000000000001'
@@ -44,6 +44,25 @@ test('remote trace doors preserve pages and use a platform-admin ticket the Work
   options.remote.secret = 'rotated-test-only'
   equal((await door[0].handle(request(`traces?scope=${id}`))).status, 200)
   equal(calls.length, 2)
+})
+test('a remote bug read names its bug by eid or by the handle a knock quotes', async () => {
+  let asked: (string | null)[] = []
+  let go = ((url: string) => {
+    asked.push(new URL(url).searchParams.get('bug'))
+    return Promise.resolve(Response.json({ rows: [] }))
+  }) as typeof fetch
+  let bug = (name: string) =>
+    read(
+      { remote: { url: 'https://tracker.invalid', secret } },
+      'bugs',
+      new URLSearchParams({ bug: name }),
+      undefined,
+      go,
+    )
+  equal((await bug('4fde03f7')).ok, true)
+  equal((await bug(id)).ok, true)
+  equal((await bug('B-1')).ok, false)
+  equal(asked, ['4fde03f7', id])
 })
 // What the box's door answers where the remote is unconfigured, has no
 // secret, or answers each status: a refusal of what was asked is 502, and a
