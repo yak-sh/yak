@@ -115,8 +115,13 @@ export let authorizeCLI = async (
       return reply.message ?? 'Connected.'
     }
     io.say(`Open ${begun.url}`)
+    io.say(
+      'and sign in. The browser then lands on a localhost page that does not load: that is expected.',
+    )
     for (;;) {
-      io.say('Paste the complete return URL and press Enter (input hidden):')
+      io.say(
+        "Paste that page's whole address, from the browser's address bar, and press Enter (input hidden):",
+      )
       let callback = await io.hidden()
       if (!callback) throw new Refused('Authorization cancelled')
       try {
