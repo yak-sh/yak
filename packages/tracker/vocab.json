@@ -404,7 +404,7 @@
       "input": {
         "bug": {
           "type": "string",
-          "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+          "description": "Box bug id or title; for yaks.app, the bug’s global eid or the hex it starts with (4fde03f7)."
         },
         "limit": {
           "type": "integer",
@@ -443,7 +443,7 @@
       "input": {
         "bug": {
           "type": "string",
-          "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+          "description": "Box bug id or title; for yaks.app, the bug’s global eid or the hex it starts with (4fde03f7)."
         },
         "source": {
           "type": "string",
@@ -495,7 +495,7 @@
       "input": {
         "bug": {
           "type": "string",
-          "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+          "description": "Box bug id or title; for yaks.app, the bug’s global eid or the hex it starts with (4fde03f7)."
         },
         "source": {
           "type": "string",
@@ -524,7 +524,7 @@
       "input": {
         "bug": {
           "type": "string",
-          "description": "Box bug id or title; for yaks.app, the bug’s global eid."
+          "description": "Box bug id or title; for yaks.app, the bug’s global eid or the hex it starts with (4fde03f7)."
         },
         "source": {
           "type": "string",
