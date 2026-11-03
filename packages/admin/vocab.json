@@ -8,7 +8,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "on a main commit Workers Builds left not live past the bound: the deploy catch-up (packages/admin/catchup.ts) started main's build through its deploy hook, once. Removing it asks for another start",
+      "description": "on a main commit Workers Builds left not live past the bound: the deploy catch-up (packages/admin/catchup.ts) asked main's deploy hook for a build, once, or again when the hook deferred to a pending build that then failed. Removing it asks for another start",
       "properties": {
         "at": {
           "type": "string",

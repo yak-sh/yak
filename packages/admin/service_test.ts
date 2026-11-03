@@ -153,6 +153,29 @@ test('a pending build answers the start and is not reported', async () => {
   equal((await f.look()).step, 'wait')
 })
 
+// 24092573's push build was still queued when the catch-up asked at 15:04Z,
+// so the hook deferred to it; Builds timed it out initializing at 15:10:20Z.
+test('a pending build that fails gets the start the hook deferred', async () => {
+  let f = fixture()
+  f.doors.start = () => Promise.resolve(PENDING)
+  f.at.now = landed + LATE
+  equal((await f.look()).step, 'rebuild')
+  f.doors.start = () => {
+    f.doors.start = () => Promise.resolve('build aa194fb5 queued')
+    return f.doors.start()
+  }
+  f.build = { broke: landed + LATE + 6 * MIN }
+  f.at.now += 6 * MIN + BOUND - MIN
+  equal((await f.look()).step, 'wait')
+  f.at.now += 2 * MIN
+  equal((await f.look()).step, 'rebuild')
+  let [row] = await f.g.get([HEAD])
+  equal((row.rebuilt as { said: string }).said, 'build aa194fb5 queued')
+  match(f.reports[0][0].message, /15 min after its Workers Build failed/)
+  f.at.now += BOUND + MIN
+  equal((await f.look()).step, 'fail')
+})
+
 test('a late head whose build is running waits for it, unreported', async () => {
   let f = fixture()
   f.build = { building: true }

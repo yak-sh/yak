@@ -16,7 +16,11 @@
 // merely waiting its turn costs nothing and is not reported; a build the hook
 // did start is. The hook would start a second build beside a running one
 // (Cloudflare's deploy hooks page), which is why a running one is read first.
-// A `BOUND` later, still not live, the catch-up marks the commit
+// An ask the hook answered with the pending build started nothing, so when
+// that pending build fails (Builds times out one that never left
+// initializing) and the kernel's rebuild does not deploy it either, the
+// catch-up asks again a `BOUND` from the failure, as for any failed build.
+// A `BOUND` after a start, still not live, the catch-up marks the commit
 // `failed{reason}`, reports that, and starts nothing more for it: the build's
 // own log says why, and the next push starts over. A rollback newer than the
 // head is an operator's choice and is left alone. Removing the marks asks for
@@ -50,13 +54,15 @@ export let BOUND = 15 * 60_000
 
 /** main's head: its commit, when origin first showed it (ms), whether Workers
  * Builds is running a build of it or when that build failed (ms, once read),
- * and when the catch-up started its build and gave up on it, if it has. */
+ * when the catch-up asked for its build, whether the hook deferred that ask
+ * to a pending build, and whether the catch-up gave up on it. */
 export type Head = {
   sha: string
   at: number
   building?: boolean
   broke?: number
   rebuilt?: number
+  deferred?: boolean
   failed?: boolean
 }
 
@@ -125,6 +131,11 @@ export type Step =
 /// step({ ...h, rebuilt: BOUND, building: true }, 2 * BOUND, l) -> 'wait'
 /// step({ ...h, rebuilt: BOUND }, 2 * BOUND, l) -> 'fail'
 /// step({ ...h, rebuilt: BOUND, failed: true }, 9 * BOUND, l) -> 'done'
+/// let d = { ...h, rebuilt: BOUND, deferred: true }
+/// step({ ...d, broke: BOUND + 1 }, 2 * BOUND, l) -> 'wait'
+/// step({ ...d, broke: BOUND + 1 }, 2 * BOUND + 1, l) -> 'rebuild'
+/// step({ ...d, broke: BOUND - 1 }, 2 * BOUND, l) -> 'fail'
+/// step(d, 2 * BOUND, l) -> 'fail'
 /** What to do about main's head at `now`, given what is live once read. */
 export let step = (
   head: Head,
@@ -146,7 +157,7 @@ export let step = (
     : head.building || now - live.at < (head.rebuilt ? bound : late) ||
         now - (head.broke ?? -Infinity) < bound
     ? 'wait'
-    : head.rebuilt
+    : head.rebuilt && !(head.deferred && (head.broke ?? 0) > head.rebuilt)
     ? 'fail'
     : 'rebuild'
 

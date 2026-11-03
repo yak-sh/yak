@@ -29,6 +29,7 @@
 import { checkout } from './checkout.ts'
 import type { Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { Interrupted } from '@yaks/tools/errors'
 import type { Host } from '@yaks/host'
 import { sleep } from '@yaks/fp'
@@ -300,7 +301,12 @@ export let pass = async (
   if (tip.sha == settled) return { sha: tip.sha, step: 'done' }
   let [row] = await g.get([tip.sha])
   let mark = row?.rebuilt as Comp | undefined
-  let head: Head = { ...tip, rebuilt: time(mark), failed: !!row?.failed }
+  let head: Head = {
+    ...tip,
+    rebuilt: time(mark),
+    deferred: mark?.said == PENDING,
+    failed: !!row?.failed,
+  }
   let next = step(head, doors.now(), undefined, late, bound)
   if (next != 'look') return { sha: tip.sha, step: next }
   let { debuts: shown, ...served } = await doors.live()
@@ -319,11 +325,11 @@ export let pass = async (
     try {
       await g.apply([{
         entity: { eid: tip.sha },
-        $was: { rebuilt: { at: null } },
+        $was: { rebuilt: { at: token(mark?.at) } },
         rebuilt: {},
       }])
     } catch (error) {
-      // Another look took this commit's one start.
+      // Another look took this ask.
       if (error instanceof Stale) return { sha: tip.sha, step: 'done' }
       throw error
     }
