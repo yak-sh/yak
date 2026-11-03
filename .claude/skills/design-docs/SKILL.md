@@ -48,9 +48,11 @@ tree becomes work agents are briefed on (`agent-briefs`).
 - **His own words** (M-31946): the messages that shaped the design, verbatim
   and dated, as comments on it. Your summary of him is strictly less than
   what he said.
-- **Your recommendation.** Each open question carries the option you'd pick and
-  why. A question any reasonable reader would answer the same way is a
-  decision, so make it and go (M-4492).
+- **His questions are few.** Before a question goes to him, ask whether the
+  answer is reversible, costs no money and turns on no preference only he
+  holds. If so it is yours: write the decision and its reason in the design, and
+  build (M-4492; "why is that blocked on me? by all means, add visit
+  tracking"). What remains carries the option you'd pick and why.
 
 ## The pulls that make designs wrong
 
@@ -79,7 +81,7 @@ What he reads, in order, in a page or less:
 
 1. The proposal: what changes and why, in a few sentences.
 2. What changes for a person: what they see or do differently.
-3. Open questions, each with a recommendation.
+3. Open questions only he can answer, each with a recommendation.
 
 Everything else (the model, where things live, migration with one shape after
 and no yaks app taken down, his words) is in the task tree's tasks and the
@@ -181,7 +183,7 @@ yak task new --project P-19 --tasks @tasks.json
 ```
 
 The result names each filed task beside its local alias. A question only the
-owner can answer is its own task with `assignee: "U-3709"`.
+owner can answer (irreversible, spends money, or a preference only he holds) is its own task with `assignee: "U-3709"`.
 
 ## When an agent drafts it
 
