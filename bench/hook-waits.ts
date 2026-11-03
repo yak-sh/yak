@@ -82,7 +82,7 @@ export async function measure(
       doc: { title: 'Hook benchmark' },
     }])
     // Check the registration itself, not a guessed list of harness events.
-    let installed = lifecycle()
+    let installed = lifecycle('http://hooks')
     for (
       let event of [
         'SessionStart',
