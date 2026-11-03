@@ -84,10 +84,6 @@ let execute = async (
     let out = await new Deno.Command(command, {
       args,
       cwd,
-      // Publishing must not hold the local landing behind the network.
-      signal: command == 'git' && args[0] == 'push'
-        ? AbortSignal.timeout(5_000)
-        : undefined,
       env: quiet,
       stdout: 'piped',
       stderr: 'piped',
@@ -527,7 +523,9 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
 // Best-effort push of the base branch to its upstream, if it has one — just
 // `@{u}`, nothing configured anywhere else. Never throws: an unreachable
 // remote, or no upstream at all, leaves the work landed but unpushed, since
-// the merge has already taken effect in the shared checkout.
+// the merge has already taken effect in the shared checkout. The push runs to
+// completion with no deadline: its exit code is the only report of whether
+// the remote has the commit, and a killed push may already have reached it.
 let publish = async (
   git: (at: string, args: string[], show?: boolean) => Promise<Ran>,
   write: (text: string, error?: boolean) => void,
