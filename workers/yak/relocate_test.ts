@@ -1,10 +1,11 @@
 import { equal, test } from '@yaks/testing'
 import { evicted } from '@yaks/durable-object'
-import { directory, fetch as directoryFetch } from './directory.ts'
+import { appStore, directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { KERNEL } from './meta.ts'
-import { LEAVE, type Relocating, relocation } from './relocate.ts'
+import { KERNEL, metaOf } from './meta.ts'
+import { COPY, LEAVE, type Relocating, relocation } from './relocate.ts'
+import { platform as probe, seeded as ada } from './serving-probe.ts'
 import { platform, slot } from './testing.ts'
 
 let asked = (env: Env, query: string) =>
@@ -170,4 +171,52 @@ test('a restart at the new object is sent again, body and all', async () => {
   )
   equal(await r!.text(), 'landed')
   equal(sent, ['write', 'write'])
+})
+
+test('a copy of an app store stands under its own name, owing nothing, while the source serves', async () => {
+  await using p = probe()
+  let { space, app } = await ada(p.env)
+  let source = metaOf(appStore(p.env.STORE, space, app))
+  let soon = new Date(Date.now() + 60_000).toISOString()
+  await source.apply([
+    { entity: { eid: 'water' }, wake: { at: soon, every: '1h' } },
+    ...Array.from({ length: 300 }, (_, i) => ({
+      entity: { eid: crypto.randomUUID() },
+      doc: { title: `sample ${i}` },
+    })),
+  ], KERNEL)
+  await source.apply([{
+    entity: { eid: 'owed' },
+    effect: { handler: 'nobody/mails', state: 'pending' },
+  }], KERNEL)
+  let copied = (to: string) =>
+    storeOf(p.env.STORE, app.store!)(
+      `${COPY}?to=${encodeURIComponent(to)}`,
+      { method: 'POST' },
+      KERNEL,
+    )
+  let r = await copied('visit/one')
+  let report = await r.json()
+  equal(r.status, 200)
+  equal(report.rows > 300, true)
+
+  let copy = p.states.get('visit/one')!
+  equal(slot(copy, 'name'), 'visit/one')
+  equal(await copy.storage.getAlarm(), null)
+  let there = metaOf(
+    appStore(p.env.STORE, space, { ...app, store: 'visit/one' }),
+  )
+  let titles = async (m: typeof source) =>
+    (await m.query('.doc')).map((b) => b.entity.eid).sort()
+  equal(await titles(there), await titles(source))
+  equal((await there.query('.wake'))[0].wake, { at: soon, every: '1h' })
+  equal(await there.query('.effect'), [])
+  equal(slot(copy, 'copied'), null)
+  equal((await source.query('.effect')).length, 1)
+  equal(slot(p.states.get(app.store!)!, 'name'), app.store)
+
+  // A name already serving is never written over, the source's own included.
+  equal((await copied('visit/one')).status, 500)
+  equal((await copied(app.store!)).status, 500)
+  equal(await titles(there), await titles(source))
 })

@@ -715,6 +715,9 @@ type Word =
   | 'wakes'
   | 'planted'
   | 'effect-migrated'
+  // The store this object was copied from (relocate.ts `copy`), until the
+  // copy has forgiven what that store owed (`#forgiven`).
+  | 'copied'
   // How far each rule of the mover got here (mover.ts), under its mark.
   | Mark
   // The bytes it last told the directory it holds (`#tell`).
@@ -1274,6 +1277,7 @@ export class Store {
       let access = heard.get('access')
       if (access) this.#mode(mode(access))
     })
+    if (!this.#refused && this.#get('copied') != null) await this.#forgiven()
     if (!this.#refused && !this.#dormant) {
       // Join this incarnation without discovering or starting work. Its own
       // writes can then persist attempts in the transaction that owes them.
@@ -1942,6 +1946,30 @@ export class Store {
   #committed = () => {
     this.#kv.delete('directory-revision')
     return Number(this.#get('directory-revision') ?? 0)
+  }
+
+  // A copy owes none of the work its source owed (relocate.ts `copy`): every
+  // effect run came across with the rows, and each is the source's to do or
+  // to have done, so a mail it sent is not sent again from every copy.
+  async #forgiven() {
+    let runs = this.#vocab.comp('effect')
+      ? await this.#graph.read('.effect')
+      : []
+    for (let at = 0; at < runs.length; at += 100) {
+      await this.#trust(
+        runs.slice(at, at + 100).map((r) => ({
+          entity: { eid: r.entity.eid },
+          $delete: true,
+        })),
+        null,
+      )
+    }
+    this.#sql.query({
+      t: 'delete',
+      from: KV.name,
+      where: eq(col('k'), val('copied')),
+    })
+    this.#kv.set('copied', null)
   }
 
   #put(k: Word, v: string) {
@@ -3939,7 +3967,7 @@ export class Store {
       this.#dormant = null
       this.#moveOnly = false
     },
-    report: (e) => defect(e, { request: 'relocate', store: PLATFORM_STORE }),
+    report: (e, store) => defect(e, { request: 'relocate', store }),
   })
 
   async #fetch(request: Request): Promise<Response> {

@@ -17,11 +17,20 @@
 // A wake that finds a hold under way (an instance died in it) starts it again,
 // at most TRIES times, so a hold that kills its instance can't keep the platform
 // down.
+//
+// `copy` is the other use of the same steps, for any store: every table read
+// at one instant and sent to a new object, which takes the name it is given and
+// stands on its own. Nothing holds and nothing is handed over, so the source
+// serves throughout and keeps every request; only the read is all at once,
+// which is what makes it one instant without a hold. The copy arms no alarm and
+// owes nothing its source owed (graph.ts `#forgiven`): it comes up when it is
+// first asked, and its wakes resume then.
 import {
   arrived,
   type Cell,
   type Chunk,
   chunks,
+  type Copied,
   copied,
   driver,
   type DurableStorage,
@@ -41,6 +50,7 @@ import { PLATFORM_STORE } from './door.ts'
 export let LEAVE = '/relocate'
 export let ARRIVE = '/relocate/arrive'
 export let WHERE = '/relocate/where'
+export let COPY = '/relocate/copy'
 let TRIES = 2
 let ROUNDS = 3
 
@@ -53,15 +63,17 @@ export type Relocating = DurableStorage & {
 }
 
 type Leaving = { to: string; tries: number }
+type Page = { table: Plan['tables'][number]; rows: Cell[][] }
 type Told =
   | { op: 'begin'; plan: Plan }
-  | { op: 'rows'; table: Plan['tables'][number]; rows: Cell[][] }
+  | { op: 'rows'; pages: Page[] }
   | { op: 'end'; plan: Plan }
   | { op: 'stale'; plan: Plan; chunks: Chunk[] }
   | { op: 'replace'; plan: Plan; chunk: Chunk; rows: Cell[][] }
-  | { op: 'seal' }
+  | { op: 'seal'; as?: string; from?: string }
 
 let SOON = 1000
+let SEND = 1024 * 1024
 
 // Whether this object already answers to its own name: a store that has served
 // holds that word, and copying over one would lose everything it has.
@@ -77,37 +89,50 @@ let serving = (sql: ReturnType<typeof driver>) => {
   }
 }
 
+// The far end of a copy: its own name, and the word that it holds a copy of
+// `from`, as the store keeps its words (graph.ts `KV`).
+let named = (sql: ReturnType<typeof driver>, name: string, from: string) =>
+  sql.query({
+    t: 'insert',
+    into: 'yak_kv',
+    cols: ['k', 'v'],
+    rows: [[val('name'), val(name)], [val('copied'), val(from)]],
+    upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+  })
+
+// What the far end says to each step. `written` is how many rows it wrote for
+// the step as the runtime counts (and bills) them, indexes included.
 let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
-  let sql = driver(storage)
+  let written = 0
+  let measure = (_: unknown, w?: number) => written += w ?? 0
+  let sql = driver(storage, undefined, measure)
+  let refused = (error: string) => Response.json({ error }, { status: 409 })
   if (told.op == 'begin') {
     if (serving(sql) && !await storage.get('arriving')) {
-      return Response.json({ error: 'this object serves already' }, {
-        status: 409,
-      })
+      return refused('this object serves already')
     }
     await storage.deleteAll()
     await storage.put('arriving', true)
-    copied(driver(storage), told.plan)
-    return Response.json({ ok: true })
+    copied(driver(storage, undefined, measure), told.plan)
+    return Response.json({ written })
   }
-  if (!await storage.get('arriving')) {
-    return Response.json({ error: 'nothing is arriving here' }, { status: 409 })
-  }
+  if (!await storage.get('arriving')) return refused('nothing is arriving here')
   switch (told.op) {
     case 'rows':
-      arrived(sql, told.table, told.rows)
-      return Response.json({ ok: true })
+      for (let p of told.pages) arrived(sql, p.table, p.rows)
+      return Response.json({ written })
     case 'end':
-      return Response.json(ending(sql, told.plan))
+      return Response.json({ tallies: ending(sql, told.plan), written })
     case 'stale':
       return Response.json(stale(sql, told.plan, told.chunks))
     case 'replace':
       overwritten(sql, told.plan, told.chunk, told.rows)
-      return Response.json({ ok: true })
+      return Response.json({ written })
     case 'seal':
+      if (told.as) named(sql, told.as, told.from ?? '')
       await storage.put('arriving', false)
-      await storage.setAlarm(Date.now() + SOON)
-      return Response.json({ ok: true })
+      if (!told.as) await storage.setAlarm(Date.now() + SOON)
+      return Response.json({ written })
   }
 }
 
@@ -118,6 +143,35 @@ let standing = async () => {
   return Response.json({ object: trace.colo, city: trace.city })
 }
 
+// Every table as it stands now, each read whole before anything is sent, so
+// no write can land between two of its pages: one instant, without a hold.
+// Pages travel together up to SEND bytes, since most tables of a small store
+// hold a row or two and each send is a round trip.
+let snapshot = (sql: ReturnType<typeof driver>) => {
+  let made = plan(sql)
+  let sends: Page[][] = [[]]
+  let size = 0
+  let tallies: Record<string, Copied> = {}
+  for (let t of made.tables) {
+    let held = raised(), after = 0
+    while (true) {
+      let next = page(sql, t, after, held)
+      held = next.held
+      if (next.last == null) break
+      let bytes = JSON.stringify(next.rows).length
+      if (size && size + bytes > SEND) {
+        sends.push([])
+        size = 0
+      }
+      sends.at(-1)!.push({ table: t, rows: next.rows })
+      size += bytes
+      after = next.last
+    }
+    tallies[t.name] = held
+  }
+  return { plan: made, sends: sends.filter((s) => s.length), tallies }
+}
+
 /** Each request an object is sent, answered by the move when it is the move's,
  * or handed to where the object now stands. Null is an object serving as ever. */
 export let relocation = (o: {
@@ -125,7 +179,7 @@ export let relocation = (o: {
   object: (name: string) => { fetch(req: Request): Promise<Response> }
   leave: () => Promise<void>
   resume: () => void
-  report: (e: unknown) => void
+  report: (e: unknown, store: string) => void
 }) => {
   let moved: string | null = null
   let looked: Promise<void> | null = null
@@ -141,7 +195,7 @@ export let relocation = (o: {
       let next = page(sql, t, after, held)
       held = next.held
       if (next.last == null) return held
-      await send(to, { op: 'rows', table: t, rows: next.rows })
+      await send(to, { op: 'rows', pages: [{ table: t, rows: next.rows }] })
       after = next.last
     }
   }
@@ -156,6 +210,39 @@ export let relocation = (o: {
     )
     if (!r.ok) throw new Error(`${told.op}: ${r.status} ${await r.text()}`)
     return r
+  }
+
+  // Every table at one instant, and the copy made of it under the name `to`.
+  // The far end's tallies must be the source's, row for row.
+  let copy = async (from: string, to: string): Promise<Response> => {
+    let start = Date.now()
+    let { plan: made, sends, tallies } = snapshot(driver(o.storage()))
+    let written = 0
+    let told = async (said: Told) => {
+      let answer = await (await send(to, said)).json()
+      written += answer.written
+      return answer
+    }
+    await told({ op: 'begin', plan: made })
+    for (let pages of sends) await told({ op: 'rows', pages })
+    let far: Record<string, Copied> =
+      (await told({ op: 'end', plan: made })).tallies
+    let differ = made.tables.map((t) => t.name).filter((t) =>
+      far[t]?.rows != tallies[t].rows || far[t]?.digest != tallies[t].digest
+    )
+    if (differ.length) throw new Error(`the copy differs in ${differ}`)
+    await told({ op: 'seal', as: to, from })
+    let report = {
+      from,
+      to,
+      tables: made.tables.length,
+      rows: Object.values(tallies).reduce((n, t) => n + t.rows, 0),
+      written,
+      sends: sends.length + 3,
+      took: Date.now() - start,
+    }
+    console.log('yak store copied', JSON.stringify(report))
+    return Response.json(report)
   }
 
   // Every table across while this object serves.
@@ -226,7 +313,7 @@ export let relocation = (o: {
         })
         return await hold(leaving.to)
       } catch (e) {
-        o.report(e)
+        o.report(e, PLATFORM_STORE)
         await storage.put('relocating', false)
         await storage.put('dormant', false)
         await storage.setAlarm(Date.now() + SOON)
@@ -246,7 +333,10 @@ export let relocation = (o: {
       if (!leaving) return
       if (leaving.tries < TRIES) void begin(leaving)
       else {
-        o.report(new Error(`relocating to ${leaving.to} gave up`))
+        o.report(
+          new Error(`relocating to ${leaving.to} gave up`),
+          PLATFORM_STORE,
+        )
         await storage.put('relocating', false)
         await storage.put('dormant', false)
         await storage.setAlarm(Date.now() + SOON)
@@ -261,14 +351,23 @@ export let relocation = (o: {
       return arrive(o.storage(), await request.json())
     }
     if (kernel && path == WHERE) return standing()
-    if (request.headers.get('x-store') != PLATFORM_STORE) return null
+    let store = request.headers.get('x-store') ?? ''
+    if (kernel && path == COPY && request.method == 'POST') {
+      let to = new URL(request.url).searchParams.get('to')
+      if (!to) return Response.json({ error: 'to' }, { status: 400 })
+      return await copy(store, to).catch((e) => {
+        o.report(e, store)
+        return Response.json({ error: String(e) }, { status: 500 })
+      })
+    }
+    if (store != PLATFORM_STORE) return null
     await look()
     if (kernel && path == LEAVE && request.method == 'POST') {
       let asked = new URL(request.url).searchParams
       let preparing = asked.get('prepare')
       if (preparing) {
         return await prepare(preparing).catch((e) => {
-          o.report(e)
+          o.report(e, PLATFORM_STORE)
           return Response.json({ error: String(e) }, { status: 500 })
         })
       }
