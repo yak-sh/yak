@@ -305,8 +305,10 @@ export type AppInfo = {
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
-/** A person's place in a space: the space, and what they are in it. */
-export type Seat = { space: Space; role: Role }
+/** A person's place in a space: the space, what they are in it, the seat's
+ * eid, and whether the space is their own (`member.own`, {@link directory}'s
+ * `own`). */
+export type Seat = { space: Space; role: Role; seat: string; own: boolean }
 
 /** One app a person is a guest of, and what the grant lets them do. */
 export type Granted = { space: Space; app: App; access: Role }
@@ -526,7 +528,7 @@ export type Row = {
   }
   fee?: { bps?: number | null }
   created?: { at?: string }
-  member?: { space: Id; person: Id; role: Role }
+  member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
   invite?: {
     to: Id
@@ -991,6 +993,23 @@ let unrooted = (space: string, slug: string) => {
     space,
   })
   return slug
+}
+
+// A person who owns several spaces, none marked as theirs and none named by
+// their address: one renamed away from it before `member.own` (T-135921), so
+// which is theirs is a guess the tracker hears about until their seat is
+// marked.
+let unmarked = (person: string, space: Space) => {
+  caught(
+    new Error(
+      `person ${person} has no own space marked; read as ${space.slug}`,
+    ),
+    {
+      request: 'own space',
+      space: space.eid,
+    },
+  )
+  return space
 }
 
 // An app row with no access mode: nothing writes one (T-59268 stamped the six
@@ -1571,6 +1590,7 @@ export let directory = (
       slug: string,
       title: string,
       headers: Record<string, string>,
+      own = false,
     ) => {
       let eid = crypto.randomUUID()
       let claims = await self.claimed(slug)
@@ -1584,7 +1604,12 @@ export let directory = (
           },
           {
             entity: { eid: '$seat' },
-            member: { space: eid, person, role: 'owner' },
+            member: {
+              space: eid,
+              person,
+              role: 'owner',
+              ...(own ? { own } : {}),
+            },
           },
           ...claims,
         ],
@@ -2077,15 +2102,18 @@ export let directory = (
         `(.member.person=${person})|(.space&.members_space.member.person=${person})&*`,
       )
       let held = new Map(
-        rows.filter((r) => r.member).map((
-          r,
-        ) => [idOf(r.member!.space), r.member!.role as Role]),
+        rows.filter((r) => r.member).map((r) => [idOf(r.member!.space), r]),
       )
-      return rows.filter((r) =>
-        r.space && held.has(r.entity.eid) &&
-        (!role || held.get(r.entity.eid) == role)
-      )
-        .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
+      return rows.flatMap((r) => {
+        let seat = r.space && held.get(r.entity.eid)
+        if (!seat || role && seat.member!.role != role) return []
+        return [{
+          space: spaceOf(r),
+          role: seat.member!.role as Role,
+          seat: seat.entity.eid,
+          own: !!seat.member!.own,
+        }]
+      })
     },
     // The eid of each space this person sits in, with their role there: all
     // of them whatever a caller goes on to keep, so that every question about
@@ -2164,11 +2192,15 @@ export let directory = (
     },
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
-    // existed (T-32482). Theirs is a space they own — the one their address
-    // names, if they own it, else the first they own — and being a member of
-    // somebody else's is not having one, so an invited person is minted theirs
-    // here rather than handed the inviter's (T-33142). A race that loses on
-    // the unique slug re-reads and finds the winner.
+    // existed (T-32482). Theirs is the space whose seat says so (`member.own`),
+    // which a rename leaves standing: it was once the space their address
+    // named, so renaming it away handed them whichever other space they owned,
+    // and settings renamed a church's space for its second owner (T-135921).
+    // A person seated before the mark is marked once, at the space their
+    // address names or the only one they own. Being a member of somebody
+    // else's is not having one, so an invited person is minted theirs here
+    // rather than handed the inviter's (T-33142). A race that loses on the
+    // unique slug re-reads and finds the winner.
     //
     // `want` is the address they chose at the sign-in card, taken only when it
     // is a slug and still free — the card asked the same question a moment
@@ -2177,10 +2209,20 @@ export let directory = (
     // reads. Someone who already has a space is not minting one, so their
     // choice is moot here and `/connect` is where they move (T-34137).
     own: async (person: string, want?: string): Promise<Space> => {
-      let mine = await self.spaces(person, 'owner')
+      let mine = await self.seats(person, 'owner')
+      let marked = mine.find((s) => s.own)
+      if (marked) return marked.space
       let row = await one(`.entity.eid=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
-      if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
+      let found = mine.find((s) => s.space.slug == wanted) ??
+        (mine.length == 1 ? mine[0] : null)
+      if (found) {
+        await self.apply({
+          entities: [{ entity: { eid: found.seat }, member: { own: true } }],
+        }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+        return found.space
+      }
+      if (mine.length) return unmarked(person, mine[0].space)
       let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
         !await self.space(want)
       let slug = chosen ? want! : await self.free(wanted)
@@ -2191,7 +2233,7 @@ export let directory = (
         await self.mint(person, slug, slug, {
           'x-yak-person': person,
           'x-yak-role': 'owner',
-        })
+        }, true)
       } catch (e) {
         let [theirs] = await self.spaces(person, 'owner')
         if (!theirs) throw e

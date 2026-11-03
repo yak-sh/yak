@@ -74,6 +74,10 @@ export let directoryDoc: VocabDoc = {
         space: ref('cascade'),
         person: ref('cascade'),
         role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
+        // The space is the person's own: the one minted for them, which their
+        // settings and an unnamed tool call mean (directory.ts `own`). A rename
+        // leaves it standing, where their address no longer names it.
+        own: bool,
       },
     },
     // A seat reaches every app in its space; this reaches one (T-37615). It is

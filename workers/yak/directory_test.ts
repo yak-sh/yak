@@ -463,6 +463,39 @@ test("a person's own space is one they own, not one they were invited to", async
   assertEquals((await m.dir.own(guest)).eid, mine.eid)
 })
 
+// T-135921: a second owner of a church's space renamed their own away from
+// their address, and settings opened on the church's.
+test("a person's own space stays theirs after they rename it", async () => {
+  let m = held()
+  let jeff = crypto.randomUUID()
+  let matt = crypto.randomUUID()
+  m.put(jeff, { person: {}, email: { address: 'jeff@yaks.app' } })
+  m.put(matt, { person: {}, email: { address: 'matt@yaks.app' } })
+  let church = await m.dir.own(jeff)
+  let mine = await m.dir.own(matt)
+  m.put(crypto.randomUUID(), {
+    member: { space: church.eid, person: matt, role: 'owner' },
+  })
+  m.put(mine.eid, { space: { slug: 'yoder' } })
+  assertEquals((await m.dir.own(matt)).eid, mine.eid)
+})
+
+test('a seat from before the mark is marked at the space their address names', async () => {
+  let m = held()
+  let ana = crypto.randomUUID()
+  m.put(ana, { person: {}, email: { address: 'ana@yaks.app' } })
+  let other = m.put(crypto.randomUUID(), { space: { slug: 'club' } })
+  let mine = m.put(crypto.randomUUID(), { space: { slug: 'ana' } })
+  for (let space of [other, mine]) {
+    m.put(crypto.randomUUID(), {
+      member: { space: space.entity.eid, person: ana, role: 'owner' },
+    })
+  }
+  assertEquals((await m.dir.own(ana)).eid, mine.entity.eid)
+  m.put(mine.entity.eid, { space: { slug: 'anna' } })
+  assertEquals((await m.dir.own(ana)).eid, mine.entity.eid)
+})
+
 // The clamp on how many round trips a sign-in costs (T-34138). Every question
 // the kernel asks the directory is one fetch to the platform's Durable Object,
 // and the sign-in flow asks them one after another — measured on the workerd
@@ -502,11 +535,11 @@ test('signing in asks the directory a bounded number of questions', async () => 
   assertEquals(m.hops.length, 6, m.hops.join('\n'))
 
   // And what it costs once they have one: the ordinary sign-in, which is
-  // every sign-in after the first: who they are and where they sit, then those
-  // spaces, in one read however many, and who they are again as above.
+  // every sign-in after the first: where they sit, and those spaces, in one
+  // read however many, the seat marking which is theirs.
   m.hops.length = 0
   assertEquals((await m.dir.own(them)).eid, mine.eid)
-  assertEquals(m.hops.length, 2, m.hops.join('\n'))
+  assertEquals(m.hops.length, 1, m.hops.join('\n'))
 })
 
 test('directory clients read their own stores at the current revision', async () => {
