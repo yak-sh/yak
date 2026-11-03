@@ -15,6 +15,16 @@ import { tallying } from './lib/hops.ts'
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
 
+/// returned('2026-11-01T10:00:00.000Z', '2026-11-02T11:00:00.000Z') -> true
+/// returned('2026-11-01T23:00:00.000Z', '2026-11-02T01:00:00.000Z') -> false
+/// returned('2026-11-01T10:00:00.000Z', '2026-11-01T22:00:00.000Z') -> false
+/// returned(undefined, '2026-11-02T11:00:00.000Z') -> false
+/** Whether a use at `at` is somebody coming back: at least a day after the
+ * use before it (funnel.ts `returned`). A first use is nobody coming back. */
+export let returned = (previous: unknown, at: string) =>
+  typeof previous == 'string' &&
+  Date.parse(at) - Date.parse(previous) >= 86_400_000
+
 export let maintenance = (run: Handler): Handler & { maintenance: true } =>
   Object.assign(run, { maintenance: true as const })
 

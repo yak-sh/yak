@@ -134,10 +134,10 @@ let eid = (app: string) => {
   return app
 }
 
-let whole = (n: number, most: number) =>
+export let whole = (n: number, most: number) =>
   Math.max(1, Math.min(most, Math.floor(n) || 1))
 
-let table = (name: string) => {
+export let table = (name: string) => {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     throw new Error(`not a dataset: ${name}`)
   }

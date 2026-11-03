@@ -11,7 +11,7 @@ import {
   type Meter,
   type Space,
 } from './directory.ts'
-import { platform } from './testing.ts'
+import { analytics, platform } from './testing.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
@@ -325,4 +325,21 @@ test("a row's figures carry their days, and a person's are their spaces' added",
     base: '/admin',
   })
   assertEquals(quiet.includes('data-chart'), false)
+})
+
+test("the admin's funnel shows each step's count", async () => {
+  let sql = analytics((q) =>
+    q.includes('GROUP BY step') ? [{ step: 'home', n: 12 }] : []
+  )
+  try {
+    let on = { ...env, CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
+    let [req, , path] = asking('/admin/funnel?days=30', 'root')
+    let page = (await answer(req, on, path, dir))!
+    assertEquals(page.status, 200)
+    let html = await page.text()
+    assertStringIncludes(html, '<dt>Home page visits</dt><dd>12</dd>')
+    assertStringIncludes(sql.asked[0], "INTERVAL '30' DAY")
+  } finally {
+    sql.done()
+  }
 })

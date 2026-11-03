@@ -25,7 +25,7 @@ import {
   UNKEPT_AT,
 } from '../kept-page.ts'
 import { cookieValue } from '../lib/cookie.ts'
-import { isView, pointOf, type Visited } from '../view-point.ts'
+import { isHome, isView, pointOf, stepOf, type Visited } from '../view-point.ts'
 import { foreign, platform, spaceDoor } from '../route.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
@@ -133,9 +133,14 @@ export let kept = (
   ) return null
   if (host == apex(env)) {
     if (!LISTINGS.includes(path)) return null
-    return listing(req, env.SITE, apex(env), path).then((page) =>
-      page.status < 500 ? page : null
-    )
+    return listing(req, env.SITE, apex(env), path).then((page) => {
+      if (page.status >= 500) return null
+      // A visit to the home page is the funnel's first step (funnel.ts).
+      if (env.VIEWS && isHome(req, path, page)) {
+        env.VIEWS.writeDataPoint(stepOf('home', req as Visited))
+      }
+      return page
+    })
   }
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
   if (host.slice(0, -apex(env).length - 1).includes('.')) return null

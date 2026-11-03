@@ -350,12 +350,14 @@ import { directory, fetch as directoryFetch } from './directory.ts'
 import {
   isRetired,
   RECEIPTS,
+  returned,
   scheduleMark,
   scheduleRetired,
   scheduleUse,
   useUntil,
   using,
 } from './used.ts'
+import * as funnel from './funnel.ts'
 import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
@@ -4545,7 +4547,7 @@ export class Store {
       }
       let mark = word == 'changed' || word == 'errored' ? String(word) : null
       let [row] = await this.#graph.read(
-        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used'}`,
+        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used ?person'}`,
       )
       if (!row) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
@@ -4570,6 +4572,9 @@ export class Store {
       if (typeof previous == 'string' && previous >= at) at = previous
       else {
         await this.#asIs([{ entity: { eid }, used: { at } }], { stamp: false })
+        if (row.person && returned(previous, at)) {
+          funnel.step(this.#bind, 'returned')
+        }
       }
       return json({ at })
     }

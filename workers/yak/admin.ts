@@ -37,7 +37,8 @@ import { esc } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { icon, type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
-import { DAYS, statsOf } from './views.ts'
+import { DAYS, NOT_ON, statsOf } from './views.ts'
+import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 
@@ -271,23 +272,28 @@ let lists = (c: Census): Record<List, Row[]> => ({
 })
 let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 
-// The desk: the three lists down the side, each with how many it holds.
+// The desk: the three lists down the side, each with how many it holds, and
+// the funnel below them.
 let desk = (
   d: Reading,
   title: string,
-  current: List | null,
+  current: List | 'funnel' | null,
   body: string,
   kicker = '',
   status = 200,
 ) => {
   let all = lists(d.census)
-  let nav = KEYS.map((key) =>
-    `<a href="${PATH}/${key}${tested(d)}"${
-      current == key ? ' aria-current="page"' : ''
-    }>${icon(LISTS[key].icon)}${LISTS[key].title}<span class="Desk_Count">${
-      shown(d, all[key]).length
-    }</span></a>`
-  ).join('')
+  let nav =
+    KEYS.map((key) =>
+      `<a href="${PATH}/${key}${tested(d)}"${
+        current == key ? ' aria-current="page"' : ''
+      }>${icon(LISTS[key].icon)}${LISTS[key].title}<span class="Desk_Count">${
+        shown(d, all[key]).length
+      }</span></a>`
+    ).join('') +
+    `<a href="${PATH}/funnel"${
+      current == 'funnel' ? ' aria-current="page"' : ''
+    }>${icon('chart-no-axes-column-increasing')}Funnel</a>`
   return shell(
     d.env,
     esc(title),
@@ -404,6 +410,57 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
   )
 }
 
+// The windows the funnel is read over, in days.
+let WINDOWS = [1, 7, 30, 90]
+
+// yaks.app's own funnel (funnel.ts): each step's count over the window, and
+// its share of the step it follows, then the sites that sent the home page
+// its visitors.
+let funnelPage = (
+  d: Reading,
+  f: Funnel | null | Error,
+  days: number,
+) => {
+  let windows = WINDOWS.map((n) =>
+    `<a href="${PATH}/funnel?days=${n}"${
+      n == days ? ' aria-current="page"' : ''
+    }>${n == 1 ? '1 day' : `${n} days`}</a>`
+  ).join(' · ')
+  let say = (name: string) => STEPS.find((s) => s.name == name)!.say
+  let of = (name: string) => {
+    let s = STEPS.find((s) => s.name == name)
+    return s && 'of' in s ? say(s.of).toLowerCase() : ''
+  }
+  let body = f instanceof Error
+    ? `<section class="Empty"><h2>The counts could not be read: ${
+      esc(f.message)
+    }</h2></section>`
+    : !f
+    ? `<section class="Empty"><h2>${esc(NOT_ON)}</h2></section>`
+    : `<div class="Card"><dl class="Fields Directory_Facts">${
+      f.steps.map((s) =>
+        `<div><dt>${esc(s.say)}</dt><dd>${s.n}${
+          s.share == null
+            ? ''
+            : ` · ${Math.round(s.share * 100)}% of ${esc(of(s.name))}`
+        }</dd></div>`
+      ).join('')
+    }</dl></div>${
+      f.from.length
+        ? `<h2 class="Group">Came to the home page from</h2><div class="Card"><dl class="Fields Directory_Facts">${
+          f.from.map((r) => `<div><dt>${esc(r.site)}</dt><dd>${r.n}</dd></div>`)
+            .join('')
+        }</dl></div>`
+        : ''
+    }`
+  return desk(
+    d,
+    'Funnel',
+    'funnel',
+    `<div class="Directory_Bar"><nav aria-label="Window">${windows}</nav></div>${body}`,
+  )
+}
+
 /** The admin's directory, at {@link PATH}, or null for any other path. */
 export let answer = async (
   req: Request,
@@ -436,6 +493,14 @@ export let answer = async (
   }
   let d = read(env, await dir.census(), asked.searchParams.has('tests'))
   if (isList(rest)) return list(d, rest, asked.searchParams.get('q') ?? '')
+  if (rest == 'funnel') {
+    let days = Number(asked.searchParams.get('days')) || 7
+    let f = await funnel(env, days).catch((e) => {
+      caught(e, { request: 'admin funnel' })
+      return e instanceof Error ? e : new Error(String(e))
+    })
+    return funnelPage(d, f, f && !(f instanceof Error) ? f.days : days)
+  }
   let r = [...d.census.people, ...d.census.spaces, ...d.census.apps]
     .find((x) => x.entity.eid == rest)
   if (!r) {

@@ -128,6 +128,8 @@ import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
 import * as site from './site.ts'
+import * as funnel from './funnel.ts'
+import { isHome } from './view-point.ts'
 import { fault, refusal } from './unseen.ts'
 
 // Doors loaded when a request first reaches one (T-37977). What they import —
@@ -258,7 +260,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
     (req.method == 'GET' || req.method == 'HEAD') &&
     (path == '/' || path == gallery.PATH || path == INTEGRATIONS.path)
   ) {
-    return site.forward(req, env, path)
+    let page = await site.forward(req, env, path)
+    if (isHome(req, path, page)) funnel.step(env, 'home', req)
+    return page
   }
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {

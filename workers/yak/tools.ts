@@ -327,6 +327,7 @@ import { read } from '@yaks/yaml'
 import { viewsTools } from './views.ts'
 import { carried, connectionTools, rebind } from './connections.ts'
 import { background, caught } from './defects.ts'
+import { step } from './funnel.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a domain can say a row without importing the
@@ -3063,6 +3064,7 @@ let OURS: Row[] = [
         who = current.who
         app = current.app!
       }
+      if (!apps.length) step(ctx.env, 'first_app')
       let at = url(space, app, ctx.env)
       return {
         text: `app ${space.slug}/${s} (${app.eid}): ${at}` +
@@ -3673,6 +3675,7 @@ let OURS: Row[] = [
           value: { deployed: false, ...review },
         }
       }
+      if (version == 1) step(ctx.env, 'first_deploy')
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${

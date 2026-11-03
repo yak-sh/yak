@@ -9,6 +9,7 @@ import { signInAt } from './route.ts'
 import { whoIs } from './session.ts'
 import { foot, head, html, top } from './shell.ts'
 import { call } from './tools.ts'
+import { step } from './funnel.ts'
 
 export let PATH = '/install'
 export let at = (name: string) => `${PATH}?name=${encodeURIComponent(name)}`
@@ -79,6 +80,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
       404,
     )
   }
+  if (req.method == 'GET') step(env, 'install', req)
   let who = await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
   if (!who.person) {
     return Response.redirect(signInAt(url(env, at(name)), env), 303)
@@ -111,6 +113,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
     if (typeof destination != 'string') {
       throw new Error('Installation returned no app address')
     }
+    step(env, 'install_done', req)
     return Response.redirect(destination, 303)
   } catch (error) {
     let status = refusing(error, { request: 'POST /install' })

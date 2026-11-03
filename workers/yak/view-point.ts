@@ -92,3 +92,36 @@ export let pointOf = (
     status: res.status,
   })
 }
+
+// ---- yaks.app's own funnel (funnel.ts, D-123514) ---------------------------
+
+/** The index yaks.app's own steps are written under. An app's index is its
+ * eid, so no app's count ever reads one of these. */
+export let FUNNEL = 'yaks.app'
+
+/**
+ * The data point one step of yaks.app's funnel is written as: a view of the
+ * platform itself, whose slug is the step. The request, where there is one,
+ * says what a view says of it and nothing more; a step taken away from any
+ * request (a person coming back) says only the step.
+ */
+export let stepOf = (step: string, req?: Visited) => {
+  let url = req && new URL(req.url)
+  return point({
+    app: FUNNEL,
+    space: '',
+    slug: step,
+    path: url?.pathname ?? '',
+    country: req?.cf?.country ?? '',
+    from: req && url ? referred(req.headers.get('referer'), url.host) : '',
+    client: req ? classed(req.headers.get('user-agent')) : '',
+    status: 0,
+  })
+}
+
+/** Whether this answer at the apex is a person visiting the home page: a GET
+ * of `/` that was answered, from a browser rather than a crawler. A 304 is a
+ * browser coming back to a page it holds, and is a visit too. */
+export let isHome = (req: Request, path: string, res: Response) =>
+  path == '/' && req.method == 'GET' && res.status < 400 &&
+  classed(req.headers.get('user-agent')) == 'browser'

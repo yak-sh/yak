@@ -169,6 +169,7 @@ import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, type Who } from './session.ts'
 import { background, caught, refusing } from './defects.ts'
+import { step } from './funnel.ts'
 import { sha256 } from '@yaks/graph/sha256'
 
 // What a grant carries and a token gives back: the person, nothing else.
@@ -671,10 +672,16 @@ let landed = async (
     }], KERNEL)
   }
   if (via) {
+    // A person who has never signed in before is the funnel's sign-up
+    // (funnel.ts): the first time, whether their row came from this sign-in
+    // or from somebody inviting them.
+    let [row] = await store.query(`.entity.eid=${person} ?signed_in`)
     await store.apply([{
       entity: { eid: person },
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
+    step(env, 'signed_in', req)
+    if (!row?.signed_in) step(env, 'signup', req)
   }
   await claimed(req, env, person)
   let set = await minted(req, env, secret(env), person)
@@ -795,6 +802,7 @@ let allow = async (
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
   let { redirectTo } = await consent(env, ask, person)
+  step(env, 'connector_granted', req)
   return redirect(redirectTo, set)
 }
 
@@ -1018,6 +1026,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // that depends on it. One that will not leave is a break for us to
       // read, and the card's "Send a new code" is the person's way to ask
       // again.
+      step(env, 'code_sent', req)
       background(
         mail(env)({
           to: email,
@@ -1136,6 +1145,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let q = url.search.slice(1)
     let ask = await asked(req, env, q)
     if (ask instanceof Response) return ask
+    step(env, 'connector_start', req)
     let who = await withAuth(env, req)
     if (!who) {
       return askEmail(
