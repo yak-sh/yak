@@ -65,6 +65,30 @@ test('settings save the name and the space in one form', async () => {
   assertEquals(card('space'), 'This space: dana.yaks.app')
 })
 
+test('every page names the space it changes and links the others', async () => {
+  let spaces = [
+    { slug: 'locustgrove', title: 'Locust Grove' },
+    { slug: 'dana', title: 'dana' },
+  ]
+  let page = await block({ view: 'settings', space: 'locustgrove', spaces })
+  let { document } = parseHTML(page)
+  let side = document.querySelector('.Desk_Spaces')!
+  assertEquals(
+    side.querySelector('.Desk_Here')?.textContent,
+    'Locust Grovelocustgrove.yaks.app',
+  )
+  assertEquals(
+    [...side.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+    [managePath('settings', 'dana')],
+  )
+  assertStringIncludes(
+    document.querySelector('.Card_Sub')!.textContent!,
+    'Locust Grove is the space these change',
+  )
+  let alone = parseHTML(await block({ spaces: [spaces[1]] })).document
+  assertEquals(alone.querySelectorAll('.Desk_Spaces a').length, 0)
+})
+
 test('new app exposes separate build and upload forms below the agent route', async () => {
   let page = await block({ view: 'new' })
   let { document } = parseHTML(page)

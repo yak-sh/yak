@@ -2463,6 +2463,7 @@ let foresee = (
   void Promise.allSettled([
     feeOf(dir),
     dir.nameAt(person),
+    dir.spaces(person, 'owner'),
     ...view == 'apps' ? [dir.seats(person), dir.granted(person)] : [],
     ...own
       ? [
@@ -2550,6 +2551,7 @@ let desk = async (
     theirs,
     people,
     connections,
+    mine,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -2600,6 +2602,8 @@ let desk = async (
         )
       )
       : undefined,
+    // Every space this person owns, which the side names and links.
+    dir.spaces(owner, 'owner'),
   ])
   return deskPage({
     views,
@@ -2636,6 +2640,8 @@ let desk = async (
     shared: theirs,
     people: people?.[0],
     connections,
+    spaces: [space, ...mine.filter((s) => s.eid != space.eid && !s.trashed)]
+      .map((s) => ({ slug: s.slug, title: s.title })),
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,

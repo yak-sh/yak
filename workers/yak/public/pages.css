@@ -337,6 +337,44 @@
     font-weight: 800;
     text-decoration: none;
   }
+  /* Which space the dashboard changes, and the person's other spaces, each a
+     link to the same page there (pages.ts `spaces`). */
+  .Desk_Spaces {
+    display: grid;
+    gap: .25rem;
+    min-width: 0;
+  }
+  .Desk_Here,
+  .Desk_Spaces a {
+    display: grid;
+    margin: 0;
+    padding: .5rem .8rem;
+    border-radius: var(--corner);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .Desk_Here {
+    border: 1px solid var(--rule);
+  }
+  .Desk_Spaces b {
+    overflow-wrap: anywhere;
+  }
+  .Desk_Spaces a b {
+    font-weight: 600;
+  }
+  .Desk_Spaces span {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    overflow-wrap: anywhere;
+  }
+  .Desk_Spaces a:hover {
+    background: var(--paper);
+  }
+  .Desk_Other {
+    margin: .5rem .8rem 0;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
   .Desk_Count {
     margin-left: auto;
     font-size: var(--fine);

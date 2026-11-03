@@ -630,6 +630,9 @@ export type DeskPage = {
   /** the apps of other people's spaces this person may open, each with the
    * slug of the space it lives in */
   shared?: (Listed & { space: string })[]
+  /** every space this person owns, this one among them: the side names the
+   * one the page changes and links each of the others */
+  spaces?: { slug: string; title: string }[]
 }
 
 let navIcons = {
@@ -661,7 +664,7 @@ ${icon(navIcons[key])}${label}${
 <aside class="Desk_Side">
 <a class="Desk_Brand" href="${url(env, '/')}"><img src="${
     url(env, '/yaks-app.png')
-  }" width="36" height="36" alt="">yaks.app</a>
+  }" width="36" height="36" alt="">yaks.app</a>${spaces(at, view, env)}
 <nav class="SideNav" aria-label="Manage your apps">
 ${link('apps', 'Apps')}${link('operator', 'Operator')}${
     link('people', 'People')
@@ -679,6 +682,30 @@ ${link('billing', 'Billing')}${link('settings', 'Settings')}${
     url(env, '/help')
   }" target="_blank" rel="noopener">Help</a></div>
 </aside>`
+}
+
+// Which space every page of the dashboard changes, named at the top of its
+// side, and each other space the person owns a link to the same page there
+// (T-135919): somebody who owns two spaces sees which one they are in and moves
+// in one press, rather than saving into a space they took for their own.
+let spaces = (at: DeskPage, view: ManageView, env: Host) => {
+  let others = (at.spaces ?? []).filter((s) => s.slug != at.space)
+  let named = (s: { slug: string; title: string }) =>
+    `<b>${esc(s.title || s.slug)}</b><span>${
+      esc(spaceHost(env, s.slug))
+    }</span>`
+  let to = view == 'new' ? 'apps' : view
+  return `<nav class="Desk_Spaces" aria-label="Your spaces">
+<p class="Desk_Here">${named({ slug: at.space, title: here(at) })}</p>${
+    others.length
+      ? `<p class="Desk_Other">Your other ${
+        others.length == 1 ? 'space' : 'spaces'
+      }</p>${
+        others.map((s) => `<a href="${managePath(to, s.slug)}">${named(s)}</a>`)
+          .join('')
+      }`
+      : ''
+  }</nav>`
 }
 
 let state = (connected: boolean, show: boolean) =>
@@ -787,6 +814,9 @@ export let library = (at: DeskPage, env: Host) => {
 // person's own name apart from the space's address and homepage, so it is
 // plain which of the two each field changes. A refusal draws the page again
 // with what was typed still in the fields (`at.typed`).
+let here = (at: DeskPage) =>
+  at.spaces?.find((s) => s.slug == at.space)?.title || at.space
+
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   let was = at.typed ?? {
@@ -807,7 +837,13 @@ let preferences = (at: DeskPage, env: Host) => {
       'Yours in every space, not only this one.',
     )
   }</section>
-<section class="Card">${heading(`This space: ${host}`)}<div class="Form">${
+<section class="Card">${heading(`This space: ${host}`)}<p class="Card_Sub">${
+    esc(here(at))
+  } is the space these change, for everyone in it.${
+    (at.spaces?.length ?? 0) > 1
+      ? ' To change another, choose it under Your other spaces.'
+      : ''
+  }</p><div class="Form">${
     labeled(
       'your-address',
       'Address',
