@@ -211,52 +211,6 @@
     ]
   },
   {
-    "suite": "operation-checkout",
-    "baseline": "bench/operation-checkout.baseline.json",
-    "groups": [
-      {
-        "reference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-        "kind": "derived",
-        "source": "git history of bench/operation-checkout.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "cli/file-cites-verify",
-          "cli/file-cites-check"
-        ]
-      },
-      {
-        "reference": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
-        "kind": "derived",
-        "source": "Earliest composed MCP runner carrying process.cwd: 685c2f1af passes host.runner to the MCP transport. Successful checkout operations replace obsolete missing-cwd refusals.",
-        "correction": {
-          "previousReference": "bbf65074e5b343ccd10b5c1646b9d0e3f8e873a3",
-          "workloadChange": "685c2f1af9eb9ba02935552e0292346d4b0f60d1",
-          "reason": "The three previous connector workloads expected missing-cwd refusals. The composed runner now supplies cwd, so those workloads are retired; code sync and citation verification measure successful persisted work. Connector land is retired rather than invoking a mutation while expecting refusal.",
-          "retiredMedians": [
-            {
-              "name": "connector/code-sync-cwd-refusal",
-              "unit": "ms",
-              "median": 25.831763999999566
-            },
-            {
-              "name": "connector/land-cwd-refusal",
-              "unit": "ms",
-              "median": 18.71299799999997
-            },
-            {
-              "name": "connector/file-cites-verify-cwd-refusal",
-              "unit": "ms",
-              "median": 19.425269999999728
-            }
-          ]
-        },
-        "benches": [
-          "connector/code-sync",
-          "connector/file-cites-verify"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "operation-commands",
     "baseline": "bench/operation-commands.baseline.json",
     "groups": [
@@ -308,30 +262,6 @@
     ]
   },
   {
-    "suite": "operation-controls",
-    "baseline": "bench/operation-controls.baseline.json",
-    "groups": [
-      {
-        "reference": "1e76aab35731f409f74c052d21a2487e87036a64",
-        "kind": "derived",
-        "source": "git history of bench/operation-controls.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "cli/builder-choose",
-          "connector/builder-choose",
-          "cli/builder-supply",
-          "connector/builder-supply",
-          "cli/builder-plan",
-          "connector/builder-plan",
-          "cli/session-cache",
-          "cli/session-listen",
-          "cli/trace-arm",
-          "cli/init",
-          "cli/land"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "operation-diagnostics",
     "baseline": "bench/operation-diagnostics.baseline.json",
     "groups": [
@@ -369,99 +299,6 @@
         "benches": [
           "cli/vector-check-populated",
           "connector/vector-check-populated"
-        ]
-      }
-    ]
-  },
-  {
-    "suite": "operation-remaining",
-    "baseline": "bench/operation-remaining.baseline.json",
-    "groups": [
-      {
-        "reference": "9f7f792b2782529f824c14cf7c511228835aa7c9",
-        "kind": "derived",
-        "source": "git history of bench/operation-remaining.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "cli/design-new",
-          "cli/design-decide",
-          "cli/effect-retry",
-          "cli/effect-drop",
-          "cli/claim-check",
-          "cli/session-check",
-          "cli/session-context",
-          "cli/session-brief",
-          "cli/session-wrap",
-          "cli/memory-source",
-          "cli/memory-around",
-          "cli/memory-target",
-          "cli/memory-thread",
-          "cli/memory-session",
-          "cli/hooks-install",
-          "cli/code-sync",
-          "cli/persona-sync",
-          "cli/search",
-          "cli/cites-verify",
-          "cli/connection-need",
-          "cli/connection-list",
-          "cli/mail-send",
-          "cli/mail-reply",
-          "cli/mail-show",
-          "cli/mail-check",
-          "cli/visualize-anatomy",
-          "cli/visualize-activity",
-          "connector/design-new",
-          "connector/design-decide",
-          "connector/effect-retry",
-          "connector/effect-drop",
-          "connector/claim-check",
-          "connector/session-check",
-          "connector/session-context",
-          "connector/session-brief",
-          "connector/session-wrap",
-          "connector/memory-source",
-          "connector/memory-around",
-          "connector/memory-target",
-          "connector/memory-thread",
-          "connector/memory-session",
-          "connector/hooks-install",
-          "connector/persona-sync",
-          "connector/search",
-          "connector/cites-verify",
-          "connector/connection-need",
-          "connector/connection-list",
-          "connector/mail-send",
-          "connector/mail-reply",
-          "connector/mail-show",
-          "connector/mail-check",
-          "connector/visualize-anatomy",
-          "connector/visualize-activity"
-        ]
-      },
-      {
-        "reference": "feb78fbfdeb05af336779f394249b923aac6bc24",
-        "kind": "derived",
-        "source": "Earliest known corrected product: feb78fbfd includes verified in the cites-check query projection. The previous reference could not perform the corrected moved-citation workload. Fixture correction retained from 3a8fa8d67.",
-        "correction": {
-          "previousReference": "9f7f792b2782529f824c14cf7c511228835aa7c9",
-          "productFix": "feb78fbfdeb05af336779f394249b923aac6bc24",
-          "fixtureFix": "3a8fa8d674e1beec730939b90ae2570bac8f06e3",
-          "reason": "The old query discarded verified and always reported never checked; its median measured missing work.",
-          "previousMedians": [
-            {
-              "name": "cli/cites-check",
-              "median": 409.77271699999983,
-              "unit": "ms"
-            },
-            {
-              "name": "connector/cites-check",
-              "median": 4.96571799999947,
-              "unit": "ms"
-            }
-          ]
-        },
-        "benches": [
-          "cli/cites-check",
-          "connector/cites-check"
         ]
       }
     ]

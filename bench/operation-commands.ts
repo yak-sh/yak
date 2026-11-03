@@ -3,7 +3,6 @@
  * or generic graph I/O. SQLite, session state and the HTTP listener are private
  * to this collection; no duties, providers, external connections or live writes.
  */
-import { remainingFixtures } from './operation-fixtures.ts'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import type { Bundle } from '@yaks/graph'
 import { sessionEnv } from '@yaks/session'
@@ -68,12 +67,8 @@ export let inventory = async (
   let said = await declarations(config, true)
   let { TOOLS } = await import('../packages/cli/yak.ts')
   let toolNames = said.tools.map((tool) => tool.name).sort()
-  let { REMAINING_FAMILIES } = await import('./operation-remaining.ts')
-  let { CONTROL_FAMILIES } = await import('./operation-controls.ts')
   let measured = new Set(
-    [...OPERATION_FAMILIES, ...REMAINING_FAMILIES, ...CONTROL_FAMILIES].map((
-      f,
-    ) => f.replaceAll('-', '_')),
+    OPERATION_FAMILIES.map((f) => f.replaceAll('-', '_')),
   )
   measured.add('task_list')
   measured.add('graph_query')
@@ -115,7 +110,7 @@ export let inventory = async (
     ].sort(),
     httpTools,
     scope:
-      'Measured names identify operations, not every variant of their arguments; checkout code_sync and file citation verification assert persisted connector work.',
+      'Measured names identify operations, not every variant of their arguments.',
     measuredTools: toolNames.filter((name) => measured.has(name)),
     unmeasuredTools: toolNames.filter((name) => !measured.has(name)),
     unmeasuredDoors: {
@@ -141,14 +136,8 @@ export type Operation = {
   family: string
   tool: string
   command: string[]
-  cwd?: string | (() => string)
-  config?: () => string
-  expectedError?: boolean
-  registered?: boolean
-  doors?: ('cli' | 'connector')[]
   args: () => Record<string, unknown>
   prepare?: () => Promise<void>
-  after?: () => void
   verify: (text: string, args: Record<string, unknown>) => Promise<void> | void
 }
 /// fault('{"result":[{"entity":{"eid":"$fault"},"content":{"body":"no"}}]}') -> 'no'
@@ -202,9 +191,6 @@ export let scaleFixture = fixture(async (
 async function collect(
   args: string[] = [],
   scale = false,
-  remaining = false,
-  controls = false,
-  checkout = false,
 ): Promise<Record<string, Samples>> {
   let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
   let n = Number(args[0] ?? 1)
@@ -212,17 +198,12 @@ async function collect(
     throw new Error('positive sample count required')
   }
   let dir = await Deno.makeTempDir({ prefix: 'T-127678-operations-' })
-  let originalCwd = Deno.cwd()
-  if (remaining) {
-    await Deno.mkdir(`${dir}/checkout`)
-    Deno.chdir(`${dir}/checkout`)
-  }
   let configPath = `${dir}/yak.json`
   // A command's whole environment, as a managed run of SESSION has it
   // (@yaks/spawn): the harness id of whoever launched the bench is gone, or
   // the command would speak for that session instead.
   let env = {
-    ...sessionEnv(remaining ? SESSION : '', Deno.env.toObject()),
+    ...sessionEnv('', Deno.env.toObject()),
     TASKS_HOME: `${dir}/tasks`,
     HARNESS_HOME: `${dir}/harness`,
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
@@ -238,37 +219,17 @@ async function collect(
     config.db = `${dir}/yak.db`
     config.duties = false
     config.plugins!.push('@yaks/sqlite')
-    if (remaining) {
-      config.plugins!.push(
-        '@yaks/design',
-        '@yaks/connections',
-        '@yaks/notify',
-        { use: '@yaks/mail', with: { sender: { via: 'stash' } } },
-        '@yaks/visualize',
-        '@yaks/fts',
-        '@yaks/code',
-        '@yaks/git',
-      )
-    }
     config.plugins = config.plugins?.map((p) =>
       p == '@yaks/session'
         ? { use: '@yaks/session', with: { transcripts: `${dir}/transcripts` } }
         : p
     )
-    if (controls) {
-      config.plugins!.push(
-        '@yaks/builders',
-        '@yaks/blob',
-        '@yaks/model',
-        '@yaks/key',
-      )
-    }
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     if (scale) await scaleFixture(config.db!, tasks, SCALE_ENTRIES)
     host = await compose(read(configPath), ['graph', 'web'])
     await settled(host)
     let graph = host.graph
-    if (!scale) await populate(graph, tasks, 0, remaining)
+    if (!scale) await populate(graph, tasks)
     let cli = async (operation: Operation, input: Record<string, unknown>) => {
       let flags = Object.entries(input).flatMap(([key, value]) => [
         `--${key.replaceAll('_', '-')}`,
@@ -277,30 +238,18 @@ async function collect(
       let out = await new Deno.Command(Deno.execPath(), {
         args: [
           'run',
-          ...(remaining
-            ? [
-              '--allow-read',
-              '--allow-write',
-              '--allow-env',
-              '--allow-run',
-              '--allow-ffi',
-              '--allow-sys',
-              '--allow-net=127.0.0.1,localhost',
-            ]
-            : ['-A']),
+          '-A',
           '--config',
           `${root}deno.json`,
           `${root}packages/cli/yak.ts`,
           '--config',
-          operation.config?.() ?? configPath,
+          configPath,
           '--no-duties',
           ...operation.command,
           ...flags,
           '--json',
         ],
-        cwd: typeof operation.cwd == 'function'
-          ? operation.cwd()
-          : operation.cwd ?? root,
+        cwd: root,
         env,
         clearEnv: true,
         stdin: 'null',
@@ -325,7 +274,6 @@ async function collect(
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     let ask = rpc({
       url: `http://127.0.0.1:${server.addr.port}/mcp`,
-      ...(remaining ? { via: SESSION } : {}),
     })
     await initialize(ask)
     let listed = await ask('tools/list', {})
@@ -591,70 +539,14 @@ async function collect(
         },
       ]
     }
-    if (remainingFixtures(remaining, controls)) {
-      let context = {
-        graph,
-        dir,
-        PERSON,
-        PROJECT,
-        TARGET,
-        SESSION,
-        PERSONA,
-        fresh,
-        saved,
-        includes,
-      }
-      operations = [
-        ...await (await import('./operation-local.ts')).localOperations(
-          context,
-        ),
-        ...await (await import('./operation-files.ts')).fileOperations(context),
-        ...await (await import('./operation-services.ts')).serviceOperations(
-          context,
-        ),
-      ]
-    }
-    if (controls) {
-      operations = await (await import('./operation-controls.ts'))
-        .controlOperations({
-          graph,
-          dir,
-          PERSON,
-          PROJECT,
-          TARGET,
-          SESSION,
-          PERSONA,
-          fresh,
-          saved,
-          includes,
-        })
-    }
-    if (checkout) {
-      operations = await (await import('./operation-checkout.ts'))
-        .checkoutOperations({
-          graph,
-          dir,
-          PERSON,
-          PROJECT,
-          TARGET,
-          SESSION,
-          PERSONA,
-          fresh,
-          saved,
-          includes,
-        })
-    }
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
     for (let operation of operations) {
-      let doors = (operation.doors ?? ['cli', 'connector']).filter((door) =>
+      let doors = ['cli', 'connector'].filter((door) =>
         selected(`${door}/${operation.family}`)
       )
       if (!doors.length) continue
-      if (
-        operation.registered !== false && !registered.has(operation.tool) &&
-        !(operation.doors?.length == 1 && operation.doors[0] == 'cli')
-      ) {
+      if (!registered.has(operation.tool)) {
         throw new Error(`unregistered operation ${operation.tool}`)
       }
       for (let door of doors) {
@@ -678,7 +570,7 @@ async function collect(
                 arguments: input,
               })
               if (
-                Boolean(answer.isError) !== Boolean(operation.expectedError)
+                answer.isError
               ) {
                 throw new Error(
                   `${operation.tool}: ${fault(JSON.stringify(answer))}`,
@@ -699,8 +591,6 @@ async function collect(
               }`,
               { cause: error },
             )
-          } finally {
-            operation.after?.()
           }
           samples.push({
             ...reading,
@@ -721,16 +611,9 @@ async function collect(
   } finally {
     await server?.shutdown()
     await host?.close()
-    if (remaining) Deno.chdir(originalCwd)
     await Deno.remove(dir, { recursive: true })
   }
 }
 export let measure = (args: string[] = []) => collect(args)
-export let measureRemaining = (args: string[] = []) =>
-  collect(args, false, true)
-export let measureControls = (args: string[] = []) =>
-  collect(args, false, true, true)
-export let measureCheckout = (args: string[] = []) =>
-  collect(args, false, true, false, true)
 export let measureScale = (args: string[] = []) => collect(args, true)
 if (import.meta.main) console.log(JSON.stringify(await measure(Deno.args)))

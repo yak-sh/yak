@@ -9,7 +9,6 @@ export let populate = async (
   graph: Graph,
   tasks: number,
   entries = 0,
-  remaining = false,
 ): Promise<void> => {
   await graph.apply([
     {
@@ -26,7 +25,6 @@ export let populate = async (
       entity: { eid: SESSION },
       session: {
         id: 'benchmark-operation-session',
-        ...(remaining ? { actor: PERSON } : {}),
       },
     },
     {

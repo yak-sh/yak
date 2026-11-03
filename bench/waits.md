@@ -62,46 +62,6 @@ These suites each have a half-hour monitor entry. The hourly shell dispatch
 reads `HOURLY` from `monitor.ts`, so adding a suite there also schedules it
 rather than leaving a second hard-coded list behind.
 
-### Remaining local operation families
-
-`operation-remaining` banks 28 additional families as 55 independent figures:
-CLI and MCP design new/decide, effect retry/drop, claim/session check, session
-context/brief/wrap, memory source/around/target/thread/session, hook
-installation, persona sync, search, entity citation verify/check, connection
-need/list, mail send/reply/show/check, visualize anatomy/activity; code sync is
-CLI-only. Preparation and readback are outside the complete production response
-clock. Three samples per collection, three rounds per run and three runs per
-acceptance bank the best run with the noise the runs measured.
-
-The fixture has 2,000 tasks, a real three-entry transcript, a comment thread, an
-independent tracked two-file checkout, owned persona files and received mail.
-Connection requests create credential-free custom integrations. Mail figures
-measure queued requests and attention marks, not transport delivery. Duties are
-disabled. CLI network permission is loopback-only. Activity captures observe
-queries on the serving host; the native CLI reads that same host over HTTP.
-
-```sh
-deno run -A bench/run.ts operation-remaining accept
-deno run -A bench/run.ts operation-remaining check
-```
-
-### Local controls and retained builders
-
-`operation-controls` measures eight additional safe families (11 figures): CLI
-and MCP retained-output choice, existing-artifact supply and builder planning;
-CLI populated cache report, listener delivery, trace arming, init and land.
-Builder planning writes calls with duties disabled; it does not run a model.
-Supply reuses an existing artifact, and choice checks exclusive selection. Init
-verifies the created person through a fresh CLI read. Land creates an
-independent primary checkout and branch with no upstream or remote, then
-verifies the exact base SHA and contents. Trace arming verifies its private
-sidecar; it is not operation-capture latency. Listener delivery verifies the
-pending item is marked. The suite has its own measured baseline.
-
-```sh
-deno run -A bench/run.ts operation-controls check
-```
-
 ### Registered doors still outside these fixtures
 
 `inventory(config?)` in `operation-commands.ts` lists declared tools, CLI doors,
@@ -122,15 +82,6 @@ the actual CLI parser/runner and owned loopback HTTP catalogue; the only
 external URL is redirected before transport. Dummy local authentication never
 represents real credentials or OpenAI latency. Vector-check verifies the
 populated native index, not an empty or waiting check.
-
-`operation-checkout` banks CLI file-citation verify/check and three separate
-HTTP cwd-refusal figures. Successful file verification reads the owned
-checkout's commit and saves its revision. MCP code-sync, land and file-citation
-verification lack `process.cwd` in the production fallback runner. Their refusal
-figures measure that real boundary; **successful MCP completion remains
-unavailable**. No handler is called directly and no process provenance is
-manufactured. Entity citations and private CLI land remain covered by their
-existing suites.
 
 The remaining suites bank best-of-three runs, three round medians per run, three
 samples per round, with tolerance zero. All are registered in `SUITES` and

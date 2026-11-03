@@ -1,6 +1,5 @@
 /** Package workloads and relay admission collected into benchmark suites.
  * Each suite declares its own baseline path and retains its timed boundaries. */
-import { CHECKOUT_NAMES } from './operation-checkout.ts'
 import { DIAGNOSTIC_NAMES } from './operation-diagnostics.ts'
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
@@ -9,8 +8,6 @@ import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
-import { CONTROL_NAMES } from './operation-controls.ts'
-import { OPERATION_REMAINING } from './operation-remaining.ts'
 import { collector } from './collector.ts'
 
 let deno = (
@@ -95,13 +92,6 @@ export let standalone: Registration[] = [
     'bench/operation-commands.ts',
     OPERATION_COMMANDS,
   ),
-  measured(
-    'operation-remaining',
-    'bench/operation-remaining.ts',
-    OPERATION_REMAINING,
-  ),
-  measured('operation-checkout', 'bench/operation-checkout.ts', CHECKOUT_NAMES),
-  measured('operation-controls', 'bench/operation-controls.ts', CONTROL_NAMES),
   measured(
     'operation-diagnostics',
     'bench/operation-diagnostics.ts',
