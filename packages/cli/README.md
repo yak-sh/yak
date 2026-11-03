@@ -12,11 +12,16 @@ transaction.
 deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
 
 yak init Ada                    # Start this machine's own graph, as Ada.
-yak --config yak.json task list # Open a local graph, run a tool, and exit.
-yak land                        # Run a tool against the selected graph.
-yak serve --config yak.json     # Run that graph's serve tool: HTTP.
-yak app_list                    # Call a tool on the selected MCP server.
+yak task new 'Buy the cake'     # Open that graph, run a tool, and exit.
+yak task list
+yak serve                       # Run the graph's serve tool: HTTP.
+yak --config yak.json task list # The same, on the graph another config names.
+yak auth yaks.app               # Sign in to yaks.app,
+yak app_list                    # then call its tools over MCP.
 ```
+
+The [repository README](https://github.com/yak-sh/yak#start) walks a first
+session.
 
 A tool is an operation declared by a graph, with a name, an input schema, and an
 implementation. `yak` turns each tool in the selected graph into a subcommand.
