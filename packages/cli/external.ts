@@ -11,7 +11,7 @@ import {
   store as machine,
 } from '@yaks/process'
 import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { launching } from './release.ts'
 
 /** The commits other hosts made, handed over as they arrive (@yaks/host). */
 export type Feed = (each: (news: News) => void) => () => void
@@ -296,7 +296,7 @@ let start = async (
         '-q',
         '-A',
         '--config',
-        fileURLToPath(new URL('../../deno.json', import.meta.url)),
+        await launching(() => Promise.resolve(dir)),
         Deno.mainModule,
         '--config',
         resolve(path),

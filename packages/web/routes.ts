@@ -67,7 +67,10 @@ let bytes = (path: string) => () =>
 // `api/report` is. `</script` in its text would end the element early; `<\/`
 // is the same string to JavaScript.
 let reporter = async () => {
-  let code = await text(import.meta.resolve(located('@yaks/tracker/page')))()
+  let { script }: typeof import('@yaks/tracker/script') = await import(
+    located('@yaks/tracker/script')
+  )
+  let code = await script()
   return `<script data-yak-at="/">${
     code.replace(/<\/(script)/gi, '<\\/$1')
   }</script>`

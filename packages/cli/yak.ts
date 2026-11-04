@@ -261,15 +261,16 @@ export let own: Command[] = [
       let { restart, queueRestart } = await import('./restart.ts')
       let path = configPath(c.config)
       if (!args.handover) {
-        let source = new URL('./yak.ts', import.meta.url)
+        let { launching } = await import('./release.ts')
         let launch = [
           Deno.execPath(),
           'run',
           '-A',
-          ...source.protocol == 'file:'
-            ? ['--config', new URL('../../deno.json', source).pathname]
-            : [],
-          source.href,
+          '--config',
+          await launching(() =>
+            Deno.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' })
+          ),
+          new URL('./yak.ts', import.meta.url).href,
         ]
         c.out(
           await queueRestart(

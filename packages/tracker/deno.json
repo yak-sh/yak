@@ -9,6 +9,7 @@
     "./intake": "./intake.ts",
     "./report": "./report.ts",
     "./page": "./page.js",
+    "./script": "./script.ts",
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",
     "./service": "./service.ts",
