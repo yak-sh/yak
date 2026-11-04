@@ -2446,9 +2446,12 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     administrative,
     until,
   }
+  // The Operator is open to every member who may change the space; its own
+  // requests are answered by it, and its page is drawn like every other.
   if (view == 'operator' && writes(who.role) && !space.trashed) {
-    let { operatorPage } = await import('./operator-page.ts')
-    return operatorPage(req, env, space, who)
+    let { operatorAnswer } = await import('./operator-page.ts')
+    return await operatorAnswer(req, env, space, who) ??
+      desk(req, env, dir, space, who, view)
   }
   if (who.role != 'owner') return nothingHere(env)
   // A space in the trash is brought back from its own address (`closed`).
@@ -2564,6 +2567,7 @@ let desk = async (
     people,
     connections,
     mine,
+    operator,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -2616,6 +2620,11 @@ let desk = async (
       : undefined,
     // Every space this person owns, which the side names and links.
     dir.spaces(owner, 'owner'),
+    view == 'operator'
+      ? import('./operator-page.ts').then((part) =>
+        part.operatorBody(env, space, who)
+      )
+      : undefined,
   ])
   return deskPage({
     views,
@@ -2654,6 +2663,8 @@ let desk = async (
     connections,
     spaces: [space, ...mine.filter((s) => s.eid != space.eid && !s.trashed)]
       .map((s) => ({ slug: s.slug, title: s.title })),
+    operator,
+    member: who.role != 'owner',
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,

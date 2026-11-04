@@ -633,6 +633,11 @@ export type DeskPage = {
   /** every space this person owns, this one among them: the side names the
    * one the page changes and links each of the others */
   spaces?: { slug: string; title: string }[]
+  /** the Operator page's content (operator-page.ts `operatorBody`) */
+  operator?: string
+  /** a member of the space who does not own it: of the dashboard they may
+   * open only the Operator, so the side links only that */
+  member?: boolean
 }
 
 let navIcons = {
@@ -666,12 +671,16 @@ ${icon(navIcons[key])}${label}${
     url(env, '/yaks-app.png')
   }" width="36" height="36" alt="">yaks.app</a>${spaces(at, view, env)}
 <nav class="SideNav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('operator', 'Operator')}${
-    link('people', 'People')
-  }${link('connect', 'Agents')}${link('connections', 'Connections')}<hr>
+${
+    at.member
+      ? link('operator', 'Operator')
+      : `${link('apps', 'Apps')}${link('operator', 'Operator')}${
+        link('people', 'People')
+      }${link('connect', 'Agents')}${link('connections', 'Connections')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
 ${link('billing', 'Billing')}${link('settings', 'Settings')}${
-    link('trash', 'Trash')
+        link('trash', 'Trash')
+      }`
   }
 </nav>
 <div class="Desk_Foot"><a href="https://${
@@ -1646,6 +1655,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'trash') body = trash(at)
   if (view == 'connections') body = connections(at, env)
   if (view == 'people') body = people(at)
+  if (view == 'operator') body = at.operator ?? ''
   return shell(
     env,
     `${titles[view]} · ${esc(at.space)}`,

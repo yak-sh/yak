@@ -89,6 +89,27 @@ test('every page names the space it changes and links the others', async () => {
   assertEquals(alone.querySelectorAll('.Desk_Spaces a').length, 0)
 })
 
+test('the Operator page is drawn beside the side, which a member sees with only the Operator', async () => {
+  let side = async (at: Parameters<typeof block>[0]) => {
+    let { document } = parseHTML(await block(at))
+    return {
+      links: [...document.querySelectorAll('.SideNav a')].map((a) =>
+        a.textContent!.trim()
+      ),
+      current: document.querySelector('[aria-current]')?.textContent?.trim(),
+      here: document.querySelector('.Desk_Here')?.textContent,
+      content: document.querySelector('#content')!.innerHTML,
+    }
+  }
+  let owner = await side({ view: 'operator', operator: '<p id="ask">Ask</p>' })
+  assertEquals(owner.current, 'Operator')
+  assertEquals(owner.links.length > 1, true)
+  assertStringIncludes(owner.content, '<p id="ask">Ask</p>')
+  assertEquals(typeof owner.here, 'string')
+  let member = await side({ view: 'operator', member: true })
+  assertEquals(member.links, ['Operator'])
+})
+
 test('new app exposes separate build and upload forms below the agent route', async () => {
   let page = await block({ view: 'new' })
   let { document } = parseHTML(page)

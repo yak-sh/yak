@@ -16,7 +16,7 @@ import {
 import { runOperator } from './operator.ts'
 import { operatorContext } from './operator.ts'
 import { TOOLS } from './tools.ts'
-import { conversation, operatorPage } from './operator-page.ts'
+import { conversation, operatorAnswer, operatorBody } from './operator-page.ts'
 import { operatorDoor } from './operator-page.ts'
 import { arrived, Refused } from './inbox.ts'
 import type { Inbound } from './env.ts'
@@ -196,13 +196,7 @@ test('an email needs the receiving MTA DMARC pass aligned with the member From',
   }
 })
 
-let page = await operatorPage(
-  new Request('https://yaks.app/manage/operator?space=clerk'),
-  f.env,
-  f.space,
-  f.held,
-)
-let html = await page.text()
+let html = await operatorBody(f.env, f.space, f.held)
 test('the operator page names its email address, keeps a durable draft and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
   assertStringIncludes(html, 'browserDrafts')
@@ -224,23 +218,18 @@ let textsAt = 'https://yaks.app/manage/operator?space=clerk&texts=1'
 let choose = async (fields: Record<string, string>) => {
   let body = new FormData()
   for (let [k, v] of Object.entries(fields)) body.set(k, v)
-  let response = await operatorPage(
+  let response = (await operatorAnswer(
     new Request(textsAt, { method: 'POST', body }),
     f.env,
     f.space,
     f.held,
-  )
+  ))!
   return { status: response.status, said: await response.json() }
 }
 let unticked = await choose({ number: '269-555-0142' })
 let wrong = await choose({ number: '555-0142', agreed: 'yes' })
 let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
-let textsHtml = await (await operatorPage(
-  new Request('https://yaks.app/manage/operator?space=clerk'),
-  f.env,
-  f.space,
-  f.held,
-)).text()
+let textsHtml = await operatorBody(f.env, f.space, f.held)
 let stopped = await choose({ stop: '1', number: '269-555-0142' })
 test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
   assertEquals(unticked.status, 400)
@@ -431,7 +420,7 @@ let liveDraft = desk({
   watch: () => ({ value: [], subscribe: () => () => {} }),
   mutate: async (bundles) => {
     submission.set('draft', JSON.stringify(bundles))
-    let response = await operatorPage(
+    let response = (await operatorAnswer(
       new Request('https://yaks.app/manage/operator?space=clerk', {
         method: 'POST',
         body: submission,
@@ -439,7 +428,7 @@ let liveDraft = desk({
       f.env,
       f.space,
       f.held,
-    )
+    ))!
     confirmed = (await response.json()).bundles
     return confirmed
   },

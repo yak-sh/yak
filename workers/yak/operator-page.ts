@@ -4,7 +4,7 @@ import type { Space } from './directory.ts'
 import { builderOf, SPACE } from './build.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
-import { esc, shell } from './pages.ts'
+import { esc } from './pages.ts'
 import { managePath } from './route.ts'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
 import { mailFrom } from './post.ts'
@@ -114,12 +114,16 @@ export let conversation = (rows: Bundle[], at = '') =>
     }</article>`
   }).join('')
 
-export let operatorPage = async (
+// What the Operator page's own requests are answered: an attachment, a texts
+// choice, a draft, a request sent and the conversation read again. A plain
+// read of the page is none of these; it is the dashboard's to draw, around
+// `operatorBody`.
+export let operatorAnswer = async (
   req: globalThis.Request,
   env: Env,
   space: Space,
   who: Who,
-) => {
+): Promise<Response | undefined> => {
   let url = new URL(req.url)
   let at = managePath('operator', space.slug)
   if (url.searchParams.has('attachment')) {
@@ -211,11 +215,8 @@ export let operatorPage = async (
     if (form.has('draft')) return Response.json(received)
     return new Response(null, { status: 303, headers: { location: at } })
   }
-  let rows = await operatorDoor(env, space, who, 'messages', {}) as Bundle[]
-  let consent = await operatorDoor(env, space, who, 'texts', {}) as
-    | Consent
-    | null
   if (url.searchParams.has('messages')) {
+    let rows = await operatorDoor(env, space, who, 'messages', {}) as Bundle[]
     return new Response(conversation(rows, at), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
@@ -223,18 +224,22 @@ export let operatorPage = async (
       },
     })
   }
-  return shell(
-    env,
-    `${esc(space.title || space.slug)}'s operator`,
-    null,
-    200,
-    `
-<a class="Away" href="${managePath('apps', space.slug)}">Your apps</a>
-<section class="Card"><h1>Your operator</h1><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p><p>Email from your member address: <a href="mailto:${
-      esc(mailFrom(space.slug, null, env))
-    }">${esc(mailFrom(space.slug, null, env))}</a></p></section>
+}
+
+// The Operator page's content, which the dashboard draws beside its side like
+// every other page (pages.ts `desk`).
+export let operatorBody = async (env: Env, space: Space, who: Who) => {
+  let at = managePath('operator', space.slug)
+  let [rows, consent] = await Promise.all([
+    operatorDoor(env, space, who, 'messages', {}) as Promise<Bundle[]>,
+    operatorDoor(env, space, who, 'texts', {}) as Promise<Consent | null>,
+  ])
+  return `
+<section class="Card"><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p><p>Email from your member address: <a href="mailto:${
+    esc(mailFrom(space.slug, null, env))
+  }">${esc(mailFrom(space.slug, null, env))}</a></p></section>
 <div data-conversation aria-live="polite">${conversation(rows, at)}</div>
-<form class="Card Form" method="post" action="${at}" enctype="multipart/form-data">
+<form class="Card Form" id="ask" method="post" action="${at}" enctype="multipart/form-data">
 <input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="">
 <p data-continuing hidden>Continuing a request. <button type="button" class="Button Button-quiet" data-new>Start a new request</button></p>
 <label class="Form_Field">What would you like done?<textarea class="Field" name="say"></textarea></label>
@@ -244,7 +249,7 @@ ${textsCard(at, consent)}
 <script type="module">
 import { browserDrafts } from '/_draft.js'
 let box = document.querySelector('[data-conversation]')
-let form = document.querySelector('form:not(#texts)')
+let form = document.querySelector('#ask')
 let texts = document.querySelector('#texts')
 texts.addEventListener('submit', async (e) => {
   e.preventDefault()
@@ -321,7 +326,5 @@ form.addEventListener('submit', async (e) => {
   finally { button.disabled = false }
 })
 poll()
-</script>`,
-    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-  )
+</script>`
 }
