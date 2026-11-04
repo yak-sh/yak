@@ -1,3 +1,5 @@
+import { durable } from './store-state-probe.ts'
+export { durable } from './store-state-probe.ts'
 import { bindings, kvStorage } from './binding-probe.ts'
 export {
   analytics,
@@ -45,54 +47,14 @@ import {
   val,
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
-import { dropDdl } from '@yaks/journal'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
-import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
-import { triggers } from '@yaks/embedding'
+import { dropDdl } from '@yaks/journal'
 import { Builder } from './build.ts'
 import type { Load } from '@yaks/host'
 import { cleanup } from '@yaks/testing'
 import type { Env } from './env.ts'
-import { texts } from './embedding.ts'
-import { KV, shapeOf, Store } from './graph.ts'
-import { GIT_STORE, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
-import { schema as writeSchema } from './writes.ts'
-
-// A new test object's installed schema is the production shape, including the
-// host's private tables and embedding queue triggers. Each durable() restores
-// private bytes. The platform's two fixed names and an app's declaration are
-// schema identity; no app name, actor, entity or lineage is copied.
-let schemas = new Map<string, Snapshot>()
-export let durable = (at = '', declaration: string | null = null) => {
-  // The object the directory stands in holds the directory's words.
-  let name = at == PLATFORM_OBJECT ? PLATFORM_STORE : at
-  let shape = shapeOf(name, declaration)
-  let key = JSON.stringify([shape.stamp, declaration, shape.own ? name : ''])
-  let from = schemas.get(key)
-  if (!from) {
-    let values = {
-      schema: shape.stamp,
-      ...(declaration ? { vocab: declaration } : {}),
-    }
-    if (name == PLATFORM_STORE || name == GIT_STORE) {
-      Object.assign(values, { name })
-    }
-    from = snapshot(shape.vocab, { derived: shape.derived }, [
-      KV,
-      ...shape.ddl,
-      ...writeSchema(),
-      ...triggers(texts(shape.vocab, shape.derived)),
-      ...Object.entries(values).map(([k, v]): Insert => ({
-        t: 'insert',
-        into: KV.name,
-        cols: ['k', 'v'],
-        rows: [[val(k), val(v)]],
-      })),
-    ])
-    schemas.set(key, from)
-  }
-  return raw(from)
-}
+import { Store } from './graph.ts'
+import { PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
 
 /**
  * Point-in-time recovery, faked (recover.ts, T-34507).

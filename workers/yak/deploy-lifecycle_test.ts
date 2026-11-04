@@ -5,9 +5,12 @@ import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
-import { declared, keep, owned } from './testing.ts'
+import { declared, owned } from './directory-fixture.ts'
+import { driver } from '@yaks/durable-object'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
+import { durable } from './store-state-probe.ts'
+import { slotsOf } from './store-schema.ts'
 import { platform } from './deploy-probe.ts'
-import { platform as directoryPlatform } from './directory-probe.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
@@ -275,7 +278,8 @@ test('updates carry every crossed required source mark but exclude the installed
 })
 
 let restored = await (async () => {
-  await using scenario = directoryPlatform('restore-words')
+  await using scenario = platform('restore-words')
+  let host = lifecycleStores(scenario.env)
   let f = await fixture(scenario.env)
   // The source accepted this vocabulary before the platform reserved cost.
   // Seed its stored declaration; every release below keeps its own bytes.
@@ -285,8 +289,9 @@ let restored = await (async () => {
   let home = (await f.dir.space('ada'))!
   let original = (await f.dir.app(home, 'recipes'))!
   let name = storeName(home, original)
-  scenario.object(name)
-  keep(scenario.states.get(name)!, 'vocab', words)
+  let physical = durable(name)
+  slotsOf(() => driver(physical)).write('vocab', words)
+  host.restore(name, physical)
   let blobs = r2Objects(scenario.env.BLOBS)
   let files: Record<string, string> = {}
   for (

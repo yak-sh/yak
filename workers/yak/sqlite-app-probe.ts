@@ -19,23 +19,39 @@ export let sqliteApp = (
   open: (from: Snapshot) => Driver & Disposable = preparedDriver,
 ) => {
   let drivers = new WeakMap<Graph, Driver & Disposable>()
-  let make = (vocab: Vocab, previous?: Graph) => {
+  let initial: (Driver & Disposable) | undefined
+  let adopt = (driver: Driver & Disposable) => {
+    if (initial) throw new Error('SQLite graph already has initial storage')
+    initial = driver
+    using(() => driver[Symbol.dispose]())
+  }
+  let make = (
+    vocab: Vocab,
+    previous?: Graph,
+    prepare?: (driver: Driver) => void,
+  ) => {
     let bodies = blobRead(vocab)
     let derived = { ...bodies, ...appDerived(vocab, bodies) }
     let searchable = fields(vocab)
     let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
     let driver = previous && drivers.get(previous)
     if (!driver) {
-      driver = open(snapshot(vocab, { derived }, extra))
-      let owned = driver
-      using(() => owned[Symbol.dispose]())
+      if (initial) {
+        driver = initial
+        initial = undefined
+      } else {
+        driver = open(snapshot(vocab, { derived }, extra))
+        let owned = driver
+        using(() => owned[Symbol.dispose]())
+      }
     }
+    prepare?.(driver)
     let rows = storage(driver, vocab, {
       derived,
       extend: [search(searchable, driver)],
       schemaReady: () => true,
     })
-    if (previous) {
+    if (previous || prepare) {
       let [failure] = rows.install(extra)
       if (failure) throw failure
     }
@@ -58,5 +74,5 @@ export let sqliteApp = (
     })
   }
   let atomic = <T>(g: Graph, run: () => T) => g.storage.tx(() => run())
-  return { graph: make, found, atomic }
+  return { graph: make, found, atomic, adopt }
 }

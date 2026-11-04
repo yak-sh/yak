@@ -26,6 +26,7 @@ import type { Env } from './env.ts'
 import { mode } from '@yaks/member'
 import { eraseStore, weighing } from './app-storage.ts'
 import { weighed } from './meter.ts'
+import { fitSchema, reshapeSlots, shapeOf, slotsOf } from './store-schema.ts'
 import type { durable } from '../../packages/durable-object/testing.ts'
 import type { Snapshot } from '../../packages/sqlite/testing.ts'
 
@@ -55,7 +56,7 @@ export let lifecycleStores = (
   cleanup(() => {
     for (let dispose of disposals) dispose()
   })
-  let store = (name: string) => {
+  let store = (name: string, restored?: Physical) => {
     let slots = new Map<string, string>()
     let unselectable = new Set<string>()
     let physical: Physical | undefined
@@ -69,10 +70,26 @@ export let lifecycleStores = (
         })
       }),
     )
+    let hydrated = !!restored
+    let slotCache = new Map<string, string | null>()
+    let raw: ReturnType<typeof slotsOf> | undefined
+    if (restored) {
+      let owned = physical = restored
+      let sql = Object.assign(driver(owned, undefined, measure), {
+        [Symbol.dispose]: () => owned[Symbol.dispose](),
+      })
+      states.set(name, { storage: owned })
+      backend.adopt(sql)
+      raw = slotsOf(() => sql, slotCache)
+      reshapeSlots(raw.read, raw.write)
+    }
     let wire: ReturnType<typeof appWire>
     let deployed = false
-    let read = (key: string) => slots.get(key) ?? null
-    let write = (key: string, value: string) => void slots.set(key, value)
+    let read = (key: string) => raw ? raw.read(key) : slots.get(key) ?? null
+    let write = (key: string, value: string) => {
+      if (raw) raw.write(key, value)
+      else slots.set(key, value)
+    }
     let weigh = weighing({
       read: () =>
         physical && read('app') && !name.startsWith('preview/')
@@ -85,7 +102,22 @@ export let lifecycleStores = (
     })
     let make = (doc: VocabDoc) => {
       let words = wireVocab(appVocab(doc))
-      let g = backend.graph(words, wire?.graph)
+      let g = backend.graph(
+        words,
+        wire?.graph,
+        hydrated
+          ? (sql) => {
+            let [failure] = fitSchema(
+              sql,
+              shapeOf(name, JSON.stringify(doc)),
+              read,
+              write,
+              () => env.CF_VERSION_METADATA?.id ?? null,
+            )
+            if (failure) throw failure
+          }
+          : undefined,
+      )
       let eid = read('app')
       let next = appWire(words, name, {
         ...(eid
@@ -125,6 +157,7 @@ export let lifecycleStores = (
         backend.atomic(active.graph, run)
       } catch (error) {
         slots = before
+        slotCache.clear()
         if (wire != active) wire.subs.stop()
         wire = active
         failed(error)
@@ -152,6 +185,7 @@ export let lifecycleStores = (
         if (error !== rollback) throw error
       } finally {
         tried?.subs.stop()
+        slotCache.clear()
       }
     }
     pages.set(name, [])
@@ -217,6 +251,9 @@ export let lifecycleStores = (
             plant: () => {
               wire.subs.stop()
               slots.clear()
+              slotCache.clear()
+              raw = undefined
+              hydrated = false
               unselectable.clear()
               deployed = false
               bind()
@@ -350,6 +387,12 @@ export let lifecycleStores = (
   return {
     sockets: pages,
     states,
+    restore: (name: string, physical: Physical) => {
+      if (held.has(name)) throw new Error('cannot restore an open app graph')
+      let restored = store(name, physical)
+      held.set(name, restored)
+      return restored
+    },
     object: (name: string) => env.STORE.get(env.STORE.idFromName(name)),
     settled: async () => {
       while (pending.size) await Promise.all(pending)
