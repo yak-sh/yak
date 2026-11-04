@@ -1,6 +1,6 @@
 {
   "name": "@yaks/vocab",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Loads and checks component vocabularies expressed as JSON Schema, and reads their property types, references, display ordering, tool declarations, rules and effects.",
   "exports": {
     ".": "./mod.ts",

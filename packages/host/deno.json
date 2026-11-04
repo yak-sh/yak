@@ -1,6 +1,6 @@
 {
   "name": "@yaks/host",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "exports": {
     ".": "./mod.ts",
     "./assembly": "./assembly.ts",

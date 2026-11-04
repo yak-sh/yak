@@ -1,6 +1,6 @@
 {
   "name": "@yaks/voxel",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "exports": {
     ".": "./mod.ts",
     "./mesh": "./mesh.ts",

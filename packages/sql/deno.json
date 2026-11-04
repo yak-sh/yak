@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sql",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Builds SQL as data and compiles query ASTs against a vocabulary, rendering SQLite text with bound parameters for a driver.",
   "exports": {
     ".": "./mod.ts",

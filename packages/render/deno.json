@@ -1,6 +1,6 @@
 {
   "name": "@yaks/render",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "exports": {
     ".": "./mod.ts",
     "./views": "./views.ts"
