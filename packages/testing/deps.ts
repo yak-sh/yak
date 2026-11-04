@@ -146,6 +146,24 @@ let configs = (paths: string[]) => {
   ]
 }
 
+// Selection and source checks may consult one cache together. A following
+// lookup reads after publication, then validates its own context and bytes;
+// no resolved graph is kept in process or substituted for that validation.
+let refreshing = new Map<string, Promise<void>>()
+let refresh = async <T>(store: string, read: () => Promise<T>): Promise<T> => {
+  let key = `${base()} ${url(store)}`
+  let before = refreshing.get(key)
+  let turn = Promise.withResolvers<void>()
+  refreshing.set(key, turn.promise)
+  try {
+    await before
+    return await read()
+  } finally {
+    turn.resolve()
+    if (refreshing.get(key) === turn.promise) refreshing.delete(key)
+  }
+}
+
 /**
  * `info` (`deno info`), asked only of what changed: each module deno said
  * before is kept by its bytes (`bytes`), and while those and what resolves
@@ -159,114 +177,117 @@ export let remembered = (
   info: (roots: string[]) => Promise<Info | undefined> = graph,
   store = GRAPH,
 ) =>
-async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
-  let here = `${system.cwd()}/`, pid = `.${system.pid}.example.`
-  let kept: Kept = {
-    version: 0,
-    deno: '',
-    configs: {},
-    modules: {},
-    redirects: {},
-    npmPackages: {},
-  }
-  try {
-    kept = {
-      ...kept,
-      ...JSON.parse(
-        io.readTextFileSync(store).replaceAll('<checkout>/', here)
-          .replaceAll('.<pid>.example.', pid),
-      ),
-    }
-  } catch { /* none kept */ }
-  let file = (s: string) => s.startsWith('file:')
-  let now = (s: string) => file(s) ? bytes(rel(s)) : Promise.resolve('')
-  let held = await Promise.all(
-    Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
-  )
-  let whole = kept.version != 1 || kept.deno != system.runtimeVersion ||
-    !held.every(Boolean)
-  let at = (s: string) => kept.redirects[s] ?? s
-  // Walked a wave at a time, each wave's bytes read together.
-  let reached = new Map<string, Module>()
-  let seen = new Set<string>(), stale = new Set<string>()
-  let wave = whole ? [] : roots.map((r) => at(url(r)))
-  while (wave.length) {
-    wave = [...new Set(wave)].filter((s) => !seen.has(s))
-    for (let s of wave) seen.add(s)
-    let digests = await Promise.all(wave.map(now))
-    let next: string[] = []
-    for (let [i, s] of wave.entries()) {
-      let k = kept.modules[s]
-      if (!k && !file(s)) whole = true
-      if (!k || k.digest != digests[i]) {
-        stale.add(rel(s))
-        continue
-      }
-      reached.set(s, k.module)
-      for (let d of k.module.dependencies ?? []) {
-        for (let to of [d.code?.specifier, d.type?.specifier]) {
-          if (to) next.push(at(to))
-        }
-      }
-    }
-    wave = next
-  }
-  if (whole) {
-    kept = {
-      version: 1,
-      deno: system.runtimeVersion,
+async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> =>
+  await refresh(store, async () => {
+    let here = `${system.cwd()}/`, pid = `.${system.pid}.example.`
+    let kept: Kept = {
+      version: 0,
+      deno: '',
       configs: {},
       modules: {},
       redirects: {},
       npmPackages: {},
     }
-    stale = new Set(roots)
-  }
-  if (stale.size) {
-    let fresh = await info([...stale])
-    if (!fresh) return undefined
-    let digests = await Promise.all(fresh.modules.map((m) => now(m.specifier)))
-    for (let [i, m] of fresh.modules.entries()) {
-      reached.set(m.specifier, m)
-      kept.modules[m.specifier] = { digest: digests[i], module: slim(m) }
-    }
-    Object.assign(kept.redirects, fresh.redirects)
-    Object.assign(kept.npmPackages, fresh.npmPackages)
-    let local = fresh.modules.map((m) => m.specifier).filter(file).map(rel)
-    let unseen = configs(local).filter((c) => !(c in kept.configs))
-    let found = await Promise.all(unseen.map(bytes))
-    for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
-    io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
-    let draft = `${store}.${system.pid}`
-    io.writeTextFileSync(
-      draft,
-      JSON.stringify(kept).replaceAll(here, '<checkout>/')
-        .replaceAll(pid, '.<pid>.example.'),
+    try {
+      kept = {
+        ...kept,
+        ...JSON.parse(
+          io.readTextFileSync(store).replaceAll('<checkout>/', here)
+            .replaceAll('.<pid>.example.', pid),
+        ),
+      }
+    } catch { /* none kept */ }
+    let file = (s: string) => s.startsWith('file:')
+    let now = (s: string) => file(s) ? bytes(rel(s)) : Promise.resolve('')
+    let held = await Promise.all(
+      Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
     )
-    io.renameSync(draft, store)
-  }
-  let modules = new Map<string, Module>()
-  let visit = roots.map((r) => at(url(r)))
-  while (visit.length) {
-    let s = visit.pop()!
-    if (modules.has(s)) continue
-    let m = reached.get(s)
-    if (!m) continue
-    modules.set(s, m)
-    for (let d of m.dependencies ?? []) {
-      for (let to of [d.code?.specifier, d.type?.specifier]) {
-        if (to) visit.push(at(to))
+    let whole = kept.version != 1 || kept.deno != system.runtimeVersion ||
+      !held.every(Boolean)
+    let at = (s: string) => kept.redirects[s] ?? s
+    // Walked a wave at a time, each wave's bytes read together.
+    let reached = new Map<string, Module>()
+    let seen = new Set<string>(), stale = new Set<string>()
+    let wave = whole ? [] : roots.map((r) => at(url(r)))
+    while (wave.length) {
+      wave = [...new Set(wave)].filter((s) => !seen.has(s))
+      for (let s of wave) seen.add(s)
+      let digests = await Promise.all(wave.map(now))
+      let next: string[] = []
+      for (let [i, s] of wave.entries()) {
+        let k = kept.modules[s]
+        if (!k && !file(s)) whole = true
+        if (!k || k.digest != digests[i]) {
+          stale.add(rel(s))
+          continue
+        }
+        reached.set(s, k.module)
+        for (let d of k.module.dependencies ?? []) {
+          for (let to of [d.code?.specifier, d.type?.specifier]) {
+            if (to) next.push(at(to))
+          }
+        }
+      }
+      wave = next
+    }
+    if (whole) {
+      kept = {
+        version: 1,
+        deno: system.runtimeVersion,
+        configs: {},
+        modules: {},
+        redirects: {},
+        npmPackages: {},
+      }
+      stale = new Set(roots)
+    }
+    if (stale.size) {
+      let fresh = await info([...stale])
+      if (!fresh) return undefined
+      let digests = await Promise.all(
+        fresh.modules.map((m) => now(m.specifier)),
+      )
+      for (let [i, m] of fresh.modules.entries()) {
+        reached.set(m.specifier, m)
+        kept.modules[m.specifier] = { digest: digests[i], module: slim(m) }
+      }
+      Object.assign(kept.redirects, fresh.redirects)
+      Object.assign(kept.npmPackages, fresh.npmPackages)
+      let local = fresh.modules.map((m) => m.specifier).filter(file).map(rel)
+      let unseen = configs(local).filter((c) => !(c in kept.configs))
+      let found = await Promise.all(unseen.map(bytes))
+      for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
+      io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+      let draft = `${store}.${system.pid}`
+      io.writeTextFileSync(
+        draft,
+        JSON.stringify(kept).replaceAll(here, '<checkout>/')
+          .replaceAll(pid, '.<pid>.example.'),
+      )
+      io.renameSync(draft, store)
+    }
+    let modules = new Map<string, Module>()
+    let visit = roots.map((r) => at(url(r)))
+    while (visit.length) {
+      let s = visit.pop()!
+      if (modules.has(s)) continue
+      let m = reached.get(s)
+      if (!m) continue
+      modules.set(s, m)
+      for (let d of m.dependencies ?? []) {
+        for (let to of [d.code?.specifier, d.type?.specifier]) {
+          if (to) visit.push(at(to))
+        }
       }
     }
-  }
-  // Deno's npm table is the lock's resolution context, including packages
-  // outside these modules. Keep it whole, as Deno reports it.
-  return {
-    modules: [...modules.values()],
-    redirects: kept.redirects,
-    npmPackages: kept.npmPackages,
-  }
-}
+    // Deno's npm table is the lock's resolution context, including packages
+    // outside these modules. Keep it whole, as Deno reports it.
+    return {
+      modules: [...modules.values()],
+      redirects: kept.redirects,
+      npmPackages: kept.npmPackages,
+    }
+  })
 
 /// named("new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> ['x/a.json']
 /// named("new URL('../', import.meta.url)", 'x/y/t_test.ts') -> ['x']

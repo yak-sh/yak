@@ -1,4 +1,4 @@
-import { equal, ok, test } from './mod.ts'
+import { equal, ok, test, throws } from './mod.ts'
 import { affected, within } from './choose.ts'
 import {
   forget,
@@ -383,5 +383,78 @@ test('a shared-core change does not make its consumers mandatory when their pack
   equal(within(packageFiles, rank, () => 100, 0), [
     at('lib/core_test.ts'),
     at('app/own_test.ts'),
+  ])
+})
+
+test('concurrent cached lookups share a refresh and retain their own requested closures', async () => {
+  let table = { 'refresh/a.ts': ['refresh/shared.ts'], 'refresh/shared.ts': [] }
+  for (let file of Object.keys(table)) write(file, file)
+  let queries: string[][] = []
+  let began = Promise.withResolvers<void>()
+  let finish = Promise.withResolvers<void>()
+  let resolve = async (roots: string[]) => {
+    queries.push(roots)
+    if (queries.length == 2) {
+      began.resolve()
+      await finish.promise
+    }
+    return await deno(table)()
+  }
+  let saved = at('refresh/graph.json')
+  let roots = [at('refresh/a.ts')]
+  await remembered(resolve, saved)(roots)
+  write('refresh/shared.ts', 'changed')
+  let first = remembered(resolve, saved)(roots)
+  await began.promise
+  let second = remembered(resolve, saved)([at('refresh/shared.ts')])
+  finish.resolve()
+  let [all, shared] = await Promise.all([first, second])
+  equal(queries, [roots, [at('refresh/shared.ts')]])
+  equal(all!.modules.length, 2)
+  equal(shared!.modules.map((m) => m.specifier), [
+    `file://${at('refresh/shared.ts')}`,
+  ])
+  await remembered(resolve, saved)(roots)
+  equal(queries.length, 2)
+})
+
+test('a failed refresh releases queued lookups and new roots and file changes are still resolved', async () => {
+  let table: Record<string, string[]> = { 'retry/a.ts': [], 'retry/b.ts': [] }
+  for (let file of Object.keys(table)) write(file, file)
+  let queries: string[][] = []
+  let resolve = (roots: string[]) => {
+    queries.push(roots)
+    if (queries.length == 1) return Promise.reject(new Error('resolver failed'))
+    let pending = roots.map((r) => r.slice(dir.length + 1))
+    let found: Record<string, string[]> = {}
+    for (let file of pending) {
+      if (file in found) continue
+      found[file] = table[file]
+      pending.push(...table[file])
+    }
+    return deno(found)()
+  }
+  let saved = at('retry/graph.json')
+  let first = remembered(resolve, saved)([at('retry/a.ts')])
+  let second = remembered(resolve, saved)([at('retry/b.ts')])
+  await throws(() => first, /resolver failed/)
+  equal((await second)!.modules.map((m) => m.specifier), [
+    `file://${at('retry/b.ts')}`,
+  ])
+  await remembered(resolve, saved)([at('retry/a.ts')])
+  write('retry/next.ts', 'next')
+  write('retry/b.ts', 'imports next')
+  table['retry/next.ts'] = []
+  table['retry/b.ts'] = ['retry/next.ts']
+  let updated = await remembered(resolve, saved)([at('retry/b.ts')])
+  equal(updated!.modules.map((m) => m.specifier).sort(), [
+    `file://${at('retry/b.ts')}`,
+    `file://${at('retry/next.ts')}`,
+  ])
+  equal(queries, [
+    [at('retry/a.ts')],
+    [at('retry/b.ts')],
+    [at('retry/a.ts')],
+    [at('retry/b.ts')],
   ])
 })
