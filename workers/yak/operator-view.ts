@@ -187,8 +187,12 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
     if (b.call) {
       return [{ id, html: tool(b, names, results.get(id)) }]
     }
-    if (b.output && body) return [{ id, html: reply(body) }]
-    if (b.failed || b.exception) {
+    // A provider's refusal (its own response kept beside it) is said in plain
+    // words, never its error.
+    if (b.output && body && !(b.refusal && b.response)) {
+      return [{ id, html: reply(body) }]
+    }
+    if (b.failed || b.exception || b.refusal) {
       return [{
         id,
         html:
@@ -218,12 +222,11 @@ export let touched = (
   return rows(entries, names).filter((r) => ids.has(r.id))
 }
 
-/** What the session is doing now, in a line; nothing once it is done. */
+/** What the session is doing now, in a line; nothing once it ended, however
+ * it ended: its lines say how. */
 export let now = (entries: Bundle[], names: Names) => {
   let status = statusOf(entries)
-  if (status == 'settled' || status == 'empty') return ''
-  if (status == 'stopped') return 'Stopped.'
-  if (status == 'failed') return 'It stopped before it finished.'
+  if (status != 'pending' && status != 'running') return ''
   let answered = new Set(
     entries.filter((b) => b.result).map((b) => String(comp(b, 'result')!.call)),
   )

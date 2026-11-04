@@ -1,11 +1,12 @@
 // The Operator's chat app, drawn in process for a conversation whose session
 // called tools: what a person meets on the page, the list beside it, the
-// address from before the chat app, and Stop reaching the Operator.
+// address from before the chat app, Stop reaching the Operator, and a
+// conversation the provider refused, which reads as ended.
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import type { Item } from '@yaks/model'
+import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
@@ -46,16 +47,32 @@ let script = [
     text: 'The notice is **posted**.\n\n- Thursday at 7',
   } as Item],
 ]
+// What Anthropic answered the first Operator request on Claude in Jeff's space.
+let BREAKS = 'Any app errors recently?'
+let REFUSED = JSON.stringify({
+  type: 'error',
+  error: {
+    type: 'invalid_request_error',
+    message:
+      'tools.26.custom.input_schema: input_schema does not support oneOf',
+  },
+})
 let service = operatorService(
   p.env,
   who,
   operatorModel((req) =>
-    Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: script.shift() ?? [{ kind: 'assistant', text: 'Done.' }],
-      cost: 0.001,
-    })
+    JSON.stringify(req.items).includes(BREAKS)
+      ? Promise.reject(
+        new ModelError('request', `400 ${REFUSED}`, undefined, {
+          body: REFUSED,
+        }),
+      )
+      : Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: script.shift() ?? [{ kind: 'assistant', text: 'Done.' }],
+        cost: 0.001,
+      })
   ),
 )
 p.env.BUILDER = service.binding
@@ -196,4 +213,30 @@ test('a conversation read again carries its title, its lines and the list', () =
   assertEquals(talk.task, task)
   assertStringIncludes(talk.html, 'Talk_Reply')
   assertStringIncludes(talk.side, 'aria-current="page"')
+})
+
+let broke = await receive(service.store, {
+  space: eid,
+  person,
+  channel: 'chat',
+}, BREAKS)
+await service.drain()
+let [failed] = await service.store.g.get([broke])
+let failedTask = (failed.operator_answer as { task: string }).task
+let crashed = (await drawn(failedTask)).document
+let reread = await (await answer(`${at}?talk=${failedTask}`))!.json()
+test('a conversation the provider refused reads as ended: no Stop, nothing under way, plain words', () => {
+  let thread = crashed.querySelector('[data-task]')!
+  assertEquals(thread.hasAttribute('data-pending'), false)
+  assertEquals(crashed.querySelector('[data-now]')?.textContent, '')
+  assertEquals(
+    crashed.querySelector('.Talk_Note-no')?.textContent,
+    'Something went wrong, and it stopped before it finished.',
+  )
+  assertEquals(thread.innerHTML.includes('invalid_request_error'), false)
+  assertEquals(reread.html.includes('data-pending'), false)
+  assertEquals(
+    crashed.querySelector('.Talk_Item[aria-current="page"][data-pending]'),
+    null,
+  )
 })
