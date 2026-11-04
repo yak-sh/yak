@@ -1426,7 +1426,8 @@ let remote = (via: Fetcher) => ({
 // A versioned door's read, always fresh, its rows marked with the revision the
 // directory answered at (`policy`): the revision belongs to this response, not
 // a shared last-response slot, since parallel reads resume in either order.
-let revised = async (via: Fetcher, q: string): Promise<string> => {
+type Revised = Readonly<{ text: string; revision: number }>
+let revised = async (via: Fetcher, q: string): Promise<Revised> => {
   let answer = await via.fetch(
     new Request(
       `http://directory/query?q=${encodeURIComponent(q)}`,
@@ -1442,10 +1443,7 @@ let revised = async (via: Fetcher, q: string): Promise<string> => {
   ) {
     throw new Error('The directory answered without a serving revision')
   }
-  let policy = { revision: Number(epoch) }
-  return JSON.stringify(
-    (JSON.parse(text) as Row[]).map((row) => ({ ...row, policy })),
-  )
+  return { text, revision: Number(epoch) }
 }
 
 // Every read carries the directory's revision. The app and the homes it borrows
@@ -1466,14 +1464,17 @@ export let directory = (
 ) => {
   let serving = servingDirectory(via, options)
   let door = remote(serving)
-  let query = async (q: string): Promise<ReadRow[]> =>
-    JSON.parse(
-      await recall(
-        META_STORE,
-        `${EPOCH} ${q}`,
-        () => revised(serving, q),
-        true,
-      ),
+  let query = (q: string): Promise<ReadRow[]> =>
+    recall(
+      META_STORE,
+      `${EPOCH} ${q}`,
+      () => revised(serving, q),
+      true,
+      ({ text, revision }) =>
+        (JSON.parse(text) as Row[]).map((row) => ({
+          ...row,
+          policy: { revision },
+        })),
     )
   let one = async (q: string) => (await query(q))[0]
   let write = (

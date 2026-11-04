@@ -108,3 +108,25 @@ test('a read that failed is asked again', async () => {
     assertEquals(await read(), 2)
   })
 })
+
+test('a failed caller decode cannot evict a newer read', async () => {
+  let reject = (_error: Error) => {}
+  let count = 0
+  let read = (
+    fresh = false,
+    decode: (value: number) => number | Promise<number> = (value) => value,
+  ) =>
+    recall('ada/notes', '/vocab', () => Promise.resolve(++count), fresh, decode)
+  await tallying(new Map(), async () => {
+    let first = read(
+      false,
+      () => new Promise<number>((_resolve, no) => reject = no),
+    )
+    let failed = assertRejects(() => first, Error, 'bad body')
+    assertEquals(await read(true), 2)
+    reject(new Error('bad body'))
+    await failed
+    assertEquals(await read(), 2)
+    assertEquals(count, 2)
+  })
+})

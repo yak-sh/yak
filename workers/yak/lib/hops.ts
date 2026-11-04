@@ -79,23 +79,44 @@ let written = (store: string, tally: Tally) => tally.get(`wrote:${store}`) ?? 0
  * ({@link writing}), and then it is read again. A `fresh` asking is answered
  * only by a fresh reading, and any reading answers an ordinary one, so an
  * answer never goes back in time within the request. Outside any request it
- * is simply read. A read that fails is forgotten, so the next asking tries. */
-export let recall = <T>(
+ * is simply read. A read that fails is forgotten, so the next asking tries.
+ * An optional decoder gives each caller its own value; decoding failures
+ * forget the corresponding transport answer too. */
+export function recall<T>(
+  store: string,
+  key: string,
+  read: () => Promise<T>,
+  fresh?: boolean,
+): Promise<T>
+export function recall<T, R>(
+  store: string,
+  key: string,
+  read: () => Promise<T>,
+  fresh: boolean,
+  decode: (value: T) => R | Promise<R>,
+): Promise<R>
+export function recall<T, R>(
   store: string,
   key: string,
   read: () => Promise<T>,
   fresh = false,
-): Promise<T> => {
+  decode?: (value: T) => R | Promise<R>,
+): Promise<T | R> {
   let tally = here.getStore()
   let held = tally && reads.get(tally)
-  if (!tally || !held) return read()
-  let at = `${store} ${written(store, tally)} ${key}`
-  let hit = held.get(at)
-  if (hit && (hit.fresh || !fresh)) return hit.answer as Promise<T>
-  let answer = read()
-  held.set(at, { fresh, answer })
-  answer.catch(() => held.get(at)?.answer == answer && held.delete(at))
-  return answer
+  let at = tally && held
+    ? `${store} ${written(store, tally)} ${key}`
+    : undefined
+  let hit = at ? held?.get(at) : undefined
+  let answer = hit && (hit.fresh || !fresh) ? hit.answer as Promise<T> : read()
+  if (held && at) held.set(at, { fresh: hit?.fresh || fresh, answer })
+  // Decode each caller's value without caching it. A bad body is a failed
+  // read too, and must not poison the request's next asking.
+  let result = decode ? answer.then(decode) : answer
+  if (held && at) {
+    result.catch(() => held.get(at)?.answer == answer && held.delete(at))
+  }
+  return result
 }
 
 /** The two numbers a request reports: store hops, and bucket operations —

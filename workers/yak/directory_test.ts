@@ -1,7 +1,7 @@
 // Directory reads through its cache and the serving app roster that must be
 // fresh and coherent across apps in one request.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -550,6 +550,48 @@ test('directory clients read their own stores at the current revision', async ()
   assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')
   assertEquals(a.at.reads, 2)
   assertEquals(b.at.reads, 1)
+})
+
+test('directory callers decode independent rows and retry a bad read at a fresh revision', async () => {
+  let revision = 7, reads = 0
+  let dir = directory({
+    fetch: (request) => {
+      if (request.method == 'POST') {
+        revision++
+        return Promise.resolve(Response.json([]))
+      }
+      reads++
+      return Promise.resolve(
+        new Response(
+          reads == 1
+            ? 'not json'
+            : JSON.stringify(['first', 'second'].map((eid) => ({
+              entity: { eid },
+              switched: { app: an.eid, to: 'v1' },
+            }))),
+          { headers: { [EPOCH]: String(revision) } },
+        ),
+      )
+    },
+  })
+  await tallying(new Map(), async () => {
+    await assertRejects(() => dir.switches(an), SyntaxError)
+    let first = await dir.switches(an)
+    first[0].entity.eid = 'changed'
+    first[0].switched!.to = 'changed'
+    first[0].policy.revision = -1
+    assertEquals(first[1].policy.revision, 7)
+    let again = await dir.switches(an)
+    assertEquals([
+      again[0].entity.eid,
+      again[0].switched!.to,
+      again[0].policy.revision,
+    ], ['first', 'v1', 7])
+    assertEquals(reads, 2)
+    await dir.apply({ entities: [] })
+    assertEquals((await dir.switches(an))[0].policy.revision, 8)
+    assertEquals(reads, 3)
+  })
 })
 
 test('an app row that says no access mode is read as private', () => {
