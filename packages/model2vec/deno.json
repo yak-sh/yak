@@ -1,6 +1,6 @@
 {
   "name": "@yaks/model2vec",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Embeds text in-process with a Model2Vec static model: a token table read from the Hugging Face hub, averaged per text, in about a millisecond, with no native code.",

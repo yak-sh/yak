@@ -1,6 +1,6 @@
 {
   "name": "@yaks/id",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "Formatting and resolution of human ids with opt-in entity numbers and vocabulary-declared prefixes.",
   "exports": {
     ".": "./mod.ts",
