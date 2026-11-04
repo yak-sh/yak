@@ -334,11 +334,13 @@ told to accept it.
 
 ## The gallery
 
-An approved private app from a space owned by yaks.app's staff gets an open demo
-in `yourname`, through `app_install`. The gallery's visit and install links use
-that published copy. Its store is independent: the source's records are never
-copied. Relisting updates its code to the source's published release and keeps
-the demo's data. Give the demo fictional sample data before sharing it.
+An approved private app from a space owned by yaks.app's staff gets a copy in
+`yourname`, through `app_install`, which stays private and published. The
+gallery's visit and install links use that copy, so each stranger reads its
+sample and writes in a store of their own. The source's records are never
+copied: the sample comes from the published version's seed, so give the app a
+seed of fictional rows before listing it. Relisting updates the copy's code to
+the source's published release and publishes it again.
 
 Publishing makes an app installable. The gallery, <https://yaks.app/gallery>, is
 a separate public page that shows apps people have made on yaks.app. Publishing

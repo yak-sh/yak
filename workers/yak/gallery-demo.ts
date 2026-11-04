@@ -22,6 +22,8 @@ export let demonstrate = async (
   app: App,
   run: (ctx: Ctx, name: string, args: Args) => Promise<Out>,
 ) => {
+  // An app of the demo space's own is its own demo: it keeps a sample already.
+  if (space.slug == DEMO) return
   if (app.access != 'private' || !await ours(ctx.dir, space)) return
   let demo = await ctx.dir.space(DEMO)
   if (!demo) throw new Error('the gallery demo space is missing')

@@ -252,3 +252,28 @@ for (let { app, k, agent } of demos) {
     )
   })
 }
+
+test('an app of the demo space is its own demo: listing it makes no copy', async () => {
+  await agent.tool('app_new', {
+    space: 'yourname',
+    slug: 'own',
+    title: 'own',
+    access: 'private',
+  })
+  await agent.tool('app_files', {
+    space: 'yourname',
+    app: 'own',
+    path: 'index.html',
+    content: '<meta property="og:image" content="card.png"><h1>own</h1>',
+  })
+  await agent.tool('app_deploy', { space: 'yourname', app: 'own' })
+  await agent.tool('app_publish', { space: 'yourname', app: 'own' })
+  await agent.tool('app_set', {
+    space: 'yourname',
+    app: 'own',
+    gallery: true,
+    review: false,
+  })
+  let apps = await agent.tool('app_list', { space: 'yourname' })
+  assert(!apps.includes('/own-2/'), apps)
+})
