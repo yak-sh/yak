@@ -78,6 +78,11 @@ export type Trouble = {
 /** Where a failure is reported: a page shows it, a test collects it. */
 export type Report = (trouble: Trouble) => void
 
+/** The header on a write's answer saying the address now reaches another
+ * store: a server that gave this browser a store of its own at this write
+ * says it, and the client opens its socket again. */
+export let MOVED = 'x-yak-moved'
+
 /** What {@link post} needs: where to send, how, and where to put the answer. */
 export type PostOpts = {
   graph: Graph
@@ -94,6 +99,8 @@ export type PostOpts = {
    * the same write: a server that kept or applied it answers as it did the
    * first time, rather than taking it again. */
   key?: string
+  /** told when the answer says the address moved ({@link MOVED}) */
+  moved?: () => void
 }
 
 export type PostResult = {
@@ -172,6 +179,7 @@ export let exchange = async (
     opts.report({ sent, refused, reverted: back.length > 0 })
     return { settled: true, refused }
   }
+  if (res.headers.has(MOVED)) opts.moved?.()
   let applied: Bundle[]
   try {
     applied = formed(decode(graph.vocab, await res.json()))

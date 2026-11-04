@@ -209,6 +209,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         held: original?.held ?? true,
         sent,
         key,
+        moved: () => w.reopen(),
       })
       if (result.refused) {
         original?.release?.(false)

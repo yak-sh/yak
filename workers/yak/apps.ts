@@ -180,7 +180,19 @@ import { broken } from '@yaks/tracker/report'
 import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
-import { caught, refusing } from './defects.ts'
+import { background, caught, refusing } from './defects.ts'
+import {
+  born,
+  due,
+  MOVED,
+  onSample,
+  type Release,
+  releaseFor,
+  used,
+  visitable,
+  visiting,
+  visitOf,
+} from './visit.ts'
 import { full, fullFiles } from './usage.ts'
 import { budget, free, gauges, size, spent } from './meter.ts'
 import { scheduleBy } from './used.ts'
@@ -1954,7 +1966,9 @@ export let api = async (
       name: person ? await dir.nameAt(person) : null,
       role: who.role,
       reads: mayRead,
-      writes: mayPost,
+      // A stranger reading the sample writes, and their first write gives
+      // them a store of their own (visit.ts).
+      writes: mayPost || onSample(app),
       signIn: person
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
@@ -3526,7 +3540,7 @@ let served = async (
     env.SESSION_SECRET,
     store,
     app.policy,
-    (p) => p == app.eid ? Promise.resolve('editor') : seatOf(p),
+    (p) => p == app!.eid ? Promise.resolve('editor') : seatOf(p),
   )
   if (bearing(req) && !itself) {
     return json(
@@ -3636,6 +3650,28 @@ let served = async (
       : await c.time('guest', () => dir.grant(app!, who.person!))
     if (held) who = { ...who, role: held.access, guest: true }
   }
+  // A stranger at a private published app is served the app from its sample,
+  // or from a store of their own once they have written (visit.ts, D-134327),
+  // unless the owner already let them in: then their way through is the
+  // click in the letter, as it was. Never the app's own worker coming back,
+  // nor a sandboxed app, whose page tokens each open one store.
+  let visit: 'sample' | 'own' | null = null
+  let stranger = { app, who, release: null as Release | null }
+  if (!itself && !walls && visitable(app, who)) {
+    let [own, release, invited] = await c.time('visit', () =>
+      Promise.all([
+        visitOf(env, who.via!, app!.eid),
+        releaseFor(dir, app!),
+        who.person
+          ? waiting(dir, space!, app!, who.person, 'not_a_reader')
+          : false,
+      ]))
+    if (!invited) {
+      stranger.release = release
+      ;({ app, who, visit } = visiting(space, app, who, own, release))
+    }
+    if (own && due(own.seen)) background(used(env, who.via!, app.eid))
+  }
   if (webPath(path)) {
     if (req.method != 'GET' && req.method != 'HEAD') {
       return json(405, 'method_not_allowed')
@@ -3724,10 +3760,32 @@ let served = async (
     ) {
       return wall(reporting(tooMany(), req, at))
     }
+    // A stranger's first write gives their browser a store of its own, a copy
+    // of the sample, and goes there; the answer tells the page's client to
+    // open its socket again, which now reaches it.
+    let moved = visit == 'sample' && path == '/api/apply' &&
+      req.method == 'POST'
+    if (moved) {
+      let own = await c.time(
+        'birth',
+        () => born(env, space!, stranger.app, who.via!),
+      )
+      ;({ app, who, visit } = visiting(
+        space,
+        stranger.app,
+        stranger.who,
+        own,
+        stranger.release,
+      ))
+    }
     let answer = await c.time(
       'api',
       () => api(req, env, dir, space!, app!, path.slice(4), who, c, at),
     )
+    if (moved) {
+      answer = new Response(answer.body, answer)
+      answer.headers.set(MOVED, '1')
+    }
     let apiPath = path.slice(4)
     if (
       (answer.ok || answer.status == 101) && !who.administrative &&

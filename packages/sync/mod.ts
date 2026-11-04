@@ -74,6 +74,7 @@ export {
 } from './sync.ts'
 export {
   type Fetch,
+  MOVED,
   post,
   type PostOpts,
   type Refusal,

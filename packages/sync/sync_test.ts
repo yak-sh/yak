@@ -10,6 +10,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
 import { at, boxGraph, client, comp, COOK, pair, server } from './testing.ts'
 import { Dropped, wire } from './socket.ts'
+import { MOVED } from './outbound.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
@@ -317,6 +318,29 @@ test('a connection that held is reopened at once, one that did not backs off', a
   assert(!await reopened(249))
   assert(await reopened(1))
   c.wire.close()
+})
+
+test('a write answered as moved opens a new socket at once', async () => {
+  let srv = server()
+  let sent = srv.handler
+  let moving = client({
+    ...srv,
+    handler: async (request) => {
+      let res = await sent(request)
+      if (new URL(request.url).pathname != '/apply') return res
+      res = new Response(res.body, res)
+      res.headers.set(MOVED, '1')
+      return res
+    },
+  })
+  moving.wire.subscribe(true, 'all')
+  await moving.idle()
+  let before = srv.sockets.length
+  moving.graph.apply([dal()])
+  await moving.idle()
+  assertEquals(srv.sockets.length, before + 1)
+  assert(moving.wire.connected())
+  moving.wire.close()
 })
 
 test('what came from the server is never sent back to it', async () => {

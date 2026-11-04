@@ -271,12 +271,33 @@ export let directoryDoc: VocabDoc = {
     },
     // A private published app's sample store (sample.ts, D-134327): the
     // handle of the store holding its published seed, which strangers read,
-    // and the sha of the declaration and seed it was made from. Server-owned:
+    // the sha of the declaration and seed it was made from, and the version
+    // and release it was made at, which strangers are served. Server-owned:
     // a handle an app could write is a door into another app's store.
     demo: {
       component: true,
       type: 'object',
-      properties: { store: owned(text), seed: owned(text) },
+      properties: {
+        store: owned(text),
+        seed: owned(text),
+        version: owned(num),
+        release: owned(text),
+      },
+    },
+    // A browser's own store of an app it visited without a seat (visit.ts,
+    // D-134327), on its `worked` edge to the app: the store's handle and where
+    // its uploads go, both written once at its first write, when it was last
+    // used (at most hourly), and the app it became when its person installed
+    // it. Server-owned for the reason `demo` is.
+    visit: {
+      component: true,
+      type: 'object',
+      properties: {
+        store: owned(text),
+        blobs: owned(text),
+        seen: owned(time),
+        adopted: owned(text),
+      },
     },
     // The Stripe account this space sells through (sell.ts, T-34524). Direct
     // charges: the connected account is the merchant, so this is the whole of

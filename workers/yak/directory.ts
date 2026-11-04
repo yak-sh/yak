@@ -379,10 +379,16 @@ export type Gallery = {
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
 
-// An app's sample store (sample.ts): its handle, and the sha of the
-// declaration and seed it was made from, so a republish that changed neither
-// keeps it.
-export type Demo = { store: string; seed: string }
+// An app's sample store (sample.ts): its handle, the sha of the declaration
+// and seed it was made from, so a republish that changed neither keeps it, and
+// the published version and the release it was selected at, which is what a
+// stranger is served (visit.ts).
+export type Demo = {
+  store: string
+  seed: string
+  version: number | null
+  release: string | null
+}
 
 // When an app or a space was thrown away and by whom (erase.ts, T-34430,
 // T-34431). `at` is what the thirty days are counted from, and `by` is the
@@ -498,7 +504,12 @@ export type Row = {
   }
   screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
-  demo?: { store?: string | null; seed?: string | null }
+  demo?: {
+    store?: string | null
+    seed?: string | null
+    version?: number | null
+    release?: string | null
+  }
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
@@ -1085,7 +1096,14 @@ export let appAbout = (r: Row): AppInfo => ({
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,
-  demo: r.demo?.store ? { store: r.demo.store, seed: r.demo.seed ?? '' } : null,
+  demo: r.demo?.store
+    ? {
+      store: r.demo.store,
+      seed: r.demo.seed ?? '',
+      version: r.demo.version ?? null,
+      release: r.demo.release ?? null,
+    }
+    : null,
   trashed: trashedOf(r),
   theme: r.theme
     ? {

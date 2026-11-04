@@ -90,7 +90,16 @@ export let sampled = async (
     declaration: release,
   })
   let seed = seedOf(declared, files)
-  if (app.demo?.seed == seed) return app.demo
+  // The same words and seed at a new version keep the store, which the
+  // strangers already in it go on reading.
+  if (app.demo?.seed == seed) {
+    if (app.demo.version == number && app.demo.release == release) {
+      return app.demo
+    }
+    let demo = { ...app.demo, version: number, release }
+    await dir.stamp({ entities: [{ entity: { eid: app.eid }, demo }] })
+    return demo
+  }
   let store = `${storeName(space, app)}/demo/${crypto.randomUUID()}`
   let serving = storeAt(space, app, env).app
   let draft = storeOf(env.STORE, store, { ...serving, release, base: '0' })
@@ -120,7 +129,7 @@ export let sampled = async (
   await asked(storeOf(env.STORE, store, { ...serving, release }), '/vocab', {
     method: 'GET',
   }, head)
-  let demo = { store, seed }
+  let demo = { store, seed, version: number, release }
   await dir.stamp({ entities: [{ entity: { eid: app.eid }, demo }] })
   if (app.demo) await cleared(env, app.demo.store)
   return demo

@@ -177,6 +177,10 @@ export type Wire = {
    * time an open one closes under it; not called immediately. The returned
    * function removes the listener. */
   onConnection: (fn: (open: boolean) => void) => () => void
+  /** open a new socket in place of the one open now, at once and with no
+   * outage: the server said its address now reaches another store
+   * (outbound.ts `MOVED`), which the new socket subscribes to afresh */
+  reopen: () => void
   /** close the socket and stop reconnecting */
   close: () => void
 }
@@ -612,6 +616,16 @@ export let wire = (opts: WireOpts): Wire => {
         probe()
       }
       return agreed.now()
+    },
+    reopen: () => {
+      let s = socket
+      if (closed || !s) return
+      // Every listener on the old socket asks whether it is still the one.
+      socket = null
+      stopClock()
+      waiting = []
+      s.close()
+      open()
     },
     connected: () => socket?.readyState == OPEN,
     onConnection: (fn) => {
