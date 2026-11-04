@@ -49,7 +49,7 @@ import {
 import { objects } from '@yaks/sqlite'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import { dropDdl } from '@yaks/journal'
-import { Builder } from './build.ts'
+import { builders } from './builder-probe.ts'
 import type { Load } from '@yaks/host'
 import { cleanup } from '@yaks/testing'
 import type { Env } from './env.ts'
@@ -262,17 +262,12 @@ export let lasting = (
   // store, and kept, so a second connection reaches the conversation the first
   // one started. Its alarm runs the Operator's effects, delivered like a
   // store's.
-  let builders = new Map<string, Builder>()
-  let builder = (name: string): Builder => {
-    let held = builders.get(name)
-    if (!held) {
-      let ctx = ownedState()
-      builders.set(name, held = new Builder(ctx, env))
-      alarmed(`builder ${name}`, ctx, () => builders.get(name)!.alarm())
-      sockets.set(`builder ${name}`, ctx.live)
-    }
-    return held
-  }
+  let { builder, namespace } = builders(() => env, (name) => {
+    let ctx = ownedState()
+    alarmed(`builder ${name}`, ctx, () => builder(name).alarm())
+    sockets.set(`builder ${name}`, ctx.live)
+    return ctx
+  })
   let { env, files } = bindings(secret, {
     STORE: {
       idFromName: (n: string) => n,
@@ -296,12 +291,7 @@ export let lasting = (
         },
       }),
     },
-    BUILDER: {
-      idFromName: (n: string) => n,
-      get: (n: unknown) => ({
-        fetch: (r: Request) => Promise.resolve(builder(String(n)).fetch(r)),
-      }),
-    },
+    BUILDER: namespace,
     ...vars,
   })
   // Every alarm that is due, delivered the way the runtime delivers one: the

@@ -1,9 +1,9 @@
 // Closing a space (T-33166): the pure seams — what the ticket in the letter
 // is worth, what the page and the letter say a delete would destroy, and the
 // two spaces that may not be deleted at all — then what the act takes with it
-// outside the graph over testing.ts's stand-in (T-34371). The whole act,
+// outside the graph over SQLite and Builder fixtures (T-34371). The whole act,
 // through the kernel, is erase_kernel_test.ts's.
-import { test } from '@yaks/testing'
+import { cleanup, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'
@@ -32,8 +32,13 @@ import { PLATFORM_OBJECT } from './door.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { ai, declared, sandboxes } from './testing.ts'
-import { platform as directoryPlatform } from './directory-probe.ts'
+import { ai } from './model-probe.ts'
+import { declared } from './directory-fixture.ts'
+import { sandboxes } from './workspace-probe.ts'
+import { kvStorage } from './binding-probe.ts'
+import { builders } from './builder-probe.ts'
+import { durable } from './store-state-probe.ts'
+import { platform as directoryPlatform } from './directory-rows-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { named, spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -417,7 +422,18 @@ let wire = () => {
 // the code.
 test('a deleted space takes its conversation and its workbench', async () => {
   let box = sandboxes()
-  let { env, builder } = directoryPlatform('a probe secret', {
+  let { builder, namespace } = builders(() => env, () => {
+    let storage = Object.assign(durable(), kvStorage())
+    cleanup(() => storage[Symbol.dispose]())
+    let live: Wire[] = []
+    return {
+      storage,
+      acceptWebSocket: (ws) => void live.push(ws),
+      getWebSockets: () => live,
+    }
+  })
+  let { env } = directoryPlatform('a probe secret', {
+    BUILDER: namespace,
     AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
     SANDBOX: box.SANDBOX as Env['SANDBOX'],
   })
