@@ -9,7 +9,15 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { client, connector, kernel, meta, signIn } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  meta,
+  onPlus,
+  owned,
+  signIn,
+} from './probe.ts'
 import { LOGOUT, MANAGE, managePath } from './route.ts'
 import type { App } from './directory.ts'
 import { library } from './pages.ts'
@@ -259,8 +267,12 @@ test('a person makes a space, opens it first, and signs out', async () => {
         headers: { cookie },
       }))
         .headers.get('location')
-    let mine = `https://yaks.app${managePath('apps', ada.email.split('@')[0])}`
+    let own = ada.email.split('@')[0]
+    let mine = `https://yaks.app${managePath('apps', own)}`
     assertEquals(await opens(), mine)
+    // Her one free space on the Plus plan makes room for another.
+    let [first] = await meta(k).query(`.space.slug=${own}`)
+    await onPlus(k, first.entity.eid)
 
     let made = await post(managePath('space'), { title: 'Books', slug: fresh })
     assertEquals(made.status, 303)
@@ -332,11 +344,8 @@ test('billing shows the space’s allowances', async () => {
   let k = await kernel()
   try {
     let ada = await signIn(k)
-    let hers = connector(k, ada.cookie)
     let slug = `b${crypto.randomUUID().slice(0, 6)}`
-    let other = String(
-      (await hers.answer('space_new', { slug, title: 'Books' })).value?.eid,
-    )
+    let other = await owned(k, ada.person, slug, 'Books')
     let month = new Date().toISOString().slice(0, 7)
     await meta(k).apply([
       { entity: { eid: other }, meter: { month, emails: 30 } },
