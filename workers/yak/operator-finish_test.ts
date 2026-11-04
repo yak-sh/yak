@@ -146,6 +146,24 @@ test('a request the API refuses reaches the tracker, never shown as its error', 
   assertStringIncludes(out.reports, 'messages: bad')
 })
 
+test("yaks.app's credit with Anthropic running out reaches the tracker, and the person reads that the Operator is unavailable", async () => {
+  answer = () =>
+    Response.json({
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message:
+          'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
+      },
+    }, { status: 400 })
+  let out = await ask('Do a third thing')
+  assertEquals(
+    out.text,
+    "I couldn't finish this: the Operator is unavailable for now." + TOLD,
+  )
+  assertStringIncludes(out.reports, 'Operator could not finish: credit')
+})
+
 test('a run that ends without an answer reaches the tracker', async () => {
   answer = () => reply('end_turn')
   let out = await ask('Say nothing')

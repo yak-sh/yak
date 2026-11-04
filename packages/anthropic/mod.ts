@@ -175,9 +175,12 @@ export let items = (content: Anthropic.ContentBlock[]): Item[] =>
 
 /**
  * What the API refused with, said the way a model's failure is said here: a
- * rate limit or an overloaded or failing server is `busy` and may pass, a
- * spent credit balance is `limit`, a refused key is `key`, an unknown model is
- * `model`, and a request it would not take is `request`. A stop the caller
+ * rate limit or an overloaded or failing server is `busy` and may pass, the
+ * key's account out of credit is `credit`, a refused key is `key`, an unknown
+ * model is `model`, and a request it would not take is `request`. A spent
+ * credit balance is never `limit`: that is a caller's own ceiling, which is
+ * expected, while the account running dry is a failure of whoever holds the
+ * key. A stop the caller
  * asked for is thrown on as it came.
  */
 export let failure = (e: unknown): unknown => {
@@ -199,7 +202,7 @@ export let failure = (e: unknown): unknown => {
     : e instanceof Anthropic.NotFoundError
     ? new ModelError('model', said, undefined, response)
     : /credit balance/i.test(said)
-    ? new ModelError('limit', said, undefined, response)
+    ? new ModelError('credit', said, undefined, response)
     : new ModelError('request', said, undefined, response)
 }
 

@@ -163,7 +163,7 @@ test('failures are model errors by kind, and a stop is thrown as a stop', async 
     [refused(529, 'overloaded'), 'busy'],
     [refused(401, 'bad key'), 'key'],
     [refused(404, 'no such model'), 'model'],
-    [refused(400, 'Your credit balance is too low'), 'limit'],
+    [refused(400, 'Your credit balance is too low'), 'credit'],
     [refused(400, 'messages: bad'), 'request'],
   ]
   for (let [answer, code, after] of cases) {

@@ -52,9 +52,10 @@ The SDK does not retry (`maxRetries: 0`); the caller does, since a retry here
 could buy one request twice. A rate limit, an overloaded or failing server, or a
 dropped connection is a `ModelError` coded `busy`, with `retry.after` from
 `Retry-After`. A refused key is `key`, an unknown model `model`, a spent credit
-balance `limit`, any other refused request `request`, and a `refusal` stop
-`refusal`. Typed questions and image or audio output are refused before anything
-is sent.
+balance `credit`, any other refused request `request`, and a `refusal` stop
+`refusal`. A spent credit balance is never `limit`, the code of a caller's own
+ceiling: the key's account running dry is a failure for whoever holds the key.
+Typed questions and image or audio output are refused before anything is sent.
 
 ## Models and prices
 

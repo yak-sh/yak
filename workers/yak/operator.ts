@@ -300,10 +300,12 @@ let ENDED = ['settled', 'failed', 'stopped']
 
 // What a model's refusal tells the person, by its code (@yaks/model
 // `ModelError`); any other is a refused request. A ceiling (@yaks/session
-// `LIMIT`) is said in its own sentence.
+// `LIMIT`) is said in its own sentence. yaks.app's own credit with the
+// provider spent (@yaks/anthropic `credit`) is no ceiling of the space's.
 let REFUSED: Record<string, string> = {
   refusal: 'the model declined to do this',
   busy: 'the model is too busy to answer right now',
+  credit: 'the Operator is unavailable for now',
 }
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 let TOLD = ' The people who run yaks.app have been told.'
