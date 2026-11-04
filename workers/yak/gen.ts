@@ -24,7 +24,9 @@
 // there too, one skill per page, and the icon with it. Same deal, same refusal.
 // It also projects the three store configs and package exports into load.ts:
 // literal facet imports that esbuild can bundle without runtime discovery,
-// and every package's `./vocab`, which an app may name as a dependency.
+// and every package's `./vocab`, which an app may name as a dependency. And it
+// prints the reserved words (vocab.ts `reserved`) into the components page,
+// which a manifest is refused against.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -85,7 +87,8 @@ let guides = () =>
     }]
   })
 
-let GUIDES = guides()
+// Read once the components page holds the reserved words (`reserving`).
+let GUIDES: ReturnType<typeof guides> = []
 
 /** Each guide page's row, by slug — what the connector lists a page by. */
 let pages = () =>
@@ -327,7 +330,6 @@ let pack = (files: Record<string, Uint8Array>) => {
   }
 }
 
-let fresh = await formatted(body())
 // Workspace manifests are the export authority. Reading them here keeps the
 // runtime free of filesystem discovery and every generated import literal.
 let root = new URL('../../', HERE)
@@ -361,17 +363,60 @@ let loaded = await formatted(
     local,
   ),
 )
+let checking = system.args.includes('--check')
+if (checking) {
+  if (await io.readTextFile(LOAD).catch(() => '') != loaded) {
+    refuse(
+      'workers/yak/load.ts is stale — run `deno task content` and commit it',
+    )
+  }
+} else await io.writeTextFile(LOAD, loaded)
+
+// ---- the reserved words ---------------------------------------------------
+//
+// The components page prints every word a manifest may not declare, under
+// RESERVED. The list is the code's (vocab.ts `reserved`), read once load.ts
+// is current, since it names the vocab facets reserved() reads.
+let RESERVED = 'The complete list of reserved names:\n\n'
+let COMPONENTS = new URL('public/docs/components.md', HERE)
+
+/** The words, four spaces in, wrapped to `width`. */
+let listed = (words: string[], width = 76) =>
+  words.reduce((lines, w) => {
+    let last = lines.at(-1)
+    if (last && last.length + 1 + w.length <= width) {
+      lines[lines.length - 1] = `${last} ${w}`
+    } else lines.push(`    ${w}`)
+    return lines
+  }, [] as string[]).map((l) => `${l}\n`).join('')
+
+/** The page with its indented block under RESERVED replaced by `words`. */
+let reserving = (page: string, words: string[]) => {
+  let at = page.indexOf(RESERVED)
+  if (at < 0) return refuse(`public/docs/components.md has no "${RESERVED}"`)
+  let from = at + RESERVED.length
+  let block = page.slice(from).match(/^(?: {4}.*\n)*/)![0]
+  return page.slice(0, from) + listed(words) + page.slice(from + block.length)
+}
+
+let { reserved } = await import('./vocab.ts')
+let page = io.readTextFileSync(COMPONENTS)
+let printed = reserving(page, reserved())
+if (checking && printed != page) {
+  refuse(
+    'workers/yak/public/docs/components.md is stale — run `deno task content` and commit it',
+  )
+}
+if (!checking) io.writeTextFileSync(COMPONENTS, printed)
+GUIDES = guides()
+
+let fresh = await formatted(body())
 let files = await packaged()
-if (system.args.includes('--check')) {
+if (checking) {
   let held = await io.readTextFile(TARGET).catch(() => '')
   if (held != fresh) {
     refuse(
       'workers/yak/content.ts is stale — run `deno task content` and commit it',
-    )
-  }
-  if (await io.readTextFile(LOAD).catch(() => '') != loaded) {
-    refuse(
-      'workers/yak/load.ts is stale — run `deno task content` and commit it',
     )
   }
   if (stale(files)) {
@@ -381,6 +426,5 @@ if (system.args.includes('--check')) {
   }
 } else {
   await io.writeTextFile(TARGET, fresh)
-  await io.writeTextFile(LOAD, loaded)
   pack(files)
 }

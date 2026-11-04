@@ -9,9 +9,11 @@ import { type Prepared, types } from './check-types.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 // What workers/yak/gen.ts reads or writes: the Worker's words and config, the
-// plugin it packs, and every workspace manifest, whose exports load.ts lists.
+// plugin it packs, every workspace manifest, whose exports load.ts lists, and
+// every vocab.json, whose words the components page prints.
 let generated = (path: string) =>
-  /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)deno\.json$/.test(path)
+  /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)(?:deno|vocab)\.json$/
+    .test(path)
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 

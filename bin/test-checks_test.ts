@@ -37,9 +37,10 @@ test("a change to a source of the Worker's generated content checks it is fresh"
       'workers/yak/content.ts',
       'plugins/yaks.app/skills/a/SKILL.md',
       'packages/a/deno.json',
+      'packages/a/vocab.json',
       'deno.json',
     ].map(content),
-    Array(7).fill(true),
+    Array(8).fill(true),
   )
   equal(['packages/a/a.ts', 'plugins/other/a.md'].map(content), [false, false])
 })

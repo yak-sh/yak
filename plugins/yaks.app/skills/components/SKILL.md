@@ -645,26 +645,29 @@ The complete list of reserved names:
 
     _pace about access account_alert account_usage alias answer app
     archetype archived artifact ask attachment attempt attribute_writes
-    belief binding blob bounced browser build build_of builder
+    belief binding blob bounced browser budget build build_of builder
     builder_answer builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready call_woken called calls
-    cancel cancelled checkout chosen cites code_review comment commit compat completed
-    connection contains content cost created delegates delete_upload deliver
-    delivered demo deploy dispatch doc document_extract document_page document_text draft edge effect email entity entry error exception
-    execution failed favorite fee feedback file filed finding fired former
-    gallery gitobj grant home hook hostname image inference installed
-    integration integration_install interrupted invite inviting key lease
-    lines listed mail mail_answered mail_post mail_task member memory meter model model_reservation
-    notice notice_confirmed notice_letter notice_posted notice_subscription
-    notified notify_trash occupancy openai opened openrouter operator operator_reach order output output_of
-    parent pending person phone plan price product project provider provisional public_file
-    published quarantined questions reads recalled ref referenced
-    refusal register_writes report repository representation requires
-    restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
-    sending serves session session_input session_run sfu signed_in signin sms_consent space spend staged stop
-    stripe submitted subscription supersedes supervises sweep switched task theme tool
-    topic trashed tree_entry trend tunnel typed updated usage uses using
-    verified visit volume wake wants web worked worktree written
+    cancel cancelled checkout chosen cites code_review comment commit compat
+    completed connection contains content cost created delegates
+    delete_upload deliver delivered demo deploy dispatch doc
+    document_extract document_page document_text draft edge effect email
+    entity entry error exception execution failed favorite fee feedback file
+    filed finding fired former gallery gitobj grant home hook hostname image
+    inference installed integration integration_install interrupted invite
+    inviting key lease lines listed mail mail_answered mail_post mail_task
+    member memory meter model model_reservation notice notice_confirmed
+    notice_letter notice_posted notice_subscription notified notify_trash
+    occupancy openai opened openrouter operator operator_reach order output
+    output_of parent pending person phone plan price product project
+    provider provisional public_file published quarantined questions reads
+    recalled ref referenced refusal register_writes report repository
+    representation requires restored result retired revision rtc rtc_lapse
+    satisfies screenshot secret seeded sending serves session session_input
+    session_run sfu signed_in signin sms_consent space spend staged stop
+    stripe submitted subscription supersedes supervises sweep switched task
+    theme tool topic trashed tree_entry trend tunnel typed updated usage
+    uses using verified visit volume wake wants web worked worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not
