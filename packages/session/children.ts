@@ -123,7 +123,6 @@ let delegation = (
       },
       effort: { type: 'string' },
     },
-    oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
   },
   run: async (args, context) => {
     let ctx = caller(context)
@@ -391,7 +390,6 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           description: 'milliseconds (default 60000)',
         },
       },
-      oneOf: [{ required: ['children'] }, { required: ['tasks'] }],
     },
     run: async (args, context) => {
       let ctx = caller(context)

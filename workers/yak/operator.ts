@@ -2,9 +2,11 @@ import { type Bundle, type Comp, identityEid, namedTool } from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
 import {
   kindOf,
+  ordered,
   running,
   sessionTools,
   statusOf,
+  textOf,
   type Tool,
   transcript,
 } from '@yaks/session'
@@ -295,21 +297,72 @@ let working = async (env: Env, store: Store, session: string) => {
 
 let ENDED = ['settled', 'failed', 'stopped']
 
-// What ended a session's work since `from`: its newest reply, else why it
-// failed.
-let replyOf = (entries: Bundle[]) => {
-  let last = [...entries].reverse().find((b) =>
-    b.content && (b.output || b.refusal || b.exception)
-  )
-  let failed = [...entries].reverse().find((b) => b.failed)
-  return {
-    mark: last ?? failed ?? entries.at(-1),
-    text: String(
-      last && comp(last, 'content')?.body ||
-        comp(failed, 'failed')?.reason || 'The request has no answer yet.',
-    ),
-  }
+// What a model's refusal tells the person, by its code (@yaks/model
+// `ModelError`); any other is a refused request.
+let REFUSED: Record<string, string> = {
+  refusal: 'the model declined to do this',
+  busy: 'the model is too busy to answer right now',
+  limit: "yaks.app's credit with the model has run out",
 }
+let couldnt = (why: string) => `I couldn't finish this: ${why}.`
+let TOLD = ' The people who run yaks.app have been told.'
+
+/**
+ * What ended a session's work: its newest reply, else what kept it from one,
+ * in plain words. `fault` is what went wrong, for the tracker: a refusal, a
+ * failure, or an end with no reply. A person's stop is no fault, and a step
+ * that threw was reported where it threw (@yaks/session `report`).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { replyOf } from './operator.ts'
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
+ * })
+ * let said = line(2, { output: { source: 'a' }, content: { body: 'Done.' } })
+ * equal(replyOf([said]), { text: 'Done.' })
+ * equal(replyOf([said, line(3, {
+ *   output: { source: 'a' }, refusal: { code: 'request' },
+ *   content: { body: '400 tools.26: input_schema does not support oneOf' },
+ * })]), {
+ *   text: "I couldn't finish this: the model refused the request." +
+ *     ' The people who run yaks.app have been told.',
+ *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
+ * })
+ * equal(replyOf([]).fault, 'ended without an answer')
+ * ```
+ */
+export let replyOf = (
+  entries: Bundle[],
+): { text: string; fault?: string } => {
+  let end = ordered(entries).findLast((b) =>
+    b.content && (b.output || b.refusal || b.exception) || b.failed ||
+    kindOf(b) == 'stop'
+  )
+  let said = end ? textOf(end) : ''
+  let kind = end && kindOf(end)
+  if (kind == 'stop') return { text: said }
+  if (kind == 'output' && !end!.notice && said) return { text: said }
+  let broke = couldnt('something in yaks.app failed while working on it')
+  if (kind == 'exception') return { text: broke + TOLD }
+  let code = String(comp(end, 'refusal')?.code)
+  let fault = kind == 'refusal'
+    ? `${code}: ${said}`
+    : String(comp(end, 'failed')?.reason ?? '') || said ||
+      'ended without an answer'
+  let why = kind == 'refusal'
+    ? couldnt(REFUSED[code] ?? 'the model refused the request')
+    : end
+    ? broke
+    : 'This ended without an answer.'
+  return { text: why + TOLD, fault }
+}
+
+// The entries since the newest words given: the turn being answered.
+let turnOf = (entries: Bundle[]) =>
+  entries.slice(
+    Math.max(0, entries.findLastIndex((b) => kindOf(b) == 'input')),
+  )
 
 /**
  * The space's Operator: @yaks/harness's runner registered on the store's
@@ -436,19 +489,33 @@ export let operating = (
   // which its channel then delivers (operator_deliver).
   let answered = async (session: string) => {
     let entries = await transcript(g, session)
-    let { text } = replyOf(entries)
+    let reply = replyOf(turnOf(entries))
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
     let mark = entries.findLast((b) => kindOf(b) == 'input')
     let [link] = await g.read(`.contains .edge.to=${session}`)
     let task = String(comp(link, 'edge')?.from ?? '')
     let space = (await workingOf(store, session))?.space
+    let answer = task && mark
+      ? derivedEid('operator-answer|' + mark.entity.eid)
+      : undefined
+    // A conversation that could not finish reaches the tracker once, when
+    // its answer is first written (M-37965).
+    let { text } = reply
+    if (reply.fault && !(answer && (await g.get([answer]))[0])) {
+      let slug = space ? (await directoryOf(env.STORE).at(space))?.slug : null
+      defect(Error(`Operator could not finish: ${reply.fault}`), {
+        request: 'operator conversation',
+        session,
+        space: slug,
+      })
+    }
     let waiting = (await g.read(`.operator_request.session=${session}`))
       .filter((b) => !b.operator_answer)
     await g.apply([
-      ...task && mark
+      ...answer
         ? [{
-          entity: { eid: derivedEid('operator-answer|' + mark.entity.eid) },
+          entity: { eid: answer },
           comment: { target: task },
           doc: { body: text },
           $actor: { by: space ?? task, via: session },

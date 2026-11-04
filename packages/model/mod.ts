@@ -181,7 +181,9 @@ export type Item =
 export type Tool = {
   name: string
   description: string
-  /** its arguments, as JSON Schema */
+  /** its arguments, as JSON Schema: an object, with no `oneOf`, `anyOf` or
+   * `allOf` at its root, which Claude's API and MCP refuse; a choice between
+   * arguments is said in the description and checked when the tool runs */
   parameters: Record<string, unknown>
 }
 

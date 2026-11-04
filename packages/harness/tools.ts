@@ -164,9 +164,6 @@ export let harnessTools = (
         tasks: { type: 'array', items: { type: 'string' }, minItems: 1 },
         timeout: { type: 'number' },
       },
-      oneOf: [{ required: ['process'] }, { required: ['children'] }, {
-        required: ['tasks'],
-      }],
     },
     run: (args, ctx) => {
       if (
