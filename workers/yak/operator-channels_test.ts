@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
@@ -272,14 +273,21 @@ test('the operator page names its email address, opens a new conversation and dr
     }]).includes('data-pending'),
     false,
   )
-  // What went wrong reads in plain words, never the error itself.
+  // What went wrong reads in plain words; the error itself waits in Details.
+  let { document } = parseHTML(conversation([{
+    ...result,
+    operator_answer: null,
+    failed: { reason: 'TypeError: x is undefined' },
+  }]))
   assertEquals(
-    conversation([{
-      ...result,
-      operator_answer: null,
-      failed: { reason: 'TypeError: x is undefined' },
-    }]).includes('TypeError'),
+    document.querySelector('.Talk_Trouble > p')!.textContent!.includes(
+      'TypeError',
+    ),
     false,
+  )
+  assertStringIncludes(
+    document.querySelector('.Talk_Trouble details pre')!.textContent!,
+    'TypeError',
   )
 })
 

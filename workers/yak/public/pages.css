@@ -1185,6 +1185,20 @@
   .Talk_Note-no {
     color: var(--warn);
   }
+  /* An error: a sentence in words, and what it said only when opened. */
+  .Talk_Trouble > details > summary {
+    color: var(--soft-ink);
+    font-size: var(--small);
+    cursor: pointer;
+  }
+  .Talk_Trouble pre {
+    margin: .4rem 0 0;
+    padding: .6rem .8rem;
+    background: var(--paper);
+    font-size: var(--small);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .Talk_Now:empty {
     display: none;
   }

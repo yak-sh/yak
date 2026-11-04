@@ -20,6 +20,7 @@ import {
   PICTURES,
   reply,
   sidebar,
+  trouble,
   type Worked,
   worked,
 } from './operator-view.ts'
@@ -120,16 +121,18 @@ export let conversation = (rows: Bundle[]) =>
     }><div class="Talk_Said"><div>${
       doc.body ? `<p class="Talk_You">${esc(doc.body)}</p>` : ''
     }${attached(row.entity.eid, files)}</div>${
-      answer?.text
-        ? reply(answer.text)
-        : `<p class="Talk_Note">${
-          failed
-            ? 'Your request is kept, but the Operator could not finish it. Send it again to try once more.'
-            : 'Your request is saved. The Operator will start on it soon.'
-        }</p>`
+      answer?.text ? reply(answer.text) : failed
+        ? trouble(
+          'Your request is kept, but the Operator could not finish it. Send it again to try once more.',
+          failed,
+        )
+        : '<p class="Talk_Note">Your request is saved. The Operator will start on it soon.</p>'
     }${
       failed && answer
-        ? '<p class="Talk_Note">The answer could not be sent to you. It is kept here.</p>'
+        ? trouble(
+          'The answer could not be sent to you. It is kept here.',
+          failed,
+        )
         : ''
     }</div></div>`
   }).join('')

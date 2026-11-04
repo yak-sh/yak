@@ -143,6 +143,33 @@ let readable = (value: unknown, depth = 0): string => {
   }${more > 0 ? `<div><dd>and ${more} more</dd></div>` : ''}</dl>`
 }
 
+// An error's own words, laid out to read: JSON indented, after the status a
+// provider puts before it ("400 {…}").
+let laid = (detail: unknown) => {
+  if (typeof detail != 'string') return JSON.stringify(detail, null, 2)
+  let [, head, rest] = detail.match(/^(\d{3} )?\s*([[{][\s\S]*)$/) ?? []
+  if (rest == null) return detail
+  try {
+    return (head ?? '') + JSON.stringify(JSON.parse(rest), null, 2)
+  } catch {
+    return detail
+  }
+}
+
+/** The one way the chat draws an error: what happened and what to do, in
+ * words, with what the error said only inside a closed "Details". */
+export let trouble = (said: string, detail?: unknown) =>
+  `<div class="Talk_Trouble"><p class="Talk_Note Talk_Note-no">${
+    esc(said)
+  }</p>${
+    detail == null || detail === '' ||
+      (typeof detail == 'object' && !Object.keys(detail).length)
+      ? ''
+      : `<details><summary>Details</summary><pre>${
+        esc(laid(detail))
+      }</pre></details>`
+  }</div>`
+
 let lower = (title: string) => title.replace(/^./, (c) => c.toLowerCase())
 
 // A tool call and, once it came back, its answer: one row, under the call's
@@ -169,7 +196,11 @@ let tool = (call: Bundle, names: Names, result?: Bundle) => {
       ? `<p>What came back</p>${
         readable(String(comp(result, 'content')?.body ?? ''))
       }`
-      : '<p>This step did not work, so the Operator went on without it.</p>'
+      : trouble(
+        'This step did not work, so the Operator went on without it.',
+        comp(result, 'content')?.body ?? result!.exception ??
+          comp(result, 'refusal'),
+      )
   }</div></details>`
 }
 
@@ -188,15 +219,24 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
       return [{ id, html: tool(b, names, results.get(id)) }]
     }
     // A provider's refusal (its own response kept beside it) is said in plain
-    // words, never its error.
-    if (b.output && body && !(b.refusal && b.response)) {
-      return [{ id, html: reply(body) }]
-    }
-    if (b.failed || b.exception || b.refusal) {
+    // words; its error waits in Details.
+    if (b.refusal && !b.result && (b.response || !b.output)) {
       return [{
         id,
-        html:
-          '<p class="Talk_Note Talk_Note-no">Something went wrong, and it stopped before it finished.</p>',
+        html: trouble(
+          'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
+          body || comp(b, 'response')?.body || comp(b, 'refusal'),
+        ),
+      }]
+    }
+    if (b.output && body) return [{ id, html: reply(body) }]
+    if (b.failed || b.exception) {
+      return [{
+        id,
+        html: trouble(
+          'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
+          body || b.exception || b.failed,
+        ),
       }]
     }
     if (b.stop || b.interrupted || b.cancel) {

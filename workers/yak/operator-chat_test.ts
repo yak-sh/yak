@@ -117,10 +117,17 @@ test('a conversation opens in the chat app: its words, each step in plain words,
     'posted',
   )
   assertEquals(text('.Talk_Reply li'), ['Thursday at 7'])
-  // A step opens on what it asked for in words, never its JSON.
-  let html = page.document.querySelector('[data-conversation]')!.innerHTML
-  assertEquals(html.includes('<pre'), false)
-  assertEquals(html.includes('&quot;'), false)
+  // A step opens on what it asked for in words; what its error said shows
+  // only inside its closed Details.
+  let said = page.document.querySelector('[data-conversation]')!.cloneNode(
+    true,
+  ) as Element
+  said.querySelectorAll('.Talk_Trouble details').forEach((d) => d.remove())
+  assertEquals(said.innerHTML.includes('<pre'), false)
+  assertEquals(said.innerHTML.includes('&quot;'), false)
+  assertEquals(text('.Talk_Trouble > p'), [
+    'This step did not work, so the Operator went on without it.',
+  ])
   assertEquals(text('.Talk_Step-no .Talk_Facts dt'), ['Op', 'App'])
   // Done: nothing is said to be under way, and Stop is not offered.
   assertEquals(page.document.querySelector('[data-pending]'), null)
@@ -230,9 +237,14 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
   assertEquals(thread.hasAttribute('data-pending'), false)
   assertEquals(crashed.querySelector('[data-now]')?.textContent, '')
   assertEquals(
-    crashed.querySelector('.Talk_Note-no')?.textContent,
-    'Something went wrong, and it stopped before it finished.',
+    crashed.querySelector('.Talk_Trouble > p')?.textContent,
+    'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
   )
+  // Its error shows only inside the closed Details.
+  let details = crashed.querySelector('.Talk_Trouble > details')!
+  assertEquals(details.hasAttribute('open'), false)
+  assertStringIncludes(details.textContent!, 'invalid_request_error')
+  details.remove()
   assertEquals(thread.innerHTML.includes('invalid_request_error'), false)
   assertEquals(reread.html.includes('data-pending'), false)
   assertEquals(
