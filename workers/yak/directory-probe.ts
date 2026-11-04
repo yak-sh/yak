@@ -9,6 +9,8 @@ import type { Options } from './facets/store.ts'
 import { ram } from '@yaks/ram'
 import { refusal } from '@yaks/api'
 import { status } from '@yaks/graph/errors'
+import { assertEquals } from '@std/assert'
+import { useUntil } from './used.ts'
 import { doorOf, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
 import { EPOCH, READS } from './directory-copy.ts'
 import type { Env } from './env.ts'
@@ -34,6 +36,28 @@ export let rows = (env: Partial<Env> = {}) => {
     let url = new URL(req.url)
     let headers = { [EPOCH]: String(revision) }
     try {
+      if (url.pathname == '/used') {
+        assertEquals(req.method, 'POST')
+        assertEquals(req.headers.get('x-yak-kernel'), '1')
+        let { eid, word } = await req.json() as { eid: string; word?: string }
+        let mark = word == 'changed' || word == 'errored' ? word : 'used'
+        let [row] = await g.read(`.entity.eid=${eid} ?${mark}`)
+        if (!row) return Response.json({}, { status: 404 })
+        let at = useUntil()
+        let previous = (row[mark] as { at?: string } | undefined)?.at
+        if (
+          !previous || Date.parse(previous) <
+            Date.parse(at) - (mark == 'used' ? 0 : 3_600_000)
+        ) {
+          await g.apply([{
+            entity: { eid },
+            [mark]: { at: mark == 'used' ? at : new Date().toISOString() },
+          }], { trusted: true, stamp: false })
+        }
+        return Response.json({
+          at: mark == 'used' && previous && previous > at ? previous : at,
+        })
+      }
       if (url.pathname == READS) {
         return Response.json(
           await Promise.all(

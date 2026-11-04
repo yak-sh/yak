@@ -5,7 +5,9 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { ADA, platform, seeded } from './serving-probe.ts'
+import { ADA, seeded } from './serving-probe.ts'
+import { platform } from './deploy-probe.ts'
+import { stores } from './app-store-probe.ts'
 import { call } from './tools.ts'
 import {
   brokenIn,
@@ -21,7 +23,7 @@ import { tallying } from './lib/hops.ts'
 import { ticket } from './app-errors.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
-  await using p = platform()
+  await using p = platform('unseen-secret')
   let { env } = p
   let { dir, space, app } = await seeded(env)
   await noted({
@@ -45,7 +47,7 @@ test('app_errors lists a break whose stored stack is null', async () => {
     app: 'cookbook',
   })
   assertStringIncludes(current.text, 'new tracked break')
-  // The legacy id and the new tracker id both remain archive arguments.
+  // Each report's id remains an archive argument.
   let ids = current.text.split('\n').map((line) => line.split(' ')[1])
   let archived = await call({ env, dir, person: ADA }, 'app_errors', {
     space: 'ada',
@@ -65,7 +67,7 @@ test('app_errors lists a break whose stored stack is null', async () => {
 // A person's app break is also the platform's, since yaks.app may have caused
 // it; the page's own write its words refuse is the owner's alone.
 test("an app's own mistake reaches its owner, never the platform", async () => {
-  await using p = platform()
+  await using p = platform('unseen-secret')
   let { env } = p
   let { space, app } = await seeded(env)
   let sent: Record<string, unknown>[] = []
@@ -147,9 +149,10 @@ test('app_errors says a break once, and its id archives every time', () => {
 })
 
 test('app_errors shows a session error from its content', async () => {
-  await using p = platform()
+  await using p = platform('unseen-secret')
   let { env } = p
   let { dir, space, app } = await seeded(env)
+  stores(env)
   let store = metaOf(appStore(env.STORE, space, app))
   await store.apply([
     { entity: { eid: 'session-1' }, session: { id: 'one' } },
