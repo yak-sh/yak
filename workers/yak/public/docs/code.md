@@ -896,13 +896,12 @@ there is deleted, and kept in its history like any other delete.
 that downloads its template (`npm create astro`), any registry and any API all
 work.
 
-**One sandbox at a time.** Your sandbox is private to you in each space, and one
-person can have one sandbox awake at a time on the free plan, two on the Plus
-plan. A sandbox goes to sleep five minutes after its last command, and a sandbox
-in the next space can wake after that. The monthly build time (the sandbox's,
-and compiling TypeScript and npm packages at `app_deploy`) is 1 hour on the free
-plan, shared by the free spaces you own, and 10 hours for each space on the Plus
-plan.
+**One sandbox at a time.** Your sandbox is private to you in each space, and a
+space can have one sandbox awake at a time on the free plan, two on the Plus
+plan. A sandbox goes to sleep five minutes after its last command, and another
+member's sandbox in that space can wake after that. The monthly build time (the
+sandbox's, and compiling TypeScript and npm packages at `app_deploy`) is 1 hour
+for each free space and 10 hours for each space on the Plus plan.
 
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yak` CLI is installed:

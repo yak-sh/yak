@@ -865,9 +865,8 @@ test('a lone connector call pays for itself and leaves the container', async () 
   assertEquals([...box.alive], [named(space, ADA)])
 })
 
-// T-37883: one person holds one sandbox at a time on the free tier. A space
-// of hers is a sandbox of its own, so without this her five spaces were
-// every container the deploy runs.
+// D-131886: a free space holds one sandbox awake at a time, whoever wakes
+// it, and each space counts its own.
 //
 // Ada's two spaces, with Bob a member of both, seeded as the file loads so
 // the case times only the holds it checks. It is the case's own: the case
@@ -898,44 +897,38 @@ let twoSpaces = await (async () => {
   return { ...seed, box, other }
 })()
 
-test('one person holds one sandbox awake on the free tier', async () => {
+test('a free space holds one sandbox awake, and each space counts its own', async () => {
   await using fixture = twoSpaces
   let { env, box, space, other } = fixture
-  let lone: Ctx = { env, dir: dirOf(env), person: ADA }
-  await tool('sandbox_shell').run(lone, { space: 'ada', command: 'ls' })
+  let ada: Ctx = { env, dir: dirOf(env), person: ADA }
+  let bob: Ctx = { ...ada, person: BOB }
+  await tool('sandbox_shell').run(ada, { space: 'ada', command: 'ls' })
   let no = await assertRejects(
-    () => tool('sandbox_shell').run(lone, { space: 'ada2', command: 'ls' }),
+    () => tool('sandbox_shell').run(bob, { space: 'ada', command: 'ls' }),
     Error,
-    'allows 1 at a time',
+    'ada already has 1 sandbox awake for other members, and the free tier allows 1 at a time',
   )
   assertEquals((no as { code?: string }).code, 'limit')
-  assertEquals(box.ran, [
-    'chmod +x /usr/local/bin/yak',
-    'yak --help >/dev/null',
-    'ls',
-  ])
-  // On the Plus plan, two; and once her first has slept, the second wakes.
+  assertStringIncludes(no.message, 'Putting ada on the Plus plan allows more')
+  await tool('sandbox_shell').run(bob, { space: 'ada2', command: 'ls' })
+  // On the Plus plan, two; and once one has slept, another wakes.
   let now = Date.now()
-  await awake(env, { ...other, tier: 'plus' }, ADA, now)
+  await awake(env, { ...space, tier: 'plus' }, BOB, now)
   await asleep(env, space, ADA, now)
-  await awake(env, other, ADA, now)
+  await awake(env, space, BOB, now)
   await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
+  await awake(env, other, BOB, now)
 
-  // Permanent deletion returns every member's place immediately, including
-  // someone who used the shared sandbox but did not ask for the deletion,
-  // and takes every member's container with it. Whether a place is free is
-  // `awake`'s to say; sandbox_shell asking it is proved above.
-  let member = { ...lone, person: BOB }
-  await tool('sandbox_shell').run(member, { space: 'ada', command: 'ls' })
-  await tool('space_delete').run(lone, { space: 'ada', forever: true })
-  assertEquals(await lone.dir.space('ada'), null)
-  assertEquals([...box.alive], [])
-  await awake(env, other, ADA)
-  await awake(env, other, BOB)
+  // Permanent deletion gives back every place in the space at once, Ada's
+  // included, and takes every member's container with it.
+  await tool('space_delete').run(ada, { space: 'ada', forever: true })
+  assertEquals(await ada.dir.space('ada'), null)
+  assert(![...box.alive].some((n) => n.includes(space.eid)))
+  await awake(env, space, BOB)
 })
 
-test("the month of sandbox time is the account's, and it refuses", async () => {
+test("the month of sandbox time is the space's, and it refuses", async () => {
   let { env, space, ctx } = await bench()
   await dirPart.stamp(env, {
     entities: [{

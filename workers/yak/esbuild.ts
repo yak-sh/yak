@@ -372,7 +372,7 @@ export let compiled = async (
           'release still serves',
       )
     }
-    let no = await refusedSpend(ctx.dir, space, 'seconds', ctx.env)
+    let no = refusedSpend(space, 'seconds', ctx.env)
     if (no) throw refuse('limit', no)
     meanwhile()
     let began = Date.now()

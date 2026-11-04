@@ -2032,8 +2032,7 @@ export let directory = (
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
     // Who owns a space, by person eid: so removing a member can refuse to
-    // leave it with none, and so a free space's spending is read against its
-    // owners' allowance (meter.ts `pooled`).
+    // leave it with none.
     owners: async (space: Space): Promise<string[]> =>
       (await query(`.member.space=${space.eid}&.member.role=owner`))
         .map((r) => r.member && idOf(r.member.person))

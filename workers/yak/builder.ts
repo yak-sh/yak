@@ -33,7 +33,7 @@
 // the page that will draw this (T-34240) draws lines.
 //
 // A build is an `app_deploy` the builder performed, not a message: the loop
-// asks the meter before it spends anything (`over`) and counts one
+// asks the meter before it spends anything (`refusedSpend`) and counts one
 // afterwards where a deploy went through (`countedBuild`), so a long
 // conversation that ships one app costs one build and one that ships nothing
 // costs none. Each model turn reserves its priced maximum and settles its
@@ -57,14 +57,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
-import {
-  atCeiling,
-  budgets,
-  countedBuild,
-  countedSpend,
-  over,
-  pooled,
-} from './meter.ts'
+import { countedBuild, countedSpend, refusedSpend } from './meter.ts'
 import { modelInfo } from '@yaks/workers-ai'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
@@ -587,15 +580,10 @@ export let build = async (
   // The month's builds and space budget are asked before anything is spent,
   // and what comes back is a sentence the builder says rather than a door
   // slammed mid-conversation — so a refused build costs the person nothing,
-  // not a build and not the model call of the refusal. The reading is taken
-  // once; what this conversation spends is added to it round by round.
-  let month = await pooled(dir, space)
-  let accounts = await budgets(dir, space)
-  if (over(space, month, 'builds')) {
-    return await end(atCeiling(space, 'builds', env))
-  }
-  let full = accounts.find((a) => a.spent >= a.limit)
-  if (full) return await end(atCeiling(space, 'models', env, full.limit))
+  // not a build and not the model call of the refusal.
+  let no = refusedSpend(space, 'builds', env) ??
+    refusedSpend(space, 'models', env)
+  if (no) return await end(no)
 
   let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))

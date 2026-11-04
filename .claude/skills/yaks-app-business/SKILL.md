@@ -76,9 +76,9 @@ budget or allowance is a person's or an account's.
 - **The space's owner hears about a limit**, in a sentence that names the
   space, the limit and the one thing to do. A guest who finds an app paused is
   a recommendation we won't get.
-- **Today's code still pools some allowances.** meter.ts pools emails, builds
-  and build seconds across an owner's free spaces; T-131890 moves these onto
-  the space. Model and voice spend already use each space's own budget.
+- **Every allowance is the space's own.** meter.ts reads each one, and the
+  model and voice budget, from the space's meter against the space's plan;
+  nothing sums across an owner's spaces. Sandboxes awake are counted per space.
 
 ## Upgrades by pull
 

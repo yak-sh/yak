@@ -163,9 +163,8 @@ sandbox_shell:
     of the person's on its way to yaks.app or the space's own address, and
     nowhere else; the token is revoked when the container is destroyed. Use
     is metered in seconds charged to the space: a {{budget}}-second budget per managed build (or
-    standalone tool call), and a monthly allowance shared by the owner's free
-    spaces. One sandbox awake per person at a time on the free tier, two on
-    the Plus plan. The container is destroyed when the build ends; separate
+    standalone tool call), and the space's monthly allowance. One sandbox
+    awake in a space at a time on the free tier, two on the Plus plan. The container is destroyed when the build ends; separate
     MCP calls reuse it until five idle minutes put it to sleep, and its
     files are temporary. A command ending within timeout milliseconds returns
     its exit code and last 40 lines of output, stdout then stderr, cut after

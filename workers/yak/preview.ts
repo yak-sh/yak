@@ -281,7 +281,7 @@ let preview = async (ctx: Ctx, args: Args) => {
     )
   }
   if (screenshot) {
-    let why = await refusedSpend(ctx.dir, space, 'models', ctx.env, 15 * RATE)
+    let why = refusedSpend(space, 'models', ctx.env, 15 * RATE)
     if (why) throw refuse('limit', why)
   }
   let exp = Date.now() + LIFE

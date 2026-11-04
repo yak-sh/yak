@@ -2399,13 +2399,7 @@ let bench = async <T>(
   body: (bench: Awaited<ReturnType<typeof workbench>>) => Promise<T>,
 ): Promise<T> => {
   let spend = ctx.spend ?? spending()
-  let no = await refusedSpend(
-    ctx.dir,
-    space,
-    'seconds',
-    ctx.env,
-    seconds(spend),
-  )
+  let no = refusedSpend(space, 'seconds', ctx.env, seconds(spend))
   if (no) throw refuse('limit', no)
   await awake(ctx.env, space, ctx.person)
   let box = await workbench(ctx.env, space, ctx.person, spend)

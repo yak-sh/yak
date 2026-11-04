@@ -30,7 +30,7 @@ import {
   atCeiling,
   atStored,
   BUDGET,
-  budgets,
+  budget,
   BUILDS,
   ceilings,
   count,
@@ -44,7 +44,6 @@ import {
   LETTERS,
   level,
   PLUS,
-  pooled,
   refusedSpend,
   requestUnits,
   size,
@@ -455,14 +454,8 @@ test('a refusal names the ceiling and where the plans are written', () => {
   )
 })
 
-// A space nobody else's spending is pooled with: its own reading is the
-// account's (meter.ts `pooled`).
-let alone = {
-  owners: () => Promise.resolve([]),
-  spaces: () => Promise.resolve([]),
-}
 let refusedBuild = (s: Space, now: Date) =>
-  refusedSpend(alone, s, 'builds', {}, 0, now)
+  refusedSpend(s, 'builds', {}, 0, now)
 
 // The builder's ceiling (T-34241). A build is one app shipped, so the count is
 // written once by the loop that finished one (`countedBuild`) and read before
@@ -491,7 +484,7 @@ let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
 
 test('a free space gets five builds each month regardless of lifetime use', async () => {
   for (let builds of [0, 1, 4]) {
-    assertEquals(await refusedBuild(space({ builds, built: 40 }), NOW), null)
+    assertEquals(refusedBuild(space({ builds, built: 40 }), NOW), null)
   }
   let c = await counting()
   await countedBuild(c.env, c.space, 0.25, 0, NOW)
@@ -502,11 +495,11 @@ test('a free space gets five builds each month regardless of lifetime use', asyn
   )
 
   let after = space({ builds: 5, models: 0.25, built: 45 })
-  let no = (await refusedBuild(after, NOW))!
+  let no = (refusedBuild(after, NOW))!
   assert(no)
   assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
   assert(!/checkout|subscribe/i.test(no), no)
-  assert(await refusedBuild(space({ builds: 6 }), NOW))
+  assert(refusedBuild(space({ builds: 6 }), NOW))
 
   // A refusal costs them nothing — not the build, and not the sentence: the
   // count is written by the loop that finished one, and this one never ran.
@@ -520,19 +513,19 @@ test('a free space gets five builds each month regardless of lifetime use', asyn
   let october = new Date('2026-10-02T00:00:00Z')
   assertEquals(spent(after, october).built, 45)
   assertEquals(spent(after, october).builds, 0)
-  assertEquals(await refusedBuild(after, october), null)
+  assertEquals(refusedBuild(after, october), null)
 })
 
 test('a paid space counts its builds down, and the month gives them back', async () => {
   let plus = (builds: number, month = '2026-09') =>
     space({ month, builds, built: 40 }, 'plus')
-  assertEquals(await refusedBuild(plus(BUILDS.plus - 1), NOW), null)
-  let no = (await refusedBuild(plus(BUILDS.plus), NOW))!
+  assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
+  let no = (refusedBuild(plus(BUILDS.plus), NOW))!
   assertStringIncludes(no, `${BUILDS.plus} built-in builds a month`)
   assertStringIncludes(no, 'build again on the 1st')
   assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
   // Last month's builds are not this month's.
-  assertEquals(await refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
+  assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
   // What its model cost is the month's, added to what the space's other
   // model calls spent, in dollars, and its container seconds beside them
@@ -879,64 +872,32 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
   }
 })
 
-test('free sending and build allowances pool independently of model budgets', async () => {
+test("each space answers to its own allowances and budget, never its owner's other spaces", () => {
   let as = (eid: string, meter: Partial<Meter>, tier: Tier | null = null) => ({
     ...space(meter, tier),
     eid,
     slug: eid,
   })
   let a = as('a', { emails: 60, models: 0.125 })
-  let b = as('b', { emails: 40, seconds: 3_000 })
+  let b = as('b', { emails: 99, seconds: 3_000 })
+  let full = as('full', { emails: 100, builds: 5, models: 0.2 })
   let paid = as('paid', { emails: 900, models: 3 }, 'plus')
-  let lastMonth = as('old', { month: '2026-08', emails: 99 })
-  let dir = {
-    owners: () => Promise.resolve(['ada']),
-    spaces: () => Promise.resolve([a, b, paid, lastMonth]),
-  }
-  let m = await pooled(dir, a, NOW)
-  assertEquals([m.emails, m.models, m.seconds], [100, 0.125, 3_000])
-  // Not a space's own: b has sent 40 of its 100, and the account has sent
-  // all of them.
-  let no = (await refusedSpend(dir, b, 'emails', {}, 0, NOW))!
-  assertStringIncludes(no, 'shared by the free spaces its owner has')
-  assertStringIncludes(no, 'Putting b on the Plus plan allows more')
+  // b has sent 99 of its own 100, whatever a has sent.
+  assertEquals(refusedSpend(b, 'emails', {}, 0, NOW), null)
+  let no = refusedSpend(full, 'emails', {}, 0, NOW)!
+  assert(!no.includes('shared'), no)
+  assertStringIncludes(no, 'Putting full on the Plus plan allows more')
+  assert(refusedSpend(full, 'builds', {}, 0, NOW))
   // What a build holds uncounted is added to the reading.
-  assertEquals(await refusedSpend(dir, b, 'seconds', {}, 599, NOW), null)
-  assert(await refusedSpend(dir, b, 'seconds', {}, 600, NOW))
-  assertEquals(await budgets(dir, a, NOW), [{ spent: 0.125, limit: 0.2 }])
-  assertEquals(await refusedSpend(dir, a, 'models', {}, 0.0625, NOW), null)
-  assert(await refusedSpend(dir, a, 'models', {}, 0.075, NOW))
-  // A paid space uses its own budget even while its owner's free space has room.
-  assert(await refusedSpend(dir, paid, 'models', {}, 0.075, NOW))
-  // The Plus plan space is paid for on its own.
-  assertEquals((await pooled(dir, paid, NOW)).emails, 900)
-  assertEquals(await refusedSpend(dir, paid, 'emails', {}, 0, NOW), null)
-})
-
-test('model budgets stay with a space across shared owners and sibling spends', async () => {
-  let selected = space({ models: 0.05, realtime: 0.025 })
-  let sibling = { ...space({ models: 100 }, 'plus'), eid: 'sibling' }
-  for (let owners of [['ada'], ['ada', 'bob']]) {
-    let dir = {
-      owners: () => Promise.resolve(owners),
-      spaces: () => Promise.resolve([selected, sibling]),
-    }
-    assertEquals(
-      await refusedSpend(dir, selected, 'models', {}, 0.1, NOW),
-      null,
-    )
-    assert(await refusedSpend(dir, selected, 'realtime', {}, 0.125, NOW))
-    assert(await refusedSpend(dir, sibling, 'models', {}, 0, NOW))
-  }
-  let unread = {
-    owners: () => {
-      throw Error('a space budget reads no owners')
-    },
-    spaces: () => {
-      throw Error('a space budget reads no sibling spaces')
-    },
-  }
-  assertEquals(await refusedSpend(unread, selected, 'models', {}, 0, NOW), null)
+  assertEquals(refusedSpend(b, 'seconds', {}, 599, NOW), null)
+  assert(refusedSpend(b, 'seconds', {}, 600, NOW))
+  assertEquals(budget(a, NOW), { spent: 0.125, limit: 0.2 })
+  assertEquals(refusedSpend(a, 'models', {}, 0.0625, NOW), null)
+  assert(refusedSpend(a, 'models', {}, 0.075, NOW))
+  assert(refusedSpend(full, 'realtime', {}, 0, NOW))
+  // The Plus plan space is held to its own plan's figures.
+  assert(refusedSpend(paid, 'models', {}, 0.075, NOW))
+  assertEquals(refusedSpend(paid, 'emails', {}, 0, NOW), null)
 })
 
 test('a conversation that shipped nothing pays for its model and seconds', async () => {
@@ -1016,10 +977,10 @@ test('a spend lands on its day, and a letter costs no day', async () => {
 test('models and voice spend one space budget, each counted apart', async () => {
   let half = BUDGET.free / 2
   let both = space({ models: half, realtime: half })
-  assert(await refusedSpend(alone, both, 'models', {}, 0, NOW))
-  assert(await refusedSpend(alone, both, 'realtime', {}, 0, NOW))
+  assert(refusedSpend(both, 'models', {}, 0, NOW))
+  assert(refusedSpend(both, 'realtime', {}, 0, NOW))
   let voice = space({ realtime: half })
-  assertEquals(await refusedSpend(alone, voice, 'models', {}, 0, NOW), null)
+  assertEquals(refusedSpend(voice, 'models', {}, 0, NOW), null)
   let c = await counting({ month: '2026-09', realtime: half })
   await countedRealtime(c.env, c.space, 0.25, NOW)
   assertEquals(await c.read('realtime', 'models'), {

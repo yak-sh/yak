@@ -1,6 +1,6 @@
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
-// what their spaces spent this month against their combined budgets, the
+// what the spaces they own spent this month (each against its own budget), the
 // storage and apps of the spaces they own, and when they were last active; a
 // space's says its own spend, storage, apps and latest use; an app's, its
 // requests, visits, storage, version, owners, last deploy, last write to its
@@ -136,7 +136,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
     let s = spaces.get(r.entity.eid)!
     let apps = appsIn.get(s.eid) ?? []
     out.set(s.eid, {
-      spend: { spent: budget([s], now).spent },
+      spend: { spent: budget(s, now).spent },
       ...days('spending', r.trend?.spend, now),
       ...days('requesting', r.trend?.requests, now),
       storage: stored(held.get(s.eid)),
@@ -167,7 +167,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
       .flatMap((s) => spaces.get(seatSpace(s)) ?? [])
       .filter((s) => s.slug != META.space)
     out.set(r.entity.eid, {
-      spend: budget(owned, now),
+      spend: { spent: sum(owned.map((s) => budget(s, now).spent)) },
       ...days(
         'spending',
         summed(owned.map((s) => trends.get(s.eid)?.spend)),

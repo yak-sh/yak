@@ -79,6 +79,7 @@ import type { Clock } from '@yaks/fp'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { refuse } from './tool.ts'
+import { plans } from './meter.ts'
 import { caught } from './defects.ts'
 import type { Workspaces } from './workspaces.ts'
 
@@ -160,53 +161,52 @@ export let NO_BOX =
   'this runtime has none. Write the app in files a browser runs — html, css ' +
   'and js — and nothing needs compiling.'
 
-/** How many sandboxes one person may hold awake at once, by the plan of the
- * space they are working in (T-37883). A sandbox is keyed per person and space, so
- * without this a person owning five spaces holds five containers, which is
- * every one the deploy runs (wrangler.toml `max_instances`). */
+/** How many sandboxes one space may hold awake at once, by its plan
+ * (D-131886). A sandbox is keyed per person and space (`named`), so each
+ * member working in a space wakes one of the space's. */
 export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, organization: 2 }
 
 /** How long one call keeps a sandbox awake, in seconds: the longest command,
  * then the nap before it sleeps on its own. */
 export let HELD = TIMEOUT / 1000 + NAP
 
-// The sandboxes a person holds, in the KV the grants live in: one row per
-// person, space eid → the unix second it is asleep by. One row rather than a
-// row per sandbox because a count is one read of it, where a KV listing is
-// neither consistent nor cheap. Nothing sweeps it: a sandbox past its second
-// has slept, and the row dies a minute after the last of them.
-let hold = (person: string) => `awake:${person}`
+// The sandboxes a space holds, in the KV the grants live in: one row per
+// space, person eid → the unix second their sandbox is asleep by. One row
+// rather than a row per sandbox because a count is one read of it, where a KV
+// listing is neither consistent nor cheap. Nothing sweeps it: a sandbox past
+// its second has slept, and the row dies a minute after the last of them.
+let hold = (space: Space) => `awake:${space.eid}`
 
-let held = async (kv: Kv, person: string, now: number) =>
+let held = async (kv: Kv, space: Space, now: number) =>
   Object.fromEntries(
     Object.entries(
-      JSON.parse(await kv.get(hold(person)) ?? '{}') as Record<string, number>,
+      JSON.parse(await kv.get(hold(space)) ?? '{}') as Record<string, number>,
     ).filter(([, until]) => until > now),
   )
 
-/** Past the per-person limit. Said as the way out: finish, or wait. */
-export let tooAwake = (awake: number, tier: Tier | null) =>
-  `you already have ${awake} sandbox${
+/** Past the space's limit. Said as the way out: wait, or the Plus plan. */
+export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
+  `${space.slug} already has ${awake} sandbox${
     awake == 1 ? '' : 'es'
-  } awake in another space, and the ${
-    tier == 'organization'
+  } awake for other members, and the ${
+    space.tier == 'organization'
       ? 'Organization plan'
-      : tier == 'plus'
+      : space.tier == 'plus'
       ? 'Plus plan'
       : 'free tier'
-  } allows ${AWAKE[tier ?? 'free']} at a time — finish there, or wait: a ` +
-  `sandbox sleeps ${NAP / 60} minutes after its last command`
+  } allows ${AWAKE[space.tier ?? 'free']} at a time — wait: a sandbox ` +
+  `sleeps ${NAP / 60} minutes after its last command. ${plans(space, env)}`
 
 /**
- * This person's sandbox in this space, counted awake — refused where they
- * already hold as many elsewhere as the plan allows. No KV or no container
- * bound (a probe, a test) holds nothing.
+ * This person's sandbox in this space, counted awake — refused where other
+ * members already hold as many in this space as its plan allows. No KV or no
+ * container bound (a probe, a test) holds nothing.
  *
- * The row is written only when this space's second is half spent: KV takes
+ * The row is written only when this sandbox's second is half spent: KV takes
  * one write a second per key, and a build calls the tools faster than that.
  */
 export let awake = async (
-  env: { SANDBOX?: Sandboxes; OAUTH_KV?: unknown },
+  env: { SANDBOX?: Sandboxes; OAUTH_KV?: unknown } & Host,
   space: Space,
   person: string,
   now = Date.now(),
@@ -214,15 +214,15 @@ export let awake = async (
   let kv = env.OAUTH_KV as Kv | undefined
   if (!env.SANDBOX || !kv?.get) return
   let t = Math.floor(now / 1000)
-  let rows = await held(kv, person, t)
-  let others = Object.keys(rows).filter((eid) => eid != space.eid).length
+  let rows = await held(kv, space, t)
+  let others = Object.keys(rows).filter((p) => p != person).length
   if (others >= AWAKE[space.tier ?? 'free']) {
-    throw refuse('limit', tooAwake(others, space.tier))
+    throw refuse('limit', tooAwake(space, others, env))
   }
-  if ((rows[space.eid] ?? 0) - t > HELD / 2) return
+  if ((rows[person] ?? 0) - t > HELD / 2) return
   await kv.put(
-    hold(person),
-    JSON.stringify({ ...rows, [space.eid]: t + HELD }),
+    hold(space),
+    JSON.stringify({ ...rows, [person]: t + HELD }),
     {
       expirationTtl: HELD + 60,
     },
@@ -239,14 +239,21 @@ export let asleep = async (
 ) => {
   let kv = env.OAUTH_KV as Kv | undefined
   if (!kv?.get) return
-  let rows = await held(kv, person, Math.floor(now / 1000))
-  if (!(space.eid in rows)) return
-  delete rows[space.eid]
+  let rows = await held(kv, space, Math.floor(now / 1000))
+  if (!(person in rows)) return
+  delete rows[person]
   if (Object.keys(rows).length) {
-    await kv.put(hold(person), JSON.stringify(rows), {
+    await kv.put(hold(space), JSON.stringify(rows), {
       expirationTtl: HELD + 60,
     })
-  } else await kv.delete(hold(person))
+  } else await kv.delete(hold(space))
+}
+
+/** Every sandbox in this space, asleep: a space erased gives its places
+ * back at once. */
+export let allAsleep = async (env: { OAUTH_KV?: unknown }, space: Space) => {
+  let kv = env.OAUTH_KV as Kv | undefined
+  if (kv?.get) await kv.delete(hold(space))
 }
 
 /** Past the budget. It says what is already built is built, the way every

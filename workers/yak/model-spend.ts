@@ -116,7 +116,7 @@ export let reserved = async <T extends { dollars: number }>(
       throw new ModelError(
         'limit',
         spent >= limit
-          ? atCeiling(fresh, what, {}, limit)
+          ? atCeiling(fresh, what)
           : `This call has no verified cost bound within the $${
             Math.max(0, limit - spent).toFixed(8)
           } remaining in ${fresh.slug}'s monthly model and voice budget`,
