@@ -10,7 +10,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
-import { parse, short } from '@yaks/id'
+import { addressId, parse, short } from '@yaks/id'
 import { derivedEid } from '@yaks/graph/identity'
 import * as dirPart from './directory.ts'
 import {
@@ -356,12 +356,13 @@ let idOf = (h: Hit) =>
 
 // Whether a word names a break: its eid, or the handle it is read by. A
 // numbered break is its number, whatever letter it is written with (`E-12`,
-// `X-12`, `12`); the letter is only how it was printed.
+// `X-12`, `12`); the letter is only how it was printed. A handle is itself
+// with or without its `#` (`b2f4065d90`), as an agent copies it off a line.
 let names = (word: string, h: Hit) =>
   word == h.entity.eid ||
   (h.entity.num && !h.tracked
     ? parse(word)?.num == h.entity.num
-    : word == short(h.entity.eid))
+    : addressId(word) == short(h.entity.eid))
 
 // One open item and the app it broke in — what serve() hands back, so a
 // caller can write the line or archive by id from the one read.

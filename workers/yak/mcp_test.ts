@@ -1294,11 +1294,13 @@ test(
       assertEquals(open(after).length, 3)
       assert(!after.includes('whisk'), 'archived is not listed')
 
-      // The agent's own door is the same one, by the id it read off a line.
+      // The agent's own door is the same one, by the id it read off a line,
+      // copied with or without its `#`.
       let said = open(after)
         .find((l) => l.includes('fold is not a function'))!
+      let unmarked = said.split(' ')[1].replace(/^#/, '')
       assertStringIncludes(
-        await agent.tool('app_errors', { ...app, fixed: [said.split(' ')[1]] }),
+        await agent.tool('app_errors', { ...app, fixed: [unmarked] }),
         'archived 1',
       )
       await assertRejects(
