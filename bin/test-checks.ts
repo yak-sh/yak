@@ -50,6 +50,7 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
           'run',
           '--allow-read',
           '--allow-write',
+          '--allow-env',
           '--allow-run=deno',
           'workers/yak/gen.ts',
           '--check',
