@@ -203,12 +203,35 @@ export let deploysIn = (
   )
   let latest = history.at(-1)
   let log = [...commits].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+  let uploads = versions.toSorted((a, b) =>
+    Date.parse(a.metadata?.created_on) - Date.parse(b.metadata?.created_on)
+  )
+  // A secret change makes a new version of the code then serving and leaves
+  // its message off. That code is known only when the version uploaded just
+  // before it is also the one that served all traffic just before it.
+  let message = (v: Version): string => {
+    let own = v.annotations?.['workers/message']
+    if (own || v.annotations?.['workers/triggered_by'] != 'secret') {
+      return own ?? ''
+    }
+    let made = Date.parse(v.metadata.created_on)
+    let prior = uploads.findLast((u) =>
+      Date.parse(u.metadata.created_on) < made
+    )
+    let serving = history.findLast((d) => Date.parse(d.created_on) < made)
+      ?.versions
+    return prior && serving?.length == 1 &&
+        serving[0].version_id == prior.id && serving[0].percentage == 100
+      ? message(prior)
+      : ''
+  }
   return versions.map((v): Deploy => {
     if (!v.id || !Number.isFinite(Date.parse(v.metadata?.created_on))) {
       throw new Error('version has no id or creation time')
     }
-    let message = v.annotations?.['workers/message'] ?? ''
-    let named = message.split('\n')[0].match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
+    let named = message(v).split('\n')[0].match(
+      /^([a-f\d]{7,40})(?:\s+(.*))?$/i,
+    )
     let commit = named
       ? log.find((c) => c.sha.startsWith(named[1])) ?? {
         sha: named[1],

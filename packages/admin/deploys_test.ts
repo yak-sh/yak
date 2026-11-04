@@ -244,6 +244,31 @@ test('later code that drops a served marker remains unsafe despite a newer uploa
   assertEquals(rows[2].refusal, undefined)
 })
 
+test('a secret change carries the commit of the code it copied', () => {
+  let secret = (n: number): Version => ({
+    ...version(n),
+    annotations: { 'workers/triggered_by': 'secret' },
+  })
+  let made = (history: Deployment[]) =>
+    deploysIn(
+      [version(1, `${commit(1).sha} change 1`), secret(2), secret(3)],
+      history,
+      [commit(2), commit(1)],
+    ).map((r) => [r.id, r.commit?.sha, r.estimated])
+  assertEquals(
+    made([deployment(3.5, 'v3'), deployment(2.5, 'v2'), deployment(1.5, 'v1')]),
+    [
+      ['v3', commit(1).sha, false],
+      ['v2', commit(1).sha, false],
+      ['v1', commit(1).sha, false],
+    ],
+  )
+  assertEquals(
+    made([deployment(2.5, 'v2'), deployment(1.5, 'v1', 'v0')]).slice(1, 2),
+    [['v2', commit(2).sha, true]],
+  )
+})
+
 test('rollback fails closed for unknown migration sources or time-inferred commits', () => {
   for (let over of [{ marks: null }, { estimated: true }]) {
     let rows = boundaries([deploy(2, ['one'], over), deploy(1, ['one'])])

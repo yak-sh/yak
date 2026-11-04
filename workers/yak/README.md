@@ -290,14 +290,15 @@ An account’s credential is a connection in the CLI’s graph, never a token fi
 `deploys` joins uploads to deployments and reads each commit’s `BOUNDARIES` from
 `migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main
 has carried, even after its deployment ages out of Cloudflare’s history. This
-conservatively includes failed builds. An inferred commit or incomplete
-migration history cannot authorize rollback. `errors` reads every unresolved
-platform bug (not resolved or archived), however old, newest first, through the
-tracker's signed door. There is no time window by default; `--since` optionally
-narrows by last seen. The header counts the matching bugs and each line gives
-lifetime counts. The tracker connection in this box's config supplies the URL
-and signing key. `tail` watches live traffic, using the box's GNU `timeout` to
-stop Wrangler and its launcher together.
+conservatively includes failed builds. A secret change's version has no message
+and carries the commit of the version it copied. An inferred commit or
+incomplete migration history cannot authorize rollback. `errors` reads every
+unresolved platform bug (not resolved or archived), however old, newest first,
+through the tracker's signed door. There is no time window by default; `--since`
+optionally narrows by last seen. The header counts the matching bugs and each
+line gives lifetime counts. The tracker connection in this box's config supplies
+the URL and signing key. `tail` watches live traffic, using the box's GNU
+`timeout` to stop Wrangler and its launcher together.
 
 `revert` requires main to match its remote, creates a fresh worktree, and uses
 the same primitive as `task land` to publish. It returns after the push; main's
