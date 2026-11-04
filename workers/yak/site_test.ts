@@ -14,17 +14,23 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
 import {
+  BUDGET,
+  BUILDS,
   count,
   CURRENCY,
+  dollars,
   FILES,
   FREE,
   LETTERS,
   ORGANIZATION,
   PLUS,
   PRICE,
+  SECONDS,
   size,
   YEARLY,
 } from './meter.ts'
+import { AWAKE } from './sandbox.ts'
+import { CAP } from './invite.ts'
 import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
@@ -249,9 +255,13 @@ test('the frame is asked for on the body, above what it frames', () => {
 // "100 emails a month" of a platform that could not send one at all.
 let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
+// The plans in the order every page shows them, and what each holds a space to.
+let TIERS = ['free', 'plus', 'organization'] as const
+let LIMITS = { free: FREE, plus: PLUS, organization: ORGANIZATION }
+
 // The copy each tier's allowances should read as, off the meter's own numbers.
-let allowance = (tier: 'free' | 'plus' | 'organization') => {
-  let limits = { free: FREE, plus: PLUS, organization: ORGANIZATION }[tier]
+let allowance = (tier: Tier) => {
+  let limits = LIMITS[tier]
   return {
     apps: limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
     visitors: 'Unlimited visitors',
@@ -262,11 +272,7 @@ let allowance = (tier: 'free' | 'plus' | 'organization') => {
       : { files: `${size(FILES[tier])} of photos and files` }),
   }
 }
-let allowances = {
-  free: allowance('free'),
-  plus: allowance('plus'),
-  organization: allowance('organization'),
-}
+let allowances = Object.fromEntries(TIERS.map((t) => [t, allowance(t)]))
 
 test('the plan pages carry the email allowance the code enforces', () => {
   let free = allowances.free.emails
@@ -285,7 +291,7 @@ test('the plan pages carry the email allowance the code enforces', () => {
 // free one and the Plus plan, and the pricing page shows every plan.
 let CARDS: Record<string, Tier[]> = {
   'index.html': ['free', 'plus'],
-  'pricing.html': ['free', 'plus', 'organization'],
+  'pricing.html': [...TIERS],
 }
 let cardOf = (tier: Tier) =>
   tier == 'free'
@@ -317,6 +323,75 @@ test('the plan cards and every offer carry the meter allowances', () => {
       )
     }
   }
+})
+
+// A reader compares the plans across, line by line, so every card on the
+// pricing page names the same things in the same order: a card's nth line
+// says FEATURES[n]. What a plan lacks is a line on its card that says so.
+let FEATURES = [
+  'apps',
+  'visitors',
+  'app data',
+  'photos and files',
+  'emails',
+  'custom domain',
+  'payments',
+  'badge',
+  'AI use',
+  'change',
+]
+
+let pricing = () => parseHTML(read('pricing.html')).document
+
+test('every pricing card lists the same features in the same order', () => {
+  let cards = [...pricing().querySelectorAll('.Plan')]
+  assertEquals(cards.length, TIERS.length)
+  cards.forEach((card, i) => {
+    let lines = [...card.querySelectorAll('.Plan_List li')]
+      .map((li) => flat(li.textContent!))
+    let named = lines.map((line, n) =>
+      line.toLowerCase().includes(FEATURES[n]?.toLowerCase())
+        ? FEATURES[n]
+        : line
+    )
+    assertEquals(named, FEATURES, TIERS[i])
+    assertEquals(
+      lines[FEATURES.indexOf('AI use')],
+      `${dollars(BUDGET[TIERS[i]])} of AI use a month`,
+    )
+  })
+})
+
+// The limits in full are the meter's numbers, a row each, a plan a column.
+test('the pricing page tabulates the limits the code holds a space to', () => {
+  let hours = (s: number) => `${s / 3600} hour${s == 3600 ? '' : 's'}`
+  let rows: [string, (t: Tier) => string][] = [
+    ['Apps', (t) => String(LIMITS[t].apps ?? 'Unlimited')],
+    ['App data', (t) => size(LIMITS[t].bytes)],
+    ['Photos and files', (t) => size(FILES[t])],
+    ['Visits a month', (t) => count(LIMITS[t].requests)],
+    ['Emails a month', (t) => count(LETTERS[t])],
+    ['AI use a month', (t) => dollars(BUDGET[t])],
+    ['Builds a month', (t) => String(BUILDS[t])],
+    ['Build time a month', (t) => hours(SECONDS[t])],
+    ['Builds at once', (t) => String(AWAKE[t])],
+  ]
+  let table = pricing().querySelector('.Limits table')!
+  assertEquals(
+    [...table.querySelectorAll('thead th')].map((th) => th.textContent),
+    ['Free', 'Plus', 'Organization'],
+  )
+  assertEquals(
+    [...table.querySelectorAll('tbody tr')].map((tr) => [
+      tr.querySelector('th')!.firstChild!.textContent!.trim(),
+      ...[...tr.querySelectorAll('td')].map((td) => td.textContent),
+    ]),
+    rows.map(([name, value]) => [name, ...TIERS.map(value)]),
+  )
+  assertStringIncludes(
+    flat(read('pricing.html')),
+    `Invitations are free, up to ${CAP} an hour`,
+  )
 })
 
 test('every footer link names a page that is there', () => {
@@ -850,6 +925,6 @@ test('pricing cards offer signup and omit build quotas', () => {
       cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
       tiers.map((t) => paid(t) ? '/login?return=%2Fconnect%23plan' : '/login'),
     )
-    assert(!read(page).includes('built-in builds a month'))
+    for (let card of cards) assert(!/\bbuild/i.test(card.textContent!), page)
   }
 })

@@ -788,7 +788,7 @@
   }
 
   /* The plans, on the home page and the pricing page: narrower than the
-     examples, since there are only two. */
+     examples, since there are only three. */
   .Cost {
     display: grid;
     gap: 1.25rem;
@@ -1022,6 +1022,53 @@
 
   .Plan_List li::marker {
     color: var(--accent);
+  }
+
+  /* Every limit, a row each and a plan a column. Each row's name says what
+     it counts underneath it, so the numbers stay one short column apiece;
+     on a phone the table scrolls sideways rather than squeezing them. */
+  .Limits {
+    display: grid;
+    gap: var(--wide-gap);
+  }
+
+  .Limits_Table {
+    overflow-x: auto;
+  }
+
+  .Limits table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+  }
+
+  .Limits :is(th, td) {
+    padding: var(--half-gap);
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .Limits thead th {
+    color: var(--accent);
+  }
+
+  .Limits tbody th {
+    width: 50%;
+  }
+
+  .Limits small {
+    display: block;
+    margin-top: var(--quarter-gap);
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    font-weight: 400;
+    text-wrap: pretty;
+  }
+
+  .Limits td {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .Foot {
