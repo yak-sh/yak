@@ -747,24 +747,36 @@ ${
 // Choosing another keeps the page: Billing in one space becomes Billing in
 // the other, a page of the person's own stays where it is, and a space they
 // are only a member of opens at its Operator.
-let chooser = (at: DeskPage, view: ManageView) => {
-  let here = picked(at)
-  let all = at.spaces?.length ? at.spaces : [here]
+let chooser = (at: DeskPage, view: ManageView) =>
+  spaceChoice(
+    picked(at),
+    at.spaces ?? [],
+    (s) =>
+      accountView(view)
+        ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
+        : managePath(
+          !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
+          s.slug,
+        ),
+    `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`,
+  )
+
+/** The space selector over `all`, holding `here`: each space opens at `to`,
+ * and `make` follows the list (the dashboard's side, and the Operator's chat
+ * app, operator-page.ts `chatPage`). */
+export let spaceChoice = (
+  here: Picked,
+  all: Picked[],
+  to: (s: Picked) => string,
+  make = '',
+) => {
   let box = (s: Picked, line = '') =>
     `<span class="Desk_Tile" aria-hidden="true">${
       esc(named(s).charAt(0).toUpperCase())
     }</span><span class="Desk_Name"><b>${esc(named(s))}</b>${
       line && `<small>${esc(line)}</small>`
     }</span>`
-  let to = (s: Picked) =>
-    accountView(view)
-      ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
-      : managePath(
-        !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
-        s.slug,
-      )
-  let make = `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`
-  if (all.length == 1) {
+  if (all.length < 2) {
     return `<div class="Desk_Space">${box(here)}</div>${make}`
   }
   return `<details class="Desk_Pick" data-menu>

@@ -159,11 +159,46 @@ test('a new conversation asks what to do, and one that is gone says so', () => {
   assertEquals(fresh.code, 200)
   assertStringIncludes(
     fresh.document.querySelector('.Talk_Hello')!.textContent!,
-    'What would you like done?',
+    'What would you like done in Township?',
   )
   assertEquals(fresh.document.querySelector('[name=say]') != null, true)
   assertEquals(gone.code, 404)
   assertEquals(gone.document.querySelector('[name=say]'), null)
+})
+
+test("the chat app says whose Operator it is, and opens another space's", async () => {
+  let spaces = [
+    { slug: 'clerk', title: 'Township', owner: true, own: false },
+    { slug: 'jeff', title: 'Jeff', owner: true, own: true },
+  ]
+  // The test's Operator serves one store, so the other space shares it.
+  let mill = { ...space, slug: 'mill', title: 'Mill Pond' }
+  for (let [at, name] of [[space, 'Township'], [mill, 'Mill Pond']] as const) {
+    let { document } = parseHTML(
+      await (await chatPage(p.env, at, who, 'new', spaces)).text(),
+    )
+    let said = (s: string) => document.querySelector(s)?.textContent?.trim()
+    assertEquals(
+      said('title'),
+      `New conversation · ${name}’s Operator · yaks.app`,
+    )
+    assertEquals(said('.Talk_Whose .Desk_Space b'), name)
+    assertEquals(said('.Talk_Who'), `${name}’s Operator`)
+    assertStringIncludes(
+      said('.Talk_Hello')!,
+      `You’re talking to ${name}’s Operator.`,
+    )
+    assertEquals(
+      [...document.querySelectorAll('.Talk_Whose .Desk_Row')].map((a) =>
+        a.getAttribute('href')
+      ),
+      [
+        ...(at == mill ? [chatPath('mill')] : []),
+        chatPath('clerk'),
+        chatPath('jeff'),
+      ],
+    )
+  }
 })
 
 let settings = parseHTML(await operatorBody(p.env, space, who)).document

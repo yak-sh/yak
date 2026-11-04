@@ -2515,7 +2515,13 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     let { chatPage, operatorAnswer } = await import('./operator-page.ts')
     if (at.open && !new URL(req.url).searchParams.has('attachment')) {
       return req.method == 'GET' || req.method == 'HEAD'
-        ? chatPage(env, space, who, at.open)
+        ? chatPage(
+          env,
+          space,
+          who,
+          at.open,
+          await dir.seats(person).then((seats) => pickable(dir, seats)),
+        )
         : nothingHere(env)
     }
     return await operatorAnswer(req, env, space, who) ??

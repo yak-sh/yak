@@ -5,7 +5,7 @@ import { reachOf } from './operator-reach.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
-import { esc, shell } from './pages.ts'
+import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { url } from './host.ts'
 import { chatPath, managePath } from './route.ts'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
@@ -412,13 +412,16 @@ listen()
  * (route.ts `chatPath`): the conversations down the side, newest first, with
  * a way to start one; the conversation filling the page, what it is doing
  * now under it; and the box to write in at the foot, with Stop while it
- * works. `open` is a task, a request no task has taken yet, or `new`.
+ * works. `open` is a task, a request no task has taken yet, or `new`. Whose
+ * Operator it is heads the side, the title and the greeting, and the side's
+ * space selector over `spaces` opens another space's Operator.
  */
 export let chatPage = async (
   env: Env,
   space: Space,
   who: Who,
   open: string,
+  spaces: Picked[] = [],
 ) => {
   let at = managePath('operator', space.slug)
   let [talked, items] = await Promise.all([
@@ -428,9 +431,12 @@ export let chatPage = async (
   let fresh = open == 'new'
   let title = fresh ? 'New conversation' : talked.title || 'Not here'
   let named = space.title || space.slug
+  let whose = `${named}’s Operator`
+  let here = spaces.find((s) => s.slug == space.slug) ??
+    { slug: space.slug, title: space.title, owner: true, own: false }
   return shell(
     env,
-    `${esc(title)} · Operator`,
+    `${esc(title)} · ${esc(whose)}`,
     null,
     fresh || talked.title ? 200 : 404,
     `<a class="Desk_Skip" href="#ask">Skip to the message box</a>
@@ -441,24 +447,31 @@ export let chatPage = async (
     }"><img src="${
       url(env, '/yaks-app.png')
     }" width="28" height="28" alt="">Operator</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
+<div class="Talk_Whose"><p class="Talk_Of">The Operator of</p>${
+      spaceChoice(
+        here,
+        spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
+        (s) => chatPath(s.slug),
+      )
+    }</div>
 <a class="Button Talk_New" href="${chatPath(space.slug)}">+ New conversation</a>
 <nav class="Talk_Nav" aria-label="Your conversations" data-side>${
       sidebar(items, space.slug, [open, talked.task])
     }</nav>
-<div class="Talk_Foot"><span>${
-      esc(named)
-    }</span><a href="${at}">Operator settings</a></div>
+<div class="Talk_Foot"><a href="${at}">Operator settings</a></div>
 </aside>
 <div class="Talk_Main">
-<header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Conversations">☰</a><h1 class="Talk_Head" data-title>${
+<header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Conversations">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
       esc(title)
-    }</h1></header>
+    }</h1><p class="Talk_Who">${esc(whose)}</p></div></header>
 <div class="Talk_Column" data-conversation aria-live="polite">${
       talked.html ||
       (fresh
-        ? `<div class="Talk_Hello"><h2>What would you like done?</h2><p>Ask the Operator for a change in ${
+        ? `<div class="Talk_Hello"><h2>What would you like done in ${
           esc(named)
-        }, or send it a document or a photo.</p></div>`
+        }?</h2><p>You’re talking to ${
+          esc(whose)
+        }. Ask it for a change in the space’s apps, or send it a document or a photo.</p></div>`
         : '<div class="Talk_Hello"><h2>This conversation is not here</h2><p>It may have been removed. Your other conversations are listed beside this one.</p></div>')
     }</div>
 ${fresh || talked.title ? composer(at, talked.task) : ''}

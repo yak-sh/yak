@@ -957,6 +957,22 @@
     font-weight: 800;
     text-decoration: none;
   }
+  /* Whose Operator this is (operator-page.ts `chatPage`): the space, in the
+     dashboard's selector, whose list stays inside the side it scrolls in. */
+  .Talk_Whose {
+    display: grid;
+    gap: .35rem;
+  }
+  .Talk_Of {
+    margin: 0 .4rem;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    font-weight: 700;
+  }
+  .Talk_Whose .Desk_Menu {
+    min-width: 100%;
+    max-width: 100%;
+  }
   .Talk_New {
     justify-content: flex-start;
   }
@@ -1028,6 +1044,15 @@
     padding: .75rem 1.25rem;
     background: var(--ground);
     border-bottom: 1px solid var(--edge);
+  }
+  .Talk_Heads {
+    display: grid;
+    min-width: 0;
+  }
+  .Talk_Who {
+    margin: 0;
+    color: var(--soft-ink);
+    font-size: var(--fine);
   }
   .Talk_Head {
     min-width: 0;
