@@ -15,6 +15,10 @@ export let operatorDoc: VocabDoc = {
         address: { type: 'string' },
         reply_to: { type: 'string' },
         files: { type: 'array', items: { type: 'object' } },
+        app: {
+          type: 'string',
+          description: 'The app whose break started the request.',
+        },
       },
     },
     operator_answer: {

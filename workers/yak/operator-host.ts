@@ -91,6 +91,12 @@ export let operatorRequest = async (
       ? Response.json(row)
       : Response.json({ message: 'That request is missing.' }, { status: 404 })
   }
+  if (path == '/operator/requests') {
+    let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
+    return Response.json(
+      (await store.g.get(ids)).filter((row) => row?.operator_request),
+    )
+  }
   if (path == '/operator/messages') {
     let rows = (await store.g.read(
       '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100',

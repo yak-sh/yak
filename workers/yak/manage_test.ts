@@ -261,3 +261,24 @@ test('an app that throws is marked on the dashboard, with what to ask', () => {
 test('a fixed app has no dashboard error mark or repair request', () => {
   assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
 })
+
+// What the space's Operator made of a break stands beside it (T-136297):
+// working, its answer, or why it could not finish, with the way to its work.
+test("a break says what the space's Operator made of it", () => {
+  let [broke] = folds(reports).map(plain)
+  let shown = (operator?: Plain['operator']) => {
+    let html = page([{ ...broke, operator }])
+    return html.slice(html.indexOf('id="fix-chores"'))
+  }
+  assert(!shown().includes('The Operator'), 'a break it never heard of')
+  assertStringIncludes(shown({}), 'The Operator is fixing it.')
+  assertStringIncludes(
+    shown({ answer: 'Defined chores and deployed.' }),
+    'The Operator: Defined chores and deployed.',
+  )
+  assertStringIncludes(
+    shown({ failed: 'the space has spent its model budget' }),
+    'The Operator could not fix it: the space has spent its model budget',
+  )
+  assertStringIncludes(shown({}), `href="${managePath('operator')}"`)
+})

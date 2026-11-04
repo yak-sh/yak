@@ -20,13 +20,16 @@ import { type Args, type Ctx, refuse } from './tool.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build.ts'
 import { accounted } from './meter.ts'
-import { caught } from './defects.ts'
+import { caught, defect } from './defects.ts'
 import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
 import type { operatorStore } from './operator-store.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
+  // Who the task and its session are by: the person asking, unless the
+  // Operator started the work itself (a break, unseen.ts `fix`).
+  by?: string
   model?: Model
   name?: string
   price?: Price
@@ -167,6 +170,33 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
     }))
 }
 
+// What the Operator does when yaks.app, not the app, is at fault: it tells
+// the platform's tracker (M-37965), where its people fix it, and changes
+// nothing in the app to get around it.
+let platformBug = (space: Space): Tool => ({
+  name: 'platform_bug',
+  description:
+    "Report that yaks.app itself is at fault, not the app's own files: a tool that answered wrongly, a refusal the guide says should pass, a deploy that lost what was sent. Say what you did, what yaks.app answered, and why the app is not the cause. It reaches the people who run yaks.app; leave the app as it is.",
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'What is wrong in yaks.app.' },
+      app: { type: 'string', description: 'The app it happened in.' },
+    },
+    required: ['text'],
+  },
+  run: (args) => {
+    let text = String(args.text ?? '').trim()
+    if (!text) throw refuse('arguments', 'say what is wrong in yaks.app')
+    defect(Error(text), {
+      request: 'operator found a platform fault',
+      space: space.slug,
+      ...typeof args.app == 'string' ? { app: args.app } : {},
+    })
+    return Promise.resolve('Reported to the people who run yaks.app.')
+  },
+})
+
 export let operatorModel = (env: Env): Model =>
   workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
 
@@ -231,7 +261,7 @@ export let runOperator = async (
         task: {},
         doc: { title: text.split('\n')[0].slice(0, 160), body: text },
         filed: { project: space.eid },
-        $actor: { by: held.person },
+        $actor: { by: options.by ?? held.person },
       }]
       : [],
   ], { trusted: true })
@@ -288,7 +318,7 @@ export let runOperator = async (
       : await begin(g, request, {
         eid: options.session,
         persona: space.eid,
-        by: held.person,
+        by: options.by ?? held.person,
         project: space.eid,
         using: {
           provider: identityEid('provider', [provider]),
@@ -310,6 +340,7 @@ export let runOperator = async (
       provider,
       remote: async () => [
         ...await operatorRoster(ctx, store),
+        platformBug(space),
         ...options.tools?.(ctx) ?? [],
       ],
       instructions: `${instructions(env)}\n\n${await standing(ctx)

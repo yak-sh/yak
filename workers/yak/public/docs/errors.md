@@ -200,6 +200,15 @@ uses, and suggests they ask you: "Fix the errors in my Chores app on yaks.app".
 Viewing them there does not mark them seen, so you are still told about each
 one.
 
+The space's Operator starts on each error as it happens: one run per distinct
+error, however often it recurs, spending the space's model budget like any
+Operator run. It finds the cause, fixes and deploys the app when the app's own
+files are wrong, and reports to the platform tracker when yaks.app is at fault.
+The dashboard shows its state beside the error: working, its answer, or why it
+could not finish, such as a spent budget. An error that happened before the
+Operator heard of it is started when the dashboard shows it. If you are fixing
+the same error, read its work first with `operator_read`.
+
 ## Unseen errors in tool replies
 
 New errors are added to the end of the next reply from a tool that changes

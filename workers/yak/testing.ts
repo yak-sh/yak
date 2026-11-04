@@ -875,36 +875,53 @@ export let lasting = (
   // The runtime indexes armed alarms. Idle objects need no storage read on
   // every clock tick, even when a shared kernel has opened many of them.
   let armed = new Set<string>()
+  // Each armed object's own alarm, by the name its state is kept under.
+  let alarms = new Map<string, () => Promise<void>>()
+  // An object's state whose alarm the runtime delivers: arming it indexes
+  // the object, and `alarm` is what a delivery calls.
+  let alarmed = (
+    name: string,
+    ctx: ReturnType<typeof state>,
+    alarm: () => Promise<void>,
+  ) => {
+    let setAlarm = ctx.storage.setAlarm.bind(ctx.storage)
+    let deleteAlarm = ctx.storage.deleteAlarm.bind(ctx.storage)
+    ctx.storage.setAlarm = async (...args) => {
+      await setAlarm(...args)
+      armed.add(name)
+    }
+    ctx.storage.deleteAlarm = async () => {
+      await deleteAlarm()
+      armed.delete(name)
+    }
+    states.set(name, ctx)
+    alarms.set(name, alarm)
+  }
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
       let ctx = Object.assign(ownedState(name), {
         id: { toString: () => name },
       })
-      let setAlarm = ctx.storage.setAlarm.bind(ctx.storage)
-      let deleteAlarm = ctx.storage.deleteAlarm.bind(ctx.storage)
-      ctx.storage.setAlarm = async (...args) => {
-        await setAlarm(...args)
-        armed.add(name)
-      }
-      ctx.storage.deleteAlarm = async () => {
-        await deleteAlarm()
-        armed.delete(name)
-      }
+      alarmed(name, ctx, () => object(name).alarm())
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
-      states.set(name, ctx)
       objects.set(name, held = new Store(ctx, env, undefined, undefined, load))
     }
     return held
   }
   // The builder's object, one per space (build.ts). Made on demand like a
   // store, and kept, so a second connection reaches the conversation the first
-  // one started.
+  // one started. Its alarm runs the Operator's effects, delivered like a
+  // store's.
   let builders = new Map<string, Builder>()
   let builder = (name: string): Builder => {
     let held = builders.get(name)
-    if (!held) builders.set(name, held = new Builder(ownedState(), env))
+    if (!held) {
+      let ctx = ownedState()
+      builders.set(name, held = new Builder(ctx, env))
+      alarmed(`builder ${name}`, ctx, () => builders.get(name)!.alarm())
+    }
     return held
   }
   // A person's stream (stream.ts), one object per person, made on demand and
@@ -1014,7 +1031,7 @@ export let lasting = (
       let at = await ctx.storage.getAlarm()
       if (at == null || at > Date.now()) return
       await ctx.storage.deleteAlarm()
-      await object(name).alarm()
+      await alarms.get(name)!()
     })().finally(() => ringing.delete(name))
     ringing.set(name, delivery)
     return delivery

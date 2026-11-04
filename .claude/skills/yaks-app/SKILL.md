@@ -408,7 +408,11 @@ through the connector's graph tier (tool.ts `roleIn`).
   sweep erases it after seven idle days. `yak admin erase <address> --as
   admin@bot.yak.sh` erases one now.
 - An app's own errors surface through `app_errors` and the unseen block
-  (`unseen.ts`).
+  (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts
+  `fix`, one request per break by `fixOf`), and the owner's dashboard shows
+  its state beside the error; `operator_read` with the space reads its work.
+  The Operator's tool `platform_bug` files what yaks.app got wrong in our
+  tracker.
 - A hang reports nothing from inside. Cloudflare's own record of every
   invocation (outcome, wall and CPU time, the object it ran in) is Workers
   observability, read with the cloudflare-api MCP's `telemetry/query` or the

@@ -11,6 +11,7 @@
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
 import { parse, short } from '@yaks/id'
+import { derivedEid } from '@yaks/graph/identity'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -235,51 +236,61 @@ export let noted = async (
     entrypoint?: string
   },
 ) => {
-  if (at) {
-    if (!at.env.ERRORS) throw Error('tracker intake is unavailable')
-    let error = Object.assign(Error(broke.message), {
-      stack: broke.stack || '',
-    })
-    let place = origin(
-      at.script ?? `${at.space.slug}/${at.app.slug}`,
-      broke.version == null ? undefined : String(broke.version),
-      at.entrypoint ?? 'browser report',
-      at.request,
+  let account = await ownedBy(at.env, at.space)
+  if (!at.env.ERRORS) throw Error('tracker intake is unavailable')
+  let error = Object.assign(Error(broke.message), {
+    stack: broke.stack || '',
+  })
+  let place = origin(
+    at.script ?? `${at.space.slug}/${at.app.slug}`,
+    broke.version == null ? undefined : String(broke.version),
+    at.entrypoint ?? 'browser report',
+    at.request,
+  )
+  let viewer = await viewing(at.env, at.space, at.request)
+  let reached = {
+    space: at.space.slug,
+    app: at.app.slug,
+    request: broke.request,
+    request_id: broke.requestId,
+    ...broke.command ? { command: broke.command } : {},
+    ...account ? { account } : {},
+    ...viewer ? { user_id: viewer } : {},
+  }
+  let page = { mechanism: broke.mechanism, breadcrumbs: broke.breadcrumbs }
+  await queue(at.env.ERRORS)(capture(error, {
+    ...place,
+    ...page,
+    commit: undefined,
+    sink: () => {},
+    version: broke.version ?? undefined,
+    during: {
+      ...place.during,
+      space: at.space.eid,
+      app: at.app.eid,
+      kind: 'exception',
+    },
+    tags: { ...place.tags, ...reached },
+  }))
+  if (account == 'person' && !broke.mistake) {
+    await queue(at.env.ERRORS)(
+      seenByPlatform(error, broke.version, at, reached, page),
     )
-    let account = await ownedBy(at.env, at.space)
-    let viewer = await viewing(at.env, at.space, at.request)
-    let reached = {
-      space: at.space.slug,
-      app: at.app.slug,
-      request: broke.request,
-      request_id: broke.requestId,
-      ...broke.command ? { command: broke.command } : {},
-      ...account ? { account } : {},
-      ...viewer ? { user_id: viewer } : {},
-    }
-    let page = { mechanism: broke.mechanism, breadcrumbs: broke.breadcrumbs }
-    await queue(at.env.ERRORS)(capture(error, {
-      ...place,
-      ...page,
-      commit: undefined,
-      sink: () => {},
-      version: broke.version ?? undefined,
-      during: {
-        ...place.during,
-        space: at.space.eid,
-        app: at.app.eid,
-        kind: 'exception',
-      },
-      tags: { ...place.tags, ...reached },
-    }))
-    if (account == 'person' && !broke.mistake) {
-      await queue(at.env.ERRORS)(
-        seenByPlatform(error, broke.version, at, reached, page),
-      )
-    }
   }
   scheduleMark(at.env, at.app.eid, 'errored')
   if (hushed(at.space, at.app)) return
+  if (account != 'test') {
+    await fix(at.env, at.space, at.app, {
+      kind: 'exception',
+      entity: { eid: '' },
+      exception: {
+        message: broke.message,
+        stack: broke.stack,
+        request: broke.request,
+        version: broke.version,
+      },
+    }).catch((why) => caught(why, { request: 'start a fix' }))
+  }
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))
     // The same line the unseen block will carry, minus the id — this seam
@@ -412,16 +423,106 @@ export let line = (fold: Seen[]) => {
   }${times > 1 ? ` (${times} times${first ? ` since ${first}` : ''})` : ''}`
 }
 
+/** What the space's Operator made of a break: still working, its answer, or
+ * why it could not finish. */
+export type Fixing = { answer?: string; failed?: string }
+
 /** A break as its owner's dashboard shows it: what it said and where, in the
- * words its line says to their assistant, how often, and when it last did. */
-export type Plain = { said: string; where: string; times: number; at: string }
+ * words its line says to their assistant, how often, when it last did, and
+ * the Operator request its first occurrence started ({@link fixOf}). */
+export type Plain = {
+  said: string
+  where: string
+  times: number
+  at: string
+  fix: string
+  operator?: Fixing
+}
 
 export let plain = (fold: Seen[]): Plain => ({
   said: said(fold[0].hit),
   where: where(fold[0].hit),
   times: often(fold),
   at: String(broke(fold[0].hit).at ?? ''),
+  fix: fixOf(fold[0].app, fold[0].hit),
 })
+
+// The Operator request a break starts: one per break, as its dashboard line
+// folds occurrences, so every later occurrence names the request the first
+// one made.
+export let fixOf = (app: App, hit: Hit) =>
+  derivedEid(`operator-fix|${app.eid}|${same(hit)}`)
+
+// The requests this isolate already handed the Operator, so a page breaking
+// on every load asks it once, not once a load.
+let asked = new Set<string>()
+
+// A break starts its space's Operator on fixing it (T-136297). The run is the
+// space's Operator's own act, with an owner's standing in the space, and
+// spends the space's model budget like any Operator run; its answer, or why
+// it could not finish, stands beside the break on the dashboard. A request
+// the Operator already holds is not asked again.
+let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
+  let id = fixOf(app, hit)
+  if (asked.has(id)) return
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let [owner] = await dir.owners(space)
+  if (!owner) return
+  let e = broke(hit)
+  let at = where(hit)
+  let { builderOf, SPACE } = await import('./build.ts')
+  let response = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/receive', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-person': owner,
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify({
+        say:
+          `Fix this error in ${app.slug}: ${said(hit)}\n\nIt happened${
+            at ? ` at ${at}` : ''
+          }${e.version ? ` in version ${e.version}` : ''}. ` +
+          `Find its cause in ${space.slug}/${app.slug}. ` +
+          `If the app's own files are wrong, fix them, deploy, and say in a ` +
+          `line or two what you changed. If yaks.app itself is at fault, ` +
+          `report it with platform_bug and leave the app as it is.`,
+        request: { channel: 'error', app: app.eid },
+        options: { id },
+      }),
+    })
+  )
+  if (!response.ok) {
+    throw Error(`the Operator refused a break (${response.status})`)
+  }
+  await response.body?.cancel()
+  if (asked.size > 1000) asked.clear()
+  asked.add(id)
+}
+
+// What the space's Operator made of each break, by request: one read of its
+// builder, and a break it never heard of (a test account's) is absent.
+let fixings = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  ids: string[],
+): Promise<Map<string, Fixing>> => {
+  if (!ids.length) return new Map()
+  let { operatorDoor } = await import('./operator-page.ts')
+  let rows = await operatorDoor(env, space, who, 'requests', {
+    ids,
+  }) as Bundle[]
+  return new Map(rows.map((row) => {
+    let answer = row.operator_answer as { text?: string } | undefined
+    let failed = row.failed as { reason?: string } | undefined
+    return [row.entity.eid, {
+      ...answer?.text != null && !failed ? { answer: answer.text } : {},
+      ...failed ? { failed: failed.reason ?? '' } : {},
+    }]
+  }))
+}
 
 // The place in a stack a person opens to fix it. A break reported from a
 // browser arrives as `<source>:<line>` already (public/report.js through
@@ -570,8 +671,9 @@ export let trackedIn = async (
 }
 
 /** Each of these apps' open breaks in plain words, by app eid: what the
- * owner's dashboard shows. It reads what `app_list` counts ({@link trackedIn})
- * and marks nothing, so their assistant still hears of each one. */
+ * owner's dashboard shows, with what the space's Operator made of each. It
+ * reads what `app_list` counts ({@link trackedIn}) and marks nothing, so
+ * their assistant still hears of each one. */
 export let brokenIn = async (
   env: Env,
   space: Space,
@@ -579,10 +681,42 @@ export let brokenIn = async (
   apps: App[],
 ) => {
   let open = await trackedIn(env, space, who, true)
+  let broken = apps.filter((a) => open.has(a.eid)).map((app) =>
+    [app.eid, folds(open.get(app.eid)!.map((hit) => ({ app, hit })))] as const
+  )
+  let all = broken.flatMap(([, f]) => f.map(([s]) => s))
+  // A dashboard without the Operator's word still shows what broke.
+  let fixed = await fixings(
+    env,
+    space,
+    who,
+    all.map((s) => fixOf(s.app, s.hit)),
+  )
+    .catch((e) => {
+      caught(e, { request: "read the Operator's fixes", space: space.slug })
+      return null
+    })
+  // A break the Operator never heard of (one from before it was told of
+  // breaks, or whose telling failed) it is told of now, as its owner sees it.
+  let started = new Set<string>()
+  let unheard = fixed ? all.filter((s) => !fixed.has(fixOf(s.app, s.hit))) : []
+  if (unheard.length && await ownedBy(env, space) != 'test') {
+    await Promise.all(
+      unheard.map((s) =>
+        fix(env, space, s.app, s.hit).then(
+          () => started.add(fixOf(s.app, s.hit)),
+          (e) => caught(e, { request: 'start a fix', space: space.slug }),
+        )
+      ),
+    )
+  }
   return new Map(
-    apps.filter((a) => open.has(a.eid)).map((app) => [
-      app.eid,
-      folds(open.get(app.eid)!.map((hit) => ({ app, hit }))).map(plain),
+    broken.map(([app, f]) => [
+      app,
+      f.map(plain).map((p) => {
+        let operator = fixed?.get(p.fix) ?? (started.has(p.fix) ? {} : null)
+        return operator ? { ...p, operator } : p
+      }),
     ]),
   )
 }

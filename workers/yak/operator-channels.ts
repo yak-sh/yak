@@ -31,6 +31,8 @@ export type Request = {
   task?: string
   files?: File[]
   administrative?: boolean
+  // The app whose break started the request, on the `error` channel.
+  app?: string
 }
 type Answer = { task: string; text: string; message_id?: string }
 export type Channel = (
@@ -136,6 +138,8 @@ export let requestId = (space: string, message: string) =>
 
 export let channels = (env: Env): Record<string, Channel> => ({
   chat: () => Promise.resolve({}),
+  // A break's request is answered beside the break, on the dashboard.
+  error: () => Promise.resolve({}),
   email: async (request, answer, subject) => {
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
@@ -279,6 +283,8 @@ export let handleChannels = (
             task: task ?? derivedEid('operator-task|' + row.entity.eid),
             session: derivedEid('operator-session|' + row.entity.eid),
             tools: attachmentTools(env, files),
+            // Nobody asked for a break's fix: the Operator started it.
+            ...request.channel == 'error' ? { by: space.eid } : {},
           },
         )
         text = result.text

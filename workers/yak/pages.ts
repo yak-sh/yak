@@ -725,7 +725,20 @@ let connectCard = (at: DeskPage, env: Host) =>
 // assistant, how often and when last, and the one thing to do, which is to
 // ask that assistant. The app's mark on its tile links here.
 let SHOWN = 5
-let fixing = (a: DeskPage['apps'][number]) => {
+// What the space's Operator made of one break, with the way to its work.
+let operated = (e: Plain, at: string) => {
+  let o = e.operator
+  if (!o) return ''
+  let said = o.failed != null
+    ? `The Operator could not fix it: ${o.failed || 'its work was interrupted'}`
+    : o.answer != null
+    ? `The Operator: ${o.answer}`
+    : 'The Operator is fixing it.'
+  return `<span class="Rows_Meta">${esc(said)} <a href="${
+    esc(at)
+  }">See its work</a></span>`
+}
+let fixing = (a: DeskPage['apps'][number], operator: string) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug
@@ -743,7 +756,7 @@ let fixing = (a: DeskPage['apps'][number]) => {
         e.times == 1 ? 'once' : `${e.times} times`
       }${
         day(e.at) ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}` : ''
-      }</span></div></li>`
+      }</span>${operated(e, operator)}</div></li>`
     ).join('')
   }</ul>${
     n > SHOWN ? `<p class="Rows_Meta">And ${n - SHOWN} more.</p>` : ''
@@ -786,7 +799,11 @@ export let library = (at: DeskPage, env: Host) => {
         ).join('')
       }</div>${
         broken.length
-          ? `<h2 class="Group">Needs fixing</h2>${broken.map(fixing).join('')}`
+          ? `<h2 class="Group">Needs fixing</h2>${
+            broken.map((a) => fixing(a, managePath('operator', at.pick))).join(
+              '',
+            )
+          }`
           : ''
       }${sharedWith(at, env)}`
       : `${

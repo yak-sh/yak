@@ -135,7 +135,11 @@ let boot = async (
   prepare?: (env: Env) => void,
   load?: Load,
 ) => {
-  let [{ handler }, { emailed, limiter, lasting }, { within }] = await Promise
+  let [
+    { handler },
+    { ai, emailed, limiter, lasting, modelPage },
+    { within },
+  ] = await Promise
     .all([
       import('./kernel.ts'),
       import('./testing.ts'),
@@ -153,6 +157,11 @@ let boot = async (
     // `send_email` binding an app's letters leave through.
     CF_VERSION_METADATA: { id: crypto.randomUUID() },
     MAIL: cf.binding,
+    // A model that says nothing, priced from a page of our own: an app's
+    // break starts its space's Operator (unseen.ts `fix`), and no test
+    // reaches Workers AI or its catalogue.
+    AI: ai([]) as Env['AI'],
+    MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
     ...Object.fromEntries(
       ratelimits.map((r) => [r.name, limiter(r.simple.limit, r.simple.period)]),
     ),

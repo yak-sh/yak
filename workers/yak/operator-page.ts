@@ -78,7 +78,13 @@ export let conversation = (rows: Bundle[], at = '') =>
     return `<article class="Card"${
       answer || failed ? '' : ' data-pending'
     }><h2 class="Card_Title">${
-      esc(request.channel == 'email' ? 'Email' : 'You')
+      esc(
+        request.channel == 'email'
+          ? 'Email'
+          : request.channel == 'error'
+          ? 'An app error'
+          : 'You',
+      )
     }</h2><p style="white-space:pre-wrap">${esc(doc.body ?? '')}</p>${
       request.files?.length
         ? `<p>${
