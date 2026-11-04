@@ -736,6 +736,7 @@
     position: relative;
     display: grid;
     grid-template-columns: 2rem 1fr;
+    align-content: start;
     gap: var(--quarter-gap) 0.875rem;
     counter-increment: step;
   }
