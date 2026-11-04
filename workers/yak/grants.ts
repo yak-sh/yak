@@ -27,7 +27,7 @@
 // within about a minute rather than instantly — which is why the life is short
 // and the ceiling is a day.
 import { opened, seal } from './lib/token.ts'
-import type { Directory, Role } from './directory.ts'
+import type { Directory, Reach, Role, Seat } from './directory.ts'
 import { refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
@@ -215,57 +215,93 @@ export let revoke = async (
 // `own` answers the narrowed space too: a tool that was given no space asks
 // for the caller's own, and under a grant for one space that is the space it
 // means. Whether they may write there is still their membership, read below.
+//
+// `beyond` is each other space its holder was let into, with the role it was
+// given there, which stands in for the caller's membership in it: a space's
+// Operator is narrowed to its own space and the spaces that let it in
+// (operator-reach.ts).
 export let narrowed = (
   dir: Directory,
   slug: string,
   eid?: string,
   over = false,
+  beyond: Reach[] = [],
 ): Directory => {
   let matches = (space: Parameters<Directory['role']>[0]) =>
     eid ? space.eid == eid : space.slug == slug
+  let letIn = new Map(beyond.map((r) => [r.space.eid, r]))
+  let past = (space: { eid: string } | null | undefined) =>
+    space ? letIn.get(space.eid) : undefined
+  let also = (role?: Role) => beyond.filter((r) => !role || r.role == role)
+  let seat = (r: Reach): Seat => ({
+    space: r.space,
+    role: r.role,
+    seat: r.eid,
+    own: false,
+  })
+  let reachHere = async (person: string) => {
+    if (!over) {
+      return (await dir.reachable(person)).filter((r) => matches(r.space))
+    }
+    let space = eid ? await dir.at(eid) : await dir.space(slug)
+    if (!space || space.trashed) return []
+    let page = await dir.page(space.slug, null, person, true)
+    let role = page.administrative ? 'owner' as const : page.role
+    return role
+      ? (await dir.apps(space)).filter((app) => !app.trashed).map((app) => ({
+        space,
+        app,
+        role,
+      }))
+      : []
+  }
   return {
     ...dir,
     space: async (want: string) => {
-      if (!eid && want != slug) return null
+      if (!eid && want != slug && !letIn.size) return null
       let space = await dir.space(want)
-      return space && matches(space) ? space : null
+      return space && (matches(space) || past(space)) ? space : null
     },
     page: async (want, app, person) => {
       let got = await dir.page(want, app, person, over)
+      let here = !!got.space && matches(got.space)
       return {
         ...got,
         ...person
           ? {
-            role: got.space && matches(got.space) ? got.role : null,
-            administrative: !!got.space && matches(got.space) && over &&
-              got.administrative === true,
+            role: here ? got.role : past(got.space)?.role ?? null,
+            administrative: here && over && got.administrative === true,
           }
           : {},
       }
     },
-    spaces: async (person: string, role?: Role) =>
-      (await dir.spaces(person, role)).filter(matches),
-    seats: async (person: string, role?: Role) =>
-      (await dir.seats(person, role)).filter((s) => matches(s.space)),
+    spaces: async (person: string, role?: Role) => [
+      ...(await dir.spaces(person, role)).filter(matches),
+      ...also(role).map((r) => r.space),
+    ],
+    seats: async (person: string, role?: Role) => [
+      ...(await dir.seats(person, role)).filter((s) => matches(s.space)),
+      ...also(role).map(seat),
+    ],
     reachable: async (person: string) => {
-      if (!over) {
-        return (await dir.reachable(person)).filter((r) => matches(r.space))
-      }
-      let space = eid ? await dir.at(eid) : await dir.space(slug)
-      if (!space || space.trashed) return []
-      let page = await dir.page(space.slug, null, person, true)
-      let role = page.administrative ? 'owner' as const : page.role
-      return role
-        ? (await dir.apps(space)).filter((app) => !app.trashed).map((app) => ({
-          space,
-          app,
-          role,
-        }))
-        : []
+      let [here, there] = await Promise.all([
+        reachHere(person),
+        Promise.all(
+          beyond.map(async (r) =>
+            (await dir.apps(r.space)).filter((app) => !app.trashed)
+              .map((app) => ({ space: r.space, app, role: r.role }))
+          ),
+        ),
+      ])
+      return [...here, ...there.flat()]
     },
-    seated: async (person: string, role?: Role) =>
-      (await dir.seated(person, role)).filter((s) => matches(s.space)),
+    seated: async (person: string, role?: Role) => [
+      ...(await dir.seated(person, role)).filter((s) => matches(s.space)),
+      ...also(role).map(seat),
+    ],
     role: async (space: Parameters<Directory['role']>[0], person: string) => {
+      let r = past(space)
+      if (r) return r.role
       if (!matches(space)) return null
       if (!over) return dir.role(space, person)
       let page = await dir.page(space.slug, null, person, true)
@@ -273,7 +309,10 @@ export let narrowed = (
     },
     target: async (space: string, person: string, app?: string | null) => {
       let got = await dir.target(space, person, app)
-      return got.space && matches(got.space) ? got : { ...got, role: null }
+      let r = past(got.space)
+      return got.space && matches(got.space)
+        ? got
+        : { ...got, role: r?.role ?? null }
     },
     own: async () => {
       let space = eid ? await dir.at(eid) : await dir.space(slug)

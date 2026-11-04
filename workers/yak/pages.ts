@@ -639,6 +639,8 @@ export type DeskPage = {
   connections?: Connections
   /** who is in the space and its apps, and who has yet to accept */
   people?: People
+  /** the other spaces whose Operator works here, and its role (`operator_reach`) */
+  operators?: { eid: string; slug: string; title: string; role: string }[]
   /** what was typed into the invitation form, when the invitation was
    * refused and the page is drawn again */
   invite?: { email: string; app: string; role: string; note: string }
@@ -1645,6 +1647,54 @@ let inviting = (at: DeskPage) => {
   }<div class="Form_Actions"><button class="Button" type="submit">Send invitation</button></div></form></section>`
 }
 
+// The Operators of other spaces working here (operator-reach.ts, T-136179):
+// each with what it may do and a Remove, then the owner's other spaces whose
+// Operator they may let in, as apps.ts `saved` takes it.
+let operating = (at: DeskPage) => {
+  let ins = at.operators ?? []
+  let offered = (at.spaces ?? []).filter((s) =>
+    s.slug != at.space && !ins.some((o) => o.slug == s.slug)
+  )
+  let rows = ins.map((o) =>
+    `<li class="Rows_Item"><span>${esc(named(o))}'s Operator · ${
+      o.role == 'viewer' ? 'only looks' : 'changes things'
+    }</span><div class="Rows_Actions"><form method="post" action="${
+      managePath('people', at.space)
+    }"><input type="hidden" name="unreach" value="${
+      esc(o.eid)
+    }"><button class="Button Button-quiet" type="submit" aria-label="Remove ${
+      esc(named(o))
+    }'s Operator">Remove</button></form></div></li>`
+  ).join('')
+  let form = offered.length
+    ? `<form class="Form" method="post" action="${
+      managePath('people', at.space)
+    }">${
+      labeled(
+        'operator-space',
+        "Let this space's Operator work here",
+        `<select class="Field" id="operator-space" name="operator">${
+          offered.map((s, i) => option(s.slug, esc(named(s)), i == 0)).join('')
+        }</select>`,
+        'Whoever may ask that Operator can have it work here.',
+      )
+    }${
+      labeled(
+        'operator-role',
+        'It can',
+        `<select class="Field" id="operator-role" name="role">${
+          option('editor', 'Change things', true)
+        }${option('viewer', 'Only look', false)}</select>`,
+      )
+    }<div class="Form_Actions"><button class="Button" type="submit">Let it in</button></div></form>`
+    : ''
+  return rows || form
+    ? `<section class="Card">${heading('Operators from other spaces')}${
+      rows ? `<ul class="Rows">${rows}</ul>` : ''
+    }${form}</section>`
+    : ''
+}
+
 // Who is in the space and in each of its apps, and who has yet to accept
 // (people.ts): the way to invite someone, then a list for the space and one
 // for each app anybody is a guest of or invited to, each row drawn by its
@@ -1689,7 +1739,7 @@ export let people = (at: DeskPage) => {
       : ''
   return `${inviting(at)}${
     list('Members · every app', [...r.members, ...r.invited])
-  }${
+  }${operating(at)}${
     r.apps.map((a) =>
       list(
         `${a.app.title} · this app only`,

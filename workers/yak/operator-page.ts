@@ -1,6 +1,7 @@
 import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { directoryOf, type Space } from './directory.ts'
+import { reachOf } from './operator-reach.ts'
 import { builderOf, SPACE } from './build.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
@@ -276,16 +277,26 @@ let conversations = async (env: Env, space: Space, who: Who, at: string) => {
 // every other page (pages.ts `desk`).
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [talks, consent, seats] = await Promise.all([
+  let [talks, consent, { pa, beyond }] = await Promise.all([
     conversations(env, space, who, at),
     operatorDoor(env, space, who, 'texts', {}) as Promise<Consent | null>,
-    who.person ? directoryOf(env.STORE).seats(who.person, 'owner') : [],
+    reachOf(directoryOf(env.STORE), space, who.person ?? ''),
   ])
-  let pa = seats.some((s) => s.own && s.space.eid == space.eid)
+  let doing = (role: string) => role == 'viewer' ? 'can look' : 'can change'
   return `
 <section class="Card"><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p>${
     pa
       ? '<p>This is your own space, so its operator is your personal assistant: it can also work in your other spaces, with your role in each.</p>'
+      : ''
+  }${
+    beyond.length
+      ? `<p>It also works in ${
+        beyond.map((r) =>
+          `<a href="${managePath('apps', r.space.slug)}">${
+            esc(r.space.title || r.space.slug)
+          }</a> (${doing(r.role)})`
+        ).join(', ')
+      }.</p>`
       : ''
   }<p>Email from your member address: <a href="mailto:${
     esc(mailFrom(space.slug, null, env))

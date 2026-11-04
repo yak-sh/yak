@@ -209,6 +209,7 @@ import { voice } from './rtc.ts'
 import { notices } from './notices.ts'
 import { reach } from './tunnel.ts'
 import { refuse } from './tool.ts'
+import { letIn, letOut } from './operator-reach.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from './rate.ts'
@@ -2691,7 +2692,10 @@ let desk = async (
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
     view == 'people'
-      ? shelved.then(({ all }) => peopleIn(dir, [space], all))
+      ? Promise.all([
+        shelved.then(({ all }) => peopleIn(dir, [space], all)),
+        dir.admits(space.eid),
+      ])
       : undefined,
     // What this space calls out through (connections.ts), read only for the
     // page that shows it; on the person's own space (`member.own`), what they
@@ -2765,7 +2769,13 @@ let desk = async (
       : undefined,
     fee: rate(fee),
     agents,
-    people: people?.[0],
+    people: people?.[0][0],
+    operators: people?.[1].map((r) => ({
+      eid: r.space.eid,
+      slug: r.space.slug,
+      title: r.space.title,
+      role: r.role,
+    })),
     connections,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
       {
@@ -3048,6 +3058,33 @@ let saved = async (
     }
     let to = sentFrom(req, env)
     to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
+    return redirect(to.href, 303)
+  }
+  // The People page's Operators (operator-reach.ts): one of the owner's
+  // other spaces whose Operator they let work here, or take back out. Only a
+  // space they sit in is offered, and only such a one is let in.
+  if (form.has('operator') || form.has('unreach')) {
+    try {
+      if (form.has('operator')) {
+        let slug = String(form.get('operator')).trim()
+        let other = await dir.space(slug)
+        if (!other || !await dir.role(other, who.person)) {
+          throw refuse('missing', `you are in no space ${slug}`)
+        }
+        let role = String(form.get('role') ?? 'editor') as Role
+        await letIn(dir, space, other, role, who.person, vouched(who))
+      } else {
+        await letOut(dir, space, String(form.get('unreach')), vouched(who))
+      }
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return desk(req, env, dir, space, who, 'people', {
+        say: sentence(e.message),
+        no: true,
+      })
+    }
+    let to = sentFrom(req, env)
+    to.searchParams.set(form.has('operator') ? 'saved' : 'removed', '1')
     return redirect(to.href, 303)
   }
   // A People row's Remove, or Withdraw for an invitation: member_remove, as

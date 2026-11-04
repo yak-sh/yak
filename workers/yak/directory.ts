@@ -319,6 +319,10 @@ export type Seat = {
   owner?: string
 }
 
+/** A space reached by another's Operator, or the Operator's space a space let
+ * in (`operator_reach`): that space, the role given, the row's eid and who gave it. */
+export type Reach = { eid: string; space: Space; role: Role; by?: string }
+
 /** One app a person is a guest of, and what the grant lets them do. */
 export type Granted = { space: Space; app: App; access: Role }
 
@@ -551,6 +555,7 @@ export type Row = {
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
+  operator_reach?: { space: Id; operator: Id; role: Role; by?: Id | null }
   invite?: {
     to: Id
     person: Id
@@ -1490,6 +1495,34 @@ export let directory = (
     }
     return await asked
   }
+  // The `operator_reach` rows on one side, each with the live space on the other.
+  let reaching = async (
+    side: 'space' | 'operator',
+    other: 'space' | 'operator',
+    eid: string,
+  ): Promise<Reach[]> => {
+    let rows = (await query(`.operator_reach.${side}=${eid}`))
+      .filter((r) => r.operator_reach)
+    if (!rows.length) return []
+    let spaces = new Map(
+      (await query(
+        `.entity.eid=${
+          rows.map((r) => idOf(r.operator_reach![other])).join(',')
+        }`,
+      )).filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
+    )
+    return rows.flatMap((r) => {
+      let space = spaces.get(idOf(r.operator_reach![other]))
+      return space && !space.trashed
+        ? [{
+          eid: r.entity.eid,
+          space,
+          role: r.operator_reach!.role,
+          ...r.operator_reach!.by ? { by: idOf(r.operator_reach!.by) } : {},
+        }]
+        : []
+    })
+  }
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
@@ -2216,6 +2249,10 @@ export let directory = (
         return space ? [{ space, app, access: held.get(app.eid)! }] : []
       })
     },
+    // The spaces that let a space's Operator in (T-136179), and the other
+    // way, the Operators a space let in: each space with the role given.
+    reaches: (operator: string) => reaching('operator', 'space', operator),
+    admits: (space: string) => reaching('space', 'operator', space),
     // The next free variant of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the
     // sign-in card offers a person before it does (T-32967).

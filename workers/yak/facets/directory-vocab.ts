@@ -99,6 +99,23 @@ export let directoryDoc: VocabDoc = {
         access: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
+    // Another space's Operator let into this one (T-136179): the Operator of
+    // `operator` works in `space` with `role`, for whoever may ask it there.
+    // A space's owner writes it on its People page (operator-reach.ts), and
+    // `by` is who.
+    operator_reach: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      unique: [['space', 'operator']],
+      properties: {
+        space: ref('cascade'),
+        operator: ref('cascade'),
+        role: { type: 'string', enum: ['editor', 'viewer'] },
+        by: owned(ref('keep')),
+      },
+    },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
     // is the space (a seat) or the app (a grant), one property the way
     // `hostname.serves` is, and accepting is one batch that writes the

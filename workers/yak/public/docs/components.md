@@ -667,7 +667,7 @@ The complete list of reserved names:
     integration integration_install interrupted invite inviting key lease
     lines listed mail mail_answered mail_post mail_task member memory meter model model_reservation
     notice notice_confirmed notice_letter notice_posted notice_subscription
-    notified notify_trash occupancy openai opened openrouter order output output_of
+    notified notify_trash occupancy openai opened openrouter operator_reach order output output_of
     parent pending person plan price product project provider provisional public_file
     published quarantined questions reads recalled ref referenced
     refusal register_writes report repository representation requires
