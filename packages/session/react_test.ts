@@ -29,6 +29,7 @@ import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import { contextDoc } from '@yaks/context'
 import { taskDoc } from '@yaks/task/vocab'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
@@ -60,8 +61,9 @@ let vocab = loadVocab([
   fakeDoc,
   contextDoc,
   taskDoc,
+  edgeDoc,
   docDoc,
-], [kernelKeywords])
+], [kernelKeywords, edgeKeywords])
 
 let ids = {
   s: 'sess',
