@@ -14,9 +14,20 @@
 // build once, marking the commit `rebuilt{said}` with what Builds answered
 // (workers/yak/hook.ts reads the answer for the kernel's rebuild too).
 // The hook starts none while one is queued or initializing, so a build that is
-// merely waiting its turn costs nothing and is not reported; a build the hook
-// did start is. The hook would start a second build beside a running one
-// (Cloudflare's deploy hooks page), which is why a running one is read first.
+// merely waiting its turn costs nothing. A build the hook did start is
+// reported only for a failure of ours (`ours`). A head whose own build passed
+// and is not live is one: an older build went live over it. A head Builds
+// started no build for is not, alone: Cloudflare drops a push now and then
+// (8d466e6b and eabd1bb6 on 2026-10-21, fde2d0aa on 2026-11-04: GitHub made
+// the Cloudflare app's check suite, yet neither `yak` nor `yak-tracker` built,
+// and Builds kept no record of the push), and the build just started recovers
+// it. When the catch-up also started the build of the Worker source change
+// before the head, two pushes in a row went unbuilt: Builds stopped building
+// pushes (its trigger, watch paths or repo connection), and that is reported.
+// A failed build is the kernel's to file, and a start that still does not
+// deploy is reported below. The hook would start a second build beside a
+// running one (Cloudflare's deploy hooks page), which is why a running one
+// is read first.
 // An ask the hook answered with the pending build started nothing, so when
 // that pending build fails (Builds times out one that never left
 // initializing) and the kernel's rebuild does not deploy it either, the
@@ -42,6 +53,7 @@
 // does not is reported too.
 
 import { median } from './usage.ts'
+import { PENDING } from '../../workers/yak/hook.ts'
 
 /** How long a push may go not live before the catch-up looks for its build.
  * Builds queues one within seconds of the push, and a build of `yak` took 78 s
@@ -60,21 +72,26 @@ export let LATE = 3 * 60_000
 export let BOUND = 15 * 60_000
 
 /** main's head: its commit, when origin first showed it (ms), whether Workers
- * Builds is running a build of it or when that build failed (ms, once read),
- * when the catch-up asked for its build, whether the hook deferred that ask
- * to a pending build, and whether the catch-up gave up on it. */
+ * Builds is running a build of it, when that build failed (ms) or whether it
+ * passed, and the Worker source change before the one its build deploys
+ * (each once read), when the catch-up asked for its build, whether the hook
+ * deferred that ask to a pending build, and whether the catch-up gave up on
+ * it. */
 export type Head = {
   sha: string
   at: number
   building?: boolean
   broke?: number
+  passed?: boolean
+  prior?: string
   rebuilt?: number
   deferred?: boolean
   failed?: boolean
 }
 
-/** What Workers Builds says of a head's build, once read. */
-export type Build = Pick<Head, 'building' | 'broke'>
+/** What Workers Builds says of a head's build, and the change before it, once
+ * read. */
+export type Build = Pick<Head, 'building' | 'broke' | 'passed' | 'prior'>
 
 /** The check run Workers Builds keeps on a commit, as GitHub gives it. */
 export type Run = {
@@ -86,11 +103,12 @@ export type Run = {
 /// ran({ status: 'in_progress' }) -> { building: true }
 /// ran({ status: 'queued' }) -> { building: true }
 /// ran({ status: 'completed', conclusion: 'failure', completed_at: '2026-10-28T12:59:40Z' }) -> { broke: 1793192380000 }
-/// ran({ status: 'completed', conclusion: 'success' }) -> {}
+/// ran({ status: 'completed', conclusion: 'success' }) -> { passed: true }
+/// ran({ status: 'completed', conclusion: 'cancelled' }) -> {}
 /// ran({ status: null, conclusion: null, completed_at: null }) -> {}
 /** What a commit's latest check run says of its build: under way until it
- * completes, or failed at its completion. A build that passed, or was
- * cancelled, says nothing: no failure path rebuilds it. */
+ * completes, then failed at its completion or passed. A cancelled build, or
+ * none, says nothing. */
 export let ran = (run: Run): Build =>
   !run.status
     ? {}
@@ -98,6 +116,8 @@ export let ran = (run: Run): Build =>
     ? { building: true }
     : run.conclusion == 'failure' && run.completed_at
     ? { broke: Date.parse(run.completed_at) }
+    : run.conclusion == 'success'
+    ? { passed: true }
     : {}
 
 /** What serves: the commit its deployment was built from, when it went live
@@ -176,25 +196,52 @@ export class NotLive extends Error {
 let short = (sha: string) => sha.slice(0, 8)
 let minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
 
-/** Why the catch-up started main's build, with what Builds answered. */
-export let missed = (
-  head: Head,
-  live: Live,
-  answer: string,
-  late = LATE,
-  bound = BOUND,
-) =>
+/// let pushed = { sha: 'fde2d0aaab27', at: 0, prior: '5569fa814681' }
+/// let started = 'build 0333e0df queued'
+/// let pending = 'a pending build of main already exists'
+/// ours(pushed, started, undefined) -> false
+/// ours(pushed, started, 'build 87942fdf queued') -> true
+/// ours(pushed, started, pending) -> false
+/// ours({ ...pushed, passed: true }, started, undefined) -> true
+/// ours({ ...pushed, passed: true }, pending, undefined) -> false
+/// ours({ ...pushed, broke: 1 }, started, 'build 87942fdf queued') -> false
+/** Whether the build the catch-up just started for `head`, which Builds
+ * answered with `answer`, stands for a failure of ours, given what Builds
+ * answered when the catch-up started the build of the Worker source change
+ * before it (`before`, if it did). A head whose own build passed and is not
+ * live is one; a head Builds started no build for is one when the change
+ * before it went unbuilt too, and otherwise a push Cloudflare dropped. A
+ * start the hook deferred to a pending build started nothing, and a failed
+ * build is the kernel's to file. */
+export let ours = (head: Head, answer: string, before?: string) =>
+  answer != PENDING && !head.broke &&
+  (!!head.passed || (before != null && before != PENDING))
+
+/// let served = { sha: '5569fa814681', at: 0, rollback: false, has: false }
+/// missed(pushed, served, started).message -> "main's head fde2d0aa is not live 3 min after it was pushed; yak serves 5569fa81. No Workers Build of it is running or deployed it, so the deploy catch-up started main's build through its deploy hook (build 0333e0df queued), as it did for the Worker source change before it (5569fa81). Builds started no build for either push: check the yak trigger's branch, watch paths and repo connection."
+/// missed({ ...pushed, passed: true }, served, started).message -> "main's head fde2d0aa is not live 3 min after it was pushed, though its Workers Build passed; yak serves 5569fa81, so the deploy catch-up started main's build through its deploy hook (build 0333e0df queued). An older build went live after it, or its deploy put nothing live."
+/** Why the catch-up started main's build, with what Builds answered: the
+ * head's own build passed and is not live, or Builds built neither it nor
+ * the Worker source change before it. */
+export let missed = (head: Head, live: Live, answer: string, late = LATE) =>
   new NotLive(
-    `main's head ${short(head.sha)} is not live ${
-      head.broke
-        ? `${minutes(bound)} after its Workers Build failed`
-        : `${minutes(late)} after it was pushed`
-    }; yak serves ${short(live.sha)}. ${
-      head.broke
-        ? 'No build of main deployed it since'
-        : 'No Workers Build of it is running or deployed it'
-    }, so the deploy catch-up started main's build through its deploy ` +
-      `hook: ${answer}`,
+    head.passed
+      ? `main's head ${short(head.sha)} is not live ${
+        minutes(late)
+      } after it was pushed, though its Workers Build passed; yak serves ` +
+        `${short(live.sha)}, so ` +
+        `the deploy catch-up started main's build through its deploy hook ` +
+        `(${answer}). An older build went live after it, or its deploy put ` +
+        `nothing live.`
+      : `main's head ${short(head.sha)} is not live ${
+        minutes(late)
+      } after it was pushed; yak serves ${short(live.sha)}. No Workers ` +
+        `Build of it is running or deployed it, so the deploy catch-up ` +
+        `started main's build through its deploy hook (${answer}), as it ` +
+        `did for the Worker source change before it${
+          head.prior ? ` (${short(head.prior)})` : ''
+        }. Builds started no build for either push: check the yak trigger's ` +
+        `branch, watch paths and repo connection.`,
   )
 
 /** Why the catch-up gave up on a commit whose build it started. */

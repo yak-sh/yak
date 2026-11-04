@@ -160,14 +160,20 @@ and no check run shows that build. Any other head that is not live, or a failed
 one still not live a `BOUND` on, asks main's deploy hook for a build, and the
 ask leaves a `rebuilt{at, by, via, said}` mark on the commit's entity (its eid
 is its sha) with what Builds answered. The hook starts none while one is queued
-or initializing, so a build waiting its turn is neither duplicated nor reported;
-a build it did start is reported to the tracker, tagged with the commit, what is
-live and what Builds said. The hook would start a second build beside a running
-one, which is why a running one is read first. A `BOUND` (15 minutes, longer
-than any build measured) after the ask, still not live, the commit gets the
-kernel's `failed{reason}` mark and a second report, and no other build: its log
-says why. A rollback newer than the head is an operator's choice and is left
-alone. Removing the marks asks for another start.
+or initializing, so a build waiting its turn is neither duplicated nor reported.
+A build it did start is reported to the tracker, tagged with the commit, what is
+live and what Builds said, only when the failure is ours: the head's own build
+passed and something older went live over it, or Builds started no build for the
+head nor for the Worker source change before it, so its trigger stopped building
+pushes. One push with no build is Cloudflare dropping it (fde2d0aa on 2026-11-04
+reached neither `yak`'s trigger nor `yak-tracker`'s), and the build the catch-up
+started recovers it; a failed build is the kernel's to file. The hook would
+start a second build beside a running one, which is why a running one is read
+first. A `BOUND` (15 minutes, longer than any build measured) after the ask,
+still not live, the commit gets the kernel's `failed{reason}` mark and a second
+report, and no other build: its log says why. A rollback newer than the head is
+an operator's choice and is left alone. Removing the marks asks for another
+start.
 
 A look that reads what `yak` serves also times every deploy wrangler's
 deployments list shows. A commit went live at its first deployment (one version,

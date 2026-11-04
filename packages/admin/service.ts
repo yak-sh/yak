@@ -47,6 +47,7 @@ import {
   LATE,
   type Live,
   missed,
+  ours,
   ran,
   slow,
   type Step,
@@ -121,7 +122,7 @@ export type Doors = {
   /** whether Workers Builds is running the build that deploys a commit's
    * Worker source, or when it failed: the build of the newest commit at or
    * before it that changed that source, since a push that changes none starts
-   * no build */
+   * no build; and the change to that source before that one */
   build: (sha: string) => Promise<Build>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
@@ -133,6 +134,7 @@ export type Doors = {
 type Report = NonNullable<Host['report']>
 
 let SHA = /^[0-9a-f]{40}\b/
+let SHAS = /^[0-9a-f]{40}$/gm
 
 /** The check run Workers Builds keeps on a commit it builds for `yak`. */
 let CHECK = 'Workers Builds: yak'
@@ -246,9 +248,9 @@ export let box = (
       return r.code == 0
     },
     build: async (sha) => {
-      let built = SHA.exec(
-        await run(['rev-list', '-1', sha, '--', ...WATCHED]),
-      )?.[0] ?? sha
+      let [built = sha, prior] =
+        (await run(['rev-list', '-2', sha, '--', ...WATCHED])).match(SHAS) ??
+          []
       let runs =
         `repos/{owner}/{repo}/commits/${built}/check-runs?check_name=` +
         encodeURIComponent(CHECK)
@@ -263,7 +265,7 @@ export let box = (
         ],
         stopping,
       )
-      return ran(JSON.parse(check))
+      return { ...ran(JSON.parse(check)), prior }
     },
     start: async () => {
       let hook = options.hook
@@ -333,10 +335,14 @@ export let pass = async (
     }
     let answer = await doors.start()
     await g.apply([{ entity: { eid: tip.sha }, rebuilt: { said: answer } }])
-    // A pending build is a slow one, not a miss.
-    if (answer != PENDING) {
+    // One push Builds dropped is Cloudflare's, and this start recovers it.
+    let [before] = head.prior ? await g.get([head.prior], ['rebuilt']) : []
+    let said = before?.rebuilt
+      ? String((before.rebuilt as Comp).said)
+      : undefined
+    if (ours(head, answer, said)) {
       await report(
-        missed(head, live, answer, late, bound),
+        missed(head, live, answer, late),
         context('deploy missed', answer),
       )
     }

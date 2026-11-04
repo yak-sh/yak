@@ -1,7 +1,8 @@
 // The deploy catch-up through its doors: a head Builds never deployed gets one
-// build and two reports, and a head that is live, holds the same Worker
-// source, is still building, is being rebuilt after its build failed or was
-// rolled back past gets none. Each deploy a look shows is timed once, and
+// build, reported when its own build passed or the change before it needed one
+// too, and a head that is live, holds the same Worker source, is still
+// building, is being rebuilt after its build failed or was rolled back past
+// gets none. Each deploy a look shows is timed once, and
 // slower deploys, or a home page that does not answer, are reported.
 import { equal, match, ok, test } from '@yaks/testing'
 import { system } from '@yaks/fp'
@@ -29,6 +30,8 @@ let MIN = 60_000
 // Today's miss: 739f56b25 landed at 12:42:23Z while e56889ea5 was live.
 let HEAD = '739f56b25cae820c8541a8b4a1ade2f7a6c7e9be'
 let LIVE = 'e56889ea55133713b3034a4096d9e857eab5eefe'
+// The Worker source change before it.
+let PRIOR = '5569fa814681e17826ac3cae9fef4bef691ec324'
 let landed = Date.parse('2026-10-13T12:42:23Z')
 
 let fixture = (
@@ -100,20 +103,52 @@ test('before it is late, a head does not look for a live build', async () => {
   equal(beforeBound.looked, 0)
 })
 
-test('a late head no build deployed gets one start', async () => {
+// fde2d0aa's push on 2026-11-04 reached neither Worker's trigger.
+test('a late head no build deployed gets one start, unreported', async () => {
   let f = atBound
+  f.build = { prior: PRIOR }
   equal((await f.look()).step, 'rebuild')
   let [row] = await f.g.get([HEAD])
   equal((row.rebuilt as { said: string }).said, 'build aa194fb5 queued')
-  let [error, context] = f.reports[0]
-  match(error.message, /739f56b2 is not live 3 min .* build aa194fb5 queued/)
+  equal([f.started, f.reports.length], [1, 0])
+})
+
+// What the catch-up reports of a late head whose check run says `build`,
+// given what Builds answered when it started the build of the change before.
+let after = async (said?: string, build: Build = {}) => {
+  let f = fixture()
+  f.build = { prior: PRIOR, ...build }
+  if (said) await f.g.apply([{ entity: { eid: PRIOR }, rebuilt: { said } }])
+  f.at.now = landed + LATE
+  await f.look()
+  return f.reports.map(([error]) => error.message)
+}
+
+test('a head whose build passed, or a second unbuilt change, is reported', async () => {
+  equal(await after(), [])
+  equal(await after(PENDING), [])
+  match(
+    (await after('build 87942fdf queued')).join(),
+    /^main's head 739f56b2 is not live 3 min .*aa194fb5 queued.*5569fa81/,
+  )
+  match(
+    (await after(undefined, { passed: true })).join(),
+    /^main's head 739f56b2 .* though its Workers Build passed/,
+  )
+})
+
+test('a reported start names the commit, what is live and what Builds said', async () => {
+  let f = fixture()
+  f.build = { passed: true }
+  f.at.now = landed + LATE
+  await f.look()
+  let [[, context]] = f.reports
   equal(context.commit, HEAD)
   equal(context.tags, {
     worker: 'yak',
     live: LIVE,
     builds: 'build aa194fb5 queued',
   })
-  equal(f.started, 1)
 })
 
 test('a bound after its start, the catch-up gives up on it once', async () => {
@@ -164,7 +199,7 @@ test('a pending build that fails gets the start the hook deferred', async () => 
   equal((await f.look()).step, 'rebuild')
   let [row] = await f.g.get([HEAD])
   equal((row.rebuilt as { said: string }).said, 'build aa194fb5 queued')
-  match(f.reports[0][0].message, /15 min after its Workers Build failed/)
+  equal(f.reports.length, 0)
   f.at.now += BOUND + MIN
   equal((await f.look()).step, 'fail')
 })
@@ -182,10 +217,11 @@ test('a late head whose build is running waits for it, unreported', async () => 
 })
 
 // fcabed20's build failed at 12:59:40Z, four minutes after its push; the
-// kernel's rebuild went live 77 s later.
+// kernel's rebuild went live 77 s later. The kernel files a failed build.
 test('a head whose build failed waits a bound for its rebuild, then gets one', async () => {
   let f = fixture()
-  f.build = { broke: landed + LATE - 5_000 }
+  await f.g.apply([{ entity: { eid: PRIOR }, rebuilt: { said: 'build 1' } }])
+  f.build = { broke: landed + LATE - 5_000, prior: PRIOR }
   f.at.now = landed + LATE
   equal((await f.look()).step, 'wait')
   f.at.now += BOUND - 2 * MIN
@@ -193,11 +229,7 @@ test('a head whose build failed waits a bound for its rebuild, then gets one', a
   equal([f.started, f.reports.length], [0, 0])
   f.at.now += 2 * MIN
   equal((await f.look()).step, 'rebuild')
-  match(
-    f.reports[0][0].message,
-    /739f56b2 is not live 15 min after its Workers Build failed; .*No build of main deployed it since.* build aa194fb5 queued/,
-  )
-  equal(f.started, 1)
+  equal([f.started, f.reports.length], [1, 0])
 })
 
 test('a live head, the same source or a newer rollback starts nothing', async () => {
