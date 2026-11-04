@@ -113,8 +113,10 @@ export type Doors = {
   answers: () => Promise<string | undefined>
   /** whether two commits hold the same Worker source */
   same: (a: string, b: string) => Promise<boolean>
-  /** whether Workers Builds is running a build of a commit, or when it
-   * failed */
+  /** whether Workers Builds is running the build that deploys a commit's
+   * Worker source, or when it failed: the build of the newest commit at or
+   * before it that changed that source, since a push that changes none starts
+   * no build */
   build: (sha: string) => Promise<Build>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
@@ -251,9 +253,13 @@ export let box = (
       return r.code == 0
     },
     build: async (sha) => {
-      let runs = `repos/{owner}/{repo}/commits/${sha}/check-runs?check_name=` +
+      let built = SHA.exec(
+        await run(['rev-list', '-1', sha, '--', ...WATCHED]),
+      )?.[0] ?? sha
+      let runs =
+        `repos/{owner}/{repo}/commits/${built}/check-runs?check_name=` +
         encodeURIComponent(CHECK)
-      let run = await command(
+      let check = await command(
         dir,
         'gh',
         [
@@ -264,7 +270,7 @@ export let box = (
         ],
         stopping,
       )
-      return ran(JSON.parse(run))
+      return ran(JSON.parse(check))
     },
     start: async () => {
       let hook = options.hook

@@ -152,21 +152,22 @@ the two commits through the build's watch paths (workers/yak/wrangler.ts
 as live. A head that is not live and that Builds is still building waits for its
 build: Builds keeps a check run named `Workers Builds: yak` on the commit in
 GitHub, in progress while the build runs, and the catch-up reads it with `gh`. A
-head whose build failed waits a `BOUND` from the failure: Builds tells the
-kernel, which builds main again through the deploy hook and files that build's
-failure (workers/yak/builds.ts), and no check run shows that build. Any other
-head that is not live, or a failed one still not live a `BOUND` on, asks main's
-deploy hook for a build, and the ask leaves a `rebuilt{at, by, via, said}` mark
-on the commit's entity (its eid is its sha) with what Builds answered. The hook
-starts none while one is queued or initializing, so a build waiting its turn is
-neither duplicated nor reported; a build it did start is reported to the
-tracker, tagged with the commit, what is live and what Builds said. The hook
-would start a second build beside a running one, which is why a running one is
-read first. A `BOUND` (15 minutes, longer than any build measured) after the
-ask, still not live, the commit gets the kernel's `failed{reason}` mark and a
-second report, and no other build: its log says why. A rollback newer than the
-head is an operator's choice and is left alone. Removing the marks asks for
-another start.
+head that changed no watched path has no build of its own, so the check run read
+is that of the newest commit before it that did. A head whose build failed waits
+a `BOUND` from the failure: Builds tells the kernel, which builds main again
+through the deploy hook and files that build's failure (workers/yak/builds.ts),
+and no check run shows that build. Any other head that is not live, or a failed
+one still not live a `BOUND` on, asks main's deploy hook for a build, and the
+ask leaves a `rebuilt{at, by, via, said}` mark on the commit's entity (its eid
+is its sha) with what Builds answered. The hook starts none while one is queued
+or initializing, so a build waiting its turn is neither duplicated nor reported;
+a build it did start is reported to the tracker, tagged with the commit, what is
+live and what Builds said. The hook would start a second build beside a running
+one, which is why a running one is read first. A `BOUND` (15 minutes, longer
+than any build measured) after the ask, still not live, the commit gets the
+kernel's `failed{reason}` mark and a second report, and no other build: its log
+says why. A rollback newer than the head is an operator's choice and is left
+alone. Removing the marks asks for another start.
 
 A look that reads what `yak` serves also times every deploy wrangler's
 deployments list shows. A commit went live at its first deployment (one version,
