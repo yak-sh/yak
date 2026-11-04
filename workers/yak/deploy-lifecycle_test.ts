@@ -5,7 +5,7 @@ import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
-import { declared, keep, platform } from './testing.ts'
+import { declared, keep, owned, platform } from './testing.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
@@ -215,7 +215,7 @@ let crossed = await (async () => {
       about: 'Recipes',
     })
   await publish()
-  await call(f.ctx, 'space_new', { slug: 'bo', title: 'Bo' })
+  await owned(f.ctx, 'bo', 'Bo')
   await call(f.ctx, 'app_install', { space: 'bo', name: 'reload-recipes' })
   let installed = async () => {
     let space = (await f.dir.space('bo'))!

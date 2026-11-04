@@ -9,7 +9,7 @@ import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
-import { type Directory, directoryOf } from './directory.ts'
+import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
 import { endpoints } from './endpoints.ts'
@@ -620,9 +620,30 @@ export let txt = { type: 'string' }
 export let num = { type: 'number' }
 export let when = { type: 'string', format: 'date-time' }
 
-// A person with spaces and apps, made through their own agent's doors: they
-// sign in, then space_new and app_new. The first app in a space answers its
-// bare hostname. Returns who they are, and the eids by slug.
+// A free space this person owns, written into the directory by the platform
+// the way directory.ts `mint` writes one: what a space made before one person
+// was held to one free space (meter.ts `SPACES`) is. Answers its eid.
+export let owned = async (
+  k: Kernel,
+  person: string,
+  slug: string,
+  title = slug,
+) => {
+  let eid = crypto.randomUUID()
+  await meta(k).apply([
+    {
+      entity: { eid },
+      doc: { title },
+      space: { slug, store: spaceHandle(slug, eid) },
+    },
+    { entity: { eid: '$seat' }, member: { space: eid, person, role: 'owner' } },
+  ])
+  return eid
+}
+
+// A person with spaces and apps: they sign in, own each space (`owned`), and
+// make its apps through their own agent's app_new. The first app in a space
+// answers its bare hostname. Returns who they are, and the eids by slug.
 export let seed = async (
   k: Kernel,
   spaces: { slug: string; apps: string[] }[],
@@ -634,7 +655,7 @@ export let seed = async (
     String((await agent.answer(tool, args)).value?.eid)
   let eids: Record<string, string> = {}
   for (let s of spaces) {
-    eids[s.slug] = await made('space_new', { slug: s.slug, title: s.slug })
+    eids[s.slug] = await owned(k, them.person, s.slug)
     for (let a of s.apps) {
       eids[`${s.slug}/${a}`] = await made('app_new', {
         space: s.slug,

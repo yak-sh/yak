@@ -1,6 +1,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { accepted, bearerFor, connector, kernel, signIn } from './probe.ts'
+import {
+  accepted,
+  bearerFor,
+  connector,
+  kernel,
+  owned,
+  signIn,
+} from './probe.ts'
 
 test('app store reads honor login bearers and live membership, and reject invalid tokens', async () => {
   let k = await kernel()
@@ -60,7 +67,7 @@ test('app store reads honor login bearers and live membership, and reject invali
     let grant = await agent.tool('grant', { space, hours: 1 })
     let narrow = /yak login (\S+)/.exec(grant)![1]
     let elsewhere = `${space}-other`
-    await agent.tool('space_new', { slug: elsewhere, title: 'Elsewhere' })
+    await owned(k, owner.person, elsewhere, 'Elsewhere')
     await agent.tool('app_new', {
       space: elsewhere,
       slug: 'private',

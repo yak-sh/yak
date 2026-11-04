@@ -1,6 +1,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { accepted, bearerFor, connector, kernel, signIn } from './probe.ts'
+import {
+  accepted,
+  bearerFor,
+  connector,
+  kernel,
+  owned,
+  signIn,
+} from './probe.ts'
 
 test('app selector resolves commandless apps for owners and members, not strangers', async () => {
   let k = await kernel()
@@ -10,7 +17,7 @@ test('app selector resolves commandless apps for owners and members, not strange
     let other = await signIn(k)
     let agent = connector(k, owner.cookie)
     let space = `address-${crypto.randomUUID().slice(0, 8)}`
-    await agent.tool('space_new', { slug: space, title: 'Address probe' })
+    await owned(k, owner.person, space, 'Address probe')
     await agent.tool('app_new', { space, slug: 'empty', title: 'No commands' })
     await agent.tool('member_add', { space, email: member.email })
     await accepted(k, member.email, member.cookie)
@@ -42,7 +49,7 @@ test('app selector resolves commandless apps for owners and members, not strange
     assertEquals(hidden.status, 404)
     assertEquals((await hidden.json()).error.code, 'not_found')
     let second = `${space}-two`
-    await agent.tool('space_new', { slug: second, title: 'Another space' })
+    await owned(k, owner.person, second, 'Another space')
     await agent.tool('app_new', {
       space: second,
       slug: 'empty',

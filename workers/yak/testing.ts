@@ -62,7 +62,7 @@ import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
 import type { Binding as AiBinding } from '@yaks/workers-ai'
 import { type Declaration, keepDeclaration } from './declaration.ts'
-import { type App, releaseOf, type Space } from './directory.ts'
+import { type App, type Directory, releaseOf, type Space } from './directory.ts'
 
 /** What a deploy keeps beside the release it selects, for a fixture that
  * stamps an app's version instead of deploying: by default no words and no
@@ -1104,6 +1104,20 @@ export let space = (over: Partial<Space> = {}): Space => ({
   tunnel: null,
   ...over,
 })
+
+/** A free space this person owns, written the way directory.ts `mint` writes
+ * one: what a space made before one person was held to one free space
+ * (meter.ts `SPACES`) is. Answers its eid. probe.ts `owned` is the same for
+ * a kernel. */
+export let owned = (
+  ctx: { dir: Directory; person: string },
+  slug: string,
+  title = slug,
+) =>
+  ctx.dir.mint(ctx.person, slug, title, {
+    'x-yak-person': ctx.person,
+    'x-yak-role': 'owner',
+  })
 
 /** A published public app in {@link space}, for a test to vary. */
 export let app = (over: Partial<App> = {}): App => ({

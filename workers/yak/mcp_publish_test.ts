@@ -14,6 +14,7 @@ import {
   letter,
   letters,
   num,
+  owned,
   signIn,
   txt,
   unique,
@@ -34,7 +35,7 @@ test('a word two spaces spell differently stays two words', async () => {
       slug: string,
       defs: Record<string, Record<string, unknown>>,
     ) => {
-      await agent.tool('space_new', { slug: space, title: space })
+      await owned(k, jeff.person, space)
       await agent.tool('app_new', { space, slug, title: slug })
       await agent.tool('app_files', {
         space,
@@ -176,7 +177,7 @@ test('an app is published by name, and the name is one app', async () => {
 
     // A second space claiming the same name is refused, named with the app
     // that has it — and its own slug is free, so it offers under another.
-    await agent.tool('space_new', { slug: kitchen44, title: kitchen44 })
+    await owned(k, jeff.person, kitchen44)
     await made(kitchen44, recipes44)
     await agent.tool('app_deploy', { space: kitchen44, app: recipes44 })
     assertStringIncludes(
@@ -979,7 +980,7 @@ test(
         about: 'A recipe box',
       })
       let pantry = `pantry-${crypto.randomUUID().slice(0, 8)}`
-      await his.tool('space_new', { slug: pantry, title: 'Pantry' })
+      await owned(k, jeff.person, pantry, 'Pantry')
       await his.tool('app_new', {
         space: pantry,
         slug: 'shelf',

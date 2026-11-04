@@ -212,10 +212,12 @@ export let CURRENCY = 'USD'
 // Every allowance and the model budget belong to the space: each one compares
 // the space's own meter with the space's own plan, and nothing is summed
 // across the spaces one person owns. A person has no plan, allowance or
-// budget; they own at most {@link SPACES} free spaces (T-131887).
+// budget; they own at most {@link SPACES} free spaces (T-131887). Jeff,
+// 2026-10-22: "and yes, one included space." Spaces that were free before
+// the cap stay free; it only stops making or restoring another.
 
 /** The free spaces one person may own. */
-export let SPACES = 5
+export let SPACES = 1
 
 /** The monthly usage counters. Models and realtime spend the same space
  * budget; their separate counters still say what each source cost. */
@@ -645,13 +647,19 @@ export let atStored = (
 }
 
 /** The refusal at {@link SPACES}: the free spaces a person owns, and what
- * frees one. Sharing is never what stops them, so it says so. */
-export let tooManySpaces = (held: Space[], env: Host = {}) =>
-  `you own ${held.length} free spaces, which is what one person gets for ` +
-  `nothing — delete one (space_delete) to make another. A space on a paid ` +
-  `plan does not count toward them, and neither does a space somebody else ` +
-  `invited you into, so putting one on the Plus plan frees its place. ` +
-  `Compare paid plans in its settings: ${planSettings(held[0].slug, env)}`
+ * makes room. Sharing is never what stops them, so it says so. */
+export let tooManySpaces = (held: Space[], env: Host = {}) => {
+  let gets = SPACES == 1 ? 'one free space' : `${SPACES} free spaces`
+  let extra = held.length - SPACES + 1
+  return `one person gets ${gets}, and you own ${count(held.length)} ` +
+    `(${held.map((s) => s.slug).join(', ')}) — put ${
+      extra == 1 ? 'one' : extra
+    } on the Plus plan or delete ${
+      extra == 1 ? 'one' : 'them'
+    } (space_delete) to make another. A space on a paid plan does not ` +
+    `count, and neither does a space somebody else invited you into. ` +
+    `Compare paid plans in its settings: ${planSettings(held[0].slug, env)}`
+}
 
 // ---- the letters (T-33688) --------------------------------------------------
 //

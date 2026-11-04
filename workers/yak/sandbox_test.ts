@@ -30,7 +30,14 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import { kv, platform, type Ran, sandboxes, workspaces } from './testing.ts'
+import {
+  kv,
+  owned,
+  platform,
+  type Ran,
+  sandboxes,
+  workspaces,
+} from './testing.ts'
 import type { Space } from './directory.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
@@ -876,7 +883,7 @@ let twoSpaces = await (async () => {
   let box = sandboxes()
   let seed = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let dir = dirOf(seed.env)
-  await tool('space_new').run(ctxOf(seed.env), { slug: 'ada2', title: 'Two' })
+  await owned({ dir, person: ADA }, 'ada2', 'Two')
   let other = (await dir.space('ada2'))!
   await dir.apply({
     entities: [

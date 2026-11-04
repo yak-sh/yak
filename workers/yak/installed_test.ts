@@ -11,7 +11,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
+import { connector, kernel, owned, signIn, txt, vocabFile } from './probe.ts'
 import { token as hash } from '@yaks/graph'
 
 test('an installed copy runs like its space, or sandboxed', async () => {
@@ -24,8 +24,7 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     let home = `home-${tag}`
     let offer = `notes-${tag}`
     let wrote = async (space: string, app: string) => {
-      await agent.tool('space_new', { slug: space, title: space })
-        .catch(() => {})
+      await owned(k, me.person, space)
       await agent.tool('app_new', { space, slug: app, title: app })
       await agent.tool('app_files', {
         space,

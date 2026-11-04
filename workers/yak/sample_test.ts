@@ -3,13 +3,13 @@ import { test } from '@yaks/testing'
 import { type App, directoryOf, storeAt } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { connector, fresh, txt, vocabFile } from './probe.ts'
+import { connector, fresh, owned, txt, vocabFile } from './probe.ts'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)
 let dir = directoryOf(env.STORE)
 let agent = connector(k, k.owner.cookie)
-await agent.tool('space_new', { slug: 'samples', title: 'Samples' })
+await owned(k, k.owner.person, 'samples', 'Samples')
 let seed = (title: string) => ({
   path: 'seed.json',
   content: JSON.stringify([{ entity: { eid: '$a' }, note: { title } }]),

@@ -29,7 +29,7 @@ import {
   uiMeta,
 } from './tools.ts'
 import { sha256 } from './versions.ts'
-import { platform } from './testing.ts'
+import { owned, platform } from './testing.ts'
 import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
@@ -642,8 +642,10 @@ test('a listing asks the directory a fixed number of times', async () => {
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let setup: Ctx = { env, dir, person: ADA }
+  await call(setup, 'space_new', { slug: 'one', title: 'one' })
+  await owned(setup, 'two')
+  await owned(setup, 'three')
   for (let space of ['one', 'two', 'three']) {
-    await call(setup, 'space_new', { slug: space, title: space })
     for (let app of ['a', 'b', 'c']) {
       await call(setup, 'app_new', { space, slug: `${app}-app`, title: app })
     }

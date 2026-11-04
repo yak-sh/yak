@@ -20,6 +20,7 @@ import {
   meta,
   rfc822,
   seed,
+  signIn,
   unique,
 } from './probe.ts'
 
@@ -188,10 +189,21 @@ export let renamed = async (k: Kernel) => {
     404,
   )
 
-  // Somebody else takes the name Ada left, which still redirected to her:
-  // it is theirs now, whole. Their space roots at a handle of its own, and
-  // their cookbook is a store of its own.
-  let rex = await seed(k, [{ slug: ada46, apps: ['cookbook'] }])
+  // Somebody else takes the name Ada left, which still redirected to her,
+  // moving their one free space there (meter.ts `SPACES`): it is theirs now,
+  // whole. Their space roots at a handle of its own, and their cookbook is a
+  // store of its own.
+  let rex = await signIn(k)
+  let theirs = connector(k, rex.cookie)
+  await theirs.tool('space_set', {
+    space: rex.email.split('@')[0],
+    slug: ada46,
+  })
+  await theirs.tool('app_new', {
+    space: ada46,
+    slug: 'cookbook',
+    title: 'cookbook',
+  })
   assert((await row(ada46)).space.store != store)
   assertEquals(
     await client(k, `${ada46}.yaks.app`, 'cookbook', rex.cookie)

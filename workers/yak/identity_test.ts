@@ -26,6 +26,7 @@ import {
   letters,
   mailed,
   meta,
+  owned,
   signIn,
   unique,
 } from './probe.ts'
@@ -1024,7 +1025,7 @@ test('/login never draws the box for a browser already signed in', async () => {
       return r.headers.get('location')
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
-    let { cookie } = await signIn(k)
+    let { cookie, person } = await signIn(k)
     let home = 'https://yaks.app/manage'
 
     // Aimed nowhere: their own space, which is where a fresh sign-in with no
@@ -1046,10 +1047,7 @@ test('/login never draws the box for a browser already signed in', async () => {
     // Aimed at nothing, it is their first — the one their address names —
     // and never the newest (T-34233).
     let other = `garden-${crypto.randomUUID().slice(0, 8)}`
-    await connector(k, cookie).tool('space_new', {
-      slug: other,
-      title: 'Garden',
-    })
+    await owned(k, person, other, 'Garden')
     let garden = `https://${other}.yaks.app/`
     assertEquals(await sent(aimed(garden), cookie), garden)
     assertEquals(await sent('/login', cookie), home)

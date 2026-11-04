@@ -363,6 +363,13 @@ test(
       )
       assertStringIncludes(await no(`${jeff27}.recipes@yaks.app`), 'no mailbox')
       assertStringIncludes(await no(`${jeff27}@yaks.app`), 'no mailbox')
+      // One person holds one free space (meter.ts `SPACES`): their others go
+      // to the trash first, to make room for this one to come back.
+      for (let other of [them.email.split('@')[0], bare27Space]) {
+        let gone = await door(`/space/${other}/delete`, { confirm: other })
+        assertEquals(gone.status, 200)
+        await gone.body?.cancel()
+      }
       await connector(k, them.cookie).tool('space_restore', { space: jeff27 })
       assertEquals(
         (await arrives(k, {
@@ -388,7 +395,6 @@ test(
   async () => {
     let k = await kernel()
     let jeff28 = unique('jeff28')
-    let elsewhere28 = unique('elsewhere28')
     try {
       let them = await seed(k, [{ slug: jeff28, apps: ['recipes'] }])
       let agent = connector(k, them.cookie)
@@ -449,7 +455,10 @@ test(
         entity: { eid: them.eids[jeff28] },
         meter: { month: monthOf(new Date()), emails: 100 },
       }])
-      await agent.tool('space_new', { slug: elsewhere28, title: 'Elsewhere' })
+      await agent.tool('space_set', {
+        space: them.email.split('@')[0],
+        title: 'Elsewhere',
+      })
       await write('The hundred and first')
       assertEquals(await spent(), 101)
       assertEquals(

@@ -16,6 +16,7 @@ import {
   meta,
   num,
   onPlus,
+  owned,
   seed,
   signIn,
   txt,
@@ -696,9 +697,8 @@ test('a write with no app routes each component to its own app', async () => {
 test('app_list answers what the month cost', async () => {
   let k = await kernel()
   let metered35 = unique('metered35')
-  let meteredToo = unique('metered-too35')
   try {
-    let { cookie, eids } = await seed(k, [
+    let { cookie, eids, email } = await seed(k, [
       { slug: metered35, apps: ['recipes'] },
     ])
     let agent = connector(k, cookie)
@@ -730,8 +730,8 @@ test('app_list answers what the month cost', async () => {
     // which is not that door. The sweep itself writes through `stamp`, which
     // clears it; a test standing in for the sweep says so here instead of
     // waiting out a TTL.
-    await agent.tool('space_new', {
-      slug: meteredToo,
+    await agent.tool('space_set', {
+      space: email.split('@')[0],
       title: 'Too',
     })
     let said = await agent.answer('app_list', { space: metered35 })
@@ -792,10 +792,8 @@ test('the free tier: a warning once, then the refusals', async () => {
   let k = await kernel()
   let brim36 = unique('brim36')
   let heavySpace = unique('heavy36')
-  let brimToo = unique('brim-too36')
-  let quotaCache = unique('quota-cache36')
   try {
-    let { cookie, eids } = await seed(k, [
+    let { cookie, eids, email } = await seed(k, [
       { slug: brim36, apps: ['one'] },
       { slug: heavySpace, apps: ['big'] },
     ])
@@ -827,8 +825,8 @@ test('the free tier: a warning once, then the refusals', async () => {
     ])
     // The seeding went in through the graph tier, which is not the door that
     // empties the directory's read cache; a directory write is.
-    await agent.tool('space_new', {
-      slug: brimToo,
+    await agent.tool('space_set', {
+      space: email.split('@')[0],
       title: 'Too',
     })
 
@@ -898,8 +896,8 @@ test('the free tier: a warning once, then the refusals', async () => {
       entity: { eid: eids[brim36] },
       meter: { ...row, requests: FREE.requests * 2 },
     }])
-    await agent.tool('space_new', {
-      slug: quotaCache,
+    await agent.tool('space_set', {
+      space: email.split('@')[0],
       title: 'Quota',
     })
     // A month of visitors past the allowance is news for the owner, never a
@@ -1429,7 +1427,9 @@ for (let plan of ['Plus', 'comped']) {
     let k = await fresh()
     try {
       let slug = plan == 'Plus' ? 'plus-limits37' : 'yourname'
-      let { cookie, eids } = await seed(k, [{ slug, apps: ['original'] }])
+      let { cookie, eids, email } = await seed(k, [
+        { slug, apps: ['original'] },
+      ])
       let agent = connector(k, cookie)
       let at = { space: slug, app: 'original' }
       await agent.tool('app_files', {
@@ -1449,8 +1449,8 @@ for (let plan of ['Plus', 'comped']) {
         await meta(k).apply(seeded.slice(i, i + 10))
       }
       // Refresh the directory after seeding through its graph.
-      await agent.tool('space_new', {
-        slug: 'limits-refresh37',
+      await agent.tool('space_set', {
+        space: email.split('@')[0],
         title: 'Refresh',
       })
       for (let app of ['last', 'over', 'extra']) {
@@ -1604,10 +1604,11 @@ test('an app store answers eids and no numbers, and refuses $num', async () => {
 test('the platform admin reads, patches and rolls back an app it holds no seat in', async () => {
   let k = await kernel()
   try {
-    let theirs = connector(k, (await signIn(k)).cookie)
+    let them = await signIn(k)
+    let theirs = connector(k, them.cookie)
     let space = unique('own')
     let at = { space, app: 'sounds' }
-    await theirs.tool('space_new', { slug: space, title: space })
+    await owned(k, them.person, space)
     await theirs.tool('app_new', { space, slug: 'sounds', title: 'sounds' })
     await theirs.tool('app_files', {
       ...at,

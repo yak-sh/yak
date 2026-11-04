@@ -22,6 +22,7 @@ import {
   kernel,
   letter,
   meta,
+  owned,
   seed,
   signedIn,
   signIn,
@@ -407,9 +408,9 @@ test('an app says who may read it and who may write it', async () => {
   let k = await kernel()
   try {
     // He signs in for real: the address is his.
-    let { cookie, email, name } = await signIn(k)
+    let { cookie, email, name, person } = await signIn(k)
     let agent = connector(k, cookie)
-    await agent.tool('space_new', { slug: club70, title: `Book ${club70}` })
+    await owned(k, person, club70, `Book ${club70}`)
     let born = (slug: string, access?: string) =>
       agent.tool('app_new', {
         space: club70,

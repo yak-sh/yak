@@ -63,9 +63,11 @@ uses never counts against another. Jeff, 2026-11-04: "we gotta re-organize
 website and the internal portal." Billing is keyed on the space: each space
 has its own Stripe customer and at most one subscription (billing.ts
 `payerFor`), it's paid for, changed and cancelled from that space's plan
-settings, and only its owner may pay. A person may own five free spaces
-(meter.ts `SPACES`); a paid space doesn't count toward them. So the plan is
-one sentence: each space is free or on a paid plan. Copy never says a plan,
+settings, and only its owner may pay. A person's first space is free, and
+every other space they own is on a paid plan: Jeff decided one free space on
+T-131887 ("and yes, one included space."), and meter.ts `SPACES` holds it.
+Spaces that were free before the cap stay free. So the plan is one sentence:
+each space is free or on a paid plan. Copy never says a plan,
 budget or allowance is a person's or an account's.
 
 - **Free is generous with people.** Members, invitations, visitors,

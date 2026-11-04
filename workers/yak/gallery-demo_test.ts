@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
-import { connector, fresh, letter, vocabFile } from './probe.ts'
+import { connector, fresh, letter, owned, vocabFile } from './probe.ts'
 import { ServingCopy } from './serving-copy.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
 import { directoryOf } from './directory.ts'
@@ -26,8 +26,8 @@ let k = await fresh({
   dir = directoryOf(env.STORE)
 })
 let agent = connector(k, k.owner.cookie)
-await agent.tool('space_new', { slug: 'yourname', title: 'Demos' })
-await agent.tool('space_new', { slug: 'home', title: 'Private home' })
+await owned(k, k.owner.person, 'yourname', 'Demos')
+await owned(k, k.owner.person, 'home', 'Private home')
 let cases = ['skip', 'tool', 'web', 'resume']
 for (let app of cases) {
   await agent.tool('app_new', {
@@ -178,8 +178,8 @@ test('relisting updates the demo offer and keeps its sample records', async () =
 let demos = await Promise.all(['bible-study', 'housebook'].map(async (app) => {
   let k = await fresh()
   let agent = connector(k, k.owner.cookie)
-  await agent.tool('space_new', { slug: 'yourname', title: 'Demos' })
-  await agent.tool('space_new', { slug: 'home', title: 'Private home' })
+  await owned(k, k.owner.person, 'yourname', 'Demos')
+  await owned(k, k.owner.person, 'home', 'Private home')
   let index = await Deno.readTextFile(
     new URL(`../../apps/${app}/demo/index.html`, import.meta.url),
   )

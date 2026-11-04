@@ -2600,7 +2600,7 @@ let holds = (a: Schema): string =>
   ].join(' ')
 
 /** Refused where the caller already owns as many free spaces as one person
- * gets (meter.ts `SPACES`, T-37882). A space in the trash is on its way out,
+ * gets (meter.ts `SPACES`, T-131887). A space in the trash is on its way out,
  * so it does not count; one somebody else made and invited them into is not
  * theirs, and one on the Plus plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {

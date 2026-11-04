@@ -12,7 +12,10 @@ import { ROWS } from './agent.ts'
 import {
   connector,
   kernel,
+  meta,
   num,
+  onPlus,
+  owned,
   signedIn,
   txt,
   unique,
@@ -474,7 +477,7 @@ test(
         paths(await agent.tool('app_files', { app: 'garden', op: 'list' })),
         '(no files)',
       )
-      await agent.tool('space_new', { slug: jeff_work54, title: 'Work' })
+      await owned(k, person, jeff_work54, 'Work')
       await assertRejects(
         () => agent.tool('app_new', { slug: 'x', title: 'X' }),
         Error,
@@ -1504,10 +1507,11 @@ test(
       let stranger = connector(k, await signedIn(k, crypto.randomUUID()))
       // Even someone who has never had a space gets one the moment they
       // need it, rather than being asked to invent a name.
-      assertMatch(
-        await stranger.tool('app_new', { slug: 'notes', title: 'Notes' }),
-        /^app [^/]+\/notes /,
-      )
+      let made = await stranger.tool('app_new', {
+        slug: 'notes',
+        title: 'Notes',
+      })
+      assertMatch(made, /^app [^/]+\/notes /)
       await assertRejects(
         () => stranger.tool('app_files', { ...app, op: 'list' }),
         Error,
@@ -1519,6 +1523,12 @@ test(
         JSON.parse(await stranger.tool('graph_query', { q: '.doc' })),
         [],
       )
+      // That one is his one free space (meter.ts `SPACES`); on Plus, it leaves
+      // room for another.
+      let [mine] = await meta(k).query(
+        `.space.slug=${/^app ([^/]+)\//.exec(made)![1]}`,
+      )
+      await onPlus(k, mine.entity.eid)
       assertMatch(
         await stranger.tool('space_new', { slug: maya54, title: 'Maya' }),
         new RegExp(`${maya54}\\.yaks\\.app`),

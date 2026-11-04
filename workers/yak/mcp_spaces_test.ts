@@ -13,6 +13,7 @@ import {
   kernel,
   letters,
   meta,
+  owned,
   seed,
   signIn,
   txt,
@@ -356,10 +357,11 @@ test('deleting the front page puts the space back to the default', async () => {
 test('the platform admin trashes and restores an app without a seat', async () => {
   let k = await kernel()
   try {
-    let owner = connector(k, (await signIn(k)).cookie)
+    let them = await signIn(k)
+    let owner = connector(k, them.cookie)
     let space = `trash${crypto.randomUUID().slice(0, 8)}`
     let at = { space, app: 'notes' }
-    await owner.tool('space_new', { slug: space, title: space })
+    await owned(k, them.person, space)
     await owner.tool('app_new', { space, slug: at.app, title: 'Notes' })
     await owner.tool('app_files', {
       ...at,
@@ -594,9 +596,11 @@ test(
   'a space goes to the trash, and space_restore brings it back',
   async () => {
     let k = await kernel()
-    let binspace50 = unique('binspace50')
     try {
-      let them = await seed(k, [{ slug: binspace50, apps: [] }])
+      // Their one free space (meter.ts `SPACES`), the one signing in made, so
+      // there is room to bring it back.
+      let them = await signIn(k)
+      let binspace50 = them.email.split('@')[0]
       let agent = connector(k, them.cookie)
       let at = { space: binspace50, app: 'notes' }
       let listed = async () => (await commandsOf(agent)).map((c) => c.name)
@@ -899,10 +903,10 @@ test('trashing a bot-owned space with an app commits and returns without queryin
   let k = await kernel()
   try {
     let suffix = crypto.randomUUID().slice(0, 8)
-    let slug = `botbin${suffix}`
-    let them = await signIn(k, `botbin-${suffix}@bot.yak.sh`)
+    let slug = `botbin-${suffix}`
+    // Their one free space (meter.ts `SPACES`), the one signing in made.
+    let them = await signIn(k, `${slug}@bot.yak.sh`)
     let agent = connector(k, them.cookie)
-    await agent.tool('space_new', { slug, title: 'Bot trash regression' })
     await agent.tool('app_new', { space: slug, slug: 'notes', title: 'Notes' })
     let before = await k.at(`${slug}.yaks.app`, '/notes/api/query?q=.doc')
     assertEquals(before.status, 200)
