@@ -4,6 +4,8 @@
 
 import { equal, ok, test } from '@yaks/testing'
 import { h } from 'preact'
+// Pages load signals, whose options skip a redraw of unchanged props.
+import '@preact/signals'
 import { useLayoutEffect } from 'preact/hooks'
 import { client } from '@yaks/client'
 import { type Bundle, define } from '@yaks/render'

@@ -26,11 +26,13 @@
 
 import {
   type ComponentChildren,
+  type Context as Provided,
+  createContext,
   type FunctionComponent,
   h,
   type VNode,
 } from 'preact'
-import { useLayoutEffect, useState } from 'preact/hooks'
+import { useContext, useLayoutEffect, useState } from 'preact/hooks'
 import {
   type Action,
   type Bundle,
@@ -71,11 +73,9 @@ export type Store = (eid: string) => Bundle | undefined
 /** Watch one entity and return the cleanup for that listener. */
 export type Subscribe = (eid: string, notify: () => void) => () => void
 
-/** The values bound once when an application creates its Entity component.
- * A `registry` given as a function is read at each render, so the registry
- * it answers can be replaced while the page stays mounted (./host.ts). */
+/** The values bound once when an application creates its Entity component. */
 export type Options = {
-  registry: HostRegistry | (() => HostRegistry)
+  registry: HostRegistry
   vocab: Vocab
   store: Store
   subscribe?: Subscribe
@@ -204,6 +204,18 @@ export function render<E>(
 }
 
 /**
+ * A registry provided above an Entity replaces the one it was bound with, and
+ * a new value draws every Entity below it again even when its props are the
+ * same, which a top-level `render` with the same props does not promise:
+ * `@preact/signals` skips a component holding hook state whose props are
+ * unchanged. The page host swaps a written views module in through it
+ * (./host.ts).
+ */
+export let Registry: Provided<HostRegistry | undefined> = createContext<
+  HostRegistry | undefined
+>(undefined)
+
+/**
  * Bind the application once: `let Entity = entity({registry, vocab, store,
  * subscribe})`, then mount `<Entity eid='a' view='Tile'/>` through Preact.
  * A notification re-reads the store even if it mutated a bundle in place.
@@ -212,6 +224,7 @@ export let entity = (
   { registry, vocab, store, subscribe }: Options,
 ): FunctionComponent<EntityProps> =>
 ({ eid, view, ...ctx }) => {
+  let now = useContext(Registry) ?? registry
   let [, revision] = useState(0)
   let refresh = () => revision((n) => n + 1)
   useLayoutEffect(() => {
@@ -230,6 +243,5 @@ export let entity = (
   }, [eid])
   let bundle = store(eid)
   if (!bundle) return null
-  let now = typeof registry == 'function' ? registry() : registry
   return render(now, bundle, view, vocab, ctx)
 }

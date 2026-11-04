@@ -24,12 +24,13 @@
  * @module
  */
 
-import { type ComponentChild, type FunctionComponent, render } from 'preact'
+import { type ComponentChild, type FunctionComponent, h, render } from 'preact'
 import {
   entity,
   type EntityProps,
   type HostRegistry,
   type Options,
+  Registry,
 } from './mod.ts'
 
 /** What a views module exports: its registry, named as a package's `/views`
@@ -153,8 +154,9 @@ export let host = async (page: Page): Promise<Host> => {
   let { root, draw, load = (url) => import(url) } = page
   let views = String(new URL(page.views, root.ownerDocument.baseURI))
   let current = registryOf(await load(views))
-  let Entity = entity({ ...page, registry: () => current })
-  let drawn = () => render(draw(Entity), root)
+  let Entity = entity({ ...page, registry: current })
+  let drawn = () =>
+    render(h(Registry.Provider, { value: current }, draw(Entity)), root)
   drawn()
   // Writes can land faster than their modules import; only the newest draws.
   let newest = 0
