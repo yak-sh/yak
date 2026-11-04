@@ -36,10 +36,17 @@ import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import { accept } from './invite.ts'
 import { narrowed } from './grants.ts'
-import type { Address } from './post.ts'
+import { type Address, posting } from './post.ts'
 import { letters } from './letters.ts'
 import { invokePackage } from './package-tools.ts'
-import type { Graph } from '@yaks/graph'
+import { type Graph, graph } from '@yaks/graph'
+import { loadTools } from '@yaks/graph/tools'
+import { type Effects, effects } from '@yaks/effects'
+import { mailbox, mailDoc } from '@yaks/mail'
+import { runs as mailRuns } from '@yaks/mail/tools'
+import { ram } from '@yaks/ram'
+import { cleanup } from '@yaks/testing'
+import { stores } from './app-store-probe.ts'
 import { clock } from './timing.ts'
 import type { Space } from './directory.ts'
 import { serve } from './unseen.ts'
@@ -56,6 +63,7 @@ let apps = (out: Out) =>
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
+  let pools = new WeakMap<Graph, Effects>()
   let { env } = rows('staging-tool-secret', {
     APEX: 'yaks.fyi',
     MAIL: {
@@ -64,6 +72,37 @@ test('staging tool URLs and app mail use the same configured host', async () => 
         return Promise.resolve({ messageId: 'sent' })
       },
     },
+  })
+  stores(env, undefined, {
+    declaration: {},
+    graph: (vocab) => {
+      let fx = effects(vocab, {
+        write: (rows) => g.apply(rows, { trusted: true }),
+      })
+      let g = graph({
+        vocab,
+        storage: ram(vocab),
+        plugins: [
+          fx,
+          mailbox({
+            domain: env.APEX,
+            sender: posting(env.MAIL, env),
+            effects: fx,
+          }),
+        ],
+      })
+      pools.set(g, fx)
+      cleanup(() => fx.stop())
+      return g
+    },
+    settled: async (g) => {
+      let fx = pools.get(g)!
+      await fx.work(g)
+      await fx.idle()
+    },
+    tools: () =>
+      loadTools([mailDoc], mailRuns(null, { domain: env.APEX }))
+        .filter((t) => t.name == 'mail_send'),
   })
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ctx: Ctx = {

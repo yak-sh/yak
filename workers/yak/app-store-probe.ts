@@ -11,7 +11,7 @@ import { runner } from '@yaks/tools'
 import { answerOf, toolEid } from '@yaks/tools/result'
 import { ram } from '@yaks/ram'
 import { cleanup } from '@yaks/testing'
-import { loadVocab, type Vocab } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { PLATFORM_OBJECT, USES } from './door.ts'
 import type { Env } from './env.ts'
 import { authenticating } from './graph.ts'
@@ -23,7 +23,9 @@ let base = appVocab()
 let vocab = loadVocab([...base.docs, apiDoc], base.keywords)
 
 type Composition = {
+  declaration?: VocabDoc
   graph?: (vocab: Vocab) => Graph
+  settled?: (graph: Graph) => Promise<void>
   tools?: (vocab: Vocab) => Tool[]
   sockets?: Hibernation
 }
@@ -70,7 +72,7 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     authenticate,
     writeParams: ['stamp'],
   })
-  let fetch = async (req: Request) => {
+  let route = async (req: Request) => {
     let path = new URL(req.url).pathname
     if (path == '/call' && run) {
       if (req.method != 'POST' || req.headers.get('x-yak-kernel') != '1') {
@@ -100,6 +102,9 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
       }
     }
     if (path == '/uses') return Response.json({})
+    if (path == '/vocab' && composition.declaration && req.method == 'GET') {
+      return Response.json(composition.declaration)
+    }
     // The Store descriptor identifies which app door a route reached.
     if (path == '/graph') return Response.json({ db: `do:${name}` })
     let answer = await request.run(req, () => serve(req))
@@ -113,6 +118,11 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
       }
       answer.headers.set(USES, '{}')
     }
+    return answer
+  }
+  let fetch = async (req: Request) => {
+    let answer = await route(req)
+    await composition.settled?.(g)
     return answer
   }
   return { graph: g, subs, fetch, authenticate, live }
