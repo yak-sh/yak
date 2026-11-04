@@ -136,9 +136,15 @@
     color: var(--soft-ink);
     font-size: var(--small);
   }
+  /* Each entry wraps within the column at any width: a grid track keeps no
+     wider than its column, and nothing in it holds its line. */
   .Chat_Said {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: .45rem;
+  }
+  .Chat_Said > * {
+    min-width: 0;
   }
   .Chat_Said:empty {
     display: none;
@@ -150,6 +156,7 @@
     background: var(--ground);
     color: var(--ink);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
   .Chat_Bubble-you {
     justify-self: end;
@@ -173,9 +180,11 @@
   }
   .Chat_Name {
     font-weight: 700;
-    flex: none;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .Chat_Of {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

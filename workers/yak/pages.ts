@@ -686,9 +686,6 @@ let picked = (at: DeskPage) =>
     { slug: at.space, title: '', owner: !at.member, own: false }
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
-// The Operator of a person's own space is their PA (T-136141).
-let operatorName = (at: DeskPage) => picked(at).own ? 'Your PA' : 'Operator'
-
 // The whole menu, one side (T-136122): what is the person's own wherever they
 // are, then the space they are working in, chosen in place, and under it that
 // space's pages. On a phone the same side opens full screen from the top
@@ -721,8 +718,8 @@ ${link('profile', 'Profile')}${link('agents', 'Agents')}${
 <nav class="SideNav" aria-label="This space">
 ${
     at.member
-      ? link('operator', operatorName(at))
-      : `${link('apps', 'Apps')}${link('operator', operatorName(at))}${
+      ? link('operator', 'Operator')
+      : `${link('apps', 'Apps')}${link('operator', 'Operator')}${
         link('people', 'People')
       }${link('connections', 'Connections')}${link('visits', 'Visits')}${
         at.sell ? link('selling', 'Selling') : ''
@@ -814,18 +811,19 @@ let connectCard = (at: DeskPage, env: Host) =>
 // assistant, how often and when last, and the one thing to do, which is to
 // ask that assistant. The app's mark on its tile links here.
 let SHOWN = 5
-// What the space's Operator made of one break, with the way to its work.
+// What the space's Operator made of one break, with the way to its work on
+// a page of its own.
 let operated = (e: Plain, at: string) => {
   let o = e.operator
   if (!o) return ''
   let said = o.failed != null
-    ? `The Operator could not fix it: ${o.failed || 'its work was interrupted'}`
+    ? `The Operator could not fix it. ${o.failed}`.trim()
     : o.answer != null
     ? `The Operator: ${o.answer}`
     : 'The Operator is fixing it.'
-  return `<span class="Rows_Meta">${esc(said)} <a href="${
-    esc(at)
-  }">See its work</a></span>`
+  return `<span class="Rows_Meta">${esc(said)} <a href="${esc(at)}?open=${
+    esc(e.fix)
+  }">See what it did</a></span>`
 }
 let fixing = (a: DeskPage['apps'][number], operator: string) => {
   let errors = a.errors ?? []
@@ -1762,7 +1760,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     agents: 'Agents',
     shared: 'Shared with you',
     space: 'New space',
-    operator: operatorName(at),
+    operator: 'Operator',
     apps: 'Apps',
     people: 'People',
     connections: 'Connections',

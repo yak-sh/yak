@@ -2717,7 +2717,7 @@ let desk = async (
     dir.seats(owner).then((seats) => pickable(dir, seats)),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
-        part.operatorBody(env, space, who)
+        part.operatorBody(env, space, who, q.get('open') ?? undefined)
       )
       : undefined,
     // Whom Stripe bills, for the Billing page (T-131895). A read that fails

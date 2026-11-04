@@ -251,9 +251,9 @@ await seatDir.apply({
   entities: [{ entity: { eid: seat.seat }, member: { own: true } }],
 }, { 'x-yak-person': f.held.person, 'x-yak-role': 'owner' })
 let ownHtml = await operatorBody(f.env, f.space, f.held)
-test("the operator page on a person's own space says it is their personal assistant", () => {
-  assertEquals(html.includes('personal assistant'), false)
-  assertStringIncludes(ownHtml, 'your personal assistant')
+test("the operator page on a person's own space says it works in their other spaces", () => {
+  assertEquals(html.includes('your other spaces'), false)
+  assertStringIncludes(ownHtml, 'your other spaces')
 })
 test('the operator page names its email address, keeps a durable draft and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
@@ -268,6 +268,15 @@ test('the operator page names its email address, keeps a durable draft and draws
       operator_answer: null,
       failed: { reason: 'interrupted' },
     }]).includes('data-pending'),
+    false,
+  )
+  // What went wrong reads in plain words, never the error itself.
+  assertEquals(
+    conversation([{
+      ...result,
+      operator_answer: null,
+      failed: { reason: 'TypeError: x is undefined' },
+    }]).includes('TypeError'),
     false,
   )
 })

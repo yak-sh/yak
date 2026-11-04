@@ -5,7 +5,13 @@ import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
-import { frame, type Names, talk } from './operator-view.ts'
+import {
+  frame,
+  type Names,
+  stateOf,
+  talk,
+  type Worked,
+} from './operator-view.ts'
 
 type Store = ReturnType<typeof operatorStore>
 let comp = (b: Bundle | undefined, name: string) =>
@@ -43,36 +49,95 @@ let entriesOf = async (store: Store, sessions: Bundle[]) =>
   (await Promise.all(sessions.map((b) => transcript(store.g, b.entity.eid))))
     .flat()
 
+let REQUESTS =
+  '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100'
+
+// The task a request was taken up by: the one its answer names, or the one
+// holding the session it started.
+let taskOf = async (store: Store, request: Bundle) => {
+  let named = comp(request, 'operator_answer')?.task
+  if (named) return String(named)
+  let session = comp(request, 'operator_request')?.session
+  if (!session) return ''
+  let [link] = await store.g.read(`.contains .edge.to=${session}`)
+  return String(comp(link, 'edge')?.from ?? '')
+}
+
+let taken = (requests: Bundle[]) =>
+  requests.filter((r) =>
+    !comp(r, 'operator_request')?.session && !comp(r, 'operator_answer')?.task
+  )
+
 /**
- * The Operator page's conversations: its newest tasks, each drawn with its
- * sessions' transcripts (operator-view.ts `talk`), and the requests no
- * session has taken yet, for the page to draw as it always has.
+ * The Operator's work, newest first, as its page lists it (operator-view.ts
+ * `worked`): each task in the words its newest session says of it, and the
+ * requests no session has taken yet.
  */
-export let conversations = async (store: Store, at: string) => {
-  let tasks = (await store.g.read('.task ?doc .order=-created.at .limit=20'))
-    .reverse()
-  let requests = (await store.g.read(
-    '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100',
-  )).reverse()
+export let workOf = async (store: Store): Promise<Worked[]> => {
+  let [tasks, requests] = await Promise.all([
+    store.g.read('.task ?doc .order=-created.at .limit=50'),
+    store.g.read(REQUESTS),
+  ])
   let drawn = await Promise.all(tasks.map(async (task) => {
-    let sessions = await sessionsOf(store, task.entity.eid)
-    let ids = new Set(sessions.map((b) => b.entity.eid))
-    let entries = await entriesOf(store, sessions)
-    let files = requests.filter((r) =>
-      ids.has(String(comp(r, 'operator_request')?.session)) ||
-      comp(r, 'operator_answer')?.task == task.entity.eid
-    ).flatMap((r) =>
-      ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
-        .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
+    let entries = await entriesOf(
+      store,
+      (await sessionsOf(store, task.entity.eid)).slice(-1),
     )
-    return talk(task, entries, await namesOf(store, entries), files, at)
+    let state = stateOf(entries, comp(task, 'task')?.status == 'done')
+    return {
+      open: task.entity.eid,
+      title: String(comp(task, 'doc')?.title ?? 'A request'),
+      state,
+      at: String(comp(task, 'updated')?.at ?? comp(task, 'created')?.at ?? ''),
+      busy: state == 'Working on it' || state == 'Waiting to start',
+    }
   }))
+  let waiting = taken(requests).map((r) => {
+    let failed = r.failed ?? r.bounced
+    return {
+      open: r.entity.eid,
+      title: String(comp(r, 'doc')?.body ?? '').split('\n')[0].slice(0, 80) ||
+        'A request',
+      state: failed ? 'Could not finish' : 'Waiting to start',
+      at: String(comp(r, 'created')?.at ?? ''),
+      busy: !failed,
+    }
+  })
+  return [...waiting, ...drawn]
+}
+
+/**
+ * One piece of the Operator's work on a page of its own, opened by its task
+ * or by a request: the task drawn with its sessions' transcripts
+ * (operator-view.ts `talk`), or the request alone while no session has taken
+ * it, for the page to draw as it always has.
+ */
+export let conversationOf = async (store: Store, at: string, open: string) => {
+  let [row] = await store.g.get([open])
+  let task = row?.task
+    ? open
+    : row?.operator_request
+    ? await taskOf(store, row)
+    : ''
+  let [held] = task ? await store.g.get([task]) : []
+  if (!held?.task) {
+    return { task: '', html: '', waiting: row?.operator_request ? [row] : [] }
+  }
+  let requests = await store.g.read(REQUESTS)
+  let sessions = await sessionsOf(store, task)
+  let ids = new Set(sessions.map((b) => b.entity.eid))
+  let entries = await entriesOf(store, sessions)
+  let files = requests.filter((r) =>
+    ids.has(String(comp(r, 'operator_request')?.session)) ||
+    comp(r, 'operator_answer')?.task == task
+  ).flatMap((r) =>
+    ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
+      .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
+  )
   return {
-    html: drawn.join(''),
-    waiting: requests.filter((r) =>
-      !comp(r, 'operator_request')?.session &&
-      !comp(r, 'operator_answer')?.task
-    ),
+    task,
+    html: talk(held, entries, await namesOf(store, entries), files, at),
+    waiting: [],
   }
 }
 
@@ -247,9 +312,7 @@ export let operatorRequest = async (
     )
   }
   if (path == '/operator/messages') {
-    let rows = (await store.g.read(
-      '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100',
-    )).reverse()
+    let rows = (await store.g.read(REQUESTS)).reverse()
     let failed = await store.g.read('.effect.state=failed')
     return Response.json(rows.map((row) => {
       let run = failed.find((b) =>
@@ -263,8 +326,15 @@ export let operatorRequest = async (
         : row
     }))
   }
-  if (path == '/operator/conversations') {
-    return Response.json(await conversations(store, String(args.at ?? '')))
+  if (path == '/operator/work') return Response.json(await workOf(store))
+  if (path == '/operator/conversation') {
+    return Response.json(
+      await conversationOf(
+        store,
+        String(args.at ?? ''),
+        String(args.open ?? ''),
+      ),
+    )
   }
   if (path == '/operator/read') {
     return Response.json(

@@ -198,14 +198,14 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   let member = sides(await block({ view: 'operator', member: true }))
   assertEquals(member.space.map((l) => l.label), ['Operator'])
   assertEquals(member.account.length, 3)
-  // On the person's own space the Operator is their PA.
+  // On the person's own space it is the Operator too.
   let own = sides(
     await block({
       view: 'operator',
       spaces: [{ slug: 'dana', title: 'Dana', owner: true, own: true }],
     }),
   )
-  assertEquals(own.current, 'Your PA')
+  assertEquals(own.current, 'Operator')
 })
 
 test('on a phone, Menu opens the same side', async () => {

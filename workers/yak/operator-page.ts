@@ -15,6 +15,7 @@ import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
 import { CONSENT, handed, type Texting, texts } from './operator-texts.ts'
 import { CallError } from '@yaks/tools/errors'
+import { type Worked, worked } from './operator-view.ts'
 
 let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
@@ -95,7 +96,7 @@ export let conversation = (rows: Bundle[], at = '') =>
     let answer = row.operator_answer as
       | { text?: string; task?: string }
       | undefined
-    let failed = (row.failed ?? row.bounced) as { reason?: string } | undefined
+    let failed = row.failed ?? row.bounced
     return `<article class="Card"${
       answer || failed ? '' : ' data-pending'
     }><h2 class="Card_Title">${
@@ -119,19 +120,12 @@ export let conversation = (rows: Bundle[], at = '') =>
     }<h3>Operator</h3><p style="white-space:pre-wrap">${
       esc(
         answer?.text ?? (failed
-          ? `Your request is kept, but the operator could not finish: ${
-            failed.reason ?? 'work was interrupted'
-          }. Continue the request to try again.`
-          : 'Your request is saved. The operator is working on it.'),
+          ? 'Your request is kept, but the Operator could not finish it. Send it again to try once more.'
+          : 'Your request is saved. The Operator will start on it soon.'),
       )
     }</p>${
       failed && answer
-        ? `<p role="status">${
-          esc(
-            failed.reason ??
-              'The answer could not be delivered. It is kept here.',
-          )
-        }</p>`
+        ? '<p role="status">The answer could not be sent to you. It is kept here.</p>'
         : ''
     }${
       answer?.task
@@ -262,7 +256,11 @@ export let operatorAnswer = async (
     return watching(env, space, req, who)
   }
   if (url.searchParams.has('messages')) {
-    return new Response(await conversations(env, space, who, at), {
+    let open = url.searchParams.get('open')
+    let html = open
+      ? (await conversationOf(env, space, who, at, open)).html
+      : await workOf(env, space, who, at)
+    return new Response(html, {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'private, no-store',
@@ -284,33 +282,54 @@ let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
     return out
   })
 
-// Every conversation the page shows: each task with its sessions as they ran
-// (operator-view.ts `talk`), then the requests no session has taken yet.
-let conversations = async (env: Env, space: Space, who: Who, at: string) => {
-  let { html, waiting } = await operatorDoor(
+// The Operator's work as its page lists it, each linking to its own page.
+let workOf = async (env: Env, space: Space, who: Who, at: string) =>
+  worked(await operatorDoor(env, space, who, 'work', {}) as Worked[], at)
+
+// One piece of the Operator's work, opened by its task or a request: its
+// sessions as they ran (operator-view.ts `talk`), or the request alone while
+// no session has taken it.
+let conversationOf = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  at: string,
+  open: string,
+) => {
+  let { task, html, waiting } = await operatorDoor(
     env,
     space,
     who,
-    'conversations',
-    { at },
-  ) as { html: string; waiting: Bundle[] }
-  return html + conversation(waiting, at)
+    'conversation',
+    { at, open },
+  ) as { task: string; html: string; waiting: Bundle[] }
+  return { task, html: html + conversation(waiting, at) }
 }
 
 // The Operator page's content, which the dashboard draws beside its side like
-// every other page (pages.ts `desk`).
-export let operatorBody = async (env: Env, space: Space, who: Who) => {
+// every other page (pages.ts `desk`). The page is the Operator's settings:
+// what it does and where, a way to ask it for something, the list of what it
+// worked on and the texts it may send. Each piece of work opens on a page of
+// its own (`open`, a task or a request), with what it did.
+export let operatorBody = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  open?: string,
+) => {
   let at = managePath('operator', space.slug)
-  let [talks, consent, { pa, beyond }] = await Promise.all([
-    conversations(env, space, who, at),
+  if (open) return workPage(env, space, who, at, open)
+  let [list, consent, { pa, beyond }] = await Promise.all([
+    workOf(env, space, who, at),
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
   ])
   let doing = (role: string) => role == 'viewer' ? 'can look' : 'can change'
+  let address = mailFrom(space.slug, null, env)
   return `
-<section class="Card"><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p>${
+<section class="Card"><p>Ask the Operator for a change in your apps, or send it a PDF or a photo. Your space's plan covers its work.</p>${
     pa
-      ? '<p>This is your own space, so its operator is your personal assistant: it can also work in your other spaces, with your role in each.</p>'
+      ? '<p>This is your own space, so its Operator can also work in your other spaces, with your role in each.</p>'
       : ''
   }${
     beyond.length
@@ -322,25 +341,58 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
         ).join(', ')
       }.</p>`
       : ''
-  }<p>Email from your member address: <a href="mailto:${
-    esc(mailFrom(space.slug, null, env))
-  }">${esc(mailFrom(space.slug, null, env))}</a></p></section>
-<div data-conversation aria-live="polite">${talks}</div>
-<form class="Card Form" id="ask" method="post" action="${at}" enctype="multipart/form-data">
-<input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="">
-<p data-continuing hidden>Continuing a request. <button type="button" class="Button Button-quiet" data-new>Start a new request</button></p>
-<label class="Form_Field">What would you like done?<textarea class="Field" name="say"></textarea></label>
+  }<p>Email it from your member address: <a href="mailto:${esc(address)}">${
+    esc(address)
+  }</a></p></section>
+${askForm(at, '', 'What would you like done?')}
+<div data-work aria-live="polite">${list}</div>
+${textsCard(at, consent)}
+${script(at, who, space, '')}`
+}
+
+// One piece of work on its page: what was asked, what the Operator did and
+// what it is doing now, and a way to add to it.
+let workPage = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  at: string,
+  open: string,
+) => {
+  let { task, html } = await conversationOf(env, space, who, at, open)
+  return `
+<p><a href="${at}">Back to the Operator</a></p>
+<div data-conversation aria-live="polite">${
+    html ||
+    '<section class="Empty"><h2>This request is not here</h2><p>It may have been removed. Your other requests are on the Operator page.</p></section>'
+  }</div>
+${task ? askForm(at, task, 'Anything to add?') : ''}
+${script(at, who, space, open)}`
+}
+
+let askForm = (at: string, task: string, label: string) =>
+  `<form class="Card Form" id="ask" method="post" action="${at}" enctype="multipart/form-data">
+<input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="${
+    esc(task)
+  }">
+<label class="Form_Field">${label}<textarea class="Field" name="say"></textarea></label>
 <div class="Form_Field"><span class="Form_Label">Documents or photos</span>${
     fileDrop({ name: 'file', label: 'Documents or photos', multiple: true })
   }</div>
-<button class="Button" type="submit">Send</button><p role="status" data-send-status></p></form>
-${textsCard(at, consent)}
-<script type="module">
+<button class="Button" type="submit">Send</button><p role="status" data-send-status></p></form>`
+
+// The page's script: the durable draft and sending, the texts choice, and
+// the work kept current from the Builder object's socket. On the list each
+// step reads the list again; on a piece of work's page its own steps are put
+// in place by id.
+let script = (at: string, who: Who, space: Space, open: string) =>
+  `<script type="module">
 import { browserDrafts } from '/_draft.js'
-let box = document.querySelector('[data-conversation]')
+let open = ${JSON.stringify(open)}
+let box = document.querySelector(open ? '[data-conversation]' : '[data-work]')
 let form = document.querySelector('#ask')
 let texts = document.querySelector('#texts')
-texts.addEventListener('submit', async (e) => {
+texts?.addEventListener('submit', async (e) => {
   e.preventDefault()
   let said = texts.querySelector('[data-texts-status]')
   let body = new FormData(texts)
@@ -353,7 +405,7 @@ texts.addEventListener('submit', async (e) => {
     location.reload()
   } catch (error) { said.textContent = error.message }
 })
-let status = document.querySelector('[data-send-status]')
+let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
 let draftAt = '${at}?draft=1'
 let submission
 let draftClient = {
@@ -381,11 +433,9 @@ let draftClient = {
   }
 }
 let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
-drafts.bind(form.elements.say, 'operator')
+if (form) drafts.bind(form.elements.say, 'operator')
 document.addEventListener('click', (e) => {
-  let follow = e.target.closest('[data-follow]')
-  if (follow) { form.elements.task.value = follow.dataset.follow; document.querySelector('[data-continuing]').hidden = false; form.elements.say.focus() }
-  if (e.target.closest('[data-new]')) { form.elements.task.value = ''; document.querySelector('[data-continuing]').hidden = true }
+  if (e.target.closest('[data-follow]')) form?.elements.say.focus()
   let stop = e.target.closest('[data-stop]')
   if (stop) {
     stop.disabled = true
@@ -396,19 +446,33 @@ document.addEventListener('click', (e) => {
       .finally(() => { stop.disabled = false })
   }
 })
+// One read at a time; a step heard during one reads once more after it.
+let reading, again = false
 let read = async () => {
-  let response = await fetch('${at}?messages=1')
-  if (!response.ok) throw new Error('Could not read the operator. Your request is saved; reload to try again.')
-  box.innerHTML = await response.text()
+  if (reading) return void (again = true)
+  reading = (async () => {
+    do {
+      again = false
+      let response = await fetch('${at}?messages=1' + (open ? '&open=' + encodeURIComponent(open) : ''))
+      if (!response.ok) throw new Error('This page could not be brought up to date. Your requests are saved; reload to try again.')
+      let html = await response.text()
+      if (html) box.innerHTML = html
+    } while (again)
+  })()
+  try { await reading } finally { reading = undefined }
 }
-// Each step the Operator takes arrives on the socket as the lines it changed,
-// put in place by id; a task the page has not drawn yet reads them all again.
+let said = (e) => { status.textContent = e.message }
+// On a piece of work's page, each step the Operator takes arrives on the
+// socket as the lines it changed, put in place by id; a task the page has not
+// drawn yet (a request just taken up) reads the page again.
 let live = false
 let hear = (frame) => {
   let o = frame.operator
   if (!o) return
-  let card = [...box.querySelectorAll('[data-task]')].find((c) => c.dataset.task == o.task)
-  if (!card) return void read().catch((e) => { status.textContent = e.message })
+  if (!open) return void (o.typing || read().catch(said))
+  let card = box.querySelector('[data-task]')
+  if (!card) return void read().catch(said)
+  if (card.dataset.task != o.task) return
   // A reply as it is written, until the step that wrote it lands.
   let typing = card.querySelector('[data-typing]')
   if (o.typing) {
@@ -440,32 +504,34 @@ let hear = (frame) => {
 }
 let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
-  socket.onopen = () => { live = true; read().catch((e) => { status.textContent = e.message }) }
-  socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { status.textContent = error.message } }
+  socket.onopen = () => { live = true; read().catch(said) }
+  socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
   socket.onclose = () => { live = false; poll(); setTimeout(listen, 3000) }
 }
-let waiting = false
+let polling = false
 let poll = async () => {
-  if (live || waiting || !box.querySelector('[data-pending]')) return
-  waiting = true
-  try { await read() } catch (e) { status.textContent = e.message }
-  finally { waiting = false; if (box.querySelector('[data-pending]')) setTimeout(poll, 2000) }
+  if (live || polling || !box.querySelector('[data-pending]')) return
+  polling = true
+  try { await read() } catch (e) { said(e) }
+  finally { polling = false; if (box.querySelector('[data-pending]')) setTimeout(poll, 2000) }
 }
-form.addEventListener('submit', async (e) => {
+form?.addEventListener('submit', async (e) => {
   e.preventDefault()
   let button = form.querySelector('[type=submit]')
   button.disabled = true
   status.textContent = 'Saving your request…'
   try {
     submission = new FormData(form)
-    let saved = await drafts.spend('operator', [{ entity: { eid: form.elements.request.value } }])
+    let request = form.elements.request.value
+    let saved = await drafts.spend('operator', [{ entity: { eid: request } }])
     if (!saved) throw new Error('Your request could not be confirmed. Your words are kept; try sending again.')
     form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = 'Your request is saved.'
+    // A new request opens on its own page, where its work appears.
+    if (!open) return void location.assign('${at}?open=' + request)
     await read(); poll()
-  } catch (error) { status.textContent = error.message }
+  } catch (error) { said(error) }
   finally { button.disabled = false }
 })
 listen()
 </script>`
-}

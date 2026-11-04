@@ -6,7 +6,7 @@
 // socket (`frame`), which puts each in place by its id.
 import type { Bundle, Comp } from '@yaks/graph'
 import { statusOf } from '@yaks/session'
-import { esc } from './html.ts'
+import { day, esc } from './html.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -21,8 +21,6 @@ let SHOWN = 4000
 
 let cut = (text: string, most = SHOWN) =>
   text.length > most ? text.slice(0, most) + '\n…' : text
-
-let line = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 let NOT_INPUT = [
   'output',
@@ -84,8 +82,6 @@ let tool = (call: Bundle, names: Names, result?: Bundle) => {
     ok == false ? ' Chat_Tool-no' : ''
   }"><span class="Chat_Name">${ok == null ? '…' : ok ? '✓' : '✗'} ${
     esc(name)
-  }</span><span class="Chat_Of">${
-    esc(line(result ? answer || (refused ? String(refused.code) : '') : args))
   }</span></summary><p class="Chat_Note">Sent</p><pre>${esc(cut(args))}</pre>${
     result
       ? `<p class="Chat_Note">${ok ? 'Answered' : 'Refused'}${
@@ -111,12 +107,10 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
     }
     if (b.output && body) return [{ id, html: bubble('them', body) }]
     if (b.failed || b.exception) {
-      let why = String(comp(b, 'failed')?.reason ?? body)
       return [{
         id,
-        html: `<p class="Chat_Note Chat_Note-no">It stopped: ${
-          esc(line(why))
-        }</p>`,
+        html:
+          '<p class="Chat_Note Chat_Note-no">Something went wrong, and it stopped before it finished.</p>',
       }]
     }
     if (b.stop || b.interrupted || b.cancel) {
@@ -208,3 +202,40 @@ export let talk = (
     esc(task.entity.eid)
   }">Stop</button></p></article>`
 }
+
+/** A piece of the Operator's work as its page lists it, in plain words. */
+export type Worked = {
+  /** what the page opens it by: a task, or a request no task has taken yet */
+  open: string
+  title: string
+  state: string
+  at: string
+  busy: boolean
+}
+
+// What a task's newest session says of it, in the words its list shows.
+export let stateOf = (entries: Bundle[], done: boolean) => {
+  let status = statusOf(entries)
+  if (status == 'failed') return 'Could not finish'
+  if (status == 'stopped') return 'Stopped'
+  if (status == 'settled') return done ? 'Done' : 'Answered'
+  return status == 'empty' ? 'Waiting to start' : 'Working on it'
+}
+
+/** The Operator's work, newest first, each a link to its own page. */
+export let worked = (items: Worked[], at: string) =>
+  `<section class="Card"><h2 class="Card_Title">What it worked on</h2>${
+    items.length
+      ? `<ul class="Rows">${
+        items.map((w) =>
+          `<li class="Rows_Item"${
+            w.busy ? ' data-pending' : ''
+          }><div class="Rows_Main"><a class="Rows_Name" href="${esc(at)}?open=${
+            esc(w.open)
+          }">${esc(w.title)}</a><span class="Rows_Meta">${esc(w.state)}${
+            day(w.at) ? ` · ${esc(day(w.at))}` : ''
+          }</span></div></li>`
+        ).join('')
+      }</ul>`
+      : '<p>Nothing yet. What you ask for appears here, and each opens to show what the Operator did.</p>'
+  }</section>`

@@ -7,7 +7,7 @@ import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore, directoryOf } from './directory.ts'
 import { stores } from './app-store-probe.ts'
 import { operating, readOperator } from './operator.ts'
-import { conversations, frameOf } from './operator-host.ts'
+import { conversationOf, frameOf, workOf } from './operator-host.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
@@ -168,14 +168,20 @@ let out = await operator.run(f.held, f.space, {
 })
 
 let history = await readOperator(f.store, out.task)
-let drawn = await conversations(f.store, '/manage/clerk/operator')
-test('the Operator page draws a task as its session ran: the words, each tool with what it sent and got, and the reply', () => {
+let drawn = await conversationOf(f.store, '/manage/clerk/operator', out.task)
+let work = await workOf(f.store)
+test('the Operator page lists its work in plain words, each opening on a page of its own', () => {
+  assertEquals(work.map((w) => [w.open, w.state, w.busy]), [
+    [out.task, 'Done', false],
+  ])
+})
+test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got, and the reply", () => {
   assertStringIncludes(drawn.html, 'Chat_Bubble-you">Post a special meeting')
   assertStringIncludes(drawn.html, '✓ graph_schema')
   assertStringIncludes(drawn.html, '&quot;component&quot;: &quot;doc&quot;')
   assertStringIncludes(drawn.html, 'notice is posted')
   assertEquals(drawn.html.includes('data-pending'), false)
-  assertEquals(drawn.waiting.length, 0)
+  assertEquals(drawn.task, out.task)
 })
 let ctx = await operatorContext(f.env, f.held, f.space)
 let { reaching } = await import('./agent.ts')

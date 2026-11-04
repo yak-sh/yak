@@ -382,8 +382,11 @@ test("a break says what the space's Operator made of it", () => {
     'The Operator: Defined chores and deployed.',
   )
   assertStringIncludes(
-    shown({ failed: 'the space has spent its model budget' }),
-    'The Operator could not fix it: the space has spent its model budget',
+    shown({ failed: 'This space has spent its model budget.' }),
+    'The Operator could not fix it. This space has spent its model budget.',
   )
-  assertStringIncludes(shown({}), `href="${managePath('operator', 'fixme')}"`)
+  assertStringIncludes(
+    shown({}),
+    `href="${managePath('operator', 'fixme')}?open=${broke.fix}"`,
+  )
 })

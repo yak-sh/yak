@@ -424,7 +424,7 @@ export let line = (fold: Seen[]) => {
 }
 
 /** What the space's Operator made of a break: still working, its answer, or
- * why it could not finish. */
+ * what it told the person when it could not finish. */
 export type Fixing = { answer?: string; failed?: string }
 
 /** A break as its owner's dashboard shows it: what it said and where, in the
@@ -516,10 +516,9 @@ let fixings = async (
   }) as Bundle[]
   return new Map(rows.map((row) => {
     let answer = row.operator_answer as { text?: string } | undefined
-    let failed = row.failed as { reason?: string } | undefined
     return [row.entity.eid, {
-      ...answer?.text != null && !failed ? { answer: answer.text } : {},
-      ...failed ? { failed: failed.reason ?? '' } : {},
+      ...answer?.text != null && !row.failed ? { answer: answer.text } : {},
+      ...row.failed ? { failed: answer?.text ?? '' } : {},
     }]
   }))
 }

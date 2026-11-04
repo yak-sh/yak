@@ -15,10 +15,16 @@ import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
 import { metering } from './meter.ts'
 import { caught } from './defects.ts'
+import { CallError } from '@yaks/tools/errors'
 import { esc } from './html.ts'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
 import type { operatorStore } from './operator-store.ts'
+
+/** What a person reads when the Operator could not start on their request
+ * for a reason that is not theirs to fix. */
+export let TROUBLE =
+  'Something went wrong, and the Operator could not start on this. Your request is kept; send it again to try once more.'
 
 type Store = ReturnType<typeof operatorStore>
 export type File = { name: string; mime: string; key: string }
@@ -279,10 +285,14 @@ export let handleChannels = (
           channel: request.channel,
           space: space.slug,
         })
-        let text = error instanceof Error ? error.message : String(error)
+        // The person reads a refusal written for them (a spent budget, a file
+        // it cannot read), and anything else in plain words; the error itself
+        // is kept for whoever fixes it.
+        let reason = error instanceof Error ? error.message : String(error)
+        let text = error instanceof CallError ? error.message : TROUBLE
         await g.apply([{
           entity: row.entity,
-          failed: { reason: text },
+          failed: { reason },
           operator_answer: { text, ...(task ? { task } : {}) },
         }], { trusted: true })
       }
