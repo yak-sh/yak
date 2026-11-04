@@ -62,6 +62,7 @@
   "@yaks/openrouter",
   "@yaks/page",
   "@yaks/persona",
+  "@yaks/phone",
   "@yaks/platform",
   "@yaks/preact",
   "@yaks/process",

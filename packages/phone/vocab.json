@@ -1,0 +1,45 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "phone",
+  "$defs": {
+    "phone": {
+      "component": true,
+      "type": "object",
+      "description": "a phone number, as a component of what it reaches — on a person, their mobile, beside the `email{address}` they wear",
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "the number in E.164 form (see `mobile`)",
+          "examples": [
+            "+12695550142"
+          ]
+        }
+      }
+    },
+    "sms_consent": {
+      "component": true,
+      "type": "object",
+      "description": "a person agreed to be texted at their `phone{number}`, in these words; removed when they stop texts",
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "identity": true,
+          "description": "who agreed; the eid is derived from it, so a person has one consent"
+        },
+        "consent": {
+          "type": "string",
+          "description": "the words they agreed to, exactly as they were shown"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when they agreed"
+        }
+      }
+    }
+  }
+}

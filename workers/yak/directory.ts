@@ -61,6 +61,7 @@ import { mailFrom } from './post.ts'
 import { RESERVED, SLUG } from './route.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
+import type { Texting } from './operator-texts.ts'
 
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
@@ -566,6 +567,8 @@ export type Row = {
   inviting?: { hour?: string | null; sent?: number | null }
   person?: Record<string, unknown>
   email?: { address: string }
+  phone?: { number: string }
+  sms_consent?: { person: Id; consent: string; at: string }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -2110,20 +2113,34 @@ export let directory = (
     // person — the letter's envelope, and nothing else (T-32629).
     emailAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.email ?? null,
+    // The number a person agreed to be texted at, in the words they agreed
+    // to (@yaks/phone), or null when they have not agreed.
+    texting: async (person: string): Promise<Texting | null> => {
+      let [them, [row]] = await Promise.all([
+        self.known(person),
+        theirs(person, `.sms_consent.person=${person}`),
+      ])
+      let agreed = row?.sms_consent
+      return them?.phone && agreed
+        ? { number: them.phone, consent: agreed.consent, at: agreed.at }
+        : null
+    },
     // What to call this person anywhere their address must not go: the name
     // they chose in their settings or were invited under, else the front of
     // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a
     // page that shows its bylines shows names (T-32654).
     nameAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.name ?? null,
-    // Both at once, from the person's one row: what to call them and where to
-    // write to them. Null for anybody the platform has no address for.
+    // All at once, from the person's one row: what to call them, where to
+    // write to them and the mobile number they gave. Null for anybody the platform has no address for.
     known: async (person: string) =>
       (await self.persons([person])).get(person) ?? null,
     // The same, for many people in one read.
     persons: async (
       persons: string[],
-    ): Promise<Map<string, { name: string; email: string }>> => {
+    ): Promise<
+      Map<string, { name: string; email: string; phone: string | null }>
+    > => {
       if (!persons.length) return new Map()
       let rows = await query(`.entity.eid=${persons.join(',')}`)
       return new Map(
@@ -2133,6 +2150,7 @@ export let directory = (
               [row.entity.eid, {
                 name: nameOf(row.doc?.title, row.email.address),
                 email: row.email.address,
+                phone: row.phone?.number ?? null,
               }] as const,
             ]
             : []

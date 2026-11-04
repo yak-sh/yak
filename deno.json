@@ -159,6 +159,7 @@
     "./packages/provenance",
     "./packages/platform",
     "./packages/goal",
+    "./packages/phone",
     "./packages/design",
     "./packages/hook",
     "./packages/page",

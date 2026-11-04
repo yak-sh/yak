@@ -4,7 +4,6 @@ import type { Held } from './build.ts'
 import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
-import { texts, textsEid } from './operator-texts.ts'
 import { transcript } from '@yaks/session'
 import { frame, type Names, talk } from './operator-view.ts'
 
@@ -181,15 +180,18 @@ export let operatorRequest = async (
     }
     return Response.json({ bundles: await store.g.get([eid]) })
   }
+  // The opt-ins this store kept before the number moved onto the person
+  // (operator-texts.ts `handed`): listed for the page to hand to the
+  // directory, then dropped once it has.
   if (path == '/operator/texts') {
-    if (typeof args.number == 'string') {
-      await store.g.apply([{
-        ...texts(person, args.number, args.agreed === true),
-        $actor: { by: person },
-      }])
+    let kept = await store.g.read('.sms_consent')
+    if (args.handed === true) {
+      await store.g.apply(
+        kept.map((row) => ({ entity: row.entity, sms_consent: null })),
+      )
+      return Response.json([])
     }
-    let [row] = await store.g.get([textsEid(person)])
-    return Response.json(row?.sms_consent ?? null)
+    return Response.json(kept.map((row) => row.sms_consent))
   }
   if (path == '/operator/receive') {
     let intake = {

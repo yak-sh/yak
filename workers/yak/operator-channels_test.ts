@@ -19,7 +19,9 @@ import {
   keepFile,
   receive,
 } from './operator-channels.ts'
-import { operating, operatorContext } from './operator.ts'
+import { operating, type Operator, operatorContext } from './operator.ts'
+import { operatorRequest } from './operator-host.ts'
+import { handed } from './operator-texts.ts'
 import { drain, type operatorStore as Stored } from './operator-store.ts'
 
 // One Operator per store, as the Builder object keeps, answered by `model`.
@@ -287,6 +289,7 @@ let wrong = await choose({ number: '555-0142', agreed: 'yes' })
 let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
 let textsHtml = await operatorBody(f.env, f.space, f.held)
 let stopped = await choose({ stop: '1', number: '269-555-0142' })
+let kept = await directoryOf(f.env.STORE).known(f.held.person)
 test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
   assertEquals(unticked.status, 400)
   assertStringIncludes(unticked.said.message, 'Tick the box')
@@ -296,6 +299,43 @@ test('a person agrees to texts with a ticked box and a mobile number, and stops 
   assertStringIncludes(textsHtml, '269-555-0142')
   assertEquals(textsHtml.includes('checked'), false)
   assertEquals(stopped.said, null)
+})
+test("a person's number stays on them, beside their address, after texts stop", () => {
+  assertEquals(kept?.phone, '+12695550142')
+  assertEquals(kept?.email, 'clerk@example.com')
+})
+
+// An opt-in kept in the operator store before the number moved onto the
+// person: listed at the door, then dropped once handed over.
+let legacy = operatorMemory()
+let door = (args: Record<string, unknown>) =>
+  operatorRequest(
+    { store: legacy } as unknown as Operator,
+    f.held,
+    '/operator/texts',
+    args,
+    () => undefined,
+  ).then((r) => r!.json())
+let old = {
+  person: f.held.person,
+  number: '+12695550199',
+  consent: 'Text me.',
+  at: '2026-11-03T00:00:00.000Z',
+}
+await legacy.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  sms_consent: old,
+}])
+let listed = await door({})
+await door({ handed: true })
+let left = await door({})
+test('the operator store hands its old opt-ins over and keeps none', () => {
+  assertEquals(listed, [old])
+  assertEquals(handed(old)[0], {
+    entity: { eid: f.held.person },
+    phone: { number: '+12695550199' },
+  })
+  assertEquals(left, [])
 })
 
 let draft = async (text?: string, over = '') => {

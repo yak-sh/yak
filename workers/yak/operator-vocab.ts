@@ -47,10 +47,13 @@ export let operatorDoc: VocabDoc = {
         message_id: { type: 'string' },
       },
     },
+    // The opt-in as this store kept it before the number moved onto the
+    // person in the directory (@yaks/phone). Only read, to hand the rows over
+    // (operator-host.ts `/operator/texts`).
     sms_consent: {
       component: true,
       description:
-        'A person agreed to texts from the operator at this number, in these words.',
+        'A person agreed to texts from the operator at this number, in these words; moving to the directory.',
       properties: {
         person: { type: 'string', ref: 'person', death: 'keep' },
         number: { type: 'string' },

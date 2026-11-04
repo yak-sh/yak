@@ -182,6 +182,9 @@ export let directoryConfig: Config = {
     { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },
     ...links,
     { use: '@yaks/mail', words: ['notified'] },
+    // A person's mobile number beside their address, and the words they
+    // agreed to before being texted.
+    { use: '@yaks/phone', facets: ['vocab'] },
     '@yaks/tunnel',
     {
       use: '@yaks/memory',
