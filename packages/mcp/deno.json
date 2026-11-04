@@ -23,6 +23,7 @@
   },
   "compilerOptions": {
     "lib": [
+      "deno.ns",
       "dom",
       "esnext"
     ]

@@ -181,7 +181,12 @@ export let partCourse = (c: Course, lo: number, hi = c.xs.length): Course => {
 }
 
 /** A bounding-box rejection test, not an exact distance test. */
-export let nearCourse = ({ box }: Course, x: number, z: number, r: number) =>
+export let nearCourse = (
+  { box }: Course,
+  x: number,
+  z: number,
+  r: number,
+): boolean =>
   x > box[0] - r && x < box[2] + r && z > box[1] - r && z < box[3] + r
 
 /** Whether a rectangle with half extents w,d clears the samples by room.
