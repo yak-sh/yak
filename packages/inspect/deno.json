@@ -1,6 +1,6 @@
 {
   "name": "@yaks/inspect",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "exports": {
     ".": "./mod.ts",
     "./views": "./views.ts",
