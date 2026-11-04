@@ -102,12 +102,18 @@
       type: s.type || 'classic',
       crossOrigin: s.crossOrigin || '',
     }))
+  let elsewhere = (all) =>
+    all.map((s) => s.src).filter((src) => src && !mine(at(src) || location))
+  // A muted "Script error." on a page that loaded no script from another
+  // origin came from none of the page's scripts: the browser mutes only a
+  // script from elsewhere, so it was an extension's or the browser's own.
+  let stranger = (e) =>
+    muted(e) && e.message == 'Script error.' &&
+    !elsewhere(scripts()).length
   let mutedStack = () => {
     let all = scripts()
-    let from = all.map((s) => s.src)
-      .filter((src) => src && !mine(at(src) || location))
     return [
-      ...[location.href, ...from].map((u) => `    at ${u}`),
+      ...[location.href, ...elsewhere(all)].map((u) => `    at ${u}`),
       `Browser: ${navigator.userAgent || 'unknown'}`,
       `Scripts: ${JSON.stringify(all)}`,
     ].join('\n')
@@ -179,7 +185,7 @@
     }
     // A fetch with no answer is judged where it rejected (the wrapper below),
     // whether the page leaves it uncaught or hands it to reportError.
-    if (foreign(e) || decided(e.error)) return
+    if (foreign(e) || stranger(e) || decided(e.error)) return
     // A notice the browser raises itself, such as a ResizeObserver loop, has
     // no error: its own message is the one that says what happened.
     broke({

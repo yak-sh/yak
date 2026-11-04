@@ -179,12 +179,11 @@ test('a muted script error keeps its browser and script loading modes', async ()
   ]])
 })
 
-test('a muted error with no foreign script remains reported without guessing its origin', async () =>
-  equal(await muted([{ src: `${at}main.js`, type: 'module' }]), [[
-    'Script error.',
-    `    at ${at}\nBrowser: Test Browser/1.0\n` +
-    `Scripts: [{"src":"${at}main.js","type":"module","crossOrigin":""}]`,
-  ]]))
+test('a muted script error on a page that loaded none from elsewhere is not filed', async () =>
+  equal(
+    await muted([{ src: `${at}main.js`, type: 'module' }, { src: '' }]),
+    [],
+  ))
 
 let link = { tagName: 'LINK', href: file }
 
