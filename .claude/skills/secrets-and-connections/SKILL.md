@@ -46,8 +46,9 @@ and one that leaks is useless.
 You reach for `Deno.env.get('SOME_KEY')` because nearly every codebase you have
 read does. Here it is usually the wrong door. An environment variable is fixed
 when the process starts, so a new key needs a restart; it is inherited by every
-child the process starts; it cannot say which hosts it may go to; and a yaks app
-on yaks.app has no process environment at all. A secret written through the
+child the process starts; it cannot say which hosts it may go to; and it
+belongs to the host, rather than to a tenant connection. A secret written
+through the
 graph arrives while the process runs, rotates behind the same handle, is gone
 when its entity is deleted, and can be scoped by a sentinel.
 
@@ -80,8 +81,13 @@ when its entity is deleted, and can be scoped by a sentinel.
 same-named environment variable when the vault has no value
 (packages/secrets/reveal.ts). The fallback is why a name a service exports needs
 nothing written, and why writing the name through the graph overrides the
-export. It is a fallback, not where a new key goes, and on yaks.app there is no
-environment to fall to. A kept `op://` reference stays unresolved.
+export. It is a fallback, not where a new key goes. On yaks.app, Node
+compatibility can populate `process.env` with the kernel
+Worker's bindings and secrets. Connection credentials, OAuth clients, private
+records and webhook verification explicitly supply `env: () => undefined`, so
+a missing tenant value never selects a kernel credential. App workers receive
+only their connected bindings; pages receive sentinels and exclude direct keys.
+A kept `op://` reference stays unresolved.
 
 - **In a config** (`~/.yak/yak.json`, a plugin's `with`), a key is `{"secret":
   "NAME"}` where the value would go. The CLI host reads it each time the

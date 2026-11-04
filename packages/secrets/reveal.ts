@@ -33,7 +33,8 @@ export type Sources = {
   env?: (name: string) => string | undefined
 }
 
-// The process environment, where the runtime has one: a Worker has none.
+// The host process environment, including Worker bindings under nodejs_compat.
+// Tenant credential readers supply their own source instead.
 let environment = (name: string): string | undefined => {
   try {
     return env.get(name)

@@ -3,6 +3,7 @@
 // deleted owner leaves behind.
 
 import { test } from '@yaks/testing'
+import { env } from '@yaks/process/env'
 import { kernelDoc } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -558,6 +559,26 @@ test(
     await assertRejects(() => begin(c, eid))
   },
 )
+
+let missingCredential = await setup()
+let missingKey = await missingCredential.needs({ integration: 'texts' })
+await connect(missingCredential.c, missingKey, { key: 'tenant-key' })
+let missingName = String(
+  of(await at(missingCredential.g, missingKey), 'secret').name,
+)
+missingCredential.vault.drop(secretEid(missingName))
+
+test('a missing connection credential never falls back to the host environment', async () => {
+  let previous = env.get(missingName)
+  env.set(missingName, 'host-secret')
+  try {
+    assertEquals(await credential(missingCredential.c, missingKey), undefined)
+    assertEquals(await envOf(missingCredential.c, 'app'), {})
+  } finally {
+    if (previous == null) env.delete(missingName)
+    else env.set(missingName, previous)
+  }
+})
 
 test(
   'begin and connect: a sign-in keeps its grant behind the connection’s own handle',
