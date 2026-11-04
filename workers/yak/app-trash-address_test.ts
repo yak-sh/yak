@@ -6,14 +6,20 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { call, type Ctx } from './tools.ts'
 import { appStore, directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { declared, platform } from './testing.ts'
+import { declared } from './testing.ts'
+import { platform } from './serving-scene.ts'
 import { platform as isolated } from './deploy-probe.ts'
 import { r2Objects } from './lib/objects.ts'
 import { blobPrefix } from './blob-key.ts'
 import { publicPrefix } from './public-files.ts'
 import { holding } from './held.ts'
+import { effects } from './facets/trash-effects.ts'
+import type { Stored } from './graph.ts'
 
-let backed = platform('trash-address')
+let backed = platform({}, {
+  handlers: (env, graph) =>
+    effects(undefined, { store: { meta: true, env, graph } as Stored }),
+})
 let addresses = isolated('trash-address')
 let NOTE = {
   $defs: {

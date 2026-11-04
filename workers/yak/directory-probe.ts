@@ -1,7 +1,9 @@
 // Directory decisions over rows in memory. App Stores stay behind their own
 // namespace, so a test of a route need not install the platform's Store.
-import { type Bundle, graph, signed } from '@yaks/graph'
+import { type Bundle, type Graph, graph, signed } from '@yaks/graph'
 import { secrets } from '@yaks/secrets'
+import { effects, type Handlers } from '@yaks/effects'
+import { cleanup } from '@yaks/testing'
 import { plugins as trash } from './facets/trash-graph.ts'
 import { plugins as meter } from './facets/meter-graph.ts'
 import { vaultOf } from './vault.ts'
@@ -21,8 +23,15 @@ import { platform as runtime } from './testing.ts'
 
 let vocab = platformVocab()
 
-/** The directory's graph and wire, without a Durable Object or effects pool. */
-export let rows = (env: Partial<Env> = {}) => {
+type Composition = {
+  handlers?: (env: Env, graph: Graph) => Handlers
+}
+
+/** The directory's graph and wire, with optional effect handlers drained in memory. */
+export let rows = (
+  env: Partial<Env> = {},
+  handlers?: (graph: Graph) => Handlers,
+) => {
   let g = graph({ vocab, storage: ram(vocab) })
   g.use(
     secrets(vaultOf(env), (rows) => g.apply(rows, { trusted: true }), vocab),
@@ -31,6 +40,17 @@ export let rows = (env: Partial<Env> = {}) => {
   for (
     let plugin of [...trash(undefined, options), ...meter(undefined, options)]
   ) g.use(plugin)
+  let failures: unknown[] = []
+  let fx = handlers && effects(vocab, {
+    defer: true,
+    report: (error) => void failures.push(error),
+    write: (rows) => g.apply(rows, { trusted: true }),
+  })
+  if (fx && handlers) {
+    g.use(fx)
+    fx.handle(handlers(g))
+    cleanup(() => fx.stop())
+  }
   let revision = 0
   let fetch = async (req: Request): Promise<Response> => {
     let url = new URL(req.url)
@@ -87,6 +107,11 @@ export let rows = (env: Partial<Env> = {}) => {
           trusted: req.headers.get('x-yak-kernel') == '1',
           stamp: url.searchParams.get('stamp') != '0',
         })
+        if (fx) {
+          await fx.work(g)
+          await fx.idle()
+          if (failures.length) throw failures.shift()
+        }
         return Response.json(out, { headers })
       }
       throw new Error(
@@ -101,10 +126,16 @@ export let rows = (env: Partial<Env> = {}) => {
 
 /** Runtime bindings with the directory's decisions served by a RAM graph.
  * Store-specific behavior keeps using the runtime's app namespace. */
-export let hosting = <T extends ReturnType<typeof runtime>>(scenario: T): T => {
+export let hosting = <T extends ReturnType<typeof runtime>>(
+  scenario: T,
+  { handlers }: Composition = {},
+): T => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
   if (scenario.env.SERVING_COPY) return scenario
-  let directory = rows(scenario.env)
+  let directory = rows(
+    scenario.env,
+    handlers && ((graph) => handlers(scenario.env, graph)),
+  )
   let stores = scenario.env.STORE
   scenario.env.STORE = {
     idFromName: (name) => name,
@@ -118,5 +149,8 @@ export let hosting = <T extends ReturnType<typeof runtime>>(scenario: T): T => {
 }
 
 /** Runtime bindings with a RAM directory. */
-export let platform = (secret: string, vars: Partial<Env> = {}) =>
-  hosting(runtime(secret, vars))
+export let platform = (
+  secret: string,
+  vars: Partial<Env> = {},
+  composition: Composition = {},
+) => hosting(runtime(secret, vars), composition)

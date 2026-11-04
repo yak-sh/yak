@@ -4,5 +4,7 @@ import { platform as runtime } from './serving-probe.ts'
 import { operators } from './operator-service-probe.ts'
 
 /** The platform in memory, with `vars` beside its own. */
-export let platform = (vars: Partial<Env> = {}) =>
-  hosting(runtime({ BUILDER: operators, ...vars }))
+export let platform = (
+  vars: Partial<Env> = {},
+  composition: Parameters<typeof hosting>[1] = {},
+) => hosting(runtime({ BUILDER: operators, ...vars }), composition)
