@@ -17,7 +17,7 @@ import catalog from './public/_compiler/packages.json' with { type: 'json' }
 import * as apps from './apps.ts'
 import { writeResources } from './esbuild.ts'
 import type { Env } from './env.ts'
-import { ADA, seeded, visit } from './serving-probe.ts'
+import { ADA, seeded, visit } from './serving-data-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'

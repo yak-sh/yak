@@ -16,7 +16,7 @@ import { added, asked } from './examples/shop/cart.js'
 import { signed } from './probe.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx } from './tools.ts'
-import { ADA, ADA_OWNS, as, seeded, visit } from './serving-probe.ts'
+import { ADA, ADA_OWNS, as, seeded, visit } from './serving-data-probe.ts'
 import { platform } from './serving-scene.ts'
 
 // ---- the shop example, deployed and shopped in (T-34517) --------------------

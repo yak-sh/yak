@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
-import { platform } from './directory-probe.ts'
+import { platform } from './directory-rows-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore, directoryOf } from './directory.ts'
 import { stores } from './app-store-probe.ts'
@@ -15,7 +15,7 @@ import type { ServingCopyDoor } from './directory-copy.ts'
 import { KERNEL } from './meta.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { withKinds } from './kinds.ts'
-import { declared } from './testing.ts'
+import { declared } from './directory-fixture.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {

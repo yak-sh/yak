@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 import { operators } from './operator-service-probe.ts'
-import { platform as runtime } from './directory-probe.ts'
+import { platform as runtime } from './directory-rows-probe.ts'
 
 export let platform = (secret: string, vars: Partial<Env> = {}) =>
   runtime(secret, {

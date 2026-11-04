@@ -1,5 +1,5 @@
 import type { Env } from './env.ts'
-import { hosting } from './directory-probe.ts'
+import { hosting } from './directory-rows-probe.ts'
 import { platform as runtime } from './serving-probe.ts'
 import { operators } from './operator-service-probe.ts'
 
