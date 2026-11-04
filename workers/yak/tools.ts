@@ -1488,6 +1488,19 @@ let published = async (
       app: app.slug,
     }),
   )
+  // A preview link open on the app goes on following it: its pages show what
+  // was released, then the next draft's writes.
+  if (app.followed) {
+    background(
+      watching(ctx.env, space, app)({
+        app: app.eid,
+        link: app.followed,
+        draft: null,
+        files: [],
+        at: new Date().toISOString(),
+      }),
+    )
+  }
   if (tooled.views) await after(() => viewsMoved(ctx, space))
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an

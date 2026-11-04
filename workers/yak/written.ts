@@ -148,11 +148,14 @@ let over = async (dir: Directory, app: App, base: Promise<Files>) => {
   return { files: overlaid(files, rows), rows }
 }
 
-/** One write to a draft as the pages following it hear it: the files it
- * left, each at its sha, null for a delete. */
+/** One change to what an app's preview link serves, as its pages hear it:
+ * a write to the draft, naming the files it left, each at its sha, null for a
+ * delete; or a release, `draft` null and no files, after which the link
+ * serves what was released. `link` is the app's `followed`. */
 export type Drafted = {
   app: string
-  draft: string
+  link: string
+  draft: string | null
   files: { path: string; sha: string | null }[]
   at: string
 }
@@ -161,9 +164,10 @@ export type Drafted = {
  * `watching`). Never refuses: the write has already landed. */
 export type Tell = (news: Drafted) => Promise<void>
 
-/** The app's draft, opened if it has none, and marked as one a link
- * follows (`app.followed`, preview.ts), so its writes are told; a write to a
- * draft no link follows costs nothing more. */
+/** The app with its preview link (`app.followed`, preview.ts), minted the
+ * first time one is asked for. The link outlives every deploy: it follows
+ * whatever draft the app has, so each write to any of them is told; an app
+ * nobody previewed costs a write nothing more. */
 export let followed = async (
   dir: Directory,
   space: Space,
@@ -173,24 +177,22 @@ export let followed = async (
   let row = app
   for (let n = 0; n < 5; n++) {
     row = await waiting(dir, space, row, who)
-    if (row.draft && row.followed == row.draft) return row
-    let draft = row.draft ?? mint()
+    if (row.followed) return row
+    let link = mint()
     try {
       await dir.stamp({
         entities: [{
           entity: { eid: row.eid },
-          app: { draft, followed: draft },
-          $was: {
-            app: { draft: token(row.draft ?? null), fence: token(null) },
-          },
+          app: { followed: link },
+          $was: { app: { followed: token(null), fence: token(null) } },
         }],
       }, vouched(who))
-      return { ...row, draft, followed: draft }
+      return { ...row, followed: link }
     } catch (e) {
       if (!(e instanceof Stale)) throw e
     }
   }
-  throw refuse('conflict', `app ${app.slug} changed while opening its draft`)
+  throw refuse('conflict', `app ${app.slug} changed while opening its link`)
 }
 
 /** One path a write changes: to new bytes, to a sha already stored (a restore,
@@ -212,7 +214,7 @@ export type Change = {
  * A change that leaves a path as the draft already holds it is left out: a
  * write sent again after it was cut off puts and records only what did not
  * land, and says which were there (`already`). Answers which paths it wrote,
- * and once they have landed tells `tell`, if a link follows the draft.
+ * and once they have landed tells `tell`, if the app has a preview link.
  * `now` is the writer's clock; persisted draft stamps order edits even when
  * that clock stops or moves backwards.
  */
@@ -306,9 +308,10 @@ export let modifying = async <T>(
           })),
         ],
       }, vouched(who))
-      if (row.followed == id) {
+      if (row.followed) {
         await tell({
           app: row.eid,
+          link: row.followed,
           draft: id,
           files: todo.map((c) => ({ path: c.path, sha: c.sha ?? null })),
           at,

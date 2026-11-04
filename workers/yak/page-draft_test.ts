@@ -88,10 +88,14 @@ let load = (
   world.globalThis = world
   new Function('world', `with (world) { ${code} }`)(world)
   let socket = Socket.made[0]
-  let wrote = (files: { path: string; sha: string | null }[], to = 'D') =>
+  let wrote = (
+    files: { path: string; sha: string | null }[],
+    to = 'D',
+    draft: string | null = 'W',
+  ) =>
     socket.fire('message', {
       data: JSON.stringify({
-        draft: { app: 'A', draft: to, files, at: 'now' },
+        draft: { app: 'A', link: to, draft, files, at: 'now' },
       }),
     })
   return {
@@ -150,7 +154,7 @@ test('any other write reloads the page, keeping its scroll and typed fields in t
   equal(deleted.reloads(), 1)
 })
 
-test('a page that cancels yak-draft takes the write itself, told where each file serves, and can still reload as the page would have; another draft and other packets are not its', () => {
+test("a page that cancels yak-draft takes the write itself, told where each file serves, and can still reload as the page would have; another link's writes and other packets are not its", () => {
   let p = load('<link rel="stylesheet" href="../style.css">', { cancel: true })
   p.wrote([{ path: 'index.html', sha: 'x' }])
   p.wrote([{ path: 'index.html', sha: 'x' }], 'other')
@@ -159,7 +163,8 @@ test('a page that cancels yak-draft takes the write itself, told where each file
   equal(p.events.length, 1)
   equal(p.events[0].detail, {
     app: 'A',
-    draft: 'D',
+    link: 'D',
+    draft: 'W',
     files: [{ path: 'index.html', sha: 'x', url: `${AT}index.html` }],
     at: 'now',
   })
@@ -172,6 +177,14 @@ test('a page that cancels yak-draft takes the write itself, told where each file
   equal(p.reloads(), 1)
   let next = load('<input id="title">', { name: String(p.world.name) })
   equal(next.document.querySelector('input')!.value, 'Soup')
+})
+
+test("a release reloads the page to show what was released, and the next draft's writes are still its", () => {
+  let p = load('<link rel="stylesheet" href="../style.css">')
+  p.wrote([], 'D', null)
+  equal(p.reloads(), 1)
+  p.wrote([{ path: 'style.css', sha: 'abc' }], 'D', 'next')
+  equal([p.reloads(), sheets(p.document).length], [1, 2])
 })
 
 test('a socket that drops comes back and reloads the page, since it may have missed a write', () => {

@@ -2,9 +2,11 @@
 // socket of its own. Nothing here reloads until the person presses Reload.
 // Woven inline into the page beside the reporter (page-script.ts).
 //
-// A page from a draft's preview link (preview.ts, `data-yak-draft`) follows
-// the draft instead: it opens a socket of its own, and takes each write the
-// draft's store tells it of (`{"draft":…}`). A cancelable `yak-draft` event
+// A page from an app's preview link (preview.ts, `data-yak-draft` naming the
+// link) follows the app's draft instead: it opens a socket of its own, and
+// takes each write the link's store tells it of (`{"draft":…}`), across
+// deploys; a release comes as one naming no files, and reloads the page to
+// show what was released. A cancelable `yak-draft` event
 // goes first, so a page can take the write itself (@yaks/preact/host takes
 // a write of its views module so) and still reload if it cannot; else a
 // write of only stylesheets the page links swaps each in place, and any other
@@ -15,7 +17,7 @@
   if (!script) return
   let version = Number(script.dataset.yakVersion)
   let at = new URL(script.dataset.yakAt, location.href)
-  let following = (draft) => {
+  let following = (link) => {
     // What a reload keeps, in sessionStorage, or in the window's name where a
     // sandboxed page has no storage: both outlive a reload of the tab.
     let KEY = `yak-draft:${at.pathname}`
@@ -100,7 +102,7 @@
       link.after(next)
     }
     let took = (news) => {
-      if (news.draft != draft || !Array.isArray(news.files)) return
+      if (news.link != link || !Array.isArray(news.files)) return
       // Each file with the address it serves at; a page that took the write
       // and could not use it calls `reload`, the one this page would have had.
       let files = news.files.map((file) => ({

@@ -70,7 +70,7 @@
         "followed": {
           "type": "string",
           "stamped": true,
-          "description": "the draft a preview link follows: each write to it is told to the link's pages"
+          "description": "the app's preview link, kept across deploys: each write to its draft, and each deploy, is told to the link's pages"
         },
         "store": {
           "type": "string",

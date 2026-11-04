@@ -201,9 +201,11 @@ test('a store-scoped page keeps borrowed component homes out of its graph', asyn
 
 // A socket on the link, as the store holds one: what it was sent.
 let heard = () => {
-  let sent: { draft: { draft: string; files: unknown } }[] = []
+  let sent: {
+    draft: { link: string; draft: string | null; files: unknown }
+  }[] = []
   let name = [...scenario.sockets.keys()].find((n) =>
-    n.includes(`preview/${app.draft}`)
+    n.includes(`preview/${app.followed}`)
   )!
   scenario.sockets.get(name)!.push({
     readyState: 1,
@@ -223,8 +225,8 @@ test('the link follows the draft: each write is told to its pages and served on 
   let link = String(out.value!.url)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   let page = await (await at()).text()
-  ok(page.includes(`data-yak-draft="${out.value!.draft}"`), page)
   app = (await dir.app(space, 'draft'))!
+  ok(page.includes(`data-yak-draft="${app.followed}"`), page)
   let sent = heard()
   await write('style.css', 'body { color: tomato }')
   await write(
@@ -233,7 +235,11 @@ test('the link follows the draft: each write is told to its pages and served on 
   )
   equal(await (await at('style.css')).text(), 'body { color: tomato }')
   ok((await (await at()).text()).includes('Soup tonight'))
-  equal(sent.map((m) => m.draft.draft), [app.draft, app.draft])
+  let draft = (await dir.app(space, 'draft'))!.draft
+  equal(sent.map((m) => [m.draft.link, m.draft.draft]), [
+    [app.followed, draft],
+    [app.followed, draft],
+  ])
   equal(sent[0].draft.files, [{
     path: 'style.css',
     sha: await sha256(new TextEncoder().encode('body { color: tomato }')),
@@ -336,12 +342,36 @@ test("a seed edited in the draft rewrites the rows it seeded in the link's store
   equal(await notes(), ['seeded again'])
 })
 
-test('a deploy releases the draft and ends its link', async () => {
+test("an open link rides through a deploy: its pages hear the release and see what was released, then the next draft's writes, all in the link's own store", async () => {
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   let link = String(out.value!.url)
-  equal((await kernel(new Request(link), env)).status, 200)
+  let at = (path = '') => kernel(new Request(new URL(path, link)), env)
+  await write('index.html', '<html><head></head><body>Before</body></html>')
+  ok((await (await at()).text()).includes('Before'))
+  app = (await dir.app(space, 'draft'))!
+  let sent = heard()
   await run('app_deploy', { app: 'draft' })
-  equal((await kernel(new Request(link), env)).status, 404)
+  equal((await dir.app(space, 'draft'))!.draft, null)
+  await new Promise((done) => setTimeout(done, 10))
+  equal(sent.map((m) => [m.draft.link, m.draft.draft, m.draft.files]), [
+    [app.followed, null, []],
+  ])
+  let page = await at()
+  equal(page.status, 200)
+  ok((await page.text()).includes('Before'))
+  await write('index.html', '<html><head></head><body>After</body></html>')
+  let next = (await dir.app(space, 'draft'))!.draft
+  ok(next && next != app.draft)
+  equal(sent.at(-1)!.draft.link, app.followed)
+  equal(sent.at(-1)!.draft.draft, next)
+  ok((await (await at()).text()).includes('After'))
+  equal(
+    String(
+      (await tools[0].run(ctx, { app: 'draft', screenshot: false }))
+        .value!.url,
+    ),
+    link,
+  )
 })
 
 test('preview viewport uses CSS pixels at phone and desktop widths', async () => {

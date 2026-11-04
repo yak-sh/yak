@@ -260,9 +260,9 @@ test('a first write sends every new file at its content address', async () => {
   )
 })
 let unfollowed = made()
-test('a write to a draft a link follows tells its files and shas once they land; one that changes nothing, or that no link follows, tells nobody', async () => {
+test('a write to an app with a preview link tells its files and shas once they land; one that changes nothing, or to an app with no link, tells nobody', async () => {
   let { write, heard, draft, follow } = made()
-  await follow()
+  let link = (await follow()).followed!
   await write({ 'a.txt': 'one', 'b.txt': 'two' })
   await write({ 'a.txt': 'one' })
   await unfollowed.write({ 'a.txt': 'one' })
@@ -270,6 +270,7 @@ test('a write to a draft a link follows tells its files and shas once they land;
   let { rows } = await draft()
   assertEquals(heard, [{
     app: APP,
+    link,
     draft: rows[0].draft!,
     files: [
       { path: 'a.txt', sha: sha('one') },

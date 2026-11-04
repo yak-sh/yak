@@ -66,13 +66,13 @@ shows up to 30 problems and five review items, with remaining counts. Findings
 never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
-The URL is a private bearer link that follows the draft until the next
-`app_deploy` releases it. Anyone holding it can exercise the preview as its
+The URL is a private bearer link to the app, one per app, that keeps working
+across every `app_deploy`. Anyone holding it can exercise the preview as its
 author while that author remains a writer; keep it private. Draft files,
-vocabulary, seed data and worker run with a separate test store, one per draft,
-kept while the draft is. Preview edits do not change released app data, and do
-not become released data later. External D1, R2, Vectorize and Durable Object
-bindings are unavailable in a draft preview.
+vocabulary, seed data and worker run with the link's own test store, kept across
+deploys and for thirty days after the draft last changed. Preview edits do not
+change released app data, and do not become released data later. External D1,
+R2, Vectorize and Durable Object bindings are unavailable in a draft preview.
 
 ### A preview that follows the draft
 
@@ -84,16 +84,19 @@ shows there as it lands, without calling `app_preview` again:
   typed into its fields;
 - a change to `worker.js`, `vocab.json` or a seed file sets up the preview's
   worker or test store again first. A seed file applied again rewrites the rows
-  it seeded rather than adding new ones.
+  it seeded rather than adding new ones;
+- an `app_deploy` reloads the page to show what was released, and the page goes
+  on following the next draft's writes.
 
 Before either, the page receives a cancelable **`yak-draft` event on `window`**.
-Its `detail` is `{app, draft, files: [{path, sha, url}], at}`, where `url` is
-the address the file serves at and `sha` is null for a deleted file. Call
-`event.preventDefault()` synchronously to take the write yourself, for example
-by fetching the one module that changed. A page that took the write and then
-cannot use it calls `event.reload()`, the reload it would have had, keeping its
-scroll and typed fields. This happens only on the preview URL; released pages
-keep the reload notice below.
+Its `detail` is `{app, link, draft, files: [{path, sha, url}], at}`, where `url`
+is the address the file serves at and `sha` is null for a deleted file. A deploy
+arrives with `draft` null and no files. Call `event.preventDefault()`
+synchronously to take the write yourself, for example by fetching the one module
+that changed. A page that took the write and then cannot use it calls
+`event.reload()`, the reload it would have had, keeping its scroll and typed
+fields. This happens only on the preview URL; released pages keep the reload
+notice below.
 
 An app on the `@yaks/` packages takes a write of its views in place, with no
 reload. Put the page's renderers in a views module that exports `views`, a

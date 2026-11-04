@@ -1,8 +1,10 @@
-// A private draft's link (D-136180): the app as its draft stands at each
-// request, the newest `written` rows over the release (written.ts), against a
-// store of the draft's own and never the live one. It lasts as long as the
-// draft does. Nothing here selects a release in the directory or opens the
-// serving app's store for writing.
+// An app's private preview link (D-136180): the app as its draft stands at
+// each request, the newest `written` rows over the release (written.ts),
+// against a store of the link's own and never the live one. The link is the
+// app's, not one draft's (`app.followed`): a deploy releases the draft and the
+// link goes on serving what was released, then the next draft. Nothing here
+// selects a release in the directory or opens the serving app's store for
+// writing.
 //
 // Each state of the draft is served as a release named for the files it holds,
 // built by the first request that finds it missing (`following`) and found
@@ -81,12 +83,14 @@ let encode = (value: string) => new TextEncoder().encode(value)
 let decode = (value: Uint8Array | null) =>
   value && new TextDecoder().decode(value)
 
-// What a link names: the draft it follows, as whom.
+// What a link names: the app's link it follows (`app.followed`), as whom.
+// A ticket sealed before links outlived a deploy names it as `draft`.
 type Ticket = {
   app: string
   space: string
   person: string
-  draft: string
+  link?: string
+  draft?: string
 }
 
 let privateHeaders = {
@@ -168,20 +172,19 @@ let post = (
     },
   )
 
-// The app as the link serves one state of its draft: the draft's own store,
+// The app as its link serves one state of its draft: the link's own store,
 // and its own dispatch script where the state has a worker.
 let previewing = (
   app: App,
-  draft: string,
+  link: string,
   source: string | null,
   mount: string,
   worker = false,
 ): App => {
-  let script = worker ? `app-${app.eid}-preview-${draft}` : undefined
+  let script = worker ? `app-${app.eid}-preview-${link}` : undefined
   return {
     ...app,
-    draft,
-    store: `preview/${draft}`,
+    store: `preview/${link}`,
     source,
     files: `${source}/private`,
     version: null,
@@ -197,10 +200,10 @@ let previewing = (
 
 // Where one state of a draft is served from: a release named for the files
 // it holds, so whichever isolate built it, the next request finds it.
-let stateOf = (space: Space, app: App, draft: string, files: Files) =>
+let stateOf = (space: Space, app: App, link: string, files: Files) =>
   `${space.store}/.releases/${app.eid}/${
     derivedEid(
-      `preview|${draft}|${JSON.stringify(Object.entries(files).sort())}`,
+      `preview|${link}|${JSON.stringify(Object.entries(files).sort())}`,
     )
   }`
 
@@ -228,7 +231,7 @@ let VOCAB = ['vocab.yml', 'vocab.json', 'package.json']
 /**
  * Build one state of a draft for its link: stage its files, compile what the
  * state before it did not, upload its worker if that changed, give the
- * draft's store the vocabulary, tools and seed rows that changed, and only
+ * link's store the vocabulary, tools and seed rows that changed, and only
  * then write the index that makes the state found. A state with nothing
  * before it (the link's first) sets up everything.
  */
@@ -236,20 +239,20 @@ let built = async (
   ctx: Ctx,
   space: Space,
   app: App,
+  link: string,
   d: Draft,
   source: string,
   mount: string,
   who: Who,
 ) => {
   let raw = r2RawObjects(ctx.env.BLOBS)
-  let draft = app.draft!
   let had = await recorded(raw, source)
   if (had) return { worker: !!had.worker }
   let last = newest(d.rows)[0]?.at
   let before = stateOf(
     space,
     app,
-    draft,
+    link,
     overlaid(await served(raw, app), d.rows.filter((w) => w.at != last)),
   )
   let prev = before == source ? null : await filesIn(raw, before)
@@ -285,7 +288,7 @@ let built = async (
   let made = await compiled(
     ctx,
     space,
-    previewing(app, draft, source, mount),
+    previewing(app, link, source, mount),
     parsed.config,
     keys,
     files.files,
@@ -296,14 +299,14 @@ let built = async (
     (keys.includes(main) ? await carried(read, main) : null)
   let config = { ...parsed.config, main: made.worker?.main ?? main }
   let worker = modules && await digest(modules, config)
-  let candidate = previewing(app, draft, source, mount, !!worker)
+  let candidate = previewing(app, link, source, mount, !!worker)
   let store = appStore(ctx.env.STORE, space, candidate, ctx.env)
   await post(
     store,
     '/expires',
     {
       at: Date.now() + AGE,
-      script: `app-${app.eid}-preview-${draft}`,
+      script: `app-${app.eid}-preview-${link}`,
       context: { app: candidate, space },
     },
     who,
@@ -341,7 +344,7 @@ let built = async (
         text: decode(await read(path)) ?? '',
       }))),
     )
-    if (seed.length) await post(store, '/apply', pinned(seed, draft), who)
+    if (seed.length) await post(store, '/apply', pinned(seed, link), who)
   }
   await files.files.put(
     `${source}/${RECORD}`,
@@ -355,22 +358,23 @@ let built = async (
 let states = new Map<string, Promise<{ worker: boolean }>>()
 let HELD = 256
 
-/** The app as its draft stands now, built for the link where no isolate has
- * served this state before. `app.draft` is the draft the link follows. */
+/** The app as its draft stands now, or as released where it has none, built
+ * for the link where no isolate has served this state before. */
 let following = async (
   ctx: Ctx,
   space: Space,
   app: App,
+  link: string,
   mount: string,
   who: Who,
 ) => {
   let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app)
-  let source = stateOf(space, app, app.draft!, d.files)
+  let source = stateOf(space, app, link, d.files)
   let state = states.get(source)
   if (!state) {
     states.set(
       source,
-      state = built(ctx, space, app, d, source, mount, who),
+      state = built(ctx, space, app, link, d, source, mount, who),
     )
     state.catch(() => states.delete(source))
     for (let old of states.keys()) {
@@ -378,19 +382,19 @@ let following = async (
       states.delete(old)
     }
   }
-  return previewing(app, app.draft!, source, mount, (await state).worker)
+  return previewing(app, link, source, mount, (await state).worker)
 }
 
-/** Each write to an app's draft, told to the pages of the draft's preview
- * link the way a release is told to the app's (graph.ts `/drafted`). A link
- * nobody opened has no pages to hear it. */
+/** Each write to an app's draft, and each release, told to the pages of the
+ * app's preview link the way a release is told to the app's (graph.ts
+ * `/drafted`). A link nobody opened has no pages to hear it. */
 export let watching =
   (env: Env, space: Space, app: App): Tell => async (news) => {
     try {
       await appStore(
         env.STORE,
         space,
-        { ...app, store: `preview/${news.draft}` },
+        { ...app, store: `preview/${news.link}` },
         env,
       ).consume('/drafted', async (res) => {
         if (!res.ok) throw new Error(`draft notice: ${res.status}`)
@@ -433,22 +437,22 @@ let preview = async (ctx: Ctx, args: Args) => {
       app: app.eid,
       space: space.eid,
       person: ctx.person,
-      draft: open.draft!,
+      link: open.followed!,
     } satisfies Ticket,
     ctx.env.SESSION_SECRET!,
   )
   let mount = `/${app.slug}/_preview/${ticket}/`
-  await following(ctx, space, open, mount, who)
+  await following(ctx, space, open, open.followed!, mount, who)
   let url = `https://${spaceHost(ctx.env, space.slug)}${mount}${path}`
   let value: Record<string, unknown> = {
     url,
-    draft: open.draft,
+    draft: open.draft ?? null,
     ...view,
     isolated: true,
     cost: 0,
   }
   let follows =
-    'It follows the draft until its next app_deploy: an open page takes each write as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields.'
+    'It follows the app from now on, across every app_deploy: an open page takes each write to the draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and after a deploy shows what was released, then the next draft.'
   if (!screenshot) {
     return {
       text:
@@ -530,7 +534,8 @@ let target = async (req: Request, env: Env) => {
   let match = /^\/([^/]+)\/_preview\/([^/]+)\/(.*)$/.exec(url.pathname)
   if (!match || !env.SESSION_SECRET) return null
   let ticket = await opened<Ticket>('preview', match[2], env.SESSION_SECRET)
-  if (!ticket || typeof ticket.draft != 'string') return null
+  let link = ticket?.link ?? ticket?.draft
+  if (!ticket || typeof link != 'string') return null
   let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -540,15 +545,14 @@ let target = async (req: Request, env: Env) => {
     ? { space: found.space, app: found.app }
     : null
   let role = found.role
-  // The link lives as long as its draft: a deploy that releases it ends it.
   if (
     !pair || pair.space.eid != ticket.space ||
     url.hostname != spaceHost(env, pair.space.slug) ||
-    pair.app.slug != match[1] || pair.app.draft != ticket.draft ||
+    pair.app.slug != match[1] || pair.app.followed != link ||
     pair.app.trashed || pair.space.trashed || !writes(role)
   ) return null
   let mount = url.pathname.slice(0, url.pathname.length - match[3].length)
-  let app = previewing(pair.app, ticket.draft, pair.app.source ?? null, mount)
+  let app = previewing(pair.app, link, pair.app.source ?? null, mount)
   // The ticket's writer is checked above on every callback. A directory
   // edit cannot revoke its scoped worker grant; current membership does.
   let grant = await granted(
@@ -565,7 +569,7 @@ let target = async (req: Request, env: Env) => {
     space: pair.space,
     app: pair.app,
     person: ticket.person,
-    draft: ticket.draft,
+    link,
     preview: app,
     who,
     path: '/' + match[3],
@@ -611,7 +615,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     app = await following(
       { env, dir, person: found.person },
       space,
-      { ...found.app, draft: found.draft },
+      found.app,
+      found.link,
       mount,
       who,
     )
@@ -652,7 +657,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       mount,
       { ...app, source: null },
       '',
-      { badge: null, draft: found.draft },
+      { badge: null, draft: found.link },
       baseOf(mount, res.headers.get('x-yak-file') ?? decoded.slice(1), false),
     )
     return privateResponse(

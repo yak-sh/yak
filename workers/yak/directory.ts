@@ -231,7 +231,8 @@ export type AppInfo = {
   blobs?: string | null
   draft?: string | null
   fence?: string | null
-  // The draft a preview link follows (preview.ts), whose writes are told.
+  // The app's preview link (preview.ts), kept across deploys; its draft's
+  // writes and its deploys are told to the link's pages.
   followed?: string | null
   script?: string | null
   // The worker its release built: empty when it built none, so a page asks

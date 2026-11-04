@@ -464,18 +464,20 @@ Core platform columns remain owned by the platform's vocabulary.
 
 ## Draft previews
 
-`app_preview` gives a private link that follows the app's draft until a deploy
-releases it (preview.ts). Each request serves the draft's newest `written` rows
-over the release as a release of their own, built the first time the link serves
-that state: what changed is compiled, and the worker, the draft's own Store's
+`app_preview` gives an app's private link (`app.followed`, preview.ts), minted
+once and kept across deploys: it serves the app's draft, or the release where
+there is none. Each request serves the draft's newest `written` rows over the
+release as a release of their own, built the first time the link serves that
+state: what changed is compiled, and the worker, the link's own Store's
 vocabulary and seed rows are set up again only when a write changed them. Each
-write is told to the link's pages over that Store's socket (`{"draft":…}`), and
-public/release.js swaps a stylesheet in place or reloads. The Store's expiry
-alarm, thirty days after the draft's last change, removes its test data and
-script. Browser screenshots use the `BROWSER` binding, configured in production
-and staging; no Browser Run REST token or local browser is needed. Browser time
-spends the account's existing budget at $0.09/hour, including failed captures.
-See [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
+write, and each deploy, is told to the link's pages over that Store's socket
+(`{"draft":…}`), and public/release.js swaps a stylesheet in place or reloads.
+The Store's expiry alarm, thirty days after the draft's last change, removes its
+test data and script. Browser screenshots use the `BROWSER` binding, configured
+in production and staging; no Browser Run REST token or local browser is needed.
+Browser time spends the account's existing budget at $0.09/hour, including
+failed captures. See
+[Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
 
 The connector's image content accompanies structured console messages,
 JavaScript errors, HTTP status, viewport, expiry and estimated browser cost. The
