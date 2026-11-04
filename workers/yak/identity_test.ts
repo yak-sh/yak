@@ -1138,35 +1138,45 @@ test(
 // their apps live at. One form, one POST to the space's own address, and the
 // answer is a redirect — a changed address moves this hostname, so where they
 // land is wherever the space now is.
-test('account settings save the name and address', async () => {
+test('Profile saves the name, and Settings the address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (
-    space: string,
+    space: string | null,
     fields: Record<string, string>,
     cookie?: string,
   ) =>
-    k.at('yaks.app', managePath('settings', space), {
-      method: 'POST',
-      redirect: 'manual',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        ...(cookie ? { cookie } : {}),
+    k.at(
+      'yaks.app',
+      space ? managePath('settings', space) : managePath('profile'),
+      {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          ...(cookie ? { cookie } : {}),
+        },
+        body: new URLSearchParams(fields).toString(),
       },
-      body: new URLSearchParams(fields).toString(),
-    })
+    )
+  let read = async (path: string, cookie: string) =>
+    await (await k.at('yaks.app', path, { headers: { cookie } })).text()
   try {
     let { cookie, email, person } = await signIn(k)
     let slug = email.split('@')[0]
     let dir = meta(k)
 
-    // The block, as its owner reads it: their address and the name signing in
-    // derived for them, both filled in and both theirs to change.
-    let page = await (await k.at('yaks.app', managePath('settings'), {
-      headers: { cookie },
-    })).text()
-    assertMatch(page, new RegExp(`name="space"[^>]*value="${slug}"`))
-    assertMatch(page, new RegExp(`name="name"[^>]*value="${slug}"`))
+    // The pages, as their owner reads them: the address on the space's
+    // Settings and the name signing in derived for them on their Profile,
+    // both filled in and both theirs to change.
+    assertMatch(
+      await read(managePath('settings', slug), cookie),
+      new RegExp(`name="space"[^>]*value="${slug}"`),
+    )
+    assertMatch(
+      await read(managePath('profile'), cookie),
+      new RegExp(`name="name"[^>]*value="${slug}"`),
+    )
 
     // A stranger sees none of it, and nor does somebody signed in who is
     // nobody here.
@@ -1175,20 +1185,19 @@ test('account settings save the name and address', async () => {
 
     // Naming themselves: written on their own person row, so every byline an
     // app writes says it (T-32654).
-    let named = await post(slug, { name: 'Dana' }, cookie)
+    let named = await post(null, { name: 'Dana' }, cookie)
     assertEquals(named.status, 303)
     await named.body?.cancel()
     assertEquals(
       named.headers.get('location'),
-      `https://yaks.app${managePath('settings', slug)}&saved=1`,
+      `https://yaks.app${managePath('profile')}?saved=1`,
     )
     let [them] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
 
     // Cleared, the front of their address comes back: a person is always
     // called something, or a member row reads back as an eid (T-32733).
-    await (await post(slug, { name: '  ' }, cookie)).body
-      ?.cancel()
+    await (await post(null, { name: '  ' }, cookie)).body?.cancel()
     let [quiet] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 
@@ -1197,12 +1206,11 @@ test('account settings save the name and address', async () => {
     // nothing has moved.
     let theirs = await signIn(k, `rex-${uniq()}@yaks.app`)
     let other = theirs.email.split('@')[0]
-    let taken = await post(slug, { name: 'Dana Q', space: other }, cookie)
+    let taken = await post(slug, { space: other }, cookie)
     assertEquals(taken.status, 400)
     let again = await taken.text()
     assertMatch(again, /is taken/)
     assertMatch(again, new RegExp(`name="space"[^>]*value="${other}"`))
-    assertMatch(again, /name="name"[^>]*value="Dana Q"/)
     assertEquals(again.match(/type="submit">Save/g)?.length, 1)
 
     // A badly shaped one says what an address is.
@@ -1218,7 +1226,7 @@ test('account settings save the name and address', async () => {
     await moved.body?.cancel()
     assertEquals(
       moved.headers.get('location'),
-      `https://yaks.app${managePath('settings', want)}&saved=1`,
+      `https://yaks.app${managePath('settings', want)}?saved=1`,
     )
     assert(
       (await dir.query(`.space.slug=${want}`)).length,

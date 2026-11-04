@@ -206,7 +206,7 @@ test('the billing doors say no before they say anything else', async () => {
     let mine = await k.at('yaks.app', '/connect', { headers: { cookie } })
     assertEquals(mine.status, 200)
     let card = await mine.text()
-    assert(card.includes('Your plan'), 'the card is on the connector page')
+    assert(card.includes('>Plan<'), 'the card is on the connector page')
     assert(
       card.includes('Get the Plus plan'),
       'and it offers the Plus plan to a free space',

@@ -28,7 +28,9 @@ import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
 export { esc } from './html.ts'
 import {
+  accountView,
   enabling,
+  LOGOUT,
   MANAGE,
   managePath,
   type ManageView,
@@ -38,8 +40,19 @@ import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { links } from './sheets.ts'
-import { ceilings, count, PRICE, size, YEARLY } from './meter.ts'
-import type { Card, Want } from './billing.ts'
+import {
+  type Budget,
+  type Ceiling,
+  ceilings,
+  count,
+  dollars,
+  type Gauge,
+  PRICE,
+  size,
+  WARN,
+  YEARLY,
+} from './meter.ts'
+import type { Card, Payer, Want } from './billing.ts'
 import { columns } from '@yaks/ui/chart'
 import { h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -581,15 +594,24 @@ type Listed = {
   access?: string | null
 }
 
+/** A space the side's selector offers: whether it is the person's to own,
+ * and whether it is the one they open first (`member.own`). */
+export type Picked = {
+  slug: string
+  title: string
+  owner: boolean
+  own: boolean
+}
+
 export type DeskPage = {
+  /** the space the page is in, or on a page of the person's own, the one the
+   * side's selector holds */
   space: string
-  /** the space the address named (`?space=`), carried by every link on the
-   * page; none is the person's own */
-  pick?: string
   /** each with its open errors, newest first (unseen.ts `plain`) */
   apps: (Listed & { errors?: Plain[] })[]
   trash?: { eid: string; slug: string; title: string; days: number }[]
   name?: string
+  email?: string
   agents?: Agent[]
   views?: Visits[] | null
   viewDays?: number
@@ -597,6 +619,15 @@ export type DeskPage = {
   sell?: 'none' | 'setup' | 'ready'
   plan?: Yours['plan']
   paid?: boolean
+  /** the Billing page's month: each allowance the space answers to and how
+   * much of it is used, its model budget, when the hourly sweep last read
+   * them, and whom Stripe bills (`undefined` when it couldn't be asked) */
+  bill?: {
+    limits: Partial<Record<Ceiling, Gauge>>
+    budget: Budget
+    read: string | null
+    payer?: Payer | null
+  }
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean
   fee?: string
@@ -611,36 +642,52 @@ export type DeskPage = {
   invite?: { email: string; app: string; role: string; note: string }
   /** what was typed into the settings form, when a change was refused and
    * the page is drawn again */
-  typed?: { name: string; space: string; home: string }
+  typed?: { space: string; home: string }
+  /** what was typed into the new space form, when it was refused */
+  made?: { title: string; slug: string }
   /** the apps of other people's spaces this person may open, each with the
    * slug of the space it lives in */
   shared?: (Listed & { space: string })[]
-  /** every space this person owns, this one among them: the side names the
-   * one the page changes and links each of the others */
-  spaces?: { slug: string; title: string }[]
+  /** every space this person may work in, this one among them */
+  spaces?: Picked[]
   /** the Operator page's content (operator-page.ts `operatorBody`) */
   operator?: string
-  /** a member of the space who does not own it: of the dashboard they may
-   * open only the Operator, so the side links only that */
+  /** a member of the space who does not own it: of its pages they may open
+   * only the Operator, so the side links only that */
   member?: boolean
 }
 
 let navIcons = {
+  profile: 'user',
+  agents: 'bot',
+  shared: 'share-2',
   operator: 'bot',
   apps: 'layout-grid',
   people: 'users',
-  connect: 'bot',
   connections: 'plug',
   visits: 'chart-no-axes-column-increasing',
   selling: 'credit-card',
-  billing: 'credit-card',
+  billing: 'receipt',
   settings: 'settings-2',
   trash: 'trash-2',
 } satisfies Record<string, IconName>
 
+// The space a page is in, as the side and the page's head name it.
+let picked = (at: DeskPage) =>
+  at.spaces?.find((s) => s.slug == at.space) ??
+    { slug: at.space, title: '', owner: !at.member, own: false }
+let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
+
+// The Operator of a person's own space is their PA (T-136141).
+let operatorName = (at: DeskPage) => picked(at).own ? 'Your PA' : 'Operator'
+
+// The whole menu, one side (T-136122): what is the person's own wherever they
+// are, then the space they are working in, chosen in place, and under it that
+// space's pages. On a phone the same side opens full screen from the top
+// bar's Menu (`:target`, no script).
 let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let link = (key: keyof typeof navIcons, label: string) =>
-    `<a href="${managePath(key, at.pick)}"${
+    `<a href="${managePath(key, at.space)}"${
       view == key || (view == 'new' && key == 'apps')
         ? ' aria-current="page"'
         : ''
@@ -651,55 +698,90 @@ ${icon(navIcons[key])}${label}${
         : ''
     }</a>`
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
-<aside class="Desk_Side">
-<a class="Desk_Brand" href="${url(env, '/')}"><img src="${
+<aside class="Desk_Side" id="menu" aria-label="Menu">
+<div class="Desk_Top"><a class="Desk_Brand" href="${url(env, '/')}"><img src="${
     url(env, '/yaks-app.png')
-  }" width="36" height="36" alt="">yaks.app</a>${spaces(at, view, env)}
-<nav class="SideNav" aria-label="Manage your apps">
+  }" width="36" height="36" alt="">yaks.app</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
+<div class="Desk_Section"><h2 class="Desk_Group" id="side-account">Your account</h2>
+<nav class="SideNav" aria-labelledby="side-account">
+${link('profile', 'Profile')}${link('agents', 'Agents')}${
+    link('shared', 'Shared with you')
+  }</nav></div>
+<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">Space you’re working in</h2>${
+    chooser(at, view, env)
+  }
+<nav class="SideNav" aria-label="This space">
 ${
     at.member
-      ? link('operator', 'Operator')
-      : `${link('apps', 'Apps')}${link('operator', 'Operator')}${
+      ? link('operator', operatorName(at))
+      : `${link('apps', 'Apps')}${link('operator', operatorName(at))}${
         link('people', 'People')
-      }${link('connect', 'Agents')}${link('connections', 'Connections')}<hr>
-${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
-${link('billing', 'Billing')}${link('settings', 'Settings')}${
+      }${link('connections', 'Connections')}${link('visits', 'Visits')}${
+        at.sell ? link('selling', 'Selling') : ''
+      }${link('billing', 'Billing')}${link('settings', 'Settings')}${
         link('trash', 'Trash')
       }`
   }
-</nav>
+</nav></div>
 <div class="Desk_Foot"><a href="https://${
     esc(spaceHost(env, at.space))
-  }/" target="_blank" rel="noopener">View homepage ${
+  }/" target="_blank" rel="noopener">Open ${esc(spaceHost(env, at.space))} ${
     icon('external-link')
   }</a><a href="${
     url(env, '/help')
-  }" target="_blank" rel="noopener">Help</a></div>
+  }" target="_blank" rel="noopener">Help</a><form method="post" action="${
+    url(env, LOGOUT)
+  }"><button class="Desk_Out" type="submit">Sign out</button></form></div>
 </aside>`
 }
 
-// Which space every page of the dashboard changes, named at the top of its
-// side, and each other space the person owns a link to the same page there
-// (T-135919): somebody who owns two spaces sees which one they are in and moves
-// in one press, rather than saving into a space they took for their own.
-let spaces = (at: DeskPage, view: ManageView, env: Host) => {
-  let others = (at.spaces ?? []).filter((s) => s.slug != at.space)
-  let named = (s: { slug: string; title: string }) =>
-    `<b>${esc(s.title || s.slug)}</b><span>${
-      esc(spaceHost(env, s.slug))
+// The space selector (T-135919, T-136122): the space every link under it
+// changes, as a box saying its name and address, and Change, which opens the
+// list in place below it. Choosing another keeps the page: Billing in one
+// space becomes Billing in the other, a page of the person's own stays where
+// it is, and a space they are only a member of opens at its Operator.
+let chooser = (at: DeskPage, view: ManageView, env: Host) => {
+  let here = picked(at)
+  let all = at.spaces?.length ? at.spaces : [here]
+  let tile = (s: Picked) =>
+    `<span class="Desk_Tile" aria-hidden="true">${
+      esc(named(s).charAt(0).toUpperCase())
     }</span>`
-  let to = view == 'new' ? 'apps' : view
-  return `<nav class="Desk_Spaces" aria-label="Your spaces">
-<p class="Desk_Here">${named({ slug: at.space, title: here(at) })}</p>${
-    others.length
-      ? `<p class="Desk_Other">Your other ${
-        others.length == 1 ? 'space' : 'spaces'
-      }</p>${
-        others.map((s) => `<a href="${managePath(to, s.slug)}">${named(s)}</a>`)
-          .join('')
-      }`
-      : ''
-  }</nav>`
+  let box = (s: Picked, line: string) =>
+    `${tile(s)}<span class="Desk_Name"><b>${esc(named(s))}</b><small>${
+      esc(line)
+    }</small></span>`
+  let to = (s: Picked) =>
+    accountView(view)
+      ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
+      : managePath(
+        !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
+        s.slug,
+      )
+  let make = `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`
+  if (all.length == 1) {
+    return `<div class="Desk_Space">${
+      box(here, spaceHost(env, here.slug))
+    }</div>${make}`
+  }
+  return `<details class="Desk_Pick">
+<summary class="Desk_Space">${
+    box(here, spaceHost(env, here.slug))
+  }<span class="Desk_Change">Change</span></summary>
+<div class="Desk_List"><p class="Desk_Ask">Which space do you want to work in?</p>${
+    all.map((s) =>
+      `<a class="Desk_Row" href="${to(s)}"${
+        s.slug == here.slug ? ' aria-current="true"' : ''
+      }>${
+        box(
+          s,
+          `${spaceHost(env, s.slug)} · ${
+            s.owner ? 'yours' : 'you’re a member'
+          }`,
+        )
+      }${s.slug == here.slug ? '<span class="Desk_Tick">✓</span>' : ''}</a>`
+    ).join('')
+  }${make}</div></details>`
 }
 
 let state = (connected: boolean, show: boolean) =>
@@ -715,7 +797,7 @@ let pasteLink = (env: Host) =>
 let connectCard = (at: DeskPage, env: Host) =>
   `<section class="Card Desk_Connect" ${state(false, !at.agents?.length)}>
 <header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button" href="${
-    managePath('connect', at.pick)
+    managePath('agents')
   }">Connect agent</a></div></header>
 <p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p>${
     pasteLink(env)
@@ -770,21 +852,20 @@ let fixing = (a: DeskPage['apps'][number], operator: string) => {
   }</div></section>`
 }
 
-// What others let this person into: drawn by the same Tile as their own, each
-// with the address it lives at, since none of them lives at this space's.
+// What others let this person into (Your account › Shared with you): drawn by
+// the same Tile as their own, each with the address it lives at.
 let sharedWith = (at: DeskPage, env: Host) =>
   at.shared?.length
-    ? `<h2 class="Group">Shared with you</h2><div class="Apps">${
+    ? `<div class="Apps">${
       at.shared.map((a) => {
         let host = spaceHost(env, a.space)
         return tile(a, { at: `https://${host}`, host, editor: true })
       }).join('')
     }</div>`
-    : ''
+    : '<section class="Empty"><h2>Nothing shared with you yet</h2><p>An app someone invites you to, in a space of theirs, appears here.</p></section>'
 
-/** The apps view: the person's apps, each marked where it broke with what to
- * ask about it, then what was shared with them; with none of their own, what
- * was shared comes first, above the way to make one. */
+/** The apps view: the space's apps, each marked where it broke with what to
+ * ask about it, and with none, the way to make one. */
 export let library = (at: DeskPage, env: Host) => {
   let broken = at.apps.filter((a) => a.errors?.length)
   return `${connectCard(at, env)}${
@@ -800,15 +881,13 @@ export let library = (at: DeskPage, env: Host) => {
       }</div>${
         broken.length
           ? `<h2 class="Group">Needs fixing</h2>${
-            broken.map((a) => fixing(a, managePath('operator', at.pick))).join(
+            broken.map((a) => fixing(a, managePath('operator', at.space))).join(
               '',
             )
           }`
           : ''
-      }${sharedWith(at, env)}`
-      : `${
-        sharedWith(at, env)
-      }<section class="Empty"><h2>Your apps will live here</h2>
+      }`
+      : `<section class="Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
       }><p>Ask your agent for your first app. Try this:</p>${firstAsk}</div>
@@ -816,45 +895,82 @@ export let library = (at: DeskPage, env: Host) => {
         state(false, !at.agents?.length)
       }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
 <a href="${
-        managePath('new', at.pick)
+        managePath('new', at.space)
       }">More ways to make an app</a></div></section>`
   }${copying}`
 }
 
-// Settings: one form and one Save button for everything on the page, the
-// person's own name apart from the space's address and homepage, so it is
-// plain which of the two each field changes. A refusal draws the page again
-// with what was typed still in the fields (`at.typed`).
-let here = (at: DeskPage) =>
-  at.spaces?.find((s) => s.slug == at.space)?.title || at.space
-
-let preferences = (at: DeskPage, env: Host) => {
-  let home = at.apps.find((a) => a.home)
-  let was = at.typed ?? {
-    name: at.name ?? '',
-    space: at.space,
-    home: home?.slug ?? '',
-  }
-  let host = esc(spaceHost(env, at.space))
+// Profile (Your account): the person's name, their email, and the space
+// `/manage` opens, which is the one their seat marks theirs (`member.own`).
+let profile = (at: DeskPage, env: Host) => {
+  let mine = (at.spaces ?? []).filter((s) => s.owner)
+  let first = mine.find((s) => s.own)?.slug ?? ''
   return `<form class="Form" method="post" action="${
-    managePath('settings', at.pick)
-  }"><section class="Card">${heading('Your account')}${
+    managePath('profile')
+  }"><section class="Card">${heading('Profile')}<div class="Form">${
     labeled(
       'your-name',
       'Your name',
       `<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
-        esc(was.name)
+        esc(at.name ?? '')
       }">`,
-      'Yours in every space, not only this one.',
+      'Shown to people in every space you’re in.',
     )
-  }</section>
-<section class="Card">${heading(`This space: ${host}`)}<p class="Card_Sub">${
-    esc(here(at))
-  } is the space these change, for everyone in it.${
-    (at.spaces?.length ?? 0) > 1
-      ? ' To change another, choose it under Your other spaces.'
+  }<div class="Form_Field"><p class="Form_Label">Email</p><p>${
+    esc(at.email ?? '')
+  }</p></div>${
+    mine.length > 1
+      ? labeled(
+        'your-first',
+        'Open first',
+        `<select class="Field" id="your-first" name="first">${
+          mine.map((s) => option(s.slug, esc(named(s)), s.slug == first))
+            .join('')
+        }</select>`,
+        `The space ${apex(env)}${MANAGE} opens.`,
+      )
       : ''
-  }</p><div class="Form">${
+  }</div></section>
+<div class="Form_Actions"><button class="Button" type="submit">Save</button></div></form>`
+}
+
+// A new space (from the selector's + New space): its name and its address,
+// space_new as the assistant asks it.
+let newSpace = (at: DeskPage, env: Host) =>
+  `<form class="Form" method="post" action="${
+    managePath('space')
+  }"><section class="Card">${
+    heading('New space')
+  }<p class="Card_Sub">A space has its own address, apps, people and plan.</p><div class="Form">${
+    labeled(
+      'space-title',
+      'Name',
+      `<input class="Field" id="space-title" name="title" maxlength="60" placeholder="Book club" value="${
+        esc(at.made?.title ?? '')
+      }">`,
+    )
+  }${
+    labeled(
+      'space-slug',
+      'Address',
+      `<span class="At"><input class="Field" id="space-slug" name="slug" maxlength="63" autocomplete="off" spellcheck="false" required value="${
+        esc(at.made?.slug ?? '')
+      }"><span>.${apex(env)}</span></span>`,
+    )
+  }</div></section>
+<div class="Form_Actions"><button class="Button" type="submit">Create space</button></div></form>`
+
+// A space's Settings: its address and what it opens, one form and one Save,
+// then deleting it, which asks again on its own page (identity.ts
+// `closing`). A refusal draws the page again with what was typed still in
+// the fields (`at.typed`).
+let preferences = (at: DeskPage, env: Host) => {
+  let home = at.apps.find((a) => a.home)
+  let was = at.typed ?? { space: at.space, home: home?.slug ?? '' }
+  let host = esc(spaceHost(env, at.space))
+  return `<form class="Form" method="post" action="${
+    managePath('settings', at.space)
+  }"><section class="Card">${heading('General')}<div class="Form">${
     labeled(
       'your-address',
       'Address',
@@ -875,13 +991,17 @@ let preferences = (at: DeskPage, env: Host) => {
             option(a.slug, esc(a.title || a.slug), a.slug == was.home)
           ).join('')
         }</select>`,
-        `Manage your apps anytime at <a href="${url(env, MANAGE)}">${
-          apex(env)
-        }${MANAGE}</a>.`,
       )
-      : '<p>Your address opens your app library.</p>'
+      : `<p>${host} opens its app library.</p>`
   }</div></section>
-<div class="Form_Actions"><button class="Button" type="submit">Save changes</button></div></form>`
+<div class="Form_Actions"><button class="Button" type="submit">Save</button></div></form>
+<section class="Card Desk_Danger">${
+    heading('Delete this space', {
+      actions: `<a class="Button Button-quiet" href="${
+        url(env, `/space/${encodeURIComponent(at.space)}/delete`)
+      }">Delete space…</a>`,
+    })
+  }<p class="Card_Sub">Its apps, people and data go to the trash for 30 days.</p></section>`
 }
 
 let selling = (at: DeskPage, env: Host) => {
@@ -891,7 +1011,7 @@ let selling = (at: DeskPage, env: Host) => {
   let stop = ready || (!at.paying && connected)
   let stripe = at.paying || connected
     ? `<form method="post" action="${
-      managePath('selling', at.pick)
+      managePath('selling', at.space)
     }"><input type="hidden" name="sell" value="${
       stop ? 'stop' : 'start'
     }"><button type="submit" class="Button${stop ? ' Button-quiet' : ''}">${
@@ -905,7 +1025,7 @@ let selling = (at: DeskPage, env: Host) => {
   let subscribe = at.paying ? '' : billButton(
     'checkout',
     `Subscribe — ${plusPrice()} a month`,
-    managePath('selling', at.pick),
+    managePath('selling', at.space),
   )
   return `<section class="Card Bill">${
     heading(
@@ -962,7 +1082,7 @@ let trash = (at: DeskPage) =>
         }</span><span class="Rows_Meta">${a.days} ${
           a.days == 1 ? 'day' : 'days'
         } left</span></div><form class="Rows_Actions" method="post" action="${
-          managePath('trash', at.pick)
+          managePath('trash', at.space)
         }"><input type="hidden" name="restore" value="${
           esc(a.eid)
         }"><button type="submit" class="Button Button-quiet">Restore</button></form></li>`
@@ -1069,20 +1189,12 @@ let calls = (a: { calls: number; cap: number | null }) =>
 // key, and for a service this space added, what it says and whether it is
 // listed. The space's side of an app that asks each person to connect
 // their own is only the ask: nothing here connects it, and it stays while
-// the app asks. Its forms post for the space that keeps it, or for the
-// page's own when it is the person's.
-let connection = (
-  c: Shown,
-  on: boolean,
-  pick?: string,
-  enable?: string[],
-) => {
+// the app asks. Its forms post to the page it is on, `action`.
+let connection = (c: Shown, on: boolean, action: string) => {
   let ask = c.each && !c.own
   let id = (what: string) => `${what}-${esc(c.eid)}`
   let form = (inner: string, at = '') =>
-    `<form method="post" action="${
-      esc(enabling(managePath('connections', c.space ?? pick), enable))
-    }"${at}><input type="hidden" name="connection" value="${
+    `<form method="post" action="${action}"${at}><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
   let open = c.status != 'connected' || !!c.failed
@@ -1326,13 +1438,11 @@ let connection = (
 let borrowing = (
   b: Borrowed,
   on: boolean,
+  action: string,
   mine?: Shown,
-  enable?: string[],
 ) => {
   let form = (inner: string, connection = b.eid) =>
-    `<form method="post" action="${
-      esc(enabling(managePath('connections', b.space), enable))
-    }"><input type="hidden" name="connection" value="${
+    `<form method="post" action="${action}"><input type="hidden" name="connection" value="${
       esc(connection)
     }"><input type="hidden" name="app" value="${
       esc(b.app.app)
@@ -1372,10 +1482,11 @@ let borrowing = (
   }</div></li></ul>${own}</section>`
 }
 
-// The page: the person's own connections and the services that hold a
-// grant, then each of their spaces' — what its apps asked for and what is
-// connected — with, under the space the page is for, what it could connect
-// next and a box for a key no app asked for yet.
+// The page: one space's connections — what its apps asked for, what is
+// connected and what they borrow — then what it could connect next and a box
+// for a key no app asked for yet. On the person's own space, what is theirs
+// comes first: what they connected for apps that ask each person, and the
+// services that hold a grant from them.
 let connections = (at: DeskPage, env: Host) => {
   let c: Connections = at.connections ?? {
     on: false,
@@ -1388,7 +1499,7 @@ let connections = (at: DeskPage, env: Host) => {
     Number(a.status == 'connected' && !a.failed) -
     Number(b.status == 'connected' && !b.failed)
   )
-  let action = esc(enabling(managePath('connections', at.pick), c.enable))
+  let action = esc(enabling(managePath('connections', at.space), c.enable))
   // A built service nothing here is connected to yet: a key to paste, or a
   // sign-in to start from its head.
   let offer = (i: Connections['built'][number]) =>
@@ -1444,7 +1555,7 @@ let connections = (at: DeskPage, env: Host) => {
   let group = (title: string, cards: string, lead = '') =>
     lead + cards ? `<h2 class="Group">${esc(title)}</h2>${lead}${cards}` : ''
   let yours = first.filter((one) => one.own)
-    .map((one) => connection(one, c.on, at.pick, c.enable)).join('') +
+    .map((one) => connection(one, c.on, action)).join('') +
     c.services.map((s) =>
       `<section class="Card">${
         heading(esc(s.name), { status: status('Connected', 'good') })
@@ -1452,20 +1563,18 @@ let connections = (at: DeskPage, env: Host) => {
         esc(day(new Date(s.connectedAt * 1000).toISOString()))
       }.</p></section>`
     ).join('')
-  let spaces = [
-    ...new Set([
-      at.space,
-      ...first.flatMap((one) => one.space ?? []),
-      ...c.borrowed.map((b) => b.space),
-    ]),
-  ]
-  // What a space holds already that could replace a loan: a connected
+  // What the space holds already that could replace a loan: a connected
   // connection through the same service.
   let mine = (b: Borrowed) =>
     first.find((one) =>
-      one.space == b.space && one.integration == b.integration &&
+      !one.own && one.integration == b.integration &&
       one.status == 'connected' && !one.failed && !one.each
     )
+  let here = first.filter((one) => !one.own)
+    .map((one) => connection(one, c.on, action)).join('') +
+    c.borrowed.map((b) => borrowing(b, c.on, action, mine(b))).join('') +
+    c.built.map(offer).join('') + (c.on ? add : '')
+  let asked = c.asked ? offer(c.asked) : ''
   return `${
     c.on
       ? ''
@@ -1476,20 +1585,10 @@ let connections = (at: DeskPage, env: Host) => {
     c.list.length || c.services.length || c.borrowed.length
       ? ''
       : `<section class="Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
-  }${group('Yours', yours)}${
-    spaces.map((space) =>
-      group(
-        spaceHost(env, space),
-        first.filter((one) => one.space == space)
-          .map((one) => connection(one, c.on, undefined, c.enable)).join('') +
-          c.borrowed.filter((b) => b.space == space)
-            .map((b) => borrowing(b, c.on, mine(b), c.enable)).join('') +
-          (space == at.space
-            ? c.built.map(offer).join('') + (c.on ? add : '')
-            : ''),
-        space == at.space && c.asked ? offer(c.asked) : '',
-      )
-    ).join('')
+  }${
+    yours
+      ? group('Yours', yours) + group(spaceHost(env, at.space), here, asked)
+      : asked + here
   }`
 }
 
@@ -1502,7 +1601,7 @@ let option = (value: string, label: string, chosen: boolean) =>
 let inviting = (at: DeskPage) => {
   let was = at.invite ?? { email: '', app: '', role: '', note: '' }
   return `<section class="Card">${heading('Invite someone')}
-<form class="Form" method="post" action="${managePath('people', at.pick)}">${
+<form class="Form" method="post" action="${managePath('people', at.space)}">${
     labeled(
       'invite-email',
       'Email address',
@@ -1555,7 +1654,7 @@ export let people = (at: DeskPage) => {
     `<input type="hidden" name="${name}" value="${esc(value)}">`
   let press = (fields: string, label: string, aria: string) =>
     `<form method="post" action="${
-      managePath('people', at.pick)
+      managePath('people', at.space)
     }">${fields}<button class="Button Button-quiet" type="submit" aria-label="${aria}">${label}</button></form>`
   let actions = (p: Person, app?: string) => {
     let them = esc(p.email ?? p.name)
@@ -1604,10 +1703,13 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let view = at.view ?? 'apps'
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
-    operator: 'Your operator',
-    apps: 'Your apps',
+    profile: 'Profile',
+    agents: 'Agents',
+    shared: 'Shared with you',
+    space: 'New space',
+    operator: operatorName(at),
+    apps: 'Apps',
     people: 'People',
-    connect: 'Your agents',
     connections: 'Connections',
     new: 'New app',
     visits: 'Visits',
@@ -1615,12 +1717,18 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     settings: 'Settings',
     billing: 'Billing',
     trash: 'Trash',
-  }
+  } satisfies Record<ManageView, string>
+  // The line over the title names whose the page is: the person's own, or
+  // the space it changes.
+  let whose = accountView(view) ? 'Your account' : named(picked(at))
   let body = ''
+  if (view == 'profile') body = profile(at, env)
+  if (view == 'shared') body = sharedWith(at, env)
+  if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
-  if (view == 'connect') {
+  if (view == 'agents') {
     body = `${
-      agentSetup(at.agents ?? [], env, managePath('connect', at.pick))
+      agentSetup(at.agents ?? [], env, managePath('agents'))
     }${copying}${tabbing}`
   }
   if (view == 'new') {
@@ -1647,12 +1755,14 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     body = plan(
       {
         slug: at.space,
+        title: named(picked(at)),
         plan: at.plan ?? { tier: 'free', ends: '', known: false },
         paid: at.paid,
+        payer: at.bill?.payer,
       },
       env,
-      managePath('billing', at.pick),
-    ) + billing
+      managePath('billing', at.space),
+    ) + (at.bill ? allowances(at.bill, env, at.space) : '') + billing
   }
   if (view == 'trash') body = trash(at)
   if (view == 'connections') body = connections(at, env)
@@ -1660,21 +1770,23 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'operator') body = at.operator ?? ''
   return shell(
     env,
-    `${titles[view]} · ${esc(at.space)}`,
+    `${titles[view]} · ${esc(whose)}`,
     null,
     at.no ? 400 : 200,
-    `${
+    `<header class="Desk_Bar"><a class="Button Button-quiet" href="#menu">☰ Menu</a><span class="Desk_Where"><b>${
+      titles[view]
+    }</b><small>${esc(whose)}</small></span></header>${
       navigation(at, view, env)
     }<div class="Desk_Body"><header class="Desk_Head"><div>
-<a class="Desk_Address" href="${site}/" target="_blank" rel="noopener">${
-      esc(spaceHost(env, at.space))
-    } ↗</a><h1>${titles[view]}</h1>${
+<p class="Desk_Whose">${esc(whose)}</p><h1>${titles[view]}</h1>${
       view == 'visits'
         ? `<p class="Desk_Period">Last ${at.viewDays ?? 30} days</p>`
         : ''
     }</div>${
       view == 'apps'
-        ? `<a class="Button" href="${managePath('new', at.pick)}">+ New app</a>`
+        ? `<a class="Button" href="${
+          managePath('new', at.space)
+        }">+ New app</a>`
         : ''
     }</header><div class="Desk_Content" id="content" tabindex="-1">${
       at.say
@@ -1683,9 +1795,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         }</p>`
         : ''
     }${body}</div></div>${['apps', 'new'].includes(view) ? copying : ''}${
-      ['apps', 'new', 'connect'].includes(view)
-        ? agentLive('/oauth/agents')
-        : ''
+      ['apps', 'new', 'agents'].includes(view) ? agentLive('/oauth/agents') : ''
     }`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
@@ -1828,7 +1938,10 @@ let pathOf = (href: string) => {
 // decide, never this page's.
 let carried = (q: string | null, back?: string | null) =>
   held('q', q) + held('return', back) +
-  (back && ['/connect', managePath('connect')].includes(pathOf(back))
+  (back &&
+      ['/connect', '/manage/connect', managePath('agents')].includes(
+        pathOf(back),
+      )
     ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
     : '')
 
@@ -2257,7 +2370,10 @@ let MOVES = 'You can change it at any time. Every app moves with it, and ' +
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
 let plan = (
-  y: Pick<Yours, 'slug' | 'plan' | 'paid'>,
+  y: Pick<Yours, 'slug' | 'plan' | 'paid'> & {
+    title?: string
+    payer?: Payer | null
+  },
   env: Host,
   target?: string,
 ) => {
@@ -2277,10 +2393,13 @@ let plan = (
     : `<p>${host} is on <b>${NAMES[tier]}</b> — ${allowance}.${
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
     }</p>`
+  // The button names the space it buys for: a plan is a space's, never the
+  // person's (D-131886), and someone with two spaces pays for the one named.
+  let space = y.title || spaceHost(env, y.slug)
   let buy = (want: Want) =>
     billButton(
       'checkout',
-      `Get ${NAMES[want.tier]} — ${priced(want)}`,
+      `Get ${NAMES[want.tier]} for ${space} — ${priced(want)}`,
       target,
       want,
     )
@@ -2306,14 +2425,14 @@ let plan = (
       `on it.</p>`
     : ''
   return `<section class="Card Bill" id="plan">${
-    heading('Your plan', {
+    heading('Plan', {
       status: tier == 'free'
         ? status('Free')
         : status(tier == 'plus' ? 'Plus' : 'Organization', 'good'),
       actions: doors,
     })
   }
-${head}${ask}
+${head}${billedLine(y.plan, y.payer)}${ask}
 ${
     y.paid
       ? '<p class="Say">Thanks — that went through. Your space moves to its ' +
@@ -2322,6 +2441,88 @@ ${
   }
 <p class="Say Bill_Say" role="status"></p>
 </section>`
+}
+
+// Whom the plan is billed to, where Stripe has met the space: the address its
+// receipts go to, or, when Stripe couldn't be asked just now (`undefined`),
+// only that Stripe bills it. A space Stripe never met is billed to nobody.
+let billedLine = (card: Card, payer?: Payer | null) =>
+  !card.known
+    ? card.tier == 'free' ? '<p class="Form_Hint">Nothing is billed.</p>' : ''
+    : payer?.email
+    ? `<p>Billed to <b>${esc(payer.email)}</b>${
+      payer.name ? ` (${esc(payer.name)})` : ''
+    } through Stripe. Manage billing changes the card, the address and who receives the receipts.</p>`
+    : '<p>Billed through Stripe. Manage billing shows the card and the receipts.</p>'
+
+// Each allowance as the Billing page names it, how its figures read, and what
+// a person needs to know about counting it.
+let ALLOWANCES: [Ceiling, string, (n: number) => string, string][] = [
+  ['apps', 'Apps', count, ''],
+  [
+    'requests',
+    'Request units',
+    count,
+    'Visitors are always served, past it too.',
+  ],
+  ['bytes', 'App data', size, ''],
+  ['files', 'Photos and files', size, ''],
+  ['emails', 'Emails', count, 'Sent and received.'],
+  [
+    'builds',
+    'Built-in builds',
+    count,
+    'Building with your own agent isn’t counted.',
+  ],
+  ['seconds', 'Build seconds', count, 'The sandbox, and compiling at deploy.'],
+]
+
+// One allowance as a row: its name, how much of it is used, and, from four
+// fifths of it, how it stands.
+let gaugeRow = (name: string, figure: string, hint: string, share: number) =>
+  `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${name}</span><span class="Rows_Meta">${figure}${
+    hint ? ` · ${hint}` : ''
+  }</span></div>${
+    share >= 1
+      ? status('At the limit', 'warn')
+      : share >= WARN
+      ? status('Near the limit', 'warn')
+      : ''
+  }</li>`
+
+/** The Billing page's month (T-131895): every allowance the space answers to
+ * and how much of it is used, with its budget for models and voice. */
+let allowances = (
+  bill: NonNullable<DeskPage['bill']>,
+  env: Host,
+  slug: string,
+) => {
+  let rows = ALLOWANCES.filter(([what]) => bill.limits[what])
+    .map(([what, name, read, hint]) => {
+      let g = bill.limits[what]!
+      // Request units are read by the hourly sweep, so before its first
+      // reading of the month there is no figure, and zero would be a claim.
+      let figure = what == 'requests' && !bill.read
+        ? `None counted yet this month, of ${read(g.limit)}`
+        : `${read(g.used)} of ${read(g.limit)}`
+      return gaugeRow(name, figure, hint, g.used / g.limit)
+    }).join('')
+  let { spent, limit } = bill.budget
+  let read = bill.read
+    ? `, last read at ${esc(bill.read.slice(11, 16))} UTC`
+    : ''
+  return `<section class="Card">${
+    heading('This month')
+  }<p class="Card_Sub">What ${
+    esc(spaceHost(env, slug))
+  } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.</p><ul class="Rows">${rows}${
+    gaugeRow(
+      'Models and voice',
+      `${dollars(spent)} of ${dollars(limit)}`,
+      'The builder’s and your apps’ models and voices, from this space’s budget.',
+      limit ? spent / limit : 0,
+    )
+  }</ul></section>`
 }
 
 // A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).

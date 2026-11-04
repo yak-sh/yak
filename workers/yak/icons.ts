@@ -15,8 +15,11 @@ import Globe from 'lucide/dist/esm/icons/globe.mjs'
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
+import Receipt from 'lucide/dist/esm/icons/receipt.mjs'
 import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
+import Share2 from 'lucide/dist/esm/icons/share-2.mjs'
 import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
+import User from 'lucide/dist/esm/icons/user.mjs'
 import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
@@ -25,6 +28,9 @@ export let icons = {
   bot: Bot,
   plug: Plug,
   users: Users,
+  user: User,
+  'share-2': Share2,
+  receipt: Receipt,
   'chart-no-axes-column-increasing': ChartNoAxesColumnIncreasing,
   'credit-card': CreditCard,
   'settings-2': Settings2,

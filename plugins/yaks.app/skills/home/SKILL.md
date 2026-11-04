@@ -28,11 +28,13 @@ the apps a visitor may open; `app_list` reports which app is the front page, if
 any. Only the space owner may change it, since everyone given the space's
 address lands there.
 
-**Managing your apps.** <https://yaks.app/manage> opens your account's app
-library and the pages beside it: assistant setup, connections, settings,
-billing, and trash. It shows your own space; `?space=<space>` names another you
-own. It is served at the platform's address, not a space's, so no app, front
-page or not, can replace it.
+**Managing your apps.** <https://yaks.app/manage> is the dashboard. Your
+account's pages are at `/manage/account/<page>`: your profile, your agents, and
+apps shared with you. Each space's pages are at `/manage/<space>/<page>`: its
+apps, Operator, people, connections, visits, billing, settings and trash.
+`/manage` opens the space your profile says to open first. The dashboard is
+served at the platform's address, not a space's, so no app, front page or not,
+can replace it.
 
 The front page is marked by a component stored on the app, `home`, and at most
 one app in a space has it. Moving it takes effect on the next request: nothing

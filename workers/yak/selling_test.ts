@@ -181,7 +181,7 @@ let sold = async (env: Env) =>
 // the kernel whole.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
-    new Request('https://yaks.app/manage/selling?space=ada', {
+    new Request('https://yaks.app/manage/ada/selling', {
       method: 'POST',
       headers: {
         cookie: await as(ADA),

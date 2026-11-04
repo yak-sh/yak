@@ -53,12 +53,14 @@ import {
   signIn,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
+import { managePath } from './route.ts'
 
 let SECRET = 'secret'
 
-// A person's dashboard, as their browser opens it.
-let desk = (k: Kernel, cookie: string) =>
-  k.at(k.host, '/manage', { headers: { cookie } }).then((r) => r.text())
+// What others shared with a person, as their browser opens it.
+let sharedPage = (k: Kernel, cookie: string) =>
+  k.at(k.host, managePath('shared'), { headers: { cookie } })
+    .then((r) => r.text())
 
 test('an invitation reaches nobody until its person accepts it', async () => {
   let k = await kernel()
@@ -127,7 +129,7 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     assertStringIncludes(after.files, 'index.html')
     // Her dashboard lists the space's apps as shared with her.
     assertStringIncludes(
-      await desk(k, ana.cookie),
+      await sharedPage(k, ana.cookie),
       `href="https://${mine}.yaks.app/notes/"`,
     )
     // The letter's link still takes her there after it has been used.
@@ -167,10 +169,10 @@ test('an invitation reaches nobody until its person accepts it', async () => {
 let post = (
   k: Kernel,
   cookie: string,
-  view: string,
+  path: string,
   fields: Record<string, string>,
 ) =>
-  k.at(k.host, `/manage/${view}`, {
+  k.at(k.host, path, {
     method: 'POST',
     headers: { cookie },
     body: new URLSearchParams(fields),
@@ -184,13 +186,14 @@ test('the People page invites and takes people off the way member_add and member
       slug: 'notes',
       title: 'Notes',
     })
+    let roster = managePath('people', jeff.email.split('@')[0])
     let page = (q = '') =>
-      k.at(k.host, `/manage/people${q}`, { headers: { cookie: jeff.cookie } })
+      k.at(k.host, `${roster}${q}`, { headers: { cookie: jeff.cookie } })
         .then((r) => r.text())
     assertStringIncludes(await page(), 'Send invitation')
 
     let ana = await signIn(k)
-    let sent = await post(k, jeff.cookie, 'people', {
+    let sent = await post(k, jeff.cookie, roster, {
       invite: ana.email,
       app: 'notes',
       role: 'viewer',
@@ -198,7 +201,7 @@ test('the People page invites and takes people off the way member_add and member
     })
     assertEquals(sent.status, 303)
     let back = new URL(sent.headers.get('location')!)
-    assertEquals(back.pathname, '/manage/people')
+    assertEquals(back.pathname, roster)
     let l = await letter(k, ana.email, '/invite?t=')
     assertStringIncludes(l.body, '> have a look')
     let listed = await page(back.search)
@@ -207,7 +210,7 @@ test('the People page invites and takes people off the way member_add and member
     assertStringIncludes(listed, `${ana.email} · viewer · `)
 
     // Withdrawn from its row, the invitation is gone from the page.
-    let gone = await post(k, jeff.cookie, 'people', {
+    let gone = await post(k, jeff.cookie, roster, {
       remove: ana.email,
       app: 'notes',
     })
@@ -218,17 +221,17 @@ test('the People page invites and takes people off the way member_add and member
 
     // A member who accepted is taken off the same way.
     let bo = await signIn(k)
-    await post(k, jeff.cookie, 'people', { invite: bo.email })
+    await post(k, jeff.cookie, roster, { invite: bo.email })
     await accepted(k, bo.email, bo.cookie)
     assertStringIncludes(await page(), `aria-label="Remove ${bo.email}"`)
-    await post(k, jeff.cookie, 'people', { remove: bo.email })
+    await post(k, jeff.cookie, roster, { remove: bo.email })
     assert(!(await page()).includes(bo.email))
     assert(
       !(await connector(k, bo.cookie).tool('app_list')).includes('notes'),
     )
 
     // Refused, the page says why and the address is still in the field.
-    let refused = await post(k, jeff.cookie, 'people', {
+    let refused = await post(k, jeff.cookie, roster, {
       invite: jeff.email,
       note: 'me again',
     })

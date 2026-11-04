@@ -29,7 +29,7 @@ await directoryOf(p.env.STORE).apply({
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 let space = (await directoryOf(p.env.STORE).at(eid))!
 let who = { person, role: 'owner' as const, space: eid }
-let base = 'https://yaks.app/manage/operator?space=clerk'
+let base = 'https://yaks.app/manage/clerk/operator'
 let serve = async (url: string | URL, init?: RequestInit) =>
   (await operatorAnswer(
     new Request(new URL(url, base), init),
@@ -126,7 +126,7 @@ let settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
 }
 let stored = async () =>
-  (await (await serve(`${base}&draft=1`)).json()).bundles[0]?.draft?.text ?? ''
+  (await (await serve(`${base}?draft=1`)).json()).bundles[0]?.draft?.text ?? ''
 
 let stash = storage()
 let first = await load(stash, true)

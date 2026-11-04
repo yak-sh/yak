@@ -79,6 +79,7 @@
     "npm:html-rewriter-wasm@0.4.1": "0.4.1",
     "npm:jsdom@26.1.0": "26.1.0",
     "npm:linkedom@~0.18.12": "0.18.13",
+    "npm:lucide@*": "1.31.0",
     "npm:lucide@1.31.0": "1.31.0",
     "npm:marked@18.0.6": "18.0.6",
     "npm:postal-mime@3.0.0": "3.0.0",

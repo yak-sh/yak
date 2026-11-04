@@ -66,7 +66,7 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
 })
 
 test('pages: staging space management and connector forms keep their host', async () => {
-  for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {
+  for (let view of ['apps', 'settings', 'agents', 'selling'] as const) {
     await staged(desk({ ...page, view }, env), [
       'ada.yaks.fyi',
       'https://yaks.fyi/help',
@@ -136,7 +136,6 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           integration: 'Weather',
           face: named('Weather'),
           own,
-          space: own ? null : 'ada',
           each: true,
           status: 'needed',
           account: '',
@@ -183,13 +182,12 @@ test('connections: the space’s ask of each person offers nothing to connect, a
   assertEquals(own.includes('Open to anyone'), false)
 })
 
-test('connections: the person’s own, then this space with what it could add, then each other space', async () => {
-  let shown = (integration: string, space: string | null) => ({
+test('connections: on the person’s own space, theirs and then the space’s with what it could add; elsewhere, only the space’s', async () => {
+  let shown = (integration: string, own = false) => ({
     eid: integration,
     integration,
     face: named(integration),
-    own: space == null,
-    space,
+    own,
     each: false,
     status: 'connected' as const,
     account: '',
@@ -204,19 +202,14 @@ test('connections: the person’s own, then this space with what it could add, t
     saving: '',
     failed: '',
   })
-  let drawn = (enable?: string[]) =>
+  let drawn = (enable?: string[], own = true) =>
     desk({
       ...page,
-      pick: 'ada',
       view: 'connections',
       connections: {
         on: true,
         borrowed: [],
-        list: [
-          shown('Mail', null),
-          shown('Weather', 'ada'),
-          shown('Maps', 'bob'),
-        ],
+        list: [...own ? [shown('Mail', true)] : [], shown('Weather')],
         services: [],
         built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
         enable,
@@ -224,11 +217,7 @@ test('connections: the person’s own, then this space with what it could add, t
     }, env).text()
   let { document } = parseHTML(await drawn())
   let groups = [...document.querySelectorAll('.Group')]
-  assertEquals(groups.map((g) => g.textContent), [
-    'Yours',
-    'ada.yaks.fyi',
-    'bob.yaks.fyi',
-  ])
+  assertEquals(groups.map((g) => g.textContent), ['Yours', 'ada.yaks.fyi'])
   let under = (i: number) => {
     let names = []
     for (
@@ -240,27 +229,28 @@ test('connections: the person’s own, then this space with what it could add, t
   }
   assertEquals(under(0), ['Mail'])
   assertEquals(under(1), ['Weather', 'OpenRouter', 'Add a key'])
-  assertEquals(under(2), ['Maps'])
-  // Each posts for the space that keeps it; the person's own, for the page's.
+  // Elsewhere the page is the space's alone, under no heading.
+  let other = parseHTML(await drawn(undefined, false)).document
+  assertEquals(other.querySelectorAll('.Group').length, 0)
+  assertEquals(
+    [...other.querySelectorAll('.Desk_Content > .Card h2')]
+      .map((h) => h.textContent),
+    ['Weather', 'OpenRouter', 'Add a key'],
+  )
+  // Every card posts to the page it is on.
   let actions = [...document.querySelectorAll('form')].filter((f) =>
     f.querySelector('input[name="connection"]')
   ).map((f) => f.getAttribute('action'))
-  assertEquals(
-    new Set(actions),
-    new Set([
-      '/manage/connections?space=ada',
-      '/manage/connections?space=bob',
-    ]),
-  )
+  assertEquals(new Set(actions), new Set(['/manage/ada/connections']))
   // A page opened with `?enable=` posts every form with it, so the page a
   // post draws again still offers the testing integration.
   let kept = parseHTML(await drawn(['google-calendar'])).document
   let posts = [...kept.querySelectorAll('form')].map((f) =>
     new URL(f.getAttribute('action')!, 'https://yaks.fyi')
-  ).filter((to) => to.pathname == '/manage/connections')
+  ).filter((to) => to.pathname == '/manage/ada/connections')
   assertEquals(
     posts.length,
-    document.querySelectorAll('form[action^="/manage/connections"]').length,
+    document.querySelectorAll('form[action^="/manage/ada/connections"]').length,
   )
   assertEquals(
     new Set(posts.map((to) => to.searchParams.get('enable'))),
@@ -277,7 +267,6 @@ let added = (status: 'needed' | 'connected', listed = false) => ({
   integration: 'Weather',
   face: { ...named('Weather'), instructions: HOW },
   own: false,
-  space: 'ada',
   each: false,
   status,
   account: '',
@@ -471,7 +460,6 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
     keyed: true,
     hosts: ['api.weather.test'],
     lender: 'Jeff',
-    space: 'ada',
     app: used({ app: 'copy', calls: 3, cap: 100 }),
   }
   let replaced = async (borrowed: Borrowed, list: Shown[] = []) => {
@@ -576,12 +564,76 @@ test('the plan card offers the Organization plan only where it is on sale', asyn
       plan: { tier: 'free', ends: '', known: false, organization },
     }, env).text()
   let none = await card([])
-  assertStringIncludes(none, 'Get the Plus plan — $9 a month')
+  assertStringIncludes(none, 'Get the Plus plan for ada — $9 a month')
   assertEquals(none.includes('data-plan="organization"'), false)
   assertStringIncludes(none, 'The Organization plan is not on sale here yet')
   let both = await card(['month', 'year'])
-  assertStringIncludes(both, 'Get the Organization plan — $49 a month')
+  assertStringIncludes(
+    both,
+    'Get the Organization plan for ada — $49 a month',
+  )
   assertStringIncludes(both, 'data-plan="organization" data-per="year"')
-  assertStringIncludes(both, 'Get the Organization plan — $490 a year')
+  assertStringIncludes(
+    both,
+    'Get the Organization plan for ada — $490 a year',
+  )
   assertEquals(both.includes('not on sale'), false)
+})
+
+// The Billing page (T-131895): the space's allowances and its use of each,
+// and whom it is billed to.
+test('billing shows each allowance and whom it bills', async () => {
+  let GB = 1024 ** 3
+  let limits = {
+    apps: { used: 3, limit: 5 },
+    requests: { used: 41_000, limit: 50_000 },
+    bytes: { used: 0, limit: GB },
+    files: { used: GB, limit: GB },
+    emails: { used: 12, limit: 100 },
+    builds: { used: 1, limit: 5 },
+    seconds: { used: 90, limit: 3_600 },
+  }
+  let billing = (bill: Partial<NonNullable<DeskPage['bill']>>, known = false) =>
+    desk({
+      ...page,
+      spaces: [{ slug: 'ada', title: 'Ada’s kitchen', owner: true, own: true }],
+      view: 'billing',
+      plan: { tier: known ? 'plus' : 'free', ends: '', known },
+      bill: {
+        limits,
+        budget: { spent: 0.05, limit: 0.2 },
+        read: '2026-11-03T14:00:00.000Z',
+        ...bill,
+      },
+    }, env).text()
+  let one = await billing({})
+  for (
+    let text of [
+      'Get the Plus plan for Ada’s kitchen — $9 a month',
+      'Nothing is billed.',
+      'last read at 14:00 UTC',
+      '3 of 5',
+      '41,000 of 50,000',
+      '12 of 100',
+      '$0.05 of $0.20',
+    ]
+  ) assertStringIncludes(one, text)
+  // Four fifths of request units is near; all of the files is at the limit.
+  assertStringIncludes(one, 'Near the limit')
+  assertStringIncludes(one, 'At the limit')
+  assertStringIncludes(
+    await billing({ read: null }),
+    'None counted yet this month, of 50,000',
+  )
+  let paying = await billing({
+    payer: { email: 'ada@x.test', name: 'Ada' },
+  }, true)
+  assertStringIncludes(
+    paying,
+    'Billed to <b>ada@x.test</b> (Ada) through Stripe',
+  )
+  assertStringIncludes(
+    await billing({ payer: undefined }, true),
+    'Billed through Stripe.',
+  )
 })

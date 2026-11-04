@@ -51,9 +51,9 @@ Custom domains require the Plus plan (or a space that is explicitly exempt). If
 the space is not eligible, `domain_attach` returns a message carrying the
 space's plan-settings link, and provisions no hostname. Give the person that
 link to compare paid plans; never link directly to checkout. The link is their
-space's `https://yaks.app/manage/billing?space=<space>` page. If they need to
-sign in, the normal sign-in flow returns them to that page. The sign-in email
-already offers a single-use link; do not create or expose a login token in the
+space's `https://yaks.app/manage/<space>/billing` page. If they need to sign in,
+the normal sign-in flow returns them to that page. The sign-in email already
+offers a single-use link; do not create or expose a login token in the
 conversation.
 
 Wait for the plan change before continuing with DNS setup. Keep using the

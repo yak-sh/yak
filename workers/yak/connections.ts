@@ -21,8 +21,8 @@ import { decodedPath } from './request-path.ts'
 // (@yaks/connections `each`). The platform draws the Connect button for it, at
 // the app's own address, `/<app>/api/connections/<integration>`: the page says
 // which app wants which service, and connecting there makes the person's own
-// connection, owned by them and shown in their own dashboard, and brings them
-// back to the app. The space holds only the ask, which its page shows and
+// connection, owned by them and shown on their own space's connections page,
+// and brings them back to the app. The space holds only the ask, which its page shows and
 // nobody connects.
 //
 // A webhook lands as a `hook` (@yaks/hook) in the store of an app that uses
@@ -153,10 +153,9 @@ export type Shown = {
   eid: string
   integration: string
   face: Face
-  /** the signed-in person's own, rather than a space's */
+  /** the signed-in person's own, rather than the space's: shown only on
+   * their own space's page */
   own: boolean
-  /** the space it is kept for, or null for the person's own */
-  space: string | null
   /** each person who uses its apps connects their own; the space's is only
    * the ask */
   each: boolean
@@ -222,8 +221,6 @@ export type Borrowed = {
   hosts: string[]
   /** the space lending it, as its people call it */
   lender: string
-  /** the space here whose app borrows it, by slug */
-  space: string
   /** the app borrowing it */
   app: Using
 }
@@ -233,7 +230,8 @@ export type Connections = {
   /** whether this deploy can keep a key at all */
   on: boolean
   list: Shown[]
-  /** outside services holding a grant from the person (connected.ts) */
+  /** outside services holding a grant from the person (connected.ts), on
+   * their own space's page */
   services: Service[]
   /** the built integrations nothing here is connected to yet, and this deploy
    * can connect: one reached by OAuth needs the client it names kept in the
@@ -245,7 +243,7 @@ export type Connections = {
   /** the integration the page was opened to add (`?add=<name>`, from the
    * integration directory), while this space has none through it */
   asked?: { name: string; keyed: boolean; face: Face }
-  /** what the apps of these spaces borrow from another space's lend */
+  /** what the apps of this space borrow from another space's lend */
   borrowed: Borrowed[]
 }
 
@@ -420,38 +418,37 @@ let rebound = async (env: Env, apps: string[]) => {
 export let enabled = (req: Request): string[] =>
   new URL(req.url).searchParams.getAll('enable').flatMap((n) => n.split(','))
 
-/** Everything the page shows a person: their own connections and each of
- * their spaces', with the apps that use each. The first space is the one the
- * page is for, and what nothing there is connected to yet is offered to it —
- * a testing integration only when `enable` names it. */
+/** What one space's connections page shows: the space's connections, with
+ * the apps that use each, and what its apps borrow. On the person's own space
+ * (`own`) it shows theirs too: what they connected for an app that asks each
+ * person, and the outside services holding a grant from them. What nothing
+ * here is connected to yet is offered to the space — a testing integration
+ * only when `enable` names it. */
 export let connectionsOf = async (
   env: Env,
-  spaces: Space[],
+  space: Space,
   person: string,
-  services: Service[] = [],
-  enable: string[] = [],
-  add?: string,
+  at: {
+    own?: boolean
+    services?: Service[]
+    enable?: string[]
+    add?: string
+  } = {},
 ): Promise<Connections> => {
+  let { own = false, enable = [], add } = at
   let read = readOf(env)
   let month = monthOf(Date.now())
   let listed = new Set((await read(`.${LISTED}`)).map((b) => b.entity.eid))
-  let slugs = new Map(spaces.map((s) => [s.eid, s.slug]))
   let all = (await Promise.all(
-    [person, ...slugs.keys()].map((owner) => list(read, owner)),
+    [space.eid, ...own ? [person] : []].map((owner) => list(read, owner)),
   )).flat()
   let links = all.filter((b) => b[USES])
   let named = new Map<string, string>()
-  let available = new Map<string, { app: string; title: string }[]>()
-  let dir = dirOf(env)
-  let kept = (await dir.apps(spaces)).filter((app) => !app.trashed)
-  for (let space of spaces) {
-    available.set(
-      space.eid,
-      kept.filter((app) => app.space == space.eid)
-        .map((app) => ({ app: app.eid, title: app.title || app.slug })),
-    )
-  }
-  let local = [...available.values()].flat().map((a) => a.app)
+  // The live apps of this space, which a connection of its own may be given.
+  let available = (await dirOf(env).apps(space))
+    .filter((app) => !app.trashed)
+    .map((app) => ({ app: app.eid, title: app.title || app.slug }))
+  let local = available.map((a) => a.app)
   let loans = await borrowed(read, local)
   let apps = [
     ...new Set(
@@ -501,7 +498,6 @@ export let connectionsOf = async (
         integration: String(c.integration),
         face: await faceOf(String(c.integration), i),
         own: c.owner == person,
-        space: slugs.get(String(c.owner)) ?? null,
         each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
         account: String(c.account ?? ''),
@@ -515,7 +511,7 @@ export let connectionsOf = async (
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
         apps: to.map(usingOf),
         binding: bindingOf(String(c.integration)),
-        available: (available.get(String(c.owner)) ?? [])
+        available: (c.owner == space.eid ? available : [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         failed: failed
@@ -527,10 +523,7 @@ export let connectionsOf = async (
       }
     }),
   )
-  let here = spaces[0]?.slug
-  let taken = new Set(
-    shown.filter((s) => s.own || s.space == here).map((s) => s.integration),
-  )
+  let taken = new Set(shown.map((s) => s.integration))
   // A client is kept in the vault, so a deploy with none has no client either.
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
@@ -562,7 +555,7 @@ export let connectionsOf = async (
   return {
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
-    services,
+    services: own ? at.services ?? [] : [],
     borrowed: await Promise.all(
       loans.filter((l) => l[USES]).map(async (l): Promise<Borrowed> => {
         let eid = String(comp(l, 'edge').to)
@@ -577,7 +570,6 @@ export let connectionsOf = async (
           keyed: !i || keyed(i),
           hosts: i?.hosts ?? [],
           lender: names.get(String(c.owner)) ?? 'another space',
-          space: slugs.get(owners[String(comp(l, 'edge').from)])!,
           app: usingOf(l),
         }
       }),

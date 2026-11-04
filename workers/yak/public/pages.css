@@ -309,43 +309,146 @@
     font-weight: 800;
     text-decoration: none;
   }
-  /* Which space the dashboard changes, and the person's other spaces, each a
-     link to the same page there (pages.ts `spaces`). */
-  .Desk_Spaces {
+  .Desk_Top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .Desk_Close,
+  .Desk_Bar {
+    display: none;
+  }
+  /* The side's two sections (pages.ts `navigation`): the person's own, then
+     the space they are working in, each under a small heading. */
+  .Desk_Section {
     display: grid;
-    gap: .25rem;
+    gap: .4rem;
     min-width: 0;
   }
-  .Desk_Here,
-  .Desk_Spaces a {
+  .Desk_Group {
+    margin: 0 .8rem;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    font-weight: 700;
+  }
+  /* The space selector (pages.ts `chooser`): a box drawn like a button,
+     naming the space, whose Change opens the list in place below it. */
+  .Desk_Pick {
     display: grid;
-    margin: 0;
-    padding: .5rem .8rem;
+    gap: .4rem;
+  }
+  .Desk_Space {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem .6rem;
+    border: var(--stroke) solid var(--graphite);
     border-radius: var(--corner);
+    background: var(--paper);
+    list-style: none;
+    filter: url(pencil.svg#line);
+  }
+  .Desk_Pick > summary {
+    cursor: pointer;
+  }
+  .Desk_Pick > summary::-webkit-details-marker {
+    display: none;
+  }
+  .Desk_Tile {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--corner);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 800;
+  }
+  .Desk_Name {
+    display: grid;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .Desk_Name b {
+    overflow-wrap: anywhere;
+  }
+  .Desk_Name small {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    overflow-wrap: anywhere;
+  }
+  .Desk_Change {
+    color: var(--accent);
+    font-size: var(--fine);
+    font-weight: 700;
+  }
+  .Desk_Pick[open] .Desk_Change {
+    color: var(--soft-ink);
+  }
+  .Desk_List {
+    display: grid;
+    border: 1px solid var(--edge);
+    border-radius: var(--corner);
+    background: var(--paper);
+    overflow: hidden;
+  }
+  .Desk_Ask {
+    margin: 0;
+    padding: .5rem .7rem;
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Desk_Row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem .7rem;
+    border-top: 1px solid var(--line);
     color: var(--ink);
     text-decoration: none;
   }
-  .Desk_Here {
-    border: 1px solid var(--rule);
+  .Desk_Row:hover {
+    background: var(--well);
   }
-  .Desk_Spaces b {
-    overflow-wrap: anywhere;
+  .Desk_Row[aria-current] {
+    background: color-mix(in srgb, var(--paper), var(--accent) 12%);
   }
-  .Desk_Spaces a b {
-    font-weight: 600;
+  .Desk_Tick {
+    color: var(--accent);
+    font-weight: 800;
   }
-  .Desk_Spaces span {
+  .Desk_New {
+    padding: .5rem .7rem;
+    color: var(--accent);
+    font-size: var(--fine);
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .Desk_List .Desk_New {
+    border-top: 1px solid var(--line);
+  }
+  /* The line over a page's title, naming the space it changes or "Your
+     account". */
+  .Desk_Whose {
+    margin: 0;
     color: var(--soft-ink);
     font-size: var(--fine);
-    overflow-wrap: anywhere;
   }
-  .Desk_Spaces a:hover {
-    background: var(--paper);
+  .Desk_Out {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--link, var(--accent));
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
   }
-  .Desk_Other {
-    margin: .5rem .8rem 0;
-    color: var(--soft-ink);
-    font-size: var(--fine);
+  .Desk_Danger .Card_Title {
+    color: var(--warn);
   }
   .Desk_Count {
     margin-left: auto;
@@ -547,17 +650,48 @@
     .Desk main {
       display: block;
     }
+    /* The top bar: Menu, and the page with the space it is in. */
+    .Desk_Bar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .6rem 1rem;
+      background: var(--ground);
+      border-bottom: 1px solid var(--edge);
+    }
+    .Desk_Where {
+      display: grid;
+      min-width: 0;
+      line-height: 1.2;
+    }
+    .Desk_Where small {
+      color: var(--soft-ink);
+      font-size: var(--fine);
+      overflow-wrap: anywhere;
+    }
+    /* The same side, behind Menu: the whole screen while it is open. */
     .Desk_Side {
-      position: relative;
+      display: none;
+    }
+    .Desk_Side:target {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      gap: 1.25rem;
       min-height: 0;
-      gap: 1rem;
       padding: 1rem;
+      overflow-y: auto;
+      background: var(--ground);
     }
     .Desk_Side::after {
-      inset: auto 0 calc(-1 * var(--room));
-      width: auto;
-      height: calc(var(--stroke) + 2 * var(--room));
-      background: var(--rule);
+      display: none;
+    }
+    .Desk_Close {
+      display: inline-flex;
     }
     .Desk_Brand {
       font-size: 1.1rem;
@@ -568,18 +702,6 @@
     }
     .Desk .SideNav {
       margin-right: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: .3rem;
-    }
-    .Desk .SideNav a {
-      padding: .45rem .65rem;
-      font-size: var(--fine);
-      gap: .4rem;
-    }
-    .Desk .SideNav hr,
-    .Desk_Foot {
-      display: none;
     }
     .Desk_Body {
       min-height: 0;

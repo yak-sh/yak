@@ -10,7 +10,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { client, connector, kernel, meta, signIn } from './probe.ts'
-import { MANAGE, managePath } from './route.ts'
+import { LOGOUT, MANAGE, managePath } from './route.ts'
 import type { App } from './directory.ts'
 import { library } from './pages.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
@@ -90,13 +90,15 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       await (await at('/manage/')).text(),
       '<h1>My manage app</h1>',
     )
-    let library = await get(MANAGE)
-    assertEquals(library.status, 200)
+    let apps = managePath('apps', slug)
+    let first = await get(MANAGE)
+    assertEquals(first.status, 302)
+    assertEquals(first.headers.get('location'), `https://yaks.app${apps}`)
     assertStringIncludes(
-      await library.text(),
+      await (await get(apps)).text(),
       `href="https://${host}/private-notes/"`,
     )
-    assertEquals((await get(`${MANAGE}/missing`)).status, 404)
+    assertEquals((await get(`${MANAGE}/${slug}/missing`)).status, 404)
     let login = await k.at('yaks.app', MANAGE, { redirect: 'manual' })
     assertEquals(login.status, 303)
     assertEquals(
@@ -106,23 +108,43 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     await login.body?.cancel()
 
     // Where the dashboard was, letters and answers still send people: each
-    // view moves to its own at the apex, query and all.
+    // page moves to its own, the space in the path, the rest of the query
+    // kept, and a form posted there kept a form.
+    let to = (path: string) => `https://yaks.app${path}`
+    let billing = `/manage/${slug}/billing?paid=1`
     for (
-      let [was, now] of [
-        ['/_yaks', `/manage?space=${slug}`],
-        ['/_yaks/', `/manage?space=${slug}`],
-        ['/_yaks/billing?paid=1', `/manage/billing?space=${slug}&paid=1`],
+      let [from, was, now, method] of [
+        [host, '/_yaks', apps],
+        [host, '/_yaks/', apps],
+        [host, '/_yaks/billing?paid=1', billing],
+        ['yaks.app', `/manage/billing?space=${slug}&paid=1`, billing],
+        ['yaks.app', '/manage/settings', `/manage/${slug}/settings`],
+        ['yaks.app', '/manage/connect', managePath('agents')],
+        ['yaks.app', `/manage/${slug}`, apps],
+        [
+          'yaks.app',
+          `/manage/people?space=${slug}`,
+          `/manage/${slug}/people`,
+          'POST',
+        ],
       ]
     ) {
-      let moved = await k.at(host, was, { redirect: 'manual' })
-      assertEquals(moved.status, 301, was)
-      assertEquals(moved.headers.get('location'), `https://yaks.app${now}`)
-      await moved.body?.cancel()
+      let res = await k.at(from, was, {
+        method,
+        redirect: 'manual',
+        headers: { cookie: them.cookie, origin: 'https://yaks.app' },
+      })
+      await res.body?.cancel()
+      assertEquals(
+        [res.status, res.headers.get('location')],
+        [method ? 308 : 301, to(now)],
+        was,
+      )
     }
     assertEquals((await k.at(host, '/_yaks/missing')).status, 404)
 
     // An icon linked from the setup page still downloads from the apex.
-    let setup = await (await get(managePath('connect'))).text()
+    let setup = await (await get(managePath('agents'))).text()
     let icon = new URL(/href="([^"]+)" download="yaks-app.png"/.exec(setup)![1])
     let download = await k.at(icon.hostname, icon.pathname)
     assertEquals(
@@ -131,88 +153,131 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     )
     assert((await download.arrayBuffer()).byteLength < 10_000)
 
-    let settings = managePath('settings')
-    let page = await (await get(settings)).text()
-    assertStringIncludes(page, `action="${settings}"`)
-    let saved = await post(settings, { name: 'Dana' })
-    assertEquals(saved.status, 303)
-    assertEquals(
-      saved.headers.get('location'),
-      `https://yaks.app${settings}?saved=1`,
-    )
+    // The name is the person's, saved on their Profile.
+    let profile = managePath('profile')
+    let named = await post(profile, { name: 'Dana' })
+    assertEquals(named.status, 303)
+    assertEquals(named.headers.get('location'), to(`${profile}?saved=1`))
     assertEquals(await title(), 'Dana')
-    let confirmed = await (await get(`${settings}?saved=1`)).text()
+    let confirmed = await (await get(`${profile}?saved=1`)).text()
     assertStringIncludes(confirmed, 'role="status"')
     assertStringIncludes(confirmed, 'value="Dana"')
-    // An address-only submission must not overwrite the independently saved name.
-    assertEquals((await post(settings, { space: slug })).status, 303)
-    assertEquals(await title(), 'Dana')
-    // A page that names the space carries it through every link and form.
-    let named = await (await get(managePath('settings', slug))).text()
+
+    // The space's Settings: its address and homepage, and the way to delete it.
+    let settings = managePath('settings', slug)
+    let page = await (await get(settings)).text()
+    assertStringIncludes(page, `action="${settings}"`)
+    assertStringIncludes(page, `href="https://yaks.app/space/${slug}/delete"`)
+    assertStringIncludes(page, `href="${managePath('trash', slug)}"`)
+    let saved = await post(settings, { space: slug })
+    assertEquals(saved.status, 303)
+    assertEquals(saved.headers.get('location'), to(`${settings}?saved=1`))
     assertStringIncludes(
-      named,
-      `action="${managePath('settings', slug).replace('&', '&amp;')}"`,
+      await (await get(`${settings}?saved=1`)).text(),
+      'role="status"',
     )
-    assertStringIncludes(named, `href="${managePath('trash', slug)}"`)
+    assertEquals(await title(), 'Dana')
 
     let discarded = (await dir.query('.app.slug=discarded'))[0].entity.eid
     await agent.tool('app_delete', { space: slug, app: 'discarded' })
-    let trash = managePath('trash')
+    let trash = managePath('trash', slug)
     assertStringIncludes(
       await (await get(trash)).text(),
       `name="restore" value="${discarded}"`,
     )
     let restored = await post(trash, { restore: discarded })
     assertEquals(restored.status, 303)
-    assertEquals(restored.headers.get('location'), `https://yaks.app${trash}`)
+    assertEquals(restored.headers.get('location'), to(trash))
     assertStringIncludes(
-      await (await get(MANAGE)).text(),
+      await (await get(apps)).text(),
       `href="https://${host}/discarded/"`,
     )
-    let stopped = await post(managePath('selling'), { sell: 'stop' })
-    assertEquals(
-      stopped.headers.get('location'),
-      `https://yaks.app${managePath('selling')}`,
-    )
+    let selling = managePath('selling', slug)
+    let stopped = await post(selling, { sell: 'stop' })
+    assertEquals(stopped.headers.get('location'), to(selling))
 
     let signedOut = await get(settings, '')
     assertEquals(signedOut.status, 303)
-    let to = new URL(signedOut.headers.get('location')!)
-    assertEquals(to.searchParams.get('return'), `https://yaks.app${settings}`)
-    // Somebody else, naming this space, is shown nothing of it; without a
-    // name, they are shown their own.
+    let back = new URL(signedOut.headers.get('location')!)
+    assertEquals(back.searchParams.get('return'), to(settings))
+    // Somebody else, naming this space, is shown nothing of it, and
+    // `/manage` opens their own.
     let other = await signIn(k)
     for (let view of ['apps', 'settings', 'trash'] as const) {
       let hidden = await get(managePath(view, slug), other.cookie)
       assertEquals(hidden.status, 404)
       assert(!(await hidden.text()).includes('private-notes'))
     }
-    let theirs = await (await get(MANAGE, other.cookie)).text()
-    assert(!theirs.includes('private-notes'), theirs)
+    let theirs = (await get(MANAGE, other.cookie)).headers.get('location')!
     assertEquals(
-      (await post(managePath('settings', slug), { name: 'Changed' }, ''))
+      theirs,
+      to(managePath('apps', other.email.split('@')[0])),
+    )
+    // Nobody but its owner moves the space, and no other page names them.
+    let away = { space: `away-${crypto.randomUUID().slice(0, 6)}` }
+    assertEquals((await post(settings, away, '')).status, 303)
+    assertEquals((await post(settings, away, other.cookie)).status, 404)
+    assertEquals(
+      (await post(settings, away, them.cookie, 'https://other.yaks.app'))
         .status,
-      303,
-    )
-    assertEquals(
-      (await post(
-        managePath('settings', slug),
-        { name: 'Changed' },
-        other.cookie,
-      )).status,
-      404,
-    )
-    assertEquals(
-      (await post(
-        settings,
-        { name: 'Changed' },
-        them.cookie,
-        'https://other.yaks.app',
-      )).status,
       403,
     )
+    assertEquals(
+      (await post(profile, { name: 'C' }, them.cookie, 'https://x.yaks.app'))
+        .status,
+      403,
+    )
+    assertEquals(await dir.query(`.space.slug=${away.space}`), [])
     assertEquals(await title(), 'Dana')
     assertStringIncludes(await (await at('/')).text(), '<h1>My front page</h1>')
+  } finally {
+    await k.stop()
+  }
+})
+
+// The person's own pages: a new space, the one they open first, and signing
+// out, each through the form its page posts.
+test('a person makes a space, opens it first, and signs out', async () => {
+  let k = await kernel()
+  try {
+    let ada = await signIn(k)
+    let fresh = `n${crypto.randomUUID().slice(0, 6)}`
+    let post = (path: string, fields: Record<string, string>) =>
+      k.at('yaks.app', path, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          cookie: ada.cookie,
+          origin: 'https://yaks.app',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(fields),
+      })
+    let opens = async (cookie = ada.cookie) =>
+      (await k.at('yaks.app', MANAGE, {
+        redirect: 'manual',
+        headers: { cookie },
+      }))
+        .headers.get('location')
+    let mine = `https://yaks.app${managePath('apps', ada.email.split('@')[0])}`
+    assertEquals(await opens(), mine)
+
+    let made = await post(managePath('space'), { title: 'Books', slug: fresh })
+    assertEquals(made.status, 303)
+    let theirs = `https://yaks.app${managePath('apps', fresh)}`
+    assertEquals(made.headers.get('location'), theirs)
+    assertEquals(await opens(), mine)
+
+    await post(managePath('profile'), { first: fresh })
+    assertEquals(await opens(), theirs)
+
+    let out = await post(LOGOUT, {})
+    assertEquals(out.status, 303)
+    let cookie = out.headers.get('set-cookie')!.split(';')[0]
+    assertEquals(
+      new URL((await opens(cookie))!).pathname,
+      '/login',
+    )
   } finally {
     await k.stop()
   }
@@ -262,6 +327,37 @@ test('a fixed app has no dashboard error mark or repair request', () => {
   assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
 })
 
+// The Billing page (T-131895), through the kernel: the space's own allowances.
+test('billing shows the space’s allowances', async () => {
+  let k = await kernel()
+  try {
+    let ada = await signIn(k)
+    let hers = connector(k, ada.cookie)
+    let slug = `b${crypto.randomUUID().slice(0, 6)}`
+    let other = String(
+      (await hers.answer('space_new', { slug, title: 'Books' })).value?.eid,
+    )
+    let month = new Date().toISOString().slice(0, 7)
+    await meta(k).apply([
+      { entity: { eid: other }, meter: { month, emails: 30 } },
+    ])
+    let html = await (await k.at('yaks.app', managePath('billing', slug), {
+      headers: { cookie: ada.cookie },
+    })).text()
+    for (
+      let text of [
+        'Get the Plus plan for Books — $9 a month',
+        'Nothing is billed.',
+        '0 of 5',
+        '$0.00 of $0.20',
+        '30 of 100',
+      ]
+    ) assertStringIncludes(html, text)
+  } finally {
+    await k.stop()
+  }
+})
+
 // What the space's Operator made of a break stands beside it (T-136297):
 // working, its answer, or why it could not finish, with the way to its work.
 test("a break says what the space's Operator made of it", () => {
@@ -280,5 +376,5 @@ test("a break says what the space's Operator made of it", () => {
     shown({ failed: 'the space has spent its model budget' }),
     'The Operator could not fix it: the space has spent its model budget',
   )
-  assertStringIncludes(shown({}), `href="${managePath('operator')}"`)
+  assertStringIncludes(shown({}), `href="${managePath('operator', 'fixme')}"`)
 })

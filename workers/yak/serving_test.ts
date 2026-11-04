@@ -1762,7 +1762,7 @@ test("a trashed front page is nobody's, and the owner restores it there", async 
   // app is back — front page and all, because the word was never taken off it.
   let cookie = await as(ADA)
   let back = await apps.fetch(
-    new Request('https://yaks.app/manage/trash?space=ada', {
+    new Request('https://yaks.app/manage/ada/trash', {
       method: 'POST',
       headers: {
         cookie,

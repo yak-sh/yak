@@ -159,6 +159,7 @@ import {
   hostOf,
   INVITE,
   LINK,
+  LOGOUT,
   MANAGE,
   OAUTH,
   onZone,
@@ -168,7 +169,13 @@ import {
 } from './route.ts'
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
-import { type Caller, minted, sessionAt, type Who } from './session.ts'
+import {
+  type Caller,
+  minted,
+  sessionAt,
+  signedOut,
+  type Who,
+} from './session.ts'
 import { WHO } from './signed.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
@@ -932,6 +939,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       confirm: field('confirm'),
       token: field('t'),
     })
+  }
+
+  // Signing out (T-136122): this browser forgets the person and stays itself.
+  // Only a POST, so a link a mail client fetches signs nobody out.
+  if (path == LOGOUT && req.method == 'POST' && env.SESSION_SECRET) {
+    return redirect(
+      hostUrl(env, '/'),
+      await signedOut(req, env, env.SESSION_SECRET),
+      303,
+    )
   }
 
   // Whether this browser is signed in, for the site's island (signed.ts).

@@ -116,7 +116,7 @@ export let renamed = async (k: Kernel) => {
   // A dashboard link naming the space by the old name follows it.
   let desk = await k.at(
     'yaks.app',
-    `/manage/settings?space=${ada46}&saved=1`,
+    `/manage/${ada46}/settings?saved=1`,
     {
       redirect: 'manual',
       headers: { cookie: them.cookie },
@@ -125,7 +125,7 @@ export let renamed = async (k: Kernel) => {
   assertEquals(desk.status, 301)
   assertEquals(
     desk.headers.get('location'),
-    `https://yaks.app/manage/settings?space=${adacooks46}&saved=1`,
+    `https://yaks.app/manage/${adacooks46}/settings?saved=1`,
   )
   // An assistant still naming the space the old way is told where it went.
   await assertRejects(
@@ -158,7 +158,7 @@ export let renamed = async (k: Kernel) => {
   assertStringIncludes(await their.text(), '<h1>Our recipe box</h1>')
   // And the roster is the space's own: its owner is still its owner, which
   // is what lets them move it again, from the settings card this time.
-  let card = await k.at('yaks.app', `/manage/settings?space=${adacooks46}`, {
+  let card = await k.at('yaks.app', `/manage/${adacooks46}/settings`, {
     method: 'POST',
     body: new URLSearchParams({ space: adakitchen46 }),
     redirect: 'manual',

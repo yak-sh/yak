@@ -343,6 +343,21 @@ export let planCard = (env: Env, space: Space): Card => ({
   ),
 })
 
+/** Whom a space is billed to: the email and name its Stripe customer holds,
+ * which is where the receipts go and what the customer portal changes. */
+export type Payer = { email: string; name: string }
+
+/** Whom Stripe bills for a space, read from its customer; null for a space
+ * Stripe has never met, or whose customer was deleted there. */
+export let billedTo = async (env: Env, space: Space): Promise<Payer | null> => {
+  let customer = space.plan?.customer
+  if (!customer || !env.STRIPE_KEY) return null
+  let c = await ask(env, `/v1/customers/${encodeURIComponent(customer)}`)
+  return c.deleted
+    ? null
+    : { email: String(c.email ?? ''), name: String(c.name ?? '') }
+}
+
 /** A tier as its plan is said: "the Plus plan", never bare "Plus". */
 export let planName = (tier: Tier) =>
   tier == 'organization'
@@ -414,10 +429,10 @@ export let checkout = async (
       customer,
       line_items: { 0: { price, quantity: 1 } },
       success_url: at
-        ? `${planSettings(at.slug, env)}&paid=1`
+        ? `${planSettings(at.slug, env)}?paid=1`
         : backTo(true, env),
       cancel_url: at
-        ? `${planSettings(at.slug, env)}&paid=0`
+        ? `${planSettings(at.slug, env)}?paid=0`
         : backTo(false, env),
       client_reference_id: space.eid,
       metadata: metaOf(env, space),

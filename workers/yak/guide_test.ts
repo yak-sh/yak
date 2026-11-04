@@ -437,7 +437,7 @@ test('the code page describes main as server source, not the upload wrapper', ()
 test('domain guidance directs unpaid users to settings, not checkout', () => {
   const domains = pageText('domains')
   assert(domains.includes('plan-settings'))
-  assert(domains.includes('/manage/billing'))
+  assert(domains.includes('/manage/<space>/billing'))
   assert(domains.includes('never link directly to checkout'))
   const tool = TOOLS.find((t) => t.name == 'domain_attach')!
   assert(tool.description.includes('plan-settings URL'))

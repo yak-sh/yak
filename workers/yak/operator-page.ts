@@ -21,7 +21,7 @@ let shown = (number: string) =>
 
 // Where a person agrees to texts from the operator, or stops them.
 export let textsCard = (at: string, consent: Consent | null) =>
-  `<form class="Card Form" id="texts" method="post" action="${at}&texts=1">
+  `<form class="Card Form" id="texts" method="post" action="${at}?texts=1">
 <h2 class="Card_Title">Text messages</h2>
 <p>The operator can text you when it finishes a change, needs an answer from you, or something about your site needs you. You can still use chat and email.</p>${
     consent
@@ -89,7 +89,7 @@ export let conversation = (rows: Bundle[], at = '') =>
       request.files?.length
         ? `<p>${
           request.files.map((f, i) =>
-            `<a href="${esc(at)}&attachment=${row.entity.eid}&file=${i}">${
+            `<a href="${esc(at)}?attachment=${row.entity.eid}&file=${i}">${
               esc(f.name)
             }</a>`
           ).join(', ')
@@ -280,7 +280,7 @@ texts.addEventListener('submit', async (e) => {
   } catch (error) { said.textContent = error.message }
 })
 let status = document.querySelector('[data-send-status]')
-let draftAt = '${at}&draft=1'
+let draftAt = '${at}?draft=1'
 let submission
 let draftClient = {
   me: async () => ({ person: '${who.person}' }),
@@ -314,7 +314,7 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-new]')) { form.elements.task.value = ''; document.querySelector('[data-continuing]').hidden = true }
 })
 let read = async () => {
-  let response = await fetch('${at}&messages=1')
+  let response = await fetch('${at}?messages=1')
   if (!response.ok) throw new Error('Could not read the operator. Your request is saved; reload to try again.')
   box.innerHTML = await response.text()
 }

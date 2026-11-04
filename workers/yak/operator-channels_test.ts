@@ -224,7 +224,7 @@ test('the operator page names its email address, keeps a durable draft and draws
   )
 })
 
-let textsAt = 'https://yaks.app/manage/operator?space=clerk&texts=1'
+let textsAt = 'https://yaks.app/manage/clerk/operator?texts=1'
 let choose = async (fields: Record<string, string>) => {
   let body = new FormData()
   for (let [k, v] of Object.entries(fields)) body.set(k, v)
@@ -431,7 +431,7 @@ let liveDraft = desk({
   mutate: async (bundles) => {
     submission.set('draft', JSON.stringify(bundles))
     let response = (await operatorAnswer(
-      new Request('https://yaks.app/manage/operator?space=clerk', {
+      new Request('https://yaks.app/manage/clerk/operator', {
         method: 'POST',
         body: submission,
       }),

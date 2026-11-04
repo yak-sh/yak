@@ -237,6 +237,19 @@ export let minted = (
     )
   ).then((token) => cookie(token, domainOf(req, env), SESSION))
 
+/** The cookie signing out leaves (T-136122): the same browser, signed in as
+ * nobody, so what it wrote as a guest stays its own. */
+export let signedOut = async (req: Request, env: Host, secret: string) => {
+  let browser = await browserOf(req, secret)
+  let via = browser?.source ?? browser?.via ?? crypto.randomUUID()
+  let exp = Math.floor(Date.now() / 1000) + SESSION
+  return cookie(
+    await seal('browser', { via, exp } satisfies Browser, secret),
+    domainOf(req, env),
+    SESSION,
+  )
+}
+
 // Does the answer already say what this session is? Signing in and the
 // handoff each set the cookie themselves, and each knows something about it
 // that a blanket renewal does not.

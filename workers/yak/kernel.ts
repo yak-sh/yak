@@ -114,6 +114,7 @@ import {
   foreign,
   guarded,
   hostOf,
+  LOGOUT,
   MANAGE,
   MOUNT,
   paged,
@@ -195,7 +196,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
-    path == '/invite' ||
+    path == '/invite' || path == LOGOUT ||
     // Closing a space (identity.ts `closing`, T-33166): a signed-in page and
     // its form, so it belongs with the rest of the cookie's surface rather
     // than at the connector door an agent speaks to.

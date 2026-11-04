@@ -20,43 +20,99 @@ export type Door = (at: Arrived) => Promise<Response | null> | Response | null
 
 export let PLATFORM = apex()
 
-// The dashboard: a person's account pages, at the apex rather than on any
-// space's hostname, so no app sharing a space's origin can reach them. One
-// space's at a time: `?space=<slug>` names one they own, and without it
-// they see their own (directory.ts `own`).
+export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
+
+// The dashboard: a person's account and the spaces they work in, at the apex
+// rather than on any space's hostname, so no app sharing a space's origin can
+// reach them (T-39354). A space's pages are `/manage/<space>/<page>`; the
+// person's own, wherever they are, are `/manage/account/<page>` (T-136122),
+// which no space can be named (`RESERVED` holds `account`).
 export let MANAGE = '/manage'
-export type ManageView =
-  | 'operator'
+export let ACCOUNT = 'account'
+/** A page of one space's. */
+export type SpaceView =
   | 'apps'
-  | 'connect'
-  | 'connections'
-  | 'people'
   | 'new'
+  | 'operator'
+  | 'people'
+  | 'connections'
   | 'visits'
   | 'selling'
-  | 'settings'
   | 'billing'
+  | 'settings'
   | 'trash'
+/** A page of the person's own, the same in every space. `space` makes one. */
+export type AccountView = 'profile' | 'agents' | 'shared' | 'space'
+export type ManageView = SpaceView | AccountView
+let SPACE_VIEWS: SpaceView[] = [
+  'apps',
+  'new',
+  'operator',
+  'people',
+  'connections',
+  'visits',
+  'selling',
+  'billing',
+  'settings',
+  'trash',
+]
+let ACCOUNT_VIEWS: AccountView[] = ['profile', 'agents', 'shared', 'space']
+export let accountView = (view: ManageView): view is AccountView =>
+  (ACCOUNT_VIEWS as string[]).includes(view)
+// The pages before the space moved into the path, `/manage/<page>` with
+// `?space=` or none for the person's own, and what each is now: letters
+// already sent carry them.
+let LEGACY: Record<string, ManageView> = {
+  ...Object.fromEntries(SPACE_VIEWS.map((v) => [v, v])),
+  connect: 'agents',
+}
+/** A dashboard page's path. A space's page without a space names the one the
+ * person opens first, whichever that is when they follow it. */
 export let managePath = (view: ManageView = 'apps', space?: string) =>
-  MANAGE + (view == 'apps' ? '' : `/${view}`) +
-  (space ? `?space=${encodeURIComponent(space)}` : '')
+  accountView(view)
+    ? `${MANAGE}/${ACCOUNT}/${view}`
+    : space
+    ? `${MANAGE}/${encodeURIComponent(space)}/${view}`
+    : view == 'apps'
+    ? MANAGE
+    : `${MANAGE}/${view}`
+/** What a dashboard path asks for: an account page, a space's page, a space
+ * with no page named, or an address from before T-136122 (`legacy`), to be
+ * sent on. Null is no page. */
+export type Managed =
+  | { account: AccountView }
+  | { space: string; view: SpaceView | null }
+  | { legacy: ManageView }
+  | { first: true }
+export let managed = (path: string): Managed | null => {
+  if (!(path == MANAGE || path.startsWith(`${MANAGE}/`))) return null
+  let [one, two, ...rest] = path.slice(MANAGE.length).split('/')
+    .filter(Boolean)
+  if (rest.length) return null
+  if (!one) return { first: true }
+  if (one == ACCOUNT) {
+    return !two
+      ? { account: 'profile' }
+      : (ACCOUNT_VIEWS as string[]).includes(two)
+      ? { account: two as AccountView }
+      : null
+  }
+  if (!two) {
+    return Object.hasOwn(LEGACY, one)
+      ? { legacy: LEGACY[one] }
+      : SLUG.test(one)
+      ? { space: one, view: null }
+      : null
+  }
+  return SLUG.test(one) && (SPACE_VIEWS as string[]).includes(two)
+    ? { space: one, view: two as SpaceView }
+    : null
+}
+/** The page an address from before the dashboard named its space in the path
+ * stands for (`/_yaks/<page>`, `/manage/<page>`), or null. */
 export let manageView = (path: string): ManageView | null => {
-  let views: ManageView[] = [
-    'operator',
-    'apps',
-    'connect',
-    'connections',
-    'people',
-    'new',
-    'visits',
-    'selling',
-    'settings',
-    'billing',
-    'trash',
-  ]
-  return views.find((view) =>
-    path == managePath(view) || path == `${managePath(view)}/`
-  ) ?? null
+  let at = managed(path)
+  return !at ? null : 'first' in at ? 'apps' : 'legacy' in at ? at.legacy : null
 }
 /** One space's dashboard page, as an address to put in a letter or an
  * answer. */
@@ -84,6 +140,9 @@ export let OURS = '/_yaks'
 // Where a sign-in link is spent (link.ts). Under `/login/`, so index.ts
 // already routes it to the identity part with the rest of the sign-in surface.
 export let LINK = '/login/link'
+
+/** Where signing out is posted (identity.ts). */
+export let LOGOUT = '/logout'
 
 /** Where an invitation is accepted, on the platform's own host (invite.ts). */
 export let INVITE = '/invite'
@@ -206,8 +265,6 @@ export type Route = {
   // the path from its slash; at the apex or a bare space, the whole path
   path: string
 }
-
-export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform

@@ -123,7 +123,7 @@ let setup = async (words = false) => {
     let form = new FormData()
     for (let [name, value] of Object.entries(fields)) form.set(name, value)
     return connecting(
-      new Request('https://yaks.app/manage/connections?space=borrower'),
+      new Request('https://yaks.app/manage/borrower/connections'),
       p.env,
       away.space,
       { person: people[1], role: 'owner' },
@@ -185,7 +185,7 @@ test('an installed copy borrows a host-capped sentinel and egress alone swaps it
   assertStringIncludes(listed.text, 'Weather')
   assertStringIncludes(listed.text, 'Lender')
   assert(!listed.text.includes(key))
-  let shown = await connectionsOf(s.p.env, [s.away.space], s.away.ctx.person)
+  let shown = await connectionsOf(s.p.env, s.away.space, s.away.ctx.person)
   assertEquals(shown.list.length, 0)
   assertEquals(shown.borrowed.map((b) => [b.integration, b.app.cap]), [[
     'Weather',
@@ -454,7 +454,7 @@ test('the connections page lends, shows the loan on both sides, and replaces and
     let [his, hers] = [jeff, friend].map((p) => p.email.split('@')[0])
     let open = async (who: Person, space: string) =>
       parseHTML(
-        await (await k.at(k.host, `/manage/connections?space=${space}`, {
+        await (await k.at(k.host, `/manage/${space}/connections`, {
           headers: { cookie: who.cookie },
         })).text(),
       ).document
@@ -572,7 +572,7 @@ test('the connections page lends, shows the loan on both sides, and replaces and
         ]),
       )
     let sent = async (who: Person, space: string, fields: object) => {
-      let r = await k.at(k.host, `/manage/connections?space=${space}`, {
+      let r = await k.at(k.host, `/manage/${space}/connections`, {
         method: 'POST',
         redirect: 'manual',
         headers: {

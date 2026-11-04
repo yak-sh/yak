@@ -81,7 +81,7 @@ let setup = async (vault = true) => {
     )
   }
   let shown = (enable?: string[]) =>
-    connectionsOf(p.env, [space], person, [], enable)
+    connectionsOf(p.env, space, person, { enable })
   // Every row the directory's SQLite holds, as text.
   let dump = () => {
     let held = p.states.get(PLATFORM_OBJECT)!
@@ -531,7 +531,8 @@ let asks = async (
     return (await own(at) ?? await envDoor(at) ?? await fetchDoor(at))!
   }
   let his = async () =>
-    (await connectionsOf(s.p.env, [s.space], bob)).list.filter((c) => c.own)
+    (await connectionsOf(s.p.env, s.space, bob, { own: true })).list
+      .filter((c) => c.own)
   return { bob, door, his }
 }
 

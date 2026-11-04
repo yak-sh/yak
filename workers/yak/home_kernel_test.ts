@@ -74,7 +74,10 @@ test('a space with no front page lists what you may open', async () => {
     let mine = await (await at(them.cookie)).text()
     assertStringIncludes(mine, 'href="/recipes/"')
     assertStringIncludes(mine, 'href="/garden/"')
-    assertStringIncludes(mine, `href="https://yaks.app/manage?space=${jeff21}"`)
+    assertStringIncludes(
+      mine,
+      `href="https://yaks.app${managePath('apps', jeff21)}"`,
+    )
     assert(!mine.includes('name="name"'), mine)
     assert(!mine.includes('What is yaks.app?'), mine)
     assert(!mine.includes('login?return='), mine)
@@ -100,7 +103,7 @@ test('a space with no front page lists what you may open', async () => {
     })
     assertStringIncludes(
       await ready.text(),
-      `href="https://yaks.app/manage?space=${bare21Space}"`,
+      `href="https://yaks.app${managePath('apps', bare21Space)}"`,
     )
 
     // An API address is still a machine door when no app answers there: a
@@ -166,8 +169,8 @@ test('management separates app creation from agent setup', async () => {
       (await k.at(`${bare22Space}.yaks.app`, '/api/build.js')).status,
       200,
     )
-    let setup = await (await at('connect')).text()
-    assertStringIncludes(setup, 'Your agents')
+    let setup = await (await at('agents')).text()
+    assertStringIncludes(setup, '<h1>Agents</h1>')
     assertStringIncludes(setup, 'Connect another agent')
     assertStringIncludes(setup, 'name="agent"')
     assert(!setup.includes('<textarea'), setup)
@@ -366,7 +369,7 @@ test('the front page is served at the space root', async () => {
 // Every trip to the directory is a wait from wherever the request landed, so a
 // dashboard page asks everything it can at once: who the person is and where
 // they sit first, then the rows those name.
-test('a dashboard page reads the directory in two trips', async () => {
+test('a dashboard page reads the directory in two trips at most', async () => {
   let k = await kernel()
   let slug = unique('trips')
   let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
@@ -380,5 +383,8 @@ test('a dashboard page reads the directory in two trips', async () => {
   for (let view of ['apps', 'settings', 'billing'] as const) {
     assertEquals(await trips(managePath(view, slug)), '2', view)
   }
-  assertEquals(await trips(managePath('apps')), '2', 'their own space')
+  // A page of the person's own asks only about them, at once.
+  for (let view of ['profile', 'shared'] as const) {
+    assertEquals(await trips(managePath(view)), '1', view)
+  }
 })

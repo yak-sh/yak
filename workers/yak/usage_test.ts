@@ -408,7 +408,7 @@ test("a space's month is one line, and names a ceiling only near or at it", () =
   let near = gauged(space({ requests: 41_000, emails: 100 }), 3, NOW)
   assertStringIncludes(near, 'at or near the limit for request units')
   assertStringIncludes(near, 'emails; plan settings: ')
-  assertStringIncludes(near, 'https://yaks.app/manage/billing?space=jeff')
+  assertStringIncludes(near, 'https://yaks.app/manage/jeff/billing')
   assertStringIncludes(gauged(space(), 5, NOW), 'at the limit for apps;')
   // A comped space has no app ceiling to be near.
   assert(!gauged({ ...space(), slug: 'yourname' }, 50, NOW).includes('limit'))
@@ -436,7 +436,7 @@ test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = refusal(space(), what)
     assertStringIncludes(said, 'free tier')
-    assertStringIncludes(said, 'https://yaks.app/manage/billing?space=jeff')
+    assertStringIncludes(said, 'https://yaks.app/manage/jeff/billing')
     assert(!/checkout|subscribe/i.test(said), said)
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
@@ -497,7 +497,7 @@ test('a free space gets five builds each month regardless of lifetime use', asyn
   let after = space({ builds: 5, models: 0.25, built: 45 })
   let no = (refusedBuild(after, NOW))!
   assert(no)
-  assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
+  assertStringIncludes(no, 'https://yaks.app/manage/jeff/billing')
   assert(!/checkout|subscribe/i.test(no), no)
   assert(refusedBuild(space({ builds: 6 }), NOW))
 
@@ -523,7 +523,7 @@ test('a paid space counts its builds down, and the month gives them back', async
   let no = (refusedBuild(plus(BUILDS.plus), NOW))!
   assertStringIncludes(no, `${BUILDS.plus} built-in builds a month`)
   assertStringIncludes(no, 'build again on the 1st')
-  assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
+  assertStringIncludes(no, 'https://yaks.app/manage/jeff/billing')
   // Last month's builds are not this month's.
   assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
@@ -860,7 +860,7 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
     ] as const
   ) {
     const free = refusal(space(), what, { APEX: 'yaks.fyi' })
-    assertStringIncludes(free, 'https://yaks.fyi/manage/billing?space=jeff')
+    assertStringIncludes(free, 'https://yaks.fyi/manage/jeff/billing')
     assertStringIncludes(free, 'Compare paid plans')
     assert(!free.includes('checkout'))
     if (what != 'apps') {

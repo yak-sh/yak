@@ -876,7 +876,7 @@ test('the free tier: a warning once, then the refusals', async () => {
           title: 'A6',
         }),
       Error,
-      `Compare paid plans in its settings: https://yaks.app/manage/billing?space=${brim36}`,
+      `Compare paid plans in its settings: https://yaks.app/manage/${brim36}/billing`,
     )
 
     // Data past the ceiling is refused at the app's own door, in the

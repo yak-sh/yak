@@ -527,11 +527,11 @@ What they do not guarantee:
 An app never holds a key. `store_connection_need` declares what it needs (a
 built-in integration by name, or a name you choose with the hosts its key may be
 sent to), and the person pastes the key, or signs in, on the space's connections
-page (`yaks.app/manage/connections?space=<slug>`). The key goes from there to
-the vault; it never appears in this chat, the app's data, its history or any
-tool's response. Never ask the person to paste a key to you, and never invent
-one. The app reads it by its **binding**: the integration's name in capitals
-(`ESV`), or the `binding` you give.
+page (`yaks.app/manage/<slug>/connections`). The key goes from there to the
+vault; it never appears in this chat, the app's data, its history or any tool's
+response. Never ask the person to paste a key to you, and never invent one. The
+app reads it by its **binding**: the integration's name in capitals (`ESV`), or
+the `binding` you give.
 
 The person can also do all of it on that page without you: **Add a key** with
 the service's name and the hosts it may be sent to, then, under the connection,

@@ -583,7 +583,7 @@ test('plan settings preserves its destination through sign-in', async () => {
   let plans13 = unique('plans13')
   try {
     const { cookie } = await seed(k, [{ slug: plans13, apps: [] }])
-    const path = `/manage/billing?space=${plans13}`
+    const path = `/manage/${plans13}/billing`
     const anonymous = await k.at('yaks.app', path, { redirect: 'manual' })
     assertEquals(anonymous.status, 303)
     const location = new URL(anonymous.headers.get('location')!)

@@ -30,84 +30,181 @@ let face = (at: Partial<Parameters<typeof spaceIndex>[0]> = {}) =>
     ...at,
   }).text()
 
-test('the app library has navigation, not account forms', async () => {
+// The side's links, by section: the person's own, then the space's.
+let sides = (html: string) => {
+  let { document } = parseHTML(html)
+  let links = (nav: string) =>
+    [...document.querySelectorAll(`nav[${nav}] a`)].map((a) => ({
+      label: a.textContent!.trim(),
+      href: a.getAttribute('href'),
+    }))
+  return {
+    document,
+    account: links('aria-labelledby="side-account"'),
+    space: links('aria-label="This space"'),
+    current: document.querySelector('.SideNav [aria-current]')?.textContent
+      ?.trim(),
+  }
+}
+
+test('one side is the whole menu: your account, then the space you are in', async () => {
   let page = await block({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
   assertStringIncludes(page, 'href="https://dana.yaks.app/recipes/"')
-  for (let view of ['connect', 'new', 'settings', 'visits', 'trash'] as const) {
-    assertStringIncludes(page, `href="${managePath(view)}"`)
-  }
-  let { document } = parseHTML(page)
-  assertEquals(
-    document.querySelector(`nav a[href="${managePath('connect')}"]`)
-      ?.textContent?.trim(),
-    'Agents',
-  )
+  let { document, account, space } = sides(page)
+  assertEquals(account, [
+    { label: 'Profile', href: '/manage/account/profile' },
+    { label: 'Agents', href: '/manage/account/agents' },
+    { label: 'Shared with you', href: '/manage/account/shared' },
+  ])
+  assertEquals(space.map((l) => l.label), [
+    'Apps',
+    'Operator',
+    'People',
+    'Connections',
+    'Visits',
+    'Billing',
+    'Settings',
+    'Trash',
+  ])
+  assertEquals(space[6].href, '/manage/dana/settings')
   assertStringIncludes(page, 'Connect your agent')
-  assert(!page.includes('<form'), page)
-  assert(!page.includes('name="agent"'), page)
+  assertEquals(
+    document.querySelector('.Desk_Connect .Button')?.getAttribute('href'),
+    managePath('agents'),
+  )
+  assertEquals(document.querySelector('.Desk_Whose')?.textContent, 'dana')
+  // Sign out is the side's one form; the library has none.
+  assertEquals(
+    document.querySelector('.Desk_Foot form')?.getAttribute('action'),
+    'https://yaks.app/logout',
+  )
+  assert(!document.querySelector('#content form'), page)
   assert(!page.includes('src="/api/build.js"'), page)
 })
 
-test('settings save the name and the space in one form', async () => {
-  let page = await block({ view: 'settings' })
-  let { document } = parseHTML(page)
-  let forms = document.querySelectorAll('form')
-  assertEquals(forms.length, 1)
-  let [form] = forms
-  assertEquals(form.getAttribute('action'), managePath('settings'))
-  assertEquals(form.querySelectorAll('[type=submit]').length, 1)
-  let card = (field: string) =>
-    form.querySelector(`[name=${field}]`)?.closest('section')
-      ?.querySelector('h2')?.textContent
-  assertEquals(card('name'), 'Your account')
-  assertEquals(card('space'), 'This space: dana.yaks.app')
+test("a space's Settings change only the space, and delete it", async () => {
+  let { document } = sides(await block({ view: 'settings' }))
+  let form = document.querySelector('#content form')!
+  assertEquals(form.getAttribute('action'), managePath('settings', 'dana'))
+  assertEquals(form.querySelector('[name=name]'), null)
+  assert(form.querySelector('[name=space]'))
+  assertEquals(
+    document.querySelector('.Desk_Danger .Button')?.getAttribute('href'),
+    'https://yaks.app/space/dana/delete',
+  )
 })
 
-test('every page names the space it changes and links the others', async () => {
+test('Profile holds the name, the email and the space opened first', async () => {
   let spaces = [
-    { slug: 'locustgrove', title: 'Locust Grove' },
-    { slug: 'dana', title: 'dana' },
+    { slug: 'dana', title: 'Dana', owner: true, own: true },
+    { slug: 'grove', title: 'Grove', owner: true, own: false },
+    { slug: 'club', title: 'Club', owner: false, own: false },
   ]
-  let page = await block({ view: 'settings', space: 'locustgrove', spaces })
-  let { document } = parseHTML(page)
-  let side = document.querySelector('.Desk_Spaces')!
+  let { document, current } = sides(
+    await block({ view: 'profile', email: 'dana@x.test', spaces }),
+  )
+  assertEquals(current, 'Profile')
   assertEquals(
-    side.querySelector('.Desk_Here')?.textContent,
-    'Locust Grovelocustgrove.yaks.app',
+    document.querySelector('.Desk_Whose')?.textContent,
+    'Your account',
   )
+  let form = document.querySelector('#content form')!
+  assertEquals(form.getAttribute('action'), managePath('profile'))
+  assertEquals(form.querySelector('[name=name]')?.getAttribute('value'), 'dana')
+  assertStringIncludes(form.textContent!, 'dana@x.test')
+  // Only spaces of their own can open first.
   assertEquals(
-    [...side.querySelectorAll('a')].map((a) => a.getAttribute('href')),
-    [managePath('settings', 'dana')],
+    [...form.querySelectorAll('[name=first] option')].map((o) =>
+      o.getAttribute('value')
+    ),
+    ['dana', 'grove'],
   )
-  assertStringIncludes(
-    document.querySelector('.Card_Sub')!.textContent!,
-    'Locust Grove is the space these change',
+})
+
+test('the selector names the space and keeps the page when another is chosen', async () => {
+  let spaces = [
+    { slug: 'dana', title: 'Dana', owner: true, own: true },
+    { slug: 'grove', title: 'Locust Grove', owner: true, own: false },
+    { slug: 'club', title: 'Book club', owner: false, own: false },
+  ]
+  let rows = (html: string) =>
+    [...parseHTML(html).document.querySelectorAll('.Desk_Row')].map((a) => ({
+      href: a.getAttribute('href'),
+      text: a.textContent,
+      here: a.hasAttribute('aria-current'),
+    }))
+  let page = await block({ view: 'billing', space: 'grove', spaces })
+  assertEquals(
+    parseHTML(page).document.querySelector('summary.Desk_Space')?.textContent,
+    'LLocust Grovegrove.yaks.appChange',
   )
-  let alone = parseHTML(await block({ spaces: [spaces[1]] })).document
-  assertEquals(alone.querySelectorAll('.Desk_Spaces a').length, 0)
+  assertEquals(rows(page), [
+    {
+      href: '/manage/dana/billing',
+      text: 'DDanadana.yaks.app · yours',
+      here: false,
+    },
+    {
+      href: '/manage/grove/billing',
+      text: 'LLocust Grovegrove.yaks.app · yours✓',
+      here: true,
+    },
+    // A space they are a member of opens at its Operator.
+    {
+      href: '/manage/club/operator',
+      text: 'BBook clubclub.yaks.app · you’re a member',
+      here: false,
+    },
+  ])
+  // On a page of their own, choosing a space stays on it.
+  assertEquals(
+    rows(await block({ view: 'shared', space: 'grove', spaces }))[0].href,
+    '/manage/account/shared?space=dana',
+  )
+  // With one space there is nothing to change, only a way to make another.
+  let alone = parseHTML(await block({ spaces: [spaces[0]] })).document
+  assertEquals(alone.querySelector('.Desk_Pick'), null)
+  assertEquals(
+    alone.querySelector('.Desk_New')?.getAttribute('href'),
+    '/manage/account/space',
+  )
 })
 
 test('the Operator page is drawn beside the side, which a member sees with only the Operator', async () => {
-  let side = async (at: Parameters<typeof block>[0]) => {
-    let { document } = parseHTML(await block(at))
-    return {
-      links: [...document.querySelectorAll('.SideNav a')].map((a) =>
-        a.textContent!.trim()
-      ),
-      current: document.querySelector('[aria-current]')?.textContent?.trim(),
-      here: document.querySelector('.Desk_Here')?.textContent,
-      content: document.querySelector('#content')!.innerHTML,
-    }
-  }
-  let owner = await side({ view: 'operator', operator: '<p id="ask">Ask</p>' })
+  let owner = sides(
+    await block({ view: 'operator', operator: '<p id="ask">Ask</p>' }),
+  )
   assertEquals(owner.current, 'Operator')
-  assertEquals(owner.links.length > 1, true)
-  assertStringIncludes(owner.content, '<p id="ask">Ask</p>')
-  assertEquals(typeof owner.here, 'string')
-  let member = await side({ view: 'operator', member: true })
-  assertEquals(member.links, ['Operator'])
+  assertEquals(owner.space.length > 1, true)
+  assertStringIncludes(
+    owner.document.querySelector('#content')!.innerHTML,
+    '<p id="ask">Ask</p>',
+  )
+  let member = sides(await block({ view: 'operator', member: true }))
+  assertEquals(member.space.map((l) => l.label), ['Operator'])
+  assertEquals(member.account.length, 3)
+  // On the person's own space the Operator is their PA.
+  let own = sides(
+    await block({
+      view: 'operator',
+      spaces: [{ slug: 'dana', title: 'Dana', owner: true, own: true }],
+    }),
+  )
+  assertEquals(own.current, 'Your PA')
+})
+
+test('on a phone, Menu opens the same side', async () => {
+  let { document } = sides(await block({ view: 'people' }))
+  let menu = document.querySelector('.Desk_Bar a')!
+  assertEquals(menu.textContent, '☰ Menu')
+  assertEquals(menu.getAttribute('href'), '#menu')
+  assertEquals(document.querySelector('#menu')?.tagName, 'ASIDE')
+  assertEquals(
+    document.querySelector('.Desk_Where')?.textContent,
+    'Peopledana',
+  )
 })
 
 test('new app exposes separate build and upload forms below the agent route', async () => {
@@ -133,7 +230,7 @@ test('new app exposes separate build and upload forms below the agent route', as
     'multipart/form-data',
   )
   assert(
-    page.indexOf(`href="${managePath('connect')}"`) < page.indexOf('<textarea'),
+    page.indexOf(`href="${managePath('agents')}"`) < page.indexOf('<textarea'),
     page,
   )
 })
@@ -201,7 +298,7 @@ test('connected pages show the named client and keep the way to connect another 
     name: 'ChatGPT',
     connectedAt: 1,
   }]
-  for (let view of ['new', 'connect'] as const) {
+  for (let view of ['new', 'agents'] as const) {
     let { document } = parseHTML(await block({ view, agents }))
     let list = document.querySelector('.Agents')!
     assertStringIncludes(list.textContent!, 'ChatGPT')
@@ -213,14 +310,14 @@ test('connected pages show the named client and keep the way to connect another 
     for (let el of document.querySelectorAll('[data-disconnected]')) {
       assert(el.hasAttribute('hidden'))
     }
-    if (view == 'connect') {
+    if (view == 'agents') {
       let another = document.querySelector('.Connect_Setup .Group')!
       assertEquals(another.textContent, 'Connect another agent')
       assert(!another.hasAttribute('hidden'))
       assert(!document.querySelector('details .Tabs'))
     }
   }
-  let { document } = parseHTML(await block({ view: 'connect' }))
+  let { document } = parseHTML(await block({ view: 'agents' }))
   assert(
     document.querySelector('.Connect_Setup .Group')!.hasAttribute('hidden'),
   )
@@ -340,7 +437,7 @@ test('trash has restore forms only on its own page', async () => {
     days: 12,
   }]
   let page = await block({ view: 'trash', trash })
-  assertStringIncludes(page, `action="${managePath('trash')}"`)
+  assertStringIncludes(page, `action="${managePath('trash', 'dana')}"`)
   assertStringIncludes(page, `name="restore" value="${trash[0].eid}"`)
   assertStringIncludes(page, '12 days left')
   let other = await block({ trash })
@@ -359,12 +456,12 @@ test("none of the dashboard is anybody else's", async () => {
 
 test('Billing is a management page beside Settings with space checkout and portal', async () => {
   let settings = await block({ view: 'settings' })
-  assertStringIncludes(settings, `href="${managePath('billing')}"`)
+  assertStringIncludes(settings, `href="${managePath('billing', 'dana')}"`)
   let { document: profile } = parseHTML(settings)
   assertEquals(profile.querySelector('.Settings_Tabs'), null)
   assertEquals(
     profile.querySelector('.SideNav [aria-current]')?.getAttribute('href'),
-    managePath('settings'),
+    managePath('settings', 'dana'),
   )
   for (let plus of [false, true]) {
     let page = await block({
@@ -381,11 +478,11 @@ test('Billing is a management page beside Settings with space checkout and porta
       document.querySelector('[data-door="portal"]')?.getAttribute(
         'data-target',
       ),
-      managePath('billing'),
+      managePath('billing', 'dana'),
     )
     assertEquals(
       document.querySelector('.SideNav [aria-current]')?.getAttribute('href'),
-      managePath('billing'),
+      managePath('billing', 'dana'),
     )
     assertEquals(document.querySelector('.Settings_Tabs'), null)
     assertEquals(
@@ -393,7 +490,7 @@ test('Billing is a management page beside Settings with space checkout and porta
         a.getAttribute('href')
       ).slice(-4),
       (['visits', 'billing', 'settings', 'trash'] as const).map((view) =>
-        managePath(view)
+        managePath(view, 'dana')
       ),
     )
     if (plus) assertStringIncludes(page, 'stops renewing')

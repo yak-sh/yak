@@ -530,7 +530,7 @@ let CONNECTIONS: Row[] = [
         space: space.slug,
         owner: space.eid,
       })
-      let view = await connectionsOf(ctx.env, [space], who.person!)
+      let view = await connectionsOf(ctx.env, space, who.person!)
       // An app of this space goes by its slug, the name every tool takes;
       // a copy borrowing from another space, by the title its page shows.
       let slugs = new Map(

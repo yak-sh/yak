@@ -53,6 +53,7 @@ import {
   META,
   paid,
   type Role,
+  type Seat,
   type Space,
   storeAt,
   storeName,
@@ -63,7 +64,7 @@ import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Mail } from './mail.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
-import { checkout, planCard, portal, wanted } from './billing.ts'
+import { billedTo, checkout, planCard, portal, wanted } from './billing.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
   buying,
@@ -114,9 +115,13 @@ import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
 import { untrash, untrashSpace } from './erase.ts'
 import {
+  type AccountView,
+  accountView,
   hostOf,
   MANAGE,
   manageAt,
+  managed,
+  managePath,
   type ManageView,
   manageView,
   MOUNT,
@@ -125,6 +130,7 @@ import {
   route,
   signInAt,
   SLUG,
+  type SpaceView,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import {
@@ -176,7 +182,7 @@ import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
-import { free, size } from './meter.ts'
+import { budget, free, gauges, size, spent } from './meter.ts'
 import { scheduleBy } from './used.ts'
 import { sha256 } from './versions.ts'
 import { DAYS, NOT_ON, seen, stats, statsFor, viewed } from './views.ts'
@@ -2409,13 +2415,14 @@ let index = async (
   }, env)
 }
 
-// The dashboard, at the apex (T-39354): one space's pages, the person's own
-// unless `?space=` names another. A space's owner is the one person shown
-// it; anybody else is answered what a wrong address is.
+// The dashboard, at the apex (T-39354): the person's own pages at
+// `/manage/account/<page>`, and each space's at `/manage/<space>/<page>`
+// (T-136122). A space's owner is shown all of its pages and a member who may
+// change it its Operator; anybody else is answered what a wrong address is.
 let manage = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
-  let view = manageView(url.pathname)
-  if (!view) return nothingHere(env)
+  let at = managed(url.pathname)
+  if (!at) return nothingHere(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -2426,28 +2433,42 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     () => Promise.resolve(null),
   )
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
-  let slug = url.searchParams.get('space')
-  if (slug && !SLUG.test(slug)) return nothingHere(env)
-  if (req.method == 'GET' || req.method == 'HEAD') {
-    foresee(dir, person, view, !slug)
-  }
-  // The one a person gets with no address named is one they own.
-  let { space, role, administrative } = slug
-    ? await dir.page(slug, null, person, view == 'operator')
-    : {
-      space: await dir.own(person),
-      role: 'owner' as const,
-      administrative: false,
+  let asked = url.searchParams.get('space')
+  if (asked && !SLUG.test(asked)) return nothingHere(env)
+  // `/manage` opens the space the person opens first, and an address from
+  // before the space was in the path (`?space=`, or none for their own) is
+  // sent on to where its page is now, so links in letters keep working.
+  if ('first' in at || 'legacy' in at) {
+    let view = 'first' in at ? 'apps' : at.legacy
+    let slug = accountView(view) ? undefined : asked ?? (await dir.own(person))
+      .slug
+    let to = new URL(managePath(view, slug), hostUrl(env))
+    for (let [k, v] of url.searchParams) {
+      if (k != 'space') to.searchParams.append(k, v)
     }
-  if (!space && slug) {
-    // A link written before the space moved to another name (T-34658).
-    let was = await dir.formerly(slug)
-    if (!was) return nothingHere(env)
-    let to = sentFrom(req, env)
-    to.searchParams.set('space', was.slug)
-    return moved(req, to.href)
+    return 'first' in at ? redirect(to.href) : moved(req, to.href)
   }
-  if (!space || space.slug == META.space) return nothingHere(env)
+  if ('account' in at) {
+    return mine(req, env, dir, { person, role: null, until }, at.account)
+  }
+  if (!at.view) {
+    return moved(req, hostUrl(env, managePath('apps', at.space)) + url.search)
+  }
+  let view = at.view
+  if (req.method == 'GET' || req.method == 'HEAD') foresee(dir, person, view)
+  let { space, role, administrative } = await dir.page(
+    at.space,
+    null,
+    person,
+    view == 'operator',
+  )
+  if (!space) {
+    // A link written before the space moved to another name (T-34658).
+    let was = await dir.formerly(at.space)
+    if (!was) return nothingHere(env)
+    return moved(req, hostUrl(env, managePath(view, was.slug)) + url.search)
+  }
+  if (space.slug == META.space) return nothingHere(env)
   let who: Owner = {
     person,
     role: administrative ? 'owner' : role ?? null,
@@ -2461,43 +2482,52 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     return await operatorAnswer(req, env, space, who) ??
       desk(req, env, dir, space, who, view)
   }
-  if (who.role != 'owner') return nothingHere(env)
+  if (who.role != 'owner') {
+    // Of a space they don't own, a member who may change it has its
+    // Operator, which every other page of it sends them to.
+    return writes(who.role) && !space.trashed &&
+        (req.method == 'GET' || req.method == 'HEAD')
+      ? redirect(hostUrl(env, managePath('operator', space.slug)))
+      : nothingHere(env)
+  }
   // A space in the trash is brought back from its own address (`closed`).
   if (space.trashed) {
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
-  if (req.method == 'POST') return saved(req, env, dir, space, who)
+  if (req.method == 'POST') return saved(req, env, dir, space, who, view)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
   return desk(req, env, dir, space, who, view)
+}
+
+// Which space the side's selector holds on a page of the person's own: the
+// one whose pages this browser opened last, kept in a cookie of the
+// dashboard's alone, so going back from Profile to Apps returns to it.
+let IN = 'yak-in'
+let inOf = (req: Request) =>
+  /(?:^|;\s*)yak-in=([a-z0-9-]+)/.exec(req.headers.get('cookie') ?? '')?.[1]
+let keptIn = (res: Response, slug: string) => {
+  res.headers.append(
+    'set-cookie',
+    `${IN}=${slug}; Path=${MANAGE}; Max-Age=31536000; Secure; HttpOnly; SameSite=Lax`,
+  )
+  return res
 }
 
 // What a dashboard page will ask the directory, asked at once so it travels
 // with whatever else this moment asks (directory-copy.ts `gathered`): each is
 // answered again from this reading when the page comes to it (hops.ts
 // `recall`), and a failure is the page's to meet when it does. A seat names its
-// space, so the apps of the spaces a person owns are read beside those spaces'
-// own rows rather than a trip after them, whichever of them is theirs.
+// space, so the side's selector comes with the person's seats.
 let foresee = (
   dir: ReturnType<typeof directory>,
   person: string,
   view: ManageView,
-  own: boolean,
 ) => {
   void Promise.allSettled([
     feeOf(dir),
     dir.nameAt(person),
-    dir.spaces(person, 'owner'),
-    ...view == 'apps' ? [dir.seats(person), dir.granted(person)] : [],
-    ...own
-      ? [
-        dir.sitting(person).then((held) =>
-          Promise.all(
-            [...held].filter(([, role]) => role == 'owner')
-              .map(([eid]) => dir.apps({ eid })),
-          )
-        ),
-      ]
-      : [],
+    dir.seats(person),
+    ...view == 'shared' ? [dir.granted(person)] : [],
   ])
 }
 
@@ -2547,14 +2577,31 @@ let sentFrom = (req: Request, env: Env) => {
   return new URL(at.pathname + at.search, hostUrl(env))
 }
 
-// One page of the dashboard (pages.ts `desk`), for the space's owner.
+// The spaces the side's selector offers (pages.ts `Picked`): every one this
+// person may work in, the one they open first at the top, then those they
+// own, then those they are a member of.
+let pickable = (seats: Seat[]) =>
+  seats.filter((s) => !s.space.trashed && writes(s.role))
+    .sort((a, b) =>
+      Number(b.own) - Number(a.own) ||
+      Number(b.role == 'owner') - Number(a.role == 'owner')
+    )
+    .map((s) => ({
+      slug: s.space.slug,
+      title: s.space.title,
+      owner: s.role == 'owner',
+      own: s.own,
+    }))
+
+// One page of a space's (pages.ts `desk`), for its owner, or its Operator for
+// a member who may change it.
 let desk = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
-  view: ManageView,
+  view: SpaceView,
   said?: { say: string; no: boolean },
   typed?: Pick<DeskPage, 'invite' | 'typed'>,
 ): Promise<Response> => {
@@ -2569,13 +2616,12 @@ let desk = async (
     broken,
     views,
     fee,
-    name,
     agents,
-    theirs,
     people,
     connections,
-    mine,
+    seats,
     operator,
+    billed,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -2598,48 +2644,54 @@ let desk = async (
       ? shelved.then(({ all }) => all.length ? visits(env, all) : undefined)
       : undefined,
     feeOf(dir),
-    dir.nameAt(owner),
-    identity().then((part) => part.agents(env, owner)),
-    // What other people's spaces let this person open, read only for the
-    // page that lists apps.
-    view == 'apps' ? shared(dir, owner) : undefined,
+    // Whether an agent is connected, for the pages that say how to make an
+    // app with one.
+    view == 'apps' || view == 'new'
+      ? identity().then((part) => part.agents(env, owner))
+      : undefined,
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
     view == 'people'
       ? shelved.then(({ all }) => peopleIn(dir, [space], all))
       : undefined,
-    // What the person connected for themselves and what each space of
-    // theirs calls out through (connections.ts), read only for the page that
-    // shows it: this space first, which a new connection is made for.
+    // What this space calls out through (connections.ts), read only for the
+    // page that shows it; on the person's own space (`member.own`), what they
+    // connected for themselves and the services holding a grant from them.
     view == 'connections'
-      ? Promise.all([
-        dir.spaces(owner, 'owner'),
-        identity().then((part) => part.services(env, owner)),
-      ]).then(([spaces, services]) =>
-        connectionsOf(
-          env,
-          [space, ...spaces.filter((s) => s.eid != space.eid)],
-          owner,
-          services,
-          enabled(req),
-          q.get('add') ?? undefined,
-        )
-      )
+      ? dir.seats(owner, 'owner').then(async (seats) => {
+        let own = seats.some((s) => s.own && s.space.eid == space.eid)
+        return connectionsOf(env, space, owner, {
+          own,
+          services: own
+            ? await identity().then((part) => part.services(env, owner))
+            : [],
+          enable: enabled(req),
+          add: q.get('add') ?? undefined,
+        })
+      })
       : undefined,
-    // Every space this person owns, which the side names and links.
-    dir.spaces(owner, 'owner'),
+    // Every space this person may work in, which the side's selector offers.
+    dir.seats(owner),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who)
       )
       : undefined,
+    // Whom Stripe bills, for the Billing page (T-131895). A read that fails
+    // is reported, and the page says only that Stripe bills it.
+    view == 'billing'
+      ? billedTo(env, space).catch((e) => {
+        caught(e, { request: 'read billing customer', space: space.slug })
+        return undefined
+      })
+      : undefined,
   ])
-  return deskPage({
+  let picks = pickable(seats)
+  let page = deskPage({
     views,
     viewDays: DAYS,
     viewsOff: NOT_ON,
     space: space.slug,
-    pick: q.get('space') ?? undefined,
     view,
     apps: all.map((a) => ({
       eid: a.eid,
@@ -2663,20 +2715,149 @@ let desk = async (
     paying: paid(space.tier),
     plan: planCard(env, space),
     paid: q.get('paid') == '1',
+    // The space's month against its allowances (meter.ts), as the
+    // directory's row holds it.
+    bill: view == 'billing'
+      ? {
+        limits: gauges(space, all.length),
+        budget: budget(space),
+        read: spent(space).at || null,
+        payer: billed,
+      }
+      : undefined,
     fee: rate(fee),
-    name: name ?? '',
     agents,
-    shared: theirs,
     people: people?.[0],
     connections,
-    spaces: [space, ...mine.filter((s) => s.eid != space.eid && !s.trashed)]
-      .map((s) => ({ slug: s.slug, title: s.title })),
+    spaces: picks.some((s) => s.slug == space.slug) ? picks : [
+      {
+        slug: space.slug,
+        title: space.title,
+        owner: who.role == 'owner',
+        own: false,
+      },
+      ...picks,
+    ],
     operator,
     member: who.role != 'owner',
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
   }, env)
+  return keptIn(page, space.slug)
+}
+
+// One page of the person's own (pages.ts `desk`): their profile, their
+// agents, what others shared with them, a new space. The side's selector
+// holds the space this browser was last in, or the one `?space=` chose.
+let mine = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  who: Owner,
+  view: AccountView,
+  said?: { say: string; no: boolean },
+  typed?: Pick<DeskPage, 'typed' | 'made'>,
+): Promise<Response> => {
+  let person = who.person
+  let q = new URL(req.url).searchParams
+  if (req.method == 'POST' && !said) {
+    return account(req, env, dir, who, view)
+  }
+  if (req.method != 'GET' && req.method != 'HEAD' && req.method != 'POST') {
+    return nothingHere(env)
+  }
+  if (req.method != 'POST') foresee(dir, person, view)
+  let [seats, name, email, agents, theirs, own] = await Promise.all([
+    dir.seats(person),
+    dir.nameAt(person),
+    view == 'profile' ? dir.emailAt(person) : undefined,
+    view == 'agents' ? identity().then((part) => part.agents(env, person)) : [],
+    view == 'shared' ? shared(dir, person) : undefined,
+    dir.own(person),
+  ])
+  let picks = pickable(seats)
+  let chosen = q.get('space') ?? inOf(req)
+  let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
+  let page = deskPage({
+    space,
+    view,
+    apps: [],
+    name: name ?? '',
+    email: email ?? '',
+    agents,
+    shared: theirs,
+    spaces: picks.some((s) => s.slug == own.slug) ? picks : [
+      { slug: own.slug, title: own.title, owner: true, own: true },
+      ...picks,
+    ],
+    member: !picks.find((s) => s.slug == space)?.owner,
+    ...typed,
+    say: said?.say ?? returned(q)?.say ?? '',
+    no: said?.no ?? returned(q)?.no,
+  }, env)
+  return q.has('space') ? keptIn(page, space) : page
+}
+
+// What a page of the person's own posts: Profile's name and the space they
+// open first, and a new space.
+let account = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  who: Owner,
+  view: AccountView,
+): Promise<Response> => {
+  let form = await req.formData().catch(() => new FormData())
+  if (view == 'space') {
+    let made = {
+      title: String(form.get('title') ?? '').trim().slice(0, 60),
+      slug: String(form.get('slug') ?? '').trim().toLowerCase(),
+    }
+    let { said } = await pressed(env, dir, who, 'space_new', {
+      slug: made.slug,
+      title: made.title || made.slug,
+    })
+    if (said) return mine(req, env, dir, who, view, said, { made })
+    return keptIn(
+      redirect(hostUrl(env, managePath('apps', made.slug)), 303),
+      made.slug,
+    )
+  }
+  if (view != 'profile') return nothingHere(env)
+  // Cleared, the front of their address comes back — a person always has a
+  // title, because a member row names them by it and a titleless one reads
+  // back as a bare eid (T-32733). `nameOf` is the same fallback signing in
+  // writes.
+  if (form.has('name')) {
+    await dir.apply({
+      entities: [{
+        entity: { eid: who.person },
+        doc: {
+          title: String(form.get('name') ?? '').trim().slice(0, 60) ||
+            nameOf(null, await dir.emailAt(who.person) ?? ''),
+        },
+      }],
+    }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+  }
+  // The space they open first is the one their seat marks theirs
+  // (`member.own`): the mark moves to another space they own.
+  let first = String(form.get('first') ?? '').trim()
+  if (first) {
+    let seats = await dir.seats(who.person, 'owner')
+    let to = seats.find((s) => s.space.slug == first && !s.space.trashed)
+    if (to && !to.own) {
+      await dir.apply({
+        entities: seats.filter((s) => s.own || s == to).map((s) => ({
+          entity: { eid: s.seat },
+          member: { own: s == to },
+        })),
+      }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+    }
+  }
+  let to = sentFrom(req, env)
+  to.searchParams.set('saved', '1')
+  return redirect(to.href, 303)
 }
 
 // A space in the trash, at any of its addresses (erase.ts, T-34431). Nothing
@@ -2778,9 +2959,8 @@ let pressed = async (
   }
 }
 
-// Account forms return to the section that submitted them. Settings fields
-// are independent; changing an address cannot overwrite an omitted name.
-// Every space's page shares the cookie's site, so ownership alone is
+// A space's forms return to the page that submitted them. Every space's page
+// shares the cookie's site, so ownership alone is
 // insufficient: a page at another address never gets here (route.ts
 // `guarded`).
 let saved = async (
@@ -2789,6 +2969,7 @@ let saved = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
+  view: SpaceView,
 ): Promise<Response> => {
   let form = await req.formData().catch(() => new FormData())
   // The connections page's buttons (connections.ts): each is one form with a
@@ -2886,12 +3067,12 @@ let saved = async (
       })
     }
   }
-  // Settings: the person's name, the space's homepage and its address, one
-  // form and one Save. A refusal draws the page again with everything typed
-  // still in the fields, and the address goes last because moving renames the
-  // space the others are written against.
+  // Settings: the space's homepage and its address, one form and one Save. A
+  // refusal draws the page again with everything typed still in the fields,
+  // and the address goes last because moving renames the space the homepage
+  // is written against.
+  if (view != 'settings') return nothingHere(env)
   let typed = {
-    name: String(form.get('name') ?? '').trim().slice(0, 60),
     space: String(form.get('space') ?? '').trim().toLowerCase(),
     home: String(form.get('home') ?? '').trim(),
   }
@@ -2910,30 +3091,15 @@ let saved = async (
       })
     if (said) return refused(said)
   }
-  // Cleared, the front of their address comes back — a person always has a
-  // title, because a member row names them by it and a titleless one reads
-  // back as a bare eid (T-32733). `nameOf` is the same fallback signing in
-  // writes.
-  if (form.has('name')) {
-    await dir.apply({
-      entities: [{
-        entity: { eid: who.person },
-        doc: {
-          title: typed.name ||
-            nameOf(null, await dir.emailAt(who.person) ?? ''),
-        },
-      }],
-    }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
-  }
-  let moved = typed.space && typed.space != space.slug
+  let moving = typed.space && typed.space != space.slug
     ? await (await identity()).choose(env, who.person, typed.space, space)
     : null
-  if (moved?.error) return refused({ say: moved.error, no: true })
-  // A page that named the space by its old address names it by its new one.
-  let to = sentFrom(req, env)
-  if (moved?.slug && to.searchParams.has('space')) {
-    to.searchParams.set('space', moved.slug)
-  }
+  if (moving?.error) return refused({ say: moving.error, no: true })
+  // The page names the space by its new address.
+  let to = new URL(
+    managePath('settings', moving?.slug ?? space.slug),
+    hostUrl(env),
+  )
   to.searchParams.set('saved', '1')
   return redirect(to.href, 303)
 }
