@@ -31,6 +31,7 @@ import { changes, git } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
 import { platformConfig } from './check-platform.ts'
 import { incremental } from './check-incremental.ts'
+import { compiler } from './check-compiler.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -224,11 +225,12 @@ export type Run = (args: string[]) => Promise<boolean>
 let spawn: Run = async (args) =>
   (await new Deno.Command(Deno.execPath(), { args }).spawn().status).success
 
-let output = async (args: string[]) => {
+let output = async (args: string[], env?: Record<string, string>) => {
   let { success, stdout, stderr, signal } = await new Deno.Command(
     Deno.execPath(),
     {
       args,
+      env,
       cwd: CHECKOUT,
       stdout: 'piped',
       stderr: 'piped',
@@ -238,6 +240,8 @@ let output = async (args: string[]) => {
   let text = new TextDecoder()
   return { success, out: text.decode(stdout), err: text.decode(stderr) }
 }
+
+let compile = compiler(output, Deno.env.toObject())
 
 /** Writes each example of `roots` beside its page, and names them. */
 let examples = async (roots: string[]) =>
@@ -373,7 +377,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     let tsc = await incremental(
       `${on.dir}/build.tsbuildinfo`,
       (info) =>
-        output([
+        compile([
           'run',
           '-A',
           TSC,
