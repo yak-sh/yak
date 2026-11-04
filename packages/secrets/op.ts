@@ -50,7 +50,7 @@ export let opRead =
   (environment?: Env): OpRead => async (reference, signal) => {
     let [{ command }, { env }, { isNotFound }] = await Promise.all([
       import('@yaks/process/command'),
-      import('@yaks/process/system'),
+      import('@yaks/process/env'),
       import('@yaks/file/io'),
     ])
     let out = await command('op', {

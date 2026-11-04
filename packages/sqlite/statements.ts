@@ -1,4 +1,4 @@
-import { build } from '@yaks/process/system'
+import { build } from '@yaks/process/platform'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
 import { type Driver, revision, type Statements } from '@yaks/sql'

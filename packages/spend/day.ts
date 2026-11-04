@@ -1,4 +1,4 @@
-import { env } from '@yaks/process/system'
+import { env } from '@yaks/process/env'
 /**
  * A day's tally, read from the graph and kept as its `spend` row: the
  * requests whose entries were written that UTC day (an imported entry is

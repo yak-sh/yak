@@ -6,6 +6,8 @@ import { readSync, writeSync } from 'node:fs'
 import { Readable, Writable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { constants } from 'node:os'
+export { type Env, env } from './env.ts'
+export { build, os } from './platform.ts'
 
 export { cpus, format, inspect, loadavg }
 export {
@@ -21,27 +23,6 @@ export type {
   CommandOutput,
   CommandStatus,
 } from './command.ts'
-export type Env = {
-  get: (name: string) => string | undefined
-  set: (name: string, value: string) => void
-  delete: (name: string) => void
-  toObject: () => Record<string, string>
-}
-export let env: Env = {
-  get: (name: string) => process.env[name],
-  set: (name: string, value: string) => {
-    process.env[name] = value
-  },
-  delete: (name: string) => {
-    delete process.env[name]
-  },
-  toObject: (): Record<string, string> =>
-    Object.fromEntries(
-      Object.entries(process.env).filter((row): row is [string, string] =>
-        row[1] != null
-      ),
-    ),
-}
 export let args: string[] = process.argv.slice(2)
 export let pid = process.pid
 export let ppid = process.ppid
@@ -51,12 +32,6 @@ export let mainModule: string = process.argv[1]
   ? pathToFileURL(process.argv[1]).href
   : ''
 export let main = (url: string): boolean => url == mainModule
-export let os = process.platform == 'win32' ? 'windows' : process.platform
-export let build = {
-  os,
-  arch: process.arch,
-  target: `${process.arch}-${process.platform}`,
-}
 export let version = { ...process.versions }
 export let runtimeName = process.versions.deno ? 'deno' : 'node'
 export let runtimeVersion = process.versions.deno ?? process.versions.node

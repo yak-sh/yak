@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { build } from '@yaks/process/system'
+import { build } from '@yaks/process/platform'
 import { errors } from '@yaks/file/io'
 import { createHash } from 'node:crypto'
 import { assertEquals, assertRejects } from '@std/assert'

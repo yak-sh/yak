@@ -1,4 +1,4 @@
-import { env } from '@yaks/process/system'
+import { env } from '@yaks/process/env'
 // Trusted code reads a value from the vault at the moment it uses it. A name
 // the vault has no value for falls back to the environment. A kept 1Password
 // reference stays unresolved: servers have no 1Password sign-in, and only a

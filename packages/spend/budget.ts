@@ -1,4 +1,4 @@
-import { env } from '@yaks/process/system'
+import { env } from '@yaks/process/env'
 import * as io from '@yaks/file/io'
 /**
  * The Claude plan's limits, as `rate_limit` rows (@yaks/model). Claude Code

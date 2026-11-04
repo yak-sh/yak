@@ -11,6 +11,8 @@
     "./views": "./views.ts",
     "./http": "./http.ts",
     "./system": "./system.ts",
+    "./env": "./env.ts",
+    "./platform": "./platform.ts",
     "./command": "./command.ts",
     "./socket": "./socket.ts",
     "./clock": "./clock.ts"
