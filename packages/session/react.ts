@@ -123,6 +123,22 @@ export type ToolContext = {
   signal?: AbortSignal
 }
 
+// What a tool's wait gives up on: the step withdrawn, or the process leaving.
+let halting = (deps: Pick<Deps, 'signal' | 'stopping'>) =>
+  deps.signal && deps.stopping
+    ? AbortSignal.any([deps.signal, deps.stopping])
+    : deps.signal ?? deps.stopping
+
+// The work, until the signal aborts: a withdrawn step stops waiting on a tool
+// call at once, whether or not the tool heeds its signal.
+let unless = <T>(signal: AbortSignal | undefined, work: Promise<T>) =>
+  !signal ? work : new Promise<T>((ok, no) => {
+    let quit = () => no(signal.reason)
+    if (signal.aborted) return quit()
+    signal.addEventListener('abort', quit, { once: true })
+    work.then(ok, no).finally(() => signal.removeEventListener('abort', quit))
+  })
+
 /** A refused tool invocation: expected, recorded as its result carrying
  * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
@@ -223,7 +239,7 @@ export type Deps = {
    * runner's own: the ones a host can run that every transcript need not
    * carry. Asked for only when a turn names some. */
   named?: () => Tool[]
-  /** aborts the model request in flight */
+  /** aborts the step in flight: its model request and its tool calls */
   signal?: AbortSignal
   /** aborts when the process running the transcript is leaving: no step
    * starts after it, and a tool waiting on something stops waiting, while the
@@ -1055,13 +1071,16 @@ export let react = async (
           entity: { eid: '$said' },
           [CONTENT]: {
             body: String(
-              await patient(call, tool, () =>
-                tool.run(argsOf(call), {
-                  session,
-                  call,
-                  entries,
-                  signal: deps.stopping,
-                })),
+              await unless(
+                deps.signal,
+                patient(call, tool, () =>
+                  tool.run(argsOf(call), {
+                    session,
+                    call,
+                    entries,
+                    signal: halting(deps),
+                  })),
+              ),
             ),
           },
           [OUTPUT]: { source: call.entity.eid },
@@ -1208,7 +1227,7 @@ export let react = async (
             session,
             call: pending,
             entries,
-            signal: deps.stopping,
+            signal: halting(deps),
           })
           if (recovered != null) {
             answer = [{

@@ -351,7 +351,7 @@ test('words given while the Operator works land in its running session, which an
   )
 })
 
-// Stopped while the model answers: nothing more after that step, one answer,
+// Stopped while the model answers: the step withdrawn, one answer,
 // and new words take the same session up again.
 let halted = operatorMemory()
 let halting: Request[] = []
@@ -380,7 +380,7 @@ let again = await halter.run(roundsHeld, roundsSpace, {
   task: begun.task,
   say: 'Go on.',
 })
-test('Stop ends the run after the step in flight with one answer, and new words reopen the session', () => {
+test('Stop ends the run at once with one answer, and new words reopen the session', () => {
   assertEquals(afterStop, 1)
   assertEquals(
     stopRead.entries?.some((b) => b.stop),

@@ -389,7 +389,7 @@ document.addEventListener('click', (e) => {
   let stop = e.target.closest('[data-stop]')
   if (stop) {
     stop.disabled = true
-    status.textContent = 'Stopping after what it is doing now…'
+    status.textContent = 'Stopping…'
     fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: stop.dataset.stop }) })
       .then((r) => { if (!r.ok) throw new Error('It could not be stopped. Try again.'); status.textContent = 'Stopped.' })
       .catch((error) => { status.textContent = error.message })

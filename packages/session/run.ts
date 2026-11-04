@@ -245,9 +245,18 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
   }
 }
 
-// Whether a request in flight has been withdrawn: a `cancel` entry in the
-// transcript naming an attempt that is still in flight.
-let withdrawn = async (g: Graph, session: Eid): Promise<boolean> => {
+// Whether the step in flight has been withdrawn: a stop written since it
+// began (the person watching pressed Stop), or a `cancel` entry naming an
+// attempt that is still in flight.
+let withdrawn = async (
+  g: Graph,
+  session: Eid,
+  since: number,
+): Promise<boolean> => {
+  let stops = await g.read(
+    `.entry.session=${session}&.${STOP_ENTRY}&.entry.seq>${since}`,
+  )
+  if (stops.length) return true
   let said = await g.read(`.entry.session=${session}&.cancel&*`)
   if (!said.length) return false
   let targets = said.map((b) => String(comp(b, 'cancel')?.target))
@@ -255,10 +264,10 @@ let withdrawn = async (g: Graph, session: Eid): Promise<boolean> => {
   return found.some((b) => comp(b, 'attempt')?.state == 'inflight')
 }
 
-// How each step in flight here looks for a withdrawal of its request, by
-// transcript. A cancel written to a transcript owes it a run, and a run owed
-// where one is going looks at once (`answer`), so a withdrawal written in this
-// process lands now; one written elsewhere is seen on the next tick.
+// How each step in flight here looks for a withdrawal, by transcript. A stop
+// or cancel written to a transcript owes it a run, and a run owed where one is
+// going looks at once (`answer`), so a withdrawal written in this process
+// lands now; one written elsewhere is seen on the next tick.
 let looks = new WeakMap<Graph, Map<Eid, () => void>>()
 let looking = (g: Graph) => {
   let here = looks.get(g)
@@ -266,7 +275,8 @@ let looking = (g: Graph) => {
   return here
 }
 
-// One step, aborted if its request is withdrawn while it runs.
+// One step, aborted if it is withdrawn while it runs: its model request and
+// its tool calls alike.
 let step = async (
   g: Graph,
   session: Eid,
@@ -275,14 +285,14 @@ let step = async (
 ): Promise<Step> => {
   let stop = new AbortController()
   let signal = r.signal ? AbortSignal.any([r.signal, stop.signal]) : stop.signal
+  let since = (await newest(g, session)).seq
   let look = () =>
-    void withdrawn(g, session).then(
+    void withdrawn(g, session, since).then(
       (yes) => yes && stop.abort(),
       (err) => r.report?.(err, session, 'withdrawal'),
     )
-  // Only a streamed request is in flight as an attempt a cancel can name.
-  let tick = r.streaming ? setInterval(look, r.look ?? 1000) : undefined
-  if (r.streaming) looking(g).set(session, look)
+  let tick = setInterval(look, r.look ?? 1000)
+  looking(g).set(session, look)
   try {
     return await react(g, session, { ...r, owner: r.holder, signal }, read)
   } finally {

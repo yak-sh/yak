@@ -389,8 +389,7 @@ export let operating = (
       model,
       name,
       provider,
-      // Its text is shown as it is written, and Stop withdraws a request in
-      // flight, which only a streamed one is (@yaks/session run.ts `step`).
+      // Its text is shown as it is written (@yaks/session run.ts `step`).
       streaming: true,
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
@@ -537,8 +536,9 @@ export let operating = (
     }
   }
 
-  // The harness's interrupt (runtime.ts): a stop no step goes on past, and the
-  // model request in flight withdrawn where it can be (a streamed one).
+  // The harness's interrupt (runtime.ts): a stop that withdraws the step in
+  // flight, its model request or tool call, and that no step goes on past
+  // (@yaks/session run.ts `withdrawn`).
   let stop: Operator['stop'] = async (task, by) => {
     let links = await g.read(`.contains .edge.from=${task}`)
     let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
@@ -555,9 +555,6 @@ export let operating = (
     ) {
       return { task, session, stopped: false }
     }
-    let flying = await g.read(
-      `.entry.session=${session}&.attempt.state=inflight`,
-    )
     await g.apply([
       {
         entity: { eid: crypto.randomUUID() },
@@ -566,12 +563,6 @@ export let operating = (
         content: { body: 'Stopped by the person watching.' },
         $actor: { by, via: session },
       },
-      ...flying.map((b) => ({
-        entity: { eid: crypto.randomUUID() },
-        entry: { session },
-        notice: {},
-        cancel: { target: b.entity.eid },
-      })),
     ], { trusted: true })
     await answered(session)
     options.tell?.(session)
@@ -602,8 +593,8 @@ export type Operator = {
     args: Args,
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
-  /** Stop the task's running session: nothing more is done after the step in
-   * flight, until new words reopen it. */
+  /** Stop the task's running session at once, the step in flight included:
+   * nothing more is done until new words reopen it. */
   stop: (
     task: string,
     by: string,

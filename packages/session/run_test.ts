@@ -594,6 +594,53 @@ test('a withdrawn streamed request is aborted', async () => {
   assertEquals((last.interrupted as Comp | undefined)?.code, 'transport')
 })
 
+// A stop written while a step is in flight ends it there: the model request
+// is withdrawn, and so is a tool call, and nothing more is asked.
+let stopped = async (model: Model, tools: Runner['tools'] = []) => {
+  let p = proc(store(), 'w1', model, { streaming: true, look: 5, tools })
+  await p.g.apply([
+    ...tools.map((t) => ({
+      entity: { eid: toolEid(t.name) },
+      tool: { name: t.name },
+    })),
+    ...ask('s1'),
+  ])
+  let run = settle(p.g, 's1', p.r)
+  await until(async () =>
+    (await p.g.read('.entry.session=s1&.attempt.state=inflight')).length ||
+    (await p.g.read('.call&.execution')).length
+  )
+  await p.g.apply([{
+    entity: { eid: 's1:stop' },
+    entry: { session: 's1' },
+    stop: {},
+  }])
+  await run
+  return statusOf(await transcript(p.g, 's1'))
+}
+let hanging = (signal?: AbortSignal) =>
+  new Promise<never>((_, no) =>
+    signal?.addEventListener('abort', () => no(signal!.reason))
+  )
+
+test('a stop withdraws the model request in flight', async () => {
+  assertEquals(await stopped((req) => hanging(req.signal)), 'stopped')
+})
+
+test('a stop withdraws the tool call in flight', async () => {
+  let { model, asks } = script(() => [
+    { kind: 'call', id: 'c1', name: 'slow', args: '{}' },
+  ])
+  let tools = [{
+    name: 'slow',
+    description: 'Never answers',
+    parameters: { type: 'object', properties: {} },
+    run: () => new Promise<string>(() => {}),
+  }]
+  assertEquals(await stopped(model, tools), 'stopped')
+  assertEquals(asks(), 1)
+})
+
 // An app's store has tasks and no claims: a task finishing there owes a run
 // (`completed` is one of `session_run`'s triggers) that no transcript could be
 // holding, and a transcript asked for a turn is answered all the same.
