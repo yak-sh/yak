@@ -124,6 +124,9 @@ export type ClientOpts = {
 export type Client = {
   /** the vocabulary it uses */
   vocab: Vocab
+  /** Add components without replacing this client or its state. Returns false
+   * if an existing declaration changes or disappears. */
+  extend: (next: Vocab) => boolean
   /** the graph itself — `apply`, `read`, `use`, all of it */
   graph: Graph
   /** the connection to the server, when there is one */
@@ -219,8 +222,8 @@ let submission = (vocab: Vocab, bundles: Bundle[], held: boolean) => {
 // what the server's run of it did. A page with no server is the whole graph,
 // and runs every rule.
 let paged =
-  (vocab: Vocab, served: boolean) => (r: Ready, o: ApplyOpts): boolean =>
-    !served || own(r, vocab) || (!o.replica && !!r.rule.optimistic)
+  (words: () => Vocab, served: boolean) => (r: Ready, o: ApplyOpts): boolean =>
+    !served || own(r, words()) || (!o.replica && !!r.rule.optimistic)
 
 /**
  * Assemble a client graph: a {@link https://jsr.io/@yaks/ram | @yaks/ram}
@@ -260,7 +263,7 @@ export let client = (
     plugins,
     mint: opts.mint,
     provenance: opts.provenance,
-    runs: paged(vocab, !!opts.url),
+    runs: paged(() => g.vocab, !!opts.url),
   })
   // @yaks/sync pins locally committed rows before anything renders or the
   // vault's asynchronous write runs.
@@ -482,7 +485,16 @@ export let client = (
   }
 
   return {
-    vocab,
+    get vocab() {
+      return g.vocab
+    },
+    extend: (next) => {
+      if (closed) throw new Error('client is closed')
+      if (!g.extend(next)) return false
+      vocab = g.vocab
+      seen.refresh()
+      return true
+    },
     graph: g,
     wire,
     watches: seen,

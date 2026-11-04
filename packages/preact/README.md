@@ -80,9 +80,7 @@ import { host } from '@yaks/preact/host'
 let page = await host({
   root: document.querySelector('main')!,
   views: new URL('./views.ts', import.meta.url),
-  vocab: front.vocab,
-  store: front.ent,
-  subscribe, // (eid, notify) => unsubscribe, over the same client
+  client: front,
   draw: (Entity) => h(Entity, { eid: 'page', view: 'Page' }),
 })
 ```
@@ -90,15 +88,17 @@ let page = await host({
 `draw` returns what the root holds, so the page can wrap the `Entity` in its own
 providers, such as `@yaks/ux`'s `Ux`. `page.registry()` is the registry drawn
 now, and `page.close()` stops following writes and empties the root. A `load`
-option replaces `import()`, for a test that supplies modules itself.
+option replaces `import()`, for a test that supplies modules itself. A page can
+also supply `vocab`, `store` and `subscribe` separately, with `extend` to adopt
+a larger vocabulary.
 
 ### A preview that takes a write in place
 
 On a yaks.app draft preview link, each write to the app's draft reaches the page
 as a cancelable `yak-draft` event on `window`, whose `detail.files` names each
-file written, its sha and its address. When a write names the views module and
-no other file, the host cancels the event, so the page does not reload, and
-then:
+file written, its sha, its address and the page entries its imports reach. When
+a write reaches only the views module, the host cancels the event, so the page
+does not reload, and then:
 
 1. imports the new module from the views module's address with
    `?yak-draft=<sha>` added, so the browser imports it again;
@@ -113,6 +113,14 @@ remounts its subtree: Preact runs the old component's cleanup and mounts the new
 one. State kept in the page graph survives the remount; state kept in hooks does
 not. A component that skips its render (`memo`) draws the new renderers the next
 time it renders.
+
+A `vocab.json` write fetches the page vocabulary from `api/vocab.json` (override
+with `vocabulary`, relative to the page's base URI). The client adopts it only
+when every existing component keeps its declaration and only new components are
+added. The graph, socket, watches and stored drafts stay open; new renderers
+read the larger vocabulary. A changed or removed declaration reloads instead. A
+write containing both vocabulary and views adopts the vocabulary first. The
+`fetch` option supplies the vocabulary fetch in an in-process check.
 
 When the new module throws on import, exports no registry, or throws during its
 first draw, the host keeps the old registry, draws it again and calls the

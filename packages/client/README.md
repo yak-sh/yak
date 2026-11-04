@@ -858,3 +858,37 @@ equal(box.ent(eid)?.doc, { title: 'Dal' })
 equal(box.read('.recipe').length, 1)
 box.close()
 ```
+
+### Vocabulary growth
+
+`client.extend(next)` adopts a loaded vocabulary that adds components while
+keeping every existing declaration unchanged. It returns `false` without
+changing the client if a declaration changes or disappears. The graph, socket,
+watches and vault keep their state; reads of `client.vocab` return the adopted
+snapshot. Vocabulary snapshots remain immutable.
+
+```ts
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let page = client(loadVocab({ $defs: {} }), [], {
+  vault: false,
+  wireVault: false,
+})
+equal(
+  page.extend(loadVocab({
+    $defs: {
+      Note: {
+        component: true,
+        sync: 'none',
+        properties: { text: { type: 'string' } },
+      },
+    },
+  })),
+  true,
+)
+page.mutate([{ entity: { eid: 'page' }, Note: { text: 'Less salt' } }])
+equal(page.read('.Note')[0].Note, { text: 'Less salt' })
+page.close()
+```

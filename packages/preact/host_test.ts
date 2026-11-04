@@ -10,7 +10,7 @@ import { useLayoutEffect } from 'preact/hooks'
 import { client } from '@yaks/client'
 import { type Bundle, define } from '@yaks/render'
 import { parse } from '@yaks/query'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import type { ComponentRenderer, HostRegistry } from './mod.ts'
 import { type Draft, host, taken, type Views } from './host.ts'
 import { CustomEvent, flush, stage } from './testing.ts'
@@ -71,7 +71,10 @@ let module = (tag: string, Render?: ComponentRenderer['Render']): Views => ({
 
 // A page mounted through the host over a client of its own; `modules` is what
 // each address imports, a function where it throws.
-let page = async (modules: Record<string, Views | (() => never)>) => {
+let page = async (
+  modules: Record<string, Views | (() => never)>,
+  words?: (url: string) => Promise<Response>,
+) => {
   let { root, document, free } = stage()
   Object.defineProperty(document, 'baseURI', {
     value: BASE,
@@ -88,13 +91,8 @@ let page = async (modules: Record<string, Views | (() => never)>) => {
   let shown = await host({
     root,
     views: 'views.ts',
-    vocab,
-    store: front.ent,
-    subscribe: (eid, notify) => {
-      let watch = front.watch(`.entity.eid="${eid}"`)
-      let off = watch.subscribe(notify)
-      return () => (off(), watch.close())
-    },
+    client: front,
+    fetch: words,
     draw: (Entity) => h(Entity, { eid: 'page', view: 'Page' }),
     load: (url) => {
       loaded.push(url)
@@ -105,11 +103,19 @@ let page = async (modules: Record<string, Views | (() => never)>) => {
     },
   })
   let reloads = 0
-  let wrote = async (path: string, sha: string) => {
+  let wrote = async (
+    path: string | Draft['files'],
+    sha = '',
+    entries?: string[],
+  ) => {
     let event = Object.assign(
       new CustomEvent('yak-draft', {
         cancelable: true,
-        detail: { files: [{ path, sha, url: BASE + path }] },
+        detail: {
+          files: typeof path == 'string'
+            ? [{ path, sha, url: BASE + path, entries }]
+            : path,
+        },
       }),
       { reload: () => reloads++ },
     )
@@ -261,6 +267,174 @@ test('of writes landing faster than their modules import, only the newest draws'
     await p.shown.settled()
     await flush()
     equal(p.text(), 'second Soup')
+  } finally {
+    p.done()
+  }
+})
+
+let more: VocabDoc = {
+  $defs: {
+    extra: {
+      component: true,
+      sync: 'none',
+      properties: { label: { type: 'string' } },
+    },
+  },
+}
+
+test('a vocabulary write grows the same page graph and a subsequent views write reads its new components', async () => {
+  let fetched: string[] = []
+  let p = await page({
+    [VIEWS]: module('old'),
+    [next('new')]: {
+      views: define([{
+        view: 'Page',
+        match: parse('.doc'),
+        render: (e, h, { vocab }) =>
+          h(
+            'b',
+            null,
+            vocab!.prop('extra', 'label')
+              ? String((e.extra as { label: string })?.label)
+              : 'unknown',
+          ),
+      }]) as HostRegistry,
+    },
+  }, (url) => {
+    fetched.push(String(url))
+    return Promise.resolve(Response.json([...vocab.docs, more]))
+  })
+  try {
+    let input = p.root.querySelector('input')
+    equal(await p.wrote('vocab.json', 'words'), true)
+    equal(fetched, [BASE + 'api/vocab.json?yak-draft=words'])
+    equal(p.reloads(), 0)
+    ok(p.front.graph === p.graph && p.root.querySelector('input') === input)
+    await p.front.mutate([{
+      entity: { eid: 'page' },
+      extra: { label: 'New component' },
+    }])
+    await p.wrote('views.ts', 'new')
+    equal(p.text(), 'New component')
+    equal(p.front.ent('page')?.doc, { title: 'Soup' })
+  } finally {
+    p.done()
+  }
+})
+
+test('an incompatible vocabulary reloads without changing the running graph or its state', async () => {
+  let p = await page(
+    { [VIEWS]: module('old') },
+    () =>
+      Promise.resolve(Response.json({
+        $defs: {
+          doc: { component: true, properties: { title: { type: 'number' } } },
+        },
+      })),
+  )
+  try {
+    let before = p.front.vocab
+    equal(await p.wrote('vocab.json', 'changed'), true)
+    equal(p.reloads(), 1)
+    ok(p.front.vocab === before)
+    equal(p.text(), 'old Soup')
+    equal(p.front.ent('page')?.doc, { title: 'Soup' })
+  } finally {
+    p.done()
+  }
+})
+
+test('the host takes an imported dependency only when it reaches its views alone', async () => {
+  let p = await page({
+    [VIEWS]: module('old'),
+    [next('dep')]: module('dependency'),
+  })
+  try {
+    equal(await p.wrote('helper.ts', 'dep', [VIEWS]), true)
+    equal(p.text(), 'dependency Soup')
+    equal(
+      await p.wrote('helper.ts', 'shared', [VIEWS, BASE + 'main.ts']),
+      false,
+    )
+    equal(p.loaded, [VIEWS, next('dep')])
+  } finally {
+    p.done()
+  }
+})
+
+let declared = (known = 'Ready', unknown = 'Missing'): Views => ({
+  views: define([{
+    view: 'Page',
+    match: parse('.doc'),
+    render: (_e, h, { vocab }) =>
+      h('b', null, vocab!.prop('extra', 'label') ? known : unknown),
+  }]) as HostRegistry,
+})
+
+test('views arriving during a vocabulary fetch wait for its components', async () => {
+  let release!: (response: Response) => void
+  let pending = new Promise<Response>((resolve) => {
+    release = resolve
+  })
+  let p = await page({
+    [VIEWS]: module('old'),
+    [next('new')]: {
+      views: define([{
+        view: 'Page',
+        match: parse('.doc'),
+        render: (_e, h, { vocab }) =>
+          h('b', null, vocab!.prop('extra', 'label') ? 'Ready' : 'Missing'),
+      }]) as HostRegistry,
+    },
+  }, () => pending)
+  try {
+    let growing = p.wrote('vocab.json', 'words')
+    let drawing = p.wrote('views.ts', 'new')
+    equal(p.text(), 'old Soup')
+    release(Response.json([...vocab.docs, more]))
+    await Promise.all([growing, drawing])
+    equal(p.text(), 'Ready')
+    equal(p.reloads(), 0)
+  } finally {
+    p.done()
+  }
+})
+
+test('a vocabulary-only write redraws existing renderers against the larger snapshot', async () => {
+  let p = await page({
+    [VIEWS]: {
+      views: define([{
+        view: 'Page',
+        match: parse('.doc'),
+        render: (_e, h, { vocab }) =>
+          h('b', null, vocab!.prop('extra', 'label') ? 'Added' : 'Waiting'),
+      }]) as HostRegistry,
+    },
+  }, () => Promise.resolve(Response.json([...vocab.docs, more])))
+  try {
+    equal(p.text(), 'Waiting')
+    await p.wrote('vocab.json', 'words')
+    equal(p.text(), 'Added')
+  } finally {
+    p.done()
+  }
+})
+
+test('a combined vocabulary and views write merges before drawing', async () => {
+  let p = await page({
+    [VIEWS]: module('old'),
+    [next('new')]: declared(),
+  }, () => Promise.resolve(Response.json([...vocab.docs, more])))
+  try {
+    equal(
+      await p.wrote([
+        { path: 'vocab.json', sha: 'words', url: BASE + 'vocab.json' },
+        { path: 'views.ts', sha: 'new', url: VIEWS },
+      ]),
+      true,
+    )
+    equal(p.text(), 'Ready')
+    equal(p.reloads(), 0)
   } finally {
     p.done()
   }

@@ -99,6 +99,8 @@ export type Watches = {
   /** notify watches after a row was evicted from the in-memory cache — which
    * is not a deletion from the graph */
   invalidate: (eids: Eid[]) => void | Promise<void>
+  /** Recompile watches after the graph takes a larger vocabulary. */
+  refresh: () => void
   /** how many watches are open — what a test asserts on after a close */
   size: () => number
   /** close every watch */
@@ -306,6 +308,15 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   return {
     watch,
     invalidate: (eids) => commit(eids.map((eid) => ({ entity: { eid } }))),
+    refresh: () => {
+      nets.clear()
+      for (let w of held) {
+        let p = projection(graph.vocab, w.query)
+        w.cut = p?.cut ?? only(named(graph.vocab, w.query))
+        w.routed = !p?.reaches.length &&
+          netFor(w.now).add(w, w.query, w.members.keys())
+      }
+    },
     size: () => held.size,
     close: () => {
       offLive()

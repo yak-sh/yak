@@ -42,7 +42,7 @@ export let bundled = (said: Said[]): Bundle[] => {
  * A component with no pace is sent as it is written.
  */
 export let pacer = (
-  vocab: Vocab,
+  vocab: Vocab | (() => Vocab),
   send: (bundles: Bundle[]) => void,
   timer: Timer,
 ): (bundles: Bundle[]) => void => {
@@ -71,7 +71,7 @@ export let pacer = (
       let eid = b.entity.eid
       for (let [comp, patch] of comps(b)) {
         let k = key(eid, comp)
-        let pace = paceOf(vocab, comp)
+        let pace = paceOf(typeof vocab == 'function' ? vocab() : vocab, comp)
         if (patch == null) gathered.delete(k)
         if (patch == null || pace == null) now.push([eid, comp, patch])
         else if (cooling.has(k)) {

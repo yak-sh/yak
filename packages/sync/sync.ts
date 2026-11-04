@@ -390,7 +390,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   graph.use(plugin)
 
   let w: Wire = wire({
-    vocab: graph.vocab,
+    get vocab() {
+      return graph.vocab
+    },
     url: opts.url,
     connect: opts.connect,
     timer,
@@ -457,7 +459,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       }
     },
   })
-  let relay = pacer(graph.vocab, w.relay, timer)
+  let relay = pacer(() => graph.vocab, w.relay, timer)
 
   let serial = 0
   return {

@@ -203,6 +203,11 @@ export function render<E>(
   }) ?? null
 }
 
+/** The vocabulary the host has most recently merged into its page graph. */
+export let Vocabulary: Provided<Vocab | undefined> = createContext<
+  Vocab | undefined
+>(undefined)
+
 /**
  * A registry provided above an Entity replaces the one it was bound with, and
  * a new value draws every Entity below it again even when its props are the
@@ -225,6 +230,7 @@ export let entity = (
 ): FunctionComponent<EntityProps> =>
 ({ eid, view, ...ctx }) => {
   let now = useContext(Registry) ?? registry
+  let words = useContext(Vocabulary) ?? vocab
   let [, revision] = useState(0)
   let refresh = () => revision((n) => n + 1)
   useLayoutEffect(() => {
@@ -243,5 +249,5 @@ export let entity = (
   }, [eid])
   let bundle = store(eid)
   if (!bundle) return null
-  return render(now, bundle, view, vocab, ctx)
+  return render(now, bundle, view, words, ctx)
 }

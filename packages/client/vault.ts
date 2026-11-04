@@ -149,7 +149,6 @@ let concerns = (bundles: Bundle[], vocab: Vocab) =>
  * {@link client} does this for you unless you tell it not to.
  */
 export let keep = (graph: Graph, vault: Vault): Kept => {
-  let vocab = graph.vocab
   // A start-up read that finishes late must not overwrite edits made while
   // storage was still opening.
   let loading = new Set<Eid>()
@@ -162,7 +161,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
       let gone: Eid[] = []
       let seen = new Set(now.map((b) => b.entity.eid))
       for (let b of now) {
-        let held = dead(b) ? {} : localComps(b, vocab)
+        let held = dead(b) ? {} : localComps(b, graph.vocab)
         if (Object.keys(held).length) {
           save.push({
             eid: b.entity.eid,
@@ -189,11 +188,11 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
           for (let b of bundles) {
             if (
               dead(b) ||
-              comps(b).some(([name]) => vaulted(vocab, name))
+              comps(b).some(([name]) => vaulted(graph.vocab, name))
             ) loading.add(b.entity.eid)
           }
         }
-        return concerns(bundles, vocab)
+        return concerns(bundles, graph.vocab)
           ? after(write(bundles), () => bundles)
           : bundles
       },
