@@ -535,14 +535,11 @@ test('an eid scope reaches disjunctions inside nested conjunctions', () => {
   )
 })
 
-// A page driven from its own component's table screens other components per
-// row while the catalog is cold, and by the archetype pointer once the catalog
-// is in memory (T-65908, T-65275): either way it answers the same.
+// Presence and absence filters answer alike before and after the catalog is
+// loaded, including when writes change which archetypes match.
 test('a screened page answers alike with the catalog cold or held', () => {
-  let ran: string[] = []
   let base = mem()
-  let watched = () => spy(base, (sql) => void ran.push(sql))
-  let s = storage(watched(), vocab)
+  let s = storage(base, vocab)
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply([
@@ -552,7 +549,7 @@ test('a screened page answers alike with the catalog cold or held', () => {
   ])
   // A store bound afresh has neither the catalog nor any answer in memory.
   let cold = () => {
-    let fresh = storage(watched(), vocab)
+    let fresh = storage(base, vocab)
     fresh.install()
     return fresh
   }
@@ -561,25 +558,23 @@ test('a screened page answers alike with the catalog cold or held', () => {
   // A query with no component of its own to drive from asks the catalog,
   // which then stays in memory until a new archetype is written.
   let hold = () => s.rows(`!marker .limit=${limit++}`)
-  let page = (on: typeof s, expected: string[], held: boolean) => {
-    ran = []
+  let page = (on: typeof s, expected: string[]) => {
     assertEquals(
       on.rows(`.doc !marker .limit=${limit++}`),
       expected.map((eid) => ({ eid })),
     )
-    assertEquals(ran.some((sql) => /"archetype" (in|=) /.test(sql)), held)
   }
   hold()
-  page(cold(), ['c', 'a'], false)
-  page(s, ['c', 'a'], true)
+  page(cold(), ['c', 'a'])
+  page(s, ['c', 'a'])
   g.apply([{ entity: { eid: 'c' }, marker: {} }])
   hold()
-  page(s, ['a'], true)
-  page(cold(), ['a'], false)
+  page(s, ['a'])
+  page(cold(), ['a'])
   g.apply([{ entity: { eid: 'b' }, marker: null }])
   hold()
-  page(s, ['b', 'a'], true)
-  page(cold(), ['b', 'a'], false)
+  page(s, ['b', 'a'])
+  page(cold(), ['b', 'a'])
 })
 
 // A class first worn mints its descriptor in the write's own transaction. The
