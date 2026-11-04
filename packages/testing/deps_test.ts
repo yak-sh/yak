@@ -4,6 +4,8 @@ import {
   forget,
   type Info,
   key,
+  location,
+  named,
   note,
   passed,
   proof,
@@ -488,4 +490,27 @@ test('a survey shares exact resolution closures and detects regenerated inputs',
   equal(await s.info([at('snapshot/new.example.ts')]), undefined)
   write('snapshot/generated.ts', 'new generated imports')
   equal(await s.info(roots, [at('snapshot/generated.ts')]), undefined)
+})
+
+test('path normalization belongs to its checkout context and preserves URL semantics', () => {
+  let first = location('/checkout/one'), next = location('/checkout/two')
+  for (let context of [first, next, first]) {
+    let root = context.cwd
+    equal(context.url('a b.ts'), `file://${root}/a%20b.ts`)
+    equal(context.url('x/../a b.ts'), context.url('a b.ts'))
+    equal(context.url('https://example.com/a?b#c'), 'https://example.com/a?b#c')
+    equal(context.rel(`file://${root}/a%20b.ts`), 'a b.ts')
+    equal(context.rel('file:///outside/a%20b.ts'), '/outside/a b.ts')
+    equal(context.rel('jsr:@yaks/example'), 'jsr:@yaks/example')
+    equal(
+      named(
+        "new URL('../data%20file.json', import.meta.url)",
+        'sub/a.ts',
+        context,
+      ),
+      ['data file.json'],
+    )
+  }
+  equal(first.rel(next.url('a.ts')), '/checkout/two/a.ts')
+  equal(next.rel(first.url('a.ts')), '/checkout/one/a.ts')
 })

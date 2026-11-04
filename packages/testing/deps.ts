@@ -48,16 +48,35 @@ export type Info = {
 let hex = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex')
 
-let base = () => `file://${system.cwd()}/`
-let url = (path: string) => new URL(path, base()).href
-// A file's path from the checkout, so keys agree between checkouts; one
-// outside it, whole. Any other specifier is itself.
-let rel = (specifier: string) =>
-  specifier.startsWith(base())
-    ? decodeURIComponent(specifier.slice(base().length))
-    : specifier.startsWith('file:')
-    ? decodeURIComponent(new URL(specifier).pathname)
-    : specifier
+// A lookup uses one checkout context; later lookups can use another. Paths
+// recur throughout selection and source planning, so normalize each once.
+export let location = (cwd = system.cwd()) => {
+  let base = `file://${cwd}/`
+  let urls = new Map<string, string>(), paths = new Map<string, string>()
+  return {
+    cwd,
+    base,
+    url: (path: string) => {
+      if (!urls.has(path)) urls.set(path, new URL(path, base).href)
+      return urls.get(path)!
+    },
+    // A checkout file is relative, an outside file absolute; any other
+    // specifier keeps its name.
+    rel: (specifier: string) => {
+      if (!paths.has(specifier)) {
+        paths.set(
+          specifier,
+          specifier.startsWith(base)
+            ? decodeURIComponent(specifier.slice(base.length))
+            : specifier.startsWith('file:')
+            ? decodeURIComponent(new URL(specifier).pathname)
+            : specifier,
+        )
+      }
+      return paths.get(specifier)!
+    },
+  }
+}
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 let cache = system.env.get('XDG_CACHE_HOME') ??
   `${system.env.get('HOME')}/.cache`
@@ -67,6 +86,7 @@ let cache = system.env.get('XDG_CACHE_HOME') ??
  * anew (a module's `/// <reference types>`) to a copy: the lock is in every
  * key, and a run that wrote it would leave its own passes behind. */
 export let graph = async (roots: string[]): Promise<Info | undefined> => {
+  let { url } = location()
   let dir = await io.makeTempDir({ prefix: 'yaks-testing-' })
   try {
     let entry = `${dir}/entry.ts`
@@ -150,8 +170,7 @@ let configs = (paths: string[]) => {
 // lookup reads after publication, then validates its own context and bytes;
 // no resolved graph is kept in process or substituted for that validation.
 let refreshing = new Map<string, Promise<void>>()
-let refresh = async <T>(store: string, read: () => Promise<T>): Promise<T> => {
-  let key = `${base()} ${url(store)}`
+let refresh = async <T>(key: string, read: () => Promise<T>): Promise<T> => {
   let before = refreshing.get(key)
   let turn = Promise.withResolvers<void>()
   refreshing.set(key, turn.promise)
@@ -177,9 +196,10 @@ export let remembered = (
   info: (roots: string[]) => Promise<Info | undefined> = graph,
   store = GRAPH,
 ) =>
-async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> =>
-  await refresh(store, async () => {
-    let here = `${system.cwd()}/`, pid = `.${system.pid}.example.`
+async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
+  let { cwd, base, url, rel } = location()
+  return await refresh(`${base} ${url(store)}`, async () => {
+    let here = `${cwd}/`, pid = `.${system.pid}.example.`
     let kept: Kept = {
       version: 0,
       deno: '',
@@ -288,6 +308,7 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> =>
       npmPackages: kept.npmPackages,
     }
   })
+}
 
 /// named("new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> ['x/a.json']
 /// named("new URL('../', import.meta.url)", 'x/y/t_test.ts') -> ['x']
@@ -295,7 +316,11 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> =>
 /// named("// new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> []
 /** What a module names beside itself: `new URL(literal, import.meta.url)`,
  * outside a comment. */
-export let named = (source: string, path: string): string[] =>
+export let named = (
+  source: string,
+  path: string,
+  { url, rel } = location(),
+): string[] =>
   [
     ...source.replace(/^\s*(\/\/|\/\*|\*).*$/gm, '').matchAll(
       /new URL\(\s*(['"])([^'"]+)\1,\s*import\.meta\.url\s*\)/g,
@@ -438,6 +463,7 @@ export let survey = async (
   info: (roots: string[], bytes: Bytes) => Promise<Info | undefined> =
     remembered(),
 ): Promise<Survey | undefined> => {
+  let where = location(), { url, rel } = where
   // What each file is and names: read once for the lot.
   let facts = new Map<string, Promise<{ digest: string; names: string[] }>>()
   let fact = (path: string) => {
@@ -452,7 +478,7 @@ export let survey = async (
           ? Promise.resolve({
             digest: hex(bytes),
             names: code(path)
-              ? named(new TextDecoder().decode(bytes), path)
+              ? named(new TextDecoder().decode(bytes), path, where)
               : [],
           })
           : digest(path, true).then((digest) => ({ digest, names: [] })),
