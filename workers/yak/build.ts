@@ -231,12 +231,10 @@ export class Builder {
   #ctx: State
   #sql: Driver
   #env: Env
+  #operator?: Promise<import('./operator.ts').Operator>
   // Whether a build is running in this object right now. In memory on purpose:
   // an object that was evicted has no build running, and a flag in storage
   // would outlive the loop it stands for and lock the space forever.
-  #operator?: Promise<
-    ReturnType<typeof import('./operator-store.ts').operatorStore>
-  >
   #building = false
   #arming?: Promise<void>
 
@@ -457,44 +455,35 @@ export class Builder {
     )
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
-    let store = await this.#work()
-    let { runOperator } = await import('./operator.ts')
+    let operator = await this.#work()
     let args = await request.json() as Record<string, unknown>
     let { operatorRequest } = await import('./operator-host.ts')
+    let held = {
+      person,
+      role,
+      space: spaceId,
+      administrative: access.administrative,
+    }
     let response = await operatorRequest(
-      store,
-      { person, role, space: spaceId, administrative: access.administrative },
+      operator.store,
+      held,
       new URL(request.url).pathname,
       args,
       () => this.#arming,
     )
     if (response) return response
-    if (this.#building) return no(409, WAIT)
-    this.#building = true
-    try {
-      return Response.json(
-        await runOperator(
-          store,
-          this.#env,
-          {
-            person,
-            role,
-            space: spaceId,
-            administrative: access.administrative,
-          },
-          space,
-          args,
-        ),
-      )
-    } finally {
-      this.#building = false
-    }
+    // Its steps run on the pool, as every other Operator session's do: words
+    // given while it works land in it.
+    return Response.json(await operator.run(held, space, args))
   }
 
   #work() {
     return this.#operator ??= (async () => {
       let { operatorStore } = await import('./operator-store.ts')
-      let { handleChannels } = await import('./operator-channels.ts')
+      let { attachmentTools, handleChannels } = await import(
+        './operator-channels.ts'
+      )
+      let { operating } = await import('./operator.ts')
       let store = operatorStore(this.#ctx.storage, {
         report: (e, where) =>
           caught(e, { request: 'operator effects', handler: where.handler }),
@@ -502,31 +491,18 @@ export class Builder {
           this.#arming = this.#ctx.storage.setAlarm(Date.now())
         },
       })
-      handleChannels(store, this.#env)
-      return store
+      let operator = operating(store, this.#env, {
+        tools: attachmentTools(this.#env),
+      })
+      handleChannels(operator, this.#env)
+      return operator
     })()
   }
 
   async alarm() {
-    if (this.#building) {
-      await this.#ctx.storage.setAlarm(Date.now() + 1000)
-      return
-    }
-    this.#building = true
-    try {
-      let { g, fx } = await this.#work()
-      await fx.work(g)
-      await fx.idle()
-      let pending = await g.read(
-        '.effect.state=pending .order=effect.next .limit=1',
-      )
-      if (pending.length) {
-        let next = (pending[0].effect as { next?: string }).next
-        await this.#ctx.storage.setAlarm(next ? Date.parse(next) : Date.now())
-      }
-    } finally {
-      this.#building = false
-    }
+    let { drain } = await import('./operator-store.ts')
+    let next = await drain((await this.#work()).store)
+    if (next) await this.#ctx.storage.setAlarm(next)
   }
 
   /**

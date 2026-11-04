@@ -47,6 +47,9 @@ let observed = await (async () => {
     }
     await react(h.g, 'session', {
       ...lent,
+      instructions: typeof lent.instructions == 'string'
+        ? lent.instructions
+        : undefined,
       model,
       tools: [],
       contextItems: lent.context,

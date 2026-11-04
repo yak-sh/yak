@@ -8,13 +8,25 @@ import { modelPage, platform } from './testing.ts'
 import { operatorModel } from './operator-testing.ts'
 import { operatorStore } from './operator-store.ts'
 import {
+  attachmentTools,
   authenticated,
   handleChannels,
   keepFile,
   receive,
 } from './operator-channels.ts'
-import { runOperator } from './operator.ts'
-import { operatorContext } from './operator.ts'
+import { operating, operatorContext } from './operator.ts'
+import { drain, type operatorStore as Stored } from './operator-store.ts'
+
+// One Operator per store, as the Builder object keeps, answered by `model`.
+let operatorOf = (
+  store: ReturnType<typeof Stored>,
+  env: Parameters<typeof operating>[1],
+  model: Model,
+) =>
+  operating(store, env, {
+    ...operatorModel(model),
+    tools: attachmentTools(env),
+  })
 import { TOOLS } from './tools.ts'
 import { conversation, operatorAnswer, operatorBody } from './operator-page.ts'
 import { operatorDoor } from './operator-page.ts'
@@ -101,9 +113,9 @@ let model: Model = (req) => {
     cost: 0.001,
   })
 }
-let options = operatorModel(model)
 let sent: string[] = []
-handleChannels(f.store, f.env, options, {
+let operator = operatorOf(f.store, f.env, model)
+handleChannels(operator, f.env, {
   chat: (_request, answer) => {
     sent.push(answer.text)
     return Promise.resolve({})
@@ -114,8 +126,7 @@ let id = await receive(f.store, {
   person: f.person,
   channel: 'chat',
 }, 'Post a special meeting Thursday at 7 about the road millage.')
-await f.store.fx.work(f.store.g)
-await f.store.fx.idle()
+await drain(f.store)
 let [result] = await f.store.g.get([id])
 let task = (result.operator_answer as { task: string }).task
 
@@ -131,16 +142,15 @@ let duplicate = await receive(
   'duplicate',
   { id },
 )
-await f.store.fx.work(f.store.g)
+await drain(f.store)
 let session = derivedEid('operator-session|' + id)
-await runOperator(
-  f.store,
-  f.env,
-  f.held,
-  f.space,
-  { say: 'Post the notice.' },
-  { ...options, session, task },
-)
+// The intake of the same request again, as a retried effect gives it.
+await operator.ask(f.held, f.space, { say: 'Post the notice.', task }, {
+  request: id,
+  session,
+  task,
+})
+await drain(f.store)
 let afterResume = asks.length
 let sessions = await f.store.g.read('.session')
 let pending = await receive(f.store, {
@@ -154,8 +164,8 @@ await f.store.g.apply([{
   effect: { attempts: 1, state: 'pending' },
 }], { trusted: true })
 let reopened = operatorStore(f.raw)
-handleChannels(reopened, f.env, options)
-await reopened.fx.work(reopened.g)
+handleChannels(operatorOf(reopened, f.env, model), f.env)
+await drain(reopened)
 let [recovered] = await reopened.g.get([pending])
 
 test('chat reaches the scoped operator, changes app rows, answers and charges the space', () => {
@@ -284,18 +294,18 @@ let file = await keepFile(
 )
 let attachmentRequests: Request[] = []
 let attachmentStore = operatorStore(durable())
+let attachmentModel: Model = (req) => {
+  attachmentRequests.push(req)
+  return Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: [{ kind: 'assistant', text: 'Read the minutes.' }],
+    cost: 0,
+  })
+}
 handleChannels(
-  attachmentStore,
+  operatorOf(attachmentStore, f.env, (req) => attachmentModel(req)),
   f.env,
-  operatorModel((req) => {
-    attachmentRequests.push(req)
-    return Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: [{ kind: 'assistant', text: 'Read the minutes.' }],
-      cost: 0,
-    })
-  }),
 )
 let attachmentId = await receive(attachmentStore, {
   space: f.space.eid,
@@ -303,7 +313,7 @@ let attachmentId = await receive(attachmentStore, {
   channel: 'chat',
   files: [file],
 }, 'Read these minutes.')
-await attachmentStore.fx.work(attachmentStore.g)
+await drain(attachmentStore)
 let original = new TextDecoder().decode(
   await (await f.env.BLOBS.get(file.key))!.arrayBuffer(),
 )
@@ -464,19 +474,15 @@ let attachmentScript = [
   call('operator_attachment', { index: 0, app: 'notices' }),
   [{ kind: 'assistant', text: 'The original minutes are attached.' } as Item],
 ]
-handleChannels(
-  attachmentStore,
-  f.env,
-  operatorModel((req) => {
-    receivedTools.push(req)
-    return Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: attachmentScript.shift()!,
-      cost: 0,
-    })
-  }),
-)
+attachmentModel = (req) => {
+  receivedTools.push(req)
+  return Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: attachmentScript.shift()!,
+    cost: 0,
+  })
+}
 let attachmentTask = (attachmentAnswer as { task: string }).task
 await receive(attachmentStore, {
   space: f.space.eid,
@@ -484,7 +490,7 @@ await receive(attachmentStore, {
   channel: 'chat',
   task: attachmentTask,
 }, 'Post the original minutes in notices.')
-await attachmentStore.fx.work(attachmentStore.g)
+await drain(attachmentStore)
 let originalRows = await graph.read('.attachment ?created *')
 test('a follow-up can publish an earlier request original without asking for it again', () => {
   assertEquals(
@@ -533,9 +539,7 @@ let pdf = await keepFile(
   new TextEncoder().encode('%PDF-1.7'),
 )
 handleChannels(
-  media,
-  f.env,
-  operatorModel((req) => {
+  operatorOf(media, f.env, (req) => {
     mediaAsks.push(req)
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -544,6 +548,7 @@ handleChannels(
       cost: 0,
     })
   }),
+  f.env,
 )
 let mediaId = await receive(media, {
   space: f.space.eid,
@@ -551,7 +556,7 @@ let mediaId = await receive(media, {
   channel: 'chat',
   files: [photo, pdf],
 }, 'Read the attached minutes.')
-await media.fx.work(media.g)
+await drain(media)
 let mediaAnswer = (await media.g.get([mediaId]))[0].operator_answer
 let afterMedia = (await f.dir.at(f.space.eid))!.meter!.models
 test('PDF pages and a JPEG photo are read through metered extraction before asking the operator', () => {

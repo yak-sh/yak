@@ -230,8 +230,12 @@ export type Deps = {
    * step in flight is let finish */
   stopping?: AbortSignal
   instructions?: string
-  /** Resolve inherited base instructions for future asks without rewriting history. */
-  resolveInstructions?: (inherited: string | undefined) => string | undefined
+  /** Resolve inherited base instructions for future asks without rewriting
+   * history; a host whose instructions differ by transcript reads its own. */
+  resolveInstructions?: (
+    inherited: string | undefined,
+    session: Eid,
+  ) => string | undefined | Promise<string | undefined>
   /** Host rendering of each input's prose in a transcript, resolved once per
    * step (it may read the graph, to name who sent each input); stored
    * content stays unchanged. */
@@ -1367,10 +1371,11 @@ export let react = async (
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
     instructions: deps.resolveInstructions
-      ? deps.resolveInstructions(
+      ? await deps.resolveInstructions(
         sending?.instructions == null
           ? undefined
           : String(sending.instructions),
+        session,
       )
       : sending?.instructions == null
       ? deps.instructions

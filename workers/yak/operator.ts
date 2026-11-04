@@ -1,6 +1,7 @@
 import { type Bundle, type Comp, identityEid, namedTool } from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
-import { settle, statusOf, type Tool, transcript } from '@yaks/session'
+import { running, statusOf, type Tool, transcript } from '@yaks/session'
+import { derivedEid } from '@yaks/graph/identity'
 import { listing } from '@yaks/mcp'
 import { billed, type Model, type Price } from '@yaks/model'
 import { modelInfo, workersAi } from '@yaks/workers-ai'
@@ -10,7 +11,7 @@ import { loadTools } from '@yaks/graph/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
-import { directory, type Space } from './directory.ts'
+import { directory, directoryOf, type Space } from './directory.ts'
 import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
@@ -23,28 +24,25 @@ import { accounted } from './meter.ts'
 import { caught, defect } from './defects.ts'
 import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
-import type { operatorStore } from './operator-store.ts'
+import { drain, type operatorStore } from './operator-store.ts'
+import type { File } from './operator-channels.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
-  // Who the task and its session are by: the person asking, unless the
-  // Operator started the work itself (a break, unseen.ts `fix`).
-  by?: string
   model?: Model
   name?: string
   price?: Price
-  session?: string
-  task?: string
-  tools?: (ctx: Ctx) => Tool[]
+  tools?: (ctx: Ctx, files: File[]) => Tool[]
 }
-let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
+let comp = (b: Bundle | undefined, name: string) =>
+  b?.[name] as Comp | undefined
 
 // Each space has its own Operator, working on that space alone. The one on a
 // person's own space (`member.own`) is their PA: it reaches every space they
 // sit in, as they would, so their role in each is what it may do there.
 export let operatorContext = async (
   env: Env,
-  held: Held,
+  held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
 ): Promise<Ctx> => {
   let open = () =>
@@ -225,164 +223,316 @@ export let readOperator = async (
   }
 }
 
-export let runOperator = async (
+// What an Operator session works with, kept on it (`operator_session`) so
+// every step, in whichever wake of the object, reads it again: the space, and
+// the person whose reach it has.
+type Working = {
+  space: string
+  person: string
+  administrative?: boolean
+  files?: File[]
+}
+let workingOf = async ({ g }: Store, session: string) => {
+  let [row] = await g.get([session])
+  return comp(row, 'operator_session') as Working | undefined
+}
+let working = async (env: Env, store: Store, session: string) => {
+  let o = await workingOf(store, session)
+  if (!o) throw new Error(`Operator session ${session} names no space`)
+  let space = await directoryOf(env.STORE).at(o.space)
+  if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
+  let ctx = await operatorContext(env, o, space)
+  ctx.who!.instrument = session
+  return { space, ctx, files: o.files ?? [] }
+}
+
+let ENDED = ['settled', 'failed', 'stopped']
+
+// What ended a session's work since `from`: its newest reply, else why it
+// failed.
+let replyOf = (entries: Bundle[]) => {
+  let last = [...entries].reverse().find((b) =>
+    b.content && (b.output || b.refusal || b.exception)
+  )
+  let failed = [...entries].reverse().find((b) => b.failed)
+  return {
+    mark: last ?? failed ?? entries.at(-1),
+    text: String(
+      last && comp(last, 'content')?.body ||
+        comp(failed, 'failed')?.reason || 'The request has no answer yet.',
+    ),
+  }
+}
+
+/**
+ * The space's Operator: @yaks/harness's runner registered on the store's
+ * pool, so every step of every Operator session is a durable effect
+ * (@yaks/session `running`). Words given to it land in their task's session
+ * even while it works ({@link Operator.ask}); its answer is written when the
+ * session ends.
+ */
+export let operating = (
   store: Store,
   env: Env,
-  held: Held,
-  space: Space,
-  args: Args,
   options: Options = {},
-) => {
+): Operator => {
   let { g, fx, vocab } = store
-  let text = typeof args.say == 'string' ? args.say.trim() : ''
-  let task = typeof args.task == 'string'
-    ? args.task
-    : options.task ?? crypto.randomUUID()
-  let [resuming] = options.session ? await g.get([options.session]) : []
-  let [old] = await g.get([task])
-  if (args.task && !old?.task) {
-    throw refuse('missing', `no operator task ${task}`)
+  let name = options.name ?? env.OPERATOR_MODEL ?? env.BUILDER_MODEL_PAID ??
+    '@cf/zai-org/glm-5.3'
+  let provider = name.startsWith('@cf/') ? 'workers-ai' : 'openai'
+  let using = {
+    provider: identityEid('provider', [provider]),
+    model: identityEid('model', [name]),
   }
-  if (!old && !text) throw refuse('arguments', 'say what you want done')
-  await g.apply([
-    {
-      entity: { eid: space.eid },
-      doc: { title: `${space.slug}'s operator` },
-      project: {},
-      persona: {},
-    },
-    { entity: { eid: held.person }, person: {} },
-    ...old && text && !resuming?.session
-      ? [{ entity: { eid: task }, completed: null, cancelled: null }]
-      : [],
-    ...!old
-      ? [{
-        entity: { eid: task },
-        task: {},
-        doc: { title: text.split('\n')[0].slice(0, 160), body: text },
-        filed: { project: space.eid },
-        $actor: { by: options.by ?? held.person },
-      }]
-      : [],
-  ], { trusted: true })
-  if (old && text && !resuming?.session) {
-    await g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      comment: { target: task },
-      doc: { body: text },
-      $actor: { by: held.person },
-    }])
-  }
-  try {
-    let history = await readOperator(store, task)
-    let request = JSON.stringify({
-      task: history.task,
-      comments: history.comments,
-    })
-    let ctx = await operatorContext(env, held, space)
-    let name = options.name ?? env.OPERATOR_MODEL ?? env.BUILDER_MODEL_PAID ??
-      '@cf/zai-org/glm-5.3'
+  let priced = options.price
+    ? Promise.resolve(options.price)
+    : name.startsWith('@cf/')
+    ? modelInfo(name, env.MODEL_FETCH).then((info) => info.price)
+    : Promise.resolve(undefined)
+  let base = options.model ?? operatorModel(env)
+  // Each ask is charged to the space of the session asking.
+  let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
     if (!options.model && !name.startsWith('@cf/')) {
       throw new Error(
         'The operator needs a priced Workers AI model in OPERATOR_MODEL',
       )
     }
-    let provider = name.startsWith('@cf/') ? 'workers-ai' : 'openai'
-    let price = options.price ??
-      (name.startsWith('@cf/')
-        ? (await modelInfo(name, env.MODEL_FETCH)).price
-        : undefined)
+    let price = await priced
     if (!options.model && !price) {
       throw new Error(`No catalogue price for operator model ${name}`)
     }
-    let spent = 0
-    let model = accounted(
+    let [ask] = req.call ? await g.get([req.call]) : []
+    let session = comp(ask, 'entry')?.session
+    let space = session
+      ? (await workingOf(store, String(session)))?.space
+      : null
+    let reply = await accounted(
       env,
-      (dir) => dir.at(space.eid),
-      options.model ?? operatorModel(env),
+      (dir) => space ? dir.at(space) : Promise.resolve(null),
+      base,
       () => Promise.resolve(price),
-    )
-    let paid: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-      let reply = await model(req)
-      let cost = billed(reply, price)
-      spent += cost?.dollars ?? 0
-      return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
-    }, model)
-    let rows = seed({ provider, model: name })
-    if (price) {
-      rows.push({ entity: { eid: identityEid('model', [name]) }, price })
+    )(req)
+    let cost = billed(reply, price)
+    return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
+  }, base)
+  let seeded: Promise<void> | undefined
+  let seeding = () =>
+    seeded ??= priced.then(async (price) => {
+      let rows = seed({ provider, model: name })
+      if (price) {
+        rows.push({ entity: { eid: identityEid('model', [name]) }, price })
+      }
+      await g.apply(rows, { trusted: true })
+    })
+
+  // The session's answer, once it ends: its newest reply as a comment on its
+  // task, and as the answer of each request it was given that has none yet,
+  // which its channel then delivers (operator_deliver).
+  let answered = async (session: string) => {
+    let { mark, text } = replyOf(await transcript(g, session))
+    let [link] = await g.read(`.contains .edge.to=${session}`)
+    let task = String(comp(link, 'edge')?.from ?? '')
+    let space = (await workingOf(store, session))?.space
+    let waiting = (await g.read(`.operator_request.session=${session}`))
+      .filter((b) => !b.operator_answer)
+    await g.apply([
+      ...task && mark
+        ? [{
+          entity: { eid: derivedEid('operator-answer|' + mark.entity.eid) },
+          comment: { target: task },
+          doc: { body: text },
+          $actor: { by: space ?? task, via: session },
+        }]
+        : [],
+      ...waiting.map((b) => ({
+        entity: b.entity,
+        operator_answer: { text, ...task ? { task } : {} },
+      })),
+    ], { trusted: true })
+  }
+
+  fx.handle(running(
+    g,
+    lend({
+      h: { g, fx, vocab, me: identityEid('operator', ['runner']) },
+      model,
+      name,
+      provider,
+      remote: async (session) => {
+        let { space, ctx, files } = await working(env, store, session)
+        return [
+          ...await operatorRoster(ctx, store),
+          platformBug(space),
+          ...options.tools?.(ctx, files) ?? [],
+        ]
+      },
+      instructions: async (session) => {
+        let { space, ctx } = await working(env, store, session)
+        return `${instructions(env)}\n\n${await standing(ctx)
+          .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${await beyond(
+            ctx,
+            space,
+          )}`
+      },
+      each: async (step, session) => {
+        if (session && ENDED.includes(step.status)) await answered(session)
+      },
+      report: (e, where) => caught(e, { request: 'operator', ...where }),
+    }),
+  ))
+
+  let ask: Operator['ask'] = async (held, space, args, o = {}) => {
+    let text = typeof args.say == 'string' ? args.say.trim() : ''
+    let task = typeof args.task == 'string'
+      ? args.task
+      : o.task ?? crypto.randomUUID()
+    let [old] = await g.get([task])
+    if (args.task && !old?.task) {
+      throw refuse('missing', `no operator task ${task}`)
     }
-    await g.apply(rows, { trusted: true })
-    let session = resuming?.session
-      ? options.session!
-      : await begin(g, request, {
-        eid: options.session,
+    if (!text) throw refuse('arguments', 'say what you want done')
+    await seeding()
+    let links = old ? await g.read(`.contains .edge.from=${task}`) : []
+    let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
+      .filter((b) => b.session)
+      .sort((a, b) =>
+        String(comp(a, 'created')?.at).localeCompare(
+          String(comp(b, 'created')?.at),
+        )
+      ).at(-1)
+    let session = newest?.entity.eid ?? o.session ?? crypto.randomUUID()
+    let by = o.by ?? held.person
+    let input = o.request
+      ? derivedEid('operator-input|' + o.request)
+      : crypto.randomUUID()
+    let [sent] = await g.get([input])
+    if (sent) return { task, session, input }
+    await g.apply([
+      {
+        entity: { eid: space.eid },
+        doc: { title: `${space.slug}'s operator` },
+        project: {},
+        persona: {},
+      },
+      { entity: { eid: held.person }, person: {} },
+      ...old
+        ? [{ entity: { eid: task }, completed: null, cancelled: null }]
+        : [{
+          entity: { eid: task },
+          task: {},
+          doc: { title: text.split('\n')[0].slice(0, 160), body: text },
+          filed: { project: space.eid },
+          $actor: { by },
+        }],
+    ], { trusted: true })
+    if (!newest) {
+      await begin(g, undefined, {
+        eid: session,
         persona: space.eid,
-        by: options.by ?? held.person,
+        by,
         project: space.eid,
-        using: {
-          provider: identityEid('provider', [provider]),
-          model: identityEid('model', [name]),
-        },
+        using,
       })
-    ctx.who!.instrument = session
-    if (!resuming?.session) {
       await g.apply([{
         entity: { eid: crypto.randomUUID() },
         edge: { from: task, to: session },
         contains: {},
       }])
     }
-    let runner = lend({
-      h: { g, fx, vocab, me: space.eid },
-      model: paid,
-      name,
-      provider,
-      remote: async () => [
-        ...await operatorRoster(ctx, store),
-        platformBug(space),
-        ...options.tools?.(ctx) ?? [],
-      ],
-      instructions: `${instructions(env)}\n\n${await standing(ctx)
-        .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${await beyond(
-          ctx,
-          space,
-        )}`,
-      report: (e, where) =>
-        caught(e, { request: 'operator', ...where, space: space.slug }),
-    })
-    // This door waits for the native runner. Its budget is checked and charged
-    // for every provider request; transcript length imposes no turn limit.
-    await settle(g, session, { ...runner, asyncTools: false })
+    // Whoever carries the task on, the newest words' reach applies.
+    let files = [
+      ...new Map(
+        [...(await workingOf(store, session))?.files ?? [], ...o.files ?? []]
+          .map((f) => [f.key, f]),
+      ).values(),
+    ]
+    let [row] = await g.get([task])
+    await g.apply([
+      {
+        entity: { eid: session },
+        operator_session: {
+          space: space.eid,
+          person: held.person,
+          ...held.administrative ? { administrative: true } : {},
+          ...files.length ? { files } : {},
+        },
+      },
+      ...old
+        ? [{
+          entity: { eid: derivedEid('operator-comment|' + input) },
+          comment: { target: task },
+          doc: { body: text },
+          $actor: { by },
+        }]
+        : [],
+      {
+        entity: { eid: input },
+        entry: { session },
+        content: { body: newest ? text : JSON.stringify({ task: row }) },
+        using,
+        $actor: { by, via: session },
+      },
+    ], { trusted: true })
+    return { task, session, input }
+  }
+
+  let run: Operator['run'] = async (held, space, args, o = {}) => {
+    let { task, session, input } = await ask(held, space, args, o)
     let entries = await transcript(g, session)
-    let state = statusOf(entries)
-    let last = [...entries].reverse().find((b) =>
-      b.content && (b.output || b.refusal || b.exception)
-    )
-    let answer = String(
-      last && comp(last, 'content')?.body || 'The request has no answer yet.',
-    )
-    await g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      comment: { target: task },
-      doc: { body: answer },
-      $actor: { by: space.eid, via: session },
-    }])
+    while (!ENDED.includes(statusOf(entries))) {
+      let next = await drain(store)
+      entries = await transcript(g, session)
+      if (ENDED.includes(statusOf(entries)) || next == null) break
+      await new Promise((ok) =>
+        setTimeout(ok, Math.min(1000, Math.max(0, next - Date.now())))
+      )
+    }
+    let mine = entries.slice(entries.findIndex((b) => b.entity.eid == input))
     return {
       task,
       session,
-      text: answer,
-      status: state,
-      cost: spent,
+      text: replyOf(mine).text,
+      status: statusOf(entries),
+      cost: mine.reduce(
+        (sum, b) => sum + Number(comp(b, 'cost')?.dollars ?? 0),
+        0,
+      ),
       model: name,
     }
-  } catch (error) {
-    await g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      comment: { target: task },
-      doc: { body: error instanceof Error ? error.message : String(error) },
-      $actor: { by: space.eid },
-    }])
-    throw error
   }
+
+  return { store, ask, run }
+}
+
+export type Asking = {
+  // Who the task and its session are by: the person asking, unless the
+  // Operator started the work itself (a break, unseen.ts `fix`).
+  by?: string
+  // The request the words came in, which makes giving them again a no-op.
+  request?: string
+  session?: string
+  task?: string
+  files?: File[]
+}
+type Asker = Pick<Held, 'person' | 'administrative'>
+export type Operator = {
+  store: Store
+  /** Words on a task: a new task and session, or the next input of the
+   * task's newest session. Answers at once with where they went. */
+  ask: (
+    held: Asker,
+    space: Space,
+    args: Args,
+    o?: Asking,
+  ) => Promise<{ task: string; session: string; input: string }>
+  /** operator_run's door: the words, then the answer once the session ends,
+   * working the pool meanwhile as the object's alarm does. */
+  run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
+    task: string
+    session: string
+    text: string
+    status: string
+    cost: number
+    model: string
+  }>
 }

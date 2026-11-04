@@ -7,7 +7,7 @@ import { platform } from './testing.ts'
 import { operatorModel } from './operator-testing.ts'
 import { directoryOf } from './directory.ts'
 import { operatorStore } from './operator-store.ts'
-import { readOperator, runOperator } from './operator.ts'
+import { operating, readOperator } from './operator.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
@@ -145,10 +145,12 @@ let model: Model = async (req) => {
     usage: { input_tokens: 10, output_tokens: 5 },
   })
 }
-let out = await runOperator(f.store, f.env, f.held, f.space, {
+let answer = model
+let operator = operating(f.store, f.env, operatorModel((req) => answer(req)))
+let out = await operator.run(f.held, f.space, {
   say:
     'Post a special meeting Thursday at 7 about the road millage in notices.',
-}, operatorModel(model))
+})
 
 let history = await readOperator(f.store, out.task)
 let ctx = await operatorContext(f.env, f.held, f.space)
@@ -184,24 +186,17 @@ test('the operator edits app rows through agent tools and records its work priva
   assertEquals(String(asked[0].instructions).includes('assistant'), false)
 })
 
-let continued = await runOperator(
-  f.store,
-  f.env,
-  f.held,
-  f.space,
-  {
-    task: out.task,
-    say: 'Schedule another meeting.',
-  },
-  operatorModel((req) =>
-    Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: [{ kind: 'assistant', text: 'Which date and time?' }],
-      cost: 0.001,
-    })
-  ),
-)
+answer = (req) =>
+  Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: [{ kind: 'assistant', text: 'Which date and time?' }],
+    cost: 0.001,
+  })
+let continued = await operator.run(f.held, f.space, {
+  task: out.task,
+  say: 'Schedule another meeting.',
+})
 let clarified = await readOperator(f.store, out.task)
 test('a follow-up reopens completed work and a clarification leaves it open', () => {
   assertEquals(continued.status, 'settled')
@@ -210,25 +205,18 @@ test('a follow-up reopens completed work and a clarification leaves it open', ()
 })
 
 let rounds = 0
-let pastTwelve = await runOperator(
-  f.store,
-  f.env,
-  f.held,
-  f.space,
-  {
-    say: 'Inspect the app.',
-  },
-  operatorModel((req) =>
-    Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: ++rounds < 14
-        ? calls('graph_query', { q: '.doc&.limit=1' })
-        : [{ kind: 'assistant', text: 'Inspected.' }],
-      cost: 0.001,
-    })
-  ),
-)
+answer = (req) =>
+  Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: ++rounds < 14
+      ? calls('graph_query', { q: '.doc&.limit=1' })
+      : [{ kind: 'assistant', text: 'Inspected.' }],
+    cost: 0.001,
+  })
+let pastTwelve = await operator.run(f.held, f.space, {
+  say: 'Inspect the app.',
+})
 test('the space budget, rather than twelve model rounds, bounds the operator', () => {
   assertEquals(rounds, 14)
   assertEquals(pastTwelve.status, 'settled')
@@ -237,18 +225,15 @@ test('the space budget, rather than twelve model rounds, bounds the operator', (
 let homeSpace = (await directoryOf(f.env.STORE).space('home'))!
 let pa = await operatorContext(
   f.env,
-  { ...f.held, space: homeSpace.eid },
+  f.held,
   homeSpace,
 )
 let paGraph = await reaching(pa, await inReach(pa))
 let paMeetings = await paGraph.read('.meeting')
 let paAsked: Request[] = []
-await runOperator(
+await operating(
   operatorStore(durable()),
   f.env,
-  { ...f.held, space: homeSpace.eid },
-  homeSpace,
-  { say: 'What can you reach?' },
   operatorModel((req) => {
     paAsked.push(req)
     return Promise.resolve({
@@ -258,7 +243,7 @@ await runOperator(
       cost: 0.001,
     })
   }),
-)
+).run(f.held, homeSpace, { say: 'What can you reach?' })
 let refused = await TOOLS.find((t) => t.name == 'app_new')!
   .run(pa, { space: 'peek', slug: 'notes', title: 'Notes' })
   .then(() => null, (e: Error) => e.message)
@@ -271,4 +256,50 @@ test("the Operator on a person's own space is their PA, reaching each of their s
     assertStringIncludes(told, said)
   }
   assertEquals(told.includes('home ('), false)
+})
+
+// A second message while the model is answering the first: one session takes
+// both, the second as its next input, and it answers after both.
+let steered = operatorStore(durable())
+let steering: Request[] = []
+let given: { task: string; session: string } | undefined
+let steerer = operating(
+  steered,
+  f.env,
+  operatorModel(async (req) => {
+    steering.push(req)
+    if (steering.length == 1) {
+      await steerer.ask(f.held, f.space, {
+        task: given!.task,
+        say: 'Make it Friday instead.',
+      })
+    }
+    return {
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{
+        kind: 'assistant',
+        text: steering.length == 1 ? 'Thursday it is.' : 'Friday it is.',
+      }],
+      cost: 0.001,
+    }
+  }),
+)
+given = await steerer.ask(f.held, f.space, { say: 'Post the meeting.' })
+let before = steering.length
+let { drain } = await import('./operator-store.ts')
+await drain(steered)
+let steeredRead = await readOperator(steered, given.task)
+test('words given while the Operator works land in its running session, which answers after them', () => {
+  assertEquals(before, 0)
+  assertEquals(steeredRead.sessions?.length, 1)
+  assertEquals(steering.length, 2)
+  assertStringIncludes(
+    JSON.stringify(steering[1].items),
+    'Make it Friday instead.',
+  )
+  assertEquals(
+    steeredRead.comments?.map((b) => comp(b, 'doc').body).at(-1),
+    'Friday it is.',
+  )
 })

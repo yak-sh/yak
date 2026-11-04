@@ -177,15 +177,16 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   provider?: string
   /** what the agent may call */
   tools?: Tool[]
-  /** tools served from elsewhere, offered afresh to every ask */
-  remote?: () => Promise<Tool[]>
+  /** tools served from elsewhere, offered afresh to every ask of the
+   * transcript named */
+  remote?: (session: Eid) => Promise<Tool[]>
   /** tools offered only to a transcript whose `sending.tools` names them
    * (@yaks/session `Deps.named`) */
   named?: () => Tool[]
   streaming?: boolean
   checkpointMs?: number
-  /** The system prompt every ask carries. */
-  instructions?: string
+  /** The system prompt every ask carries, or what reads each transcript's */
+  instructions?: string | ((session: Eid) => Promise<string>)
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
   /** the share of its model's context window a transcript fills before it is
@@ -459,7 +460,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       const key = boundary ?? session
       const held = phase === 'call' && offered.get(key)
       if (held) return [...tools, ...held]
-      const served = await remote()
+      const served = await remote(session)
       // Several asks may overlap older calls. Keep each original offer until
       // all of its calls have final results; a later catalogue refresh must
       // not redirect an in-progress call to a newly configured MCP server.
@@ -505,9 +506,16 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     streaming: opts.streaming,
     checkpointMs: opts.checkpointMs,
     compactAt: opts.compactAt,
-    instructions: opts.instructions,
-    resolveInstructions: (inherited) =>
-      inheritedInstructions(inherited, opts.instructions),
+    instructions: typeof opts.instructions == 'string'
+      ? opts.instructions
+      : undefined,
+    resolveInstructions: async (inherited, session) =>
+      inheritedInstructions(
+        inherited,
+        typeof opts.instructions == 'function'
+          ? await opts.instructions(session)
+          : opts.instructions,
+      ),
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript)),
     contextItems: opts.context,

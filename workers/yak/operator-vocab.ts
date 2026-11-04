@@ -10,6 +10,12 @@ export let operatorDoc: VocabDoc = {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         person: { type: 'string', ref: 'person', death: 'keep' },
         task: { type: 'string', ref: 'task', death: 'keep' },
+        session: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          description: 'The session its words went to, whose end answers it.',
+        },
         channel: { type: 'string' },
         administrative: { type: 'boolean' },
         address: { type: 'string' },
@@ -19,6 +25,17 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description: 'The app whose break started the request.',
         },
+      },
+    },
+    operator_session: {
+      component: true,
+      description:
+        "What an Operator session works with: its space, the person whose reach it has (the newest words' sender), and the attachments it was given.",
+      properties: {
+        space: { type: 'string', ref: 'entity', death: 'keep' },
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        administrative: { type: 'boolean' },
+        files: { type: 'array', items: { type: 'object' } },
       },
     },
     operator_answer: {
