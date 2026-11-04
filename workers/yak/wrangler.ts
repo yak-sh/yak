@@ -1050,43 +1050,21 @@ export let descendants = (pid: number): number[] => {
 
 // ---- which commit may go live ----------------------------------------------
 //
-// Workers Builds runs one build per push that changes the watched source
-// (`WATCHED`), and the builds finish in whatever order they finish. A deploy stops when a
-// newer build has source to deploy, or a newer version is already live. Other
-// pushes do not start a build, so they must not supersede the last one.
-// A live version that is neither behind nor ahead (a commit that never reached
-// main) is replaced: main is what runs. What could not be read is printed.
-// The tracker's deploy (workers/tracker/deploy.ts) asks the same with the
-// watched paths of its own trigger.
-//
-// The door looks once as the build starts (`seen`), beside its preparation,
-// and asks main's tip again as each upload starts (`again`): bundling, images
-// and sibling uploads can take minutes, and a newer push's build can go live
-// in them, so an answer from the start alone can let an older build go live
-// over a newer one.
+// Builds finish in any order. A completed build may deploy unless a newer
+// commit is already live. Read live versions again before each upload and
+// retry: a newer build can finish while this one prepares or waits.
 
-/** What a deploy sees: its own commit, main's tip at the remote (null when the
- * remote could not be asked), whether the watched source changed at that tip,
- * and each commit a live version was deployed from, with whether it is ahead
+/** This build's commit and the commits live now, with whether each is ahead
  * of this one (null when git cannot tell). */
 export type Seen = {
   head: string
-  tip: string | null
-  changed: boolean | null
   live: { sha: string; ahead: boolean | null }[]
 }
 
 let short = (sha: string) => sha.slice(0, 8)
 
 /** Why this commit must not go live, or null when it may. */
-export let superseded = ({ head, tip, changed, live }: Seen): string | null => {
-  if (tip && tip != head && changed !== false) {
-    return changed
-      ? `main is at ${
-        short(tip)
-      } with newer Worker source; its build deploys it`
-      : `main is at ${short(tip)}; watched source could not be compared`
-  }
+export let superseded = ({ head, live }: Seen): string | null => {
   let newer = live.find((l) => l.ahead)
   return newer
     ? `${short(newer.sha)} is live and ahead of ${short(head)}`
@@ -1105,10 +1083,8 @@ let git = async (root: string, ...args: string[]) => {
 
 let SHA = /^[0-9a-f]{40}\b/
 
-/** The production trigger's build watch paths (README.md), as git pathspecs:
- * a push that changes none of these starts no build, so it neither supersedes
- * this one nor leaves main ahead of what is live (packages/admin/catchup.ts).
- * A test, a README or an app alone changes none. */
+/** The production trigger's build watch paths (README.md), as git pathspecs.
+ * The deploy catch-up compares these to find source that needs a build. */
 export let WATCHED = [
   'workers/yak',
   'packages',
@@ -1171,40 +1147,18 @@ export let changed = async (
   return code == 0 ? false : code == 1 ? true : null
 }
 
-// main's tip at the remote, or null when the remote could not be asked.
-let tipOf = async (root: string, read = git) => {
-  let asked = await read(root, 'ls-remote', 'origin', 'refs/heads/main')
-  return asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-}
-
-// Whether the watched source changed between this commit and main's tip.
-let moved = (
-  root: string,
-  head: string,
-  tip: string | null,
-  watched = WATCHED,
-  read = git,
-) => tip && tip != head ? changed(root, head, tip, watched, read) : false
-
-/**
- * What a deploy from `root`'s checkout sees, given the commits live now. A
- * shallow clone can lack both older and newer live commits. Fetch their
- * ancestry without trees or blobs; comparing watched source at main's tip
- * needs trees, but never historical file contents.
- */
+/** What a deploy from `root`'s checkout sees, given the commits live now.
+ * Fetch ancestry a shallow clone lacks, without trees or file contents. */
 export let seen = async (
   root: string,
   live: string[] | Promise<string[]>,
-  watched = WATCHED,
   read = git,
 ): Promise<Seen> => {
-  let [checked, tip, named] = await Promise.all([
+  let [checked, named] = await Promise.all([
     read(root, 'rev-parse', 'HEAD'),
-    tipOf(root, read),
     live,
   ])
   let head = checked.out
-  let change = await moved(root, head, tip, watched, read)
   let ahead = async (sha: string) => {
     if (sha == head) return false
     await fetched(root, sha, 'tree:0', read)
@@ -1213,41 +1167,17 @@ export let seen = async (
   }
   return {
     head,
-    tip,
-    changed: change,
     live: await Promise.all(
       named.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
     ),
   }
 }
 
-/** What a deploy sees as an upload starts: its first look (`seen`) with
- * main's tip asked again. A version ahead of this commit goes live only from a
- * newer commit on main, so while the tip has not moved the first look stands,
- * for one `ls-remote`; a tip that cannot be read leaves it standing too. */
-let again = async (
-  root: string,
-  saw: Seen,
-  watched = WATCHED,
-  read = git,
-): Promise<Seen> => {
-  let tip = await tipOf(root, read)
-  return !tip || tip == saw.tip ? saw : {
-    ...saw,
-    tip,
-    changed: await moved(root, saw.head, tip, watched, read),
-  }
-}
-
-/** The deploy door's guard over the first look `look` gives: `first` answers
- * it beside the build's preparation, and `still` answers {@link again} as
- * each upload starts. Main only moves on, so a refusal stands for every upload
- * after it. */
+/** The deploy guard looks beside preparation (`first`) and reads fresh live
+ * versions before each upload (`still`). Once a newer commit is live, this
+ * build leaves it serving for every remaining upload. */
 export let guard = (
-  root: string,
   look: () => Promise<Seen>,
-  watched = WATCHED,
-  read = git,
   note = console.log,
 ) => {
   let looked: Promise<Seen> | undefined
@@ -1264,15 +1194,10 @@ export let guard = (
       let live = saw.live.map((l) =>
         short(l.sha) + (l.ahead == null ? '?' : '')
       )
-      note(
-        `deploy ${short(saw.head)}: main at ${
-          saw.tip ? short(saw.tip) : '(unread)'
-        }, live ${live.join(' ') || '(unread)'}`,
-      )
+      note(`deploy ${short(saw.head)}: live ${live.join(' ') || '(unread)'}`)
       return decide(saw)
     },
-    still: async () =>
-      !refused && decide(await again(root, await once(), watched, read)),
+    still: async () => !refused && decide(await look()),
   }
 }
 
@@ -1334,10 +1259,7 @@ if (system.main(import.meta.url)) {
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded
-    ? guard(
-      dir,
-      () => seen(dir, readied.then(() => serving(envs(argv), wrangler))),
-    )
+    ? guard(() => seen(dir, readied.then(() => serving(envs(argv), wrangler))))
     : undefined
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true

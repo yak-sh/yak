@@ -7,19 +7,16 @@
 // whether to roll back or fix forward is an agent's call, never this script's.
 //
 // Workers Builds runs one build per push and they finish in any order, so a
-// build deploys only while no newer commit's build owns the Worker, as the yak
+// build deploys unless a newer commit is already live, as the yak
 // Worker's deploy door decides it (workers/yak/wrangler.ts `superseded`).
 import { root, run } from './wrangler.ts'
 import { type Seen, seen, superseded } from '../yak/wrangler.ts'
 
-/** The tracker trigger's build watch paths (README.md), as git pathspecs: a
- * push that changes one starts a tracker build of its own. */
-export let WATCHED = ['workers/tracker', 'packages', 'bin/build-tracker']
 /** The tracker's answer that this build's canary failed, not still on its way. */
 export class Failed extends Error {}
 export type Hooks = {
   current: () => Promise<{ hash?: string }>
-  /** This build's commit beside main's tip and the commits live now. */
+  /** This build's commit and the commits live now. */
   seen: () => Promise<Seen>
   deploy: (hash: string) => Promise<void>
   /** Whether the canary arrived; throws {@link Failed} when it failed. */
@@ -169,12 +166,9 @@ if (import.meta.main) {
         let saw = await seen(
           root,
           serving().then(({ commit }) => commit ? [commit] : []),
-          WATCHED,
         )
         console.log(
-          `tracker ${saw.head.slice(0, 8)}: main at ${
-            saw.tip?.slice(0, 8) ?? '(unread)'
-          }, live ${
+          `tracker ${saw.head.slice(0, 8)}: live ${
             saw.live.map((l) => l.sha.slice(0, 8) + (l.ahead ? ' (ahead)' : ''))
               .join(' ') || '(unread)'
           }`,

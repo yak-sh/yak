@@ -184,15 +184,12 @@ minutes after it landed with no build under way, and reports it. A head whose
 build failed is this rebuild's for 15 minutes; the catch-up builds it only if it
 is still not live then.
 
-Builds run on watched-path pushes and finish in any order, so the deploy door
-(`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
-the watched source and no live version is ahead of it. It looks once as the
-build starts, beside the build's preparation, and asks main's tip again as each
-upload starts (`wrangler.ts` `guard`), since a build can take minutes to reach
-its upload and a newer push's build can go live in them. That second look is one
-`git ls-remote` while main has not moved. An app-only push starts no replacement
-build and does not supersede the last one. A build that loses the race to newer
-Worker source deploys nothing and says why in its log.
+Builds run on watched-path pushes and finish in any order. The deploy guard
+(`wrangler.ts` `guard`) lets a completed build deploy unless a newer commit is
+already live. It reads live versions beside preparation, then again before each
+upload and retry, since another build can deploy while this one prepares or
+waits. A push to main does not stop a completed build from deploying. A build
+behind a newer live version deploys nothing and says why in its log.
 
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).

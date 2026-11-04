@@ -2,7 +2,6 @@
 // credentials, paid resources, or waiting for deployment propagation.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
 import { canary, deploy, Failed, type Hooks } from './deploy.ts'
-import type { Seen } from '../yak/wrangler.ts'
 import { canary as receipt, STALL, worker } from './worker.ts'
 import { grouped } from '@yaks/tracker'
 import { json } from './door.ts'
@@ -20,12 +19,14 @@ let fixture = (step = 15_000) => {
   // What the hooks read is what is deployed, and from which commit: this
   // build's is `mine`, and a newer commit's build deploys through `another`.
   let live = { hash: 'old', ahead: false }
-  let saw: Seen = { head: 'mine', tip: 'mine', changed: false, live: [] }
   let another = (hash: string, ahead = true) => live = { hash, ahead }
   let hooks: Hooks = {
     current: () => Promise.resolve(live),
     seen: () =>
-      Promise.resolve({ ...saw, live: [{ sha: 'live', ahead: live.ahead }] }),
+      Promise.resolve({
+        head: 'mine',
+        live: [{ sha: 'live', ahead: live.ahead }],
+      }),
     deploy: (hash) => {
       calls.push('deploy')
       another(hash, false)
@@ -37,8 +38,7 @@ let fixture = (step = 15_000) => {
     now: time.now,
     wait: () => time.advance(step),
   }
-  let see = (seen: Partial<Seen>) => saw = { ...saw, ...seen }
-  return { hooks, calls, another, see }
+  return { hooks, calls, another }
 }
 test('unchanged bundle does not deploy; changed bundle requires a canary', async () => {
   let { hooks, calls } = fixture()
@@ -87,23 +87,13 @@ test('a build superseded by a newer deployment reports nothing', async () => {
     equal(calls, ['deploy'])
   }
 })
-test('a build behind a newer commit never deploys over it', async () => {
-  let cases: [seen: Partial<Seen>, ahead: boolean, deploys: boolean][] = [
-    // A newer commit's version is live.
-    [{}, true, false],
-    // main moved on with tracker source, so its build deploys it.
-    [{ tip: 'newer', changed: true }, false, false],
-    [{ tip: 'newer', changed: null }, false, false],
-    // A push that starts no tracker build leaves this one to deploy.
-    [{ tip: 'newer', changed: false }, false, true],
-  ]
-  for (let [seen, ahead, deploys] of cases) {
-    let { hooks, calls, another, see } = fixture()
+test('a build deploys unless a newer commit is already live', async () => {
+  for (let ahead of [false, true]) {
+    let { hooks, calls, another } = fixture()
     another('newer', ahead)
-    see(seen)
     hooks.canary = () => Promise.resolve(true)
     await deploy('new', hooks)
-    equal(calls, deploys ? ['deploy'] : [])
+    equal(calls, ahead ? [] : ['deploy'])
   }
 })
 let hash = 'a'.repeat(64)

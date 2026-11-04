@@ -36,7 +36,6 @@ import {
   SIBLINGS,
   siblings,
   uploadSibling,
-  WATCHED,
 } from './wrangler.ts'
 
 let apiFailure =
@@ -937,7 +936,6 @@ test('deploy preflight starts Git reads while the serving version is pending', a
   let inspection = seen(
     '/checkout',
     live.promise,
-    WATCHED,
     (_root, ...args) => {
       calls.push(args)
       return Promise.resolve({ code: 0, out: head })
@@ -945,38 +943,34 @@ test('deploy preflight starts Git reads while the serving version is pending', a
   )
   assertEquals(calls, [
     ['rev-parse', 'HEAD'],
-    ['ls-remote', 'origin', 'refs/heads/main'],
   ])
   live.resolve([head])
   assertEquals(await inspection, {
     head,
-    tip: head,
-    changed: false,
     live: [{ sha: head, ahead: false }],
   })
 })
 
-// A build of commit `a` whose first look finds main at `a` and an older commit
-// serving. `main.at` is main's tip for each later look (null when the remote
-// cannot be asked), and `newer` whether its Worker source differs from `a`'s.
+// A build of `a` with an older commit serving. The hooks read current live
+// state for each upload; `main.at` advances without activating a version.
 // A deploy's first `fail` upload attempts fail as Cloudflare's 504 does.
-let build = async (main: { at: string | null }, newer = true) => {
+let build = async (main: { at: string | null; live?: string }) => {
   let [a, old] = ['a'.repeat(40), 'f'.repeat(40)]
   main.at = a
-  let read = (_root: string, ...[op]: string[]) =>
+  let read = (_root: string, ...[op, , , sha]: string[]) =>
     Promise.resolve(
       op == 'ls-remote'
         ? { code: main.at ? 0 : 128, out: `${main.at}\trefs/heads/main` }
         : op == 'rev-parse'
         ? { code: 0, out: a }
-        : { code: op == 'diff' ? +newer : op == 'merge-base' ? 1 : 0, out: '' },
+        : {
+          code: op == 'diff' || (op == 'merge-base' && sha != B) ? 1 : 0,
+          out: '',
+        },
     )
   let notes: string[] = [], uploads = 0
   let door = guard(
-    '/c',
-    () => seen('/c', [old], WATCHED, read),
-    WATCHED,
-    read,
+    () => seen('/c', [main.live ?? old], read),
     (line) => notes.push(line),
   )
   assert(await door.first())
@@ -991,34 +985,46 @@ let build = async (main: { at: string | null }, newer = true) => {
 
 let B = 'b'.repeat(40)
 
-test('a build of the newest commit deploys, and an app-only push after it does not stop it', async () => {
+test('a completed build deploys even when main advances while it prepares', async () => {
   for (let moved of [false, true]) {
     let main = { at: null as string | null }
-    let b = await build(main, false)
+    let b = await build(main)
     if (moved) main.at = B
     assertEquals([await b.deploy(), b.uploads()], [0, 1])
   }
 })
 
-test('a build main moved past while it prepared leaves the newer version serving', async () => {
-  let main = { at: null as string | null }
-  let b = await build(main)
-  main.at = B
-  assertEquals([await b.deploy(), b.uploads()], [0, 0])
-  assertEquals(
-    b.notes.at(-1),
-    'not deploying: main is at bbbbbbbb with newer Worker source; its build deploys it',
-  )
-  // Main only moves on: a tip unread later does not undo the refusal.
-  main.at = null
-  assertEquals(await b.door.still(), false)
-})
-
-test('a deploy attempt retried after main moved on is not started', async () => {
+test('a deploy retries when newer source is only on main', async () => {
   let main = { at: null as string | null }
   let b = await build(main)
   let moving = () => Promise.resolve(void (main.at = B))
-  assertEquals([await b.deploy(1, moving), b.uploads()], [0, 1])
+  assertEquals([await b.deploy(1, moving), b.uploads()], [0, 2])
+})
+
+test('a build leaves a newer version live when it activates during preparation', async () => {
+  let main = {
+    at: null as string | null,
+    live: undefined as string | undefined,
+  }
+  let b = await build(main)
+  main.live = B
+  assertEquals([await b.deploy(), b.uploads()], [0, 0])
+  assertEquals(
+    b.notes.at(-1),
+    'not deploying: bbbbbbbb is live and ahead of aaaaaaaa',
+  )
+  main.live = undefined
+  assertEquals(await b.door.still(), false)
+})
+
+test('a retry leaves a newer version live when it activates after an attempt', async () => {
+  let main = {
+    at: null as string | null,
+    live: undefined as string | undefined,
+  }
+  let b = await build(main)
+  let activating = () => Promise.resolve(void (main.live = B))
+  assertEquals([await b.deploy(1, activating), b.uploads()], [0, 1])
 })
 
 test('only a Wrangler step that changes what serves asks the guard', async () => {
