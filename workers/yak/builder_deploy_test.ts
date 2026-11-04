@@ -3,10 +3,11 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { build, fake } from './builder.ts'
-import { ADA, platform, seeded } from './serving-probe.ts'
+import { ADA, seeded } from './serving-probe.ts'
+import { platform } from './deploy-probe.ts'
 import { call } from './tools.ts'
 
-await using p = platform()
+await using p = platform('deploy-review')
 let { dir, space } = await seeded(p.env)
 let ctx = { env: p.env, dir, person: ADA }
 await call(ctx, 'app_files', {
