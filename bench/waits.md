@@ -53,9 +53,9 @@ hook leaves that work pending. UserPromptSubmit remains measured by
 `person-commands`. There is no installed Stop or PreCompact hook to time.
 
 ```sh
-deno task bench operation-commands accept
-deno task bench operation-scale check
-deno task bench hook-waits check
+deno run -A bench/run.ts accept operation-commands
+deno run -A bench/run.ts check operation-scale
+deno run -A bench/run.ts check hook-waits
 ```
 
 These suites each have a half-hour monitor entry. The hourly shell dispatch
