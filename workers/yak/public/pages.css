@@ -313,6 +313,7 @@
     display: flex;
     flex-direction: column;
     gap: 2rem;
+    z-index: 1;
     min-height: 100vh;
     padding: 2rem 1.25rem;
   }
@@ -360,17 +361,17 @@
     font-weight: 700;
   }
   /* The space selector (pages.ts `chooser`): a box drawn like a button,
-     naming the space, whose Change opens the list in place below it. */
+     naming the space, whose Change opens the list over the page, wider than
+     the side, drawn in pencil on a hatch the way a button sits on its. */
   .Desk_Pick {
-    display: grid;
-    gap: .4rem;
+    position: relative;
   }
   .Desk_Space {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr) auto;
     align-items: center;
     gap: .6rem;
-    padding: .5rem .6rem;
+    padding: .55rem .7rem;
     border: var(--stroke) solid var(--graphite);
     border-radius: var(--corner);
     background: var(--paper);
@@ -399,12 +400,11 @@
     line-height: 1.25;
   }
   .Desk_Name b {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
   .Desk_Name small {
     color: var(--soft-ink);
     font-size: var(--fine);
-    overflow-wrap: anywhere;
   }
   .Desk_Change {
     color: var(--accent);
@@ -414,26 +414,61 @@
   .Desk_Pick[open] .Desk_Change {
     color: var(--soft-ink);
   }
+  .Desk_Menu {
+    --lift: 6px;
+    position: absolute;
+    top: calc(100% + .6rem);
+    left: 0;
+    z-index: 1;
+    width: max-content;
+    min-width: max(100%, 18rem);
+    max-width: 26rem;
+  }
+  .Desk_Menu::before {
+    content: '';
+    position: absolute;
+    inset: var(--lift) calc(-1 * var(--lift)) calc(-1 * var(--lift))
+      var(--lift);
+    border-radius: var(--corner);
+    background: var(--hatch);
+    clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+      0 calc(100% - var(--lift)), calc(100% - var(--lift))
+      calc(100% - var(--lift)));
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
+  .Desk_Menu::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--corner);
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
   .Desk_List {
+    position: relative;
     display: grid;
-    border: 1px solid var(--edge);
+    max-height: min(34rem, 70vh);
+    padding: .35rem 0;
     border-radius: var(--corner);
     background: var(--paper);
-    overflow: hidden;
+    overflow-y: auto;
   }
   .Desk_Ask {
     margin: 0;
-    padding: .5rem .7rem;
+    padding: .5rem 1rem .6rem;
     color: var(--soft-ink);
     font-size: var(--fine);
   }
   .Desk_Row {
     display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-columns: 2rem minmax(0, 1fr) 1rem;
     align-items: center;
-    gap: .6rem;
-    padding: .5rem .7rem;
-    border-top: 1px solid var(--line);
+    gap: .75rem;
+    margin: 0 .35rem;
+    padding: .55rem .65rem;
+    border-radius: var(--corner);
     color: var(--ink);
     text-decoration: none;
   }
@@ -454,8 +489,19 @@
     font-weight: 700;
     text-decoration: none;
   }
+  /* Under the rows, ruled off from them. */
   .Desk_List .Desk_New {
-    border-top: 1px solid var(--line);
+    position: relative;
+    margin-top: .35rem;
+    padding: .7rem 1rem .4rem;
+  }
+  .Desk_List .Desk_New::before {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--room)) 0 auto;
+    height: calc(var(--stroke) + 2 * var(--room));
+    background: var(--rule);
+    filter: url(pencil.svg#line);
   }
   /* The line over a page's title, naming the space it changes or "Your
      account". */
@@ -716,6 +762,17 @@
     }
     .Desk_Side::after {
       display: none;
+    }
+    .Desk_Menu {
+      position: relative;
+      top: auto;
+      margin: .6rem var(--lift) var(--lift) 0;
+      width: auto;
+      min-width: 0;
+      max-width: none;
+    }
+    .Desk_List {
+      max-height: none;
     }
     .Desk_Close {
       display: inline-flex;

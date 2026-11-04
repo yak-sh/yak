@@ -123,7 +123,7 @@ test('Profile holds the name, the email and the space opened first', async () =>
   )
 })
 
-test('the selector names the space and keeps the page when another is chosen', async () => {
+test('the selector names the space, not its address, and keeps the page when another is chosen', async () => {
   let spaces = [
     { slug: 'dana', title: 'Dana', owner: true, own: true },
     { slug: 'grove', title: 'Locust Grove', owner: true, own: false },
@@ -145,17 +145,17 @@ test('the selector names the space and keeps the page when another is chosen', a
   let page = await block({ view: 'billing', space: 'grove', spaces })
   assertEquals(
     parseHTML(page).document.querySelector('summary.Desk_Space')?.textContent,
-    'LLocust Grovegrove.yaks.appChange',
+    'LLocust GroveChange',
   )
   assertEquals(rows(page), [
     {
       href: '/manage/dana/billing',
-      text: 'DDanadana.yaks.app · yours',
+      text: 'DDana',
       here: false,
     },
     {
       href: '/manage/grove/billing',
-      text: 'LLocust Grovegrove.yaks.app · yours✓',
+      text: 'LLocust Grove✓',
       here: true,
     },
     // A space they are a member of opens at its Operator.
@@ -164,10 +164,10 @@ test('the selector names the space and keeps the page when another is chosen', a
       text: 'BBook clubAna’s space · you’re a member',
       here: false,
     },
-    // One whose owner has no name says where it is.
+    // One whose owner has no name says only that.
     {
       href: '/manage/quilt/operator',
-      text: 'QQuiltsquilt.yaks.app · you’re a member',
+      text: 'QQuiltsYou’re a member',
       here: false,
     },
   ])

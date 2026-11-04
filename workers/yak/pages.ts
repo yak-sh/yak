@@ -712,7 +712,7 @@ ${link('profile', 'Profile')}${link('agents', 'Agents')}${
     link('shared', 'Shared with you')
   }</nav></div>
 <div class="Desk_Section"><h2 class="Desk_Group" id="side-space">Space you’re working in</h2>${
-    chooser(at, view, env)
+    chooser(at, view)
   }
 <nav class="SideNav" aria-label="This space">
 ${
@@ -739,22 +739,20 @@ ${
 </aside>`
 }
 
-// The space selector (T-135919, T-136122): the space every link under it
-// changes, as a box saying its name and address, and Change, which opens the
-// list in place below it. Choosing another keeps the page: Billing in one
-// space becomes Billing in the other, a page of the person's own stays where
-// it is, and a space they are only a member of opens at its Operator.
-let chooser = (at: DeskPage, view: ManageView, env: Host) => {
+// The space selector (T-135919, T-136122, T-136983): the space every link
+// under it changes, as a box saying its name, and Change, which opens the list
+// over the page. Choosing another keeps the page: Billing in one space becomes
+// Billing in the other, a page of the person's own stays where it is, and a
+// space they are only a member of opens at its Operator.
+let chooser = (at: DeskPage, view: ManageView) => {
   let here = picked(at)
   let all = at.spaces?.length ? at.spaces : [here]
-  let tile = (s: Picked) =>
+  let box = (s: Picked, line = '') =>
     `<span class="Desk_Tile" aria-hidden="true">${
       esc(named(s).charAt(0).toUpperCase())
+    }</span><span class="Desk_Name"><b>${esc(named(s))}</b>${
+      line && `<small>${esc(line)}</small>`
     }</span>`
-  let box = (s: Picked, line: string) =>
-    `${tile(s)}<span class="Desk_Name"><b>${esc(named(s))}</b><small>${
-      esc(line)
-    }</small></span>`
   let to = (s: Picked) =>
     accountView(view)
       ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
@@ -764,15 +762,13 @@ let chooser = (at: DeskPage, view: ManageView, env: Host) => {
       )
   let make = `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`
   if (all.length == 1) {
-    return `<div class="Desk_Space">${
-      box(here, spaceHost(env, here.slug))
-    }</div>${make}`
+    return `<div class="Desk_Space">${box(here)}</div>${make}`
   }
   return `<details class="Desk_Pick">
 <summary class="Desk_Space">${
-    box(here, spaceHost(env, here.slug))
+    box(here)
   }<span class="Desk_Change">Change</span></summary>
-<div class="Desk_List"><p class="Desk_Ask">Which space do you want to work in?</p>${
+<div class="Desk_Menu"><div class="Desk_List"><p class="Desk_Ask">Which space do you want to work in?</p>${
     all.map((s) =>
       `<a class="Desk_Row" href="${to(s)}"${
         s.slug == here.slug ? ' aria-current="true"' : ''
@@ -780,14 +776,14 @@ let chooser = (at: DeskPage, view: ManageView, env: Host) => {
         box(
           s,
           s.owner
-            ? `${spaceHost(env, s.slug)} · yours`
-            : `${
-              s.whose ? `${s.whose}’s space` : spaceHost(env, s.slug)
-            } · you’re a member`,
+            ? ''
+            : s.whose
+            ? `${s.whose}’s space · you’re a member`
+            : 'You’re a member',
         )
       }${s.slug == here.slug ? '<span class="Desk_Tick">✓</span>' : ''}</a>`
     ).join('')
-  }${make}</div></details>`
+  }${make}</div></div></details>`
 }
 
 let state = (connected: boolean, show: boolean) =>
