@@ -18,7 +18,7 @@ import {
   owned,
   signIn,
 } from './probe.ts'
-import { LOGOUT, MANAGE, managePath } from './route.ts'
+import { chatPath, LOGOUT, MANAGE, managePath } from './route.ts'
 import type { App } from './directory.ts'
 import { library } from './pages.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
@@ -216,6 +216,11 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       assertEquals(hidden.status, 404)
       assert(!(await hidden.text()).includes('private-notes'))
     }
+    // An Operator conversation opens in its chat app, for nobody else.
+    let chat = await get(chatPath(slug))
+    assertEquals(chat.status, 200)
+    assertStringIncludes(await chat.text(), 'class="Talk"')
+    assertEquals((await get(chatPath(slug), other.cookie)).status, 404)
     let theirs = (await get(MANAGE, other.cookie)).headers.get('location')!
     assertEquals(
       theirs,
@@ -387,6 +392,6 @@ test("a break says what the space's Operator made of it", () => {
   )
   assertStringIncludes(
     shown({}),
-    `href="${managePath('operator', 'fixme')}?open=${broke.fix}"`,
+    `href="${chatPath('fixme', broke.fix)}"`,
   )
 })

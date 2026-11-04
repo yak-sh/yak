@@ -39,6 +39,7 @@ import { TOOLS } from './tools.ts'
 import { conversation, operatorAnswer, operatorBody } from './operator-page.ts'
 import { operatorDoor } from './operator-page.ts'
 import { arrived, Refused } from './inbox.ts'
+import { chatPath } from './route.ts'
 import type { Inbound } from './env.ts'
 
 let fixture = async () => {
@@ -256,9 +257,9 @@ test("the operator page on a person's own space says it works in their other spa
   assertEquals(html.includes('your other spaces'), false)
   assertStringIncludes(ownHtml, 'your other spaces')
 })
-test('the operator page names its email address, keeps a durable draft and draws kept answers', () => {
+test('the operator page names its email address, opens a new conversation and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
-  assertStringIncludes(html, 'browserDrafts')
+  assertStringIncludes(html, `href="${chatPath('clerk')}"`)
   assertStringIncludes(
     conversation([result]),
     'The road millage notice is posted.',
@@ -504,7 +505,7 @@ test('a page watching the Operator hears each step as the lines it changed, and 
   assertEquals(heard[0].now, 'Thinking…')
   assertStringIncludes(
     heard.flatMap((h) => h.rows.map((r) => r.html)).join(''),
-    'Chat_Bubble-them',
+    'Talk_Reply',
   )
   // Ended, however it ended: nothing is said to be under way.
   assertEquals(heard.at(-1)!.now.endsWith('…'), false)

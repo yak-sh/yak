@@ -175,11 +175,11 @@ test('the Operator page lists its work in plain words, each opening on a page of
     [out.task, 'Done', false],
   ])
 })
-test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got, and the reply", () => {
-  assertStringIncludes(drawn.html, 'Chat_Bubble-you">Post a special meeting')
-  assertStringIncludes(drawn.html, '✓ Read the schema')
-  assertStringIncludes(drawn.html, '✓ Listed app files')
-  assertStringIncludes(drawn.html, '&quot;component&quot;: &quot;doc&quot;')
+test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got in words, and the reply", () => {
+  assertStringIncludes(drawn.html, 'Talk_You">Post a special meeting')
+  assertStringIncludes(drawn.html, '<summary>Read the schema')
+  assertStringIncludes(drawn.html, '<summary>Listed app files')
+  assertStringIncludes(drawn.html, '<dt>Component</dt><dd><span>doc</span>')
   assertStringIncludes(drawn.html, 'notice is posted')
   assertEquals(drawn.html.includes('data-pending'), false)
   assertEquals(drawn.task, out.task)

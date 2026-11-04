@@ -1,4 +1,4 @@
-// The Operator page's own script, run over linkedom with its fetches answered
+// The Operator chat app's own script, run over linkedom with its fetches answered
 // by operatorAnswer, loaded again and again over one localStorage: what a
 // person typed is kept when the page is left with its save cut off.
 
@@ -9,7 +9,7 @@ import type { Stash } from '@yaks/draft'
 import { browserDrafts } from '../../packages/draft/browser.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { operatorAnswer, operatorBody } from './operator-page.ts'
+import { chatPage, operatorAnswer } from './operator-page.ts'
 
 let p = platform('operator-draft')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -55,7 +55,7 @@ let storage = (): Stash => {
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
 let load = async (stash: Stash, cut = false) => {
-  let html = await operatorBody(p.env, space, who)
+  let html = await (await chatPage(p.env, space, who, 'new')).text()
   let { document, Event } = parseHTML(html)
   // What linkedom's forms lack: their fields by name, their action, and a
   // FormData of them.
@@ -173,13 +173,13 @@ let resent = fourth.say.value
 let afterSend = await stored()
 fourth.leave()
 
-test('words typed on the Operator page are kept when it is left mid save', () => {
+test("words typed in the Operator's chat app are kept when it is left mid save", () => {
   assertEquals(unsaved, '', 'the save never landed')
   assertEquals(shown, 'Post the road millage notice')
   assertEquals(saved, 'Post the road millage notice')
 })
 
-test('a request sent as the Operator page is left comes back as its draft', () => {
+test("a message sent as the Operator's chat app is left comes back as its draft", () => {
   assertEquals(sending, '')
   assertEquals(
     resent,

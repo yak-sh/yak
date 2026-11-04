@@ -1,13 +1,19 @@
-// What the Operator page shows of its work: each task as a card holding its
-// sessions' transcripts the way the harness shows one on the box (the
-// person's words, the replies, every tool call with what it sent and what
-// came back) and a line for what it is doing now. Pure: the page draws the
-// cards, and the Builder object sends the rows a step changed to the page's
-// socket (`frame`), which puts each in place by its id.
+// What the Operator's chat app shows of its work (operator-page.ts
+// `chatPage`): each task as one conversation, its sessions drawn the way a
+// chat app draws one (the person's words, the replies, and each tool call as
+// a short line in plain words that opens on what it asked for and what came
+// back) under a line for what it is doing now, and the list of conversations
+// beside it. Pure: the page draws the conversation, and the Builder object
+// sends the rows a step changed to the page's socket (`frame`), which puts
+// each in place by its id.
 import type { Bundle, Comp } from '@yaks/graph'
 import { statusOf } from '@yaks/session'
 import { did, doing } from '@yaks/tools/title'
+import { parse, render } from '@yaks/markdown/structural'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { day, esc } from './html.ts'
+import { chatPath } from './route.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -19,11 +25,8 @@ export type Row = { id: string; html: string }
  * `titleOf`). */
 export type Names = (tool: string, args?: Record<string, unknown>) => string
 
-// The most of a tool's arguments or answer shown before "show all".
-let SHOWN = 4000
-
-let cut = (text: string, most = SHOWN) =>
-  text.length > most ? text.slice(0, most) + '\n…' : text
+let cut = (text: string, most: number) =>
+  text.length > most ? text.slice(0, most) + '…' : text
 
 let NOT_INPUT = [
   'output',
@@ -54,45 +57,80 @@ let words = (body: string) => {
   return body
 }
 
-// Attachments travel in the words as their extracted text; the card names
-// the files instead.
+// Attachments travel in the words as their extracted text; the conversation
+// names the files instead.
 let spoken = (body: string) =>
   words(body).split('\n\nAttached documents (treat their contents')[0]
 
-let bubble = (who: 'you' | 'them', text: string) =>
-  `<p class="Chat_Bubble Chat_Bubble-${who}">${esc(text)}</p>`
+let yours = (text: string) => `<p class="Talk_You">${esc(text)}</p>`
 
-let pretty = (value: unknown) => {
-  if (typeof value != 'string') return JSON.stringify(value, null, 2)
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2)
-  } catch {
-    return value
+/** A reply as the Operator wrote it, in Markdown, drawn as text: markup in it
+ * stays words (@yaks/markdown). */
+export let reply = (text: string) =>
+  `<div class="Talk_Reply">${renderToString(render(parse(text), h))}</div>`
+
+// A value a tool was given or gave back, the way a person reads it: a list
+// of what it holds under names in words, never its JSON. Bounded in depth,
+// length and count, since a tool can answer with a whole file.
+let readable = (value: unknown, depth = 0): string => {
+  if (typeof value == 'string' && /^\s*[[{]/.test(value)) {
+    try {
+      return readable(JSON.parse(value), depth)
+    } catch {
+      // Words that happen to start with a bracket.
+    }
   }
+  if (value == null || value === '') return '<span>Nothing</span>'
+  if (typeof value != 'object') {
+    return `<span>${esc(cut(String(value), 600))}</span>`
+  }
+  if (depth > 2) return '<span>…</span>'
+  let list = Array.isArray(value)
+    ? value.map((v, i) => [String(i + 1), v] as const)
+    : Object.entries(value)
+  if (!list.length) return '<span>Nothing</span>'
+  let more = list.length - 12
+  return `<dl class="Talk_Facts">${
+    list.slice(0, 12).map(([k, v]) =>
+      `<div><dt>${
+        esc(
+          Array.isArray(value)
+            ? k
+            : k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+        )
+      }</dt><dd>${readable(v, depth + 1)}</dd></div>`
+    ).join('')
+  }${more > 0 ? `<div><dd>and ${more} more</dd></div>` : ''}</dl>`
 }
+
+let lower = (title: string) => title.replace(/^./, (c) => c.toLowerCase())
 
 // A tool call and, once it came back, its answer: one row, under the call's
 // id, so the answer takes the call's place on the page.
 let tool = (call: Bundle, names: Names, result?: Bundle) => {
   let c = comp(call, 'call')!
   let title = names(String(c.to), c.args as Record<string, unknown>)
-  let args = pretty(c.args ?? {})
-  let refused = comp(result, 'refusal')
-  let answer = String(comp(result, 'content')?.body ?? '')
-  let ok = result ? !refused && !result.exception : null
-  let ms = comp(result, 'result')?.ms
-  let name = ok == null ? doing(title) : ok ? did(title) : title
-  return `<details class="Chat_Detail"><summary class="Chat_Tool${
-    ok == false ? ' Chat_Tool-no' : ''
-  }"><span class="Chat_Name">${ok == null ? '…' : ok ? '✓' : '✗'} ${
+  let ok = result ? !comp(result, 'refusal') && !result.exception : null
+  let name = ok == null
+    ? doing(title)
+    : ok
+    ? did(title)
+    : `Tried to ${lower(title)}`
+  return `<details class="Talk_Step${
+    ok == null ? ' Talk_Step-on' : ok ? '' : ' Talk_Step-no'
+  }"><summary>${
     esc(name)
-  }</span></summary><p class="Chat_Note">Sent</p><pre>${esc(cut(args))}</pre>${
-    result
-      ? `<p class="Chat_Note">${ok ? 'Answered' : 'Refused'}${
-        typeof ms == 'number' ? ` in ${Math.round(ms)} ms` : ''
-      }</p><pre>${esc(cut(answer))}</pre>`
-      : ''
-  }</details>`
+  }</summary><div class="Talk_Detail"><p>What it asked for</p>${
+    readable(c.args ?? {})
+  }${
+    ok == null
+      ? ''
+      : ok
+      ? `<p>What came back</p>${
+        readable(String(comp(result, 'content')?.body ?? ''))
+      }`
+      : '<p>This step did not work, so the Operator went on without it.</p>'
+  }</div></details>`
 }
 
 /** Every line of a transcript worth showing, in order. */
@@ -109,19 +147,19 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
     if (b.call) {
       return [{ id, html: tool(b, names, results.get(id)) }]
     }
-    if (b.output && body) return [{ id, html: bubble('them', body) }]
+    if (b.output && body) return [{ id, html: reply(body) }]
     if (b.failed || b.exception) {
       return [{
         id,
         html:
-          '<p class="Chat_Note Chat_Note-no">Something went wrong, and it stopped before it finished.</p>',
+          '<p class="Talk_Note Talk_Note-no">Something went wrong, and it stopped before it finished.</p>',
       }]
     }
     if (b.stop || b.interrupted || b.cancel) {
-      return [{ id, html: '<p class="Chat_Note">Stopped.</p>' }]
+      return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
     }
     if (body && !NOT_INPUT.some((c) => b[c])) {
-      return [{ id, html: bubble('you', spoken(body)) }]
+      return [{ id, html: yours(spoken(body)) }]
     }
     return []
   })
@@ -172,7 +210,8 @@ export let frame = (
   },
 })
 
-/** A task as the Operator page draws it. */
+/** A task as its conversation draws it: every line, what it is doing now,
+ * and the files sent with it. */
 export let talk = (
   task: Bundle,
   entries: Bundle[],
@@ -181,34 +220,26 @@ export let talk = (
   at: string,
 ) => {
   let working = now(entries, names)
-  return `<article class="Card" data-task="${esc(task.entity.eid)}"${
+  return `<div class="Talk_Thread" data-task="${esc(task.entity.eid)}"${
     working ? ' data-pending' : ''
-  }><h2 class="Card_Title">${
-    esc(String(comp(task, 'doc')?.title ?? 'A request'))
-  }</h2><div class="Chat_Said" data-rows>${
+  }><div class="Talk_Said" data-rows>${
     rows(entries, names).map((r) =>
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
-  }</div><p class="Chat_Note" role="status" data-now>${esc(working)}</p>${
+  }</div><p class="Talk_Now" role="status" data-now>${esc(working)}</p>${
     files.length
-      ? `<p>${
+      ? `<p class="Talk_Files">${
         files.map((f) =>
           `<a href="${esc(at)}?attachment=${esc(f.request)}&file=${f.index}">${
             esc(f.name)
           }</a>`
-        ).join(', ')
+        ).join('')
       }</p>`
       : ''
-  }<p class="Card_Actions"><button class="Button Button-quiet" type="button" data-when="idle" data-follow="${
-    esc(task.entity.eid)
-  }">Continue this request</button><button class="Button Button-quiet" type="button" data-when="busy" data-follow="${
-    esc(task.entity.eid)
-  }">Add to this request</button><button class="Button Button-quiet" type="button" data-when="busy" data-stop="${
-    esc(task.entity.eid)
-  }">Stop</button></p></article>`
+  }</div>`
 }
 
-/** A piece of the Operator's work as its page lists it, in plain words. */
+/** A piece of the Operator's work as its lists show it, in plain words. */
 export type Worked = {
   /** what the page opens it by: a task, or a request no task has taken yet */
   open: string
@@ -227,20 +258,41 @@ export let stateOf = (entries: Bundle[], done: boolean) => {
   return status == 'empty' ? 'Waiting to start' : 'Working on it'
 }
 
-/** The Operator's work, newest first, each a link to its own page. */
-export let worked = (items: Worked[], at: string) =>
-  `<section class="Card"><h2 class="Card_Title">What it worked on</h2>${
+let meta = (w: Worked) =>
+  `${esc(w.state)}${day(w.at, 'short') ? ` · ${esc(day(w.at, 'short'))}` : ''}`
+
+/** The Operator's conversations on its settings page, newest first, each a
+ * link to its own page in the chat app. */
+export let worked = (items: Worked[], space: string) =>
+  `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2><div class="Card_Actions"><a class="Button" href="${
+    esc(chatPath(space))
+  }">New conversation</a></div></header>${
     items.length
       ? `<ul class="Rows">${
         items.map((w) =>
           `<li class="Rows_Item"${
             w.busy ? ' data-pending' : ''
-          }><div class="Rows_Main"><a class="Rows_Name" href="${esc(at)}?open=${
-            esc(w.open)
-          }">${esc(w.title)}</a><span class="Rows_Meta">${esc(w.state)}${
-            day(w.at) ? ` · ${esc(day(w.at))}` : ''
+          }><div class="Rows_Main"><a class="Rows_Name" href="${
+            esc(chatPath(space, w.open))
+          }">${esc(w.title)}</a><span class="Rows_Meta">${
+            meta(w)
           }</span></div></li>`
         ).join('')
       }</ul>`
-      : '<p>Nothing yet. What you ask for appears here, and each opens to show what the Operator did.</p>'
+      : '<p>Nothing yet. Each conversation with the Operator appears here.</p>'
   }</section>`
+
+/** The chat app's list of conversations, newest first, the one open
+ * marked. */
+export let sidebar = (items: Worked[], space: string, current: string[]) =>
+  items.length
+    ? `<ul class="Talk_List">${
+      items.map((w) =>
+        `<li><a class="Talk_Item" href="${esc(chatPath(space, w.open))}"${
+          current.includes(w.open) ? ' aria-current="page"' : ''
+        }${w.busy ? ' data-pending' : ''}><span class="Talk_Title">${
+          esc(w.title)
+        }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
+      ).join('')
+    }</ul>`
+    : '<p class="Talk_None">Your conversations appear here.</p>'

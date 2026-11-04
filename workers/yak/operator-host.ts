@@ -65,14 +65,19 @@ let taskOf = async (store: Store, request: Bundle) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
+// A request no task has taken yet, named by its first line.
+let firstLine = (request: Bundle) =>
+  String(comp(request, 'doc')?.body ?? '').split('\n')[0].slice(0, 80) ||
+  'A request'
+
 let taken = (requests: Bundle[]) =>
   requests.filter((r) =>
     !comp(r, 'operator_request')?.session && !comp(r, 'operator_answer')?.task
   )
 
 /**
- * The Operator's work, newest first, as its page lists it (operator-view.ts
- * `worked`): each task in the words its newest session says of it, and the
+ * The Operator's work, newest first, as its conversations are listed
+ * (operator-view.ts `worked`, `sidebar`): each task in the words its newest session says of it, and the
  * requests no session has taken yet.
  */
 export let workOf = async (store: Store): Promise<Worked[]> => {
@@ -98,8 +103,7 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
     let failed = r.failed ?? r.bounced
     return {
       open: r.entity.eid,
-      title: String(comp(r, 'doc')?.body ?? '').split('\n')[0].slice(0, 80) ||
-        'A request',
+      title: firstLine(r),
       state: failed ? 'Could not finish' : 'Waiting to start',
       at: String(comp(r, 'created')?.at ?? ''),
       busy: !failed,
@@ -109,8 +113,8 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
 }
 
 /**
- * One piece of the Operator's work on a page of its own, opened by its task
- * or by a request: the task drawn with its sessions' transcripts
+ * One conversation in the Operator's chat app, opened by its task or by a
+ * request: its title and the task drawn with its sessions' transcripts
  * (operator-view.ts `talk`), or the request alone while no session has taken
  * it, for the page to draw as it always has.
  */
@@ -123,7 +127,9 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
     : ''
   let [held] = task ? await store.g.get([task]) : []
   if (!held?.task) {
-    return { task: '', html: '', waiting: row?.operator_request ? [row] : [] }
+    return row?.operator_request
+      ? { task: '', title: firstLine(row), html: '', waiting: [row] }
+      : { task: '', title: '', html: '', waiting: [] }
   }
   let requests = await store.g.read(REQUESTS)
   let sessions = await sessionsOf(store, task)
@@ -138,6 +144,7 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
   )
   return {
     task,
+    title: String(comp(held, 'doc')?.title ?? 'A request'),
     html: talk(held, entries, await namesOf(store, entries), files, at),
     waiting: [],
   }

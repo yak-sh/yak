@@ -29,6 +29,7 @@ import type { Plain } from './unseen.ts'
 export { esc } from './html.ts'
 import {
   accountView,
+  chatPath,
   enabling,
   LOGOUT,
   MANAGE,
@@ -811,9 +812,9 @@ let connectCard = (at: DeskPage, env: Host) =>
 // assistant, how often and when last, and the one thing to do, which is to
 // ask that assistant. The app's mark on its tile links here.
 let SHOWN = 5
-// What the space's Operator made of one break, with the way to its work on
-// a page of its own.
-let operated = (e: Plain, at: string) => {
+// What the space's Operator made of one break, with the way to its
+// conversation in the Operator's chat app.
+let operated = (e: Plain, space: string) => {
   let o = e.operator
   if (!o) return ''
   let said = o.failed != null
@@ -821,11 +822,11 @@ let operated = (e: Plain, at: string) => {
     : o.answer != null
     ? `The Operator: ${o.answer}`
     : 'The Operator is fixing it.'
-  return `<span class="Rows_Meta">${esc(said)} <a href="${esc(at)}?open=${
-    esc(e.fix)
+  return `<span class="Rows_Meta">${esc(said)} <a href="${
+    esc(chatPath(space, e.fix))
   }">See what it did</a></span>`
 }
-let fixing = (a: DeskPage['apps'][number], operator: string) => {
+let fixing = (a: DeskPage['apps'][number], space: string) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug
@@ -843,7 +844,7 @@ let fixing = (a: DeskPage['apps'][number], operator: string) => {
         e.times == 1 ? 'once' : `${e.times} times`
       }${
         day(e.at) ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}` : ''
-      }</span>${operated(e, operator)}</div></li>`
+      }</span>${operated(e, space)}</div></li>`
     ).join('')
   }</ul>${
     n > SHOWN ? `<p class="Rows_Meta">And ${n - SHOWN} more.</p>` : ''
@@ -886,7 +887,7 @@ export let library = (at: DeskPage, env: Host) => {
       }</div>${
         broken.length
           ? `<h2 class="Group">Needs fixing</h2>${
-            broken.map((a) => fixing(a, managePath('operator', at.space))).join(
+            broken.map((a) => fixing(a, at.space)).join(
               '',
             )
           }`

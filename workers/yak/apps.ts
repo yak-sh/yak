@@ -2508,9 +2508,15 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     until,
   }
   // The Operator is open to every member who may change the space; its own
-  // requests are answered by it, and its page is drawn like every other.
+  // requests are answered by it, its settings page is drawn like every
+  // other, and each conversation with it opens in its chat app.
   if (view == 'operator' && writes(who.role) && !space.trashed) {
-    let { operatorAnswer } = await import('./operator-page.ts')
+    let { chatPage, operatorAnswer } = await import('./operator-page.ts')
+    if (at.open) {
+      return req.method == 'GET' || req.method == 'HEAD'
+        ? chatPage(env, space, who, at.open)
+        : nothingHere(env)
+    }
     return await operatorAnswer(req, env, space, who) ??
       desk(req, env, dir, space, who, view)
   }
@@ -2717,7 +2723,7 @@ let desk = async (
     dir.seats(owner).then((seats) => pickable(dir, seats)),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
-        part.operatorBody(env, space, who, q.get('open') ?? undefined)
+        part.operatorBody(env, space, who)
       )
       : undefined,
     // Whom Stripe bills, for the Billing page (T-131895). A read that fails

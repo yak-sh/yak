@@ -76,18 +76,30 @@ export let managePath = (view: ManageView = 'apps', space?: string) =>
     : view == 'apps'
     ? MANAGE
     : `${MANAGE}/${view}`
+// What a conversation opens by: a task's or a request's eid, or `new`.
+let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
+/** An Operator conversation's own page, the chat app (operator-page.ts
+ * `chatPage`): one opened by its task or request, or a new one. */
+export let chatPath = (space: string, open = 'new') =>
+  `${managePath('operator', space)}/${open}`
 /** What a dashboard path asks for: an account page, a space's page, a space
  * with no page named, or an address from before T-136122 (`legacy`), to be
  * sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
-  | { space: string; view: SpaceView | null }
+  | { space: string; view: SpaceView | null; open?: string }
   | { legacy: ManageView }
   | { first: true }
 export let managed = (path: string): Managed | null => {
   if (!(path == MANAGE || path.startsWith(`${MANAGE}/`))) return null
   let [one, two, ...rest] = path.slice(MANAGE.length).split('/')
     .filter(Boolean)
+  // An Operator conversation, on a page of its own (`chatPath`).
+  if (two == 'operator' && rest.length == 1 && SLUG.test(one)) {
+    return OPEN.test(rest[0])
+      ? { space: one, view: 'operator', open: rest[0] }
+      : null
+  }
   if (rest.length) return null
   if (!one) return { first: true }
   if (one == ACCOUNT) {
