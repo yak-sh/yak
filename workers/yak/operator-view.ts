@@ -204,6 +204,27 @@ let tool = (call: Bundle, names: Names, result?: Bundle) => {
   }</div></details>`
 }
 
+// A helper session's end, told to the Operator (@yaks/session `deliverChild`):
+// one of its steps, never the person's words. A receipt from before it said
+// so (`delivery`) is known by the first line deliverChild gives it.
+let LEGACY = /^child [0-9a-f-]{36} (settled|failed|stopped)\n/
+let told = (b: Bundle, body: string) =>
+  !b.result && (b.delivery || LEGACY.test(body))
+let helper = (b: Bundle, body: string) => {
+  let outcome = comp(b, 'delivery')?.outcome ?? body.match(LEGACY)?.[1]
+  let said = body.replace(/^.*\n/, '')
+  return outcome == 'settled'
+    ? `<details class="Talk_Step"><summary>Heard back from a helper</summary><div class="Talk_Detail"><p>What came back</p>${
+      readable(said)
+    }</div></details>`
+    : `<details class="Talk_Step Talk_Step-no"><summary>A helper could not finish</summary><div class="Talk_Detail">${
+      trouble(
+        'A helper the Operator started could not finish, so the Operator went on without it.',
+        said,
+      )
+    }</div></details>`
+}
+
 /** Every line of a transcript worth showing, in order. */
 export let rows = (entries: Bundle[], names: Names): Row[] => {
   let results = new Map(
@@ -230,6 +251,7 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
       }]
     }
     if (b.output && body) return [{ id, html: reply(body) }]
+    if (told(b, body)) return [{ id, html: helper(b, body) }]
     if (b.failed || b.exception) {
       return [{
         id,

@@ -1,11 +1,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import type { Item, Model, Request } from '@yaks/model'
+import { type Item, type Model, ModelError, type Request } from '@yaks/model'
+import { parseHTML } from 'linkedom'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
+import { conversationOf } from './operator-host.ts'
 import { transcript } from '@yaks/session'
 
 // On Claude the Operator runs on Sonnet and hands code to Opus in a child
@@ -83,4 +85,44 @@ test('on Claude the Operator hands code to Opus, which works for its space at it
   assertEquals(said(on(SONNET).at(-1)!), true)
   assertEquals(await entries(child.entity.eid), [0.004])
   assertEquals((await entries(out.session)).every((d) => d == 0.002), true)
+})
+
+// A helper's end reaches the conversation as one of the Operator's steps,
+// never as words the person said: the one that settled and the one whose
+// model was refused, as Opus was in Jeff's space for want of budget.
+let REFUSED = 'What is left of claude’s model and voice budget is too little'
+let talked = async (refused: boolean) => {
+  let store = operatorMemory()
+  let opus: Model = Object.assign(
+    (req: Request) =>
+      refused && req.model == OPUS
+        ? Promise.reject(new ModelError('limit', REFUSED))
+        : model(req),
+    { info: model.info },
+  )
+  let { task } = await operating(store, env, { model: opus, name: SONNET })
+    .run({ person: owner }, space, { say: 'The page is broken; fix it.' })
+  await drain(store)
+  let { html } = await conversationOf(store, '/manage/claude/operator', task)
+  let { document } = parseHTML(`<main>${html}</main>`)
+  let all = (s: string) =>
+    [...document.querySelectorAll(s)].map((e) => e.textContent?.trim())
+  return { all, document }
+}
+
+test("a helper's end is the Operator's step in the conversation, never the person's words", async () => {
+  for (let refused of [false, true]) {
+    let { all } = await talked(refused)
+    assertEquals(all('.Talk_You'), ['The page is broken; fix it.'])
+    assertEquals(
+      all('.Talk_Step > summary').at(-1),
+      refused ? 'A helper could not finish' : 'Heard back from a helper',
+    )
+    if (refused) {
+      assertEquals(all('.Talk_Step-no .Talk_Trouble > p'), [
+        'A helper the Operator started could not finish, so the Operator went on without it.',
+      ])
+      assertStringIncludes(all('.Talk_Trouble pre').join(), REFUSED)
+    }
+  }
 })

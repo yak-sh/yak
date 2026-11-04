@@ -563,6 +563,22 @@
         }
       }
     },
+    "delivery": {
+      "component": true,
+      "type": "object",
+      "description": "on a parent's entry, the child session whose end it tells: the receipt deliverChild writes, never words a person wrote",
+      "properties": {
+        "child": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "how the child had ended when it was told: settled, failed or stopped"
+        }
+      }
+    },
     "woken": {
       "component": true,
       "type": "object",

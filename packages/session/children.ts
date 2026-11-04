@@ -543,6 +543,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
       session: parent,
     },
     content: { body: message + '\n' + context + textOf(last) },
+    delivery: { child, outcome: status },
     ...open ? { result: { call: link.call } } : {},
     ...using ? { using } : {},
   }], { trusted: true })

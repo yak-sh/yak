@@ -28,6 +28,14 @@ let entries = [
     refusal: { code: 'missing' },
   }),
   entry('crash', 6, { failed: { message: 'Worker exceeded its CPU time' } }),
+  // A helper's end as Jeff's conversation 68fd688b recorded it, before the
+  // receipt carried `delivery`.
+  entry('helper', 7, {
+    content: {
+      body:
+        'child 44bf29e4-a03f-8fed-ad75-25d6efa4204f failed\nThis call has no verified cost bound',
+    },
+  }),
 ]
 
 let drawn = () =>
@@ -41,10 +49,10 @@ test('an error reads as words, its detail only inside a closed disclosure', () =
   let doc = drawn()
   let shown = [...doc.querySelectorAll('.Talk_Trouble > p')]
     .map((p) => p.textContent)
-  assertEquals(shown.length, 3)
+  assertEquals(shown.length, 4)
   for (let said of shown) assert(!/[{}]/.test(said!), said!)
   let details = [...doc.querySelectorAll('.Talk_Trouble > details')]
-  assertEquals(details.length, 3)
+  assertEquals(details.length, 4)
   for (let d of details) {
     assert(!d.hasAttribute('open'))
     assertEquals(d.querySelector('summary')!.textContent, 'Details')
@@ -54,6 +62,11 @@ test('an error reads as words, its detail only inside a closed disclosure', () =
     '"type": "invalid_request_error"',
   )
   assertStringIncludes(details[2].textContent!, 'CPU time')
-  // Nothing of an error is drawn as a reply.
+  assertStringIncludes(details[3].textContent!, 'no verified cost bound')
+  // Nothing of an error is drawn as a reply, or as the person's words.
   assertEquals(doc.querySelectorAll('.Talk_Reply').length, 0)
+  assertEquals(
+    [...doc.querySelectorAll('.Talk_You')].map((p) => p.textContent),
+    ['Any app errors recently?'],
+  )
 })
