@@ -19,7 +19,9 @@ The installer takes `yak` and its plugins from [jsr.io](https://jsr.io/@yaks)
 and puts the command in `~/.deno/bin`. If that folder isn't on your `PATH` yet,
 add it (`echo 'export PATH="$HOME/.deno/bin:$PATH"' >> ~/.zshrc`) and open a new
 terminal. `--minimum-dependency-age=0` lets it take a release published today,
-which Deno otherwise waits a day for.
+which Deno otherwise waits a day for. To update later, run the same line with
+`--reload=jsr:@yaks/cli` added: Deno remembers the release it found last, and
+the flag asks jsr.io again.
 
 ## See your spend
 

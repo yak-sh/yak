@@ -10,7 +10,9 @@
 // so the config written here is the release's (./release.ts `released`).
 //
 // Run it with `--minimum-dependency-age=0` to install the release published
-// today; without, it installs the newest release a day old, whole.
+// today; without, it installs the newest release a day old, whole. Deno keeps
+// the release list it fetched, so an update adds `--reload=jsr:@yaks/cli`,
+// or it installs the release it found before.
 
 import cli from './deno.json' with { type: 'json' }
 import { released } from './release.ts'

@@ -29,11 +29,13 @@ yak help            # every command
 
 The installer puts `yak` on your PATH at its own release, so the command and
 every package a config names are one set; `--minimum-dependency-age=0` lets it
-install a release published today, which Deno otherwise waits a day for. From a
-checkout, `deno task install` runs the checkout itself. `yak init` writes the
-config (`db`, the plugins, and who you are) and never replaces one. `yak serve`
-listens on this machine alone; a config's `hostname` offers it to a network, and
-it has no authentication of its own.
+install a release published today, which Deno otherwise waits a day for. Deno
+remembers which release it last found, so to update, run it with
+`--reload=jsr:@yaks/cli` too, which asks jsr.io again. From a checkout,
+`deno task install` runs the checkout itself. `yak init` writes the config
+(`db`, the plugins, and who you are) and never replaces one. `yak serve` listens
+on this machine alone; a config's `hostname` offers it to a network, and it has
+no authentication of its own.
 
 Agents join the same graph:
 
