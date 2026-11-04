@@ -1,28 +1,7 @@
 /// <reference lib="deno.ns" />
-// Serving an app off the Store on the packages (T-33815): the page, the file
-// beside it, and the `/api/*` doors its client speaks — over the workerd
-// stand-in, with nothing stubbed between the request and the rows.
-//
-// The whole point is that two wires meet here and the door translates
-// (wire.ts): a page sends `{entities: […]}` and reads `{ok, aliases, bundles}`
-// back, writes its filter as the query string itself, and folds a socket's
-// frames — while the Store takes a bare array of bundles, answers the batch as
-// applied, reads its line off `?q=`, and pushes `{id, bundles, gone}`. So the
-// client is driven the way a page drives it, and what it gets back is what the
-// guide says it gets back.
-//
-// The directory is a Store too, at `yak/platform`, so the space and the app
-// this serves are real rows written the way `space_new` and `app_new` write
-// them (platform_test.ts is that half on its own).
-//
-// The routing order is held here as well, at the end: which part answers a
-// path — an app, the home app, the platform's own index — is the same door
-// asked the same way, and the stand-in is where a home app with a worker can
-// be stood up at all (apps.ts `served`, D-34197).
-// The runtime this Worker is written against — the HTML rewriter, a Durable
-// Object's state, the bucket, the Store namespace — is testing.ts's, shared
-// with builder_test.ts; Ada, her space and her app are serving-probe.ts's,
-// shared with selling_test.ts, which sells from the same kind of space.
+// App serving and the page wire: requests through the app router, with the
+// directory's decisions over RAM rows. Tests of the app Store's wire keep
+// its Store; the Operator is a service boundary, checked in operator_test.ts.
 import {
   assert,
   assertEquals,
@@ -60,7 +39,8 @@ import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
 import { FREE, monthOf, PLUS, size } from './meter.ts'
-import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
+import { ADA, ADA_OWNS, as, seeded, visit } from './serving-probe.ts'
+import { platform } from './serving-scene.ts'
 import { addressed, sha256 } from './versions.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'

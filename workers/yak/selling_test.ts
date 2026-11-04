@@ -3,6 +3,11 @@
 // signed webhook refusals, account removal and the platform fee.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { aliases } from '@yaks/alias'
+import { keys } from '@yaks/key'
+import { ram } from '@yaks/ram'
+import { appVocab } from './vocab.ts'
 import * as apps from './apps.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -11,7 +16,8 @@ import { added, asked } from './examples/shop/cart.js'
 import { signed } from './probe.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx } from './tools.ts'
-import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
+import { ADA, ADA_OWNS, as, seeded, visit } from './serving-probe.ts'
+import { platform } from './serving-scene.ts'
 
 // ---- the shop example, deployed and shopped in (T-34517) --------------------
 
@@ -148,10 +154,24 @@ test('the shop example deploys, seeds itself and serves its front', async () => 
   )
 })
 
-test('a cart off the shop page is an ask the checkout door can price', async () => {
-  await using k = await shopping()
-  await k.deploy()
-  let shirts = await k.shirts()
+// Cart behavior needs the shop's product rows, without another deployment.
+let cartVocab = appVocab()
+let cartStore = graph({
+  vocab: cartVocab,
+  storage: ram(cartVocab),
+  plugins: [aliases(), keys(cartVocab)],
+})
+let shelf = await cartStore.apply(
+  await Deno.readTextFile(new URL('seed/01-shirts.json', SHOP)).then(
+    JSON.parse,
+  ),
+)
+
+test('a cart off the shop page is an ask the checkout door can price', () => {
+  let shirts = shelf.filter((row) => row.product) as {
+    entity: { eid: string }
+    doc: { title: string }
+  }[]
   let tee = shirts.find((r) => r.doc.title.endsWith('Charcoal'))!
   let long = shirts.find((r) => r.doc.title.startsWith('Long'))!
 
@@ -196,9 +216,7 @@ let pressed = async (env: Env, sell: string) =>
 let WHSEC = 'whsec_a_connect_probe_secret'
 
 test('the connect door refuses what Stripe did not sign', async () => {
-  await using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
-  let { env } = scenario
-  await seeded(env)
+  let env = { STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC } as Env
   let raw = '{"type":"account.updated"}'
   let post = (headers: Record<string, string>) =>
     sell.fetch(
@@ -237,9 +255,7 @@ test('the connect door refuses what Stripe did not sign', async () => {
 // in one sentence — and every other half of selling still works, which is the
 // whole reason it is a 503 rather than a boot failure.
 test('with no connect secret the door says so, and nothing else breaks', async () => {
-  await using scenario = platform({ STRIPE_KEY: 'sk_probe' })
-  let { env } = scenario
-  await seeded(env)
+  let env = { STRIPE_KEY: 'sk_probe' } as Env
   let res = await sell.fetch(
     new Request('https://yaks.app/stripe/connect', {
       method: 'POST',

@@ -9,7 +9,7 @@ import * as apps from './apps.ts'
 import { resourceName, SCOPES } from './bindings.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { platform } from './testing.ts'
+import { platform } from './deploy-probe.ts'
 import { meta } from './meta.ts'
 import { call, type Ctx, type Listed } from './tools.ts'
 import { connect, envOf, need } from '@yaks/connections'
@@ -34,9 +34,9 @@ let configuration = {
   }],
 }
 
-// The tools, directory, and app store run together, as in serving_test.ts.
-// Only Cloudflare's account API is replaced: its resources and multipart
-// uploads are the effects this lifecycle test needs to inspect.
+// Resource lifecycle through the tools and RAM directory. The Store accepts
+// the empty app declaration; controlled Cloudflare API replies expose resource
+// requests and multipart uploads without starting an app Store.
 let fixture = async (active = true, vault = false) => {
   let scenario = platform('bindings-probe', {
     CF_ACCOUNT: 'acct',

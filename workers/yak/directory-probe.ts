@@ -77,10 +77,9 @@ export let rows = (env: Partial<Env> = {}) => {
 
 /** Runtime bindings with the directory's decisions served by a RAM graph.
  * Store-specific behavior keeps using the runtime's app namespace. */
-export let platform = (secret: string, vars: Partial<Env> = {}) => {
-  let scenario = runtime(secret, vars)
+export let hosting = <T extends ReturnType<typeof runtime>>(scenario: T): T => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
-  if (vars.SERVING_COPY) return scenario
+  if (scenario.env.SERVING_COPY) return scenario
   let directory = rows(scenario.env)
   let stores = scenario.env.STORE
   scenario.env.STORE = {
@@ -93,3 +92,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   scenario.env.META = directory.meta
   return scenario
 }
+
+/** Runtime bindings with a RAM directory. */
+export let platform = (secret: string, vars: Partial<Env> = {}) =>
+  hosting(runtime(secret, vars))
