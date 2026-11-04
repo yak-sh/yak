@@ -85,7 +85,8 @@ export let within = (url: string) => `jsr/${url.replace(/^https?:\/\//, '')}`
  * The npm packages as `node_modules`: the package id at each directory. A name
  * the graph's modules import (`direct`) holds its own version at the top;
  * another package's dependency is the top's when the versions agree, and
- * nested under it when they do not.
+ * nested under it when they do not. Direct imports of another version keep
+ * their own home under `.versions` when no dependent already holds it.
  */
 export let tree = (packages: Record<string, Package>, direct: string[]) => {
   let top = new Map<string, string>()
@@ -104,6 +105,15 @@ export let tree = (packages: Record<string, Package>, direct: string[]) => {
     }
   }
   for (let [name, id] of top) nest(name, id, [id])
+  let held = new Set(at.values())
+  for (let id of direct) {
+    let p = packages[id]
+    if (!p || held.has(id)) continue
+    let path = `.versions/${id.replaceAll('/', '+')}/node_modules/${p.name}`
+    at.set(path, id)
+    nest(path, id, [id])
+    for (let id of at.values()) held.add(id)
+  }
   return at
 }
 
