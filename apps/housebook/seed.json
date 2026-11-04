@@ -5,7 +5,7 @@
     },
     "doc": {
       "title": "The example house",
-      "body": "This is a fictional home with sample records. Explore the manual, add an item, or build a handover. Keep personal information out of this public demo."
+      "body": "This is a fictional home with sample records. Explore the manual, add an item, or build a handover."
     },
     "house_profile": {
       "address": "123 Example Lane · Sample home",
@@ -213,11 +213,11 @@
     },
     "doc": {
       "title": "Sample appliance care sheet",
-      "body": "An example document created for this public demo."
+      "body": "An example document for the sample house."
     },
     "house_file": {
       "item": "483fe89d-c717-5572-8d47-76eba812170c",
-      "url": "https://yourname.yaks.app/housebook/demo/appliance-care.txt",
+      "url": "https://yourname.yaks.app/housebook/samples/appliance-care.txt",
       "mime": "text/plain",
       "reference": true
     }
@@ -228,11 +228,11 @@
     },
     "doc": {
       "title": "Sample paint schedule",
-      "body": "An example document created for this public demo."
+      "body": "An example document for the sample house."
     },
     "house_file": {
       "item": "b213a31f-62da-562a-b4b4-4c98acc0531d",
-      "url": "https://yourname.yaks.app/housebook/demo/paint-schedule.txt",
+      "url": "https://yourname.yaks.app/housebook/samples/paint-schedule.txt",
       "mime": "text/plain",
       "reference": true
     }

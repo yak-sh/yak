@@ -1774,10 +1774,9 @@ let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
   let files = version.source
     ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
     : version.files
-  let source = Object.fromEntries(
+  return Object.fromEntries(
     Object.entries(files).filter(([path]) => transferable(path)),
   ) as Files
-  return ctx.copyFiles ? ctx.copyFiles(source) : source
 }
 
 // A publication's source and completed build travel together, named by their

@@ -14,6 +14,7 @@
 import { sha256 } from '@yaks/graph/sha256'
 import {
   type App,
+  appStore,
   type Demo,
   type Directory,
   releaseOf,
@@ -21,10 +22,11 @@ import {
   storeAt,
   storeName,
 } from './directory.ts'
-import { declarationOf } from './declaration.ts'
+import { type Declaration, declarationOf } from './declaration.ts'
 import { ACCEPTED, type Door, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
+import { KERNEL } from './meta.ts'
 import { filesAt } from './release.ts'
 import { applying } from './release-seed.ts'
 import { seedy, sow } from './seed.ts'
@@ -33,6 +35,11 @@ import { addressed, type Files } from './versions.ts'
 /** Whether an app keeps a sample: a private app on offer. An open or public
  * app is one store everyone already shares. */
 export let sampling = (app: App) => app.access == 'private' && !!app.published
+
+/** Whether a stranger can open the app: one everyone shares, or a private
+ * one that keeps a sample for them. */
+export let opens = (app: App) =>
+  app.access != 'private' || (sampling(app) && !!app.demo)
 
 /** What a sample is made from, as one sha: the declaration and the seed
  * files' own shas, so a republish that changed neither is the same sample. */
@@ -56,6 +63,34 @@ let asked = async (
   let text = await r.text()
   if (!r.ok) throw new Error(`sample store ${path}: ${text}`)
   return text
+}
+
+/**
+ * A declaration with the words its app borrows from a sibling (its store's
+ * `/uses`, which no declaration carries) written in as its own, the way
+ * erase.ts gives them to a borrower whose home goes. A sample, and every
+ * visitor's copy of it, stands in no space and borrows from nobody.
+ */
+let alone = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  declared: Declaration,
+): Promise<Declaration> => {
+  let uses = JSON.parse(
+    await asked(appStore(env.STORE, space, app), '/uses', {}, KERNEL),
+  ) as Record<string, string>
+  if (!Object.keys(uses).length) return declared
+  let defs = { ...declared.vocab.$defs }
+  for (let [name, slug] of Object.entries(uses)) {
+    let home = await dir.app(space, slug)
+    let schema = home &&
+      (await declarationOf(env, space, home)).vocab.$defs?.[name]
+    if (!schema) throw new Error(`${slug} has no declaration for ${name}`)
+    defs[name] = schema
+  }
+  return { ...declared, vocab: { ...declared.vocab, $defs: defs } }
 }
 
 /**
@@ -84,11 +119,17 @@ export let sampled = async (
   // The declaration the published version serves under: the app's live
   // pointer while it is still the live version, its number otherwise.
   let release = app.version == number ? releaseOf(app) : String(number)
-  let declared = await declarationOf(env, space, {
-    ...app,
-    source: version.source ?? null,
-    declaration: release,
-  })
+  let declared = await alone(
+    env,
+    dir,
+    space,
+    app,
+    await declarationOf(env, space, {
+      ...app,
+      source: version.source ?? null,
+      declaration: release,
+    }),
+  )
   let seed = seedOf(declared, files)
   // The same words and seed at a new version keep the store, which the
   // strangers already in it go on reading.
@@ -145,9 +186,7 @@ export let unsampled = async (env: Env, dir: Directory, app: App) => {
 /** A sample store's rows and state gone (erase.ts `emptied` does the same for
  * an app's own store). */
 export let cleared = async (env: Env, store: string) => {
-  let r = await storeOf(env.STORE, store)('/', { method: 'DELETE' }, {
-    'x-yak-kernel': '1',
-  })
+  let r = await storeOf(env.STORE, store)('/', { method: 'DELETE' }, KERNEL)
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
 }

@@ -78,6 +78,7 @@ import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
 import { DEMO } from './gallery-demo.ts'
+import { opens } from './sample.ts'
 import type { Args, Ctx, Out } from './tool.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
@@ -193,7 +194,7 @@ let shownOf = (space: Space, app: App, env: Host): Shown => ({
 // a published app and nothing else: unpublishing is what takes an app out of
 // that list, and it takes it out of this one at the same moment without a
 // second rule to keep in step. A private app opens as its copy in the demo
-// space, where there is one.
+// space, where there is one a stranger can open.
 export let shown = async (
   dir: Directory,
   env: Host = {},
@@ -201,7 +202,7 @@ export let shown = async (
   let offers = await dir.offers()
   let demos = new Map(
     offers.filter(({ space, app }) =>
-      space.slug == DEMO && app.access != 'private' && app.installed?.of
+      space.slug == DEMO && opens(app) && app.installed?.of
     ).map((offer) => [offer.app.installed!.of, offer]),
   )
   return offers.map(({ space, app }) => {

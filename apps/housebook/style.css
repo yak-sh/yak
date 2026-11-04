@@ -944,16 +944,6 @@ dialog form {
   .sidebar-bottom {
     display: none;
   }
-  [data-demo] .sidebar-bottom {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 8px;
-    margin-top: 12px;
-  }
-  [data-demo] .sidebar-bottom > a {
-    display: none;
-  }
   .sidebar nav {
     display: flex;
     overflow-x: auto;

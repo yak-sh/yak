@@ -115,10 +115,11 @@ for (let app of cases) {
     let shown = await connector(k, undefined, undefined, '/mcp?auth=mixed')
       .tool('gallery_search', { words: app })
     assertStringIncludes(shown, `app_install(name: 'private-${app}')`)
-    // A stranger at the private original is served its sample, never its
-    // records (visit.ts).
+    // A stranger at the private original, or at its copy, is served its
+    // sample, never its records (visit.ts).
     let original = await k.at('home.yaks.app', `/${app}/api/query?q=.note`)
-    assert(!(await original.text()).includes('Private records stay home'))
+    assertEquals(original.status, 200)
+    assertEquals(await original.json(), [])
     let demo = await k.at('yourname.yaks.app', `/${app}/`)
     assertEquals(demo.status, 200)
     await demo.body?.cancel()
@@ -136,17 +137,12 @@ for (let app of cases) {
   })
 }
 
-test('relisting updates the demo offer and keeps its sample records', async () => {
-  await agent.tool('app_set', {
-    space: 'yourname',
-    app: 'skip',
-    access: 'public',
-  })
+test('relisting updates the demo copy and keeps its records', async () => {
   await agent.tool('graph_apply', {
     app: 'yourname/skip',
     entities: [{
       entity: { eid: crypto.randomUUID() },
-      note: { body: 'Sample record' },
+      note: { body: 'Copy record' },
     }],
   })
   await agent.tool('app_files', {
@@ -166,12 +162,16 @@ test('relisting updates the demo offer and keeps its sample records', async () =
     op: 'read',
   })
   assertStringIncludes(copied, 'Updated manual')
+  assertStringIncludes(
+    await agent.tool('graph_query', { app: 'yourname/skip', filter: '.note' }),
+    'Copy record',
+  )
   let rows = await k.at('yourname.yaks.app', '/skip/api/query?q=.note')
-  assertStringIncludes(await rows.text(), 'Sample record')
+  assertEquals(await rows.json(), [])
   let who = await k.at('yourname.yaks.app', '/skip/api/me').then((r) =>
     r.json()
   )
-  assertEquals(who.writes, true)
+  assertEquals([who.role, who.writes], ['viewer', true])
   let offer = await agent.tool('app_published', { words: 'private-skip-demo' })
   assertStringIncludes(offer, 'v2')
 })
@@ -181,9 +181,6 @@ let demos = await Promise.all(['bible-study', 'housebook'].map(async (app) => {
   let agent = connector(k, k.owner.cookie)
   await owned(k, k.owner.person, 'yourname', 'Demos')
   await owned(k, k.owner.person, 'home', 'Private home')
-  let index = await Deno.readTextFile(
-    new URL(`../../apps/${app}/demo/index.html`, import.meta.url),
-  )
   let at = { space: 'home', app }
   await agent.tool('app_new', {
     ...at,
@@ -203,15 +200,14 @@ let demos = await Promise.all(['bible-study', 'housebook'].map(async (app) => {
         path: 'vocab.json',
         content: vocabFile({ note: { body: { type: 'string' } } }),
       },
-      { path: 'demo/index.html', content: index },
       {
-        path: 'demo/seed.json',
+        path: 'seed.json',
         content: JSON.stringify([{
           entity: { eid: crypto.randomUUID() },
           note: { body: `Sample ${app}` },
         }]),
       },
-      { path: 'demo/documents/care.txt', content: 'Sample care instructions' },
+      { path: 'samples/care.txt', content: 'Sample care instructions' },
     ],
   })
   await agent.tool('app_deploy', at)
@@ -229,71 +225,30 @@ let demos = await Promise.all(['bible-study', 'housebook'].map(async (app) => {
     name: `private-${app}`,
     as: `${app}-copy`,
   })
-  await agent.tool('app_files', {
-    ...at,
-    path: 'release.txt',
-    content: 'Source version two',
-  })
-  await agent.tool('app_deploy', at)
-  return { app, at, index, k, agent }
+  return { app, k, agent }
 }))
 
-for (let { app, at, index, k, agent } of demos) {
-  test(`${app}'s demo files and edited sample data survive a source republish`, async () => {
-    let rows = await k.at('yourname.yaks.app', `/${app}/api/query?q=.note`)
-      .then((r) => r.json())
-    assertEquals(rows.length, 1)
-    await agent.tool('graph_apply', {
-      app: `yourname/${app}`,
-      entities: [{
-        entity: rows[0].entity,
-        note: { body: 'A visitor edited this sample' },
-      }],
-    })
-    await agent.tool('app_publish', at)
-    let copied = await agent.tool('app_files', {
-      space: 'yourname',
-      app,
-      op: 'read',
-      path: 'index.html',
-    })
-    assertEquals(copied, index)
-    let page = await k.at('yourname.yaks.app', `/${app}/`).then((r) => r.text())
-    assertStringIncludes(
-      page,
-      app == 'housebook' ? 'data-demo' : 'A shared demo with sample studies.',
+let notes = (rows: { note: { body: string } }[]) =>
+  rows.map((row) => row.note.body)
+
+for (let { app, k, agent } of demos) {
+  test(`${app}'s demo copy shows strangers its seed, as every install starts`, async () => {
+    let at = (path: string) => k.at('yourname.yaks.app', `/${app}/${path}`)
+    assertEquals(
+      notes(await at('api/query?q=.note').then((r) => r.json())),
+      [`Sample ${app}`],
     )
-    assertStringIncludes(
-      await k.at('yourname.yaks.app', `/${app}/release.txt`).then((r) =>
-        r.text()
-      ),
-      'Source version two',
-    )
-    assertStringIncludes(
-      await k.at('yourname.yaks.app', `/${app}/documents/care.txt`).then((r) =>
-        r.text()
-      ),
+    assertStringIncludes(await at('').then((r) => r.text()), `Private ${app}`)
+    assertEquals(
+      await at('samples/care.txt').then((r) => r.text()),
       'Sample care instructions',
     )
-    let kept = await k.at('yourname.yaks.app', `/${app}/api/query?q=.note`)
-      .then((r) => r.json())
-    assertEquals(kept.map((row: { note: { body: string } }) => row.note.body), [
-      'A visitor edited this sample',
-    ])
-    let ordinary = await agent.tool('app_files', {
-      space: 'home',
-      app: `${app}-copy`,
-      op: 'read',
-      path: 'index.html',
-    })
-    assertEquals(
-      ordinary,
-      `<meta property="og:image" content="card.png"><h1>Private ${app}</h1>`,
+    assertStringIncludes(
+      await agent.tool('graph_query', {
+        app: `home/${app}-copy`,
+        filter: '.note',
+      }),
+      `Sample ${app}`,
     )
-    let empty = await agent.tool('graph_query', {
-      app: `home/${app}-copy`,
-      filter: '.note',
-    })
-    assert(!empty.includes(`Sample ${app}`))
   })
 }

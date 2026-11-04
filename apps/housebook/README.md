@@ -14,12 +14,10 @@ App files contain no personal house records. A person's records belong in the
 app store, so publishing code must never require copying their house data into a
 seed.
 
-The public gallery copy lives at https://yourname.yaks.app/housebook/. The
-fictional records and documents in `demo/` furnish that copy. Keep `demo/` in
-the private source alongside its ordinary files. The platform applies its files
-at the root of the gallery copy on every install and update, including the index
-that enables the shared demo footer. The private app and ordinary installs use
-the ordinary index and have no root seed file.
+The gallery copy lives at https://yourname.yaks.app/housebook/. `seed.json`
+furnishes every new store with a fictional house, whose documents are in
+`samples/`: each install starts with it, and each visitor to the gallery copy
+reads it and gets a store of their own at their first change.
 
 To record a service visit, open an item and add a History entry. To keep a
 receipt, add a document and upload it or paste its direct download URL.

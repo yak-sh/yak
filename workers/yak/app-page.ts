@@ -21,12 +21,13 @@ import { esc } from './html.ts'
 import { type Host, spaceHost } from './host.ts'
 import { at as installAt } from './install.ts'
 import { lost } from './pages.ts'
+import { opens } from './sample.ts'
 import { foot, head, html, top } from './shell.ts'
 
 export let page = (a: Shown, env: Host = {}) => {
-  // A private app with no copy in the demo space opens only for its own
-  // people, so a stranger is offered the copy and nothing to open.
-  let opened = a.app.access != 'private' || a.at != appUrl(a.space, a.app, env)
+  // A private app with no sample and no copy in the demo space opens only for
+  // its own people, so a stranger is offered the copy and nothing to open.
+  let opened = opens(a.app) || a.at != appUrl(a.space, a.app, env)
   let listed = !!a.app.gallery?.listedAt
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
   let copy = `<form method="post" action="${

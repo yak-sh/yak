@@ -1,17 +1,7 @@
 import { type App, type Directory, META, type Space } from './directory.ts'
 import type { Args, Ctx, Out } from './tool.ts'
-import type { Files } from './versions.ts'
 
 export let DEMO = 'yourname'
-
-/** Demo files replace their root counterparts only in the gallery copy. */
-export let demoFiles = (files: Files): Files => ({
-  ...files,
-  ...Object.fromEntries(
-    Object.entries(files).filter(([path]) => path.startsWith('demo/'))
-      .map(([path, sha]) => [path.slice(5), sha]),
-  ),
-})
 
 export let ours = async (dir: Directory, space: Space) => {
   let meta = await dir.space(META.space)
@@ -23,7 +13,9 @@ export let ours = async (dir: Directory, space: Space) => {
 export let copyOf = (apps: App[], source: App) =>
   apps.find((app) => !app.trashed && app.installed?.of == source.eid)
 
-/** Install code into the demo space; the source store is never read. */
+/** Install code into the demo space, private and published, so each stranger
+ * there reads its sample and writes in a store of their own (visit.ts); the
+ * source store is never read. */
 export let demonstrate = async (
   ctx: Ctx,
   space: Space,
@@ -34,9 +26,8 @@ export let demonstrate = async (
   let demo = await ctx.dir.space(DEMO)
   if (!demo) throw new Error('the gallery demo space is missing')
   let copy = copyOf(await ctx.dir.apps(demo), app)
-  let copying = { ...ctx, copyFiles: demoFiles }
   if (!copy) {
-    let installed = await run(copying, 'app_install', {
+    let installed = await run(ctx, 'app_install', {
       space: DEMO,
       name: app.published!.name,
     })
@@ -46,12 +37,21 @@ export let demonstrate = async (
   let changed = !copy.version ||
     copy.installed!.version != app.published!.version
   if (changed) {
-    await run(copying, 'app_update', { space: DEMO, app: copy.slug })
+    await run(ctx, 'app_update', { space: DEMO, app: copy.slug })
   }
-  if (copy.access != 'open') {
-    await run(ctx, 'app_set', { space: DEMO, app: copy.slug, access: 'open' })
+  // A sample is made at publish, so a copy made private is published again.
+  let closed = copy.access != 'private'
+  if (closed) {
+    await run(ctx, 'app_set', {
+      space: DEMO,
+      app: copy.slug,
+      access: 'private',
+    })
   }
-  if (!copy.published || changed || copy.published.version != copy.version) {
+  if (
+    !copy.published || changed || closed ||
+    copy.published.version != copy.version
+  ) {
     await run(ctx, 'app_publish', {
       space: DEMO,
       app: copy.slug,
