@@ -26,6 +26,9 @@ export let install = (version: string, config: string): string[] => [
   'install',
   '--global',
   '--allow-all',
+  // Deno's own lines as a first command fetches modules say nothing to whoever
+  // ran it; its errors print all the same.
+  '--quiet',
   // TODO: drop once Deno honors deno.json's "no-legacy-abort" (2.9.1 does not)
   '--unstable-no-legacy-abort',
   '--force',

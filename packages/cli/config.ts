@@ -78,21 +78,33 @@ let near = (spec: string, base: URL): string =>
   )
 
 export { given, used } from '@yaks/host/config'
-// A subpath a package does not export is a module it does not have. Anything
-// else that goes wrong importing one — a syntax error, a missing dependency, a
-// throw at module scope — is that module failing, and is rethrown: a host that
-// quietly runs without its rules is worse than one that refuses to start.
-let unexported = (error: unknown, spec: string): boolean => {
+/** Whether importing `spec` failed only because its package does not export
+ * that subpath: a module it does not have. Anything else that goes wrong
+ * importing one — a syntax error, a missing dependency, a throw at module
+ * scope — is that module failing, and is rethrown: a host that quietly runs
+ * without its rules is worse than one that refuses to start. A package from
+ * JSR is named with its version in Deno's refusal.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let refusal = (message: string) => new TypeError(message)
+ * assertEquals(unexported(refusal("Unknown export './vocab' for '@yaks/mcp'.\n  Package exports:"), '@yaks/mcp/vocab'), true)
+ * assertEquals(unexported(refusal("Unknown export './vocab' for '@yaks/mcp@0.2.12'.\n  Package exports:"), 'jsr:@yaks/mcp@0.2.12/vocab'), true)
+ * assertEquals(unexported(refusal("Unknown export './vocab' for '@yaks/mcp@0.2.12'."), 'jsr:@yaks/doc@0.2.12/vocab'), false)
+ * assertEquals(unexported(refusal('Module not found "file:///p/vocab.ts".'), 'file:///p/vocab.ts'), true)
+ * assertEquals(unexported(new SyntaxError('Unexpected token'), '@yaks/mcp/vocab'), false)
+ * ```
+ */
+export let unexported = (error: unknown, spec: string): boolean => {
   if (!(error instanceof TypeError)) return false
   // A failed batched import may be cached with an importer location. Only
   // its first line identifies the missing module; dependencies still differ.
-  if (error.message.split('\n', 1)[0] == `Module not found "${spec}".`) {
-    return true
-  }
+  let first = error.message.split('\n', 1)[0]
+  if (first == `Module not found "${spec}".`) return true
   let pkg = /^(?:jsr:)?(@[^/]+\/[^/@]+)(?:@[^/]+)?\/(.+)$/.exec(spec)
-  return !!pkg && error.message.startsWith(
-    `Unknown export './${pkg[2]}' for '${pkg[1]}'.`,
-  )
+  let said = /^Unknown export '\.\/(.+)' for '(@[^/]+\/[^/@']+)(?:@[^']*)?'\.$/
+    .exec(first)
+  return !!pkg && !!said && said[1] == pkg[2] && said[2] == pkg[1]
 }
 
 /** Whether a plugin exports a subpath, asked of the resolver rather than by
