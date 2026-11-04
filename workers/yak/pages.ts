@@ -134,6 +134,10 @@ ${links(env, 'pages.css')}
       inner.includes('data-chart')
         ? `<script src="${url(env, '/chart.js')}" defer></script>`
         : ''
+    }${
+      inner.includes('data-menu')
+        ? `<script src="${url(env, '/menu.js')}" defer></script>`
+        : ''
     }<script src="${url(env, '/drop.js')}" defer></script></body>
 </html>`,
     {
@@ -739,11 +743,12 @@ ${
 </aside>`
 }
 
-// The space selector (T-135919, T-136122, T-136983): the space every link
-// under it changes, as a box saying its name, and Change, which opens the list
-// over the page. Choosing another keeps the page: Billing in one space becomes
-// Billing in the other, a page of the person's own stays where it is, and a
-// space they are only a member of opens at its Operator.
+// The space selector (T-135919, T-136122, T-136983, T-137003): the space
+// every link under it changes, as a box saying its name, and Change, which
+// opens the list over the page; it closes like any menu (public/menu.js).
+// Choosing another keeps the page: Billing in one space becomes Billing in
+// the other, a page of the person's own stays where it is, and a space they
+// are only a member of opens at its Operator.
 let chooser = (at: DeskPage, view: ManageView) => {
   let here = picked(at)
   let all = at.spaces?.length ? at.spaces : [here]
@@ -764,7 +769,7 @@ let chooser = (at: DeskPage, view: ManageView) => {
   if (all.length == 1) {
     return `<div class="Desk_Space">${box(here)}</div>${make}`
   }
-  return `<details class="Desk_Pick">
+  return `<details class="Desk_Pick" data-menu>
 <summary class="Desk_Space">${
     box(here)
   }<span class="Desk_Change">Change</span></summary>
