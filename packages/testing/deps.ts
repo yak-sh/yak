@@ -337,8 +337,8 @@ export let seal = (
  * as JSON), so it holds the same in every survey. A file's `distance` from a
  * change is the imports between them, never through a module wider than
  * `WIDE`; given each path's package (`owner`), a file of a changed package
- * is 0 when that distance reaches it and 1 when only a wide module does, and
- * a file importing a changed package from another is at most 1. */
+ * is 0 when changes in that package reach it, and 1 otherwise. A file
+ * importing a changed package from another is at most 1. */
 export type Survey = {
   of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
@@ -531,23 +531,33 @@ export let survey = async (
     },
     distance: (changed, owner = () => undefined) => {
       let edges = incoming(runtime)
-      let far = new Map<string, number>()
-      for (let p of changed) far.set(p, 0).set(at(url(p)), 0)
-      for (let node of far.keys()) {
-        let d = far.get(node)!
-        if (d && wide(node)) continue
-        for (let from of edges.get(node) ?? []) {
-          if (!far.has(from)) far.set(from, d + 1)
+      let walk = (paths: string[]) => {
+        let far = new Map<string, number>()
+        for (let p of paths) far.set(p, 0).set(at(url(p)), 0)
+        for (let node of far.keys()) {
+          let d = far.get(node)!
+          if (d && wide(node)) continue
+          for (let from of edges.get(node) ?? []) {
+            if (!far.has(from)) far.set(from, d + 1)
+          }
         }
+        return far
       }
-      let mine = new Set(changed.map(owner).filter(Boolean))
+      let far = walk(changed)
+      let homes = [...new Set(changed.map(owner).filter(Boolean))]
+      let mine = new Map(
+        homes.map((
+          home,
+        ) => [home, walk(changed.filter((p) => owner(p) == home))]),
+      )
       return (root) => {
         let d = Math.min(
           far.get(root) ?? Infinity,
           far.get(at(url(root))) ?? Infinity,
         )
         let home = owner(root)
-        if (home && mine.has(home)) return d < Infinity ? 0 : 1
+        let own = home && mine.get(home)
+        if (own) return own.has(root) || own.has(at(url(root))) ? 0 : 1
         let uses = (runtime.get(at(url(root))) ?? []).some((n) => {
           let to = owner(rel(n))
           return to && to != home && mine.has(to)

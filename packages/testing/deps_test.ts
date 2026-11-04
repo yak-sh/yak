@@ -1,5 +1,5 @@
 import { equal, ok, test } from './mod.ts'
-import { affected } from './choose.ts'
+import { affected, within } from './choose.ts'
 import {
   forget,
   type Info,
@@ -304,4 +304,34 @@ test('distance is 0 for the files of a changed package, and 1 for its importers 
   equal(far(at('use/far_test.ts')), 3)
   equal(far(at('app/kernel_test.ts')), 1)
   equal(s.distance([at('lib/render.ts')])(at('lib/README.md.ts')), 2)
+})
+
+let packageFiles = [
+  'app/consumer_test.ts',
+  'lib/core_test.ts',
+  'app/own_test.ts',
+]
+  .map(at)
+let packageSurvey = (await survey(
+  packageFiles,
+  deno({
+    'lib/core.ts': [],
+    'lib/core_test.ts': ['lib/core.ts'],
+    'app/changed.ts': ['lib/core.ts'],
+    'app/own_test.ts': ['app/changed.ts'],
+    'app/consumer_test.ts': ['lib/core.ts'],
+  }),
+))!
+let packageOwner = (path: string) => path.slice(dir.length + 1).split('/')[0]
+
+test('a shared-core change does not make its consumers mandatory when their package also changes', () => {
+  let rank = packageSurvey.distance(
+    [at('lib/core.ts'), at('app/changed.ts')],
+    packageOwner,
+  )
+  equal(rank(at('app/consumer_test.ts')), 1)
+  equal(within(packageFiles, rank, () => 100, 0), [
+    at('lib/core_test.ts'),
+    at('app/own_test.ts'),
+  ])
 })
