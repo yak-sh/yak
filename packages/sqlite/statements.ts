@@ -6,7 +6,7 @@ import { unit } from './unit.ts'
 let held = new WeakMap<Driver, Statements>()
 let platform =
   (globalThis as { Deno?: { build: { os: string; arch: string } } }).Deno?.build
-/** The platform library's path, only when resolution reaches a local file. */
+/** The platform library's path, only when the name resolves to a local file. */
 export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
   let names: Record<string, string> = {
     'linux-x86_64': '@sqlite-vector-linux-x86_64',
@@ -22,7 +22,12 @@ export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
     : platform.os == 'darwin'
     ? 'dylib'
     : 'so'
-  let base = new URL(resolve(name))
+  let base: URL
+  try {
+    base = new URL(resolve(name))
+  } catch {
+    return // nothing maps the name: no vector library is installed
+  }
   if (base.protocol != 'file:') return
   return new URL(`./vector.${ext}`, base).pathname
 }

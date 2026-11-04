@@ -14,6 +14,13 @@ test('an unresolved vector library leaves the native facility unavailable', () =
     undefined,
   )
   equal(vectorPath(() => 'https://example.com/vector/index.js'), undefined)
+  // Outside this repository nothing maps the name, as in a yak from JSR.
+  equal(
+    vectorPath((name) => {
+      throw new TypeError(`Import "${name}" not a dependency`)
+    }),
+    undefined,
+  )
   let ext = Deno.build.os == 'windows'
     ? 'dll'
     : Deno.build.os == 'darwin'
