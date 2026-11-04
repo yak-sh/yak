@@ -497,6 +497,7 @@ export class Builder {
         './operator-channels.ts'
       )
       let { operating } = await import('./operator.ts')
+      let { operatorFrames } = await import('./operator-host.ts')
       let store = operatorStore(this.#ctx.storage, {
         report: (e, where) =>
           caught(e, { request: 'operator effects', handler: where.handler }),
@@ -510,14 +511,15 @@ export class Builder {
           )
         },
       })
+      let frames = operatorFrames(store, () => this.#ctx.getWebSockets())
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
         tell: (session) =>
-          void this.#hear(session).catch((e) =>
+          void frames.tell(session).catch((e) =>
             caught(e, { request: 'operator socket' })
           ),
         typing: (session, text) =>
-          void this.#typing(session, text).catch((e) =>
+          void frames.typing(session, text).catch((e) =>
             caught(e, { request: 'operator socket' })
           ),
       })
@@ -533,61 +535,6 @@ export class Builder {
     return this.#ctx.getWebSockets().filter((ws) =>
       !(ws.deserializeAttachment() as Watching | null)?.operator
     )
-  }
-
-  // Where each Operator session's frames got to, so the next sends only what
-  // moved. In memory: a woken object sends a session's last lines again, and
-  // the page puts each where it already was.
-  #told = new Map<string, number>()
-
-  #watching() {
-    return this.#ctx.getWebSockets().filter((ws) =>
-      (ws.deserializeAttachment() as Watching | null)?.operator
-    )
-  }
-
-  #send(watching: Wire[], frame: unknown) {
-    let sent = JSON.stringify(frame)
-    for (let ws of watching) {
-      try {
-        ws.send(sent)
-      } catch {
-        // A page that has gone away hears nothing more.
-      }
-    }
-  }
-
-  /** A session moved: its frame, to every page watching the Operator. */
-  async #hear(session: string) {
-    let watching = this.#watching()
-    if (!watching.length) return
-    let { frameOf } = await import('./operator-host.ts')
-    let made = await frameOf(
-      (await this.#work()).store,
-      session,
-      this.#told.get(session),
-    )
-    if (!made) return
-    this.#told.set(session, made.seq)
-    this.#send(watching, made.frame)
-  }
-
-  // Each session's task, for the pieces of a reply sent as it is written.
-  #tasks = new Map<string, string>()
-
-  /** A piece of a reply as the model writes it, to every page watching. */
-  async #typing(session: string, text: string) {
-    let watching = this.#watching()
-    if (!watching.length) return
-    let task = this.#tasks.get(session)
-    if (!task) {
-      let { g } = (await this.#work()).store
-      let [link] = await g.read(`.contains .edge.to=${session}`)
-      task = String((link?.edge as { from?: string } | undefined)?.from ?? '')
-      if (!task) return
-      this.#tasks.set(session, task)
-    }
-    this.#send(watching, { operator: { task, typing: text } })
   }
 
   async alarm() {

@@ -7,7 +7,11 @@ import { declared, modelPage } from './testing.ts'
 import { platform } from './directory-probe.ts'
 import { stores } from './app-store-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import {
+  operatorMemory,
+  operatorModel,
+  operatorService,
+} from './operator-testing.ts'
 import {
   attachmentTools,
   authenticated,
@@ -86,7 +90,31 @@ let fixture = async () => {
   app = (await dir.app(space, 'notices'))!
   await declared(p.env, space, app, { vocab: appDoc(words), tools: {} })
   stores(p.env, appVocab(words))
-  return { ...p, dir, space, person, raw, store, held, ctx }
+  let service = operatorService(
+    p.env,
+    held,
+    operatorModel((req) =>
+      Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Which date and time?' }],
+        cost: 0.001,
+      })
+    ),
+  )
+  p.env.BUILDER = service.binding
+  return {
+    ...p,
+    dir,
+    space,
+    person,
+    raw,
+    store,
+    held,
+    ctx,
+    sockets: service.sockets,
+    drain: service.drain,
+  }
 }
 let f = await fixture()
 let asks: Request[] = []
@@ -410,14 +438,13 @@ let watched = (operator: boolean) => {
     serializeAttachment: (v: unknown) => void (held = v),
     deserializeAttachment: () => held,
   }
-  f.builder(f.space.eid)
-  f.sockets.get(`builder ${f.space.eid}`)!.push(ws)
+  f.sockets.push(ws)
   return sent
 }
 let operatorPage = watched(true)
 let buildPage = watched(false)
 let firstEmail = await arrived(email('request-1'), f.env)
-await f.builder(f.space.eid).alarm()
+await f.drain()
 let heard = operatorPage.flatMap((frame) =>
   frame.operator ? [frame.operator] : []
 )
@@ -434,9 +461,9 @@ test('a page watching the Operator hears each step as the lines it changed, and 
   assertEquals(buildPage.length, 0)
 })
 let duplicateEmail = await arrived(email('request-1'), f.env)
-await f.builder(f.space.eid).alarm()
+await f.drain()
 let secondEmail = await arrived(email('request-2', 'reply-1'), f.env)
-await f.builder(f.space.eid).alarm()
+await f.drain()
 let messages = await operatorDoor(
   f.env,
   f.space,

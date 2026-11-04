@@ -102,6 +102,53 @@ export let frameOf = async (store: Store, session: string, from?: number) => {
   }
 }
 
+export type Listener = {
+  send: (data: string) => void
+  deserializeAttachment: () => unknown
+}
+
+/** Frames for the pages watching this Operator, with each session's cursor. */
+export let operatorFrames = (store: Store, sockets: () => Listener[]) => {
+  let told = new Map<string, number>()
+  let tasks = new Map<string, string>()
+  let watching = () =>
+    sockets().filter((ws) =>
+      (ws.deserializeAttachment() as { operator?: boolean } | null)?.operator
+    )
+  let send = (watching: Listener[], frame: unknown) => {
+    let sent = JSON.stringify(frame)
+    for (let ws of watching) {
+      try {
+        ws.send(sent)
+      } catch {
+        // A page that has gone away hears nothing more.
+      }
+    }
+  }
+  return {
+    tell: async (session: string) => {
+      let pages = watching()
+      if (!pages.length) return
+      let made = await frameOf(store, session, told.get(session))
+      if (!made) return
+      told.set(session, made.seq)
+      send(pages, made.frame)
+    },
+    typing: async (session: string, text: string) => {
+      let pages = watching()
+      if (!pages.length) return
+      let task = tasks.get(session)
+      if (!task) {
+        let [link] = await store.g.read(`.contains .edge.to=${session}`)
+        task = String(comp(link, 'edge')?.from ?? '')
+        if (!task) return
+        tasks.set(session, task)
+      }
+      send(pages, { operator: { task, typing: text } })
+    },
+  }
+}
+
 let drafts = (bundles: Bundle[], person: string) =>
   bundles.filter((b) => b.draft).map((b) => ({
     entity: { eid: draftEid(person, 'operator') },
