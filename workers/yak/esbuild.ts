@@ -44,15 +44,22 @@ let MODULE = `${BUILT}.worker.js`
 // one of this version's static assets (bin/compiler-packages.ts) read then:
 // in the script, it was 40% of what every isolate loaded and parsed, each
 // waking Store's included (T-123910, T-37974).
-let catalogText: Promise<string> | undefined
-let CATALOG = (env: Env) =>
-  catalogText ??= env.ASSETS.fetch(
+// Kept per assets binding, the isolate's one in a deployment: a platform made
+// in a test reads its own, so what it reads never rests on an earlier one.
+let catalogs = new WeakMap<Env['ASSETS'], Promise<string>>()
+let CATALOG = (env: Env) => {
+  let text = catalogs.get(env.ASSETS)
+  if (text) return text
+  text = env.ASSETS.fetch(
     new Request(url(env, '/_compiler/packages.json')),
   ).then(async (r) => {
     if (r.ok) return await r.text()
-    catalogText = undefined
+    catalogs.delete(env.ASSETS)
     throw new Error(`compiler catalog ${r.status}`)
   })
+  catalogs.set(env.ASSETS, text)
+  return text
+}
 
 type Cache = {
   compiler: string
