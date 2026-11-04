@@ -7,6 +7,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { connector, fresh, meta, seed, unique } from './probe.ts'
 import { ai, type Turn } from './testing.ts'
 import type { Env } from './env.ts'
+import { managePath } from './route.ts'
 
 let vocab = (defs: Record<string, unknown>) => JSON.stringify({ $defs: defs })
 let recipe = { recipe: { properties: { serves: { type: 'number' } } } }
@@ -88,7 +89,7 @@ test('a break starts one Operator run that fixes the app', async () => {
     // has done it.
     // The dashboard's row for the break that says this.
     let row = async (said: string) => {
-      let page = await (await k.at('yaks.app', `/manage?space=${slug}`, {
+      let page = await (await k.at('yaks.app', managePath('apps', slug), {
         headers: { cookie },
       })).text()
       let at = page.indexOf(said)
