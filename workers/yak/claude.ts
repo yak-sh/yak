@@ -1,8 +1,9 @@
 // Claude for the platform's own agents (the Operator, builders), on the
 // platform's Anthropic key: a Worker secret like OPENAI_API_KEY, read at the
 // moment of each call, and never handed to an app.
-import { messages } from '@yaks/anthropic'
-import { type Model, ModelError } from '@yaks/model'
+import { mark } from '@yaks/anthropic/mark'
+import { anthropicDoc } from '@yaks/anthropic/vocab'
+import { deferredModel, type Model, ModelError } from '@yaks/model'
 import type { Env } from './env.ts'
 
 /** Which provider serves a model name: Workers AI's are `@cf/…`,
@@ -16,8 +17,8 @@ export let providerOf = (name: string): string =>
 
 /** The Messages API on the platform's key; without one, every call is
  * refused as a missing key. */
-export let claude = (env: Env): Model =>
-  messages({
+export let claude = (env: Env): Model => {
+  let options = {
     key: () =>
       env.ANTHROPIC_API_KEY ??
         Promise.reject(
@@ -25,4 +26,9 @@ export let claude = (env: Env): Model =>
         ),
     fetch: env.MODEL_FETCH,
     base: env.ANTHROPIC_API,
-  })
+  }
+  return deferredModel(
+    () => import('@yaks/anthropic').then(({ messages }) => messages(options)),
+    { mark, vocab: anthropicDoc, anchor: () => undefined, info: true },
+  )
+}

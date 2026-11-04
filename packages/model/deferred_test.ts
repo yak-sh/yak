@@ -2,7 +2,7 @@
 // requests and metadata calls share the same provider and retain its recorders.
 import { equal, test } from '@yaks/testing'
 import type { Model, Request } from '@yaks/model'
-import { deferredModel } from './deferred_model.ts'
+import { deferredModel } from './mod.ts'
 
 let request: Request = { model: 'fake', items: [], tools: [] }
 let reply = { id: 'reply', model: 'fake', items: [] }

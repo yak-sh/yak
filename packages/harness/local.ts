@@ -5,7 +5,7 @@
 import * as systemProcess from '@yaks/process/system'
 
 import { artifactStore } from '@yaks/blob'
-import { type Model, prefixCacheMark } from '@yaks/model'
+import { deferredModel, type Model, prefixCacheMark } from '@yaks/model'
 import { claudeDoc } from '@yaks/claude/vocab'
 import { anthropicDoc } from '@yaks/anthropic/vocab'
 import { mark as anthropicMark } from '@yaks/anthropic/mark'
@@ -33,7 +33,6 @@ import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
 import { skillItems, skillTools } from './skills.ts'
 import { pooledHttp } from './http.ts'
-import { deferredModel } from './deferred_model.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools } from './tools.ts'
