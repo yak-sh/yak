@@ -5,7 +5,9 @@ import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
-import { declared, keep, owned, platform } from './testing.ts'
+import { declared, keep, owned } from './testing.ts'
+import { platform } from './deploy-probe.ts'
+import { platform as directoryPlatform } from './directory-probe.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
@@ -160,7 +162,7 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 
 // Capture every intermediate update before later releases move its pointer.
 let crossed = await (async () => {
-  await using scenario = platform('reload-secret')
+  await using scenario = directoryPlatform('reload-secret')
   let f = await fixture(scenario.env)
   // The source accepted this vocabulary before the platform reserved cost.
   // Seed its stored declaration; every release below keeps its own bytes.
@@ -315,7 +317,7 @@ test('updates carry every crossed required source mark but exclude the installed
 // Each module load owns its two kept releases. Only pointer changes, reports
 // and the next release belong to the rollback case's measured work.
 let rollback = await (async () => {
-  let scenario = platform('rollback-secret')
+  let scenario = directoryPlatform('rollback-secret')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
@@ -423,7 +425,7 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
 })
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
-  await using scenario = platform('rollback-errors')
+  await using scenario = directoryPlatform('rollback-errors')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
