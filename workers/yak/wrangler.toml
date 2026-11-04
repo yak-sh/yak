@@ -135,6 +135,10 @@ CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 # Existing subscriptions stay on their old price unless migrated in Stripe.
 STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
 
+# Telnyx's webhook signing key (operator-texts.ts, T-135147): public, so a
+# var. Staging has none, so its webhook door answers 404.
+TELNYX_PUBLIC_KEY = "RA8+wmOD4ivICcJNznDMWuA8DoM+StbPtYr0srTKaKI="
+
 # The Organization plan's live prices (billing.ts, T-135234): $49 a month and
 # $490 a year. Staging has none, so its checkout for the plan stays off.
 STRIPE_PRICE_ORGANIZATION = "price_1UXaBQITlUS6lUlgf2JQems1"

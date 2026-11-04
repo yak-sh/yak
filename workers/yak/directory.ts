@@ -571,7 +571,7 @@ export type Row = {
   person?: Record<string, unknown>
   email?: { address: string }
   phone?: { number: string }
-  sms_consent?: { person: Id; consent: string; at: string }
+  sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -2136,6 +2136,11 @@ export let directory = (
     personAt: async (email: string) =>
       (await one(`.person&.email.address=${email}`))
         ?.entity.eid ?? null,
+    // Who has this mobile number (@yaks/phone `mobile`'s form), if anyone:
+    // where a text that arrived is from.
+    phoned: async (number: string) =>
+      (await one(`.person&.phone.number=${JSON.stringify(number)}`))
+        ?.entity.eid ?? null,
     // The same question the other way: where the platform writes to this
     // person — the letter's envelope, and nothing else (T-32629).
     emailAt: async (person: string): Promise<string | null> =>
@@ -2149,7 +2154,12 @@ export let directory = (
       ])
       let agreed = row?.sms_consent
       return them?.phone && agreed
-        ? { number: them.phone, consent: agreed.consent, at: agreed.at }
+        ? {
+          number: them.phone,
+          consent: agreed.consent,
+          at: agreed.at,
+          ...(agreed.space ? { space: idOf(agreed.space) } : {}),
+        }
         : null
     },
     // What to call this person anywhere their address must not go: the name

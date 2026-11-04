@@ -13,7 +13,14 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
-import { CONSENT, handed, type Texting, texts } from './operator-texts.ts'
+import {
+  CONSENT,
+  handed,
+  REPLIES,
+  tell,
+  type Texting,
+  texts,
+} from './operator-texts.ts'
 import { given } from './operator-name.ts'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -209,14 +216,26 @@ export let operatorAnswer = async (
     let person = who.person ?? ''
     let dir = directoryOf(env.STORE)
     try {
+      let before = await dir.texting(person)
       await dir.apply({
         entities: texts(
           person,
           form.has('stop') ? '' : String(form.get('number') ?? ''),
           form.get('agreed') == 'yes',
+          undefined,
+          space.eid,
         ),
       }, vouched(who))
-      return Response.json(await dir.texting(person))
+      let now = await dir.texting(person)
+      // The welcome the campaign promises, once for each number agreed to.
+      if (now && now.number != before?.number) {
+        await tell(
+          env,
+          { to: now.number, text: REPLIES.welcome },
+          'text welcome',
+        )
+      }
+      return Response.json(now)
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })

@@ -42,6 +42,10 @@ import { operatorDoor } from './operator-page.ts'
 import { arrived, Refused } from './inbox.ts'
 import { chatPath } from './route.ts'
 import type { Inbound } from './env.ts'
+import { endpoints } from './endpoints.ts'
+import { REPLIES, telnyxDoor, textSend } from './operator-texts.ts'
+import { textSigned } from './operator-channels.ts'
+import type { Bundle } from '@yaks/graph'
 
 let fixture = async () => {
   let p = platform('operator-intake')
@@ -322,6 +326,147 @@ test('a person agrees to texts with a ticked box and a mobile number, and stops 
 test("a person's number stays on them, beside their address, after texts stop", () => {
   assertEquals(kept?.phone, '+12695550142')
   assertEquals(kept?.email, 'clerk@example.com')
+})
+
+// Telnyx at its HTTP boundary: the "yaks.app" profile with a 269 number and
+// a toll-free one, and every text posted to it. A number in `blocked` is
+// refused the way a carrier refuses one before a campaign is approved.
+let ANA = '+12695550142', FREE = '+18885550100'
+let texted: { from: string; to: string; text: string }[] = []
+let blocked = new Set<string>()
+let telnyxApi = endpoints(globalThis).open(async (req) => {
+  let path = new URL(req.url).pathname
+  if (path == '/messaging_profiles') {
+    return Response.json({ data: [{ id: 'profile-1' }] })
+  }
+  if (path.endsWith('/phone_numbers')) {
+    return Response.json({
+      data: [{ phone_number: '+12695550100' }, { phone_number: FREE }],
+    })
+  }
+  let sent = await req.json()
+  if (blocked.has(sent.to)) {
+    return Response.json({ errors: [{ code: '40010' }] }, { status: 400 })
+  }
+  texted.push({ from: sent.from, to: sent.to, text: sent.text })
+  return Response.json({ data: { id: `msg-${texted.length}` } })
+})
+let signer = await crypto.subtle.generateKey('Ed25519', true, [
+  'sign',
+  'verify',
+]) as CryptoKeyPair
+let b64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
+Object.assign(f.env, {
+  TELNYX_API: telnyxApi.url,
+  TELNYX_API_KEY: 'a-key',
+  TELNYX_PUBLIC_KEY: b64(
+    await crypto.subtle.exportKey('raw', signer.publicKey),
+  ),
+})
+let texting = async (id: string, text: string, sign = true) => {
+  let body = JSON.stringify({
+    data: {
+      event_type: 'message.received',
+      payload: {
+        id,
+        type: 'SMS',
+        text,
+        from: { phone_number: ANA },
+        to: [{ phone_number: FREE }],
+      },
+    },
+  })
+  let t = String(Math.floor(Date.now() / 1000))
+  let signature = b64(
+    await crypto.subtle.sign(
+      'Ed25519',
+      signer.privateKey,
+      new TextEncoder().encode(`${t}|${body}`),
+    ),
+  )
+  let answer = await telnyxDoor(
+    new Request('https://yaks.app/telnyx/webhook', {
+      method: 'POST',
+      headers: sign
+        ? { 'telnyx-timestamp': t, 'telnyx-signature-ed25519': signature }
+        : {},
+      body,
+    }),
+    f.env,
+  )
+  await f.drain()
+  return answer.status
+}
+let rejoined = await choose({ number: ANA, agreed: 'yes' })
+let welcome = texted.splice(0)
+// The Operator's requests by text, as its page reads them.
+let byText = async () =>
+  (await operatorDoor(f.env, f.space, f.held, 'messages', {}) as Bundle[])
+    .filter((r) =>
+      (r.operator_request as { channel: string }).channel == 'text'
+    )
+let unsigned = await texting('t0', 'Post the agenda', false)
+let afterUnsigned = (await byText()).length
+let signedIn = await texting('t1', 'Post the agenda')
+let [asked] = await byText()
+let answered = texted.splice(0)
+await texting('t2', 'help')
+await texting('t3', 'STOP')
+let replies = texted.splice(0)
+let stoppedTexts = await directoryOf(f.env.STORE).texting(f.held.person)
+test('agreeing to texts sends the welcome from the toll-free number', () => {
+  assertEquals(rejoined.said.number, ANA)
+  assertEquals(welcome, [{ from: FREE, to: ANA, text: REPLIES.welcome }])
+})
+test("a signed text reaches the space's Operator, which answers by text; an unsigned one is refused", () => {
+  assertEquals([unsigned, signedIn], [400, 200])
+  assertEquals(afterUnsigned, 0)
+  assertEquals(asked?.doc, {
+    title: 'Post the agenda',
+    body: 'Post the agenda',
+  })
+  assertEquals((asked?.operator_request as { address: string }).address, ANA)
+  assertEquals(answered, [{
+    from: FREE,
+    to: ANA,
+    text: `Which date and time?\n\n${textSigned(f.space)}`,
+  }])
+})
+test('HELP and STOP are answered in the campaign words, and STOP ends consent', () => {
+  assertEquals(replies.map((r) => r.text), [REPLIES.help, REPLIES.stop])
+  assertEquals(stoppedTexts, null)
+})
+
+// The Operator texts first, from the toll-free number, signed with its name.
+let unagreed = await Promise.resolve(
+  textSend(f.env, f.ctx, f.space).run({ text: 'Hi' }),
+).catch((e: Error) => e.message)
+await choose({ number: ANA, agreed: 'yes' })
+texted.splice(0)
+await textSend(f.env, f.ctx, f.space).run({ text: 'Your agenda is up.' })
+let first = texted.splice(0)
+test('the Operator texts the person it works for only at the number they agreed to, signed with its name', () => {
+  assertStringIncludes(String(unagreed), 'not agreed to texts')
+  assertEquals(first, [{
+    from: FREE,
+    to: ANA,
+    text: `Your agenda is up.\n\n${textSigned(f.space)}`,
+  }])
+})
+
+// A carrier refusing the answer bounces it in plain words.
+blocked.add(ANA)
+await texting('t4', 'Post the minutes')
+blocked.clear()
+let refusedAnswer = (await byText()).find((r) =>
+  (r.doc as { body: string }).body == 'Post the minutes'
+)
+await telnyxApi.stop()
+test('an answer a carrier will not carry yet is bounced with the reason', () => {
+  assertStringIncludes(
+    String((refusedAnswer?.bounced as { reason: string }).reason),
+    'business texting registration',
+  )
 })
 
 // An opt-in kept in the operator store before the number moved onto the

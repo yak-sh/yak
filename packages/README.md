@@ -424,8 +424,11 @@ grouped approximately by function, **not** by dependency order.
   Failed delivery cannot roll back the original graph transaction.
 - **[@yaks/phone](./phone)** — A person's mobile number as `phone{number}`
   beside their `email{address}`, the words they agreed to before being texted as
-  `sms_consent{person, consent, at}`, and `mobile()` for US numbers in E.164
-  form.
+  `sms_consent{person, consent, at, space}`, and `mobile()` for US numbers in
+  E.164 form. Texts are `text{from, to, at, message_id, rcs}` entities, sent
+  through a sender the caller supplies (Telnyx over HTTP, or a stash) with their
+  outcomes written back; a box takes Telnyx's signed webhook at
+  `/telnyx/webhook`.
 
 - **[@yaks/inbox](./inbox)** — A person's inbox, as a plugin a config may leave
   out: the thread and attention policy (Needs you, Replies, Updates and Recent

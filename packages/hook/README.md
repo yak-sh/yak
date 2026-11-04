@@ -54,6 +54,11 @@ beside the secret it goes with:
 - `'github'`: the `X-Hub-Signature-256` header, `sha256=<hex>` of the body.
 - `{header, prefix?, encoding?}`: an HMAC-SHA256 of the body in the named
   header, written as hex (the default) or base64, after an optional prefix.
+- `'telnyx'`: the `telnyx-signature-ed25519` header, a base64 Ed25519 signature
+  of `<telnyx-timestamp>|<raw body>`, refused beyond `SKEW` seconds.
+- `{signature, timestamp, join}`: the same for any sender signing with Ed25519:
+  the signature header, the timestamp header, and what joins the timestamp to
+  the body. The secret is the sender's public key, base64.
 
 The receiver passes the secret; this package never learns where it came from.
 

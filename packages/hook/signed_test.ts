@@ -169,3 +169,48 @@ test('checked: a captured request carries the answer in verified', async () => {
     [true, false, false],
   )
 })
+
+// Telnyx's: Ed25519 over `<t>|<body>` under its public key.
+let pair = await crypto.subtle.generateKey('Ed25519', true, [
+  'sign',
+  'verify',
+]) as CryptoKeyPair
+let telnyxKey = b64(
+  new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)),
+)
+let telnyx = async (raw: string, at: number) => ({
+  'telnyx-timestamp': String(at),
+  'telnyx-signature-ed25519': b64(
+    new Uint8Array(
+      await crypto.subtle.sign(
+        'Ed25519',
+        pair.privateKey,
+        enc.encode(`${at}|${raw}`),
+      ),
+    ),
+  ),
+})
+test("telnyx: Ed25519 over the time and the body, under Telnyx's public key", async () => {
+  let raw = '{"data":{"event_type":"message.received"}}'
+  let said = (body: string, headers: Record<string, string>, key = telnyxKey) =>
+    refusal('telnyx', key, body, new Headers(headers), NOW)
+  let good = await telnyx(raw, SEC)
+  let other = b64(new Uint8Array(32).fill(7))
+  let why = await Promise.all([
+    said(raw, good),
+    said(`${raw} `, good),
+    said(raw, good, other),
+    said(raw, await telnyx(raw, SEC - SKEW - 1)),
+    said(raw, { ...good, 'telnyx-signature-ed25519': 'AAAA' }),
+    said(raw, { 'telnyx-timestamp': String(SEC) }),
+  ])
+  assertEquals(why, [
+    '',
+    'the signature does not match',
+    'the signature does not match',
+    'the signature is too old',
+    'the signature is not well formed',
+    'no telnyx-signature-ed25519 header',
+  ])
+  assertEquals(why.map(ours), [false, true, true, false, false, false])
+})

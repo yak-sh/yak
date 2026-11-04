@@ -215,6 +215,13 @@ export type Env = {
   // not a secret, it rides wrangler.toml's `[vars]` beside the account tag.
   // There is no base-URL seam beside them: under test Stripe is still Stripe,
   // reached with a sandbox key (probe.ts `stripeKey`).
+  // Texts (operator-texts.ts, T-135147). TELNYX_API_KEY is the secret the
+  // Worker sends with; TELNYX_PUBLIC_KEY is Telnyx's webhook signing key,
+  // public, a `[vars]` line; unset, the webhook door answers 404. TELNYX_API
+  // aims the sender somewhere other than Telnyx, for a test.
+  TELNYX_API_KEY?: string
+  TELNYX_PUBLIC_KEY?: string
+  TELNYX_API?: string
   STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string

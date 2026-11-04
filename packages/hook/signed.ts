@@ -1,8 +1,9 @@
 // Whether a delivered request is signed by whoever holds the secret.
 //
 // A scheme is data, so the receiver can keep it beside the secret it names:
-// `'stripe'`, `'github'`, or an HMAC-SHA256 of the raw body in a header of the
-// sender's choosing. The answer is a sentence: '' when the signature holds,
+// `'stripe'`, `'github'`, `'telnyx'`, an HMAC-SHA256 of the raw body in a
+// header of the sender's choosing, or an Ed25519 signature over a timestamp
+// and the body, checked under the sender's public key. The answer is a sentence: '' when the signature holds,
 // else why it does not, because a refusal someone reads in a log should say
 // what was wrong rather than only that something was.
 //
@@ -32,8 +33,21 @@ export type Hmac = {
   encoding?: 'hex' | 'base64'
 }
 
-/** How a sender signs: a named scheme, or an {@link Hmac} of the body. */
-export type Scheme = 'stripe' | 'github' | Hmac
+/** An Ed25519 signature over `<timestamp><join><raw body>`, base64 in one
+ * header, the timestamp (unix seconds) in another. The secret it is checked
+ * under is the sender's public key, base64. */
+export type Ed25519 = {
+  /** the header carrying the signature */
+  signature: string
+  /** the header carrying the unix time it was signed */
+  timestamp: string
+  /** what stands between the timestamp and the body in what was signed */
+  join: string
+}
+
+/** How a sender signs: a named scheme, an {@link Hmac} of the body, or an
+ * {@link Ed25519} signature. */
+export type Scheme = 'stripe' | 'github' | 'telnyx' | Hmac | Ed25519
 
 /** Where a signature's header is read from: a fetch `Headers` is one. */
 export type HeaderLookup = { get(name: string): string | null }
@@ -49,6 +63,12 @@ let MISMATCH = 'the signature does not match'
 let MALFORMED = 'the signature is not well formed'
 
 let GITHUB: Hmac = { header: 'X-Hub-Signature-256', prefix: 'sha256=' }
+// https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks
+let TELNYX: Ed25519 = {
+  signature: 'telnyx-signature-ed25519',
+  timestamp: 'telnyx-timestamp',
+  join: '|',
+}
 
 let enc = new TextEncoder()
 
@@ -140,6 +160,39 @@ let hmac = async (
   return await matches(secret, body, [decoded])
 }
 
+// Ed25519: a 64-byte signature over `<t><join><raw body>`, `t` within SKEW of
+// now, under a 32-byte public key. A key that is not one is the receiver's own
+// mistake, so it reads as a mismatch.
+let ed25519 = async (
+  scheme: Ed25519,
+  publicKey: string,
+  body: string,
+  headers: HeaderLookup,
+  now: number,
+) => {
+  let line = headers.get(scheme.signature)
+  if (!line) return `no ${scheme.signature} header`
+  let at = headers.get(scheme.timestamp) ?? ''
+  if (!/^\d+$/.test(at)) return 'no timestamp on the signature'
+  if (Math.abs(now / 1000 - Number(at)) > SKEW) {
+    return 'the signature is too old'
+  }
+  let sent = base64(line.trim())
+  if (sent?.length != 64) return MALFORMED
+  let raw = base64(publicKey)
+  if (raw?.length != 32) return MISMATCH
+  let k = await crypto.subtle.importKey('raw', raw, 'Ed25519', false, [
+    'verify',
+  ])
+  let ok = await crypto.subtle.verify(
+    'Ed25519',
+    k,
+    sent,
+    enc.encode(`${at}${scheme.join}${body}`),
+  )
+  return ok ? '' : MISMATCH
+}
+
 /**
  * Why a request is not signed under this scheme and secret, or '' when it is.
  *
@@ -158,6 +211,10 @@ export let refusal = (
 ): Promise<string> =>
   scheme == 'stripe'
     ? stripe(secret, body, headers, now)
+    : scheme == 'telnyx'
+    ? ed25519(TELNYX, secret, body, headers, now)
+    : scheme != 'github' && 'timestamp' in scheme
+    ? ed25519(scheme, secret, body, headers, now)
     : hmac(scheme == 'github' ? GITHUB : scheme, secret, body, headers)
 
 /**

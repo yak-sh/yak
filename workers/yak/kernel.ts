@@ -50,6 +50,7 @@
 //     /stripe/webhook         billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
 //     /stripe/connect         sell.ts: what a seller's account says happened
+//     /telnyx/webhook         operator-texts.ts: texts to the Operator
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt,
 //     /.well-known/security.txt
@@ -221,6 +222,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this one nothing: Stripe posts server to server with no Origin at all, and
   // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
+  // Texts and their outcomes, as Telnyx posts them (operator-texts.ts).
+  if (path == '/telnyx/webhook') {
+    let { telnyxDoor } = await import('./operator-texts.ts')
+    return telnyxDoor(req, env)
+  }
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason
   // the billing doors are: `/api/*` at the apex is otherwise all mcp.ts's, and

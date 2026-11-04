@@ -183,8 +183,9 @@ export let directoryConfig: Config = {
     ...links,
     { use: '@yaks/mail', words: ['notified'] },
     // A person's mobile number beside their address, and the words they
-    // agreed to before being texted.
-    { use: '@yaks/phone', facets: ['vocab'] },
+    // agreed to before being texted. Texts themselves are kept by the
+    // Operator, not here, so `text` stays free for apps.
+    { use: '@yaks/phone', facets: ['vocab'], words: ['phone', 'sms_consent'] },
     '@yaks/tunnel',
     {
       use: '@yaks/memory',

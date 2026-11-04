@@ -10,6 +10,7 @@ import { sha256 } from './versions.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
 import { Unsent } from '@yaks/mail'
+import { Blocked } from '@yaks/phone'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
@@ -163,26 +164,52 @@ export let requestId = (space: string, message: string) =>
 export let signed = (space: Space) =>
   `${space.operator}\n${space.title || space.slug}’s Operator`
 
-export let channels = (env: Env): Record<string, Channel> => ({
-  chat: () => Promise.resolve({}),
-  // A break's request is answered beside the break, on the dashboard.
-  error: () => Promise.resolve({}),
-  email: async (request, answer, subject) => {
+/** A text's sign-off: the Operator's name, and the brand. */
+export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
+
+export let channels = (env: Env): Record<string, Channel> => {
+  let texted = async (
+    request: Request,
+    answer: Answer,
+    back: { from?: string; agent?: string },
+  ) => {
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
-    let from = mailFrom(space.slug, null, env)
-    let text = `${answer.text}\n\n${signed(space)}`
-    return metering(env, () => from, posting(env.MAIL, env)).send({
-      from,
-      name: space.operator,
+    let { texter } = await import('./operator-texts.ts')
+    return texter(env).send({
       to: request.address!,
-      subject: /^re:/i.test(subject) ? subject : 'Re: ' + subject,
-      text,
-      html: `<p>${esc(text).replaceAll('\n', '<br>')}</p>`,
-      ...(request.reply_to ? { replyTo: request.reply_to } : {}),
+      text: `${answer.text}\n\n${textSigned(space)}`,
+      ...(back.from ? { from: back.from } : {}),
+      ...(back.agent ? { agent: back.agent } : {}),
     })
-  },
-})
+  }
+  return {
+    chat: () => Promise.resolve({}),
+    // A break's request is answered beside the break, on the dashboard.
+    error: () => Promise.resolve({}),
+    email: async (request, answer, subject) => {
+      let space = await directoryOf(env.STORE).at(request.space)
+      if (!space) throw new Error('Operator reply has no space')
+      let from = mailFrom(space.slug, null, env)
+      let text = `${answer.text}\n\n${signed(space)}`
+      return metering(env, () => from, posting(env.MAIL, env)).send({
+        from,
+        name: space.operator,
+        to: request.address!,
+        subject: /^re:/i.test(subject) ? subject : 'Re: ' + subject,
+        text,
+        html: `<p>${esc(text).replaceAll('\n', '<br>')}</p>`,
+        ...(request.reply_to ? { replyTo: request.reply_to } : {}),
+      })
+    },
+    // A text goes back from the number it reached, an RCS one from the agent,
+    // signed with the Operator's name and the brand carriers ask a text to say.
+    text: (request, answer) =>
+      texted(request, answer, { from: request.reply_to }),
+    rcs: (request, answer) =>
+      texted(request, answer, { agent: request.reply_to }),
+  }
+}
 
 export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
   files.length
@@ -342,10 +369,14 @@ export let handleChannels = (
         )
       } catch (error) {
         if (error instanceof Unsent) throw error
-        caught(error, {
-          request: 'operator delivery',
-          channel: request.channel,
-        })
+        // A carrier's block (a text before the number may send, or to a
+        // person who replied STOP) is expected, and only bounces.
+        if (!(error instanceof Blocked)) {
+          caught(error, {
+            request: 'operator delivery',
+            channel: request.channel,
+          })
+        }
         await g.apply([{
           entity: row.entity,
           bounced: {

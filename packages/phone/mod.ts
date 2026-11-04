@@ -1,5 +1,5 @@
 /**
- * Phone numbers: a person's number as `phone{number}`, the consent they gave
+ * Phone numbers and texts: a person's number as `phone{number}`, the consent they gave
  * to be texted as `sms_consent{person, consent, at}`, and `mobile` to put a
  * typed number in the form both are kept in.
  */
@@ -29,3 +29,19 @@ export let mobile = (typed: string): string | null => {
 /** The eid of a person's `sms_consent`, derived from them. */
 export let consentEid = (person: string): string =>
   identityEid('sms_consent', [person])
+
+export {
+  type Arrival,
+  Blocked,
+  type Keyword,
+  keyword,
+  type Outcome,
+  type Receipt,
+  type Sender,
+  type Text,
+} from './text.ts'
+export { heard, TELNYX, type Telnyx, telnyx } from './telnyx.ts'
+export { type Stash, stash } from './stash.ts'
+export { arrivalEid, kept, settled } from './received.ts'
+export { owed, sending, type Texting } from './send.ts'
+export type { Door, Options, Transport } from './options.ts'

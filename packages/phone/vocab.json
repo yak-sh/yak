@@ -38,8 +38,58 @@
           "type": "string",
           "format": "date-time",
           "description": "when they agreed"
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the space whose Operator texts them: the one they agreed on, and where a text from them goes"
         }
       }
+    },
+    "text": {
+      "component": true,
+      "type": "object",
+      "description": "one text message, sent or received; its words are `doc{body}`. One with @yaks/mail's `deliver{to}` asks to be sent to the `phone{number}` of `deliver.to`, and its outcome is `delivered` or `bounced`",
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "the number it came from, in E.164 form; absent on one to send, which goes from the sender's own",
+          "examples": [
+            "+12695550142"
+          ]
+        },
+        "to": {
+          "type": "string",
+          "description": "the number it went to, or the RCS agent's id for an RCS text that arrived; written on one sent once it leaves",
+          "examples": [
+            "+12695550100"
+          ]
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it arrived"
+        },
+        "message_id": {
+          "type": "string",
+          "description": "the provider's id for it: read from one that arrived, or returned by the sender for one that left"
+        },
+        "rcs": {
+          "type": "boolean",
+          "description": "whether it came, or goes, as RCS rather than SMS"
+        }
+      }
+    },
+    "text_post": {
+      "effect": true,
+      "created": [
+        "text",
+        "deliver"
+      ],
+      "target": ".text",
+      "tries": 6,
+      "description": "Hand an outbound text to the sender and record its outcome. A send the sender knows never left is tried again."
     }
   }
 }

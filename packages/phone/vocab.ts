@@ -6,8 +6,9 @@ import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
-/** The phone vocabulary: `phone{number}` and `sms_consent{person, consent,
- * at}`, in the form `loadVocab` accepts. */
+/** The phone vocabulary: `phone{number}`, `sms_consent{person, consent,
+ * at, space}` and `text{from, to, at, message_id, rcs}`, in the form
+ * `loadVocab` accepts. */
 export let phoneDoc: VocabDoc = doc as VocabDoc
 
 /** What this package is: its manifest's description, the one place it is

@@ -39,6 +39,7 @@ import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import { asIs, type File, SHOWN } from './operator-channels.ts'
+import { textSend } from './operator-texts.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
@@ -565,6 +566,7 @@ export let operating = (
         return [
           ...await operatorRoster(ctx, store),
           platformBug(space),
+          textSend(env, ctx, space),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
