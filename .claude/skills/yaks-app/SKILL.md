@@ -139,8 +139,8 @@ while, and a probe right after a deploy can see the old behavior. A bug's
 occurrence carries the version it ran (`commit`); one from the previous version
 in that window is the lag, not the change. Keep a Worker-to-store call working
 against the previous store code. A restart can cut off an answer already being
-read, so a caller that reads the body does it through the door's `consume`, in
-the same replay as the fetch; `send` is for a body handed on. A reset that still
+read, so the store door (door.ts `storeOf`) reads every answer it may send again
+whole inside its retry, and a caller never handles a reset. A reset that still
 outlasts the retries files under one bug per wording (defects.ts `defect`),
 whichever caller and deploy it names. The tracker's own deploy waits for its object
 (`workers/tracker/deploy.ts`).

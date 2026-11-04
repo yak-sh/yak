@@ -2,13 +2,7 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import {
-  ACCEPTED,
-  doorOf,
-  type Namespace,
-  storeOf as door,
-  whole,
-} from './door.ts'
+import { ACCEPTED, doorOf, type Namespace, storeOf as door } from './door.ts'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
@@ -278,27 +272,62 @@ test('Store policy is carried only from Served, never visitor headers', async ()
   assertEquals(seen, [null, '12'])
 })
 
-test('a door handing on an answer a restart cuts off sends it again; an empty answer stands', async () => {
-  let sent = 0
-  let cut = new ReadableStream({
-    pull: (c) =>
-      c.error(
-        Error('Durable Object reset because a newer deploy reached it: b'),
-      ),
-  })
-  let answers = [
-    () => new Response(cut, { status: 200 }),
-    () => new Response('kept', { status: 201, headers: { 'x-said': 'yes' } }),
-    () => new Response(null, { status: 204 }),
-  ]
+// Each send answers the next of `answers`; `cut` is a 200 a restart cuts off.
+let cut = () =>
+  new Response(
+    new ReadableStream({
+      pull: (c) =>
+        c.error(
+          Error('Durable Object reset because a newer deploy reached it: b'),
+        ),
+    }),
+  )
+let answering = (answers: (() => Response)[]) => {
+  let sent = { n: 0 }
   let store = storeOf({
     idFromName: (name: string) => name,
-    get: () => ({ fetch: () => Promise.resolve(answers[sent++]()) }),
+    get: () => ({ fetch: () => Promise.resolve(answers[sent.n++]()) }),
   } as unknown as Namespace, 'ada')
-  let kept = await store.consume('/storage', whole)
-  assertEquals(
-    [kept.status, kept.headers.get('x-said'), await kept.text(), sent],
-    [201, 'yes', 'kept', 2],
+  return { store, sent }
+}
+
+test('an answer a restart cuts off is sent again, read or handed on', async () => {
+  let kept = () =>
+    new Response('kept', { status: 201, headers: { 'x-said': 'yes' } })
+  for (
+    let init of [{}, { method: 'POST', body: '[]' }] as RequestInit[]
+  ) {
+    let { store, sent } = answering([cut, kept])
+    let r = await store('/query', init)
+    assertEquals(
+      [r.status, r.headers.get('x-said'), await r.text(), sent.n],
+      [201, 'yes', 'kept', 2],
+    )
+  }
+  let { store } = answering([() => new Response(null, { status: 204 })])
+  assertEquals((await store('/storage')).status, 204)
+})
+
+test('a stream, or a call that cannot be sent again, is handed on as it comes', async () => {
+  let pour = () =>
+    new Response(cut().body, {
+      headers: { 'content-type': 'application/x-ndjson' },
+    })
+  let { store, sent } = answering([pour])
+  let streamed = await store('/apply', {
+    method: 'POST',
+    body: new ReadableStream(),
+  })
+  await assertRejects(() => streamed.text(), Error, 'newer deploy')
+  let once = answering([cut])
+  let r = await once.store('/query', {}, {}, { replayable: false })
+  await assertRejects(() => r.text(), Error, 'newer deploy')
+  assertEquals([sent.n, once.sent.n], [1, 1])
+  let live = answering([pour])
+  await assertRejects(
+    async () => await (await live.store('/query')).text(),
+    Error,
+    'newer deploy',
   )
-  assertEquals((await store.consume('/storage', whole)).status, 204)
+  assertEquals(live.sent.n, 1)
 })

@@ -304,10 +304,15 @@ export let fetchOf =
       wait,
     )
 
-/** An answer read whole, for a door to hand on through `consume`: a restart
- * that cuts it off is sent again instead of reaching the caller. */
-export let whole = async (r: Response): Promise<Response> =>
-  r.body ? new Response(await r.arrayBuffer(), r) : r
+// An answer a resend could replace, read whole inside the replay that sent it:
+// a restart that cuts off its body is sent again instead of reaching whoever
+// reads it later. A stream (an ndjson pour, a socket) is handed on as it comes,
+// since its reader is the one reading it live.
+let held = async (r: Response): Promise<Response> =>
+  !r.body || r.status == 101 ||
+    /ndjson|event-stream/.test(r.headers.get('content-type') ?? '')
+    ? r
+    : new Response(await r.arrayBuffer(), r)
 
 let stamped = (req: Request) => (stamp(req.headers), req)
 
@@ -335,34 +340,43 @@ export let storeOf = (
   // write again itself (a page resending after a 202) names the key, and this
   // door keeps it rather than minting one per call. `wait` waits out each
   // pause before a resend (@yaks/durable-object `retried`).
+  //
+  // Every call to a store comes through here, so this is the one place a
+  // deploy's restart is answered: no caller handles a reset, and none can miss
+  // one. A call is sent again when it is safe to repeat: its request can be
+  // built again (no streamed body), and a write carries the idempotency key the
+  // store answers a second time as it answered the first.
   let door = doorOf(
     (req) => placed(ns, name).fetch(req),
     name,
     app,
   )
+  // `read` is a consumer's; a call that hands its answer on names none.
   let ask = <T>(
     path: string,
-    read: (response: Response) => T | Promise<T>,
+    read: ((response: Response) => T | Promise<T>) | null,
     init: RequestInit | Request = {},
     headers: Record<string, string> = {},
-    consuming = false,
     options: { replayable?: boolean } = {},
   ) => {
     let once = { [IDEMPOTENCY]: crypto.randomUUID(), ...headers }
     let method = init instanceof Request ? init.method : init.method ?? 'GET'
     let safe = method == 'GET' || method == 'HEAD'
     let request = `store ${path.split('?')[0]}`
+    let replayable = rebuildable(init) && options.replayable !== false
+    let take = read ??
+      ((r: Response) => (replayable ? held(r) : r) as T | Promise<T>)
     return retried(
       async () => {
         try {
-          return read(await thrown(await door(path, init, once)))
+          return await take(await thrown(await door(path, init, once)))
         } catch (e) {
           if (killed(e) || starved(e)) defect(e, { request, store: name })
           throw e
         }
       },
-      rebuildable(init) && options.replayable !== false,
-      (e) => evicted(e) || (consuming && safe && opaque(e)),
+      replayable,
+      (e) => evicted(e) || (!!read && safe && opaque(e)),
       wait,
     )
   }
@@ -371,16 +385,15 @@ export let storeOf = (
     init: RequestInit | Request = {},
     headers: Record<string, string> = {},
     options: { replayable?: boolean } = {},
-  ) => ask(path, (response) => response, init, headers, false, options)
-  // A body can fail after the runtime answered 200. Keep consuming it inside
-  // the same replay as the fetch, so a retry gets a fresh stub and the same
-  // idempotency key. A caller streaming a socket or bytes keeps using `send`.
+  ) => ask<Response>(path, null, init, headers, options)
+  // A caller that reads the answer reads it inside the same replay, so a read
+  // that fails in the runtime's opaque words is sent again too.
   let consume = <T>(
     path: string,
     read: (response: Response) => T | Promise<T>,
     init: RequestInit | Request = {},
     headers: Record<string, string> = {},
     options: { replayable?: boolean } = {},
-  ) => ask(path, read, init, headers, true, options)
+  ) => ask(path, read, init, headers, options)
   return Object.assign(send, { consume })
 }
