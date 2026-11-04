@@ -250,10 +250,15 @@ export let free = (space: Space) => !paid(space.tier)
 export let over = (space: Space, what: Limited, more = 0, now = new Date()) =>
   used(spent(space, now), what) + more >= allowance(what, space.tier)
 
-/** The space's models and voice this month, against its plan's budget. */
+/** The dollars a space's models and voice may spend a month: the one the
+ * platform's owner set on it (budget.ts), else its plan's. */
+export let limitOf = (space: Space) =>
+  space.budget ?? BUDGET[space.tier ?? 'free']
+
+/** The space's models and voice this month, against its budget. */
 export let budget = (space: Space, now = new Date()): Budget => ({
   spent: used(spent(space, now), 'models'),
-  limit: BUDGET[space.tier ?? 'free'],
+  limit: limitOf(space),
 })
 
 /** What stops this spend in this space, or null to go ahead. */
@@ -511,7 +516,7 @@ export let gauged = (
   let close = shown.filter(([, g]) => full(g) >= WARN)
   let over = close.filter(([, g]) => full(g) >= 1).length
   let state = !over ? 'near' : over == close.length ? 'at' : 'at or near'
-  let limit = BUDGET[space.tier ?? 'free']
+  let limit = limitOf(space)
   let voice = m.realtime ? ` (${share(m.realtime, limit)} on voice)` : ''
   return `This month${read}: ${
     shown.map(([what, g]) => READ[what](g)).join(', ')

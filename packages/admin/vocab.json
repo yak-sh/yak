@@ -104,6 +104,37 @@
       },
       "openWorld": true
     },
+    "admin_budget": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": true,
+      "noun": "admin",
+      "verb": "budget",
+      "title": "Read or set a space's model budget",
+      "description": "A space's monthly dollar budget for models and voice: read it, set it, or hand the space back to its plan's budget with `plan`. Set by the platform, so the selected account must have the platform role.\n\n  yak admin budget ada --as admin@bot.yak.sh\n  yak admin budget ada 300 --as admin@bot.yak.sh\n  yak admin budget ada plan --as admin@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "the space, by its subdomain"
+        },
+        "dollars": {
+          "type": "string",
+          "description": "the new budget in dollars a month, or plan for the plan's"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "space"
+      ],
+      "openWorld": true,
+      "positional": [
+        "space",
+        "dollars"
+      ]
+    },
     "admin_fee": {
       "tool": true,
       "destructive": false,

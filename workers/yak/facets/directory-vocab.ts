@@ -362,6 +362,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { bps: owned(num) },
     },
+    // A space's monthly dollar budget for models and voice, in place of its
+    // plan's (meter.ts `limitOf`). Stamped, and written only by the platform
+    // owner's door (budget.ts), for the reason the fee is.
+    budget: {
+      component: true,
+      type: 'object',
+      properties: { dollars: owned(num) },
+    },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at

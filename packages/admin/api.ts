@@ -256,6 +256,28 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
+/** A space's monthly model and voice budget (workers/yak/budget.ts): the
+ * dollars set on it, null where its plan's stands, and the limit it answers to. */
+export type SpaceBudget = {
+  space: string
+  dollars: number | null
+  limit: number
+}
+
+export let BUDGET = '/api/budget'
+
+/** The budget as it stands. Only an owner of the `yak` space is answered. */
+export let budgetNow = (session: string, space: string): Promise<SpaceBudget> =>
+  said(sent(apex(`${BUDGET}?space=${encodeURIComponent(space)}`), session))
+
+/** Set it, in dollars a month; '' hands the space back to its plan's. */
+export let setBudget = (
+  session: string,
+  space: string,
+  dollars: string,
+): Promise<SpaceBudget> =>
+  said(posted(apex(BUDGET), { space, dollars }, session))
+
 /** The store mover's sweep door (workers/yak/sweep.ts): every store there is,
  * and one of them asked to rehearse its rules, or woken to move what it owes.
  * An owner of the `yak` space is answered. */

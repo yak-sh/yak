@@ -181,6 +181,7 @@ let tunneled: Space = {
   plan: null,
   stripe: null,
   fee: 0,
+  budget: null,
   meter: null,
   told: false,
   trashed: null,

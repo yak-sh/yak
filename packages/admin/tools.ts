@@ -23,6 +23,7 @@ import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
 import {
   acceptInvite,
+  budgetNow,
   close,
   closeAccount,
   doomedIn,
@@ -32,6 +33,7 @@ import {
   renewing,
   rpc,
   saidBy,
+  setBudget,
   setFee,
   setTunnel,
   storeApply,
@@ -303,6 +305,21 @@ export let runs = (
         ? await feeNow(at.bearer)
         : await setFee(at.bearer, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    admin_budget: verb(async (call) => {
+      let a = argsOf(call)
+      let space = String(a.space)
+      let dollars = word(a, 'dollars')
+      if (dollars != null && !/^(\d+(\.\d+)?|plan)$/.test(dollars)) {
+        throw new CallError('dollars', `not a number of dollars: ${dollars}`)
+      }
+      let at = await acting(a)
+      let now = dollars == null
+        ? await budgetNow(at.bearer, space)
+        : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
+      let set = now.dollars == null ? "its plan's" : 'set by the platform'
+      return [said(call, `${now.space}: $${now.limit} a month (${set})`)]
     }),
 
     admin_erase: verb(async (call) => {

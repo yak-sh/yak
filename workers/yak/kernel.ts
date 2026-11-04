@@ -90,6 +90,7 @@ import * as admin from './admin.ts'
 import * as apps from './apps.ts'
 import { packageAt, sealed } from './cache.ts'
 import * as billing from './billing.ts'
+import * as budget from './budget.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
@@ -233,6 +234,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this is not a tool — the connector's roster is fixed and public (T-34541),
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
+  // A space's model budget, set by the same owner (budget.ts, T-137556),
+  // before the connector for the same reason as the fee's.
+  if (path == '/api/budget') return budget.fetch(req, env)
   // The tunnel a space has to a machine (tunnel.ts, T-39585): the owner's own
   // door, before the connector for the same reason as the fee's.
   if (path == '/api/tunnel') return tunnel.fetch(req, env)

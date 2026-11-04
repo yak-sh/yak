@@ -192,6 +192,10 @@ export type Space = {
   // `feeOf`). It is asked of one space — `yak`, the platform's own row — and
   // 0 on every other, where nobody has ever written one.
   fee: number
+  // The space's monthly dollar budget for models and voice where the
+  // platform's owner set one (budget.ts), in place of its plan's (meter.ts
+  // `BUDGET`). Null on every space nobody has given one, which is almost all.
+  budget: number | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -556,6 +560,7 @@ export type Row = {
     from_bookmark?: string | null
   }
   fee?: { bps?: number | null }
+  budget?: { dollars?: number | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
@@ -947,6 +952,7 @@ export let SPACE_PARTS = [
   'trashed',
   'stripe',
   'fee',
+  'budget',
   'former',
   'tunnel',
   'operator',
@@ -1011,6 +1017,7 @@ export let spaceOf = (r: Row): Space => ({
   plan: planOf(r),
   stripe: stripeOf(r),
   fee: r.fee?.bps ?? 0,
+  budget: r.budget?.dollars ?? null,
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),

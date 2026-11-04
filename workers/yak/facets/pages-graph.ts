@@ -25,7 +25,15 @@ import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 // these: an app's draft, its counters and its gallery listing, and a space's
 // bills and letters. A part added to either row is purged until it is named
 // here.
-let UNSEEN = ['meter', 'gallery', 'screenshot', 'notified', 'stripe', 'fee']
+let UNSEEN = [
+  'meter',
+  'gallery',
+  'screenshot',
+  'notified',
+  'stripe',
+  'fee',
+  'budget',
+]
 let DRAFT = ['draft', 'fence', 'followed']
 // A space's routing: which app answers which path, and whether any does.
 let ROUTING = ['home', 'trashed', 'former']

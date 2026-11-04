@@ -302,6 +302,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   plan: null,
   stripe: null,
   fee: 0,
+  budget: null,
   told: false,
   trashed: null,
   slugs: [],
@@ -899,6 +900,10 @@ test("each space answers to its own allowances and budget, never its owner's oth
   // The Plus plan space is held to its own plan's figures.
   assert(refusedSpend(paid, 'models', {}, 0.075, NOW))
   assertEquals(refusedSpend(paid, 'emails', {}, 0, NOW), null)
+  // A budget the platform set stands in place of the plan's.
+  let given = { ...paid, budget: 300 }
+  assertEquals(budget(given, NOW), { spent: 3, limit: 300 })
+  assertEquals(refusedSpend(given, 'models', {}, 0.075, NOW), null)
 })
 
 test('a conversation that shipped nothing pays for its model and seconds', async () => {
