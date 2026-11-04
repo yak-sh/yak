@@ -244,28 +244,36 @@ test('later code that drops a served marker remains unsafe despite a newer uploa
   assertEquals(rows[2].refusal, undefined)
 })
 
-test('a secret change carries the commit of the code it copied', () => {
-  let secret = (n: number): Version => ({
-    ...version(n),
+test('a secret change carries the commit it copied however many deploys follow', () => {
+  let secret = {
+    ...version(2),
     annotations: { 'workers/triggered_by': 'secret' },
-  })
-  let made = (history: Deployment[]) =>
-    deploysIn(
-      [version(1, `${commit(1).sha} change 1`), secret(2), secret(3)],
-      history,
-      [commit(2), commit(1)],
-    ).map((r) => [r.id, r.commit?.sha, r.estimated])
+  }
+  let later = [3, 4, 5, 6, 7, 8, 9]
+  let named = (n: number) => version(n, `${commit(n).sha} change ${n}`)
+  // Wrangler's history has aged out the deployment that served v1.
+  let history = [2, ...later].map((n) => deployment(n + 0.5, `v${n}`))
+  let rows = (versions: Version[]) =>
+    boundaries(
+      deploysIn(versions, history, [1, ...later].map(commit))
+        .map((r) => ({ ...r, marks: [] })),
+    ).map((r) => [r.id, r.commit?.sha, r.estimated, r.refusal])
+  assertEquals(rows([named(1), secret, ...later.map(named)]).at(-2), [
+    'v2',
+    commit(1).sha,
+    false,
+    undefined,
+  ])
+  // v1 has aged out of the uploads too: v2 copied code older than every one
+  // retained, which blocks no rollback but its own.
   assertEquals(
-    made([deployment(3.5, 'v3'), deployment(2.5, 'v2'), deployment(1.5, 'v1')]),
-    [
-      ['v3', commit(1).sha, false],
-      ['v2', commit(1).sha, false],
-      ['v1', commit(1).sha, false],
-    ],
-  )
-  assertEquals(
-    made([deployment(2.5, 'v2'), deployment(1.5, 'v1', 'v0')]).slice(1, 2),
-    [['v2', commit(2).sha, true]],
+    rows([secret, ...later.map(named)]).filter((r) => r[3]),
+    [[
+      'v2',
+      commit(1).sha,
+      true,
+      'no rollback: commit inferred by time; version messages required',
+    ]],
   )
 })
 

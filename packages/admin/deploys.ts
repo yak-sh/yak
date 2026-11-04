@@ -59,6 +59,10 @@ export type Deploy = {
   created: string
   commit?: Commit
   estimated: boolean
+  // A secret change's copy of an earlier upload's code. When that upload has
+  // aged out of the list, its commit is inferred, but it brings no code that
+  // the boundaries main has carried don't already cover.
+  copy?: true
   marks: string[] | null
   first?: string
   last?: string
@@ -206,37 +210,32 @@ export let deploysIn = (
   let uploads = versions.toSorted((a, b) =>
     Date.parse(a.metadata?.created_on) - Date.parse(b.metadata?.created_on)
   )
-  // A secret change makes a new version of the code then serving and leaves
-  // its message off. That code is known only when the version uploaded just
-  // before it is also the one that served all traffic just before it.
-  let message = (v: Version): string => {
-    let own = v.annotations?.['workers/message']
-    if (own || v.annotations?.['workers/triggered_by'] != 'secret') {
-      return own ?? ''
-    }
+  let named = (message = '') =>
+    message.split('\n')[0].match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
+  // A secret change copies the latest upload and names no commit of its own:
+  // Wrangler's `secret put` refuses unless that upload serves, and `versions
+  // secret put` copies it outright. Its code is the upload just before it.
+  let copy = (v: Version) =>
+    v.annotations?.['workers/triggered_by'] == 'secret' &&
+    !named(v.annotations?.['workers/message'])
+  let source = (v: Version): RegExpMatchArray | null => {
+    if (!copy(v)) return named(v.annotations?.['workers/message'])
     let made = Date.parse(v.metadata.created_on)
     let prior = uploads.findLast((u) =>
       Date.parse(u.metadata.created_on) < made
     )
-    let serving = history.findLast((d) => Date.parse(d.created_on) < made)
-      ?.versions
-    return prior && serving?.length == 1 &&
-        serving[0].version_id == prior.id && serving[0].percentage == 100
-      ? message(prior)
-      : ''
+    return prior ? source(prior) : null
   }
   return versions.map((v): Deploy => {
     if (!v.id || !Number.isFinite(Date.parse(v.metadata?.created_on))) {
       throw new Error('version has no id or creation time')
     }
-    let named = message(v).split('\n')[0].match(
-      /^([a-f\d]{7,40})(?:\s+(.*))?$/i,
-    )
-    let commit = named
-      ? log.find((c) => c.sha.startsWith(named[1])) ?? {
-        sha: named[1],
+    let lead = source(v)
+    let commit = lead
+      ? log.find((c) => c.sha.startsWith(lead[1])) ?? {
+        sha: lead[1],
         at: '',
-        subject: named[2] ?? '',
+        subject: lead[2] ?? '',
       }
       : log.find((c) => Date.parse(c.at) <= Date.parse(v.metadata.created_on))
     let served = deploymentsFor(v.id, history)
@@ -244,7 +243,8 @@ export let deploysIn = (
       id: v.id,
       created: v.metadata.created_on,
       commit,
-      estimated: !named,
+      estimated: !lead,
+      ...copy(v) && { copy: true },
       marks: null,
       first: served[0]?.created_on,
       last: served.at(-1)?.created_on,
@@ -279,7 +279,7 @@ export let boundaries = (
   for (let mark of floor ?? []) moved.add(mark)
   let unknown = floor == null || !served.length ||
     served.some((r) => r.marks == null)
-  let estimated = served.some((r) => r.estimated)
+  let estimated = served.some((r) => r.estimated && !r.copy)
   for (let r of out) {
     let missing = [...moved].filter((m) => !r.marks?.includes(m))
     let older = newest && Date.parse(r.created) < Date.parse(newest.created)
