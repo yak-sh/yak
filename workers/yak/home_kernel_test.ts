@@ -417,8 +417,9 @@ test("the selector names whose space each one you're a member of is", async () =
       .map((m) => m[1])
   }
   let owner = them.email.split('@')[0]
-  // The owner's own row says it is theirs; the member's names the owner.
-  assert((await rows(them.cookie)).includes(`${slug}.yaks.app · yours`))
+  // The owner's own row says nothing under its name; the member's names the
+  // owner.
+  assert(!(await rows(them.cookie)).some((r) => r.includes('member')))
   assert(
     (await rows(guest.cookie)).includes(`${owner}’s space · you’re a member`),
   )
