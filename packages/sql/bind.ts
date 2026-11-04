@@ -2091,7 +2091,10 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   if (indexed && none.length && ctx.archetypes) {
     ctx = { ...ctx, archetypes: undefined }
   }
-  let gated = (!ctx.present || ctx.archetypes?.held) &&
+  // A lifecycle absence can discard most of a presence component's history.
+  // Load even a cold catalog instead of probing every historical owner.
+  let pending = all.length > 0 && none.length > 0
+  let gated = (!ctx.present || ctx.archetypes?.held || pending) &&
     (all.length + none.length > 1 || none.length > 0 && wearing.length > 0)
   let shape = gated && !indexed
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })

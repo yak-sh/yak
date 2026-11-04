@@ -3,7 +3,7 @@ import { assert, assertEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { archetypeSet, bind, compile, isRaw, lit } from './mod.ts'
+import { archetypeSet, bind, compile, lit } from './mod.ts'
 
 let v = loadVocab({
   $defs: {
@@ -93,11 +93,6 @@ test('archetype plans: positive facets drive their table while boolean kinds kee
     )
     assertEquals(sql.params, [], query)
   }
-  let r = bind(parse('.task .doc !claim .doc.title=hello'), v, { archetypes })
-  assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), [
-    '"entity" not indexed',
-    '"doc" not indexed',
-  ])
   assertEquals(bind(parse('?doc'), v, { archetypes }).joins, [])
   let empty = archetypeSet(new Archetypes(), new Map())
   assertEquals(compile(parse('.doc'), v, { archetypes: empty }).params, [])
