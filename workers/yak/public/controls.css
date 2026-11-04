@@ -112,6 +112,23 @@
     --button-fill: var(--paper);
     --button-ink: var(--ink);
   }
+  /* A button that steps back beside another: it reads as a link, with no
+     fill, outline or hatch. */
+  .Button-link,
+  .Button-link:hover:not(:disabled, [aria-pressed='true']),
+  .Button-link:active:not(:disabled) {
+    --lift: 0px;
+    padding: 0;
+    background: none;
+    color: var(--accent);
+    font-weight: inherit;
+    text-decoration: underline;
+    transform: none;
+  }
+  .Button-link::before,
+  .Button-link::after {
+    content: none;
+  }
   /* A field is a well: darker than the paper, a little hollow, its edge
      drawn in pencil. The pencil keeps what lies inside the edge as it is,
      so what is typed stays crisp. Focus draws the edge in the accent. */

@@ -384,16 +384,17 @@ export let pictures = async (env: Env, all: Shown[]) =>
 
 // ---- the page ----------------------------------------------------------
 
-// Trying the app and installing a copy are separate actions: its head is its
-// name, linked to the app, and the copy it offers; its picture opens the app
-// too.
+// Trying the app is the card's one button; installing a copy is the quieter
+// link beside it. Its name and its picture open the app too.
 export let card = (a: Shown) =>
   `<li class="Card Make_Card" id="${esc(a.name)}">
 <header class="Card_Head"><h3 class="Card_Title"><a href="${esc(a.at)}">${
     esc(a.title)
-  } <span aria-hidden="true">↗</span></a></h3><form class="Card_Actions" method="post" action="/install?name=${
+  }</a></h3><div class="Card_Actions"><form method="post" action="/install?name=${
     encodeURIComponent(a.name)
-  }"><button class="Button" type="submit">Get a copy</button></form></header>
+  }"><button class="Button Button-link" type="submit">Get a copy</button></form><a class="Button" href="${
+    esc(a.at)
+  }">Try it <span aria-hidden="true">↗</span></a></div></header>
 <a class="Make_Shot" href="${esc(a.at)}" tabindex="-1" aria-hidden="true">${
     a.shot
       ? `<img src="${
@@ -821,12 +822,10 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// These are the examples promised on the home page, in its order: tools for
-// work, then something for a side business, then for home. Gallery approval
+// These are the examples promised on the home page, in its order: something
+// for a side business, then for home. Gallery approval
 // and listing recency do not decide which apps the platform features.
 export let DEMOS = [
-  'practice',
-  'handouts',
   'menu',
   'recipes',
   'garden',

@@ -142,9 +142,15 @@ it.
 its personas (yaks.app's is D-131886, reached through `yaks-app-business`).
 Read it before writing a line, and write for one of them: their work, their
 problem, the words they'd use for it. The examples on the page should be things
-that person would ask for, named the way they'd name them. "A practice planner
-for your team" tells a coach the page is about her; "a world you can explore
-together" tells her nothing.
+that person would ask for, named the way they'd name them. "A menu for your
+side business" tells a baker the page is about them; "a world you can explore
+together" tells them nothing.
+
+**A stranger gets each example at a glance.** Its name and one line say what
+it is to someone with no context. A niche example only the people in that niche
+recognize is cut. Of "Practice Planner" and "Handout library" on yaks.app's
+home page, Jeff, verbatim: "i think "Practice Planner" and "Handout library"
+are a bit too confusing for the yaks.app homepage".
 
 **Examples spark ideas; they aren't a menu.** A row of example apps is there
 to show how wide the range is and to set off the visitor's own idea, not to

@@ -360,7 +360,7 @@ test('the homepage paints every chosen screenshot', async () => {
   }
 })
 
-test('a card offers installation separately from opening the app', () => {
+test("a card's button opens the app, and the copy steps back", () => {
   let html = card(shown())
   assertStringIncludes(html, 'id="recipes"')
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
@@ -368,10 +368,14 @@ test('a card offers installation separately from opening the app', () => {
   assert(!html.includes('>jeff.yaks.app/recipes/<'))
   // No picture of its own falls back to the platform's tile.
   assertStringIncludes(html, 'connector-512.png')
-  assert(html.indexOf('</a>') < html.indexOf('<form'))
+  assert(html.indexOf('</h3>') < html.indexOf('<form'))
   assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
   assertStringIncludes(
     html,
-    '<button class="Button" type="submit">Get a copy</button>',
+    '<button class="Button Button-link" type="submit">Get a copy</button>',
+  )
+  assertStringIncludes(
+    html,
+    '<a class="Button" href="https://jeff.yaks.app/recipes/">Try it',
   )
 })
