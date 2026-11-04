@@ -374,6 +374,19 @@ let hear = (frame) => {
   if (!o) return
   let card = [...box.querySelectorAll('[data-task]')].find((c) => c.dataset.task == o.task)
   if (!card) return void read().catch((e) => { status.textContent = e.message })
+  // A reply as it is written, until the step that wrote it lands.
+  let typing = card.querySelector('[data-typing]')
+  if (o.typing) {
+    if (!typing) {
+      typing = document.createElement('p')
+      typing.className = 'Chat_Bubble Chat_Bubble-them'
+      typing.dataset.typing = ''
+      card.querySelector('[data-rows]').append(typing)
+    }
+    typing.textContent += o.typing
+    return
+  }
+  typing?.remove()
   for (let row of o.rows) {
     let at = document.getElementById('row-' + row.id)
     if (!at) {

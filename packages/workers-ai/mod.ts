@@ -408,6 +408,116 @@ let raw = (
   })
 }
 
+/** A tool call a stream gave in pieces, joined. */
+export type StreamedCall = {
+  id?: string
+  type?: string
+  function: { name: string; arguments: string }
+}
+
+/** A streamed answer, in the shape a whole OpenAI-style answer has. */
+export type Streamed = {
+  id: string
+  choices: { message: { content: string; tool_calls?: StreamedCall[] } }[]
+  usage: unknown
+}
+
+/**
+ * A streamed answer (`stream: true`) read as its server-sent events, into the
+ * object a whole answer is: each chunk's output text is told as it arrives
+ * (`onText`; never its reasoning), tool calls are joined by their index, and
+ * the closing summary's usage, which counts the whole request, is the
+ * answer's. A withdrawn request stops reading.
+ *
+ * ```ts
+ * import { streamed } from '@yaks/workers-ai'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let events = [
+ *   { choices: [{ delta: { reasoning: 'hm' } }] },
+ *   { choices: [{ delta: { content: 'Hel' } }] },
+ *   { choices: [{ delta: { content: 'lo' } }] },
+ *   { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'f', arguments: '{"a"' } }] } }] },
+ *   { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: ':1}' } }] } }] },
+ *   { response: '', usage: { prompt_tokens: 9, completion_tokens: 4 } },
+ * ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n'
+ * let told: string[] = []
+ * let out = await streamed(new Response(events).body!, {
+ *   model: 'm', items: [], tools: [], onText: (d) => told.push(d.text),
+ * })
+ * assertEquals(told, ['Hel', 'lo'])
+ * assertEquals(out.choices[0].message.content, 'Hello')
+ * assertEquals(out.choices[0].message.tool_calls![0].function.arguments, '{"a":1}')
+ * assertEquals(out.usage, { prompt_tokens: 9, completion_tokens: 4 })
+ * ```
+ */
+export let streamed = async (
+  body: ReadableStream<Uint8Array>,
+  req: Request,
+): Promise<Streamed> => {
+  let text = '', id = '', usage: unknown, last: unknown
+  let tools: StreamedCall[] = []
+  let take = (chunk: unknown) => {
+    id ||= str(at(chunk, 'id'))
+    let delta = at(chunk, 'choices', 0, 'delta')
+    let piece = str(at(delta, 'content') ?? at(chunk, 'response'))
+    if (piece) {
+      text += piece
+      req.onText?.({ index: 0, text: piece })
+    }
+    let said = at(delta, 'tool_calls') ?? at(chunk, 'tool_calls')
+    for (let c of Array.isArray(said) ? said : []) {
+      let fn = at(c, 'function') ?? c
+      let args = at(fn, 'arguments')
+      let index = count(at(c, 'index')) ?? tools.length
+      let call = tools[index] ??= { function: { name: '', arguments: '' } }
+      call.id ||= str(at(c, 'id')) || undefined
+      call.type ||= str(at(c, 'type')) || undefined
+      call.function.name ||= str(at(fn, 'name'))
+      call.function.arguments += typeof args == 'string'
+        ? args
+        : args == null
+        ? ''
+        : JSON.stringify(args)
+    }
+    let used = at(chunk, 'usage')
+    if (used) last = used
+    // The summary has no choices: what the whole request used.
+    if (used && !at(chunk, 'choices')) usage = used
+  }
+  let reader = body.getReader()
+  let words = new TextDecoder()
+  let stop = () => void reader.cancel().catch(() => {})
+  req.signal?.addEventListener('abort', stop, { once: true })
+  let held = ''
+  try {
+    for (;;) {
+      let { value, done } = await reader.read()
+      if (done) break
+      held += words.decode(value, { stream: true })
+      let lines = held.split('\n')
+      held = lines.pop()!
+      for (let line of lines) {
+        let data = line.startsWith('data:') ? line.slice(5).trim() : ''
+        if (data && data != '[DONE]') take(JSON.parse(data))
+      }
+    }
+  } finally {
+    req.signal?.removeEventListener('abort', stop)
+  }
+  req.signal?.throwIfAborted()
+  return {
+    id,
+    choices: [{
+      message: {
+        content: text,
+        ...tools.length ? { tool_calls: tools.filter(Boolean) } : {},
+      },
+    }],
+    usage: usage ?? last,
+  }
+}
+
 /**
  * A model over the binding, failing as {@link failure} says. Music output
  * needs artifact storage and returns its measured/priced dollar cost.
@@ -468,7 +578,12 @@ export let workersAi = (
         'This call already generated media; use recovery instead',
       )
     }
-    let sent = music(req.model) ? musicInput(req) : input(req)
+    // A native model's text is told as it is written, to whoever listens.
+    let streams = !!req.onText && !req.questions && !music(req.model) &&
+      req.model.startsWith('@cf/')
+    let sent = music(req.model)
+      ? musicInput(req)
+      : { ...input(req), ...streams ? { stream: true } : {} }
     await submitted(req)
     let response = await decoded(
       await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(
@@ -490,7 +605,9 @@ export let workersAi = (
         throw failure(e)
       }),
     )
-    let out = said(response)
+    let out = response instanceof ReadableStream
+      ? await streamed(response, req)
+      : said(response)
     let id = str(at(out, 'id')) || crypto.randomUUID()
     if (music(req.model)) {
       let reported = count(at(response, 'gatewayMetadata', 'cost')) ??
@@ -529,7 +646,9 @@ export let workersAi = (
     // answer OpenAI's; both are read, so a change of model is a change of id.
     let chat = at(out, 'choices', 0, 'message')
     let text = String(at(out, 'response') ?? at(chat, 'content') ?? '')
-    if (text) req.onText?.({ index: 0, text })
+    if (text && !(response instanceof ReadableStream)) {
+      req.onText?.({ index: 0, text })
+    }
     let words: Item[] = text ? [{ kind: 'assistant', text }] : []
     return {
       id,

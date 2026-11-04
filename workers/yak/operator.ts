@@ -36,6 +36,8 @@ export type Options = {
   // Told each time a session moved (a step landed, words were given), so a
   // page watching it hears at once (the Builder object's socket).
   tell?: (session: string) => void
+  // Told each piece of a reply as the model writes it.
+  typing?: (session: string, text: string) => void
 }
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -309,12 +311,23 @@ export let operating = (
     let space = session
       ? (await workingOf(store, String(session)))?.space
       : null
+    let heard = req.onText
     let reply = await accounted(
       env,
       (dir) => space ? dir.at(space) : Promise.resolve(null),
       base,
       () => Promise.resolve(price),
-    )(req)
+    )({
+      ...req,
+      ...heard
+        ? {
+          onText: (delta) => {
+            heard(delta)
+            if (session) options.typing?.(String(session), delta.text)
+          },
+        }
+        : {},
+    })
     let cost = billed(reply, price)
     return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
   }, base)
@@ -365,6 +378,9 @@ export let operating = (
       model,
       name,
       provider,
+      // Its text is shown as it is written, and Stop withdraws a request in
+      // flight, which only a streamed one is (@yaks/session run.ts `step`).
+      streaming: true,
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
         return [

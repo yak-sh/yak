@@ -354,3 +354,30 @@ test('Stop ends the run after the step in flight with one answer, and new words 
   assertEquals(again.session, begun!.session)
   assertEquals(again.text, 'Picked up again.')
 })
+
+// A reply streamed: its host is told each piece, for the page watching.
+let pieces: [string, string][] = []
+let writer = operating(
+  operatorMemory(),
+  f.env,
+  {
+    ...operatorModel((req) => {
+      for (let text of ['Posting ', 'it now.']) req.onText?.({ index: 0, text })
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Posting it now.' }],
+        cost: 0.001,
+      })
+    }),
+    typing: (session, text) => void pieces.push([session, text]),
+  },
+)
+let written = await writer.run(f.held, f.space, { say: 'Post it.' })
+test('the Operator tells its host each piece of a reply as the model writes it', () => {
+  assertEquals(pieces, [[written.session, 'Posting '], [
+    written.session,
+    'it now.',
+  ]])
+  assertEquals(written.text, 'Posting it now.')
+})

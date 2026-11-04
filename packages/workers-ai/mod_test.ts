@@ -330,3 +330,60 @@ test('paid submission is guarded before the binding and remains submitted on a l
   )
   assertEquals(events, [])
 })
+
+// GLM-5.3's stream, as Workers AI sends it: OpenAI chunks with private
+// reasoning, text and a tool call in pieces, then the request's usage.
+let stream = () =>
+  new Response(
+    [
+      { id: 's1', choices: [{ delta: { role: 'assistant', content: '' } }] },
+      { choices: [{ delta: { reasoning: 'They want apps.' } }] },
+      { choices: [{ delta: { content: 'Looking' } }] },
+      { choices: [{ delta: { content: ' now.' } }] },
+      {
+        choices: [{
+          delta: {
+            tool_calls: [{
+              index: 0,
+              id: 'call-1',
+              type: 'function',
+              function: { name: 'app_list', arguments: '{"sp' },
+            }],
+          },
+        }],
+      },
+      {
+        choices: [{
+          delta: {
+            tool_calls: [{ index: 0, function: { arguments: 'ace":1}' } }],
+          },
+        }],
+      },
+      { response: '', usage: { prompt_tokens: 152, completion_tokens: 40 } },
+    ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') +
+      'data: [DONE]\n\n',
+  ).body!
+
+test('a native model told to stream its text says each piece as it comes, and answers the same reply', async () => {
+  let { asked, model } = binding(stream())
+  let told: string[] = []
+  let reply = await model(ask([{ kind: 'user', text: 'apps?' }], {
+    onText: (d) => told.push(d.text),
+  }))
+  assertEquals((asked[0].input as { stream?: boolean }).stream, true)
+  assertEquals(told, ['Looking', ' now.'])
+  assertEquals(reply.items, [
+    { kind: 'assistant', text: 'Looking now.' },
+    { kind: 'call', id: 'call-1', name: 'app_list', args: '{"space":1}' },
+  ])
+  assertEquals(
+    reply.usage,
+    usageOf({ usage: { prompt_tokens: 152, completion_tokens: 40 } }),
+  )
+})
+
+test('a request nobody listens to is answered whole', async () => {
+  let { asked, model } = binding({ response: 'ok' })
+  await model(ask([{ kind: 'user', text: 'hi' }]))
+  assertEquals('stream' in (asked[0].input as object), false)
+})

@@ -516,6 +516,10 @@ export class Builder {
           void this.#hear(session).catch((e) =>
             caught(e, { request: 'operator socket' })
           ),
+        typing: (session, text) =>
+          void this.#typing(session, text).catch((e) =>
+            caught(e, { request: 'operator socket' })
+          ),
       })
       handleChannels(operator, this.#env)
       return operator
@@ -536,11 +540,26 @@ export class Builder {
   // the page puts each where it already was.
   #told = new Map<string, number>()
 
-  /** A session moved: its frame, to every page watching the Operator. */
-  async #hear(session: string) {
-    let watching = this.#ctx.getWebSockets().filter((ws) =>
+  #watching() {
+    return this.#ctx.getWebSockets().filter((ws) =>
       (ws.deserializeAttachment() as Watching | null)?.operator
     )
+  }
+
+  #send(watching: Wire[], frame: unknown) {
+    let sent = JSON.stringify(frame)
+    for (let ws of watching) {
+      try {
+        ws.send(sent)
+      } catch {
+        // A page that has gone away hears nothing more.
+      }
+    }
+  }
+
+  /** A session moved: its frame, to every page watching the Operator. */
+  async #hear(session: string) {
+    let watching = this.#watching()
     if (!watching.length) return
     let { frameOf } = await import('./operator-host.ts')
     let made = await frameOf(
@@ -550,14 +569,25 @@ export class Builder {
     )
     if (!made) return
     this.#told.set(session, made.seq)
-    let sent = JSON.stringify(made.frame)
-    for (let ws of watching) {
-      try {
-        ws.send(sent)
-      } catch {
-        // A page that has gone away hears nothing more.
-      }
+    this.#send(watching, made.frame)
+  }
+
+  // Each session's task, for the pieces of a reply sent as it is written.
+  #tasks = new Map<string, string>()
+
+  /** A piece of a reply as the model writes it, to every page watching. */
+  async #typing(session: string, text: string) {
+    let watching = this.#watching()
+    if (!watching.length) return
+    let task = this.#tasks.get(session)
+    if (!task) {
+      let { g } = (await this.#work()).store
+      let [link] = await g.read(`.contains .edge.to=${session}`)
+      task = String((link?.edge as { from?: string } | undefined)?.from ?? '')
+      if (!task) return
+      this.#tasks.set(session, task)
     }
+    this.#send(watching, { operator: { task, typing: text } })
   }
 
   async alarm() {
