@@ -129,6 +129,11 @@
     --quarter-gap: calc(var(--gap) / 4);
     --half-gap: calc(var(--gap) / 2);
     --wide-gap: calc(var(--gap) * 1.5);
+
+    /* What floats over the page (an open menu, a chart's tip) is drawn at
+       --float, above every raised part in the flow: a current tab, a
+       selected tab, a chart. */
+    --float: 10;
   }
 
   /* A theme re-points roles. The paints above stay exactly where they are. */

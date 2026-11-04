@@ -803,7 +803,7 @@
   }
   .Chart_Tip {
     position: fixed;
-    z-index: 10;
+    z-index: var(--float);
     padding: .15rem .5rem;
     border-radius: var(--corner);
     background: var(--ink);
@@ -982,6 +982,17 @@
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  /* A menu (`<details data-menu>`, public/menu.js) lies over the page while
+     open. The menu itself is the layer, not its list: the list is positioned
+     inside it, so whatever box the menu sits in, it paints at --float within
+     that box's stacking context and over every raised sibling after it. */
+  [data-menu] {
+    position: relative;
+  }
+  [data-menu][open] {
+    z-index: var(--float);
   }
 
   /* A column of links beside an edge, the edge between this nav and the

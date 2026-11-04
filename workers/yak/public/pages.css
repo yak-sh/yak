@@ -372,9 +372,6 @@
   /* The space selector (pages.ts `chooser`): a box drawn like a button,
      naming the space, whose Change opens the list over the page, wider than
      the side, drawn in pencil on a hatch the way a button sits on its. */
-  .Desk_Pick {
-    position: relative;
-  }
   .Desk_Space {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr) auto;
@@ -428,7 +425,6 @@
     position: absolute;
     top: calc(100% + .6rem);
     left: 0;
-    z-index: 1;
     width: max-content;
     min-width: max(100%, 18rem);
     max-width: 26rem;
@@ -548,7 +544,10 @@
     --nav-edge: transparent;
     margin-right: -1.25rem;
   }
+  /* The body keeps what it raises (a selected tab, a chart) to itself, so
+     the side, and a menu opened from it over the body, lies above it all. */
   .Desk_Body {
+    isolation: isolate;
     min-width: 0;
     min-height: 100vh;
     background: var(--paper);
