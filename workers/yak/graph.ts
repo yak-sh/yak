@@ -122,7 +122,6 @@ import {
   type Authenticate,
   clockReply,
   decode,
-  type Frame,
   type Handler,
   json,
   type PeerWriter,
@@ -132,7 +131,6 @@ import {
   refuse,
   served,
   signed,
-  type Sink,
   type Subs,
   subscriptions,
   type Timer,
@@ -223,6 +221,7 @@ import {
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
 import { broadcast, drafted } from './page-notice.ts'
+import { kinded, naming } from './app-subs.ts'
 import type {
   Actor,
   AdmitOpts,
@@ -5292,10 +5291,7 @@ export class Store {
   // vocabulary can say which that is. Every caller above reads it — the
   // composing read calls a row by it (reach.ts), a page's listing draws with
   // it, and the guide documents it on every row.
-  #kind = (row: Bundle): Bundle => ({
-    kind: this.#vocab.kindOf(row as Record<string, unknown>),
-    ...row,
-  })
+  #kind = (row: Bundle): Bundle => kinded(this.#vocab, row)
 
   // Outputs speak human (listing.ts `named`): a property that references a
   // person answers `{eid, name}` on a query, and the name rides beside the eid
@@ -5439,83 +5435,11 @@ export class Store {
   // wrapped once per sink, since `close` and `drop` find a subscription by the
   // sink it was opened with.
   #naming(subs: Subs, words: string[]): Subs {
-    let wrapped = new Map<Sink, Sink>()
-    let writing = (writer: PeerWriter | undefined) =>
-      writer ? { ...writer, actor: instrumentActor(writer.actor) } : writer
-    let by = (sink: Sink): Sink => {
-      let held = wrapped.get(sink)
-      if (!held) {
-        wrapped.set(
-          sink,
-          held = (f) => {
-            if (!f.bundles) return sink(f)
-            // What a projection reaches rides beside the rows, in the same
-            // words.
-            let bundles = f.bundles.map(this.#kind)
-            let peers = f.peers?.map(this.#kind)
-            let rode = peers ? { peers } : {}
-            after(this.#names([...bundles, ...peers ?? []]), (said) => {
-              let spoken: Frame & Partial<Names> =
-                Object.keys(said.names).length
-                  ? { ...f, bundles, ...rode, ...said }
-                  : { ...f, bundles, ...rode }
-              sink(spoken)
-            })
-          },
-        )
-      }
-      return held
-    }
-    return {
-      read: subs.read,
-      observe: subs.observe,
-      resume: subs.resume,
-      stop: subs.stop,
-      snapshot: (query, opts) =>
-        subs.snapshot(
-          typeof query == 'string'
-            ? asking(query, words, this.#personal)
-            : query,
-          opts,
-        ),
-      open: (sink, id, query, opts) =>
-        subs.open(
-          by(sink),
-          id,
-          query === true ? query : asking(query, words, this.#personal),
-          opts,
-        ),
-      restore: (openings, deferStatic) =>
-        subs.restore(
-          openings.map(({ sink, id, query, opts }) => ({
-            sink: by(sink),
-            id,
-            query: query === true
-              ? query
-              : asking(query, words, this.#personal),
-            opts,
-          })),
-          deferStatic,
-        ),
-      close: (sink, id) => subs.close(by(sink), id),
-      drop: (sink) => subs.drop(by(sink)),
-      vocab: subs.vocab,
-      commit: subs.commit,
-      hear: subs.hear,
-      check: subs.check,
-      // Hibernated writers keep the same instrument identity as HTTP writes,
-      // including attachments made with a credential's outside id.
-      relay: (sink, bundles, writer) =>
-        subs.relay(by(sink), bundles, writing(writer)),
-      enqueue: (sink, bundles, writer) =>
-        (subs.enqueue ?? subs.relay)(by(sink), bundles, writing(writer)),
-      pace: subs.pace,
-      save: subs.save,
-      now: subs.now,
-      timer: subs.timer,
-      relaying: (sink) => subs.relaying(by(sink)),
-      relayed: (sink, keys) => subs.relayed(by(sink), keys),
-    }
+    return naming(subs, {
+      query: (line) => asking(line, words, this.#personal),
+      kind: this.#kind,
+      names: this.#names,
+    })
   }
 
   // What a slot holds for this request, as JSON text: a candidate release's

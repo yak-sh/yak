@@ -11,7 +11,16 @@ import {
 } from '@std/assert'
 import { parse } from 'es-module-lexer/js'
 import type { Wire } from '@yaks/durable-object'
-import { clock, test, until } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { choices } from '@yaks/builders'
+import { builderDoc, derived as builderDerived } from '@yaks/builders/vocab'
+import { loadTools } from '@yaks/graph/tools'
+import { runs as builderRuns } from '../../packages/builders/tools.ts'
+import { workshop } from '../../packages/builders/testing.ts'
+import { derived as toolDerived } from '@yaks/tools/vocab'
+import { preparedStore } from '../../packages/sqlite/testing.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
+import { cleanup, clock, test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import {
@@ -965,11 +974,20 @@ test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
 
 test('a subscription is that query still answering', async () => {
   await using scenario = platform()
-  let { env, object, sockets } = scenario
+  let { env } = scenario
+  using storage = durable()
+  let pages: Wire[] = []
+  let at = stores(env, undefined, {
+    sockets: {
+      storage,
+      acceptWebSocket: (ws) => void pages.push(ws),
+      getWebSockets: () => pages,
+    },
+  })
   await seeded(env)
   let name = 'ada/cookbook.aaa111'
-  // The upgrade goes to the object itself, so the socket is driven the way the
-  // runtime drives a hibernated one.
+  // The runtime's hibernation interface drives the production socket adapter
+  // over the same graph API the page reads and writes.
   let sent: Record<string, unknown>[] = []
   let ws: Wire = {
     readyState: 1,
@@ -977,12 +995,11 @@ test('a subscription is that query still answering', async () => {
     serializeAttachment: () => {},
     deserializeAttachment: () => null,
   }
-  // The object plants its tables when the kernel first names it, so the store
-  // is reached the way every store is reached first: through a request.
+  // The page first reaches the app through its query door.
   let page = client(env, await as(ADA))
   assertEquals(await page.query('.doc'), [])
-  sockets.get(name)!.push(ws)
-  await object(name).webSocketMessage(
+  pages.push(ws)
+  await at(name).live!.message(
     ws,
     JSON.stringify({ subscribe: '.doc!&.created?&!person', id: '1:.doc' }),
   )
@@ -2060,6 +2077,18 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
 
 test('an open visitor cannot choose generated media, and the editor browser can', async () => {
   let p = platform()
+  stores(p.env, workshop(), {
+    graph: (vocab) => {
+      let storage = preparedStore(vocab, {
+        derived: { ...builderDerived(vocab), ...toolDerived(vocab) },
+      })
+      cleanup(() => storage[Symbol.dispose]())
+      return graph({ vocab, storage, plugins: [choices()] })
+    },
+    tools: (vocab) =>
+      loadTools([builderDoc], builderRuns({ vocab }))
+        .filter((tool) => tool.name == 'builder_choose'),
+  })
   let { space, app } = await seeded(p.env, 'open')
   let store = appStore(p.env.STORE, space, app, p.env)
   let run = crypto.randomUUID(), call = crypto.randomUUID()
