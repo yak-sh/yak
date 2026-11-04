@@ -43,9 +43,9 @@ let named = (rows: EntryRow[]) =>
   rows.flatMap((r) =>
     [r.comps.ask?.to, r.comps.call?.to].flatMap((x) => x ? [String(x)] : [])
   )
-let nameOf = (eid: string) => {
+let nameOf = (eid: string, args?: Record<string, unknown>) => {
   let e = ent(eid)
-  return e.model?.name ?? (e.tool ? titleOf(e.tool) : undefined)
+  return e.model?.name ?? (e.tool ? titleOf(e.tool, args) : undefined)
 }
 
 export let useEntryLog = (

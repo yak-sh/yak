@@ -134,6 +134,7 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
     .map((t) => ({
       name: t.name,
       ...t.title ? { title: t.title } : {},
+      ...t.titles ? { titles: t.titles } : {},
       description: t.description,
       parameters: inputSchemaOf(t),
       readOnly: t.readOnly,

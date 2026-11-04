@@ -1064,6 +1064,7 @@ export type Tool = {
   eid: string
   name?: string | null
   title?: string | null
+  titles?: Record<string, Record<string, string>> | null
   description?: string | null
 }
 

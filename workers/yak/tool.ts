@@ -121,6 +121,10 @@ export type Tool = {
   // directories require one on every tool, and a person picking through a
   // permission prompt reads it instead of the snake_case name.
   title: string
+  // The title of the one thing a call does, for a tool whose arguments choose
+  // it: by argument, then by its value ('' when left out), as tools.yml says
+  // (@yaks/tools `Titles`).
+  titles?: Record<string, Record<string, string>>
   description: string
   // What this one does, as the four MCP hints (@yaks/graph `Tool`, emitted by
   // @yaks/mcp `annotated`). A host reads them to decide what it may call
@@ -143,14 +147,18 @@ export type Tool = {
 
 /** What a tool says about itself: one entry of tools.yml, under the tool's own
  * name. The words are the file's; everything else about a row is code's. */
-export type Words = { title: string; description: string }
+export type Words = {
+  title: string
+  titles?: Record<string, Record<string, string>>
+  description: string
+}
 
 /**
  * A row as it is written: everything but the words. `worded` puts those on,
  * out of tools.yml — the Rails-locale shape of M-34605, where the code refers
  * to a key and the file holds the sentence.
  */
-export type Row = Omit<Tool, 'title' | 'description'> & {
+export type Row = Omit<Tool, 'title' | 'titles' | 'description'> & {
   /** what a `{{slot}}` in those words stands for, for the few rows whose
    * description is not a constant — `guide` names the pages there are today. */
   slots?: Record<string, string>
@@ -168,6 +176,7 @@ export let worded = (row: Row): Tool => {
   return {
     ...rest,
     title: said.title,
+    ...said.titles ? { titles: said.titles } : {},
     description: fill(said.description, slots),
   }
 }

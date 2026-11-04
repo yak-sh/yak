@@ -221,6 +221,9 @@ export type Tool<R = Bundle[]> = {
   scope?: ToolDefinition['scope']
   /** a short human-readable title */
   title?: string
+  /** the title of the one thing a call does, by argument, then by its value
+   * ('' when left out): @yaks/tools `Titles` */
+  titles?: Record<string, Record<string, string>>
   /** what it does and when to use it — the agent reads this */
   description: string
   /** Implementation revision included in a builder's input key. */

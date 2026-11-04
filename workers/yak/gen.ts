@@ -123,6 +123,24 @@ let prompts = () => {
   return out
 }
 
+// A tool's `titles`: by argument, then by its value ('' when left out), the
+// title of the one thing a call with it does.
+let titled = (v: unknown, where: string) => {
+  if (!v || typeof v != 'object' || Array.isArray(v)) {
+    refuse(`${where} is not a map of argument to {value: title}`)
+  }
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>).map(([arg, by]) => [
+      arg,
+      Object.fromEntries(
+        Object.entries(by as Record<string, unknown> ?? {}).map((
+          [value, title],
+        ) => [value, said(title, `${where}.${arg}.${value}`)]),
+      ),
+    ]),
+  )
+}
+
 /** What every tool says about itself, by name: tools.yml. */
 let words = () => {
   let at = 'tools.yml'
@@ -135,6 +153,9 @@ let words = () => {
     let one = row as Record<string, unknown>
     out[name] = {
       title: said(one?.title, `${at} ${name}.title`),
+      ...one?.titles
+        ? { titles: titled(one.titles, `${at} ${name}.titles`) }
+        : {},
       description: said(one?.description, `${at} ${name}.description`),
     }
   }

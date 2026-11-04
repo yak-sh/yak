@@ -14,9 +14,10 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
-/** A tool's English name by its eid, as a call names it (`call.to`): its
- * title, an imperative phrase (@yaks/tools `titleOf`). */
-export type Names = (tool: string) => string
+/** A tool's English name by its eid, as a call names it (`call.to`), said as
+ * the one thing the call's arguments chose: an imperative phrase (@yaks/tools
+ * `titleOf`). */
+export type Names = (tool: string, args?: Record<string, unknown>) => string
 
 // The most of a tool's arguments or answer shown before "show all".
 let SHOWN = 4000
@@ -74,7 +75,7 @@ let pretty = (value: unknown) => {
 // id, so the answer takes the call's place on the page.
 let tool = (call: Bundle, names: Names, result?: Bundle) => {
   let c = comp(call, 'call')!
-  let title = names(String(c.to))
+  let title = names(String(c.to), c.args as Record<string, unknown>)
   let args = pretty(c.args ?? {})
   let refused = comp(result, 'refusal')
   let answer = String(comp(result, 'content')?.body ?? '')
@@ -150,7 +151,10 @@ export let now = (entries: Bundle[], names: Names) => {
   )
   let open = entries.filter((b) => b.call && !answered.has(b.entity.eid))
   return open.length
-    ? open.map((b) => doing(names(String(comp(b, 'call')!.to)))).join(' ')
+    ? open.map((b) => {
+      let c = comp(b, 'call')!
+      return doing(names(String(c.to), c.args as Record<string, unknown>))
+    }).join(' ')
     : 'Thinking…'
 }
 

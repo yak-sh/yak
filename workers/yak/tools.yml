@@ -8,6 +8,11 @@
 # A description that depends on something this file cannot know keeps a named
 # placeholder, `{{pages}}` in `guide` for example, which the code fills in when
 # the tool is built.
+#
+# A tool whose arguments choose what it does also has `titles`: by argument,
+# then by that argument's value ('' when it is left out), the title of the one
+# thing a call with it does, so a person reads "Listing app files…" and not
+# the title of everything the tool can do.
 
 space_new:
   title: Create a space
@@ -98,6 +103,17 @@ app_new:
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
+  titles:
+    op:
+      '': Write app files
+      list: List app files
+      read: Read app files
+      write: Write app files
+      patch: Edit app files
+      fetch: Download a file into an app
+      delete: Delete an app file
+      history: List an app file's earlier versions
+      restore: Restore an app file
   description: >-
     Write the app's files (index.html and any css, js or images beside it),
     or list, read or delete them. files: [{path, content}, …] writes a whole

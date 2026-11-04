@@ -158,6 +158,9 @@ export type Tool = Declared & {
   /** What a person reads in place of its name: an imperative phrase
    * (@yaks/tools `titleOf`). It is never sent to the model. */
   title?: string
+  /** The title of the one thing a call does, by argument and its value
+   * (@yaks/tools `Titles`). */
+  titles?: Record<string, Record<string, string>>
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,

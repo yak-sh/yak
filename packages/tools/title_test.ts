@@ -36,3 +36,19 @@ Deno.test('a tool without a title is its name in words', () => {
     'Read or write app files',
   )
 })
+
+Deno.test('a call reads as the one thing its arguments chose', () => {
+  let files = {
+    name: 'app_files',
+    title: 'Read or write app files',
+    titles: { op: { list: 'List app files', '': 'Write app files' } },
+  }
+  for (
+    let [args, said] of [
+      [{ op: 'list' }, 'List app files'],
+      [{ path: 'index.html' }, 'Write app files'],
+      [{ op: 'nonsense' }, 'Read or write app files'],
+      [undefined, 'Write app files'],
+    ] as const
+  ) assertEquals(titleOf(files, args), said)
+})

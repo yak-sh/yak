@@ -165,6 +165,10 @@
           "type": "string",
           "description": "what a person reads in place of the name: an imperative phrase, such as Read or write app files"
         },
+        "titles": {
+          "type": "object",
+          "description": "for a tool whose arguments choose what it does: by argument, then by that argument's value ('' when left out), the title of what a call with it does, such as op list: List app files"
+        },
         "description": {
           "type": "string"
         },

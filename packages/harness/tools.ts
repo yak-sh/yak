@@ -71,6 +71,7 @@ export let graphTools = (
   return r.registry.list().map((t) => ({
     name: toolName(t),
     ...t.title ? { title: t.title } : {},
+    ...t.titles ? { titles: t.titles } : {},
     description: t.description,
     parameters: inputSchemaOf(t),
     ...t.readOnly ? { readOnly: true } : {},

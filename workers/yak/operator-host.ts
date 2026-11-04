@@ -19,19 +19,20 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Record<string, unknown> | undefined
 
 // The English names of the tools a transcript's calls name (`call.to` is a
-// tool's eid).
+// tool's eid), each said as the one thing its call's arguments chose.
 let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
   let tools = await store.g.get([
     ...new Set(
       entries.flatMap((b) => b.call ? [String(comp(b, 'call')!.to)] : []),
     ),
   ])
-  let names = new Map(
-    tools.filter(Boolean).map((
-      b,
-    ) => [b.entity.eid, titleOf(comp(b, 'tool') ?? {})]),
+  let held = new Map(
+    tools.filter(Boolean).map((b) => [b.entity.eid, comp(b, 'tool') ?? {}]),
   )
-  return (tool) => names.get(tool) || 'Use a tool'
+  return (tool, args) => {
+    let t = held.get(tool)
+    return t ? titleOf(t, args) : 'Use a tool'
+  }
 }
 
 // A task's sessions, oldest first.
