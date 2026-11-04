@@ -126,3 +126,43 @@ test("a helper's end is the Operator's step in the conversation, never the perso
     }
   }
 })
+
+// Helpers refused while the Operator prepares its next request are heard in
+// that request, as Jeff's three were not: it said it had started them after
+// their refusals were in, then that none had run (T-137585).
+test('the Operator hears helpers refused while it prepares, and answers once', async () => {
+  let store = operatorMemory()
+  let heard = (r: Request) =>
+    r.items.filter((i) => i.kind == 'user' && i.text.endsWith(REFUSED)).length
+  let three: Model = Object.assign(
+    (req: Request) => {
+      if (req.model == OPUS) {
+        return Promise.reject(new ModelError('limit', REFUSED))
+      }
+      let items: Item[] = req.items.some((i) => i.kind == 'result')
+        ? [{ kind: 'assistant', text: `${heard(req)} of 3 were refused.` }]
+        : [1, 2, 3].map(() => ({
+          kind: 'call',
+          id: crypto.randomUUID(),
+          name: 'spawn',
+          args: JSON.stringify({ prompt: 'Fix an app', model: OPUS }),
+        }))
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items,
+        usage: { input_tokens: 1000, output_tokens: 0 },
+      })
+    },
+    { info: model.info },
+  )
+  let { session } = await operating(store, env, { model: three, name: SONNET })
+    .run({ person: owner }, space, { say: 'Fix every app with errors.' })
+  await drain(store)
+  assertEquals(
+    (await transcript(store.g, session)).flatMap((b) =>
+      b.output ? [(b.content as { body: string }).body] : []
+    ),
+    ['3 of 3 were refused.'],
+  )
+})

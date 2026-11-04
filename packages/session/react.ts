@@ -1579,10 +1579,15 @@ export let react = async (
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing
-  if (
-    await moved(g, session, seen) &&
-    await currentStatus(g, session) == 'stopped'
-  ) return current()
+  // A new ask is sent from what the step read, so a line landed since (a stop,
+  // words given, a helper's end) is read first and the step taken again:
+  // asked from the older read, the Operator told Jeff it had started three
+  // helpers whose refusals were already in (T-137585). An ask resumed from its
+  // own boundary keeps it, and only a stop ends it.
+  if (await moved(g, session, seen)) {
+    if (ask != unfinished) return react(g, session, deps)
+    if (await currentStatus(g, session) == 'stopped') return current()
+  }
   let pending = entries.filter((b) => b.provisional && b.ask).map((b) => ({
     entity: b.entity,
     provisional: null,
