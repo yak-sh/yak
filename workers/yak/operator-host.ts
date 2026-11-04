@@ -1,7 +1,7 @@
 import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Held } from './build.ts'
-import { readOperator } from './operator.ts'
+import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { texts, textsEid } from './operator-texts.ts'
@@ -115,14 +115,18 @@ let drafts = (bundles: Bundle[], person: string) =>
   }))
 
 export let operatorRequest = async (
-  store: ReturnType<typeof operatorStore>,
+  operator: Operator,
   held: Held,
   path: string,
   args: Record<string, unknown>,
   armed: () => Promise<void> | undefined,
 ): Promise<Response | null> => {
   let { person, space: spaceId } = held
+  let { store } = operator
   let access = held
+  if (path == '/operator/stop') {
+    return Response.json(await operator.stop(String(args.task ?? ''), person))
+  }
   if (path == '/operator/draft') {
     let eid = draftEid(person, 'operator')
     if (Array.isArray(args.bundles)) {

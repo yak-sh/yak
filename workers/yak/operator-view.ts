@@ -119,7 +119,7 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
         }</p>`,
       }]
     }
-    if (b.interrupted || b.cancel) {
+    if (b.stop || b.interrupted || b.cancel) {
       return [{ id, html: '<p class="Chat_Note">Stopped.</p>' }]
     }
     if (body && !NOT_INPUT.some((c) => b[c])) {
@@ -200,7 +200,11 @@ export let talk = (
         ).join(', ')
       }</p>`
       : ''
-  }<button class="Button Button-quiet" type="button" data-follow="${
+  }<p class="Card_Actions"><button class="Button Button-quiet" type="button" data-when="idle" data-follow="${
     esc(task.entity.eid)
-  }">Continue this request</button></article>`
+  }">Continue this request</button><button class="Button Button-quiet" type="button" data-when="busy" data-follow="${
+    esc(task.entity.eid)
+  }">Add to this request</button><button class="Button Button-quiet" type="button" data-when="busy" data-stop="${
+    esc(task.entity.eid)
+  }">Stop</button></p></article>`
 }

@@ -478,7 +478,7 @@ export class Builder {
       administrative: access.administrative,
     }
     let response = await operatorRequest(
-      operator.store,
+      operator,
       held,
       new URL(request.url).pathname,
       args,
@@ -500,8 +500,14 @@ export class Builder {
       let store = operatorStore(this.#ctx.storage, {
         report: (e, where) =>
           caught(e, { request: 'operator effects', handler: where.handler }),
+        // A write that owes work starts it now, beside a step in flight, so a
+        // person's words reach the session they are for at once; the alarm
+        // is there for what this wake leaves.
         nudge: () => {
           this.#arming = this.#ctx.storage.setAlarm(Date.now())
+          store.fx.work(store.g).catch((e) =>
+            caught(e, { request: 'operator effects' })
+          )
         },
       })
       let operator = operating(store, this.#env, {

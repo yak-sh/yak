@@ -314,3 +314,43 @@ test('words given while the Operator works land in its running session, which an
     'Friday it is.',
   )
 })
+
+// Stopped while the model answers: nothing more after that step, one answer,
+// and new words take the same session up again.
+let halted = operatorMemory()
+let halting: Request[] = []
+let begun: { task: string; session: string } | undefined
+let halter = operating(
+  halted,
+  f.env,
+  operatorModel(async (req) => {
+    halting.push(req)
+    if (halting.length == 1) await halter.stop(begun!.task, f.held.person)
+    return {
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: halting.length == 1
+        ? calls('graph_query', { q: '.doc&.limit=1' })
+        : [{ kind: 'assistant', text: 'Picked up again.' }],
+      cost: 0.001,
+    }
+  }),
+)
+begun = await halter.ask(f.held, f.space, { say: 'Look at every app.' })
+await drain(halted)
+let afterStop = halting.length
+let stopRead = await readOperator(halted, begun.task)
+let again = await halter.run(f.held, f.space, {
+  task: begun.task,
+  say: 'Go on.',
+})
+test('Stop ends the run after the step in flight with one answer, and new words reopen the session', () => {
+  assertEquals(afterStop, 1)
+  assertEquals(
+    stopRead.entries?.some((b) => b.stop),
+    true,
+  )
+  assertEquals(stopRead.comments?.length, 1)
+  assertEquals(again.session, begun!.session)
+  assertEquals(again.text, 'Picked up again.')
+})

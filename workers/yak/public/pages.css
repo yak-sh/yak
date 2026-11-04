@@ -199,6 +199,11 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* What a conversation offers while its Operator works, and after. */
+  [data-task]:not([data-pending]) [data-when='busy'],
+  [data-task][data-pending] [data-when='idle'] {
+    display: none;
+  }
   .Chat_Note-no {
     color: var(--warn);
   }

@@ -222,6 +222,12 @@ export let operatorAnswer = async (
     if (form.has('draft')) return Response.json(received)
     return new Response(null, { status: 303, headers: { location: at } })
   }
+  if (url.searchParams.has('stop') && req.method == 'POST') {
+    let { task } = await req.json() as { task?: string }
+    return Response.json(
+      await operatorDoor(env, space, who, 'stop', { task }),
+    )
+  }
   if (url.searchParams.has('live')) {
     if ((req.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
       return new Response("This is the Operator page's WebSocket.", {
@@ -345,6 +351,15 @@ document.addEventListener('click', (e) => {
   let follow = e.target.closest('[data-follow]')
   if (follow) { form.elements.task.value = follow.dataset.follow; document.querySelector('[data-continuing]').hidden = false; form.elements.say.focus() }
   if (e.target.closest('[data-new]')) { form.elements.task.value = ''; document.querySelector('[data-continuing]').hidden = true }
+  let stop = e.target.closest('[data-stop]')
+  if (stop) {
+    stop.disabled = true
+    status.textContent = 'Stopping after what it is doing now…'
+    fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: stop.dataset.stop }) })
+      .then((r) => { if (!r.ok) throw new Error('It could not be stopped. Try again.'); status.textContent = 'Stopped.' })
+      .catch((error) => { status.textContent = error.message })
+      .finally(() => { stop.disabled = false })
+  }
 })
 let read = async () => {
   let response = await fetch('${at}?messages=1')

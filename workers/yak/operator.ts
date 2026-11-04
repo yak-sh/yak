@@ -1,6 +1,6 @@
 import { type Bundle, type Comp, identityEid, namedTool } from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
-import { running, statusOf, type Tool, transcript } from '@yaks/session'
+import { kindOf, running, statusOf, type Tool, transcript } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { listing } from '@yaks/mcp'
 import { billed, type Model, type Price } from '@yaks/model'
@@ -332,7 +332,11 @@ export let operating = (
   // task, and as the answer of each request it was given that has none yet,
   // which its channel then delivers (operator_deliver).
   let answered = async (session: string) => {
-    let { mark, text } = replyOf(await transcript(g, session))
+    let entries = await transcript(g, session)
+    let { text } = replyOf(entries)
+    // One answer for each time it was given words: the turn ended again
+    // (stopped, then a step in flight finishing) says it anew.
+    let mark = entries.findLast((b) => kindOf(b) == 'input')
     let [link] = await g.read(`.contains .edge.to=${session}`)
     let task = String(comp(link, 'edge')?.from ?? '')
     let space = (await workingOf(store, session))?.space
@@ -507,7 +511,48 @@ export let operating = (
     }
   }
 
-  return { store, ask, run }
+  // The harness's interrupt (runtime.ts): a stop no step goes on past, and the
+  // model request in flight withdrawn where it can be (a streamed one).
+  let stop: Operator['stop'] = async (task, by) => {
+    let links = await g.read(`.contains .edge.from=${task}`)
+    let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
+      .filter((b) => b?.session)
+      .sort((a, b) =>
+        String(comp(a, 'created')?.at).localeCompare(
+          String(comp(b, 'created')?.at),
+        )
+      ).at(-1)
+    if (!newest) throw refuse('missing', `no operator task ${task}`)
+    let session = newest.entity.eid
+    if (
+      !['pending', 'running'].includes(statusOf(await transcript(g, session)))
+    ) {
+      return { task, session, stopped: false }
+    }
+    let flying = await g.read(
+      `.entry.session=${session}&.attempt.state=inflight`,
+    )
+    await g.apply([
+      {
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        stop: {},
+        content: { body: 'Stopped by the person watching.' },
+        $actor: { by, via: session },
+      },
+      ...flying.map((b) => ({
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        notice: {},
+        cancel: { target: b.entity.eid },
+      })),
+    ], { trusted: true })
+    await answered(session)
+    options.tell?.(session)
+    return { task, session, stopped: true }
+  }
+
+  return { store, ask, run, stop }
 }
 
 export type Asking = {
@@ -531,6 +576,12 @@ export type Operator = {
     args: Args,
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
+  /** Stop the task's running session: nothing more is done after the step in
+   * flight, until new words reopen it. */
+  stop: (
+    task: string,
+    by: string,
+  ) => Promise<{ task: string; session: string; stopped: boolean }>
   /** operator_run's door: the words, then the answer once the session ends,
    * working the pool meanwhile as the object's alarm does. */
   run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
