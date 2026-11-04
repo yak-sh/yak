@@ -251,7 +251,7 @@ app_preview:
     that follows the draft until the next app_deploy: a page open on it shows
     each file written, a stylesheet in place and anything else by reloading;
     do not publish it. screenshot: false returns only the URL without
-    browser cost. Browser use costs $0.09/hour from the account's existing
+    browser cost. Browser use costs $0.09/hour from the space's monthly
     budget; the result reports the estimated cost. External database, bucket
     and Durable Object bindings are not available in a draft preview.
     A draft worker's external service calls still reach those services.

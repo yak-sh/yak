@@ -96,7 +96,7 @@ Calls a draft worker makes to external services still reach those services; the
 separate test store isolates app data, not external side effects.
 
 Browser time is estimated at $0.09 per hour ($0.000025 per second), charged to
-the account's existing budget. Each reply reports its browser cost; compilation,
+the space's monthly budget. Each reply reports its browser cost; compilation,
 when needed, uses the ordinary compiler allowance. Opening an already prepared
 URL does not run a Cloudflare browser or incur browser time.
 
@@ -507,9 +507,9 @@ uses Workers AI's free `toMarkdown` conversion. A scanned page is transcribed
 with `@cf/google/gemma-4-26b-a4b-it`, priced at $0.10 per million input tokens
 and $0.30 per million output tokens. Page embeddings and semantic
 query embeddings use `@cf/qwen/qwen3-embedding-0.6b` ($0.0118 per million input
-tokens). Answers are separate model calls. All model costs spend the account's
-one budget, alongside the app's other use. Costs vary with page content and
-answer length; there is no separate document allowance.
+tokens). Answers are separate model calls. All model costs spend the space's one
+budget, alongside the app's other use. Costs vary with page content and answer
+length; there is no separate document allowance.
 
 Cloudflare's PDF conversion extracts existing text; it does not OCR scans. The
 platform renders and transcribes scanned pages explicitly. See

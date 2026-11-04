@@ -472,8 +472,8 @@ installed from another space, are refused it.
 Workers AI's own binding does. It is the app calling `./api/ai/run` as itself,
 so every call is charged at the model's price to the space's monthly budget;
 once the budget is spent, `run` throws an error saying so. Only the models in
-the catalogue are available (see [AI Models](/docs/models)), and it never uses
-the account's own Workers AI.
+the catalogue are available (see [AI Models](/docs/models)), and it never needs
+a Workers AI account of your own.
 
 ### Payments without a Stripe key
 

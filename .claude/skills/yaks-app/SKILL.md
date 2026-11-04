@@ -2,7 +2,7 @@
 name: yaks-app
 description: >
   Use for workers/yak, kernel Workers, stores, app vocab/rows, platform
-  words, connector tools/prompts/guides, account spending, or
+  words, connector tools/prompts/guides, space spending, or
   broken/slow/refusing yaks apps. This is the hosted platform; local yak
   serve is separate. Shapes are vocabulary; migrations are data-migration;
   pricing is yaks-app-business.

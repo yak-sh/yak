@@ -176,8 +176,8 @@ entry are answered by the `typesafe/jev` model as `answer` rows (a choice, a
 yes-or-no, a score), and a command marked `"model": true` is one the model may
 call. One call answered at once is a post to `./api/ai/run`, or `env.AI.run` in
 a worker, and a question about a picture is one of those, the picture inside it.
-Every call spends the owner's monthly account budget, weighed in dollars by the
-model's price.
+Every call spends the space's monthly budget, weighed in dollars by the model's
+price.
 
 Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows that
 come back, typed questions, one call at once, asking about a picture, who may
