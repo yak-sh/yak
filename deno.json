@@ -126,6 +126,7 @@
     "./packages/spawn",
     "./packages/model",
     "./packages/openai",
+    "./packages/anthropic",
     "./packages/openrouter",
     "./packages/workers-ai",
     "./packages/oauth",

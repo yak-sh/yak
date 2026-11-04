@@ -256,6 +256,13 @@ export type Env = {
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string
   OPERATOR_MODEL?: string
+  // Claude for the Operator and builders (claude.ts): the platform's
+  // Anthropic key, for product use only. With it the Operator runs on Sonnet
+  // and hands coding to OPERATOR_DELEGATE (Opus by default); ANTHROPIC_API is
+  // a probe's door to somewhere other than api.anthropic.com.
+  ANTHROPIC_API_KEY?: string
+  ANTHROPIC_API?: string
+  OPERATOR_DELEGATE?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
   // one build compiles in, bound as a Durable Object namespace
   // (wrangler.toml `[[containers]]`). Absent in a test run and the

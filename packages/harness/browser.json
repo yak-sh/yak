@@ -23,6 +23,7 @@
     "@yaks/mcp-client/vocab": "../mcp-client/vocab.ts",
     "@yaks/model/vocab": "../model/vocab.ts",
     "@yaks/openai/vocab": "../openai/vocab.ts",
+    "@yaks/anthropic/vocab": "../anthropic/vocab.ts",
     "@yaks/openrouter/vocab": "../openrouter/vocab.ts",
     "@yaks/process/vocab": "../process/vocab.ts",
     "@yaks/project/vocab": "../project/vocab.ts",

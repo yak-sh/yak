@@ -44,6 +44,7 @@ import {
   type Affordable,
   type Item,
   type Listed,
+  type Model as YakModel,
   ModelError,
   type Price,
   type Reply,
@@ -59,6 +60,7 @@ import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
 import { countedBuild, countedSpend, refusedSpend } from './meter.ts'
 import { modelInfo } from '@yaks/workers-ai'
+import { claude, providerOf } from './claude.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -335,21 +337,17 @@ let answer = (reply: Reply): Answer => ({
   },
 })
 
-/**
- * The free build: a Workers AI model through the `AI` binding. No key, no
- * gateway, nothing to mint — the binding is the authorization.
- */
-let binding = (env: Env, id: string): Model => ({
+// A @yaks/model model as the loop's: its info, and each ask as one request.
+let through = (
+  id: string,
+  open: () => YakModel,
+  info: () => Promise<Listed>,
+): Model => ({
   id,
-  info: () => {
-    if (!env.AI) throw new Error(NO_AI)
-    return modelInfo(id, env.MODEL_FETCH)
-  },
-  ask: async ({ system, conversation, said, fns, tokens, onSubmit }) => {
-    if (!env.AI) throw new Error(NO_AI)
-    let model = workersAi(env.AI)
-    return answer(
-      await model({
+  info,
+  ask: async ({ system, conversation, said, fns, tokens, onSubmit }) =>
+    answer(
+      await open()({
         model: id,
         instructions: system,
         conversation,
@@ -358,9 +356,31 @@ let binding = (env: Env, id: string): Model => ({
         tokens,
         onSubmit,
       }),
-    )
-  },
+    ),
 })
+
+/**
+ * The free build: a Workers AI model through the `AI` binding. No key, no
+ * gateway, nothing to mint — the binding is the authorization.
+ */
+let binding = (env: Env, id: string): Model => {
+  let ai = () => {
+    if (!env.AI) throw new Error(NO_AI)
+    return env.AI
+  }
+  return through(id, () => workersAi(ai()), () => {
+    ai()
+    return modelInfo(id, env.MODEL_FETCH)
+  })
+}
+
+/** Claude on the platform's Anthropic key, priced from @yaks/model's list. */
+let anthropic = (env: Env, id: string): Model =>
+  through(id, () => claude(env), async () => {
+    let info = await claude(env).info?.(id)
+    if (!info) throw new Error(`Anthropic lists no model ${id}`)
+    return info
+  })
 
 // Where OpenAI is reached: the gateway, so every call is logged, cached and
 // rate-limited by the account rather than by us. `OPENAI_API` is the probe's
@@ -478,9 +498,15 @@ export let openai = (env: Env, id: string): Model => ({
 export let idOf = (env: Env, space: Space): string =>
   paid(space.tier) ? env.BUILDER_MODEL_PAID ?? '' : env.BUILDER_MODEL_FREE ?? ''
 
-/** The provider an id names: a Workers AI model is always `@cf/…`. */
-export let modelOf = (env: Env, id: string): Model =>
-  id.startsWith('@cf/') ? binding(env, id) : openai(env, id)
+/** The provider an id names (claude.ts `providerOf`). */
+export let modelOf = (env: Env, id: string): Model => {
+  let provider = providerOf(id)
+  return provider == 'workers-ai'
+    ? binding(env, id)
+    : provider == 'anthropic'
+    ? anthropic(env, id)
+    : openai(env, id)
+}
 
 /**
  * A scripted model, for the stand-in: it answers the turns it was given, in

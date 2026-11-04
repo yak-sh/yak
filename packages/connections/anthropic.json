@@ -1,0 +1,10 @@
+{
+  "name": "anthropic",
+  "title": "Anthropic",
+  "tagline": "Claude models, on your own Anthropic API key.",
+  "site": "https://www.anthropic.com",
+  "hosts": [
+    "api.anthropic.com"
+  ],
+  "instructions": "Create an API key at https://platform.claude.com/settings/keys and paste it here."
+}

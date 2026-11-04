@@ -71,11 +71,13 @@ is made by `need`, only where no integration holds the name yet, so no verb a
 space can reach writes over a built integration or changes where its tokens are
 sent, and only the host can mark one `built`. Each logo is the service's mark
 from [Simple Icons](https://simpleicons.org) (CC0, simple-icons 16.32.0), in its
-brand colour. `openrouter` is built: its sign-in needs no registered client, and
-its exchange answers an API key (`answers: 'key'`, @yaks/oauth), kept as the
-connection's grant. `google-calendar` is built: it asks for `calendar.events`
-and `calendar.calendarlist.readonly` unless an app needs narrower, asks Google
-for offline access so the grant can be refreshed, and sends its token to
+brand colour. `anthropic` is built: a pasted API key, sent to
+`api.anthropic.com` alone, with no logo yet. `openrouter` is built: its sign-in
+needs no registered client, and its exchange answers an API key
+(`answers: 'key'`, @yaks/oauth), kept as the connection's grant.
+`google-calendar` is built: it asks for `calendar.events` and
+`calendar.calendarlist.readonly` unless an app needs narrower, asks Google for
+offline access so the grant can be refreshed, and sends its token to
 `www.googleapis.com` alone. It is `testing: true` while Google's app is in
 testing mode, where only the people Google lists may sign in, so yaks.app offers
 it only on a connections page opened with `?enable=google-calendar`. `openai` is

@@ -1150,6 +1150,16 @@ server name and a return URL. These calls are controls for the embedding
 program, not agent instructions. Never paste a return URL into the ordinary
 conversation input.
 
+## Anthropic
+
+`anthropic` is Claude through the Messages API
+([@yaks/anthropic](../anthropic)), on a key the person pastes with
+`yak auth anthropic`; the key is a connection like OpenRouter's, in the vault.
+Name a model as data, a provider and model row with a `serves` edge as below
+(`claude-sonnet-5-5`, `claude-opus-5-5`), or
+`spawn({prompt, model: 'claude-opus-5-5'})` from a session already on Anthropic.
+Without a connection a request is refused with "Anthropic is not connected".
+
 ## OpenRouter
 
 OpenAI remains the default. OpenRouter is a separate provider, selected through

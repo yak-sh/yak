@@ -387,6 +387,9 @@ grouped approximately by function, **not** by dependency order.
   described as data (begin, complete, token, refresh), and its building blocks:
   a private-store interface, PKCE (Proof Key for Code Exchange) and expiring
   attempts. Secrets remain outside graph data.
+- **[@yaks/anthropic](./anthropic)** — Implement the model interface over
+  Anthropic's Messages API with the official SDK: streamed text, tool use,
+  automatic prompt caching and Stop. The application supplies the key.
 - **[@yaks/openrouter](./openrouter)** — Implement the model interface over
   OpenRouter's Responses API, with response metadata schemas and optional PKCE
   authorization. The application supplies credentials or a private store.

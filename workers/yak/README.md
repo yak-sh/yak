@@ -338,6 +338,8 @@ it. Values never appear here or in the repo.
 | `MAIL_SINK`                                                                                    | staging  | the owner's address                                                                                                                               | staging letters go to their intended recipients                                               |
 | `OPENAI_APPS_CHALLENGE`                                                                        | optional | the token OpenAI's apps directory issues                                                                                                          | `/.well-known/openai-apps-challenge` 404s                                                     |
 | `CIMD`                                                                                         | optional | `on` (default when unset) or `off`                                                                                                                | nothing; `off` stops claiming Client ID Metadata Documents                                    |
+| `ANTHROPIC_API_KEY`                                                                            | optional | the platform's Anthropic API key, for product use only (claude.ts)                                                                                | the Operator runs on `@cf/zai-org/glm-5.3`; a `claude-*` model is refused as a missing key    |
+| `OPERATOR_DELEGATE`                                                                            | optional | the model the Operator hands coding and tricky work to (default `claude-opus-5-5`)                                                                | nothing                                                                                       |
 | `AI_GATEWAY`, `AI_GATEWAY_TOKEN`, `OPENAI_API_KEY`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID` | optional | the other builder provider; all unset on purpose (T-34238)                                                                                        | nothing; both tiers build on Workers AI                                                       |
 | `MAIL_DEV`                                                                                     | local    | `1`                                                                                                                                               | never set on a deploy: letters become entities instead of sending                             |
 
@@ -844,11 +846,18 @@ recent tasks. Continue with `operator_run({space, task, say})`. A settled model
 turn may be a question: the operator explicitly completes a task through
 `task_update` after finishing it.
 
-`OPERATOR_MODEL` overrides the full `BUILDER_MODEL_PAID` model used by default.
-The selected model must have a catalogue price and runs on the existing Workers
-AI binding. This entry accepts text. Picture attachments and the email, chat and
-SMS interfaces are separate work. Interrupted requests remain in the graph and
-can be continued explicitly; they do not resume automatically.
+The Operator runs on `claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, and
+otherwise on `BUILDER_MODEL_PAID` (`@cf/zai-org/glm-5.3`); `OPERATOR_MODEL`
+overrides either. A `@cf/…` model runs on the Workers AI binding and a
+`claude-…` model on Anthropic's API (claude.ts `providerOf`); the model must
+have a price, from the Workers AI catalogue or @yaks/model's list. On Anthropic
+the Operator has `spawn`, and its instructions send writing or fixing code and
+tasks that need careful reasoning to `OPERATOR_DELEGATE` (`claude-opus-5-5`) in
+a child session working for the same space and charged to it; the child's answer
+comes back to the session that asked. This entry accepts text. Picture
+attachments and the email, chat and SMS interfaces are separate work.
+Interrupted requests remain in the graph and can be continued explicitly; they
+do not resume automatically.
 
 Model spending reserves each provider call's maximum in the directory before
 submission. The atomic reservation debits the space's shared model and voice

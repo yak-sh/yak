@@ -7,6 +7,8 @@ import * as systemProcess from '@yaks/process/system'
 import { artifactStore } from '@yaks/blob'
 import { type Model, prefixCacheMark } from '@yaks/model'
 import { claudeDoc } from '@yaks/claude/vocab'
+import { anthropicDoc } from '@yaks/anthropic/vocab'
+import { mark as anthropicMark } from '@yaks/anthropic/mark'
 import { openrouterDoc } from '@yaks/openrouter/vocab'
 import { openaiDoc } from '@yaks/openai/vocab'
 import { type Bundle } from '@yaks/graph'
@@ -199,6 +201,25 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
                 .claudeSession,
             },
           }),
+        },
+      ),
+      anthropic: deferredModel(
+        () =>
+          import('@yaks/anthropic').then(({ messages }) =>
+            messages({
+              fetch: http.fetch,
+              key: async () =>
+                (h.person
+                  ? await auth.signin.key(h.person, 'anthropic')
+                  : undefined) ?? refuse(
+                    'Anthropic is not connected. Run yak auth anthropic.',
+                  ),
+            })
+          ),
+        {
+          vocab: anthropicDoc,
+          info: true,
+          mark: anthropicMark,
         },
       ),
       openrouter: deferredModel(

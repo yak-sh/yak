@@ -1,0 +1,20 @@
+{
+  "title": "anthropic",
+  "$defs": {
+    "anthropic": {
+      "component": true,
+      "journal": false,
+      "description": "Anthropic message metadata; the Messages API keeps nothing to continue from.",
+      "properties": {
+        "response_id": {
+          "type": "string"
+        },
+        "cache_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the recorded expiry of this request’s cached prefix: request start plus the documented five minutes. Missing means unknown, not warm"
+        }
+      }
+    }
+  }
+}

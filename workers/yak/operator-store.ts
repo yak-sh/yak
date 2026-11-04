@@ -10,6 +10,7 @@ import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project/vocab'
 import { sessionDoc, sessions } from '@yaks/session'
 import { modelDoc } from '@yaks/model'
+import { anthropicDoc } from '@yaks/anthropic/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { contextDoc } from '@yaks/context'
@@ -36,6 +37,7 @@ export let operatorVocab = loadVocab([
   personaDoc,
   sessionDoc,
   modelDoc,
+  anthropicDoc,
   toolsDoc,
   contextDoc,
   effectDoc,

@@ -1,10 +1,18 @@
 import { type Bundle, type Comp, identityEid, namedTool } from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
-import { kindOf, running, statusOf, type Tool, transcript } from '@yaks/session'
+import {
+  kindOf,
+  running,
+  sessionTools,
+  statusOf,
+  type Tool,
+  transcript,
+} from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { listing } from '@yaks/mcp'
 import { billed, type Model, type Price } from '@yaks/model'
-import { modelInfo, workersAi } from '@yaks/workers-ai'
+import { workersAi } from '@yaks/workers-ai'
+import { claude, providerOf } from './claude.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools } from '@yaks/graph/tools'
@@ -214,8 +222,28 @@ let platformBug = (space: Space): Tool => ({
   },
 })
 
-export let operatorModel = (env: Env): Model =>
-  workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
+// The Operator's own model, by default and with the key: Sonnet, which hands
+// coding and tricky work to Opus. Without the key it stays on GLM.
+let SONNET = 'claude-sonnet-5-5'
+let OPUS = 'claude-opus-5-5'
+let GLM = '@cf/zai-org/glm-5.3'
+
+/** What serves the Operator's models: Workers AI through the binding, or
+ * Anthropic with the platform's key. */
+export let operatorModel = (env: Env, provider: string): Model =>
+  provider == 'workers-ai'
+    ? workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
+    : provider == 'anthropic'
+    ? claude(env)
+    : Object.assign(
+      () =>
+        Promise.reject(
+          new Error(
+            'The operator needs a Workers AI or Anthropic model in OPERATOR_MODEL',
+          ),
+        ),
+      { info: () => Promise.resolve(undefined) },
+    )
 
 export let readOperator = async (
   { g }: Store,
@@ -296,29 +324,35 @@ export let operating = (
   options: Options = {},
 ): Operator => {
   let { g, fx, vocab } = store
-  let name = options.name ?? env.OPERATOR_MODEL ?? env.BUILDER_MODEL_PAID ??
-    '@cf/zai-org/glm-5.3'
-  let provider = name.startsWith('@cf/') ? 'workers-ai' : 'openai'
+  let name = options.name ?? env.OPERATOR_MODEL ??
+    (env.ANTHROPIC_API_KEY ? SONNET : env.BUILDER_MODEL_PAID ?? GLM)
+  let provider = providerOf(name)
+  // Coding and tricky work go to a stronger model of the same provider, in a
+  // child session (`spawn`) whose answer comes back to the one that asked.
+  let delegate = provider == 'anthropic'
+    ? env.OPERATOR_DELEGATE ?? OPUS
+    : undefined
   let using = {
     provider: identityEid('provider', [provider]),
     model: identityEid('model', [name]),
   }
-  let priced = options.price
-    ? Promise.resolve(options.price)
-    : name.startsWith('@cf/')
-    ? modelInfo(name, env.MODEL_FETCH).then((info) => info.price)
-    : Promise.resolve(undefined)
-  let base = options.model ?? operatorModel(env)
-  // Each ask is charged to the space of the session asking.
+  let base = options.model ?? operatorModel(env, provider)
+  // A model's price, from what its provider lists, asked once per name.
+  let prices = new Map<string, Promise<Price | undefined>>()
+  let priced = (model: string) => {
+    if (options.price) return Promise.resolve(options.price)
+    let held = prices.get(model) ??
+      Promise.resolve(base.info?.(model)).then((info) => info?.price)
+    prices.set(model, held)
+    held.catch(() => prices.delete(model))
+    return held
+  }
+  // Each ask is charged to the space of the session asking, at the price of
+  // the model it asks.
   let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-    if (!options.model && !name.startsWith('@cf/')) {
-      throw new Error(
-        'The operator needs a priced Workers AI model in OPERATOR_MODEL',
-      )
-    }
-    let price = await priced
+    let price = await priced(req.model)
     if (!options.model && !price) {
-      throw new Error(`No catalogue price for operator model ${name}`)
+      throw new Error(`No catalogue price for operator model ${req.model}`)
     }
     let [ask] = req.call ? await g.get([req.call]) : []
     let session = comp(ask, 'entry')?.session
@@ -347,13 +381,20 @@ export let operating = (
   }, base)
   let seeded: Promise<void> | undefined
   let seeding = () =>
-    seeded ??= priced.then(async (price) => {
-      let rows = seed({ provider, model: name })
-      if (price) {
-        rows.push({ entity: { eid: identityEid('model', [name]) }, price })
+    seeded ??= (async () => {
+      let rows: Bundle[] = []
+      for (let m of delegate ? [name, delegate] : [name]) {
+        let price = await priced(m)
+        rows.push(...seed({ provider, model: m }))
+        if (price) {
+          rows.push({
+            entity: { eid: identityEid('model', [m]) },
+            price,
+          })
+        }
       }
       await g.apply(rows, { trusted: true })
-    })
+    })()
 
   // The session's answer, once it ends: its newest reply as a comment on its
   // task, and as the answer of each request it was given that has none yet,
@@ -394,6 +435,13 @@ export let operating = (
       provider,
       // Its text is shown as it is written (@yaks/session run.ts `step`).
       streaming: true,
+      tools: delegate ? sessionTools(g).filter((t) => t.name == 'spawn') : [],
+      // A child works for the same space and person as the session that
+      // started it, and is charged to that space.
+      prepareChild: async ({ parent }) => {
+        let o = await workingOf(store, parent)
+        return o ? { operator_session: o } : {}
+      },
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
         return [
@@ -404,10 +452,14 @@ export let operating = (
       },
       instructions: async (session) => {
         let { space, ctx } = await working(env, store, session)
+        let [row] = await g.get([session])
+        let asks = delegate && !row?.spawned
         return `${instructions(env)}\n\n${await standing(ctx)
           .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${
-          told(ctx, space)
-        }`
+          asks
+            ? ` For writing or fixing code, or a task that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you, and you tell the person.`
+            : ''
+        }${told(ctx, space)}`
       },
       each: async (step, session) => {
         if (!session) return

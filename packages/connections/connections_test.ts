@@ -489,6 +489,7 @@ test('the integration directory: every built one but those in testing, and each 
     await set(g.read, { owner: 'space', integration: 'esv', listed: true }),
   )
   assertEquals(names(await listing(g.read)), [
+    'Anthropic',
     'calendar',
     'ESV API',
     'OpenAI',
