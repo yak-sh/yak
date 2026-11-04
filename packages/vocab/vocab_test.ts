@@ -611,6 +611,15 @@ test('a word has one home across documents', () => {
     Error,
     "component 'doc' is declared twice, by @a/one and by @a/two",
   )
+  assertThrows(
+    () =>
+      loadVocab([
+        { package: '@a/one', $defs: { doc } },
+        { package: '@a/one', $defs: { doc } },
+      ]),
+    Error,
+    "component 'doc' is declared twice, by @a/one loaded twice",
+  )
 })
 
 // The spine's case: a plugin keeps a property beside every entity without

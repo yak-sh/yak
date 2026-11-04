@@ -79,7 +79,7 @@ export let measure = async (
         ? { use: '@yaks/session', with: { transcripts: `${dir}/transcripts` } }
         : p
     )
-    config.plugins.push('@yaks/sqlite', '@yaks/harness', '@yaks/model', {
+    config.plugins.push('@yaks/sqlite', '@yaks/harness', {
       use: '@yaks/embedding',
       with: { embedder: { provider: 'hash' }, text: ['doc.title'] },
     })

@@ -756,8 +756,13 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       }
       let pkg = schema.package ?? doc.package
       if (name in defs) {
-        // Which two said it, where both documents say whose they are.
-        let by = from[name] && pkg ? `, by ${from[name]} and by ${pkg}` : ''
+        // Which two said it, where both documents say whose they are; one
+        // package saying it twice was loaded twice, as a config naming it twice.
+        let by = !from[name] || !pkg
+          ? ''
+          : from[name] == pkg
+          ? `, by ${pkg} loaded twice`
+          : `, by ${from[name]} and by ${pkg}`
         throw new Error(`component '${name}' is declared twice${by}`)
       }
       defs[name] = schema
