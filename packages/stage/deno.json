@@ -19,12 +19,7 @@
   },
   "license": "Apache-2.0",
   "description": "Three.js scenes, effects, instancing, orbit cameras, picking and positional sound over caller-supplied values.",
-  "publish": {
-    "exclude": [
-      "**/*_test.ts",
-      "./browser.json"
-    ]
-  },
+  "publish": false,
   "imports": {
     "three": "npm:three@^0.186.1"
   }
