@@ -3,7 +3,9 @@
 # git hooks.
 #
 # `yak` is a shim that runs the main checkout's CLI against that
-# checkout's own deno.json and deno.lock, read each time it starts. Nothing is
+# checkout's own deno.json and deno.lock, read each time it starts, quietly:
+# Deno's own lines as it fetches a first command's modules are hundreds, and
+# say nothing to whoever ran it; its errors print all the same. Nothing is
 # copied: `deno install -g` froze the import map at install time, so a landing
 # that moved or deleted a package's export broke every `yak` command until
 # someone reinstalled.
@@ -23,8 +25,14 @@ rm -rf "$bin/.yak"
 cat >"$bin/yak" <<EOF
 #!/bin/sh
 export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
-exec deno run -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
+exec deno run -q -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
 EOF
 chmod +x "$bin/yak"
 # TODO: drop --unstable-no-legacy-abort once Deno honors deno.json's (2.9.1 does not)
 ln -sf yak "$bin/task"
+echo "yak is at $bin/yak, running $root"
+case ":$PATH:" in
+*":$bin:"*) ;;
+*) echo "put it on your PATH: echo 'export PATH=\"$bin:\$PATH\"' >> ~/.zshrc, then open a new terminal" ;;
+esac
+[ -e "${YAK_CONFIG:-$HOME/.yak/yak.json}" ] || echo 'next: yak init <your name>'

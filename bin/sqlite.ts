@@ -111,7 +111,12 @@ let build = async (dir: string) => {
 export let library = async (cache?: string): Promise<string> => {
   let dir = await place(cache)
   let path = `${dir}/${FILE}`
-  if (!await Deno.stat(path).then(() => true, () => false)) await build(dir)
+  if (await Deno.stat(path).then(() => false, () => true)) {
+    console.error(
+      `building SQLite ${VERSION} once, into ${dir}: about a minute`,
+    )
+    await build(dir)
+  }
   return path
 }
 

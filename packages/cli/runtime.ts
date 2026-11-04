@@ -349,6 +349,9 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     let [command, ...args] = tethered([
       Deno.execPath(),
       'run',
+      // Deno's own lines as a fresh tree fetches its modules say nothing to
+      // whoever started the command; its errors print all the same.
+      '-q',
       '-A',
       // TODO: deno.json's "no-legacy-abort" says this; Deno 2.9.1 ignores it
       // there (./install.ts).

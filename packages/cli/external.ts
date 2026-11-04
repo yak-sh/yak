@@ -282,17 +282,18 @@ let start = async (
   let dir = await Deno.makeTempDir({ prefix: 'yak-work-' })
   let file = `${dir}/ready`
   try {
-    // Null stdio and a new session keep the worker outside web shutdown's
-    // process group. Never call `yak` from PATH: it may name another checkout.
+    // Null stdio and a detached child keep the worker outside web shutdown's
+    // process group, on macOS too, which ships no setsid(1). Never call `yak`
+    // from PATH: it may name another checkout.
     signal.throwIfAborted()
     // Role names may start with @ (a package service). The CLI expands @file
     // values, so pass the list through a file rather than as a literal path.
     let selected = `${dir}/roles`
     await Deno.writeTextFile(selected, roles.join(','))
-    let child = new Deno.Command('setsid', {
+    let child = new Deno.Command(Deno.execPath(), {
       args: [
-        Deno.execPath(),
         'run',
+        '-q',
         '-A',
         '--config',
         fileURLToPath(new URL('../../deno.json', import.meta.url)),
@@ -310,6 +311,7 @@ let start = async (
       stdin: 'null',
       stdout: 'null',
       stderr: 'null',
+      detached: true,
     }).spawn()
     await ready(
       child,

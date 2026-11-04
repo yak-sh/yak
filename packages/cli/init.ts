@@ -8,8 +8,9 @@
 // agent can join through hooks and `/mcp` — the person's connections to outside
 // services, so `yak auth yaks.app` signs in to this graph and every command
 // reaching yaks.app finds the token here, and the web canvas `yak serve`
-// answers with, whose session pages read those processes. Everything else is one
-// line added to `plugins` later. Pure data: yak.ts writes it and opens the
+// answers with, whose session pages read those processes, and the Spend page,
+// which tallies what the models those sessions asked cost. Everything else is
+// one line added to `plugins` later. Pure data: yak.ts writes it and opens the
 // graph it names.
 
 import type { Config } from './config.ts'
@@ -41,6 +42,8 @@ export let STARTER = [
   '@yaks/web',
   '@yaks/browse',
   '@yaks/canvas',
+  '@yaks/model',
+  '@yaks/spend',
 ]
 
 /** What nobody needs a new number for: people, integrations and connections,
@@ -79,18 +82,23 @@ export let UNNUMBERED = [
   'lease',
   'machine',
   'mail',
+  'model',
   'module',
   'output',
   'package',
   'person',
   'process',
+  'provider',
+  'rate_limit',
   'ref',
   'result',
   'secret',
   'session',
+  'spend',
   'subscription',
   'symbol',
   'tool',
+  'untallied',
   'volume',
 ]
 

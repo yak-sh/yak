@@ -10,6 +10,10 @@ change is a batch of entity patches, and every list is a query.
 
 ## Start
 
+To see what Claude Code and Codex have cost you, from the transcripts already on
+your machine, follow [docs/SPEND.md](docs/SPEND.md): an install from this
+repository and two commands.
+
 `yak` runs on [Deno](https://deno.com) 2.9 or later.
 
 ```sh

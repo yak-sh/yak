@@ -93,10 +93,11 @@ request arriving during the tally marks the day again.
 
 ## The page
 
-`./views` offers the browsing app a `Spend` page in its sidebar
-(`/?page=spend`): each plan limit against its pace, then the week's tally beside
-the week before, ranked by dollars, over the list of days. A day's row opens to
-that day's tally. The bars are @yaks/ui's `Meter`.
+`./views` offers the browsing app a `Spend` page in its sidebar (`/?page=spend`,
+which `./routes` also answers at `/spend`, the address `yak serve` prints when
+it starts): each plan limit against its pace, then the week's tally beside the
+week before, ranked by dollars, over the list of days. A day's row opens to that
+day's tally. The bars are @yaks/ui's `Meter`.
 
 Beside each row's dollars, its **week %** estimates what it cost on a
 subscription: its share of each plan's weekly limit. `rates` measures a plan's
