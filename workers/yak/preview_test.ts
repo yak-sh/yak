@@ -6,6 +6,11 @@ import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { homed } from './page-graph.ts'
 import { sha256 } from './versions.ts'
+import { h } from 'preact'
+import { client } from '@yaks/client'
+import { host } from '@yaks/preact/host'
+import { loadVocab } from '@yaks/vocab'
+import { CustomEvent, stage } from '../../packages/preact/testing.ts'
 
 let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
   handler.fetch(req, env)
@@ -237,6 +242,78 @@ test('the link follows the draft: each write is told to its pages and served on 
   let released = await live.text()
   ok(released.includes('Private draft') && !released.includes('Soup'))
   ok(!released.includes('data-yak-draft="'))
+})
+
+test('a page drawn by @yaks/preact/host takes a write of its views module from the link in place: the module the link serves, drawn in the same root over the same page graph', async () => {
+  let views = (word: string) =>
+    "import { define } from '@yaks/render'\n" +
+    "export let views = define([{ view: 'Page', match: true, " +
+    `render: (b, h) => h('p', null, '${word} ' + b.entity.eid) }])`
+  await write('views.js', views('Soup'))
+  let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  let link = String(out.value!.url)
+  let sent = heard()
+  let { root, document, free } = stage()
+  Object.defineProperty(document, 'baseURI', {
+    value: link,
+    configurable: true,
+  })
+  let front = client(
+    loadVocab([{
+      $defs: { pot: { component: true, sync: 'none', properties: {} } },
+    }]),
+    [],
+    { vault: false, wireVault: false, provenance: false },
+  )
+  await front.mutate([{ entity: { eid: 'pot' }, pot: {} }])
+  let graph = front.graph
+  // The module as a browser imports it from the link: the bytes it serves.
+  let load = async (url: string) => {
+    let text = await (await kernel(new Request(url), env)).text()
+    return import('data:text/javascript,' + encodeURIComponent(text))
+  }
+  let page = await host({
+    root,
+    views: 'views.js',
+    vocab: front.vocab,
+    store: front.ent,
+    draw: (Entity) => h(Entity, { eid: 'pot', view: 'Page' }),
+    load,
+  })
+  try {
+    equal(root.textContent, 'Soup pot')
+    let drawn = root.firstChild
+    await write('views.js', views('Stew'))
+    let news = sent.at(-1)!.draft as unknown as {
+      files: { path: string; sha: string }[]
+    }
+    equal(news.files, [{
+      path: 'views.js',
+      sha: await sha256(new TextEncoder().encode(views('Stew'))),
+    }])
+    let reloads = 0
+    let event = Object.assign(
+      new CustomEvent('yak-draft', {
+        cancelable: true,
+        detail: {
+          ...news,
+          files: news.files.map((f) => ({
+            ...f,
+            url: String(new URL(f.path, link)),
+          })),
+        },
+      }),
+      { reload: () => reloads++ },
+    )
+    equal(document.defaultView!.dispatchEvent(event), false)
+    await page.settled()
+    equal([root.textContent, reloads], ['Stew pot', 0])
+    ok(root.firstChild == drawn && front.graph == graph)
+  } finally {
+    page.close()
+    front.close()
+    free()
+  }
 })
 
 test("a seed edited in the draft rewrites the rows it seeded in the link's store, never adding them again", async () => {

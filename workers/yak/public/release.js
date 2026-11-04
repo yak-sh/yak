@@ -5,9 +5,11 @@
 // A page from a draft's preview link (preview.ts, `data-yak-draft`) follows
 // the draft instead: it opens a socket of its own, and takes each write the
 // draft's store tells it of (`{"draft":…}`). A cancelable `yak-draft` event
-// goes first, so a page can take the write itself; else a write of only
-// stylesheets the page links swaps each in place, and any other reloads the
-// page, keeping the window's scroll and the values typed into its fields.
+// goes first, so a page can take the write itself (@yaks/preact/host takes
+// a write of its views module so) and still reload if it cannot; else a
+// write of only stylesheets the page links swaps each in place, and any other
+// reloads the page, keeping the window's scroll and the values typed into its
+// fields.
 ;(() => {
   let script = document.currentScript
   if (!script) return
@@ -99,10 +101,17 @@
     }
     let took = (news) => {
       if (news.draft != draft || !Array.isArray(news.files)) return
+      // Each file with the address it serves at; a page that took the write
+      // and could not use it calls `reload`, the one this page would have had.
+      let files = news.files.map((file) => ({
+        ...file,
+        url: String(new URL(file.path, at)),
+      }))
       let event = new CustomEvent('yak-draft', {
-        detail: news,
+        detail: { ...news, files },
         cancelable: true,
       })
+      event.reload = reload
       if (!dispatchEvent(event)) return
       let links = sheets(news.files)
       if (links) links.forEach((link, i) => swap(link, news.files[i].sha))

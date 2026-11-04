@@ -150,7 +150,7 @@ test('any other write reloads the page, keeping its scroll and typed fields in t
   equal(deleted.reloads(), 1)
 })
 
-test('a page that cancels yak-draft takes the write itself; another draft and other packets are not its', () => {
+test('a page that cancels yak-draft takes the write itself, told where each file serves, and can still reload as the page would have; another draft and other packets are not its', () => {
   let p = load('<link rel="stylesheet" href="../style.css">', { cancel: true })
   p.wrote([{ path: 'index.html', sha: 'x' }])
   p.wrote([{ path: 'index.html', sha: 'x' }], 'other')
@@ -160,10 +160,18 @@ test('a page that cancels yak-draft takes the write itself; another draft and ot
   equal(p.events[0].detail, {
     app: 'A',
     draft: 'D',
-    files: [{ path: 'index.html', sha: 'x' }],
+    files: [{ path: 'index.html', sha: 'x', url: `${AT}index.html` }],
     at: 'now',
   })
   equal([p.reloads(), sheets(p.document).length], [0, 1])
+  let input = p.document.createElement('input')
+  input.id = 'title'
+  input.value = 'Soup'
+  p.document.body.append(input)
+  ;(p.events[0] as unknown as { reload: () => void }).reload()
+  equal(p.reloads(), 1)
+  let next = load('<input id="title">', { name: String(p.world.name) })
+  equal(next.document.querySelector('input')!.value, 'Soup')
 })
 
 test('a socket that drops comes back and reloads the page, since it may have missed a write', () => {

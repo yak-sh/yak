@@ -58,7 +58,9 @@ export type Events = {
 }
 
 /** Portable trees and native components share the same selection machinery. */
-type HostRegistry<E = Bundle> = Selection<Renderer | ComponentRenderer<E>>
+export type HostRegistry<E = Bundle> = Selection<
+  Renderer | ComponentRenderer<E>
+>
 type Node<E = Bundle> =
   | VNode<Record<string, unknown>>
   | VNode<Context & { e: E }>
@@ -69,9 +71,11 @@ export type Store = (eid: string) => Bundle | undefined
 /** Watch one entity and return the cleanup for that listener. */
 export type Subscribe = (eid: string, notify: () => void) => () => void
 
-/** The values bound once when an application creates its Entity component. */
+/** The values bound once when an application creates its Entity component.
+ * A `registry` given as a function is read at each render, so the registry
+ * it answers can be replaced while the page stays mounted (./host.ts). */
 export type Options = {
-  registry: HostRegistry
+  registry: HostRegistry | (() => HostRegistry)
   vocab: Vocab
   store: Store
   subscribe?: Subscribe
@@ -225,5 +229,7 @@ export let entity = (
     }
   }, [eid])
   let bundle = store(eid)
-  return bundle ? render(registry, bundle, view, vocab, ctx) : null
+  if (!bundle) return null
+  let now = typeof registry == 'function' ? registry() : registry
+  return render(now, bundle, view, vocab, ctx)
 }

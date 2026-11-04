@@ -6,10 +6,15 @@
 import { type ComponentChild, render } from 'preact'
 import { parseHTML } from 'linkedom'
 
-let { document } = parseHTML('<html><body></body></html>')
+let window = parseHTML('<html><body></body></html>')
+let { document } = window
 
-/** Install a document, mount, and return an explicit cleanup for the test. */
-export let mount = (node: ComponentChild) => {
+/** The shared document's own event classes, which its targets dispatch. */
+export let { CustomEvent } = window
+
+/** Install the document and give a root of its own; `free` empties and
+ * removes it and puts the previous global document back. */
+export let stage = () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
     value: document,
@@ -23,6 +28,12 @@ export let mount = (node: ComponentChild) => {
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
+  return { root, document, free }
+}
+
+/** Install a document, mount, and return an explicit cleanup for the test. */
+export let mount = (node: ComponentChild) => {
+  let { root, free } = stage()
   try {
     render(node, root)
   } catch (error) {
