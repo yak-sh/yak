@@ -1,6 +1,6 @@
 // Command declarations are data. The memo keeps neither a vocabulary runtime
 // nor any closures; the chosen command loads its implementation by role.
-import { type Config, used } from './config.ts'
+import { type Config, located, used } from './config.ts'
 import { chosen, facetsOf } from '@yaks/host/config'
 import type { Declared } from './words.ts'
 import type { CliCommand, CliFacet } from './host.ts'
@@ -63,6 +63,9 @@ export let declarations = (
       ),
     {
       callbacks: { cli: ['run'] },
+      // A plugin found where the loader finds it: an installed `yak` names
+      // its packages at its own release on JSR (./config.ts `located`).
+      resolve: (specifier) => import.meta.resolve(located(specifier)),
     },
   )
   held.set(key, made)
