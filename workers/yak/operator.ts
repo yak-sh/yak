@@ -11,6 +11,7 @@ import {
   transcript,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
+import { LIMIT } from '@yaks/session/status'
 import { listing } from '@yaks/mcp'
 import { billed, type Item, type Model, type Price } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
@@ -298,11 +299,11 @@ let working = async (env: Env, store: Store, session: string) => {
 let ENDED = ['settled', 'failed', 'stopped']
 
 // What a model's refusal tells the person, by its code (@yaks/model
-// `ModelError`); any other is a refused request.
+// `ModelError`); any other is a refused request. A ceiling (@yaks/session
+// `LIMIT`) is said in its own sentence.
 let REFUSED: Record<string, string> = {
   refusal: 'the model declined to do this',
   busy: 'the model is too busy to answer right now',
-  limit: "yaks.app's credit with the model has run out",
 }
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 let TOLD = ' The people who run yaks.app have been told.'
@@ -310,8 +311,9 @@ let TOLD = ' The people who run yaks.app have been told.'
 /**
  * What ended a session's work: its newest reply, else what kept it from one,
  * in plain words. `fault` is what went wrong, for the tracker: a refusal, a
- * failure, or an end with no reply. A person's stop is no fault, and a step
- * that threw was reported where it threw (@yaks/session `report`).
+ * failure, or an end with no reply. A person's stop is no fault, nor a
+ * ceiling met (a spent budget says so in its own words), and a step that threw
+ * was reported where it threw (@yaks/session `report`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -329,6 +331,10 @@ let TOLD = ' The people who run yaks.app have been told.'
  *     ' The people who run yaks.app have been told.',
  *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
  * })
+ * equal(replyOf([line(3, {
+ *   output: { source: 'a' }, refusal: { code: 'limit' },
+ *   content: { body: "clerk's budget of $5 for models and voice is spent" },
+ * })]), { text: "clerk's budget of $5 for models and voice is spent" })
  * equal(replyOf([]).fault, 'ended without an answer')
  * ```
  */
@@ -342,6 +348,9 @@ export let replyOf = (
   let said = end ? textOf(end) : ''
   let kind = end && kindOf(end)
   if (kind == 'stop') return { text: said }
+  if (kind == 'refusal' && comp(end, 'refusal')?.code == LIMIT) {
+    return { text: said }
+  }
   if (kind == 'output' && !end!.notice && said) return { text: said }
   let broke = couldnt('something in yaks.app failed while working on it')
   if (kind == 'exception') return { text: broke + TOLD }
