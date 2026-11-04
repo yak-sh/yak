@@ -1,3 +1,4 @@
+import { type Clock, system as runtimeClock } from '@yaks/fp'
 import type { Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { statusComputed } from '@yaks/session/status'
@@ -39,10 +40,23 @@ export let operatorModel = (answer: Model) => {
   }
 }
 
+// RAM effect passes yield to asynchronous work without waiting for a timer.
+let clock: Clock = {
+  ...runtimeClock,
+  after: (ms, callback) => {
+    if (ms > 0) return runtimeClock.after(ms, callback)
+    let pending = true
+    queueMicrotask(() => {
+      if (pending) callback()
+    })
+    return () => void (pending = false)
+  },
+}
+
 /** Session decisions use the same graph composition over rows in memory. */
 export let operatorMemory = (storage: Storage = ram(operatorVocab, {
   computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
-})) => ({ ...operatorGraph(storage, []), storage })
+})) => ({ ...operatorGraph(storage, [], { clock }), storage })
 
 /** The Operator's HTTP and page-frame handlers over a private RAM graph. */
 export let operatorService = (env: Env, held: Held, options: Options) => {
