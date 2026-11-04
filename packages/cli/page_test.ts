@@ -1,6 +1,7 @@
 import { test, tick } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Body, type Build, bundle, compiled, kept } from './page.ts'
+import { close } from './held.ts'
 
 let get = (handle: (r: Request) => Promise<Response>) =>
   handle(new Request('http://x/x'))
@@ -49,6 +50,27 @@ test('a make still going when its host closes is ended', async () => {
   await tick()
   assertEquals(seen.aborted, true)
   assertEquals((await answer).status, 500)
+})
+
+test('a closing process lets a make it stopped settle, and leaves one still going', async () => {
+  let ended = (closing: Promise<void>) => {
+    let done = false
+    void closing.then(() => done = true)
+    return async () => (await tick(), done)
+  }
+  let going = Promise.withResolvers<Body>()
+  let answer = get(kept('/x', 'text/plain', () => going.promise))
+  assertEquals(await ended(close())(), true)
+  going.resolve('made')
+  assertEquals(await (await answer).text(), 'made')
+
+  let stopped = Promise.withResolvers<Body>()
+  let given = get(kept('/x', 'text/plain', () => stopped.promise, { limit: 0 }))
+  assertEquals((await given).status, 500)
+  let closed = ended(close())
+  assertEquals(await closed(), false)
+  stopped.reject(new Error('stopped'))
+  assertEquals(await closed(), true)
 })
 
 test('a body once made is kept, and revalidated by its hash', async () => {
