@@ -1,10 +1,16 @@
-// The app wire over a graph in memory. These callers test routing, query
-// encoding and uploads; Store installation and authorization have their own
-// tests through the Store. Kernel writes retain their trusted boundary here.
+// The app wire over a supplied graph: RAM for routing and uploads, SQLite
+// for blob-backed search and private scope. Production authority and read
+// seams stay shared; the Store owns installation and runtime duties.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { api, json, refuse, subscriptions } from '@yaks/api'
 import { apiDoc } from '@yaks/api/vocab'
-import { type Graph, graph, signed, type Tool } from '@yaks/graph'
+import {
+  type Graph,
+  graph,
+  type ReadOpts,
+  signed,
+  type Tool,
+} from '@yaks/graph'
 import { type Mode, personalsIn, policy } from '@yaks/member'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import { runner } from '@yaks/tools'
@@ -15,8 +21,11 @@ import { assertEquals } from '@std/assert'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { PLATFORM_OBJECT, USES } from './door.ts'
 import type { Env } from './env.ts'
-import { appGuard, authenticating, vouchOf } from './graph.ts'
+import { appGuard, authenticating, vouchOf } from './app-authority.ts'
 import { appDoc, appVocab } from './vocab.ts'
+import { appRead } from './app-read.ts'
+import { lowering, vouching } from './app-writes.ts'
+import type { Hit } from '@yaks/fts'
 import { kinded, naming } from './app-subs.ts'
 import { asking, screened } from './listing.ts'
 
@@ -29,6 +38,7 @@ type Composition = {
   graph?: (vocab: Vocab) => Graph
   settled?: (graph: Graph) => Promise<void>
   tools?: (vocab: Vocab) => Tool[]
+  found?: (graph: Graph, text: string, opts: ReadOpts, limit: number) => Hit[]
   sockets?: Hibernation
 }
 
@@ -38,6 +48,14 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
   if (composition.app) {
     let { eid, mode, manifest } = composition.app
     g.apply([{ entity: { eid }, access: { mode } }], { trusted: true })
+    g.use(lowering(() => vocab))
+    g.use(vouching({
+      app: () => eid,
+      authority: () => {
+        let req = request.getStore()
+        return req ? vouchOf(req) : undefined
+      },
+    }))
     g.use(appGuard(eid, vocab, manifest, {
       level: () => {
         let req = request.getStore()
@@ -81,11 +99,32 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     ...g,
     apply: (rows, options) => g.apply(rows, { ...options, trusted: true }),
   }, { host: g, tools: composition.tools(vocab) })
+  let read = (req: Request): ReadOpts => ({
+    person: vouchOf(req).person,
+    administrative: req.headers.get('x-yak-administrative') == '1',
+  })
   let serve = api({
     graph: view,
     subs,
     authenticate,
     writeParams: ['stamp'],
+    read,
+  })
+  let query = composition.found && appRead({
+    graph: g,
+    vocab,
+    route: serve,
+    authenticate,
+    read,
+    own: false,
+    spoke: () => {},
+    trusted: () => ({
+      ...g,
+      read: (line) => g.read(line, { administrative: true }),
+    }),
+    found: (text, opts, limit) => composition.found!(g, text, opts, limit),
+    speak: (rows) => rows,
+    taught: (answer) => Promise.resolve(answer),
   })
   let route = async (req: Request) => {
     let path = new URL(req.url).pathname
@@ -126,9 +165,12 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     }
     // The Store descriptor identifies which app door a route reached.
     if (path == '/graph') return Response.json({ db: `do:${name}` })
-    let answer = await request.run(req, () => serve(req))
+    let answer = await request.run(
+      req,
+      () => path == '/query' && query ? query(req) : serve(req),
+    )
     if (path == '/query') {
-      if (answer.ok) {
+      if (answer.ok && !query) {
         let rows = await answer.json()
         answer = json(
           Array.isArray(rows) ? rows.map((row) => kinded(vocab, row)) : rows,

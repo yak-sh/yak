@@ -11,6 +11,24 @@ import {
   Unfenced,
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
+import { appRead } from './app-read.ts'
+import {
+  appGuard,
+  authenticating,
+  type Vouch,
+  vouchOf,
+} from './app-authority.ts'
+export {
+  appGuard,
+  authenticating,
+  FLOORS,
+  floorsOf,
+  VISIT,
+  type Vouch,
+  vouchOf,
+} from './app-authority.ts'
+import { grantEid, lowering, vouching } from './app-writes.ts'
+export { grantEid } from './app-writes.ts'
 import {
   type Context as AppContext,
   expired,
@@ -240,20 +258,14 @@ import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
-import { noticeComponents } from './notices-vocab.ts'
 import {
-  actorOf,
   Denied,
   edits,
-  type Floors,
-  type Level,
   level,
-  members,
   type Mode,
   mode,
   type Personal,
   personalsIn,
-  type Policy,
   policy,
   reads,
 } from '@yaks/member'
@@ -746,109 +758,6 @@ export let KV: CreateTable = {
   ],
 }
 
-/** What the kernel vouched for one request: who is asking, the level the
- * platform says they hold on this app, what to call them, and whether they
- * stand in the app as a visitor (visit.ts). */
-export type Vouch = {
-  person: string | null
-  actor?: string
-  via: string | null
-  level: Level | null
-  title: string | null
-  visit?: boolean
-}
-
-/** The header the kernel marks a visitor's request with: a stranger reading
- * the sample or standing in a store of their own (visit.ts, session.ts
- * `vouched`). */
-export let VISIT = 'x-yak-visit'
-
-/** The kernel's authenticated person and verified instrument are separate:
- * a browser's via never supplies a person. The principal is `person ?? via`,
- * and it holds the level the kernel vouched, so a signed-out visitor is the
- * editor of a store of their own and the viewer of the sample (D-134327).
- *
- * ```ts
- * import { vouchOf } from './graph.ts'
- * import { assertEquals } from '@std/assert'
- * let v = vouchOf(new Request('http://store', {
- *   headers: {
- *     'x-yak-via': '0190e0c4-4a52-7b0e-9a3c-1f2d3e4f5a6b',
- *     'x-yak-role': 'editor',
- *     'x-yak-visit': '1',
- *   },
- * }))
- * assertEquals([v.person, v.level, v.visit], [null, 'editor', true])
- * ```
- */
-export let vouchOf = (req: Request): Vouch => {
-  let said = req.headers.get('x-yak-role')
-  let person = req.headers.get('x-yak-person')
-  let via = req.headers.get('x-yak-via')
-  return {
-    person,
-    ...(person && req.headers.get('x-yak-actor')
-      ? { actor: req.headers.get('x-yak-actor')! }
-      : {}),
-    via: via ? instrumentEid(via) : null,
-    level: (person || via) && said ? level(said) : null,
-    title: person ? req.headers.get('x-yak-title') : null,
-    ...(req.headers.has(VISIT) ? { visit: true } : {}),
-  }
-}
-
-/**
- * The seam: the vouch as @yaks/api's `Authenticate`, which @yaks/mcp's mount
- * takes too. Nobody at all is `null` — an anonymous visitor, which an `open`
- * or `public` app admits and a `private` one refuses.
- *
- * A read never reaches `apply()`, so it is refused here, in @yaks/member's own
- * words: the app's mode against the level this caller holds. The level is the
- * kernel's when it vouched one — the platform's roster lives in the directory,
- * not in an app's store — and this store's own grants otherwise, which is what
- * a share link and an app's own `grant` rows are. A write passes here and is
- * refused again inside the transaction by @yaks/member's precondition guard,
- * which is the only check that can read the batch.
- */
-export let authenticating = (
-  may: Policy,
-  app: () => string | null,
-  heard: (v: Vouch) => void = () => {},
-): Authenticate =>
-async (req) => {
-  let v = vouchOf(req)
-  heard(v)
-  let who = v.person || v.via
-    ? {
-      ...(v.person ? { by: v.actor ?? v.person } : {}),
-      ...(v.via ? { via: v.via } : {}),
-    }
-    : null
-  let held = app()
-  if (!held) return who
-  let m = await may.modeOf(held)
-  let has = v.level ?? await may.levelOf(v.person, held)
-  if (reads(m, has)) return who
-  // Signed out, the way in is to sign in; signed in and holding nothing, it
-  // is the app owner's to grant. Neither answer says more about the app than
-  // the address already did.
-  if (!v.person) throw new Unauthorized('sign in to read this app')
-  throw new Denied(v.person, held, 'viewer', 'read')
-}
-
-// The piece of the wider platform grammar an app's store refuses by name
-// rather than answering some other way (public/docs/querying.md, where it is
-// written down as this store's own limit). A work lane is the fleet's board,
-// which nothing here has, and an empty answer to a question about one would
-// read as "no rows" rather than "not that question".
-// The three directives that reshape an answer into one value rather than a set
-// of rows. A line naming one is not a listing at all.
-type Agg = 'count' | 'distinct' | 'tally'
-let AGGS: Agg[] = ['count', 'distinct', 'tally']
-let aggOf = (line: string): Agg | null =>
-  parse(line).clauses.map((c) => c.kind as Agg).find((k) => AGGS.includes(k)) ??
-    null
-
 // What a schema pass is remembered by: the Worker version it ran under, the
 // words it fitted and the stamp it left. A wake finding the same three renders
 // no schema; one finding any moved asks the print again. A runtime that names
@@ -866,15 +775,6 @@ export let stands = (held: string | null, fit: string | null): boolean =>
 let FORMATTED = /\[object [A-Z]\w*\]/
 export let formatted = (line: string): string | null =>
   line.match(FORMATTED)?.[0] ?? null
-
-let unserved = (line: string): string | null => {
-  for (let seg of line.split('&')) {
-    if (seg.startsWith('work=')) {
-      return 'work lanes are not served by this store'
-    }
-  }
-  return null
-}
 
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
@@ -905,100 +805,6 @@ let NO_PITR =
   "this store's back end does not offer point-in-time recovery — it is a " +
   'Cloudflare production Durable Object that does, and local development does ' +
   'not'
-
-/**
- * The platform's words that ask a level of their own in an app's store,
- * whatever the app's `access` (@yaks/member `floors`, T-37881). An `open` app
- * takes a visitor's rows on purpose, and these are the rows that are not a
- * visitor's to write:
- *
- *   product  what the checkout charges (sell.ts `priced`): the seller's
- *   order    what was sold: its properties are the webhook's alone (vocab.ts),
- *            and an owner may clear one
- *   deliver  the ask to send a letter, which leaves under the platform's
- *            name — an open app with no floor here is an open relay, and the
- *            first spam run would take the zone's reputation with it. Writing
- *            the letter is not held to anything; a draft is ordinary data.
- *   using    the ask for a model's turn, which the space pays for (D-40545):
- *            its members' to make, unless the app's manifest says
- *            `"models": "open"` ({@link floorsOf}), and then anyone's who may
- *            write it.
- *   builder  an instruction that starts model turns at the account's expense.
- *            Only an editor may write its settings, even in an open app.
- */
-export let FLOORS: Floors = {
-  product: 'editor',
-  order: 'owner',
-  [DELIVER]: 'editor',
-  using: 'editor',
-  builder: 'editor',
-}
-
-/**
- * The floors a visitor stands below in a store of their own (visit.ts), where
- * the door makes them its editor: the letter that would leave under the app's
- * address, and the model turns and builders the owner's space pays for. Only
- * the owner reaches these, and nobody is the owner of a visitor's store until
- * it is installed.
- */
-let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
-
-/** The floors an app's own manifest leaves standing: every one, less the
- * floor on asking its models where it opens them to anyone who may write;
- * for a visitor, raised to {@link VISITING}.
- *
- * ```ts
- * import { floorsOf } from './graph.ts'
- * import { assertEquals } from '@std/assert'
- * assertEquals(floorsOf({}).deliver, 'editor')
- * assertEquals(floorsOf({}, true).deliver, 'owner')
- * assertEquals(floorsOf({ models: 'open' }, true).using, undefined)
- * ```
- */
-export let floorsOf = (manifest: VocabDoc, visit = false): Floors =>
-  Object.fromEntries(
-    Object.entries({
-      ...FLOORS,
-      ...(visit ? VISITING : {}),
-      ...Object.fromEntries(
-        noticeComponents(manifest).map((name) => [name, 'editor']),
-      ),
-    }).filter(([k]) => !(manifest.models == 'open' && k == 'using')),
-  ) as Floors
-
-/** The rows an open app's visitor writes only inside a row of their own: a
- * line of a transcript, since after an entry with `using` every line asks for
- * a model's turn the space pays for. A visitor's lines, and so the turns they
- * ask for, stay in transcripts they started. */
-let WITHIN = { entry: 'session' }
-
-/** The write guard an app's store holds every writer to: @yaks/member's rule,
- * over this platform's floors as the app's manifest leaves them
- * ({@link floorsOf}) and its {@link WITHIN}. `level` is the standing the door
- * vouched for a writer, and `ignore` the grant rows that standing has outlived.
- * So an open app's visitor adds rows and changes or deletes only their own (an
- * upload's content row, and so its bytes, included), and its owner any.
- * `visit` holds the writer below the floors a visitor never reaches. */
-export let appGuard = (
-  app: string,
-  vocab: Vocab,
-  manifest: VocabDoc,
-  standing: Pick<Parameters<typeof members>[0], 'level' | 'ignore'>,
-  visit = false,
-): Plugin =>
-  members({
-    app,
-    vocab,
-    instrument: instrumentEid,
-    floors: floorsOf(manifest, visit),
-    within: WITHIN,
-    ...standing,
-  })
-
-/** The id a mirrored grant is filed under: one per (app, person), derived, so
- * the same vouch lands on one row however often it is said. */
-export let grantEid = (app: string, person: string): string =>
-  sha256(`grant\x00${app}\x00${person}`)
 
 // Request paths become profile labels only for known Store doors. An arbitrary
 // caller path or method must not create a new label.
@@ -1074,6 +880,7 @@ export class Store {
   #people = new Map<string, string | null>()
   #live!: Sockets
   #route!: Handler
+  #reading!: Handler
   #auth!: Authenticate
   #meta!: Meta
   // The serving fence a directory write commits under: its revision, -1 for
@@ -1933,6 +1740,19 @@ export class Store {
         }
         : {}),
     })
+    this.#reading = appRead({
+      graph: g,
+      vocab,
+      route: this.#route,
+      authenticate: this.#auth,
+      read: (request) => this.#callerRead(request),
+      own,
+      spoke: (line) => this.#spoke(line),
+      trusted: () => this.#kernelGraph(g),
+      found: (text, opts, limit) => this.#found(text, opts, { limit }),
+      speak: this.#speak,
+      taught: (answer) => this.#taught(answer),
+    })
     // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
@@ -2370,8 +2190,8 @@ export class Store {
 
   // What the kernel has vouched about somebody, this incarnation, kept by
   // person: two requests can be in flight at once, and a `Vouch` held in one
-  // field would be whichever of them spoke last. `#told` is what has already
-  // been written down for them, so a session's second write costs no rows.
+  // field would be whichever of them spoke last. The vouching plugin remembers
+  // what was written down, so a session's second write costs no rows.
   // A fresh transport per operation, never an isolate-wide promise or roster.
   // Every read stands on the independent directory authority.
   #directoryTransport() {
@@ -2514,7 +2334,6 @@ export class Store {
   // What the kernel vouched for a browser with nobody signed in, by its
   // instrument: a visitor reading the sample or in a store of their own.
   #browsers = new Map<string, Vouch>()
-  #told = new Map<string, string>()
 
   #writerKey(actor: Actor) {
     return JSON.stringify([actor.by, actor.via ?? null])
@@ -2552,31 +2371,7 @@ export class Store {
     if (actor) this.#delegated.delete(this.#writerKey(actor))
   }
 
-  #lowering: Plugin = {
-    name: 'yak/lower',
-    hooks: {
-      normalize: (bundles) =>
-        bundles.map((b) => {
-          let out: Record<string, unknown> | null = null
-          for (let [name, comp] of comps(b)) {
-            if (!comp) continue
-            for (let [prop, v] of Object.entries(comp)) {
-              let eid = (v as { eid?: unknown } | null)?.eid
-              if (
-                typeof eid != 'string' ||
-                this.#vocab.prop(name, prop)?.category != 'ref'
-              ) continue
-              out ??= { ...b }
-              out[name] = {
-                ...(out[name] as Record<string, unknown>),
-                [prop]: eid,
-              }
-            }
-          }
-          return (out ?? b) as Bundle
-        }),
-    },
-  }
+  #lowering = lowering(() => this.#vocab)
 
   #staleGrant = (row: Bundle): boolean => {
     let grant = row.grant as Comp | null | undefined
@@ -2586,85 +2381,10 @@ export class Store {
       this.#vouched.get(person)?.level === null
   }
 
-  #untold(bundles: Bundle[]) {
-    let v = this.#authority(writerOf(bundles))
-    let who = v?.person
-    if (!who || !v) return null
-    let app = this.#get('app')
-    let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
-    return this.#told.get(who) == said ? null : { who, v, app, said }
-  }
-
-  /**
-   * Who this store knows, from what the kernel vouched: the person as an
-   * entity of its own (so a byline resolves to somebody), the name to call
-   * them by, and the level the platform says they hold on this app.
-   *
-   * It is a write-path plugin rather than a door's own step, because there is
-   * more than one door — @yaks/api's `/apply`, @yaks/mcp's tools, whatever
-   * mounts next — and the guard that reads these rows would otherwise hold
-   * for one of them and not the others. `precondition` is where it belongs:
-   * inside the batch's transaction, before @yaks/member's guard runs, so the
-   * platform's word is a row by the time the rule asks for one, and a refused
-   * batch rolls the row back with everything else it wrote.
-   *
-   * A read writes nothing at all: an app learns who its members are when one
-   * of them writes to it, not when one of them looks at it.
-   */
-  #vouching: Plugin = {
-    name: 'yak/vouch',
-    // The two rows the hook below writes — a person and their grant. Naming
-    // them here puts them in the batch's own gather, so the store learns their
-    // identities in the read every batch already takes rather than in one of
-    // its own (T-34032).
-    admission: () => true,
-    wants: (bundles) => {
-      let vouch = this.#untold(bundles)
-      if (!vouch) return []
-      let { who, app } = vouch
-      return [{ eids: app ? [who, app, grantEid(app, who)] : [who] }]
-    },
-    hooks: {
-      precondition: (bundles, tx, _err, context) => {
-        let vouch = this.#untold(bundles)
-        if (!vouch) return bundles
-        let { who, v, app, said } = vouch
-        if (!context?.admission) this.#told.set(who, said)
-        // Admission mirrors the same rows in its temporary transaction so
-        // rules see exactly what an ordinary write sees, without retaining it.
-        // The app writing as itself (dispatch.ts `owning`, `env.APP`) is the
-        // one actor that is not a person: it is already a row here, carrying
-        // this store's `access`, and calling it a person would put the app in
-        // its own `.person` listing. Its grant is still written — that is
-        // what @yaks/member's guard reads to admit the write.
-        let out: Bundle[] = who == app ? [] : [{
-          entity: { eid: who },
-          person: {},
-          ...(v.title ? { doc: { title: v.title } } : {}),
-        }]
-        if (app && v.level) {
-          out.push({
-            entity: { eid: grantEid(app, who) },
-            grant: { app, person: who, access: v.level },
-          })
-        }
-        if (!out.length) return bundles
-        return after(tx.patch(out), () => bundles)
-      },
-      // The transaction is gone, taking the rows above with it — because the
-      // batch was refused, or because it was only ever a rehearsal
-      // (@yaks/graph `Checked`, the `?check=1` half of a write that spans two
-      // stores). Either way what this object believes it has written down goes
-      // too, or the next batch by that person would skip a row that is not
-      // there.
-      audit: (bundles, _tx, _err, context) => {
-        if (context?.admission) return bundles
-        let who = this.#authority(writerOf(bundles))?.person ?? actorOf(bundles)
-        if (who) this.#told.delete(who)
-        return bundles
-      },
-    },
-  }
+  #vouching = vouching({
+    app: () => this.#get('app'),
+    authority: (actor) => this.#authority(actor),
+  })
 
   /**
    * An app's letters: the address they leave from, and who may ask for one.
@@ -5252,37 +4972,7 @@ export class Store {
       defect(e, { request: 'query', store: this.#get('name') })
       throw e
     }
-    if (url.searchParams.get('listing') == '1') {
-      let own = ownStore(this.#get('name') ?? '')
-      let words = screened((w) => !!this.#vocab.comp(w), own)
-      line = asking(line, words, this.#personal)
-      url.searchParams.set('q', line)
-      request = new Request(url, request)
-    }
-    let live = url.searchParams.get('live') == '1'
-    let no = unserved(line)
-    if (no) throw new Refused(no)
-    let agg = aggOf(line)
-    this.#spoke(line)
-    // Service callbacks need server-owned evidence that the public wire omits.
-    // Only the kernel's constructed door may ask for this read.
-    if (url.searchParams.get('trusted') == '1') {
-      if (request.headers.get('x-yak-kernel') != '1') {
-        throw new Refused('trusted queries require the kernel')
-      }
-      return agg
-        ? await this.#counted(line, agg, { administrative: true })
-        : json(await this.#kernelGraph(this.#graph).read(line))
-    }
-    if (agg && !live) {
-      await this.#auth(request)
-      return await this.#counted(line, agg, this.#callerRead(request))
-    }
-    return await this.#kinded(
-      await this.#route(request),
-      line,
-      this.#callerRead(request),
-    )
+    return await this.#reading(request)
   }
 
   // The word a row is named by. `kind` is not a property and no client can
@@ -5342,54 +5032,6 @@ export class Store {
       : Response.json(said, { status: answer.status, headers: answer.headers })
   }
 
-  // One aggregate, as every door on this platform says it: a count is a
-  // number, a distinct is the values, a tally is how many rows each.
-  // @yaks/sql answers all three as one value→n shape, so this is the reading.
-  async #counted(line: string, agg: Agg, opts = {}): Promise<Response> {
-    let rows = await this.#graph.rows(line, opts) as {
-      value: string
-      n: number
-    }[]
-    if (agg == 'count') return Response.json({ count: rows[0]?.n ?? 0 })
-    let said = rows.map((r) => [String(r.value ?? ''), r.n] as const)
-    return Response.json(
-      agg == 'distinct'
-        ? { distinct: said.map(([v]) => v) }
-        : { tally: Object.fromEntries(said) },
-    )
-  }
-
-  // A text term ranks as well as filters: a search answers closest first, and
-  // each row says how close (public/client.js `search`, and reach.ts reads the
-  // same word to merge two apps' hits into one order). @yaks/sql compiles a
-  // bare word as a predicate and stops there, so the ranking is read off the
-  // very index it matched through (@yaks/fts) and painted on the rows the
-  // filter already chose. `rank` is the answer's own word about a row, never a
-  // component: nothing stores it and no vocabulary declares it.
-  //
-  // bm25 counts down — a closer match is a smaller number, and they are
-  // negative — so what a page reads is its negation, where bigger is better.
-  #ranked(rows: Bundle[], line: string, readOpts: ReadOpts): Bundle[] {
-    let text = parse(line).clauses
-      .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
-    if (!text.trim() || !rows.length) return rows
-    let hits = this.#found(text, readOpts, {
-      limit: Math.max(rows.length, 20),
-    })
-    let at = new Map(hits.map((h, i) => [h.entity, { i, h }]))
-    return rows
-      .map((b) => {
-        let hit = at.get(b.entity.eid)
-        return hit
-          ? { ...b, rank: { score: -hit.h.rank, snip: hit.h.snippet } }
-          : b
-      })
-      .sort((a, b) =>
-        (at.get(a.entity.eid)?.i ?? rows.length) -
-        (at.get(b.entity.eid)?.i ?? rows.length)
-      )
-  }
-
   // The full-text hits for words, best first, over the text this reader may
   // see: what a bare word in a query matches by, and what search and ask
   // retrieve with (document-search.ts).
@@ -5404,23 +5046,6 @@ export class Store {
       ...opts,
       screens: screens(searchable, this.#vocab, this.#graph.scope(readOpts)),
     })
-  }
-
-  async #kinded(
-    answer: Response,
-    line: string,
-    readOpts: ReadOpts,
-  ): Promise<Response> {
-    if (!answer.ok) return this.#taught(answer)
-    let rows = await answer.json()
-    if (!Array.isArray(rows)) return Response.json(rows)
-    // The rows already carry what the line names (@yaks/graph `wanted`).
-    let ranked = this.#ranked(
-      fromWire(this.#vocab, rows) as Bundle[],
-      line,
-      readOpts,
-    )
-    return json(await this.#speak(ranked.map(this.#kind)))
   }
 
   // The same rows on a subscription's frames, because a subscription is that

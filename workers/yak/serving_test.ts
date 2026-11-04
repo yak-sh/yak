@@ -51,7 +51,8 @@ import { FREE, monthOf, PLUS, size } from './meter.ts'
 import { ADA, ADA_OWNS, as, seeded, visit } from './serving-probe.ts'
 import { platform } from './serving-scene.ts'
 import { stores } from './app-store-probe.ts'
-import { appVocab } from './vocab.ts'
+import { sqliteApp } from './sqlite-app-probe.ts'
+import { appDoc, appVocab } from './vocab.ts'
 import { addressed, sha256 } from './versions.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -708,19 +709,25 @@ let wireFixture = async () => {
   try {
     let { env } = scenario
     let { dir, space, app } = await seeded(env)
+    let words = appDoc({
+      $vocabulary: { 'https://yak.sh/vocab/member': true },
+      $defs: {
+        local_setting: {
+          component: true,
+          personal: 'entity',
+          properties: { text: { type: 'string', search: true } },
+        },
+      },
+    })
+    stores(env, appVocab(words), {
+      ...sqliteApp(),
+      declaration: words,
+      app: { eid: app.eid, mode: 'public', manifest: words },
+    })
     let store = appStore(env.STORE, space, app)
     let declaration = await store('/vocab', {
       method: 'POST',
-      body: JSON.stringify({
-        $vocabulary: { 'https://yak.sh/vocab/member': true },
-        $defs: {
-          local_setting: {
-            component: true,
-            personal: 'entity',
-            properties: { text: { type: 'string', search: true } },
-          },
-        },
-      }),
+      body: JSON.stringify(words),
     }, KERNEL)
     assertEquals(declaration.status, 200, await declaration.text())
     await store('/apply', {
