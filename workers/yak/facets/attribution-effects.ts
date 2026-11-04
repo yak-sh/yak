@@ -42,7 +42,23 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let by = (browser?.browser as Comp | undefined)?.by
       if (!by) return
       let { appStore, directoryOf } = await import('../directory.ts')
-      let found = await directoryOf(at.env.STORE!).appAt(edge.to)
+      // A browser given a store of its own at the app (visit.ts) wrote its
+      // rows there, not in the app's: the store as a stranger is served it,
+      // or the app it became, which is the only app it may be told it holds.
+      let dir = directoryOf(at.env.STORE!)
+      let visit = receipt.visit as Comp | undefined
+      let adopted = typeof visit?.adopted == 'string' ? visit.adopted : null
+      let found = await dir.appAt(adopted ?? edge.to)
+      if (found && typeof visit?.store == 'string' && !adopted) {
+        found = {
+          ...found,
+          app: {
+            ...found.app,
+            store: visit.store,
+            declaration: found.app.demo?.release ?? found.app.declaration,
+          },
+        }
+      }
       if (found) {
         let door = appStore(at.env.STORE!, found.space, found.app, at.env)
         let result = await door.consume(

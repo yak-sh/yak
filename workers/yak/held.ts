@@ -12,8 +12,11 @@ import { ownedPrefix } from './file-root.ts'
 // bucket, everything under `<handle>/` (the space's own, directory.ts
 // `spaceHandle`), each counted for the app whose prefix
 // holds it (file-root.ts `ownedPrefix`): its files,
-// uploads, kept versions and history. A key under no app's prefix still counts
-// for the space, so the apps' files can sum to less than the space's.
+// uploads, kept versions and history. An app installed over a visit
+// (visit.ts) keeps its uploads where the visit put them, outside the space
+// (`app.blobs`), and they count for it and its space too (`prefixes`). A key
+// under no app's prefix still counts for the space, so the apps' files can sum
+// to less than the space's.
 import type { App, Space } from './directory.ts'
 
 /** What a space, or one of its apps, holds: app data and photos and files. */
@@ -26,6 +29,33 @@ export type Holding = Held & {
 }
 
 let sum = (ns: Iterable<number>) => [...ns].reduce((a, b) => a + b, 0)
+
+type Owner = Pick<App, 'eid' | 'slug' | 'files' | 'blobs'>
+
+/** The prefixes an app's bytes live under: its own, and its uploads' where
+ * they lie outside it.
+ *
+ * ```ts
+ * import { prefixes } from './held.ts'
+ * import { assertEquals } from '@std/assert'
+ * let jeff = { store: 'jeff' }
+ * assertEquals(prefixes(jeff, { slug: 'notes', files: 'jeff/.apps/n', blobs: 'jeff/.apps/n/blobs/' }), ['jeff/.apps/n/'])
+ * assertEquals(prefixes(jeff, { slug: 'notes', files: 'jeff/.apps/n', blobs: '.visits/v/blobs/' }), ['jeff/.apps/n/', '.visits/v/blobs/'])
+ * ```
+ */
+export let prefixes = (
+  space: Pick<Space, 'store'>,
+  app: Pick<App, 'slug' | 'files' | 'blobs'>,
+) => {
+  let own = ownedPrefix(space, app) + '/'
+  return app.blobs && !app.blobs.startsWith(own) ? [own, app.blobs] : [own]
+}
+
+/** The prefixes outside the space's own that its apps keep bytes under, which
+ * a listing of `<handle>/` does not reach (usage.ts `fileSizes`). */
+export let outside = (space: Pick<Space, 'store'>, apps: Owner[]) =>
+  apps.flatMap((app) => prefixes(space, app))
+    .filter((p) => !p.startsWith(`${space.store}/`))
 
 // The bucket's objects under a space, totalled by the app whose prefix holds
 // them.
@@ -57,8 +87,7 @@ export let split = (
 /// holding(jeff, [notes], new Map([['jeff/cart/a', 4]])) -> { names: new Map([['n', 'notes']]), bytes: 7, files: 4, apps: new Map([['n', { bytes: 7, files: 0 }], ['cart', { bytes: 0, files: 4 }]]) }
 export let holding = (
   space: Pick<Space, 'store'> & { meter: Partial<Held> | null },
-  apps:
-    (Pick<App, 'eid' | 'slug' | 'files'> & { meter: Partial<Held> | null })[],
+  apps: (Owner & { meter: Partial<Held> | null })[],
   sizes?: Map<string, number>,
 ): Holding => {
   let held = new Map<string, Held>(apps.map((a) => [a.eid, {
@@ -66,7 +95,7 @@ export let holding = (
     files: sizes
       ? sum(
         [...sizes].filter(([key]) =>
-          key.startsWith(ownedPrefix(space, a) + '/')
+          prefixes(space, a).some((p) => key.startsWith(p))
         ).map(([, n]) => n),
       )
       : a.meter?.files ?? 0,

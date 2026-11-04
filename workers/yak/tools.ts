@@ -330,6 +330,8 @@ import { viewsTools } from './views.ts'
 import { carried, connectionTools, rebind } from './connections.ts'
 import { background, caught } from './defects.ts'
 import { step } from './funnel.ts'
+import { adopt, unadopt, type Visit, visitOf } from './visit.ts'
+import { Stale } from '@yaks/graph/errors'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a domain can say a row without importing the
@@ -1893,11 +1895,17 @@ let taking = async (
  * named by is made out of it (directory.ts `handle`) and there is no second
  * moment to write it in. `former` opens at the slug it is born at: the first
  * line of an address history, which is all that word is now (T-34657).
+ * An app installed over a visit (visit.ts) takes that visit's store and
+ * uploads, so nothing moves.
  */
 let born = (
   space: Space,
   slug: string,
-  o: { title: string; access: Access },
+  o: {
+    title: string
+    access: Access
+    kept?: Pick<Visit, 'store' | 'blobs'> | null
+  },
 ): Bundle => {
   let eid = crypto.randomUUID()
   let files = rootedPrefix(space, { eid })
@@ -1909,9 +1917,9 @@ let born = (
       space: space.eid,
       version: 0,
       access: o.access,
-      store: handle(space, slug, eid),
+      store: o.kept?.store ?? handle(space, slug, eid),
       files,
-      blobs: blobPrefix(space, { slug, files }),
+      blobs: o.kept?.blobs ?? blobPrefix(space, { slug, files }),
     },
     former: { slug },
   }
@@ -5415,11 +5423,19 @@ let OURS: Row[] = [
             'otherwise its published name, adding -2, -3, etc. if taken. ' +
             'app_published lists both',
         ),
+        visit: {
+          type: 'boolean',
+          description:
+            'true to keep what this browser made at the published app ' +
+            'before signing up: the copy takes over that store, rows and ' +
+            'uploads, instead of starting from the seed',
+        },
       },
       required: ['name'],
     },
     run: async (ctx, args) => {
       let name = slug(args.name, 'name')
+      let visiting = args.visit != null && flag(args.visit, 'visit')
       // `offered` still names a trashed app, whose name stays claimed for the
       // trash's thirty days; it is not on offer until it is restored.
       let offer = await ctx.dir.offered(name)
@@ -5432,9 +5448,44 @@ let OURS: Row[] = [
             'offer',
         )
       }
+      // The store this browser was given at the published app (visit.ts),
+      // which the copy takes over rather than starting from the seed. Only
+      // the browser that holds it may, and only once.
+      let via = visiting ? ctx.who?.instrument : undefined
+      let kept = via ? await visitOf(ctx.env, via, offer.app.eid) : null
+      if (visiting && !kept) {
+        throw refuse(
+          'missing',
+          `this browser made nothing at ${name} to keep — app_install ` +
+            'without visit gets a copy of its own',
+        )
+      }
+      if (kept?.adopted) {
+        let had = await ctx.dir.appAt(kept.adopted)
+        if (had && !had.app.trashed && !had.space.trashed) {
+          return {
+            text: `what this browser made at ${name} is already ` +
+              `${had.space.slug}/${had.app.slug}: ${
+                url(had.space, had.app, ctx.env)
+              }`,
+            value: {
+              app: had.app.slug,
+              url: url(had.space, had.app, ctx.env),
+              version: had.app.installed?.version ?? had.app.version,
+            },
+            space: had.space,
+          }
+        }
+        throw refuse(
+          'conflict',
+          `what this browser made at ${name} became an app that is now in ` +
+            'the trash — app_restore brings it back',
+        )
+      }
       let { space, who } = await inSpace(ctx, args, true)
       // An installed app costs what any other does, so it is counted like any
-      // other (T-32758) — the same refusal app_new gives.
+      // other (T-32758) — the same refusal app_new gives. A visit's store
+      // waits for an install that fits.
       let free = ceilings(space.tier, space.slug)
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
@@ -5491,8 +5542,19 @@ let OURS: Row[] = [
         ...born(space, s, {
           title: clamped(offer.app.title),
           access: offer.app.access,
+          kept,
         }),
         installed: { of: offer.app.eid, version, ...sandboxing(false) },
+        // A visit's store was seeded from the sample, and holds what they
+        // made of it since.
+        ...kept
+          ? {
+            seeded: {
+              at: new Date().toISOString(),
+              version: offer.app.demo?.version ?? version,
+            },
+          }
+          : {},
       }
       // What the copy asks this space for: a needed connection for each one
       // the app uses, read before anything is written and written with the
@@ -5504,7 +5566,25 @@ let OURS: Row[] = [
         offer.app.eid,
       )
       let entities = [row, ...claims, ...asked.asks]
-      let applied = await ctx.dir.stamp({ entities }, vouched(who))
+      // The visit is taken before the row is written, so two installs never
+      // share one store, and given back if the row could not be.
+      if (kept) {
+        await adopt(ctx.env, via!, offer.app.eid, row.entity.eid).catch(
+          (error) => {
+            if (!(error instanceof Stale)) throw error
+            throw refuse(
+              'conflict',
+              `what this browser made at ${name} is being installed already`,
+            )
+          },
+        )
+      }
+      let applied = await ctx.dir.stamp({ entities }, vouched(who)).catch(
+        async (error) => {
+          if (kept) await unadopt(ctx.env, via!, offer.app.eid, row.entity.eid)
+          throw error
+        },
+      )
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
       renew(ctx)
@@ -5542,10 +5622,11 @@ let OURS: Row[] = [
         text:
           `installed ${name} v${version} as ${space.slug}/${s}: ${
             url(space, app, ctx.env)
-          } — ${wrote.length} ${
-            wrote.length == 1 ? 'file' : 'files'
-          }, its own ` +
-          'store and its own data, pinned to that version (app_update moves ' +
+          } — ${wrote.length} ${wrote.length == 1 ? 'file' : 'files'}, ${
+            kept
+              ? 'with everything this browser made there'
+              : 'its own store and its own data'
+          }, pinned to that version (app_update moves ` +
           'it)' + asked.said + out.said,
         value: { app: app.slug, url: url(space, app, ctx.env), version },
         space,

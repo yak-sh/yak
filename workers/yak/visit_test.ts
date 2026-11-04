@@ -54,7 +54,8 @@ let host = `owner.${k.host}`
 let titles = async (c: ReturnType<typeof client>) =>
   (await c.get('q=.note')).map((r) => (r.note as { title: string }).title)
     .sort()
-let ada = client(k, host, 'notes', (await signIn(k)).cookie)
+let adaIn = await signIn(k)
+let ada = client(k, host, 'notes', adaIn.cookie)
 let bo = client(k, host, 'notes', (await signIn(k)).cookie)
 let owner = client(k, host, 'notes', k.owner.cookie)
 let nobody = client(k, host, 'notes')
@@ -102,9 +103,50 @@ let signedOut = (await nobody.get('q=.note')) as unknown as {
 let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
 let vias = (await meta(env).query('.visit')).length
 
+// Ada installs, keeping what she made.
+let install = () =>
+  k.at(k.host, '/install?name=notes', {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: adaIn.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: '',
+  })
+let offered = await (await k.at(k.host, '/install?name=notes', {
+  headers: { cookie: adaIn.cookie },
+})).text()
+let installed = await install()
+let kept = new URL(installed.headers.get('location') ?? 'https://none/')
+await installed.body?.cancel()
+let again = await install()
+let againAt = again.headers.get('location')
+await again.body?.cancel()
+let adopted = client(
+  k,
+  kept.host,
+  kept.pathname.split('/')[1],
+  adaIn.cookie,
+)
+let adoptedRows = await titles(adopted)
+let adoptedWrite = await adopted.post([
+  { entity: { eid: '$k' }, note: { title: 'Kept' } },
+])
+let adoptedStatus = adoptedWrite.status
+await adoptedWrite.body?.cancel()
+let sent = await k.at(host, '/notes/', {
+  redirect: 'manual',
+  headers: { cookie: adaIn.cookie, 'sec-fetch-mode': 'navigate' },
+})
+await sent.body?.cancel()
+let demoAfter = await titles(ada)
+let adoptedAgain = await titles(adopted)
+
 // What a sweep reaches, and what makes no store.
 let listed = (await stores(env)).map((s) => s.at)
-let crowding = [await crowded(env, app.eid, 2), await crowded(env, app.eid, 3)]
+// Ada's store is her app's now, so it is neither a visit nor counted.
+let crowding = [await crowded(env, app.eid, 1), await crowded(env, app.eid, 2)]
 let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
 let cyc = client(k, host, 'notes', cy.cookie)
 env.BIRTH_RATE = { limit: () => Promise.resolve({ success: false }) }
@@ -132,6 +174,7 @@ let lapsing = (await lapsed(env, later)).length
 await collected(env, later)
 let afterSweep = (await visits(env)).length
 let adaAgain = await titles(ada)
+let adoptedSwept = await titles(adopted)
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -179,7 +222,7 @@ test('the sample is not the app’s store, and signed out is still sign-in', () 
 
 test('a sweep reaches the sample and every visitor store', () => {
   assert(listed.includes('owner/notes sample'))
-  assertEquals(listed.filter((at) => at == 'owner/notes visit').length, 2)
+  assertEquals(listed.filter((at) => at == 'owner/notes visit').length, 1)
 })
 
 test('past its rate or its cap, a first write is asked to sign up', () => {
@@ -198,4 +241,23 @@ test('a store nobody claimed is erased after 90 days unused', () => {
   assertEquals([soon, lapsing], [0, 2])
   assertEquals(afterSweep, 0)
   assertEquals(adaAgain, ['Sample'])
+})
+
+test('installing keeps what they made, in their own app', () => {
+  assertStringIncludes(offered, 'What you made in this browser comes with it')
+  assertEquals(installed.status, 303)
+  assertEquals(adoptedRows, ['Mine', 'Sample, changed', 'Two'])
+  assertEquals(adoptedStatus, 200)
+  assertEquals(adoptedAgain, ['Kept', 'Mine', 'Sample, changed', 'Two'])
+})
+
+test('installing twice is the one app, and the demo sends them to it', () => {
+  assertEquals(againAt, kept.href)
+  assertEquals(sent.status, 303)
+  assertEquals(sent.headers.get('location'), kept.href)
+  assertEquals(demoAfter, ['Sample'])
+})
+
+test('an installed visit is its app’s, and no sweep takes it', () => {
+  assertEquals(adoptedSwept, ['Kept', 'Mine', 'Sample, changed', 'Two'])
 })

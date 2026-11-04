@@ -192,6 +192,7 @@ import {
   releaseFor,
   used,
   visitable,
+  type Visiting,
   visiting,
   visitOf,
 } from './visit.ts'
@@ -3663,7 +3664,7 @@ let served = async (
   // unless the owner already let them in: then their way through is the
   // click in the letter, as it was. Never the app's own worker coming back,
   // nor a sandboxed app, whose page tokens each open one store.
-  let visit: 'sample' | 'own' | null = null
+  let visit: Visiting | null = null
   let stranger = { app, who, release: null as Release | null }
   if (!itself && !walls && visitable(app, who)) {
     let [own, release, invited] = await c.time('visit', () =>
@@ -3679,6 +3680,17 @@ let served = async (
       ;({ app, who, visit } = visiting(space, app, who, own, release))
     }
     if (own && due(own.seen)) background(used(env, who.via!, app.eid))
+    // Their store is an app of their own now: the page they open is there.
+    let mine = visit == 'kept' && req.method == 'GET' &&
+        req.headers.get('sec-fetch-mode') == 'navigate'
+      ? await dir.appAt(own!.adopted!)
+      : null
+    if (mine && !mine.app.trashed && !mine.space.trashed) {
+      return redirect(
+        `${urlOf(mine.space, mine.app, env)}${path.slice(1)}${url.search}`,
+        303,
+      )
+    }
   }
   if (webPath(path)) {
     if (req.method != 'GET' && req.method != 'HEAD') {

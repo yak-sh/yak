@@ -10,6 +10,7 @@ import { whoIs } from './session.ts'
 import { foot, head, html, top } from './shell.ts'
 import { call } from './tools.ts'
 import { step } from './funnel.ts'
+import { visitOf } from './visit.ts'
 
 export { INSTALL as PATH, installAt as at } from './route.ts'
 
@@ -21,6 +22,7 @@ let page = (
   why = '',
   status = 200,
   selected = '',
+  kept = false,
 ) =>
   html(
     `${
@@ -41,7 +43,11 @@ ${
       name
         ? `<form class="Card" method="post" action="${esc(installAt(name))}">
 <header class="Card_Head"><h2 class="Card_Title">Get your own copy</h2></header>
-<p class="Card_Sub">Your copy has its own data. You can make it your own.</p>
+<p class="Card_Sub">${
+          kept
+            ? 'What you made in this browser comes with it, and only you can see it.'
+            : 'Your copy has its own data. You can make it your own.'
+        }</p>
 ${
           spaces.length
             ? `<div class="Form_Field"><label class="Form_Label" for="install-space">Install in</label><div class="Form_Line"><select class="Field" id="install-space" name="space" required>${
@@ -87,11 +93,18 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
   let spaces = (await dir.seats(who.person))
     .filter((s) => !s.space.trashed && writes(s.role)).map((s) => s.space)
   let title = `Install ${offer.app.title}`
-  if (req.method == 'GET') return page(env, title, name, spaces)
+  // What this browser made at the app before signing up (visit.ts) is the
+  // copy's, unless it already became an app.
+  let visit = who.via ? await visitOf(env, who.via, offer.app.eid) : null
+  let kept = !!visit && !visit.adopted
+  // Asked again once it became one, the install answers that app.
+  let shown = (why = '', status = 200, selected = '') =>
+    page(env, title, name, spaces, why, status, selected, kept)
+  if (req.method == 'GET') return shown()
   let form = await req.formData()
   let space = String(form.get('space') ?? '') ||
     (spaces.length == 1 ? spaces[0].slug : '')
-  if (!space && spaces.length > 1) return page(env, title, name, spaces)
+  if (!space && spaces.length > 1) return shown()
   try {
     let installed = await call(
       {
@@ -106,7 +119,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
         },
       },
       'app_install',
-      { name, ...space ? { space } : {} },
+      { name, ...space ? { space } : {}, ...visit ? { visit: true } : {} },
     )
     let destination = installed.value?.url
     if (typeof destination != 'string') {
@@ -116,11 +129,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
     return Response.redirect(destination, 303)
   } catch (error) {
     let status = refusing(error, { request: 'POST /install' })
-    return page(
-      env,
-      title,
-      name,
-      spaces,
+    return shown(
       error instanceof Error ? error.message : String(error),
       status,
       space,

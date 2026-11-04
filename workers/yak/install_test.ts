@@ -5,7 +5,11 @@ import type { Env } from './env.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
 
-let env = { SESSION_SECRET: 'install-test' } as Env
+// A directory where this browser visited nothing (visit.ts `visitOf`).
+let env = {
+  SESSION_SECRET: 'install-test',
+  META: { query: () => Promise.resolve([]) },
+} as unknown as Env
 // A session as the sign-in mints it, naming the browser it was signed in
 // from (session.ts `minted`).
 let cookie = `yak_session=${await sign({

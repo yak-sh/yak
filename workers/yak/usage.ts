@@ -47,7 +47,7 @@ import {
   storeName,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { holding } from './held.ts'
+import { holding, outside } from './held.ts'
 import {
   atStored,
   ceilings,
@@ -253,7 +253,7 @@ let SWEEP = { tries: 8, wait: 500 }
 export let measured = async (
   spaces: { space: Space; apps: App[] }[],
   { sizesOf, counts, daysOf, month, now }: {
-    sizesOf: (space: Space) => Promise<Map<string, number>>
+    sizesOf: (space: Space, apps: App[]) => Promise<Map<string, number>>
     counts: ((space: Space, app: App) => Counts) | null
     daysOf?: (space: Space, app: App) => ByDay
     month: string
@@ -269,7 +269,7 @@ export let measured = async (
     // What the space holds, app by app (held.ts). A space whose files cannot
     // be listed keeps its figures, its apps' too: with no listing, `holding`
     // reads them off the rows.
-    let sizes = await sizesOf(space)
+    let sizes = await sizesOf(space, apps)
       .catch((e) => {
         refused.push(e)
         return undefined
@@ -377,7 +377,8 @@ export let sweep = async (env: Env, now = new Date()) => {
       })
     : null
   let { entities, turned, refused } = await measured(spaces, {
-    sizesOf: (space) => fileSizes(env, space, SWEEP.tries, SWEEP.wait),
+    sizesOf: (space, apps) =>
+      fileSizes(env, space, apps, SWEEP.tries, SWEEP.wait),
     counts: counts &&
       ((space, app) => ({
         ...counts.get(String(env.STORE.idFromName(storeName(space, app)))) ??
@@ -432,27 +433,31 @@ export let full = async (
 }
 
 // Space-owned R2 objects, each key with its size: live files, uploaded blobs,
-// trash and local history. Shared sha/ pins are platform retention, not
-// attributable physical bytes of one space. The trailing slash prevents a
-// space from counting a slug sibling. `tries` and `wait` are `patient`'s: how
-// long a busy bucket is waited out.
+// trash and local history, and the uploads its apps keep outside it (held.ts
+// `outside`). Shared sha/ pins are platform retention, not attributable
+// physical bytes of one space. The trailing slash prevents a space from
+// counting a slug sibling. `tries` and `wait` are `patient`'s: how long a busy
+// bucket is waited out.
 export let fileSizes = async (
   env: Env,
   space: Space,
+  apps: Parameters<typeof outside>[1] = [],
   tries?: number,
   wait?: number,
 ) => {
   let sizes = new Map<string, number>()
-  let cursor: string | undefined
-  do {
-    let page = await patient(
-      () => env.BLOBS.list({ prefix: `${space.store}/`, cursor }),
-      tries,
-      wait,
-    )
-    for (let object of page.objects) sizes.set(object.key, object.size)
-    cursor = page.truncated ? page.cursor : undefined
-  } while (cursor)
+  for (let prefix of [`${space.store}/`, ...outside(space, apps)]) {
+    let cursor: string | undefined
+    do {
+      let page = await patient(
+        () => env.BLOBS.list({ prefix, cursor }),
+        tries,
+        wait,
+      )
+      for (let object of page.objects) sizes.set(object.key, object.size)
+      cursor = page.truncated ? page.cursor : undefined
+    } while (cursor)
+  }
   return sizes
 }
 
@@ -472,9 +477,10 @@ export let fullFiles = async (
   let ceiling = FILES[space.tier ?? 'free']
   let arriving = writes.reduce((sum, w) => sum + w.bytes, 0)
   if ((spent(space, now).files ?? 0) + arriving < ceiling * WARN) return ''
-  let sizes = await fileSizes(env, space)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let held = holding(space, await dir.apps(space), sizes)
+  let apps = await dir.apps(space)
+  let sizes = await fileSizes(env, space, apps)
+  let held = holding(space, apps, sizes)
   let delta = 0
   // A batch may repeat a path; parallel puts can finish in either order.
   let incoming = new Map<string, number>()

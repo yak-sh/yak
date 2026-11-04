@@ -23,6 +23,12 @@
 // as long as the cookie that alone reaches it lives, and one whose person
 // closed their account without installing it. The app's own schedule runs in
 // each store as it does in the app's, and stops with it.
+//
+// Installing with `visit` (tools.ts app_install) makes the store an app of the
+// installer's own: a new app row names it, and `adopted` names that row. From
+// then on the store is that app's, and the door never serves it as this one
+// again, which would tell it it belongs to another app: the page sends the
+// browser to its own app, and what the old page still asks reads the sample.
 import { edgeEid, link } from '@yaks/edge'
 import { MOVED } from '@yaks/sync'
 import type { Comp } from '@yaks/graph'
@@ -77,16 +83,22 @@ export type Release = Pick<
   'version' | 'source' | 'script' | 'worker' | 'lenses'
 >
 
+/** How a stranger is served: from the sample, from a store of their own, or,
+ * once that store became an app of theirs, from the sample again, read-only,
+ * while the page sends them on to their own app. */
+export type Visiting = 'sample' | 'own' | 'kept'
+
 /**
  * The app and caller a request is served as. A member, an app with no sample,
  * and someone whose invitation waits are served as they came. A stranger with
- * a store of their own is its editor; one without reads the sample. Either is
+ * a store of their own is its editor; one without reads the sample, and so
+ * does one whose store became an app of theirs, with nothing to write there. Either is
  * served the published version (`release`, where it is no longer the live
  * one), pinned to the app's own worker script, which its store name no longer
  * names.
  *
  * ```ts
- * import { visiting } from './visit.ts'
+ * import { onSample, visiting } from './visit.ts'
  * import { assertEquals } from '@std/assert'
  * let space = { slug: 'ada' } as Parameters<typeof visiting>[0]
  * let app = {
@@ -104,6 +116,9 @@ export type Release = Pick<
  * assertEquals(visiting(space, app, who, own).app.store, own.store)
  * assertEquals(visiting(space, app, who, own).who.role, 'editor')
  * assertEquals(visiting(space, app, { ...who, role: 'owner' }, own).visit, null)
+ * let kept = visiting(space, app, who, { ...own, adopted: 'b' })
+ * assertEquals([kept.visit, kept.app.store, kept.who.role], ['kept', 'ada/notes.1f7c3e/demo/d', 'viewer'])
+ * assertEquals(onSample(kept.app), false)
  * ```
  */
 export let visiting = (
@@ -112,7 +127,7 @@ export let visiting = (
   who: Who,
   visit: Visit | null,
   release: Release | null = null,
-): { app: App; who: Who; visit: 'sample' | 'own' | null } => {
+): { app: App; who: Who; visit: Visiting | null } => {
   if (!visitable(app, who)) return { app, who, visit: null }
   // A release from before each had a script of its own runs the one named by
   // the app's handle.
@@ -125,6 +140,15 @@ export let visiting = (
     declaration: app.demo!.release ?? app.declaration,
   }
   let kept = { kept: !!visit?.adopted }
+  // A sample they no longer write to: their first write would give them
+  // a second store.
+  if (visit?.adopted) {
+    return {
+      app: { ...served, store: app.demo!.store, demo: null },
+      who: { ...who, role: 'viewer', guest: true, visit: kept },
+      visit: 'kept',
+    }
+  }
   return visit
     ? {
       app: { ...served, store: visit.store, blobs: visit.blobs },
@@ -341,6 +365,36 @@ export let lapsed = async (
         '!edge.from.browser.by.email ?edge',
     ),
   ])
+}
+
+/** The visit's store taken by the app row `eid`, unless another install took
+ * it first, which refuses with Stale. */
+export let adopt = async (
+  env: Pick<Env, 'STORE'>,
+  via: string,
+  app: string,
+  eid: string,
+) => {
+  await meta(env).apply([{
+    entity: { eid: edgeOf(via, app) },
+    visit: { adopted: eid },
+    $was: { visit: { adopted: null } },
+  }], KERNEL)
+}
+
+/** An adoption whose app row could not be written, put back so the store
+ * waits for the next install. */
+export let unadopt = async (
+  env: Pick<Env, 'STORE'>,
+  via: string,
+  app: string,
+  eid: string,
+) => {
+  await meta(env).apply([{
+    entity: { eid: edgeOf(via, app) },
+    visit: { adopted: null },
+    $was: { visit: { adopted: eid } },
+  }], KERNEL)
 }
 
 /** Whether a visit's last use is old enough to write down again: at most
