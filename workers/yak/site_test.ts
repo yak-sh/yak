@@ -207,7 +207,7 @@ test('the style guide demonstrates every shared component', () => {
 // (T-33643). The current page marks itself with aria-current and nothing else,
 // so the set of destinations is identical everywhere.
 test('every page carries the same nav links', () => {
-  let want = ['/#how', '/gallery', '/pricing', '/docs', '/login']
+  let want = ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage']
   for (let page of branded) {
     let nav = read(page).split('<nav class="Nav"')[1]?.split('</nav>')[0] ?? ''
     assert(nav, `${page} has no nav`)
@@ -368,7 +368,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
   let nav = one.split('<nav class="Nav"')[1].split('</nav>')[0]
   assertEquals(
     [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
-    ['/#how', '/gallery', '/pricing', '/docs', '/login'],
+    ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage'],
   )
   assertEquals(links(one.split('<footer')[1]), FOOT)
   assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)

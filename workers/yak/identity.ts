@@ -169,6 +169,7 @@ import {
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, type Who } from './session.ts'
+import { WHO } from './signed.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { sha256 } from '@yaks/graph/sha256'
@@ -930,6 +931,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return closing(req, env, close[1], {
       confirm: field('confirm'),
       token: field('t'),
+    })
+  }
+
+  // Whether this browser is signed in, for the site's island (signed.ts).
+  if (path == WHO && req.method == 'GET') {
+    return Response.json({ signedIn: !!await browser(env, req) }, {
+      headers: { 'cache-control': 'private, no-store' },
     })
   }
 

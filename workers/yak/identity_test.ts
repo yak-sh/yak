@@ -1598,3 +1598,23 @@ test(
     }
   },
 )
+
+// The site's island (signed.ts) asks whether this browser is signed in, and
+// the answer is the browser's alone: never cached, true only with a session.
+test('/login/who answers whether the cookie signs somebody in', async () => {
+  let k = await kernel()
+  try {
+    let who = async (cookie?: string) => {
+      let r = await k.at('yaks.app', '/login/who', {
+        headers: cookie ? { cookie } : {},
+      })
+      assertEquals(r.headers.get('cache-control'), 'private, no-store')
+      return (await r.json()).signedIn
+    }
+    assertEquals(await who(), false)
+    assertEquals(await who(`${COOKIE}=forged`), false)
+    assertEquals(await who((await signIn(k)).cookie), true)
+  } finally {
+    await k.stop()
+  }
+})

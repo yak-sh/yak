@@ -410,6 +410,17 @@
     color: var(--ink);
   }
 
+  /* A person signed in reads "Dashboard" where "Sign in" is (signed.ts sets
+     data-signed on the root before the page paints). */
+  .Nav_Dashboard,
+  :root[data-signed] .Nav_SignIn {
+    display: none;
+  }
+
+  :root[data-signed] .Nav_Dashboard {
+    display: revert;
+  }
+
   /* The reading column, and the two slots beside it. The column says how
      WIDE, never how far apart: what fills it — .Home, .Pricing, .Guide — owns
      its own rhythm, and says so by re-pointing --rhythm. A page that names

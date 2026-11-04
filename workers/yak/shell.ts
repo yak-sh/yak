@@ -10,6 +10,7 @@
 import { esc } from './html.ts'
 import { type Host, url } from './host.ts'
 import { links } from './sheets.ts'
+import { island } from './signed.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
 // (public/*.html, site_test.ts): the title and the line, the canonical, the
@@ -43,7 +44,8 @@ ${
 <meta name="twitter:image" content="${url(env, '/og.png')}">
 <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-${links(env, 'style.css')}`
+${links(env, 'style.css')}
+${island}`
 
 export let top = `<header class="Top">
 <a class="Top_Name" href="/" aria-label="yaks.app, home"><img class="Yak Yak-small" src="/yak.png" alt="" /><span>yaks.app</span></a>
@@ -52,7 +54,8 @@ export let top = `<header class="Top">
 <a href="/gallery">Gallery</a>
 <a href="/pricing">Pricing</a>
 <a href="/docs">Documentation</a>
-<a href="/login">Sign in</a>
+<a class="Nav_SignIn" href="/login">Sign in</a>
+<a class="Nav_Dashboard" href="/manage">Dashboard</a>
 </nav>
 </header>`
 
