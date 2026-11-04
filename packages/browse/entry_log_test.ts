@@ -13,7 +13,7 @@ let row = (
 ): EntryRow => ({ eid, seq, comps: { entry: { session: 's', seq }, ...comps } })
 
 let names = (eid: string) =>
-  ({ gpt: 'gpt-6', bash: 'bash', query: 'graph_query' })[eid]
+  ({ gpt: 'gpt-6', bash: 'bash', query: 'Query entities' })[eid]
 
 let turn = [
   row('input', 1, {
@@ -90,7 +90,7 @@ test('what an entry is decides its row', () => {
     graphLog([row('e', 1, comps)], names).entries[0].row
   assertEquals(
     shown({ call: { to: 'query', args: { q: '.task' } } }),
-    { kind: 'tool', name: 'graph_query', detail: '{"q":".task"}' },
+    { kind: 'tool', name: 'Query entities', detail: '{"q":".task"}' },
   )
   assertEquals(shown({ call: { to: 'gone', args: {} } }), {
     kind: 'tool',
@@ -156,15 +156,8 @@ test('the log says what a working transcript waits on', () => {
   })
   assertEquals(activity([input, ask, call]), {
     kind: 'tool',
-    label: 'waiting for graph_query…',
+    label: 'Querying entities…',
   })
-  assertEquals(
-    activity([input, ask, {
-      ...call,
-      comps: { ...call.comps, execution: { state: 'running' } },
-    }]),
-    { kind: 'tool', label: 'running graph_query…' },
-  )
   assertEquals(activity(turn), undefined)
   assertEquals(activity([...turn, row('stop', 7, { stop: {} })]), undefined)
 })

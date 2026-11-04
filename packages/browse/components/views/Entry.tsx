@@ -5,6 +5,7 @@ import { useState } from 'preact/hooks'
 import { type Ent, friendly, kilo, type LogRow } from '../../types.ts'
 import { backlinks, ent } from '../../live.ts'
 import * as ui from '@yaks/ui'
+import { did, doing } from '@yaks/tools/title'
 import { Entity } from '../Entity.tsx'
 import { resolve } from '../registry.ts'
 import { Icon } from '../icons.tsx'
@@ -229,7 +230,7 @@ export let EntryBody = ({ x, repo }: { x: EntryLine; repo?: string }) => {
     case 'tool':
       return (
         <ToolSummary
-          name={r.name}
+          name={r.ok == null ? doing(r.name) : r.ok ? did(r.name) : r.name}
           detail={r.detail}
           status={r.ok == null ? '… pending' : r.ok ? '✓ done' : '✗ failed'}
           error={r.error}

@@ -18,7 +18,8 @@
     "./state": "./state.ts",
     "./display": "./display.ts",
     "./schema": "./schema.ts",
-    "./registry": "./registry.ts"
+    "./registry": "./registry.ts",
+    "./title": "./title.ts"
   },
   "license": "Apache-2.0",
   "description": "Provides a shared tool registry and schemas, executes recorded graph tool calls, and keeps their answers, duration, and execution state; parses app-declared commands and provides their HTTP route and answer rendering.",

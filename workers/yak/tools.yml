@@ -821,7 +821,7 @@ guide:
     same pages are served to a person at https://yaks.app/docs.md, and as
     web pages at https://yaks.app/docs.
 about:
-  title: What yaks.app is
+  title: Read what yaks.app is
   description: >-
     What yaks.app is and what gets made here, in a paragraph. Signed out, it
     adds what works signed out, what signing in adds, and where to sign in,
@@ -863,7 +863,7 @@ memory_recall:
     finds the rest. Returns each memory whole, with the context saved beside
     it. Documentation: https://yaks.app/docs/memory.
 app_stats:
-  title: App traffic
+  title: Read app traffic
   description: >-
     Return page-view counts for an app: the total over the last 30 days by
     default, and counts by page, referring site and country. These count

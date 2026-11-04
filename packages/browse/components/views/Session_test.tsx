@@ -151,7 +151,7 @@ test('uncached graph entries keep their normalized session face', () => {
       }}
     />,
   )
-  assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
+  assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Reading…')
   assertEquals(root.querySelector('.Json'), null)
   free()
 })

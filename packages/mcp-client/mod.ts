@@ -320,6 +320,9 @@ export const connect = (server: Server, options: Options = {}): Connection => {
       }
       return Promise.all(listed.map(async (t) => ({
         name: await nameOf(server.namespace ?? server.name, t.name),
+        ...(t.title ?? t.annotations?.title
+          ? { title: t.title ?? t.annotations?.title }
+          : {}),
         description: `[${server.label ?? server.name}] ${
           t.description ?? t.name
         }`,

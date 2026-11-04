@@ -271,7 +271,7 @@ test('normalized tools and shell calls share compact entry rows', () =>
       />,
       root,
     )
-    assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
+    assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Reading…')
     assertEquals(root.querySelector('.Entry_Line')?.textContent, 'src/query.ts')
     assertEquals(root.querySelector('.Entry-pending') != null, true)
 

@@ -6,6 +6,7 @@
 import { kindOf, openCalls, statusOf, textOf } from '@yaks/session/status'
 import type { Bundle } from '@yaks/graph'
 import { type LogRow } from './types.ts'
+import { doing } from '@yaks/tools/title'
 
 export type EntryRow = {
   eid: string
@@ -146,12 +147,7 @@ let activityOf = (
   let call = openCalls(bundles).at(-1)
   if (call) {
     let tool = toolOf(call as EntryRow['comps'], name)
-    let running = (call.execution as { state?: unknown } | undefined)?.state ==
-      'running'
-    return {
-      kind: 'tool',
-      label: running ? `running ${tool}…` : `waiting for ${tool}…`,
-    }
+    return { kind: 'tool', label: doing(tool) }
   }
   return status == 'running'
     ? { kind: 'model', label: 'waiting for model…' }

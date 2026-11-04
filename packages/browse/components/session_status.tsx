@@ -4,6 +4,7 @@ import { ent, subscriptionState, useHold } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
 import { Dot } from './Dot.tsx'
+import { titleOf } from '@yaks/tools/title'
 import { useRows } from './subscriptions.ts'
 import { usePage } from './useQuery.ts'
 
@@ -36,14 +37,15 @@ export type EntryReadState =
   | { status: 'failed'; reason: string; reference: string; sub: string }
 
 // A transcript names its model on each ask and its tool on each call; those
-// entities are held so the log can say them in words.
+// entities are held so the log can say them in words: a tool by its English
+// name (@yaks/tools `titleOf`).
 let named = (rows: EntryRow[]) =>
   rows.flatMap((r) =>
     [r.comps.ask?.to, r.comps.call?.to].flatMap((x) => x ? [String(x)] : [])
   )
 let nameOf = (eid: string) => {
   let e = ent(eid)
-  return e.model?.name ?? e.tool?.name ?? undefined
+  return e.model?.name ?? (e.tool ? titleOf(e.tool) : undefined)
 }
 
 export let useEntryLog = (

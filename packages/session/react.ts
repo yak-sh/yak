@@ -155,6 +155,9 @@ import {
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
+  /** What a person reads in place of its name: an imperative phrase
+   * (@yaks/tools `titleOf`). It is never sent to the model. */
+  title?: string
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,

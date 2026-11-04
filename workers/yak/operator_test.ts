@@ -177,7 +177,7 @@ test('the Operator page lists its work in plain words, each opening on a page of
 })
 test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got, and the reply", () => {
   assertStringIncludes(drawn.html, 'Chat_Bubble-you">Post a special meeting')
-  assertStringIncludes(drawn.html, '✓ graph_schema')
+  assertStringIncludes(drawn.html, '✓ Read the schema')
   assertStringIncludes(drawn.html, '&quot;component&quot;: &quot;doc&quot;')
   assertStringIncludes(drawn.html, 'notice is posted')
   assertEquals(drawn.html.includes('data-pending'), false)

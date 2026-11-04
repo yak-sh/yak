@@ -6,6 +6,7 @@
 // socket (`frame`), which puts each in place by its id.
 import type { Bundle, Comp } from '@yaks/graph'
 import { statusOf } from '@yaks/session'
+import { did, doing } from '@yaks/tools/title'
 import { day, esc } from './html.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -13,7 +14,8 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
-/** A tool's name by its eid, as a call names it (`call.to`). */
+/** A tool's English name by its eid, as a call names it (`call.to`): its
+ * title, an imperative phrase (@yaks/tools `titleOf`). */
 export type Names = (tool: string) => string
 
 // The most of a tool's arguments or answer shown before "show all".
@@ -72,12 +74,13 @@ let pretty = (value: unknown) => {
 // id, so the answer takes the call's place on the page.
 let tool = (call: Bundle, names: Names, result?: Bundle) => {
   let c = comp(call, 'call')!
-  let name = names(String(c.to))
+  let title = names(String(c.to))
   let args = pretty(c.args ?? {})
   let refused = comp(result, 'refusal')
   let answer = String(comp(result, 'content')?.body ?? '')
   let ok = result ? !refused && !result.exception : null
   let ms = comp(result, 'result')?.ms
+  let name = ok == null ? doing(title) : ok ? did(title) : title
   return `<details class="Chat_Detail"><summary class="Chat_Tool${
     ok == false ? ' Chat_Tool-no' : ''
   }"><span class="Chat_Name">${ok == null ? '…' : ok ? '✓' : '✗'} ${
@@ -147,9 +150,7 @@ export let now = (entries: Bundle[], names: Names) => {
   )
   let open = entries.filter((b) => b.call && !answered.has(b.entity.eid))
   return open.length
-    ? `Running ${
-      open.map((b) => names(String(comp(b, 'call')!.to))).join(', ')
-    }…`
+    ? open.map((b) => doing(names(String(comp(b, 'call')!.to)))).join(' ')
     : 'Thinking…'
 }
 
@@ -175,16 +176,16 @@ export let talk = (
   files: { request: string; name: string; index: number }[],
   at: string,
 ) => {
-  let doing = now(entries, names)
+  let working = now(entries, names)
   return `<article class="Card" data-task="${esc(task.entity.eid)}"${
-    doing ? ' data-pending' : ''
+    working ? ' data-pending' : ''
   }><h2 class="Card_Title">${
     esc(String(comp(task, 'doc')?.title ?? 'A request'))
   }</h2><div class="Chat_Said" data-rows>${
     rows(entries, names).map((r) =>
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
-  }</div><p class="Chat_Note" role="status" data-now>${esc(doing)}</p>${
+  }</div><p class="Chat_Note" role="status" data-now>${esc(working)}</p>${
     files.length
       ? `<p>${
         files.map((f) =>

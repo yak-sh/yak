@@ -133,6 +133,7 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
     .filter((t) => workbench.has(t.name))
     .map((t) => ({
       name: t.name,
+      ...t.title ? { title: t.title } : {},
       description: t.description,
       parameters: inputSchemaOf(t),
       readOnly: t.readOnly,
@@ -189,6 +190,7 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
 // nothing in the app to get around it.
 let platformBug = (space: Space): Tool => ({
   name: 'platform_bug',
+  title: 'Report a yaks.app fault',
   description:
     "Report that yaks.app itself is at fault, not the app's own files: a tool that answered wrongly, a refusal the guide says should pass, a deploy that lost what was sent. Say what you did, what yaks.app answered, and why the app is not the cause. It reaches the people who run yaks.app; leave the app as it is.",
   parameters: {

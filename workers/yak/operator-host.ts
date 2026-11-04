@@ -5,6 +5,7 @@ import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
+import { titleOf } from '@yaks/tools/title'
 import {
   frame,
   type Names,
@@ -17,8 +18,8 @@ type Store = ReturnType<typeof operatorStore>
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Record<string, unknown> | undefined
 
-// The names of the tools a transcript's calls name (`call.to` is a tool's
-// eid).
+// The English names of the tools a transcript's calls name (`call.to` is a
+// tool's eid).
 let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
   let tools = await store.g.get([
     ...new Set(
@@ -28,9 +29,9 @@ let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
   let names = new Map(
     tools.filter(Boolean).map((
       b,
-    ) => [b.entity.eid, String(comp(b, 'tool')?.name)]),
+    ) => [b.entity.eid, titleOf(comp(b, 'tool') ?? {})]),
   )
-  return (tool) => names.get(tool) ?? 'a tool'
+  return (tool) => names.get(tool) || 'Use a tool'
 }
 
 // A task's sessions, oldest first.

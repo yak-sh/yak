@@ -527,7 +527,7 @@ export let WORDS: Record<string, Words> = {
       'The guide, read here instead of fetched from the web. With no page: the overview, which says what an app is, how its pages read and write its store, and has a paragraph on every feature there is. It is the map. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them returns the overview, which lists them all. The same pages are served to a person at https://yaks.app/docs.md, and as web pages at https://yaks.app/docs.',
   },
   'about': {
-    'title': 'What yaks.app is',
+    'title': 'Read what yaks.app is',
     'description':
       'What yaks.app is and what gets made here, in a paragraph. Signed out, it adds what works signed out, what signing in adds, and where to sign in, and reads nothing about anybody: the same answer for everyone. Signed in, it adds who you are signed in as, how (a browser, a connector, a CLI token) and until when, the tools this connector is listing right now, and every app you can reach: its address, what it holds, the notes it keeps and whatever the person has said in that space.',
   },
@@ -547,7 +547,7 @@ export let WORDS: Record<string, Words> = {
       'The memories kept for the space, ranked against the words passed: what the person has said about how they want things done, and notes saved beside them. The newest few arrive with every connection already; this finds the rest. Returns each memory whole, with the context saved beside it. Documentation: https://yaks.app/docs/memory.',
   },
   'app_stats': {
-    'title': 'App traffic',
+    'title': 'Read app traffic',
     'description':
       "Return page-view counts for an app: the total over the last 30 days by default, and counts by page, referring site and country. These count page loads, not distinct people. Pass days for a different window, up to 90 days; if analytics is not configured, returns that fact instead. Aggregate counts and nothing else: no visitor is identified, no address and no session is kept, so this can never say who someone was or what one person did. Only the app's own members may ask. Documentation: https://yaks.app/docs/stats.",
   },

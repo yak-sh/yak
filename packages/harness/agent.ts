@@ -96,7 +96,11 @@ export let seed = (
       : [],
     ...(o.tools ?? []).map((t) => ({
       entity: { eid: toolEid(t.name) },
-      [TOOL]: { name: t.name, description: t.description },
+      [TOOL]: {
+        name: t.name,
+        ...t.title ? { title: t.title } : {},
+        description: t.description,
+      },
     })),
   ]
 }

@@ -112,6 +112,7 @@ export const mcpTools = (
     snapshot: async (): Promise<Tool[]> =>
       (await connections.tools()).map((t) => ({
         name: toolName(t),
+        ...t.title ? { title: t.title } : {},
         description: t.description,
         parameters: t.inputSchema!,
         run: async (args, call) => {

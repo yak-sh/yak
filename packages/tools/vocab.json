@@ -161,6 +161,10 @@
           "identity": true,
           "description": "what callers call it; the entity id is derived from it"
         },
+        "title": {
+          "type": "string",
+          "description": "what a person reads in place of the name: an imperative phrase, such as Read or write app files"
+        },
         "description": {
           "type": "string"
         },

@@ -121,10 +121,10 @@ test('the door before anyone signs in', async () => {
     // It wears the same title and hints signed in and out (tools.ts lifts it
     // from preauth.ts): this is the list a directory reviewer sees first, and
     // a bare entry here reads as a door with no annotations at all.
-    assertEquals(about.title, 'What yaks.app is')
+    assertEquals(about.title, 'Read what yaks.app is')
     assertEquals(about.annotations, {
       // Where a directory listing reads the display name (T-37748).
-      title: 'What yaks.app is',
+      title: 'Read what yaks.app is',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,

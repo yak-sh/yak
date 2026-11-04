@@ -10,6 +10,7 @@ import {
 import { awake, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
 import { ent, findEid, mutate, retrySubscription, uuid } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
+import { doing as running } from '@yaks/tools/title'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps, screenTarget } from '../nav.tsx'
 import { Id } from './Inline.tsx'
@@ -291,7 +292,7 @@ export let doing = (r?: LogRow, turn?: string | null, starting = false) =>
     : r?.kind == 'exec' && r.exit == null && !r.status
     ? 'running command…'
     : r?.kind == 'tool' && r.ok == null
-    ? `running ${r.name}…`
+    ? running(r.name)
     : turn == 'idle' || r?.kind == 'turn' ||
         (r?.kind == 'say' && r.role == 'agent')
     ? 'waiting for request…'
