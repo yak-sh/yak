@@ -37,23 +37,21 @@ export let seeded = async (env: Env, access = 'public') => {
         entity: { eid: '$seat' },
         member: { space: '$space', person: ADA, role: 'owner' },
       },
+      {
+        entity: { eid: '$app' },
+        doc: { title: 'Cookbook' },
+        app: {
+          slug: 'cookbook',
+          space: '$space',
+          version: 1,
+          access,
+          store: 'ada/cookbook.aaa111',
+        },
+        former: { slug: 'cookbook' },
+      },
     ],
   }, ADA_OWNS)
   let space = (await dir.space('ada'))!
-  await dir.apply({
-    entities: [{
-      entity: { eid: '$app' },
-      doc: { title: 'Cookbook' },
-      app: {
-        slug: 'cookbook',
-        space: space.eid,
-        version: 1,
-        access,
-        store: 'ada/cookbook.aaa111',
-      },
-      former: { slug: 'cookbook' },
-    }],
-  }, ADA_OWNS)
   let app = (await dir.app(space, 'cookbook'))!
   await declared(env, space, app)
   return { dir, space, app }
