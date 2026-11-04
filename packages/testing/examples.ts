@@ -47,6 +47,7 @@ let DOCTEST = /^\s*\/\/( ?)\/ (.*)$/
  * to it.
  */
 export let doctests = (source: string): Doctest[] => {
+  if (!source.includes('/// ') && !source.includes('// / ')) return []
   let out: (Doctest & { end: number })[] = []
   for (let [i, text] of source.split('\n').entries()) {
     let [, skip, code] = text.match(DOCTEST) ?? []
@@ -104,6 +105,7 @@ export let module = (path: string): boolean => /\.[mc]?[jt]sx?$/.test(path)
  * module every block inside a doc comment, its ` * ` margin taken off.
  */
 export let fences = (source: string, path = 'page.md'): Fence[] => {
+  if (!source.includes('```')) return []
   let lines = source.split('\n')
   if (module(path)) {
     let doc = false

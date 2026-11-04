@@ -230,17 +230,22 @@ export let named = (source: string, path: string): string[] =>
  * name, a directory's ending in `/`, but for what the runner writes beside a
  * page while it is keyed or loads), or nothing. A directory a module only
  * names is a `place`, whatever lies in it. */
-export let digest = async (path: string, place = false): Promise<string> => {
-  let info = await Deno.stat(path).catch(() => undefined)
-  if (!info) return 'absent'
-  if (info.isFile) return hex(await Deno.readFile(path))
-  if (place) return 'place'
-  let names: string[] = []
-  for await (let e of Deno.readDir(path)) {
-    if (!written(e.name)) names.push(e.isDirectory ? `${e.name}/` : e.name)
-  }
-  return hex(names.sort().join('\n'))
-}
+export let digest = (path: string, place = false): Promise<string> =>
+  Promise.try(() => {
+    let info
+    try {
+      info = Deno.statSync(path)
+    } catch {
+      return 'absent'
+    }
+    if (info.isFile) return hex(Deno.readFileSync(path))
+    if (place) return 'place'
+    let names: string[] = []
+    for (let e of Deno.readDirSync(path)) {
+      if (!written(e.name)) names.push(e.isDirectory ? `${e.name}/` : e.name)
+    }
+    return hex(names.sort().join('\n'))
+  })
 
 /// let next = new Map([['a', ['b']], ['b', ['a']], ['c', ['a']], ['d', []]])
 /// let s = seal(next, (n) => n)
@@ -358,17 +363,20 @@ export let survey = async (
   let facts = new Map<string, Promise<{ digest: string; names: string[] }>>()
   let fact = (path: string) => {
     if (!facts.has(path)) {
+      let bytes: Uint8Array | undefined
+      try {
+        bytes = Deno.readFileSync(path)
+      } catch { /* a directory or a missing file */ }
       facts.set(
         path,
-        Deno.readFile(path).then(
-          (bytes) => ({
+        bytes
+          ? Promise.resolve({
             digest: hex(bytes),
             names: code(path)
               ? named(new TextDecoder().decode(bytes), path)
               : [],
-          }),
-          async () => ({ digest: await digest(path, true), names: [] }),
-        ),
+          })
+          : digest(path, true).then((digest) => ({ digest, names: [] })),
       )
     }
     return facts.get(path)!

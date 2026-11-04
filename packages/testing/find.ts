@@ -31,24 +31,25 @@ export let written = (name: string): number | undefined => {
 }
 
 /** Every file under the paths, sorted, each once. */
-export let walk = async (paths: string[]): Promise<string[]> => {
-  let out = new Set<string>()
-  let visited = new Set<string>()
-  let go = async (path: string): Promise<void> => {
-    if (visited.has(path)) return
-    visited.add(path)
-    let info = await Deno.stat(path)
-    if (info.isFile) return void out.add(path)
-    for await (let e of Deno.readDir(path)) {
-      if (e.name.startsWith('.') || SKIP.includes(e.name)) continue
-      let at = `${path}/${e.name}`
-      if (e.isDirectory) await go(at)
-      else if (e.isFile) out.add(at)
+export let walk = (paths: string[]): Promise<string[]> =>
+  Promise.try(() => {
+    let out = new Set<string>()
+    let visited = new Set<string>()
+    let go = (path: string): void => {
+      if (visited.has(path)) return
+      visited.add(path)
+      let info = Deno.statSync(path)
+      if (info.isFile) return void out.add(path)
+      for (let e of Deno.readDirSync(path)) {
+        if (e.name.startsWith('.') || SKIP.includes(e.name)) continue
+        let at = `${path}/${e.name}`
+        if (e.isDirectory) go(at)
+        else if (e.isFile) out.add(at)
+      }
     }
-  }
-  for (let p of paths) await go(p.replace(/^\.\//, '').replace(/\/+$/, ''))
-  return [...out].sort()
-}
+    for (let p of paths) go(p.replace(/^\.\//, '').replace(/\/+$/, ''))
+    return [...out].sort()
+  })
 
 /** Whether a page's source holds an example that runs. */
 export let examples = (path: string, source: string): boolean =>
@@ -60,10 +61,8 @@ export let find = async (
   paths: string[],
 ): Promise<{ tests: string[]; pages: string[] }> => {
   let files = await walk(paths)
-  let pages = await Promise.all(
-    files.filter(paged).map(async (f) =>
-      examples(f, await Deno.readTextFile(f)) ? [f] : []
-    ),
+  let pages = files.filter((f) =>
+    paged(f) && examples(f, Deno.readTextFileSync(f))
   )
-  return { tests: files.filter(tested), pages: pages.flat() }
+  return { tests: files.filter(tested), pages }
 }

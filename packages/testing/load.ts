@@ -47,7 +47,7 @@ export let sweep = async (pages: string[]) => {
     pages.map((p) => p.slice(0, p.lastIndexOf('/') + 1) || './'),
   )
   for (let dir of dirs) {
-    for await (let e of Deno.readDir(dir)) {
+    for (let e of Deno.readDirSync(dir)) {
       let pid = written(e.name)
       if (pid && !alive(pid)) {
         await Deno.remove(`${dir}${e.name}`).catch(() => {})
@@ -67,22 +67,24 @@ let runs = (source: string, page: string) => ({
  * it is a module), written beside it: what the page's examples depend on, as
  * a module graph can say. The caller removes them.
  */
-export let plan = async (pages: string[]) =>
-  await Promise.all(pages.map(async (page) => {
-    let { fenced, lines } = runs(await Deno.readTextFile(page), page)
-    let base = page.slice(page.lastIndexOf('/') + 1)
-    let named = new Set([
-      ...module(page) ? [`./${base}`] : [],
-      ...[...fenced, ...lines.filter((l) => !l.skip)]
-        .flatMap((e) => specifiers(e.code)),
-    ])
-    let path = beside(page, 'plan')
-    await Deno.writeTextFile(
-      path,
-      [...named].map((s) => `import ${JSON.stringify(s)}\n`).join(''),
-    )
-    return [page, path] as const
-  }))
+export let plan = (pages: string[]) =>
+  Promise.try(() =>
+    pages.map((page) => {
+      let { fenced, lines } = runs(Deno.readTextFileSync(page), page)
+      let base = page.slice(page.lastIndexOf('/') + 1)
+      let named = new Set([
+        ...module(page) ? [`./${base}`] : [],
+        ...[...fenced, ...lines.filter((l) => !l.skip)]
+          .flatMap((e) => specifiers(e.code)),
+      ])
+      let path = beside(page, 'plan')
+      Deno.writeTextFileSync(
+        path,
+        [...named].map((s) => `import ${JSON.stringify(s)}\n`).join(''),
+      )
+      return [page, path] as const
+    })
+  )
 
 // Loads one compiled example; one that cannot load fails as a test.
 let load = async (
@@ -110,7 +112,7 @@ let exported = async (page: string): Promise<string[]> =>
 
 /** Loads a page's examples, each declaring its test. */
 export let examples = async (page: string) => {
-  let { fenced, lines } = runs(await Deno.readTextFile(page), page)
+  let { fenced, lines } = runs(Deno.readTextFileSync(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
     let name = await fenceName(page, f)
