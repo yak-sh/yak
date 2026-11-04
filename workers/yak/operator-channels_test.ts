@@ -3,8 +3,10 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
-import { modelPage } from './testing.ts'
+import { declared, modelPage } from './testing.ts'
 import { platform } from './directory-probe.ts'
+import { stores } from './app-store-probe.ts'
+import { appDoc, appVocab } from './vocab.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import {
   attachmentTools,
@@ -59,6 +61,10 @@ let fixture = async () => {
   let raw = store.storage
   let held = { person, role: 'owner' as const, space: eid }
   let ctx = await operatorContext(p.env, held, space)
+  let words = {
+    $defs: { meeting: { properties: { title: { type: 'string' } } } },
+    imports: ['blob'],
+  }
   await TOOLS.find((t) => t.name == 'app_new')!.run(ctx, {
     slug: 'notices',
     title: 'Notices',
@@ -69,14 +75,17 @@ let fixture = async () => {
       { path: 'index.html', content: '<h1>Notices</h1>' },
       {
         path: 'vocab.json',
-        content: JSON.stringify({
-          $defs: { meeting: { properties: { title: { type: 'string' } } } },
-          imports: ['blob'],
-        }),
+        content: JSON.stringify(words),
       },
     ],
   })
-  await TOOLS.find((t) => t.name == 'app_deploy')!.run(ctx, { app: 'notices' })
+  let app = (await dir.app(space, 'notices'))!
+  await dir.apply({
+    entities: [{ entity: { eid: app.eid }, app: { version: 1 } }],
+  }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+  app = (await dir.app(space, 'notices'))!
+  await declared(p.env, space, app, { vocab: appDoc(words), tools: {} })
+  stores(p.env, appVocab(words))
   return { ...p, dir, space, person, raw, store, held, ctx }
 }
 let f = await fixture()
