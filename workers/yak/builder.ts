@@ -584,7 +584,7 @@ export let build = async (
   // Fresh, every read: a tool answers about what a tool just wrote
   // (directory.ts, mcp.ts).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  // The month's builds and account budget are asked before anything is spent,
+  // The month's builds and space budget are asked before anything is spent,
   // and what comes back is a sentence the builder says rather than a door
   // slammed mid-conversation — so a refused build costs the person nothing,
   // not a build and not the model call of the refusal. The reading is taken

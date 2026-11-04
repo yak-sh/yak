@@ -200,7 +200,7 @@ matching, its build becomes stale, and the build and its outputs are kept as
 history. Changing `builder.floor` to a time in the past checks every match
 again. A `wake` can check it later, and `builder.immediate: true` also checks
 changed inputs. Only app editors may write a builder, since model turns spend
-the owner's account budget.
+the space's budget.
 
 A builder written with `staged: {}` builds nothing by itself, so a new prompt
 can be tried on a few rows first. `store_builder_build` builds it now: `only`
@@ -242,7 +242,7 @@ Transcripts send their session id automatically; keep instructions and tools
 stable where their meaning has not changed.
 
 The same people who may ask for a turn (see Who may call a model, below) may
-call it, and it spends the same account budget. A refusal uses the error format
+call it, and it spends the same space budget. A refusal uses the error format
 every endpoint uses, `{error: {code, message}}`: `400` for a model not offered
 here or an input the model refuses, `429` past the budget, with a message that
 says so, and `503` while the model is busy. Show the person `error.message`.
@@ -325,7 +325,7 @@ its `vocab.json`:
     { "models": "open", "$defs": { … } }
 
 Then anyone who may write the app may ask, which on an `open` app is anyone with
-the link, and every turn they ask for spends the owner's budget.
+the link, and every turn they ask for spends the space's budget.
 
 Since every line after a `using` asks for a turn, a visitor to an `open` app
 writes entries only in transcripts they started; a line in a member's transcript
@@ -333,7 +333,7 @@ is refused, whatever `models` says.
 
 ## Models and pricing
 
-These platform models spend the owner's monthly yaks.app account budget:
+These platform models spend the space's monthly yaks.app budget:
 
 | model                                     | for             | per million tokens in | out   |
 | ----------------------------------------- | --------------- | --------------------- | ----- |
@@ -343,21 +343,22 @@ These platform models spend the owner's monthly yaks.app account budget:
 | `@cf/baai/bge-base-en-v1.5`               | embeddings      | $0.067                | —     |
 
 Every platform call is charged at its model's price against that budget, which
-is $0.20 plus $3.00 for each space the owner has on the Plus plan, shared by all
-of the owner's spaces. The builder and app voice calls spend it too. `app_list`
+belongs to the space the app is in: $0.20 a month on the free plan, $3.00 on the
+Plus plan and $15.00 on the Organization plan. What one space spends never
+counts against another. The builder and app voice calls spend it too. `app_list`
 shows what each space spent.
 
 `bytedance-seed/seed-audio-1-0` uses the app's connected OpenRouter account.
 OpenRouter bills that account for generated audio at its published rate; it does
-not spend the yaks.app account budget.
+not spend the space's yaks.app budget.
 
 A call that starts under the budget finishes even if it goes over. The next one
 is refused: the transcript gets a `refusal { code: 'limit' }` entry whose
 `content.body` says which limit it reached, and the transcript stays `failed`
-until a new entry asks again, on the 1st of the month or once the account's
-budget is raised. A `refusal` row is the platform's, so a listing leaves it out
-unless the filter names `refusal` or asks for transcript `entry` rows. Subscribe
-with `&?refusal` to show the message.
+until a new entry asks again, on the 1st of the month or once the space's budget
+is raised. A `refusal` row is the platform's, so a listing leaves it out unless
+the filter names `refusal` or asks for transcript `entry` rows. Subscribe with
+`&?refusal` to show the message.
 
 A model's rate limit is shared by every app on the platform. A turn that hits it
 is retried; after three failures in a row the transcript stays `failed` until a

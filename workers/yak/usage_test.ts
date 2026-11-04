@@ -899,7 +899,7 @@ test('free sending and build allowances pool independently of model budgets', as
   // all of them.
   let no = (await refusedSpend(dir, b, 'emails', {}, 0, NOW))!
   assertStringIncludes(no, 'shared by the free spaces its owner has')
-  assertStringIncludes(no, 'The Plus plan allows more')
+  assertStringIncludes(no, 'Putting b on the Plus plan allows more')
   // What a build holds uncounted is added to the reading.
   assertEquals(await refusedSpend(dir, b, 'seconds', {}, 599, NOW), null)
   assert(await refusedSpend(dir, b, 'seconds', {}, 600, NOW))

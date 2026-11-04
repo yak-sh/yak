@@ -419,7 +419,7 @@ builder_build:
     shadow variant. Each successful answer retains its takes and chooses the
     newest in each slot by default; builder_choose selects an earlier take.
     A staged builder is tried only through this door. Each model turn spends
-    the account budget. Only an app editor may build. Returns the builds it
+    the space's budget. Only an app editor may build. Returns the builds it
     reconciled.
 app_set:
   title: Rename, move or reshare an app

@@ -222,7 +222,7 @@ export let CURRENCY = 'USD'
 /** The free spaces one person may own. */
 export let SPACES = 5
 
-/** The monthly usage counters. Models and realtime spend the same account
+/** The monthly usage counters. Models and realtime spend the same space
  * budget; their separate counters still say what each source cost. */
 export type Spend = 'emails' | 'builds' | 'models' | 'realtime' | 'seconds'
 export type Limited = Exclude<Spend, 'models' | 'realtime'>
@@ -561,7 +561,7 @@ export let gauged = (
 // The refusal, one sentence: what the ceiling is, and where the plans are
 // written down. Every door that says no says it this way.
 //
-// It names account plan settings, never a checkout link. This is a policy
+// It names the space's plan settings, never a checkout link. This is a policy
 // line rather than a preference (C-33033 on D-32751): an agent surface may
 // explain that a feature needs a plan and may link to a page describing the
 // plans; it may not hand back anything that starts a purchase. Paying is the
@@ -628,7 +628,7 @@ let plans = (space: Space, env: Host) =>
   `${
     paid(space.tier)
       ? `Manage usage and plan settings`
-      : `The Plus plan allows more. Compare paid plans in settings`
+      : `Putting ${space.slug} on the Plus plan allows more. Compare paid plans in its settings`
   }: ${planSettings(space.slug, env)}`
 
 /** What one app holds, as a person reads it, leaving out what it holds none
@@ -697,8 +697,8 @@ export let tooManySpaces = (held: Space[], env: Host = {}) =>
   `you own ${held.length} free spaces, which is what one person gets for ` +
   `nothing — delete one (space_delete) to make another. A space on a paid ` +
   `plan does not count toward them, and neither does a space somebody else ` +
-  `invited you into. The Plus plan allows more. Compare paid plans in ` +
-  `settings: ${planSettings(held[0].slug, env)}`
+  `invited you into, so putting one on the Plus plan frees its place. ` +
+  `Compare paid plans in its settings: ${planSettings(held[0].slug, env)}`
 
 // ---- the letters (T-33688) --------------------------------------------------
 //

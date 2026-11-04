@@ -497,7 +497,7 @@ export let OPENS: Record<string, string> = {
  * lifted off and carried on the document. `tools: false` synthesizes no tools
  * for its kinds (kinds.ts, T-34513); a boolean tells it from a component named
  * `tools`, which is an object of properties like any other. `models` and `rtc`
- * are each {@link OPENS}: who may spend the owner's account budget through the
+ * are each {@link OPENS}: who may spend the space's budget through the
  * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked
  * where bytes come in (apps.ts `took`, `inParts`; inbox.ts). `packages` is
  * the one the person never writes here: a deploy lifts it off package.json's

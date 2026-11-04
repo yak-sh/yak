@@ -58,9 +58,15 @@ resembles stays a guess until someone who came on their own fits it.
 Jeff: "the space is where all the data lives and thus we account for the
 billing there also." A space is one address, its apps, their data and the
 people in it. It's the space that's upgraded, not a person, and what one space
-uses never counts against another. A person's first space is free, and every
-other space they own is on the Plus plan (T-131887, built under T-131891). So
-the plan is one sentence: each space is free or on the Plus plan.
+uses never counts against another. Jeff, 2026-11-04: "we gotta re-organize
+*billing*. it is now space-specific. so we should do that throughout the
+website and the internal portal." Billing is keyed on the space: each space
+has its own Stripe customer and at most one subscription (billing.ts
+`payerFor`), it's paid for, changed and cancelled from that space's plan
+settings, and only its owner may pay. A person may own five free spaces
+(meter.ts `SPACES`); a paid space doesn't count toward them. So the plan is
+one sentence: each space is free or on a paid plan. Copy never says a plan,
+budget or allowance is a person's or an account's.
 
 - **Free is generous with people.** Members, invitations, visitors,
   publishing, installing someone's app and exporting are unlimited on every

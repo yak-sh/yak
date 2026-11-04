@@ -394,7 +394,7 @@ export let WORDS: Record<string, Words> = {
   'builder_build': {
     'title': "Run an app's builder now",
     'description':
-      'Build new bindings or ones whose own inputs changed. A changed template, model or tool never redoes current outputs by itself. outdated redoes selected bindings built under an older definition; rebuild redoes every selected binding even when nothing changed. Both combine with only and limit. An alternate template, provider, model or native input creates a shadow variant. Each successful answer retains its takes and chooses the newest in each slot by default; builder_choose selects an earlier take. A staged builder is tried only through this door. Each model turn spends the account budget. Only an app editor may build. Returns the builds it reconciled.',
+      "Build new bindings or ones whose own inputs changed. A changed template, model or tool never redoes current outputs by itself. outdated redoes selected bindings built under an older definition; rebuild redoes every selected binding even when nothing changed. Both combine with only and limit. An alternate template, provider, model or native input creates a shadow variant. Each successful answer retains its takes and chooses the newest in each slot by default; builder_choose selects an earlier take. A staged builder is tried only through this door. Each model turn spends the space's budget. Only an app editor may build. Returns the builds it reconciled.",
   },
   'app_set': {
     'title': 'Rename, move or reshare an app',

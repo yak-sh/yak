@@ -489,10 +489,10 @@ installed from another space, are refused it.
 `"ai": { "binding": "AI" }` gives the worker `env.AI`, and
 `await env.AI.run(model, input)` calls a model and returns its output, as
 Workers AI's own binding does. It is the app calling `./api/ai/run` as itself,
-so every call is charged at the model's price to the owner's monthly account
-budget; once the budget is spent, `run` throws an error saying so. Only the
-models in the catalogue are available (see [AI Models](/docs/models)), and it
-never uses the account's own Workers AI.
+so every call is charged at the model's price to the space's monthly budget;
+once the budget is spent, `run` throws an error saying so. Only the models in
+the catalogue are available (see [AI Models](/docs/models)), and it never uses
+the account's own Workers AI.
 
 ### Payments without a Stripe key
 
