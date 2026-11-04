@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=deno
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=deno
 // The Worker's words, out of the files they are written in and into the one
 // module it imports (T-34606, M-34605): `content.ts`, which nobody edits.
 //
