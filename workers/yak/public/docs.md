@@ -255,7 +255,9 @@ Who may read and write an app is its `access` and its guest list; `member_add`
 invites someone by email. A deployed app can be published under a name the whole
 platform shares, and anyone can install a copy into their own space. A copy
 shares nothing but the code, and stays on the version it was installed from
-until its owner updates it.
+until its owner updates it. A stranger at a private published app is served it
+with its seed, their first change gives their browser a store of its own, and
+installing keeps what they made there (`app_publish(demo: false)` turns it off).
 
 Deeper: <https://yaks.app/docs/sharing.md> — access, members, publishing,
 installing, pinning.

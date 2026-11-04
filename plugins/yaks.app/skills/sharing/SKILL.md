@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved."
+description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved."
 ---
 
 # Access, Publishing and Installing
@@ -71,6 +71,9 @@ to anyone at its path; that is how a private app puts a page on the public web
 worker's code decides who gets in. Use it to write an access rule finer than the
 three settings, such as an invitation code that opens one household's row and no
 other. See `env.APP` in [Backend Code](./code.md).
+
+A private app that is published (`app_publish`) answers strangers differently;
+see "A stranger at a private published app" below.
 
 Sharing an app does not have to share what each person writes in it. A component
 you declare with `personal` makes each person's rows readable only by that
@@ -270,6 +273,65 @@ The answer names the address, the file count, and the pinned version:
 **`app_update(app, space?)`** — update an installed copy to the version its
 publisher offers now. See "Updating an installed copy" below.
 
+## A stranger at a private published app
+
+Publishing a private app lets anyone try it without seeing its data. A stranger
+who opens it, signed in or not, is served the app with its sample, and their
+first change gives them a copy of their own, which signing up and installing
+keeps.
+
+**The sample.** `app_publish` makes a store that holds the published version's
+seed (`seed.json`, `seed.yml` or `seed/`) and nothing else; the app's own store
+is never read for it. A stranger reads the sample as a viewer, and is served the
+published version, not a later deploy that has not been published. Publishing
+again with the same `vocab.json` and seed keeps the sample; a changed one
+replaces it, and people who already have a store of their own keep theirs.
+
+**Their own store.** A stranger's first write (`apply`) copies the sample into a
+store of their own, and the write goes there. The answer carries `x-yak-moved`,
+and the page's client opens its socket again on the new store, so nothing on the
+page has to change. The store is reached by that browser alone: no member of the
+app, no other visitor, and not the same person in another browser. The visitor
+is its editor, and the seed rows are theirs to change. Their uploads are kept
+apart from the app's. They still cannot write `deliver` (send email), `using` or
+`builder` (ask the space's models, unless the app's `vocab.json` says
+`"models": "open"`), and a component with `"floor": "person"` needs them signed
+in.
+
+**The bar.** Every page served to a stranger wears a one-line bar: "Try it. What
+you change stays in this browser for 90 days, and only you can see it. Another
+browser, or clearing this one, starts over." Its button says "Sign up to keep
+it" (signed out) or "Keep it" (signed in), and leads to
+`https://yaks.app/install?name=<name>`. `me()` returns `visit: {kept}` to a
+stranger and `visit: null` to anyone else, so a page can word its own prompts
+(<https://yaks.app/docs/store.md>).
+
+**Keeping it.** The install page says what they made in this browser comes with
+it, and installs with **`app_install(name, visit: true)`**: the new app takes
+over that store, rows and uploads, instead of starting from the seed. It works
+only in the browser that made the store, and only once; asking again answers the
+app it already became. The free plan's five apps still apply: past them, the
+install is refused before anything is written, and the store waits. Once
+installed, opening the published app in that browser goes to their own app. Rows
+written before signing up have their `created.by` filled in when they sign in.
+
+**Limits.** The platform pays for a visitor's store until it is installed, so a
+first write from one network address makes at most 10 stores a minute, and an
+app's strangers hold at most 10,000 stores nobody has installed. Past either,
+the write is refused 429 with `sign_up` and a `signIn` address. Once a day,
+yaks.app erases a store nobody claimed that has gone 90 days without use, the
+life of the browser cookie that alone reaches it. A store someone claimed by
+signing in but never installed goes when their account closes, and erasing the
+app erases every visitor's store with it.
+
+**Turning it off.** `app_publish(app, demo: false)` keeps no sample, and
+strangers get the sign-in page, as at an unpublished private app. So do an app
+whose sample could not be made (the answer says so, and publishing again
+retries), `app_unpublish`, and an app made `public` or `open`, which is one
+store everyone shares. An app made `private` after it was published gets its
+sample at its next `app_publish`. Someone with an invitation waiting is still
+told to accept it.
+
 ## The gallery
 
 An approved private app from a space owned by yaks.app's staff gets an open demo
@@ -360,11 +422,12 @@ before building something from scratch.
 
 An installed copy is an ordinary app in the installer's space, with its own
 address, its own store, its own file prefix, its own worker script and its own
-version history starting at v1. Its store starts empty. Installation gives the
-publisher no access to the copy's data, and data is not synced between them. The
-publisher can also lend a connection so the copy works before its owner gets
-their own key; this grants calls to the outside service, never access to either
-app's store.
+version history starting at v1. Its store starts with the app's seed, or, with
+`app_install(visit: true)`, with what the installer made as a stranger.
+Installation gives the publisher no access to the copy's data, and data is not
+synced between them. The publisher can also lend a connection so the copy works
+before its owner gets their own key; this grants calls to the outside service,
+never access to either app's store.
 
 Only the app's own files are copied: the pages, the stylesheets, the
 `vocab.json`, the `worker.js`. What is not copied:

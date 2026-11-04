@@ -138,9 +138,13 @@ store_connection_need, never through you.
 An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) accepts access 'open',
 where anyone with the link can vote, add a line or sign up without signing in,
-and 'private', where only members see it at all; member_add invites someone by
-email address — name the app and that one app is all they get, its page and its
-data and nothing else in the space, which is how a player joins one game.
+and 'private', where only members see its data. Once a private app is
+published, a stranger gets it with its seed, their first change gives their
+browser a copy of its own, and signing up installs that copy with what they
+made (app_publish with demo: false turns this off). member_add invites
+someone by email address — name the app and that one app is all they get, its
+page and its data and nothing else in the space, which is how a player joins
+one game.
 Leave the app out and they are added to the space itself, which reaches every
 app in it. Either way the invitation is mailed to them, and nothing is theirs
 until they accept it with the one click in that letter, signed in with that
