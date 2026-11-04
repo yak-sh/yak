@@ -18,6 +18,7 @@ import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
 import { inReach } from './declared.ts'
 import { reaching } from './agent.ts'
+import { ledger } from './ledger.ts'
 import { type Args, type Ctx, refuse } from './tool.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build.ts'
@@ -122,6 +123,9 @@ let workbench = new Set([
 export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
   let g = await reaching(ctx, await inReach(ctx))
+  // A tool's answer in words is the call's own, as at the connector's door:
+  // only what it wrote for an app goes on to the app (ledger.ts).
+  let landing = ledger(g)
   let privateTools = work
     ? loadTools([taskDoc], taskRuns()).filter((t) => t.name == 'task_update')
     : []
@@ -134,7 +138,9 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
       readOnly: t.readOnly,
       run: async (args, context) => {
         let call = context!.call
-        let target = t.name == 'task_update' ? work!.g : g
+        let [host, target] = t.name == 'task_update'
+          ? [work!.g, work!.g]
+          : [g, landing]
         let fault: unknown
         let out = await invoke(
           {
@@ -152,6 +158,7 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
           t,
           target,
           {
+            host,
             report: (e) => {
               fault = e
               caught(e, { request: 'operator tool', tool: t.name })

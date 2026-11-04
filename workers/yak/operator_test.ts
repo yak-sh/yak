@@ -122,6 +122,7 @@ let eid = crypto.randomUUID()
 let script = [
   calls('graph_schema', { component: 'doc' }),
   calls('graph_query', { q: '.doc&*' }),
+  calls('app_files', { app: 'notices', op: 'list' }),
   calls('graph_apply', {
     bundles: [{
       entity: { eid },
@@ -181,6 +182,7 @@ let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
 let g = await reaching(ctx, await inReach(ctx))
 let docs = await g.read('.doc ?created *')
+let said = await g.read('.content&*')
 let meetings = await g.read('.meeting ?created *')
 let tasks = await g.read('.task&*')
 let other = await ctx.dir.space('other')
@@ -190,11 +192,18 @@ test('the operator edits app rows through agent tools and records its work priva
   let created = comp(posted, 'created')
   assertEquals(out.status, 'settled')
   assertStringIncludes(out.text, 'notice is posted')
-  assertEquals(out.cost, 0.006)
+  assertEquals(out.cost, 0.007)
   assertEquals(comp(history.task, 'task').status, 'done')
   assertEquals(comp(history.task, 'completed').by, f.space.eid)
   assertEquals(history.comments?.length, 1)
-  assertEquals(history.entries?.filter((b) => b.call).length, 5)
+  assertEquals(history.entries?.filter((b) => b.call).length, 6)
+  // A tool that may write answers in words, which are the call's own and
+  // never a row in the space's apps.
+  let listed = history.entries?.find((b) =>
+    (comp(b, 'call')?.args as { op?: string })?.op == 'list'
+  )
+  assertEquals(comp(listed, 'execution').state, 'done')
+  assertEquals(said, [])
   let tools = asked[0].tools.map((t) => t.name)
   assertEquals(tools.includes('graph_query'), true)
   assertEquals(posted?.doc, {
