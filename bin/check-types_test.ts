@@ -1,5 +1,5 @@
 import { equal, test, throws } from '@yaks/testing'
-import { generate, MADE } from './check-types.ts'
+import { generate, MADE, programs } from './check-types.ts'
 
 test('source imports reuse complete readiness receipts and make the remaining outputs', async () => {
   let called: string[][] = []
@@ -59,4 +59,43 @@ test('source without generated imports does not wait for unrelated readiness', a
     await generate([], () => Promise.resolve(false), new Promise(() => {})),
     true,
   )
+})
+
+test('independent host programs start before unrelated generated imports are ready', async () => {
+  let receipt = Promise.withResolvers<readonly string[]>()
+  let checked: string[] = []
+  let catalog = 'bin/compiler-packages.ts'
+  let result = programs(
+    [
+      { made: [catalog], check: () => Promise.resolve(!!checked.push('deno')) },
+      { made: [], check: () => Promise.resolve(!!checked.push('workers')) },
+    ],
+    () => Promise.resolve(true),
+    receipt.promise,
+  )
+  await Promise.resolve()
+  await Promise.resolve()
+  equal(checked, ['workers'])
+  receipt.resolve(MADE[catalog])
+  equal(await result, true)
+  equal(checked, ['workers', 'deno'])
+})
+
+test('hosts share generation and retain failures without blocking independent checks', async () => {
+  let checked: string[] = [], generated: string[][] = []
+  let catalog = 'bin/compiler-packages.ts'
+  let result = await programs([
+    { made: [catalog], check: () => Promise.resolve(!!checked.push('deno')) },
+    {
+      made: [catalog],
+      check: () => Promise.resolve(!!checked.push('workers')),
+    },
+    { made: [], check: () => Promise.resolve(!!checked.push('independent')) },
+  ], (args) => {
+    generated.push(args)
+    return Promise.resolve(false)
+  })
+  equal(result, false)
+  equal(checked, ['independent'])
+  equal(generated, [['run', '--no-lock', '-A', catalog]])
 })

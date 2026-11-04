@@ -415,32 +415,45 @@ export let prepare = async (
   let all = flags.includes('--all')
   let changedPaths = all ? [] : await effects.changes()
   let changedFiles = await effects.format(changedPaths)
-  let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
-  let files = [
-    ...tests.filter((f) => on(platform(f))),
-    ...on('deno') ? pages : [],
-  ]
-  // Choose files before starting runtimes; hand each its dependency keys.
-  let changed = !paths.length && !all ? changedPaths : undefined
-  let { keys, run, beyond, reaches, read } = await effects.chosen(
-    files,
-    all,
-    [sqlite],
-    changed,
-    changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
-  )
-  let prepared = reaches(READIES)
-    ? effects.ready(
-      !flags.includes('--verbose'),
-      run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
-    ).then((outputs) => outputs ?? [])
-    : Promise.resolve([])
-  let ok = all ? Promise.resolve(true) : effects.check(changedFiles, prepared)
-    .catch((e) => (console.error(e), false))
-  // Source discovery and other checks run beside readiness. Only preparing
-  // generated imports awaits its receipts; runtimes still need ready assets.
-  await prepared
-  return { flags, paths, tags, files, keys, run, beyond, ok }
+  let imports = Promise.withResolvers<readonly string[]>()
+  // A selection failure still settles the source job, even when no program
+  // needs generated imports and therefore nobody awaits this receipt.
+  void imports.promise.catch(() => {})
+  let ok = all
+    ? Promise.resolve(true)
+    : effects.check(changedFiles, imports.promise)
+      .catch((e) => (console.error(e), false))
+  try {
+    let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
+    let files = [
+      ...tests.filter((f) => on(platform(f))),
+      ...on('deno') ? pages : [],
+    ]
+    // Choose files before starting runtimes; hand each its dependency keys.
+    let changed = !paths.length && !all ? changedPaths : undefined
+    let { keys, run, beyond, reaches, read } = await effects.chosen(
+      files,
+      all,
+      [sqlite],
+      changed,
+      changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
+    )
+    let prepared = reaches(READIES)
+      ? effects.ready(
+        !flags.includes('--verbose'),
+        run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
+      ).then((outputs) => outputs ?? [])
+      : Promise.resolve([])
+    // Source discovery and other checks run beside readiness. Only preparing
+    // generated imports awaits its receipts; runtimes still need ready assets.
+    imports.resolve(prepared)
+    await prepared
+    return { flags, paths, tags, files, keys, run, beyond, ok }
+  } catch (error) {
+    imports.reject(error)
+    await ok
+    throw error
+  }
 }
 
 // `--bulk` gives each document environment its selected files and their keys.

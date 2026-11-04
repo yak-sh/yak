@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { affected } from '@yaks/testing/choose'
 import { survey } from '@yaks/testing/deps'
 import { changes } from './test-changes.ts'
@@ -120,6 +120,7 @@ let readied = async (read: (file: string) => string[] | undefined) => {
     find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
     chosen: (files, _all, _also, _changed, sources) => {
       equal(sources, ['worker.ts'])
+      equal(order, ['check'])
       return Promise.resolve({
         keys: new Map(),
         run: files,
@@ -147,15 +148,51 @@ let readied = async (read: (file: string) => string[] | undefined) => {
     },
   })
   equal(await plan.ok, true)
-  equal(order, ['ready', 'check', 'completed'])
+  equal(order, ['check', 'ready', 'completed'])
   return made
 }
 
-test('source checks begin beside readiness and receive its completed generated imports', async () => {
+test('source checks begin before selection and receive completed generated imports', async () => {
   equal(await readied(() => undefined), [true])
 })
 
 test('a run makes the generated assets only when a file it runs read one, or has no reads kept', async () => {
   equal(await readied(() => ['workers/yak/public/docs.md']), [false])
   equal(await readied(() => ['workers/yak/public/_client.js']), [true])
+})
+
+test('planning and readiness failures settle source jobs waiting for their imports', async () => {
+  for (let failure of ['selection', 'readiness']) {
+    let settled = false
+    await throws(() =>
+      prepare([], '/sqlite.so', {
+        changes: () => Promise.resolve(['worker.ts']),
+        format: (files) => Promise.resolve(files),
+        find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
+        chosen: (files) => {
+          if (failure == 'selection') throw new Error(failure)
+          return Promise.resolve({
+            keys: new Map(),
+            run: files,
+            affected: files,
+            sources: [],
+            beyond: 0,
+            reaches: () => true,
+            read: () => undefined,
+          })
+        },
+        check: async (_changed, prepared) => {
+          try {
+            await prepared
+            return true
+          } catch {
+            return false
+          } finally {
+            settled = true
+          }
+        },
+        ready: () => Promise.reject(new Error(failure)),
+      }), new RegExp(failure))
+    equal(settled, true)
+  }
 })

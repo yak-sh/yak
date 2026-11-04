@@ -155,10 +155,16 @@ let reached = async (changed: string[], hosted: string[]) => {
   let far = s.distance(changed)
   let roots = all.filter((f) => far(f) <= 1)
   let entries = hosted.filter((e) => s.reaches([e], changed))
-  let made = Object.entries(MADE)
-    .filter(([, out]) => s.reaches([...roots, ...entries], out))
-    .map(([generator]) => generator)
-  return { roots, entries, made }
+  let imports = (roots: string[]) =>
+    Object.entries(MADE)
+      .filter(([, out]) => s.reaches(roots, out))
+      .map(([generator]) => generator)
+  return {
+    roots,
+    entries,
+    made: imports([...roots, ...entries]),
+    hostedMade: imports(entries),
+  }
 }
 
 /// beside('a/b.ts', 3, 'tsx') -> `a/.b.ts.t3.${Deno.pid}.example.tsx`
@@ -393,19 +399,52 @@ export let generate = async (
   )).every(Boolean)
 }
 
+/** Check independent host programs as soon as their generated imports are
+ * ready. A generator shared by hosts still runs only once. */
+export let programs = async (
+  jobs: { made: string[]; check: () => Promise<boolean> }[],
+  run: Run,
+  prepared: Prepared = [],
+) => {
+  let generating = new Map<string, Promise<boolean>>()
+  let imports = (made: string[]) =>
+    Promise.all(made.map((name) => {
+      if (!generating.has(name)) {
+        generating.set(name, generate([name], run, prepared))
+      }
+      return generating.get(name)!
+    })).then((out) => out.every(Boolean))
+  return (await Promise.all(
+    jobs.map(async (job) => await imports(job.made) && await job.check()),
+  )).every(Boolean)
+}
+
 let check = async (
   roots: string[],
   entries: string[],
   made: string[],
   run: Run,
   prepared: Prepared = [],
+  hostedMade = made,
 ) => {
-  if (!await generate(made, run, prepared)) return false
   let hosted = entries.length ? (await workers()).platform : undefined
-  return (await Promise.all([
-    roots.length ? program(deno(), roots) : true,
-    hosted ? program(hosted, entries) : true,
-  ])).every(Boolean)
+  return await programs(
+    [
+      {
+        made,
+        check: () =>
+          roots.length ? program(deno(), roots) : Promise.resolve(true),
+      },
+      ...hosted
+        ? [{
+          made: hostedMade,
+          check: () => program(hosted, entries),
+        }]
+        : [],
+    ],
+    run,
+    prepared,
+  )
 }
 
 /** Check the types of the modules the `changed` paths reach. */
@@ -416,9 +455,9 @@ export let types = async (
 ) => {
   let { entries: hosted } = await workers()
   if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
-  let { roots, entries, made } = await reached(changed, hosted)
+  let { roots, entries, made, hostedMade } = await reached(changed, hosted)
   return !roots.length && !entries.length ||
-    await check(roots, entries, made, run, prepared)
+    await check(roots, entries, made, run, prepared, hostedMade)
 }
 
 if (import.meta.main) {
