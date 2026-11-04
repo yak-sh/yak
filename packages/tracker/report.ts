@@ -62,14 +62,33 @@ export let origin = (
   }
 }
 
-/** Refusals are control flow, not tracked mistakes. Hosts can exclude their
- * own accepted/deferred operation before calling caught. */
+/** A caller that hung up before its request body arrived, in the words of
+ * the Workers runtime: the caller's own act, wherever a body read meets it.
+ *
+ * ```ts
+ * import { ok } from '@yaks/testing'
+ * import { disconnected } from '@yaks/tracker/report'
+ * ok(disconnected(new TypeError(
+ *   "Can't read from request stream because client disconnected.",
+ * )))
+ * ok(!disconnected(new TypeError('x is undefined')))
+ * ```
+ */
+export let disconnected = (error: unknown): boolean =>
+  error instanceof TypeError &&
+  error.message ==
+    "Can't read from request stream because client disconnected."
+
+/** Refusals are control flow, not tracked mistakes, and neither is a caller
+ * that hung up. Hosts can exclude their own accepted/deferred operation
+ * before calling caught. */
 export let refused = (error: unknown): boolean => {
   let e = error && typeof error == 'object' ? error : {}
   let named = 'name' in e ? e.name : ''
   let code = 'status' in e ? e.status : undefined
   return named == 'CallError' || status(error) < 500 ||
-    (typeof code == 'number' && code >= 400 && code < 500)
+    (typeof code == 'number' && code >= 400 && code < 500) ||
+    disconnected(error)
 }
 
 /** No request query, headers, body, cookies, or console arguments leave. */

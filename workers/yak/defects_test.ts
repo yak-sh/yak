@@ -130,7 +130,7 @@ test('a caught failure counts once per invocation and refusals stay back', async
   ok(rows.every((r) => batch(r).scope == platform))
 })
 
-test('a door keeps a refusal or relayed answer at its status and throws its own failure on, each reported once', async () => {
+test('a door keeps a refusal, a hung-up caller or relayed answer at its status and throws its own failure on, each reported once', async () => {
   let { rows, time, env } = recorded()
   let door = (e: unknown) => {
     try {
@@ -148,10 +148,13 @@ test('a door keeps a refusal or relayed answer at its status and throws its own 
       Object.assign(new Error('relayed'), { status: 403 }),
       Object.assign(new Error('stalled'), { name: 'Refused', status: 503 }),
       new Pending('kept'),
+      new TypeError(
+        "Can't read from request stream because client disconnected.",
+      ),
       said(Object.assign(new Error('store fell over'), { status: 500 })),
       broke,
     ].map(door), time)
-  equal(answers, [400, 404, 403, 503, 202, 500, broke])
+  equal(answers, [400, 404, 403, 503, 202, 499, 500, broke])
   equal(
     rows.map(([row]) => [
       (row.exception as { value: string }).value,

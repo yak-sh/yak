@@ -10,6 +10,7 @@ import {
   capture,
   coalesce,
   type Coalesced,
+  disconnected,
   normalize,
   type origin,
   queue,
@@ -113,11 +114,14 @@ let carried = (error: unknown) => {
   return typeof said == 'number' && said >= 400 && said < 600 ? said : null
 }
 
-// A kept write's 202, a tool's status by its code (@yaks/tools), a relayed
-// answer's own, else the one its name says (@yaks/graph `status`).
+// A kept write's 202, a caller that hung up's 499 (heard by nobody), a tool's
+// status by its code (@yaks/tools), a relayed answer's own, else the one its
+// name says (@yaks/graph `status`).
 let statusOf = (error: unknown): number =>
   error instanceof Pending
     ? 202
+    : disconnected(error)
+    ? 499
     : error instanceof CallError
     ? toolRefusal(error).status
     : carried(error) ?? status(error)
