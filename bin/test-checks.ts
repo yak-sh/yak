@@ -4,7 +4,7 @@
 // follow consumers. Main CI checks every module's types after the push.
 
 import { publishing } from './release.ts'
-import { types } from './check-types.ts'
+import { type Prepared, types } from './check-types.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 // What workers/yak/gen.ts reads or writes: the Worker's words and config, the
@@ -102,9 +102,9 @@ export let check = async (
   changed: string[],
   run = command,
   packages = publishing,
-  typed = (changed: string[], prepared: readonly string[]) =>
+  typed = (changed: string[], prepared: Prepared) =>
     types(changed, (args) => run({ name: 'types', args }), prepared),
-  prepared: readonly string[] = [],
+  prepared: Prepared = [],
 ) =>
   (await Promise.all([
     ...checks(changed, (await packages()).map((p) => p.config))

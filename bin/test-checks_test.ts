@@ -110,9 +110,9 @@ test('source type preparation receives the outputs readiness completed', async (
     [],
     () => Promise.resolve(true),
     () => Promise.resolve([]),
-    (_changed, prepared) => {
-      received = prepared
-      return Promise.resolve(true)
+    async (_changed, prepared) => {
+      received = await prepared
+      return true
     },
     ready,
   )

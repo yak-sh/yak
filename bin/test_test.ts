@@ -113,6 +113,7 @@ test('dependency bookkeeping changes select their consumers without selecting un
 
 let readied = async (read: (file: string) => string[] | undefined) => {
   let made: boolean[] = []
+  let order: string[] = []
   let plan = await prepare([], '/sqlite.so', {
     changes: () => Promise.resolve(['worker.ts', 'guide.md']),
     format: (files) => Promise.resolve(files),
@@ -129,20 +130,28 @@ let readied = async (read: (file: string) => string[] | undefined) => {
         read,
       })
     },
-    check: (_changed, prepared) => {
-      equal(prepared, made.at(-1) ? ['workers/yak/public/_client.js'] : [])
+    check: async (_changed, prepared) => {
+      order.push('check')
+      equal(
+        await prepared,
+        made.at(-1) ? ['workers/yak/public/_client.js'] : [],
+      )
       return Promise.resolve(made.length > 0)
     },
-    ready: (_quiet, assets) => {
+    ready: async (_quiet, assets) => {
+      order.push('ready')
       made.push(assets)
-      return Promise.resolve(assets ? ['workers/yak/public/_client.js'] : [])
+      await Promise.resolve()
+      order.push('completed')
+      return assets ? ['workers/yak/public/_client.js'] : []
     },
   })
   equal(await plan.ok, true)
+  equal(order, ['ready', 'check', 'completed'])
   return made
 }
 
-test('a changed source readies its generated imports before the checks', async () => {
+test('source checks begin beside readiness and receive its completed generated imports', async () => {
   equal(await readied(() => undefined), [true])
 })
 

@@ -376,23 +376,29 @@ let program = async (on: Platform, roots: string[]) => {
   }
 }
 
+/** Outputs validated by this run, possibly while source discovery proceeds. */
+export type Prepared = readonly string[] | PromiseLike<readonly string[]>
+
 /** Make a source's imports unless readiness validated every output this run. */
 export let generate = async (
   made: string[],
   run: Run,
-  prepared: readonly string[] = [],
-) =>
-  (await Promise.all(
-    made.filter((g) => !MADE[g].every((path) => prepared.includes(path)))
+  prepared: Prepared = [],
+) => {
+  if (!made.length) return true
+  let completed = await prepared
+  return (await Promise.all(
+    made.filter((g) => !MADE[g].every((path) => completed.includes(path)))
       .map((g) => run(['run', '--no-lock', '-A', g])),
   )).every(Boolean)
+}
 
 let check = async (
   roots: string[],
   entries: string[],
   made: string[],
   run: Run,
-  prepared: readonly string[] = [],
+  prepared: Prepared = [],
 ) => {
   if (!await generate(made, run, prepared)) return false
   let hosted = entries.length ? (await workers()).platform : undefined
@@ -406,7 +412,7 @@ let check = async (
 export let types = async (
   changed: string[],
   run: Run = spawn,
-  prepared: readonly string[] = [],
+  prepared: Prepared = [],
 ) => {
   let { entries: hosted } = await workers()
   if (!changed.some((p) => checked(p) || hosted.includes(p))) return true

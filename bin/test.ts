@@ -10,6 +10,7 @@
 
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
+import type { Prepared } from './check-types.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
@@ -385,7 +386,7 @@ export let prepare = async (
     format,
     find,
     chosen,
-    check: (changed: string[], prepared: readonly string[]) =>
+    check: (changed: string[], prepared: Prepared) =>
       check(changed, undefined, undefined, undefined, prepared),
     ready: async (
       quiet: boolean,
@@ -428,15 +429,17 @@ export let prepare = async (
     changed,
     changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
   )
-  let prepared: readonly string[] = []
-  if (reaches(READIES)) {
-    prepared = await effects.ready(
+  let prepared = reaches(READIES)
+    ? effects.ready(
       !flags.includes('--verbose'),
       run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
-    ) ?? []
-  }
+    ).then((outputs) => outputs ?? [])
+    : Promise.resolve([])
   let ok = all ? Promise.resolve(true) : effects.check(changedFiles, prepared)
     .catch((e) => (console.error(e), false))
+  // Source discovery and other checks run beside readiness. Only preparing
+  // generated imports awaits its receipts; runtimes still need ready assets.
+  await prepared
   return { flags, paths, tags, files, keys, run, beyond, ok }
 }
 
