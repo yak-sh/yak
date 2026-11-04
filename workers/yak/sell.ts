@@ -39,7 +39,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
 import { ask } from './stripe.ts'
-import { refusal } from '@yaks/hook'
+import { ours, refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
 import {
@@ -1004,9 +1004,9 @@ let settled = async (env: Env, space: Space, event: Event) => {
 }
 
 // The webhook door is on the open internet, so what it files has a ceiling:
-// per isolate, per minute, the way billing.ts caps its own. A refused signature
-// is worth seeing once — a secret rolled, or somebody poking — and worth seeing
-// a hundred times an hour never.
+// per isolate, per minute, the way billing.ts caps its own. Only a refusal that
+// can mean our secret is wrong is filed at all (`ours`, @yaks/hook), and it is
+// worth seeing once and never a hundred times an hour.
 let FILED = 6
 let filed = new Map<string, { minute: number; n: number }>()
 
@@ -1067,7 +1067,9 @@ let hook = async (env: Env, req: Request) => {
     req.headers,
   )
   if (no) {
-    if (!hushed(no)) await fault(env, 'POST /stripe/connect', new Error(no))
+    if (ours(no) && !hushed(no)) {
+      await fault(env, 'POST /stripe/connect', new Error(no))
+    }
     return json(400, 'bad_signature', no)
   }
   let event: Event

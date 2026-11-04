@@ -12,7 +12,13 @@
 // constant-time without a compare of our own.
 //
 // What secret to use, and what a refusal means for the request, are the
-// receiver's to say. This module never learns where a secret came from.
+// receiver's to say. This module never learns where a secret came from, but it
+// does say which refusal can be the receiver's own fault (`ours`): a sender
+// holding the secret always sends a complete, fresh, well-formed signature, so
+// only one of those that fails to match can mean the receiver's secret is
+// wrong. Anything short of that (no header, no timestamp, a stale one, a digest
+// that is not a SHA-256) is the caller's own bad input, which anyone on the
+// internet can send, and is refused without anybody being told.
 
 import { header, type Request } from './hooked.ts'
 
@@ -37,6 +43,10 @@ export type HeaderLookup = { get(name: string): string | null }
 // that a body captured off the wire cannot be replayed later under its own
 // signature.
 export let SKEW = 300
+
+// The one refusal a receiver holding the wrong secret would see.
+let MISMATCH = 'the signature does not match'
+let MALFORMED = 'the signature is not well formed'
 
 let GITHUB: Hmac = { header: 'X-Hub-Signature-256', prefix: 'sha256=' }
 
@@ -68,22 +78,23 @@ let key = (secret: string) =>
     ['verify'],
   )
 
-// Whether any of these digests is the HMAC of the payload. A malformed digest
-// is simply not a match: it must never throw its way past the check, and when
-// none is well formed there is nothing to take the secret out for.
+// Why none of these digests is the HMAC of the payload, or '' when one is. A
+// digest that is not 32 bytes cannot be a SHA-256 and is simply skipped: it
+// must never throw its way past the check, and when none is well formed there
+// is nothing to take the secret out for.
 let matches = async (
   secret: string,
   payload: string,
   digests: (Uint8Array<ArrayBuffer> | null)[],
 ) => {
-  let sent = digests.filter((d) => d != null)
-  if (!sent.length) return false
+  let sent = digests.filter((d) => d?.length == 32) as Uint8Array<ArrayBuffer>[]
+  if (!sent.length) return MALFORMED
   let k = await key(secret)
   let bytes = enc.encode(payload)
   for (let d of sent) {
-    if (await crypto.subtle.verify('HMAC', k, d, bytes)) return true
+    if (await crypto.subtle.verify('HMAC', k, d, bytes)) return ''
   }
-  return false
+  return MISMATCH
 }
 
 // The Stripe header as its pairs, in order. A Map would not do: a header
@@ -112,8 +123,6 @@ let stripe = async (
   if (Math.abs(now / 1000 - t) > SKEW) return 'the signature is too old'
   let digests = said.filter(([k]) => k == 'v1').map(([, v]) => hex(v))
   return await matches(secret, `${t}.${body}`, digests)
-    ? ''
-    : 'the signature does not match'
 }
 
 let hmac = async (
@@ -125,12 +134,10 @@ let hmac = async (
   let line = headers.get(scheme.header)
   if (!line) return `no ${scheme.header} header`
   let prefix = scheme.prefix ?? ''
-  if (!line.startsWith(prefix)) return 'the signature does not match'
+  if (!line.startsWith(prefix)) return MALFORMED
   let digest = line.slice(prefix.length).trim()
   let decoded = scheme.encoding == 'base64' ? base64(digest) : hex(digest)
   return await matches(secret, body, [decoded])
-    ? ''
-    : 'the signature does not match'
 }
 
 /**
@@ -152,6 +159,18 @@ export let refusal = (
   scheme == 'stripe'
     ? stripe(secret, body, headers, now)
     : hmac(scheme == 'github' ? GITHUB : scheme, secret, body, headers)
+
+/**
+ * Whether a {@link refusal} can mean the receiver's own secret is wrong, and so
+ * is worth reporting: only a complete, fresh, well-formed signature that does
+ * not match. Every other refusal is the caller's own bad input.
+ *
+ * ```ts
+ * import { ours, refusal } from '@yaks/hook'
+ * ours(await refusal('stripe', 'a secret', '{}', new Headers())) // false
+ * ```
+ */
+export let ours = (why: string): boolean => why == MISMATCH
 
 /**
  * A captured request with its `verified` set by checking it under this scheme

@@ -55,7 +55,7 @@ import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 
 import { sessionAt } from './session.ts'
-import { refusal } from '@yaks/hook'
+import { ours, refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import { ask } from './stripe.ts'
 
@@ -246,9 +246,10 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 // The webhook door is on the open internet, so what it files has a ceiling:
-// per isolate, per minute, the way unseen.ts caps a crash-looping page. A
-// refused signature is worth seeing once — it means a secret rolled, or
-// somebody is poking — and worth seeing a hundred times an hour never.
+// per isolate, per minute, the way unseen.ts caps a crash-looping page. Only a
+// refusal that can mean our secret is wrong is filed at all (`ours`, @yaks/hook):
+// a well-formed signature that does not match is worth seeing once and never a
+// hundred times an hour, and a request with no signature is a stranger's.
 let FILED = 6
 let filed = new Map<string, { minute: number; n: number }>()
 
@@ -613,7 +614,7 @@ let hook = async (env: Env, req: Request) => {
   }
   let no = await refusal('stripe', env.STRIPE_WEBHOOK_SECRET, raw, req.headers)
   if (no) {
-    if (!hushed(no)) {
+    if (ours(no) && !hushed(no)) {
       await fault(env, 'POST /stripe/webhook', new Error(no))
     }
     return json(400, 'bad_signature', no)

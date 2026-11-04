@@ -154,22 +154,23 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     assertEquals(page.status, 403)
     assertEquals((await page.json()).error.code, 'foreign_origin')
 
-    // Authentication failures reach the platform tracker even though the
-    // webhook answers them. A foreign Origin stays the caller's refusal.
+    // A well-formed, fresh signature that does not match is what Stripe's
+    // delivery looks like when our secret is wrong, so it reaches the platform
+    // tracker though the webhook answers it. No signature, a stale one, and a
+    // foreign Origin are the caller's own refusals, which anyone can send.
     await k.flushReports()
-    let reports = k.reported.slice(before).filter((row) => row.error)
-    assert(
-      reports.some((row) =>
-        (row.exception as { value: string }).value.includes(
-          'the signature does not match',
-        )
-      ),
-    )
+    let said = (text: string) =>
+      k.reported.slice(before).filter((row) => row.error).some((row) =>
+        (row.exception as { value: string }).value.includes(text)
+      )
     assertEquals(
-      reports.some((row) =>
-        (row.exception as { value: string }).value.includes('foreign_origin')
-      ),
-      false,
+      [
+        'the signature does not match',
+        'no Stripe-Signature header',
+        'the signature is too old',
+        'foreign_origin',
+      ].map(said),
+      [true, false, false, false],
     )
   } finally {
     await k.stop()

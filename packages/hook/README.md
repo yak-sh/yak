@@ -58,10 +58,15 @@ beside the secret it goes with:
 The receiver passes the secret; this package never learns where it came from.
 
 - `refusal(scheme, secret, body, headers, now?)` answers `''` when the signature
-  holds and otherwise the reason, such as `'no Stripe-Signature
-  header'` or
-  `'the signature does not match'`. `headers` is anything with `get(name)`, such
-  as a fetch `Headers`.
+  holds and otherwise the reason, such as `'no Stripe-Signature header'`,
+  `'the signature is not well formed'` or `'the signature does not match'`.
+  `headers` is anything with `get(name)`, such as a fetch `Headers`.
+- `ours(reason)` says whether a refusal can mean the receiver's own secret is
+  wrong, and so is worth reporting. Only `'the signature does not match'` can: a
+  sender holding the secret always sends a complete, fresh, well-formed
+  signature (a 32-byte digest). No header, no timestamp, a stale timestamp or a
+  malformed digest is the caller's own bad input, which anyone can send; refuse
+  it and report nothing.
 - `checked(request, scheme, secret, now?)` returns the captured request with
   `verified` set, ready for `hooked()`.
 

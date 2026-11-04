@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { checked, refusal, type Scheme, SKEW } from './signed.ts'
+import { checked, ours, refusal, type Scheme, SKEW } from './signed.ts'
 
 let SECRET = 'whsec_a_probe_secret'
 let NOW = 1_788_460_000_000
@@ -68,10 +68,26 @@ test('stripe: a header missing its parts is refused, never thrown past', async (
     [
       'no Stripe-Signature header',
       'no timestamp on the signature',
-      'the signature does not match',
-      'the signature does not match',
-      'the signature does not match',
+      'the signature is not well formed',
+      'the signature is not well formed',
+      'the signature is not well formed',
     ],
+  )
+})
+
+test('ours: only a complete, fresh, well-formed signature that fails can be our secret', async () => {
+  let raw = '{"id":"evt_1"}'
+  let sent = async (v?: string) =>
+    ours(await ask('stripe', raw, v == null ? {} : { 'stripe-signature': v }))
+  assertEquals(
+    await Promise.all([
+      sent(),
+      sent(`t=${SEC},v1=beef`),
+      sent(await stripe(raw, SEC - SKEW - 1, 'whsec_someone_else')),
+      sent(await stripe(raw, SEC, 'whsec_someone_else')),
+      sent(await stripe(raw, SEC)),
+    ]),
+    [false, false, false, true, false],
   )
 })
 
@@ -103,7 +119,7 @@ test('github: sha256= and the hex of the body', async () => {
     [
       '',
       'the signature does not match',
-      'the signature does not match',
+      'the signature is not well formed',
       'no X-Hub-Signature-256 header',
     ],
   )
@@ -121,7 +137,7 @@ test('hmac: a named header carries the digest in hex', async () => {
       await ask(hexed, form, { 'x-signature': hex(formMac) }),
       await ask(hexed, form, { 'x-signature': b64(formMac) }),
     ],
-    ['', 'the signature does not match'],
+    ['', 'the signature is not well formed'],
   )
 })
 
@@ -131,7 +147,7 @@ test('hmac: a named header may carry it in base64', async () => {
       await ask(based, form, { 'x-shopify-hmac-sha256': b64(formMac) }),
       await ask(based, form, { 'x-shopify-hmac-sha256': '%%%' }),
     ],
-    ['', 'the signature does not match'],
+    ['', 'the signature is not well formed'],
   )
 })
 
