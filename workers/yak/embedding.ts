@@ -14,7 +14,9 @@
 // search scans the int8 copy and ranks its best hundred by their float rows,
 // which keeps ~99.8% of the full vectors' quality where a cut to 256 kept
 // ~95%. Where the binding is absent (a test, a probe), nothing is embedded
-// and `.near` ranks over whatever is already stored.
+// and `.near` ranks over whatever is already stored. The binding is metered
+// (meter.ts): a space whose budget is spent is refused, and its texts are
+// `Withheld` until the month turns, which is no failure.
 
 import configured from './embedding.json' with { type: 'json' }
 
@@ -27,8 +29,11 @@ import {
   resolved,
   searched,
   space,
+  Withheld,
   workersAi,
 } from '@yaks/embedding'
+import { ModelError } from '@yaks/model'
+import { LIMIT } from '@yaks/session/status'
 import type { Meaning } from '@yaks/host'
 import type { Derived, Raw, Statements } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -46,7 +51,18 @@ export let SPACE = space({ model: MODEL })
 
 /** The embedder a store runs over the binding it was handed, or none. */
 export let embedder = (bind: { AI?: Ai }): Embedder | null =>
-  bind.AI ? workersAi({ model: MODEL, ai: bind.AI }) : null
+  bind.AI ? workersAi({ model: MODEL, ai: spending(bind.AI) }) : null
+
+// The binding, its spent budget said as the embedder's `Withheld`.
+let spending = (ai: Ai): Ai => ({
+  run: (model, input) =>
+    ai.run(model, input).catch((e) => {
+      if (e instanceof ModelError && e.code == LIMIT) {
+        throw new Withheld(e.message)
+      }
+      throw e
+    }),
+})
 
 /** The text a store embeds: every property its vocabulary marks searched,
  * read through its derived columns, so a body kept by address is its prose. */

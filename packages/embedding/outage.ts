@@ -9,14 +9,15 @@
 // texts it holds up have waited {@link OVERDUE}: reported once, the outage as
 // its cause. Anything else a drain throws is unexpected and reports at once.
 // A text the model refuses is the text's, not the drain's (./sweep.ts
-// `refused`).
+// `refused`). A model `Withheld` (a host's spent budget) is no failure at
+// all: its texts wait for the ceiling to lift, logged once, never reported.
 //
 // It is @yaks/mail's delayed letter (pull.ts) for vectors: what fails is the
 // wait, not each try. The outage is a value the host keeps between drains; a
 // Durable Object keeps it in its own storage, since it sleeps between the
 // alarms that retry.
 
-import { Unanswered } from './embedder.ts'
+import { Unanswered, Withheld } from './embedder.ts'
 
 /**
  * How long owed texts may wait on a model that does not answer before the
@@ -28,7 +29,8 @@ import { Unanswered } from './embedder.ts'
 export let OVERDUE: number = 15 * 60_000
 
 /** An outage a host's drains are riding out: since when the model has not
- * answered, and whether its wait has been reported. */
+ * answered, and whether its wait has been reported or, withheld, needs no
+ * report. */
 export type Outage = { since: number; told?: true }
 
 /** What one drain's outcome makes of the outage: the outage it leaves, the
@@ -71,7 +73,8 @@ export let drained: Ride = (outage, now) =>
 /**
  * A drain that threw `error`. A model that did not answer starts an outage or
  * rides on in one, until its texts have waited {@link OVERDUE}, which reports
- * once; anything else reports at once.
+ * once; a model that withheld its answer waits without a report; anything
+ * else reports at once.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -83,6 +86,12 @@ export let drained: Ride = (outage, now) =>
  * ```
  */
 export let failed = (error: unknown): Ride => (outage, now) => {
+  if (error instanceof Withheld) {
+    return outage ? { outage: { ...outage, told: true } } : {
+      outage: { since: now, told: true },
+      log: `${error.message}; its texts wait until it lifts`,
+    }
+  }
   if (!(error instanceof Unanswered)) return { outage, report: error }
   if (!outage) {
     return {

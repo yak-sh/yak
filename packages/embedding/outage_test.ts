@@ -2,7 +2,7 @@
 // host keeps between them.
 
 import { equal, test } from '@yaks/testing'
-import { Unanswered } from './embedder.ts'
+import { Unanswered, Withheld } from './embedder.ts'
 import {
   drained,
   failed,
@@ -64,4 +64,13 @@ test('a drain that answers ends the wait; the next outage waits anew', () => {
 test('an outage kept across drains reports once, wherever it resumes', () => {
   let rode = down({ since: 0, told: true }, 10 * OVERDUE)
   equal(rode, { outage: { since: 0, told: true } })
+})
+
+test('a withheld model waits out its ceiling unreported, logging its ends', () => {
+  let spent = failed(new Withheld('the budget is spent'))
+  let month = Array.from(
+    { length: 3 * OVERDUE / MIN },
+    (_, m): [number, Ride] => [m, m % 2 ? spent : down],
+  )
+  equal(run(...month, [3 * OVERDUE / MIN, drained]), { reports: [], logs: 2 })
 })

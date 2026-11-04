@@ -35,6 +35,16 @@ export type Embedder = {
 export class Refused extends Error {}
 
 /**
+ * What an embedder throws when its provider answered but will not embed for
+ * this host until a ceiling it set lifts, such as a monthly budget that is
+ * spent. Nothing failed: the texts stay owed, asking again sooner changes
+ * nothing, and the drain after the ceiling lifts embeds them (./outage.ts).
+ */
+export class Withheld extends Error {
+  override name = 'Withheld'
+}
+
+/**
  * What an embedder throws when its provider failed every time it was asked
  * (./remote.ts `retrying`). One provider out is one failure, however many
  * texts it was asked for or in which words it failed, so the message names

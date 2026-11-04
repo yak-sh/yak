@@ -11,7 +11,9 @@ import {
   sweep,
   TABLE,
   unit,
+  Withheld,
 } from '@yaks/embedding'
+import { ModelError } from '@yaks/model'
 import { driver } from '@yaks/durable-object'
 import { col, select, table, val } from '@yaks/sql'
 import { doorOf } from './door.ts'
@@ -25,7 +27,7 @@ import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
-import { DIM, ranking, SPACE, texts } from './embedding.ts'
+import { DIM, embedder, ranking, SPACE, texts } from './embedding.ts'
 
 // Workers AI, stood in for by word buckets: texts sharing words are near.
 let words = hashEmbedder(DIM)
@@ -171,4 +173,22 @@ test('deployment of vectors in another space re-embeds them all', async () => {
   // migration has finished: schema documentation runs in the same sweep.
   await until(() => spaces().every((r) => r.model == SPACE))
   assertEquals(spaces(), [{ model: SPACE }])
+})
+
+test("a space's spent budget withholds its vectors, asked once", async () => {
+  let asked = 0
+  let spent = embedder({
+    AI: {
+      run: () => {
+        asked++
+        return Promise.reject(new ModelError('limit', 'the budget is spent'))
+      },
+    },
+  })!
+  let error = await Promise.resolve().then(() => spent.embed('a text'))
+    .catch((e: Error) => e)
+  assertEquals(
+    [error instanceof Withheld, (error as Error).message, asked],
+    [true, 'the budget is spent', 1],
+  )
 })

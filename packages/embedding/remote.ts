@@ -34,7 +34,7 @@
 // bare setTimeout(0) takes about 2 ms under Deno 2.9, and every search's one
 // embedding waited on it.
 
-import { type Embedder, Refused, Unanswered } from './embedder.ts'
+import { type Embedder, Refused, Unanswered, Withheld } from './embedder.ts'
 import { unit } from './vector.ts'
 
 /** The slice of `fetch` this file uses — the web one, and a Worker's. */
@@ -292,7 +292,7 @@ async (input) => {
     try {
       return await ask(input)
     } catch (error) {
-      if (error instanceof Refused) throw error
+      if (error instanceof Refused || error instanceof Withheld) throw error
       if (sent > pauses.length) {
         let texts = String(input.length), tries = String(sent)
         throw new Unanswered(provider, { model, texts, tries }, error)
