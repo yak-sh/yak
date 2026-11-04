@@ -55,7 +55,7 @@ import {
   rows as answer,
   statusOf,
 } from '@yaks/match'
-import type { Vocab } from '@yaks/vocab'
+import { extendsVocab, type Vocab } from '@yaks/vocab'
 import { bindings } from './rules.ts'
 
 export type { Query }
@@ -126,6 +126,8 @@ export type Tx = {
  * a row.
  */
 export type Store = {
+  /** Adopt an additive vocabulary without replacing rows or their indexes. */
+  extend: (next: Vocab) => boolean
   /** Whether a value this store reads for the property means its entity
    * wears the component. */
   worn: (comp: string, prop: string) => boolean
@@ -180,9 +182,28 @@ let bandOf = (v: unknown): number | undefined => {
 let valueOf = (b: Bundle | undefined, comp: string, prop: string): unknown =>
   (b?.[comp] as Comp | undefined)?.[prop]
 
-// A vocabulary never changes: resolve its status-bearing components once,
+// A vocabulary snapshot never changes: resolve its status-bearing components once,
 // rather than inspect every component of every row each time it is gathered.
 let ladders = new WeakMap<Vocab, string[]>()
+let statusesOf = (vocab: Vocab): string[] => {
+  let held = ladders.get(vocab)
+  if (!held) {
+    ladders.set(
+      vocab,
+      held = vocab.all.filter((n) => vocab.comp(n)?.ladder),
+    )
+  }
+  return held
+}
+let binariesOf = (vocab: Vocab) =>
+  vocab.all.flatMap((comp) => {
+    let props = vocab.props(comp).filter((p) =>
+      vocab.prop(comp, p)?.scalar == 'binary'
+    )
+    return props.length ? [{ comp, props }] : []
+  })
+let uniqueIn = (vocab: Vocab) =>
+  vocab.all.some((name) => vocab.indexes(name).some((i) => i.unique))
 
 /**
  * A store over a Map of bundles, bound to a vocabulary once. It is the storage
@@ -239,9 +260,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     return got
   }
-  let hasUnique = vocab.all.some((name) =>
-    vocab.indexes(name).some((i) => i.unique)
-  )
+  let hasUnique = uniqueIn(vocab)
   let uniqueKey = (
     b: Bundle | undefined,
     comp: string,
@@ -413,7 +432,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   // Resolve storage policy once per component, not on every moving cell.
-  // The vocabulary belongs to this store and is fixed for its lifetime.
+  // Existing components keep their policy when the vocabulary grows.
   let cells = new Map<string, { refs: Set<string>; kept: Set<string> }>()
   let cellsOf = (comp: string) => {
     let held = cells.get(comp)
@@ -437,12 +456,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // holds no rule to derive them.
   // Bytes cross the storage boundary by value, just as a database BLOB does.
   // Keep the ordinary immutable-bundle path allocation-free.
-  let binary = vocab.all.flatMap((comp) => {
-    let props = vocab.props(comp).filter((p) =>
-      vocab.prop(comp, p)?.scalar == 'binary'
-    )
-    return props.length ? [{ comp, props }] : []
-  })
+  let binary = binariesOf(vocab)
   let detached = (b: Bundle): Bundle => {
     let out = b
     for (let { comp, props } of binary) {
@@ -462,13 +476,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // Reads carry the computed values a server would send, without storing
   // them. Compute against the whole index before cutting requested components.
-  let statuses = ladders.get(vocab)
-  if (!statuses) {
-    ladders.set(
-      vocab,
-      statuses = vocab.all.filter((name) => vocab.comp(name)?.ladder),
-    )
-  }
+  let statuses = statusesOf(vocab)
   let derived = Object.entries(base.computed ?? {}).map(([path, read]) =>
     [...path.split('.'), read] as [string, string, Computed[string]]
   )
@@ -930,6 +938,20 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   return {
+    extend: (next) => {
+      if (next === vocab) return true
+      if (depth || !extendsVocab(vocab, next)) return false
+      for (let name of next.all) {
+        if (vocab.comp(name)) continue
+        cells.delete(name)
+        uniques.delete(name)
+      }
+      vocab = next
+      hasUnique = uniqueIn(vocab)
+      binary = binariesOf(vocab)
+      statuses = statusesOf(vocab)
+      return true
+    },
     // A computed override may read another component, even when its named
     // component is absent, so only a stored property's value says it is worn.
     worn: (comp, prop) =>

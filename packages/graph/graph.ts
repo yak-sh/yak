@@ -47,7 +47,7 @@
 // wrote inside the transaction is never left believing its rows are still
 // there.
 
-import { rulesIn, syncOf, type Vocab } from '@yaks/vocab'
+import { extendsVocab, rulesIn, syncOf, type Vocab } from '@yaks/vocab'
 import {
   type Context,
   context,
@@ -307,6 +307,9 @@ let lending = (
 export type Graph = {
   /** the component vocabulary this graph uses */
   vocab: Vocab
+  /** Adopt a vocabulary that only adds words, retaining this graph, its
+   * storage, rows and plugins. False leaves both graph and storage unchanged. */
+  extend: (next: Vocab) => boolean
   /** Whether a value of this property means its entity wears the
    * component (its storage's `worn`; no by default). */
   worn: (comp: string, prop: string) => boolean
@@ -1459,24 +1462,56 @@ export let graph = (opts: Options): Graph => {
   let { address, ask, answer, view, rewrites } = reads
 
   let g: Graph = {
-    vocab,
+    get vocab() {
+      return vocab
+    },
+    extend: (next) => {
+      if (next === vocab) return true
+      if (!extendsVocab(vocab, next) || !storage.extend) return false
+      let nextReads = reading({
+        storage,
+        vocab: next,
+        plugins,
+        outside: outsideRead,
+      })
+      let nextStamps = Map.groupBy(
+        [...provenance(opts.provenance), ...marks(next)],
+        (r) => r.phase,
+      )
+      declaredIn(next)
+      if (!storage.extend(next)) return false
+      vocab = next
+      reads = nextReads
+      ;({ address, ask, answer, view, rewrites } = reads)
+      stamping = nextStamps
+      loaded = new Set([...loaded, ...next.docs])
+      declarationKey = undefined
+      return true
+    },
     worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
     storage,
     outside: committed,
     plugins,
-    address,
-    rewrites,
-    scope: reads.scope,
-    ask,
-    answer,
-    view,
+    address: (ids, kind, o) => address(ids, kind, o),
+    rewrites: (o) => rewrites(o),
+    scope: (o) => reads.scope(o),
+    ask: (q, o) => ask(q, o),
+    answer: (bs, o) => answer(bs, o),
+    view: (q, o) => view(q, o),
     use: (plugin) => {
       plugins.push(plugin)
       reads.use(plugin)
       return g
     },
     install: () => storage.install(),
-    ...queries(() => g, lending(opts.reader, reads)),
+    ...queries(
+      () => g,
+      lending(opts.reader, {
+        read: (q, o) => reads.read(q, o),
+        rows: (q, o) => reads.rows(q, o),
+        get: (ids, comps, o) => reads.get(ids, comps, o),
+      }),
+    ),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
   }

@@ -10,6 +10,7 @@
 // entities it created, including the `num` if the adapter assigns one.
 
 import type { Query as Ast } from '@yaks/query'
+import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Eid, Entity } from './bundle.ts'
 import { Misfit, Refused } from './errors.ts'
 import type { Binding, Match } from './join.ts'
@@ -213,6 +214,9 @@ export type News = { applied: Bundle[][]; missed: boolean }
  * promise.
  */
 export type Storage = {
+  /** Adopt an additive vocabulary snapshot without replacing stored data.
+   * False leaves the store unchanged. Absent when growth needs a new store. */
+  extend?: (next: Vocab) => boolean
   /** A connection-local token invalidated by every committed data/schema
    * change, including other connections. Optional: read-result memoization
    * must not survive a call when the store cannot prove this token. */

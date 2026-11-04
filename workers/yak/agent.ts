@@ -648,6 +648,7 @@ export let reaching = async (
   }
   let self: Graph = {
     vocab,
+    extend: () => false,
     worn: () => false,
     storage,
     outside: detached(storage),

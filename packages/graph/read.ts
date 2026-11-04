@@ -687,6 +687,7 @@ export let graph = (opts: Options): Graph => {
     storage,
     outside,
     plugins,
+    extend: () => false,
     worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
     use: (plugin) => {
       plugins.push(plugin)
