@@ -281,17 +281,24 @@ test('the plan pages carry the email allowance the code enforces', () => {
   }
 })
 
-test('the plan cards and paid offers carry the meter allowances', () => {
-  let cards = {
-    free: '.Plan:not(.Plan-plus):not(.Plan-organization)',
-    plus: '.Plan-plus',
-    organization: '.Plan-organization',
-  }
-  for (let page of ['index.html', 'pricing.html']) {
+// The plan cards each page shows: the home page prices a space in brief, the
+// free one and the Plus plan, and the pricing page shows every plan.
+let CARDS: Record<string, Tier[]> = {
+  'index.html': ['free', 'plus'],
+  'pricing.html': ['free', 'plus', 'organization'],
+}
+let cardOf = (tier: Tier) =>
+  tier == 'free'
+    ? '.Plan:not(.Plan-plus):not(.Plan-organization)'
+    : `.Plan-${tier}`
+
+test('the plan cards and every offer carry the meter allowances', () => {
+  for (let [page, tiers] of Object.entries(CARDS)) {
     let { document } = parseHTML(read(page))
-    for (let [tier, selector] of Object.entries(cards)) {
-      let card = document.querySelector(selector)!
-      for (let text of Object.values(allowances[tier as Tier])) {
+    assertEquals(document.querySelectorAll('.Plan').length, tiers.length, page)
+    for (let tier of tiers) {
+      let card = document.querySelector(cardOf(tier))!
+      for (let text of Object.values(allowances[tier])) {
         assertStringIncludes(flat(card.textContent!), text, `${page}: ${tier}`)
       }
     }
@@ -300,7 +307,7 @@ test('the plan cards and paid offers carry the meter allowances', () => {
   let app = doc['@graph'].find((n: { '@type': string }) =>
     n['@type'] == 'SoftwareApplication'
   )
-  for (let name of ['Plus', 'Organization']) {
+  for (let name of ['Free', 'Plus', 'Organization']) {
     let offer = app.offers.find((o: { name: string }) => o.name == name)
     for (let text of Object.values(allowances[name.toLowerCase() as Tier])) {
       assertStringIncludes(
@@ -485,7 +492,6 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     '/login',
     '/login',
     '/login?return=%2Fconnect%23plan',
-    '/login?return=%2Fconnect%23plan',
     '/login',
   ], 'a home-page door misses sign-in')
 })
@@ -632,12 +638,16 @@ test('the home page describes itself at the prices the code charges', () => {
   }
 })
 
-test('the plan pages quote the prices the offers name', () => {
+test('the plan pages quote the prices the offers name, and no other', () => {
+  let charged = new Set([...Object.values(PRICE), ...Object.values(YEARLY)])
   for (let page of ['index.html', 'pricing.html']) {
     let html = flat(parseHTML(read(page)).document.body.textContent!)
     assertStringIncludes(html, `$${PRICE.plus} a month`)
     assertStringIncludes(html, `$${PRICE.organization} a month`)
     assertStringIncludes(html, `$${YEARLY.organization} a year`)
+    for (let [, n] of html.matchAll(/\$(\d+) a (?:month|year)/g)) {
+      assert(charged.has(Number(n)), `${page} quotes $${n}`)
+    }
   }
 })
 
@@ -828,22 +838,17 @@ test('the signed-in plan copy derives both tiers from the meter', async () => {
 })
 
 test('pricing cards offer signup and omit build quotas', () => {
-  for (let page of ['index.html', 'pricing.html']) {
+  for (let [page, tiers] of Object.entries(CARDS)) {
     let { document } = parseHTML(read(page))
     let cards = [...document.querySelectorAll('.Plan')]
-    assertEquals(cards.length, 3)
-    assertEquals(cards.map((c) => c.querySelector('.Button')?.textContent), [
-      'Start Free',
-      'Get Started',
-      'Get Started',
-    ])
+    let paid = (tier: Tier) => tier != 'free'
+    assertEquals(
+      cards.map((c) => c.querySelector('.Button')?.textContent),
+      tiers.map((t) => paid(t) ? 'Get Started' : 'Start Free'),
+    )
     assertEquals(
       cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
-      [
-        '/login',
-        '/login?return=%2Fconnect%23plan',
-        '/login?return=%2Fconnect%23plan',
-      ],
+      tiers.map((t) => paid(t) ? '/login?return=%2Fconnect%23plan' : '/login'),
     )
     assert(!read(page).includes('built-in builds a month'))
   }

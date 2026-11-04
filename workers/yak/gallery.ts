@@ -822,12 +822,12 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// These are the examples promised on the home page, in its order: something
-// for a side business, then for home. Gallery approval
-// and listing recency do not decide which apps the platform features.
+// These are the examples promised in the home page's carousel, in its order:
+// things for home and for a group. The bakery's menu and the recipe box are
+// the home page's cards for a side business and for home, below it, so the
+// carousel doesn't repeat them. Gallery approval and listing recency do not
+// decide which apps the platform features.
 export let DEMOS = [
-  'menu',
-  'recipes',
   'garden',
   'bookclub',
   'trip',

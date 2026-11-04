@@ -712,9 +712,31 @@
     }
   }
 
-  .How {
+  .For,
+  .How,
+  .Path,
+  .Made {
     display: grid;
     gap: 1.5rem;
+  }
+
+  /* Who it's for: a card each for work, side projects and home, with one
+     app from it to open or copy. Side by side on a laptop, stacked on a
+     phone. */
+  .For_List {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: var(--gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .For_Doors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--half-gap) var(--gap);
+    font-weight: 700;
   }
 
   .Step_Name {
