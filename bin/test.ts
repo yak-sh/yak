@@ -92,17 +92,14 @@ export let GIT = {
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
 /**
- * The module cache a runtime runs on: the run's, every part of it linked but
- * Deno's code cache. A runtime compiles every function as its module loads
- * (`runtime`), and code cached under one V8 flag is refused under another, so
- * sharing a code cache with the `yak` command, the servers and a test's own
- * deno children would have each recompile what the other last wrote there
- * (44 ms to 144 ms for the CLI's import). Kept apart, a runtime reads its
- * code compiled whole, which is most of what loading TypeScript or starting
- * a worker in a test took: 296 ms to 108 ms for the compiler catalog's.
+ * The runtime shares downloaded modules with the run, but keeps its own V8
+ * code cache. Its source-position flag differs from the CLI and a test's
+ * deno children: sharing their cache would have each replace code the other
+ * cannot use. The flag-specific directory also keeps earlier worktrees'
+ * eager compilation cache separate.
  */
-export let wholeDir = (shared: string = denoDir()) => {
-  let dir = `${shared.replace(/\/+$/, '')}-whole`
+export let runtimeDir = (shared: string = denoDir()) => {
+  let dir = `${shared.replace(/\/+$/, '')}-test-no-lazy-source-positions`
   Deno.mkdirSync(dir, { recursive: true })
   for (let { name } of Deno.readDirSync(shared)) {
     if (name.startsWith('v8_code_cache')) continue
@@ -125,22 +122,14 @@ export let runtime = (shared: string = denoDir()) => ({
     // and main's CI every module.
     '--no-check',
     '-A',
-    // Every function compiled as its module loads. A test runs once, so V8's
-    // lazy compilation charged each test for compiling its own body and all
-    // the code it was the first to call: a third of what a test between 0.5
-    // and 1 ms took, paid by whichever test came first. Compiled whole, the
-    // run takes as long.
-    //
-    // Source positions with it. Deno reads the source positions of the
-    // functions on the stack whenever an error is made, and V8 keeps none
-    // until asked: the first error made in or under a function had it parse
-    // that function again, 0.3 to 0.6 ms for the first refusal through the
-    // query parser, paid by whichever test refused first.
-    '--v8-flags=--no-lazy,--no-enable-lazy-source-positions',
+    // Compile functions when used, so a selected run does not compile unused
+    // Store and Builder methods. Keep their source positions when compiled:
+    // otherwise the first Error.stack reparses functions on its stack.
+    '--v8-flags=--no-enable-lazy-source-positions',
     '--preload',
     new URL('./test-runtime.ts', import.meta.url).pathname,
   ],
-  env: { DENO_DIR: wholeDir(shared), [SHARED]: shared },
+  env: { DENO_DIR: runtimeDir(shared), [SHARED]: shared },
 })
 
 // Deno prints a test's name before running it, then finishes the same line
