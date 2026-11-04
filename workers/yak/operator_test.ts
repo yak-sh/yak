@@ -211,19 +211,30 @@ test('a follow-up reopens completed work and a clarification leaves it open', ()
   assertStringIncludes(continued.text, 'Which date')
 })
 
-let rounds = 0
-answer = (req) =>
-  Promise.resolve({
-    id: crypto.randomUUID(),
-    model: req.model,
-    items: ++rounds < 14
-      ? calls('graph_query', { q: '.doc&.limit=1' })
-      : [{ kind: 'assistant', text: 'Inspected.' }],
-    cost: 0.001,
-  })
-let pastTwelve = await operator.run(f.held, f.space, {
-  say: 'Inspect the app.',
+// Model rounds and concurrent input need a scoped graph, without app storage.
+let roundsPlatform = platform('operator-rounds')
+let roundsDir = directoryOf(roundsPlatform.env.STORE)
+let roundsId = await roundsDir.mint(owner, 'rounds', 'Rounds', {
+  'x-yak-person': owner,
+  'x-yak-role': 'owner',
 })
+let roundsSpace = (await roundsDir.at(roundsId))!
+let roundsHeld = { person: owner, role: 'owner' as const, space: roundsId }
+let rounds = 0
+let pastTwelve = await operating(
+  operatorMemory(),
+  roundsPlatform.env,
+  operatorModel((req) =>
+    Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: ++rounds < 14
+        ? calls('graph_query', { q: '.doc&.limit=1' })
+        : [{ kind: 'assistant', text: 'Inspected.' }],
+      cost: 0.001,
+    })
+  ),
+).run(roundsHeld, roundsSpace, { say: 'Inspect the app.' })
 test('the space budget, rather than twelve model rounds, bounds the operator', () => {
   assertEquals(rounds, 14)
   assertEquals(pastTwelve.status, 'settled')
@@ -273,12 +284,12 @@ let given: { task: string; session: string } | undefined
 let mid: Awaited<ReturnType<typeof frameOf>> = null
 let steerer = operating(
   steered,
-  f.env,
+  roundsPlatform.env,
   operatorModel(async (req) => {
     steering.push(req)
     if (steering.length == 1) {
       mid = await frameOf(steered, given!.session)
-      await steerer.ask(f.held, f.space, {
+      await steerer.ask(roundsHeld, roundsSpace, {
         task: given!.task,
         say: 'Make it Friday instead.',
       })
@@ -294,7 +305,7 @@ let steerer = operating(
     }
   }),
 )
-given = await steerer.ask(f.held, f.space, { say: 'Post the meeting.' })
+given = await steerer.ask(roundsHeld, roundsSpace, { say: 'Post the meeting.' })
 let before = steering.length
 let { drain } = await import('./operator-store.ts')
 await drain(steered)
@@ -322,10 +333,10 @@ let halting: Request[] = []
 let begun: { task: string; session: string } | undefined
 let halter = operating(
   halted,
-  f.env,
+  roundsPlatform.env,
   operatorModel(async (req) => {
     halting.push(req)
-    if (halting.length == 1) await halter.stop(begun!.task, f.held.person)
+    if (halting.length == 1) await halter.stop(begun!.task, roundsHeld.person)
     return {
       id: crypto.randomUUID(),
       model: req.model,
@@ -336,11 +347,11 @@ let halter = operating(
     }
   }),
 )
-begun = await halter.ask(f.held, f.space, { say: 'Look at every app.' })
+begun = await halter.ask(roundsHeld, roundsSpace, { say: 'Look at every app.' })
 await drain(halted)
 let afterStop = halting.length
 let stopRead = await readOperator(halted, begun.task)
-let again = await halter.run(f.held, f.space, {
+let again = await halter.run(roundsHeld, roundsSpace, {
   task: begun.task,
   say: 'Go on.',
 })
