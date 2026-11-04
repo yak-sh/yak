@@ -13,7 +13,7 @@ import type { Host } from '@yaks/host'
 
 import { running } from '@yaks/session'
 import { lend, offering } from './agent.ts'
-import { here } from './local.ts'
+import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
 import { machines } from './session_machines.ts'
@@ -24,9 +24,11 @@ import { machines } from './session_machines.ts'
  * by default is graph data (./default.ts `defaultUsing`). */
 export let effects = (
   host: Host,
-  options: Record<string, unknown> = {},
+  options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> = {},
 ): Handlers => {
   let { lent } = here(hosted(host), {
+    env: options.env,
+    http: options.http,
     compactAt: typeof options.compactAt == 'number'
       ? options.compactAt
       : undefined,

@@ -11,7 +11,7 @@ type Generation = { client: Client; active: number; retired: boolean }
 export let pooledHttp = (options: {
   fetch?: typeof fetch
   client?: () => Client
-} = {}) => {
+} = {}): { fetch: typeof fetch; close: () => void } => {
   let go = options.fetch
   let create = options.client ?? httpClient
   let current: Generation | undefined

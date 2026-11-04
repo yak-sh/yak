@@ -19,18 +19,11 @@ let observed = await (async () => {
   let started = Promise.withResolvers<void>()
   let release = Promise.withResolvers<void>()
   let fetched = 0, closed = 0
-  let originalFetch = globalThis.fetch, originalEnv = Deno.env.get
-  let fake: typeof fetch = async (url, init) => {
+  let fake: typeof fetch = async (url) => {
     if (String(url).endsWith('/models')) {
       return Response.json({ data: [{ id: 'drain-model' }] })
     }
     fetched++
-    let client = Reflect.get(init!, 'client')
-    let close = client.close.bind(client)
-    client.close = () => {
-      closed++
-      close()
-    }
     if (fetched == 1) {
       started.resolve()
       await release.promise
@@ -52,17 +45,17 @@ let observed = await (async () => {
       ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
     )
   }
-  // here() captures these capabilities synchronously. Restore the globals
-  // before any asynchronous graph or provider work begins.
-  globalThis.fetch = fake
-  Deno.env.get = (name) =>
-    name == 'OPENAI_API_KEY' ? 'fixture-key' : originalEnv(name)
-  try {
-    host.fx.handle(effects(host))
-  } finally {
-    globalThis.fetch = originalFetch
-    Deno.env.get = originalEnv
-  }
+  host.fx.handle(effects(host, {
+    env: (name) => name == 'OPENAI_API_KEY' ? 'fixture-key' : undefined,
+    http: {
+      fetch: fake,
+      client: () => ({
+        close: () => {
+          closed++
+        },
+      }),
+    },
+  }))
   let model = identityEid('model', ['drain-model'])
   let work: Promise<void> | undefined
   let ended = false

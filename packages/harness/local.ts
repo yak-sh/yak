@@ -69,6 +69,8 @@ export type Opts = ChildLimits & NotHarness & {
   /** where settings such as `HARNESS_STREAM` are read (default this process's
    * environment) */
   env?: (name: string) => string | undefined
+  /** Transport and connection lifetime lent to the provider pool. */
+  http?: Parameters<typeof pooledHttp>[0]
   /** Cooperating migrations must allow at least this polling interval, which
    * the migration monitor keeps by `clock`. */
   migrationPollMs?: number
@@ -149,7 +151,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     credential: async () => (await credentials()).credential(),
     refresh: async (stale) => (await credentials()).refresh(stale),
   }
-  let http = pooledHttp()
+  let http = pooledHttp(opts.http)
   let images = opts.model
     ? undefined
     : configuredImages(h.artifacts, opts.images)
