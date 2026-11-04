@@ -1,4 +1,5 @@
 import { test, until } from '@yaks/testing'
+import type { ChildProcess } from '@yaks/process/command'
 import {
   assertEquals,
   assertMatch,
@@ -376,7 +377,7 @@ test('tail follows the local Wrangler stream without polling MCP', async () => {
           child: {
             stdout,
             status: Promise.resolve(status),
-          } as Deno.ChildProcess,
+          } as ChildProcess,
           stopped: () => false,
           stop: () => {
             stopped = true

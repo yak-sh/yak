@@ -7,6 +7,7 @@
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
 import { clock, test } from '@yaks/testing'
+import type { CommandOutput } from '@yaks/process/command'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -315,7 +316,7 @@ let read = (path: string) =>
 let modelOutput = (
   deployments: unknown,
   success = true,
-): Deno.CommandOutput => ({
+): CommandOutput => ({
   success,
   code: success ? 0 : 1,
   signal: null,
@@ -1204,7 +1205,7 @@ test('each sibling prepares beside the kernel and uploads as soon as its own pre
 let checkSiblingPreparation = async () => {
   let root = Deno.makeTempDirSync()
   let encoder = new TextEncoder()
-  let result = (stdout = '', code = 0): Deno.CommandOutput => ({
+  let result = (stdout = '', code = 0): CommandOutput => ({
     success: code == 0,
     code,
     signal: null,
@@ -1230,7 +1231,7 @@ let checkSiblingPreparation = async () => {
       'outbound/wrangler.toml',
     ]
     let live = '[]', digest = '', called = false
-    let version: Deno.CommandOutput | Error | undefined
+    let version: CommandOutput | Error | undefined
     let versionReads = 0
     let query = (argv: string[]) => {
       if (argv.includes('--dry-run')) {
@@ -1437,7 +1438,7 @@ let checkSiblingPreparation = async () => {
       prepared.remove()
     }
     let failure = Error('bundle read failed')
-    let finish = Promise.withResolvers<Deno.CommandOutput>()
+    let finish = Promise.withResolvers<CommandOutput>()
     let reading = Promise.withResolvers<void>()
     let output = ''
     let failed = prepareSibling(args, [], root, (argv) => {

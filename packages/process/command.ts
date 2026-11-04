@@ -50,7 +50,11 @@ let stdio = (value: 'piped' | 'inherit' | 'null') =>
   value == 'piped' ? 'pipe' : value == 'null' ? 'ignore' : value
 let options = (o: CommandOptions, collect = false) => ({
   cwd: o.cwd == null ? undefined : path(o.cwd),
-  env: { ...o.clearEnv ? {} : process.env, ...o.env },
+  env: o.clearEnv
+    ? { ...o.env }
+    : o.env
+    ? { ...process.env, ...o.env }
+    : undefined,
   stdio: [
     stdio(o.stdin ?? 'null'),
     stdio(o.stdout ?? (collect ? 'piped' : 'inherit')),

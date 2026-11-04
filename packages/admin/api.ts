@@ -561,7 +561,7 @@ export let storeApply = (
 export let storeUpload = (
   session: string,
   at: string,
-  bytes: Uint8Array<ArrayBuffer>,
+  bytes: Uint8Array,
   mime: string,
   name: string,
 ): Promise<{ eid: string; url: string; mime: string; bytes: number }> =>
@@ -571,7 +571,7 @@ export let storeUpload = (
       'content-type': mime,
       'x-yak-name': encodeURIComponent(name),
     },
-    body: bytes,
+    body: new Uint8Array(bytes),
   }))
 
 // Keep an OAuth client in the platform store, sealed (@yaks/connections

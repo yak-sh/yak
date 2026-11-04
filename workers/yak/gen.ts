@@ -41,7 +41,7 @@ let PLUGIN = new URL('../../plugins/yaks.app/', HERE)
 
 let refuse = (why: string): never => {
   console.error(why)
-  system.exit(1)
+  return system.exit(1)
 }
 
 // Every file of a kind, by name, so the emitted module is stable whatever

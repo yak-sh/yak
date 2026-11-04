@@ -215,7 +215,7 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
-  host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping'>,
+  host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping' | 'fetch'>,
 ): Runs => {
   let acting = (a: Args) => account(host)(word(a, 'as'))
   // Infrastructure uses the box's Cloudflare/GitHub logins. Only the platform
@@ -481,7 +481,7 @@ export let runs = (
       let report = await errors(
         word(argsOf(call), 'since'),
         await tracker(host.config, vault),
-        { graph, resolved: argsOf(call).resolved === true },
+        { fetch: host.fetch, graph, resolved: argsOf(call).resolved === true },
       )
       return [said(call, report)]
     }),
