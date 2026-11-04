@@ -103,8 +103,23 @@ let load = async (stash: Stash, cut = false) => {
     'setTimeout',
     'clearTimeout',
     'FormData',
+    'WebSocket',
     source,
-  )(opened, document, fetch, { reload() {} }, after, clearTimeout, FormOf)
+  )(
+    opened,
+    document,
+    fetch,
+    { reload() {}, origin: 'https://yaks.app' },
+    after,
+    clearTimeout,
+    FormOf,
+    // A socket that never opens: the page polls, as with none.
+    class {
+      onopen?: () => void
+      onmessage?: () => void
+      onclose?: () => void
+    },
+  )
   let say = document.querySelector('[name=say]') as HTMLTextAreaElement
   return {
     say,
