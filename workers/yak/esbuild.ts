@@ -66,6 +66,18 @@ type Cache = {
   served?: string
 }
 
+/** Each compiled page entry's source paths from the last saved plan, or
+ * null where this state has no compile plan. */
+export let pageInputs = async (
+  read: (path: string) => Promise<Uint8Array | null>,
+): Promise<Plan['inputs']['pages'] | null> => {
+  let bytes = await read(CACHE)
+  return bytes
+    ? (JSON.parse(decode(bytes)) as Cache)
+      .plan?.inputs.pages ?? null
+    : null
+}
+
 /** What the compile step hands the rest of the release. */
 export type Compiled = {
   /** The compiled worker, when the server source needed compiling: the app's

@@ -38,7 +38,7 @@ import {
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { report } from './accessibility.ts'
-import { compiled } from './esbuild.ts'
+import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
 import { baseOf, fileBytes, inside, prefixOf } from './files.ts'
 import { spaceHost } from './host.ts'
@@ -66,6 +66,7 @@ import { addressed, BUILT, type Files, sha256 } from './versions.ts'
 import {
   AGE,
   type Draft,
+  type Drafted,
   drafting,
   followed,
   newest,
@@ -385,11 +386,64 @@ let following = async (
   return previewing(app, link, source, mount, (await state).worker)
 }
 
+// The last plan a page could have loaded. Writes can arrive before a page
+// asks for their state, so walk past those unbuilt states to the last built
+// one. Undoing the draft's writes ends at the serving release's source files.
+let reached = async (
+  env: Env,
+  space: Space,
+  app: App,
+  news: Drafted,
+  before?: Draft,
+): Promise<Drafted> => {
+  if (!before) return news
+  let raw = r2RawObjects(env.BLOBS)
+  let files = { ...before.files }
+  let rows = newest(before.rows)
+  while (true) {
+    let source = stateOf(space, app, news.link, files)
+    let index = await filesIn(raw, source)
+    let pages = index &&
+      await pageInputs((path) =>
+        index[path] ? raw.read(addressed(index[path])) : Promise.resolve(null)
+      )
+    if (index && !pages) return news
+    if (!index && !rows.length && app.source) {
+      pages = await pageInputs((path) =>
+        before.view.read(`${app.source}/${path}`)
+      )
+    }
+    if (pages) {
+      return {
+        ...news,
+        files: news.files.map((file) => {
+          let entries = Object.entries(pages).filter(([, paths]) =>
+            paths.includes(file.path)
+          ).map(([entry]) => entry)
+          return entries.length ? { ...file, entries } : file
+        }),
+      }
+    }
+    if (!rows.length) return news
+    let at = rows[0].at
+    while (rows.length && rows[0].at == at) {
+      let row = rows.shift()!
+      if (row.was) files[row.path] = row.was
+      else delete files[row.path]
+    }
+  }
+}
+
 /** Each write to an app's draft, and each release, told to the pages of the
  * app's preview link the way a release is told to the app's (graph.ts
  * `/drafted`). A link nobody opened has no pages to hear it. */
 export let watching =
-  (env: Env, space: Space, app: App): Tell => async (news) => {
+  (env: Env, space: Space, app: App): Tell => async (news, before) => {
+    try {
+      news = await reached(env, space, app, news, before)
+    } catch (e) {
+      caught(e, { request: 'draft entries', space: space.slug, app: app.slug })
+    }
     try {
       await appStore(
         env.STORE,

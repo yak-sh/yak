@@ -89,7 +89,7 @@ let load = (
   new Function('world', `with (world) { ${code} }`)(world)
   let socket = Socket.made[0]
   let wrote = (
-    files: { path: string; sha: string | null }[],
+    files: { path: string; sha: string | null; entries?: string[] }[],
     to = 'D',
     draft: string | null = 'W',
   ) =>
@@ -200,4 +200,20 @@ test('a socket that drops comes back and reloads the page, since it may have mis
 
 test('a released page opens no socket of its own and never follows a draft', () => {
   equal(load('', { draft: '' }).sockets(), 0)
+})
+
+test('a dependency write tells a page the served addresses of every compiled entry it reaches', () => {
+  let p = load('', { cancel: true })
+  p.wrote([{
+    path: 'parts/title.ts',
+    sha: 'abc',
+    entries: ['views.ts', 'about/main.ts'],
+  }])
+  equal((p.events[0].detail as { files: unknown }).files, [{
+    path: 'parts/title.ts',
+    sha: 'abc',
+    url: `${AT}parts/title.ts`,
+    entries: [`${AT}views.ts`, `${AT}about/main.ts`],
+  }])
+  equal(p.reloads(), 0)
 })

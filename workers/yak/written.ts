@@ -156,13 +156,14 @@ export type Drafted = {
   app: string
   link: string
   draft: string | null
-  files: { path: string; sha: string | null }[]
+  files: { path: string; sha: string | null; entries?: string[] }[]
   at: string
 }
 
 /** Where a draft's writes are told: its preview link's pages (preview.ts
- * `watching`). Never refuses: the write has already landed. */
-export type Tell = (news: Drafted) => Promise<void>
+ * `watching`), with the draft before the write so the notice can name the
+ * page entries it reaches. Never refuses: the write has already landed. */
+export type Tell = (news: Drafted, before?: Draft) => Promise<void>
 
 /** The app with its preview link (`app.followed`, preview.ts), minted the
  * first time one is asked for. The link outlives every deploy: it follows
@@ -315,7 +316,7 @@ export let modifying = async <T>(
           draft: id,
           files: todo.map((c) => ({ path: c.path, sha: c.sha ?? null })),
           at,
-        })
+        }, draft)
       }
       return { value, wrote: todo.map((c) => c.path), already }
     } catch (e) {

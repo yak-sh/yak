@@ -71,26 +71,29 @@ shows there as it lands, without calling `app_preview` again:
   on following the next draft's writes.
 
 Before either, the page receives a cancelable **`yak-draft` event on `window`**.
-Its `detail` is `{app, link, draft, files: [{path, sha, url}], at}`, where `url`
-is the address the file serves at and `sha` is null for a deleted file. A deploy
-arrives with `draft` null and no files. Call `event.preventDefault()`
-synchronously to take the write yourself, for example by fetching the one module
-that changed. A page that took the write and then cannot use it calls
-`event.reload()`, the reload it would have had, keeping its scroll and typed
-fields. This happens only on the preview URL; released pages keep the reload
-notice below.
+Its `detail` is `{app, link, draft, files: [{path, sha, url, entries?}], at}`,
+where `url` is the address the file serves at and `sha` is null for a deleted
+file. When a saved compile plan names the file, `entries` lists the URLs of the
+compiled page entries that import it. A deploy arrives with `draft` null and no
+files. Call `event.preventDefault()` synchronously to take the write yourself,
+for example by fetching the one module that changed. A page that took the write
+and then cannot use it calls `event.reload()`, the reload it would have had,
+keeping its scroll and typed fields. This happens only on the preview URL;
+released pages keep the reload notice below.
 
 An app on the `@yaks/` packages takes a write of its views in place, with no
 reload. Put the page's renderers in a views module that exports `views`, a
 `@yaks/render` registry; load it from `index.html` with its own
 `<script type="module" src="views.ts"></script>`; and draw the page with `host`
 from `@yaks/preact/host` (`"@yaks/preact": "platform"` in `package.json`),
-giving it the root element, the views module's address and the page's client.
-When a write names only the views module, the page imports the new module and
-draws it in the same place: the client, its socket and the page graph stay open,
-and scroll, focus and everything in the page graph are kept. A module that fails
-to import or to draw keeps the old views and reloads. A write of any other file,
-`vocab.json` included, reloads as above. The
+giving it the root element, the views module's address and the page's client
+through the `client` option. A write of the views module, or a dependency whose
+`entries` name only that module, imports the updated module and draws it in the
+same place: the client, its socket and the page graph stay open, and scroll,
+focus and everything in the page graph are kept. A `vocab.json` write that only
+adds components fetches `api/vocab.json` and extends the client's vocabulary in
+place. A changed component shape, a dependency shared with another page entry,
+or a module that fails to import or draw reloads the page as above. The
 [@yaks/preact README](https://jsr.io/@yaks/preact) has the details.
 
 Calls a draft worker makes to external services still reach those services; the

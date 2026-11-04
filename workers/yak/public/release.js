@@ -108,6 +108,11 @@
       let files = news.files.map((file) => ({
         ...file,
         url: String(new URL(file.path, at)),
+        ...(file.entries
+          ? {
+            entries: file.entries.map((entry) => String(new URL(entry, at))),
+          }
+          : {}),
       }))
       let event = new CustomEvent('yak-draft', {
         detail: { ...news, files },
