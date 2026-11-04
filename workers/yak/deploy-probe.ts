@@ -2,10 +2,12 @@
 // about vocabulary or saved rows use directory-probe's app Stores instead.
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
+import { operators } from './operator-service-probe.ts'
 import { platform as runtime } from './directory-probe.ts'
 
 export let platform = (secret: string, vars: Partial<Env> = {}) =>
   runtime(secret, {
+    BUILDER: operators,
     STORE: {
       idFromName: (name) => name,
       get: () => ({
@@ -14,6 +16,10 @@ export let platform = (secret: string, vars: Partial<Env> = {}) =>
           if (path == '/' && req.method == 'DELETE') {
             assertEquals(req.headers.get('x-yak-kernel'), '1')
             return Response.json({ ok: true })
+          }
+          if (path == '/query') {
+            assertEquals(req.method, 'GET')
+            return Response.json([])
           }
           if (path == '/released') {
             assertEquals(req.method, 'POST')

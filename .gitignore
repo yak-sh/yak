@@ -9,6 +9,7 @@
 # on demand (workers/yak/wrangler.ts); the .lock is that install's mutex.
 node_modules
 node_modules.lock/
+node_modules.lock.*/
 
 # check:types' TypeScript project (bin/check-types.ts): links into Deno's
 # caches and each run's tsconfig.

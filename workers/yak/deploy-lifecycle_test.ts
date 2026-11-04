@@ -162,50 +162,10 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 
 // Capture every intermediate update before later releases move its pointer.
 let crossed = await (async () => {
-  await using scenario = directoryPlatform('reload-secret')
+  await using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
-  // The source accepted this vocabulary before the platform reserved cost.
-  // Seed its stored declaration; every release below keeps its own bytes.
-  let words = JSON.stringify({
-    $defs: { cost: { properties: { euros: { type: 'number' } } } },
-  })
-  let home = (await f.dir.space('ada'))!
-  let original = (await f.dir.app(home, 'recipes'))!
-  let name = storeName(home, original)
-  scenario.object(name)
-  keep(scenario.states.get(name)!, 'vocab', words)
-  let blobs = r2Objects(scenario.env.BLOBS)
-  let files: Record<string, string> = {}
-  for (
-    let [path, text] of Object.entries({
-      'index.html': '<h1>1</h1>',
-      'vocab.json': words,
-    })
-  ) {
-    let bytes = new TextEncoder().encode(text)
-    files[path] = await sha256(bytes)
-    await pins(blobs).put(files[path], bytes)
-    await blobs.put(`ada/recipes/${path}`, bytes)
-  }
-  await f.dir.apply({
-    entities: [
-      { entity: { eid: original.eid }, app: { version: 1 } },
-      {
-        entity: { eid: crypto.randomUUID() },
-        deploy: {
-          app: original.eid,
-          version: 1,
-          files: JSON.stringify(files),
-          worker: '',
-          reload: 'required',
-        },
-      },
-    ],
-  })
-  await declared(scenario.env, home, (await f.dir.app(home, 'recipes'))!, {
-    vocab: JSON.parse(words),
-    tools: {},
-  })
+  await f.write('1')
+  await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
   let deploy = async (n: number, reload?: string) => {
     await f.write(String(n))
     await call(f.ctx, 'app_deploy', { ...f.args, ...reload ? { reload } : {} })
@@ -264,6 +224,79 @@ let crossed = await (async () => {
   await remove()
   await update()
   let unmarked = (await installed())[0].reload
+  return { optional, required, unmarked }
+})()
+
+test('updates carry every crossed required source mark but exclude the installed and later releases', () => {
+  assertEquals(crossed.optional, null)
+  assertEquals(crossed.required, 'required')
+  assertEquals(crossed.unmarked, null)
+})
+
+let restored = await (async () => {
+  await using scenario = directoryPlatform('restore-words')
+  let f = await fixture(scenario.env)
+  // The source accepted this vocabulary before the platform reserved cost.
+  // Seed its stored declaration; every release below keeps its own bytes.
+  let words = JSON.stringify({
+    $defs: { cost: { properties: { euros: { type: 'number' } } } },
+  })
+  let home = (await f.dir.space('ada'))!
+  let original = (await f.dir.app(home, 'recipes'))!
+  let name = storeName(home, original)
+  scenario.object(name)
+  keep(scenario.states.get(name)!, 'vocab', words)
+  let blobs = r2Objects(scenario.env.BLOBS)
+  let files: Record<string, string> = {}
+  for (
+    let [path, text] of Object.entries({
+      'index.html': '<h1>1</h1>',
+      'vocab.json': words,
+    })
+  ) {
+    let bytes = new TextEncoder().encode(text)
+    files[path] = await sha256(bytes)
+    await pins(blobs).put(files[path], bytes)
+    await blobs.put(`ada/recipes/${path}`, bytes)
+  }
+  await f.dir.apply({
+    entities: [
+      { entity: { eid: original.eid }, app: { version: 1 } },
+      {
+        entity: { eid: crypto.randomUUID() },
+        deploy: {
+          app: original.eid,
+          version: 1,
+          files: JSON.stringify(files),
+          worker: '',
+          reload: 'required',
+        },
+      },
+    ],
+  })
+  await declared(scenario.env, home, (await f.dir.app(home, 'recipes'))!, {
+    vocab: JSON.parse(words),
+    tools: {},
+  })
+  await call(f.ctx, 'app_publish', {
+    ...f.args,
+    name: 'restore-recipes',
+    about: 'Recipes',
+  })
+  await owned(f.ctx, 'bo', 'Bo')
+  await call(f.ctx, 'app_install', { space: 'bo', name: 'restore-recipes' })
+  let space = (await f.dir.space('bo'))!
+  let installed = async () =>
+    f.dir.deploys((await f.dir.app(space, 'recipes'))!)
+  let copy = { space: 'bo', app: 'recipes' }
+  let remove = async () => {
+    await call(f.ctx, 'app_files', {
+      ...copy,
+      path: 'vocab.json',
+      content: '{}',
+    })
+    await call(f.ctx, 'app_deploy', copy)
+  }
   // Removing an empty word and restoring the kept release must admit that
   // release's declaration again, without changing any version or file.
   let before = await installed()
@@ -291,33 +324,20 @@ let crossed = await (async () => {
   let write = { status: wrote.status, body: await wrote.text() }
   let read = await store('/query?q=.cost.euros=12', {}, by)
   let cost = (await read.json())[0].cost
-  return {
-    optional,
-    required,
-    unmarked,
-    before,
-    after,
-    restoredWords,
-    words,
-    write,
-    cost,
-  }
+  return { before, after, restoredWords, words, write, cost }
 })()
 
-test('updates carry every crossed required source mark but exclude the installed and later releases', () => {
-  assertEquals(crossed.optional, null)
-  assertEquals(crossed.required, 'required')
-  assertEquals(crossed.unmarked, null)
-  assertEquals(crossed.after, crossed.before)
-  assertEquals(crossed.restoredWords, crossed.words)
-  assertEquals(crossed.write.status, 200, crossed.write.body)
-  assertEquals(crossed.cost, { euros: 12 })
+test('rollback admits a kept declaration again without changing its version or files', () => {
+  assertEquals(restored.after, restored.before)
+  assertEquals(restored.restoredWords, restored.words)
+  assertEquals(restored.write.status, 200, restored.write.body)
+  assertEquals(restored.cost, { euros: 12 })
 })
 
 // Each module load owns its two kept releases. Only pointer changes, reports
 // and the next release belong to the rollback case's measured work.
 let rollback = await (async () => {
-  let scenario = directoryPlatform('rollback-secret')
+  let scenario = platform('rollback-secret')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
@@ -425,7 +445,7 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
 })
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
-  await using scenario = directoryPlatform('rollback-errors')
+  await using scenario = platform('rollback-errors')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)

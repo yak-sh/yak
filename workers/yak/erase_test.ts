@@ -33,7 +33,8 @@ import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, declared, sandboxes } from './testing.ts'
-import { platform } from './directory-probe.ts'
+import { platform as directoryPlatform } from './directory-probe.ts'
+import { platform } from './deploy-probe.ts'
 import { named, spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -416,7 +417,7 @@ let wire = () => {
 // the code.
 test('a deleted space takes its conversation and its workbench', async () => {
   let box = sandboxes()
-  let { env, builder } = platform('a probe secret', {
+  let { env, builder } = directoryPlatform('a probe secret', {
     AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
     SANDBOX: box.SANDBOX as Env['SANDBOX'],
   })
