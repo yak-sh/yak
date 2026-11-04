@@ -75,7 +75,6 @@
         "check:bytes",
         "check:types:all",
         "check:raycast",
-        "check:publish",
         "check:browser",
         "check:content"
       ]

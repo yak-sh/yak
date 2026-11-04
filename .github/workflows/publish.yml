@@ -1,10 +1,8 @@
 # Publish the @yaks/* family to JSR.
 #
-# Two triggers, and only one of them publishes:
-#
-#   push to main   `deno publish --dry-run` over every workspace package, so a
-#                  package that would be refused at release time is refused now
-#   tag v*         the publish itself, from the tag bin/release.ts cut
+# A tag v* publishes the release bin/release.ts cut. Main's CI already
+# validates publication through `deno task check:types --all`, including the
+# package-local Deno settings and public types, after each push.
 #
 # No token. JSR takes GitHub's OIDC identity (`id-token: write`) and trusts it
 # because the package is LINKED to this repository on jsr.io — which is the
@@ -20,7 +18,6 @@ name: publish
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
 
 concurrency:
@@ -28,22 +25,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Every package, checked the way JSR will check it, after the push. Slow
-  # types and missing exports report through CI without holding a landing.
-  dry-run:
-    if: startsWith(github.ref, 'refs/tags/v') == false
-    runs-on: [self-hosted, yak]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      # One command for the whole workspace: deno walks `workspace` in the root
-      # deno.json, simulates every member that is a package, and skips the one
-      # that is npm-only (workers/yak). It fails if ANY member would be
-      # refused. `--allow-dirty` because a dry run publishes nothing, and a
-      # stray file on the runner must not turn this red.
-      - name: deno publish --dry-run
-        run: deno task check:publish
-
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: [self-hosted, yak]
