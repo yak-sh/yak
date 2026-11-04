@@ -128,34 +128,6 @@
     justify-content: center;
     margin: 0 0 1.25rem;
   }
-  /* A card whose dashed line is a place to drop a file. */
-  .Drop_Zone {
-    --pencil: var(--edge);
-    --pencil-style: dashed;
-    display: grid;
-    place-items: center;
-    gap: .5rem;
-    padding: 1.25rem 1rem;
-    background: var(--ground);
-    text-align: center;
-    cursor: pointer;
-  }
-  .Drop_Zone-over {
-    --pencil: var(--accent);
-    background: var(--paper);
-  }
-  .Drop_File {
-    min-width: 0;
-    max-width: 100%;
-    border: 0;
-    padding: 0;
-    background: none;
-    cursor: pointer;
-  }
-  .Drop_Say {
-    color: var(--soft-ink);
-    font-size: var(--fine);
-  }
   .Files {
     display: grid;
     gap: .3rem;

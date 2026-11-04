@@ -5,6 +5,7 @@ import { builderOf, SPACE } from './build.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
 import { esc } from './pages.ts'
+import { fileDrop } from './html.ts'
 import { managePath } from './route.ts'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
 import { mailFrom } from './post.ts'
@@ -249,7 +250,9 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
 <input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="">
 <p data-continuing hidden>Continuing a request. <button type="button" class="Button Button-quiet" data-new>Start a new request</button></p>
 <label class="Form_Field">What would you like done?<textarea class="Field" name="say"></textarea></label>
-<label class="Form_Field">Documents or photos<input class="Field" type="file" name="file" multiple></label>
+<div class="Form_Field"><span class="Form_Label">Documents or photos</span>${
+    fileDrop({ name: 'file', label: 'Documents or photos', multiple: true })
+  }</div>
 <button class="Button" type="submit">Send</button><p role="status" data-send-status></p></form>
 ${textsCard(at, consent)}
 <script type="module">
@@ -325,7 +328,7 @@ form.addEventListener('submit', async (e) => {
     submission = new FormData(form)
     let saved = await drafts.spend('operator', [{ entity: { eid: form.elements.request.value } }])
     if (!saved) throw new Error('Your request could not be confirmed. Your words are kept; try sending again.')
-    form.elements.file.value = ''; form.elements.request.value = crypto.randomUUID()
+    form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = 'Your request is saved.'
     await read(); poll()
   } catch (error) { status.textContent = error.message }

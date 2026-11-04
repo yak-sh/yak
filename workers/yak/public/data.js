@@ -393,8 +393,10 @@ export let open = ({ root, client, words, view, files }) => {
       changed()
       return show(sha)
     }
+    // The drop zone (controls.css `.Drop`, public/drop.js); what is kept
+    // shows above it, so it lists nothing chosen of its own.
     let pick = h('input', {
-      class: 'Field',
+      class: 'Drop_File',
       id,
       type: 'file',
       accept: accepts,
@@ -413,8 +415,23 @@ export let open = ({ root, client, words, view, files }) => {
         }
       },
     })
+    let zone = h(
+      'div',
+      { class: 'Drop' },
+      h(
+        'label',
+        { class: 'Drop_Zone' },
+        pick,
+        h(
+          'span',
+          { class: 'Drop_Say' },
+          h('span', { class: 'Drop_Choose' }, 'Choose a file'),
+          ' or drop it here',
+        ),
+      ),
+    )
     void show(value).catch(failed)
-    return [hold, shown, writes ? pick : null, said]
+    return [hold, shown, writes ? zone : null, said]
   }
 
   let controlOf = async (f, id, value, writes, changed) => {

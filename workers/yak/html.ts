@@ -26,3 +26,23 @@ export let day = (iso: string, month: 'long' | 'short' = 'long') => {
   let at = new Date(iso)
   return Number.isNaN(at.getTime()) ? '' : days[month].format(at)
 }
+
+// A file input as a drop zone (controls.css `.Drop`, public/drop.js): the
+// form's own input inside a place to press or drop on, and the list of what
+// is chosen under it. `label` names the input; `hint` says what it takes.
+export let fileDrop = (o: {
+  name: string
+  label: string
+  hint?: string
+  multiple?: boolean
+  required?: boolean
+}) =>
+  `<div class="Drop"><label class="Drop_Zone"><input class="Drop_File" type="file" name="${
+    esc(o.name)
+  }" aria-label="${esc(o.label)}"${o.multiple ? ' multiple' : ''}${
+    o.required ? ' required' : ''
+  }><span class="Drop_Say"><span class="Drop_Choose">Choose ${
+    o.multiple ? 'files' : 'a file'
+  }</span> or drop ${o.multiple ? 'them' : 'it'} here</span>${
+    o.hint ? `<span class="Drop_Hint">${esc(o.hint)}</span>` : ''
+  }</label><ul class="Drop_Chosen" aria-live="polite"></ul></div>`

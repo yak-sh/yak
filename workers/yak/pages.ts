@@ -22,7 +22,7 @@ import type {
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
-import { day, esc } from './html.ts'
+import { day, esc, fileDrop } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
@@ -121,7 +121,7 @@ ${links(env, 'pages.css')}
       inner.includes('data-chart')
         ? `<script src="${url(env, '/chart.js')}" defer></script>`
         : ''
-    }</body>
+    }<script src="${url(env, '/drop.js')}" defer></script></body>
 </html>`,
     {
       status,
@@ -201,23 +201,27 @@ exactly as they were.</p>${home(env)}`,
   )
 
 // Deploying by dropping a file (T-34230): the one door on this platform that
-// makes an app with no assistant in the room. A file input, which a file can
-// also be dragged onto, and the name the app lives at — one plain form that
-// POSTs to `/deploy` (drop.ts) and needs no script at all. The script below
-// only fills the name in from the file's own and lets a drag land on the
-// label; nothing it does is required for the form to work.
+// makes an app with no assistant in the room. A drop zone (html.ts
+// `fileDrop`) and the name the app lives at — one plain form that POSTs to
+// `/deploy` (drop.ts) and needs no script at all. The script below only fills
+// the name in from the file's own; nothing it does is required for the form
+// to work.
 //
 // `slug` given is an app's own page, where the name is not a question: the
 // drop goes to that app and nowhere else. `to` is the space's door, whole,
 // on a page that is not at the space's own address (the dashboard's).
 let dropZone = (slug?: string, to = '/deploy') =>
-  `<form class="Drop" method="post" action="${
+  `<form class="Deploy" method="post" action="${
     esc(to)
   }" enctype="multipart/form-data">
-<label class="Card Drop_Zone">
-<input class="Drop_File" type="file" name="file" required aria-label="Website files">
-<span class="Drop_Say">A .zip of your website files, or a single index.html</span>
-</label>
+${
+    fileDrop({
+      name: 'file',
+      label: 'Website files',
+      hint: 'A .zip of your website files, or a single index.html',
+      required: true,
+    })
+  }
 ${
     slug
       ? held('slug', slug)
@@ -230,43 +234,24 @@ ${
   }</button>
 </form>`
 
-// Constant text, no interpolation, and every write to the page is textContent
-// or a class — the page never speaks HTML on a person's behalf (`inline`
-// below takes the same line).
+// Constant text, no interpolation, and every write to the page is a field's
+// value — the page never speaks HTML on a person's behalf (`inline` below
+// takes the same line). A drop says `change` too (public/drop.js).
 let dropping = `<script>
-let drop = document.querySelector('.Drop')
-if (drop) {
-  let file = drop.querySelector('input[type=file]')
-  let zone = drop.querySelector('.Drop_Zone')
-  let say = drop.querySelector('.Drop_Say')
-  let slug = drop.querySelector('input[name=slug]')
+let deploy = document.querySelector('.Deploy')
+if (deploy) {
+  let file = deploy.querySelector('input[type=file]')
+  let slug = deploy.querySelector('input[name=slug]')
   // What to call it, from what the file is called: recipes.zip -> recipes.
   // Never over a name already typed, and never off a bare index.html, whose
   // stem says nothing about the app.
-  let named = (f) => {
-    say.textContent = f.name
-    if (!slug || slug.value) return
+  file.addEventListener('change', () => {
+    let f = file.files[0]
+    if (!f || !slug || slug.value) return
     let stem = f.name.replace(/\\.[a-z0-9]+$/i, '').toLowerCase()
     if (stem == 'index') return
     slug.value = stem.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
       .slice(0, 63)
-  }
-  file.addEventListener('change', () => {
-    if (file.files[0]) named(file.files[0])
-  })
-  zone.addEventListener('dragover', (e) => {
-    e.preventDefault()
-    zone.classList.add('Drop_Zone-over')
-  })
-  zone.addEventListener('dragleave', () => {
-    zone.classList.remove('Drop_Zone-over')
-  })
-  zone.addEventListener('drop', (e) => {
-    e.preventDefault()
-    zone.classList.remove('Drop_Zone-over')
-    if (!e.dataTransfer.files.length) return
-    file.files = e.dataTransfer.files
-    named(e.dataTransfer.files[0])
   })
 }
 </script>`

@@ -946,6 +946,51 @@
         </div>
 
         <div class="Card Guide_Demo">
+          <p class="Guide_Name">
+            .Drop · .Drop_Zone · .Drop_File · .Drop_Say · .Drop_Choose ·
+            .Drop_Hint · .Drop_Chosen · .Drop_Item · .Drop_Picture ·
+            .Drop_Name · .Drop_Size · .Drop_Zone-over
+          </p>
+          <form class="Form" onsubmit="return false">
+            <div class="Form_Field">
+              <span class="Form_Label">Documents or photos</span>
+              <div class="Drop">
+                <label class="Drop_Zone"><input class="Drop_File"
+                    type="file" name="file" aria-label="Documents or photos"
+                    multiple /><span class="Drop_Say"><span
+                      class="Drop_Choose">Choose files</span> or drop them
+                    here</span><span class="Drop_Hint">PDFs and
+                    photos</span></label>
+                <ul class="Drop_Chosen" aria-live="polite">
+                  <li
+                    class="Drop_Item"><span class="Drop_Name">lease.pdf</span><span
+                      class="Drop_Size">412 KB</span><button
+                      class="Button Button-quiet" type="button">Remove</button></li>
+                  <li class="Drop_Item"><img class="Drop_Picture"
+                      src="yak.png" alt="" /><span
+                      class="Drop_Name">yak.png</span><span
+                      class="Drop_Size">38 KB</span><button
+                      class="Button Button-quiet" type="button">Remove</button></li>
+                </ul>
+              </div>
+            </div>
+            <div class="Drop">
+              <label class="Drop_Zone Drop_Zone-over"><input
+                  class="Drop_File" type="file"
+                  aria-label="Website files" /><span class="Drop_Say"><span
+                    class="Drop_Choose">Choose a file</span> or drop it
+                  here</span></label>
+            </div>
+          </form>
+          <p class="Note Note-small">
+            Every file input is a drop zone. Press it, or Enter or Space on
+            it, to choose; on a phone that opens the phone's picker. Files
+            dragged over light it. What is chosen lists under it with its
+            size, a picture where it is one, and Remove.
+          </p>
+        </div>
+
+        <div class="Card Guide_Demo">
           <p class="Guide_Name">.Group</p>
           <h3 class="Group">yourname.yaks.app</h3>
           <div class="Card">
@@ -1197,5 +1242,6 @@
     choose()
     </script>
     <script src="chart.js" defer></script>
+    <script src="drop.js" defer></script>
   </body>
 </html>
