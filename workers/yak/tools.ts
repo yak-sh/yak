@@ -108,7 +108,8 @@ import {
 import * as dirPart from './directory.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
-import { tools as previewTools, watching } from './preview.ts'
+import { watching } from './preview.ts'
+import { tools as previewTools } from './preview-tools.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {

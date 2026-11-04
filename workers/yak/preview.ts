@@ -49,18 +49,7 @@ import { filesIn, staged } from './release.ts'
 import { loaded, pinned, seedy } from './seed.ts'
 import { vouched, type Who } from './session.ts'
 import { clock, headed } from './timing.ts'
-import {
-  APP,
-  type Args,
-  type Ctx,
-  inApp,
-  refuse,
-  rejected,
-  type Row,
-  SPACE,
-  str,
-  worded,
-} from './tool.ts'
+import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
 import { addressed, BUILT, type Files, sha256 } from './versions.ts'
 import {
@@ -463,7 +452,7 @@ export let watching =
     }
   }
 
-let preview = async (ctx: Ctx, args: Args) => {
+export let preview = async (ctx: Ctx, args: Args) => {
   let view = viewport(args)
   let path = page(args.path)
   if (args.screenshot != null && typeof args.screenshot != 'boolean') {
@@ -537,51 +526,6 @@ let preview = async (ctx: Ctx, args: Args) => {
     images: [{ data: image, mime_type: 'image/png' }],
   }
 }
-
-export let tools = [worded(
-  {
-    name: 'app_preview',
-    destructive: false,
-    openWorld: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        path: str(
-          'page relative to the app root, e.g. about/; defaults to the front page',
-        ),
-        width: {
-          type: 'integer',
-          minimum: 240,
-          maximum: 2560,
-          description:
-            'viewport CSS pixels; 390 for a phone, 1280 for a desktop (default)',
-        },
-        height: {
-          type: 'integer',
-          minimum: 240,
-          maximum: 2560,
-          description: 'viewport CSS pixels; default 900',
-        },
-        wait: {
-          type: 'integer',
-          minimum: 0,
-          maximum: 3000,
-          description:
-            'milliseconds to capture logs and render after DOMContentLoaded; default 1000',
-        },
-        screenshot: {
-          type: 'boolean',
-          description:
-            'default true; false returns the private preview address without running a browser',
-        },
-      },
-      required: ['app'],
-    },
-    run: preview,
-  } satisfies Row,
-)]
 
 let target = async (req: Request, env: Env) => {
   let url = new URL(req.url)
