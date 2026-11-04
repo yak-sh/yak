@@ -183,9 +183,9 @@ reads the file a few MiB at a time, so it works on a file larger than memory.
 
 ### me()
 
-Returns `{person, name, role, reads, writes, signIn, invited}` to any caller,
-including a signed-out visitor at a `private` app, so a page can always ask what
-the visitor may do. The fields are described below.
+Returns `{person, name, role, reads, writes, signIn, invited, visit}` to any
+caller, including a signed-out visitor at a `private` app, so a page can always
+ask what the visitor may do. The fields are described below.
 
 ### outbox
 
@@ -491,6 +491,12 @@ What `me()` returns:
 - `invited`: `true` when they are signed in, may not write here yet, and the
   owner has invited them (`member_add`). The remaining step is the accept link
   in the email yaks.app sent them, which no page can follow for them.
+- `visit`: `null`, unless they are a stranger at a `private` published app,
+  trying it out. They read its seed, and their first write gives them a store of
+  their own, which only this browser reaches, for 90 days. Then it is `{kept}`:
+  `kept` is `true` once they have installed the app and the store is theirs.
+  yaks.app shows them a bar with a button that keeps it; a page can word its own
+  prompt from this too.
 
 ## Author names on rows: `created.by`
 
@@ -663,7 +669,7 @@ directly from `curl`, from another page, or from your own `worker.js` through
     GET ./api/me
     → {"person": null, "name": null, "role": null, "reads": true,
        "writes": false, "signIn": "https://yaks.app/login?return=…",
-       "invited": false}
+       "invited": false, "visit": null}
 
     GET ./api/vocab.json
     → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,

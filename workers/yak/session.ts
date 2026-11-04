@@ -50,6 +50,10 @@ export type Who = {
    * reaches nothing else in the space — its files included, since writing an
    * app's bytes stays a member's act (apps.ts, public/docs/sharing.md). */
   guest?: boolean
+  /** A stranger at a private published app, served it from its sample or
+   * from a store of their own (visit.ts): `kept` once that store became an
+   * app of theirs. */
+  visit?: { kept: boolean }
   /** The unix second the credential this caller came in on dies at: the
    * cookie's `exp`, or a page token's. A sandboxed app's page token is minted
    * to die with it (installed.ts). */

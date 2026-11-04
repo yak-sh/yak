@@ -28,9 +28,11 @@ import {
 } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
+import { type Host, url } from './host.ts'
 import { instrumentEid } from './instrument.ts'
 import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
+import { installAt, signInAt } from './route.ts'
 import { cleared, sampling } from './sample.ts'
 import type { Who } from './session.ts'
 
@@ -76,6 +78,7 @@ export type Release = Pick<
  * assertEquals(sample.visit, 'sample')
  * assertEquals(sample.app.store, 'ada/notes.1f7c3e/demo/d')
  * assertEquals(sample.who.role, 'viewer')
+ * assertEquals(sample.who.visit, { kept: false })
  * let own = { store: 'ada/notes.1f7c3e/visit/o', blobs: '.visits/o/blobs/', seen: null, adopted: null }
  * assertEquals(visiting(space, app, who, own).app.store, own.store)
  * assertEquals(visiting(space, app, who, own).who.role, 'editor')
@@ -100,17 +103,52 @@ export let visiting = (
       : scriptOf(space, app),
     declaration: app.demo!.release ?? app.declaration,
   }
+  let kept = { kept: !!visit?.adopted }
   return visit
     ? {
       app: { ...served, store: visit.store, blobs: visit.blobs },
-      who: { ...who, role: 'editor', guest: true },
+      who: { ...who, role: 'editor', guest: true, visit: kept },
       visit: 'own',
     }
     : {
       app: { ...served, store: app.demo!.store },
-      who: { ...who, role: 'viewer', guest: true },
+      who: { ...who, role: 'viewer', guest: true, visit: kept },
       visit: 'sample',
     }
+}
+
+/** What the bar on a visitor's page offers (public/visit.js): the page that
+ * keeps what they made, and what its button says. */
+export type Bar = { keep: string; says: string }
+
+/**
+ * The bar a visitor's page wears, or null for anyone else. Keeping it is
+ * installing the app: a stranger who is signed in goes straight to the
+ * install page, and one who is not signs up on the way there.
+ *
+ * ```ts
+ * import { barOf } from './visit.ts'
+ * import { assertEquals } from '@std/assert'
+ * let app = { published: { name: 'notes' } } as Parameters<typeof barOf>[1]
+ * let visit = { kept: false }
+ * assertEquals(barOf({}, app, { person: 'p', role: 'editor', visit }), {
+ *   keep: 'https://yaks.app/install?name=notes',
+ *   says: 'Keep it',
+ * })
+ * assertEquals(
+ *   barOf({}, app, { person: null, role: 'editor', visit })?.says,
+ *   'Sign up to keep it',
+ * )
+ * assertEquals(barOf({}, app, { person: 'p', role: 'editor' }), null)
+ * ```
+ */
+export let barOf = (env: Host, app: App, who: Who): Bar | null => {
+  let name = app.published?.name
+  if (!who.visit || who.visit.kept || !name) return null
+  let keep = url(env, installAt(name))
+  return who.person
+    ? { keep, says: 'Keep it' }
+    : { keep: signInAt(keep, env), says: 'Sign up to keep it' }
 }
 
 /** Whether the app is served from its sample: to a stranger who has not

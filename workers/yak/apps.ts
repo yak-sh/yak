@@ -157,7 +157,7 @@ import { pageSocket } from './page-socket.ts'
 import { DATA_SCRIPT, dataPath, webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
-import { admitted, pageScript } from './page-script.ts'
+import { admitted, pageScript, type Scripts } from './page-script.ts'
 import { appDoc } from './vocab.ts'
 import type { Bundle } from '@yaks/graph'
 import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
@@ -182,6 +182,7 @@ import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { background, caught, refusing } from './defects.ts'
 import {
+  barOf,
   born,
   due,
   MOVED,
@@ -487,17 +488,17 @@ let platformFile = (req: Request, env: Env, path: string) =>
 // what follows it, and the tags come first.
 //
 // A page of a space on the free plan wears the badge too (public/badge.js,
-// `badgeOf`), opening `badge`: decided as it is served, so every version and
-// release an app serves wears it, and none of their files change.
+// `badgeOf`), and a visitor's page their bar (public/visit.js, `barOf`):
+// decided as it is served, so every version and release an app serves wears
+// them, and none of their files change.
 export let reported = async (
   env: Env,
   at: string,
   page: Response,
   version: number,
-  badge: string | null,
-  draft?: string,
+  scripts: Scripts,
 ) => {
-  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badge, draft)
+  let { tags, hashes } = await pageScript(env.ASSETS, at, version, scripts)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -893,15 +894,27 @@ export let badgeOf = (space: Space, app: App, env: Host) =>
 // The platform's scripts a page wears as the files door hands it: none when
 // an app's worker asked for it, since what the worker answers is woven on its
 // way out (`reported`), and the browser would run each script twice.
-// Otherwise its badge is `badgeOf`.
-export let worn = (req: Request, space: Space, app: App, env: Host) =>
-  bearing(req) ? null : { badge: badgeOf(space, app, env) }
+// Otherwise its badge is `badgeOf` and its bar `barOf`.
+export let worn = (
+  req: Request,
+  space: Space,
+  app: App,
+  env: Host,
+  who: Who,
+): Scripts | null => bearing(req) ? null : wearing(space, app, env, who)
+
+// What every page the door serves this caller wears.
+let wearing = (space: Space, app: App, env: Host, who: Who): Scripts => ({
+  badge: badgeOf(space, app, env),
+  bar: barOf(env, app, who),
+})
 
 let asset = async (
   req: Request,
   env: Env,
   space: Space,
   app: App,
+  who: Who,
   path: string,
   // Where this app is mounted for the browser that asked, which is what its
   // pages resolve their relative URLs against: `/<app>/`, or `/` when it is
@@ -982,7 +995,7 @@ let asset = async (
       bare,
       app,
       sandbox ? await sandbox() : '',
-      worn(req, space, app, env),
+      worn(req, space, app, env, who),
       base,
     ))
   if (sandbox) {
@@ -1023,7 +1036,7 @@ export let woven = async (
   bare: string,
   app: App,
   tags: string,
-  scripts: { badge: string | null; draft?: string } | null,
+  scripts: Scripts | null,
   base = at,
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source, base), app)
@@ -1036,14 +1049,7 @@ export let woven = async (
     base,
   )
   if (scripts) {
-    page = await reported(
-      env,
-      at,
-      page,
-      app.version ?? 0,
-      scripts.badge,
-      scripts.draft,
-    )
+    page = await reported(env, at, page, app.version ?? 0, scripts)
   }
   return await page.text()
 }
@@ -1957,6 +1963,10 @@ export let api = async (
   // `invited` is what a refusal would tell a signed-in friend the owner let in
   // (WAITING): their way through is the click in the letter, so the page
   // can say so before they type rather than offer them nothing (T-124071).
+  // `visit` is null unless this is a stranger served the app from its sample
+  // or a store of their own (visit.ts), when `kept` says whether that store is
+  // an app of theirs yet: an app can word its own prompt to keep what they
+  // made, beside the platform's bar.
   // Answered to anyone: a stranger learning they must sign in is the point.
   if (path == '/me') {
     let person = who.person
@@ -1973,6 +1983,7 @@ export let api = async (
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
       invited: await invitedHere(dir, space, app, person, mayRead, mayPost),
+      visit: who.visit ?? null,
     })
   }
   // The app's platform doors use the same refusals as its store doors.
@@ -3491,13 +3502,9 @@ let served = async (
       ))
   if (open) {
     if (open.headers.get('content-type')?.startsWith('text/html')) {
-      open = await reported(
-        env,
-        bare,
-        open,
-        app.version ?? 0,
-        badgeOf(space, app, env),
-      )
+      open = await reported(env, bare, open, app.version ?? 0, {
+        badge: badgeOf(space, app, env),
+      })
     }
     let page = reporting(open, req, bare)
     if (edge) return keep(page, space, app)
@@ -3623,13 +3630,9 @@ let served = async (
         page.body &&
         page.headers.get('content-type')?.startsWith('text/html')
       ) {
-        page = await reported(
-          env,
-          '/',
-          page,
-          early.app.version ?? 0,
-          badgeOf(space, early.app, env),
-        )
+        page = await reported(env, '/', page, early.app.version ?? 0, {
+          badge: badgeOf(space, early.app, env),
+        })
       }
       let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
@@ -3697,7 +3700,7 @@ let served = async (
           version: env.CF_VERSION_METADATA?.id ?? '',
         }),
         app.version ?? 0,
-        null,
+        { badge: null },
       )
     }
     if (!who.person) {
@@ -3839,6 +3842,7 @@ let served = async (
       env,
       space,
       app,
+      who,
       path,
       at,
       c,
@@ -3866,7 +3870,7 @@ let served = async (
       at,
       own,
       app.version ?? 0,
-      badgeOf(space, app, env),
+      wearing(space, app, env, who),
     )
   }
   let page = own ?? await file!

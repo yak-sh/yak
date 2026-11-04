@@ -578,10 +578,12 @@ export let store = (base, { clock = system } = {}) => {
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 
   // Who is looking, before anything is asked of them: `{person, name, role,
-  // reads, writes, signIn, invited}` — `person` null when they are signed
-  // out, `name` what to call them, `writes` whether this app takes a write
-  // from them, `signIn` where a signed-out visitor signs in, and `invited`
-  // whether an invitation waits in their email to accept. Call it on load and
+  // reads, writes, signIn, invited, visit}` — `person` null when they are
+  // signed out, `name` what to call them, `writes` whether this app takes a
+  // write from them, `signIn` where a signed-out visitor signs in, `invited`
+  // whether an invitation waits in their email to accept, and `visit`
+  // `{kept}` for a stranger trying a published app in a store of their own.
+  // Call it on load and
   // the page knows whether to show a sign-in link, the invitation or a name
   // field, instead of finding out from a refusal after someone has typed.
   let me = () => ask('me')

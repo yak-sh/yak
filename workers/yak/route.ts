@@ -185,6 +185,13 @@ export let signInAt = (page: string, env: Host) => {
   to.searchParams.set('return', page)
   return to.href
 }
+/** The page that installs a published app by its name (install.ts). Here
+ * beside the sign-in address, since a visitor's bar (visit.ts) sends a
+ * stranger through the one to the other. */
+export let INSTALL = '/install'
+export let installAt = (name: string) =>
+  `${INSTALL}?name=${encodeURIComponent(name)}`
+
 export let says = (env: Host = {}) =>
   `sign in at ${url(env, '/login')} to reach your apps from here`
 

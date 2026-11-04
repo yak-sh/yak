@@ -1,6 +1,8 @@
 // The platform's own script in every page an app serves: the reporter
-// (public/report.js) and the release listener (public/release.js), and the
-// badge (public/badge.js) in a page of a space on the free plan, woven into
+// (public/report.js) and the release listener (public/release.js), the
+// badge (public/badge.js) in a page of a space on the free plan, and the
+// visitor's bar (public/visit.js) in a page served to a stranger from a
+// published app's sample or their own store of it (visit.ts), woven into
 // the page's text rather than named by a `src`. Both must run before the
 // page's own code, which made them blocking scripts, and a blocking script is
 // a round trip the parser waits on before anything paints, on every load,
@@ -10,7 +12,9 @@
 // which release the page is (`data-yak-version`): the scripts read their doors
 // off the first, and client.js sends the second with every request. The
 // badge's also says what it opens (`data-yak-badge`): the app's own page on
-// yaks.app, or yaks.app itself. Attributes are not hashed, so the scripts'
+// yaks.app, or yaks.app itself. The bar's says where keeping it goes and what
+// its button says (`data-yak-keep`, `data-yak-keep-says`). Attributes are not
+// hashed, so the scripts'
 // text and a policy's hashes are the same on every page.
 //
 // A page with a Content-Security-Policy of its own may refuse inline scripts.
@@ -18,11 +22,21 @@
 // and nothing else.
 import { caught } from './defects.ts'
 import { esc } from './html.ts'
+import type { Bar } from './visit.ts'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 type Script = { text: string; hash: string }
 
-let FILES = ['/report.js', '/release.js', '/badge.js']
+let FILES = ['/report.js', '/release.js', '/badge.js', '/visit.js']
+
+/** The platform's scripts a page wears beyond the reporter and the release
+ * listener: the badge, opening `badge` unless it is null; a draft's preview
+ * link it follows, which wears the release listener alone; the visitor's bar. */
+export type Scripts = {
+  badge: string | null
+  draft?: string
+  bar?: Bar | null
+}
 
 let digest = async (text: string) =>
   `'sha256-${
@@ -55,21 +69,20 @@ let scripts = (assets: Assets) => {
   return got
 }
 
-/** The tags for a page mounted at `at`, of release `version`, wearing a badge
- * that opens `badge` unless it is null, and the hashes a policy needs to admit
- * them. A page of a draft's preview link (preview.ts) carries the release
- * listener alone, told the `draft` it follows (`data-yak-draft`). A page
- * whose scripts could not be read is served without them, and the failure is
- * reported: a page that paints without its reporter beats one that fails. */
+/** The tags for a page mounted at `at`, of release `version`, wearing
+ * `worn`, and the hashes a policy needs to admit them. A page of a draft's
+ * preview link (preview.ts) carries the release listener alone, told the
+ * `draft` it follows (`data-yak-draft`). A page whose scripts could not be
+ * read is served without them, and the failure is reported: a page that
+ * paints without its reporter beats one that fails. */
 export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  badge: string | null,
-  draft?: string,
+  { badge, draft, bar }: Scripts,
 ) => {
   try {
-    let [report, release, badged] = await scripts(assets)
+    let [report, release, badged, barred] = await scripts(assets)
     let tag = ({ text }: Script, more = '') =>
       `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
     if (draft) {
@@ -78,11 +91,19 @@ export let pageScript = async (
         hashes: [release.hash],
       }
     }
-    let all = badge == null ? [report, release] : [report, release, badged]
+    let worn: [Script, string][] = [[report, ''], [release, '']]
+    if (badge != null) worn.push([badged, ` data-yak-badge="${esc(badge)}"`])
+    if (bar) {
+      worn.push([
+        barred,
+        ` data-yak-keep="${esc(bar.keep)}" data-yak-keep-says="${
+          esc(bar.says)
+        }"`,
+      ])
+    }
     return {
-      tags: tag(report) + tag(release) +
-        (badge == null ? '' : tag(badged, ` data-yak-badge="${esc(badge)}"`)),
-      hashes: all.map(({ hash }) => hash),
+      tags: worn.map(([script, more]) => tag(script, more)).join(''),
+      hashes: worn.map(([{ hash }]) => hash),
     }
   } catch (e) {
     caught(e, { request: 'page script' })

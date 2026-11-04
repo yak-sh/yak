@@ -1,4 +1,9 @@
-import { assert, assertEquals, assertNotEquals } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertStringIncludes,
+} from '@std/assert'
 import { test } from '@yaks/testing'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -54,6 +59,13 @@ let nobody = client(k, host, 'notes')
 let sampleBefore = await titles(ada)
 let me = await (await k.at(host, '/notes/api/me', { headers: ada.headers }))
   .json()
+let page = async (headers: HeadersInit) =>
+  await (await k.at(host, '/notes/', { headers })).text()
+let adaPage = await page(ada.headers)
+let ownerPage = await page(owner.headers)
+let ownerMe = await (await k.at(host, '/notes/api/me', {
+  headers: owner.headers,
+})).json()
 let first = await ada.post([{ entity: { eid: '$n' }, note: { title: 'Mine' } }])
 let firstMoved = first.headers.get(MOVED)
 await first.body?.cancel()
@@ -91,6 +103,16 @@ await k.stop()
 test('a stranger reads the sample and hears they may write', () => {
   assertEquals(sampleBefore, ['Sample'])
   assertEquals(me.writes, true)
+  assertEquals(me.visit, { kept: false })
+  assertEquals(ownerMe.visit, null)
+})
+
+test('a stranger’s page wears the bar that keeps it, and a member’s none', () => {
+  assertStringIncludes(
+    adaPage,
+    `data-yak-keep="https://${k.host}/install?name=notes" data-yak-keep-says="Keep it"`,
+  )
+  assert(!ownerPage.includes('data-yak-keep'))
 })
 
 test('their first write gives them a store of their own, and goes there', () => {

@@ -5,14 +5,13 @@ import type { Env } from './env.ts'
 import { refusing } from './defects.ts'
 import { esc } from './html.ts'
 import { url } from './host.ts'
-import { signInAt } from './route.ts'
+import { installAt, signInAt } from './route.ts'
 import { whoIs } from './session.ts'
 import { foot, head, html, top } from './shell.ts'
 import { call } from './tools.ts'
 import { step } from './funnel.ts'
 
-export let PATH = '/install'
-export let at = (name: string) => `${PATH}?name=${encodeURIComponent(name)}`
+export { INSTALL as PATH, installAt as at } from './route.ts'
 
 let page = (
   env: Env,
@@ -29,7 +28,7 @@ let page = (
         env,
         title,
         'Get your own copy of this app.',
-        url(env, at(name)),
+        url(env, installAt(name)),
         false,
       )
     }
@@ -40,7 +39,7 @@ ${top}
 ${why ? `<p class="Say Say-no" role="alert">${esc(why)}</p>` : ''}
 ${
       name
-        ? `<form class="Card" method="post" action="${esc(at(name))}">
+        ? `<form class="Card" method="post" action="${esc(installAt(name))}">
 <header class="Card_Head"><h2 class="Card_Title">Get your own copy</h2></header>
 <p class="Card_Sub">Your copy has its own data. You can make it your own.</p>
 ${
@@ -83,7 +82,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
   if (req.method == 'GET') step(env, 'install', req)
   let who = await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
   if (!who.person) {
-    return Response.redirect(signInAt(url(env, at(name)), env), 303)
+    return Response.redirect(signInAt(url(env, installAt(name)), env), 303)
   }
   let spaces = (await dir.seats(who.person))
     .filter((s) => !s.space.trashed && writes(s.role)).map((s) => s.space)

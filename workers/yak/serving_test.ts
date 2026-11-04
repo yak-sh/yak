@@ -100,7 +100,7 @@ let CAKE = 'c0000000-0000-4000-8000-00000000cake'.replace('cake', '0001')
 
 // The platform's own scripts, read once.
 let ASSETS = assets(new URL('./public/', import.meta.url))
-await pageScript(ASSETS, '/', 0, 'https://yaks.app/')
+await pageScript(ASSETS, '/', 0, { badge: 'https://yaks.app/' })
 
 // ---- the tests -------------------------------------------------------------
 
@@ -153,7 +153,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
       ASSETS,
       '/cookbook/',
       1,
-      apps.badgeOf(space(plan), cookbook, {}),
+      { badge: apps.badgeOf(space(plan), cookbook, {}) },
     )).tags.includes('Made with ')
   assert(await badged({}), 'the free plan')
   assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
@@ -1306,7 +1306,7 @@ test("a worker's own page runs each platform script once", async () => {
     '/',
     new Response(handed, { headers: { 'content-type': 'text/html' } }),
     1,
-    'https://yaks.app/',
+    { badge: 'https://yaks.app/' },
   )
   let scripts = woven(await page.text())
   assert(scripts.length > 0)
@@ -2226,11 +2226,30 @@ test("an app worker's own request is woven no scripts, and no badge", () => {
     headers: { 'x-yak-grant': 'g' },
   })
   let visit = new Request('https://ada.yaks.app/')
-  assertEquals(apps.worn(asked, space(null), app, {}), null)
-  assertEquals(apps.worn(visit, space(null), app, {}), {
+  let who = { person: 'p', role: null }
+  assertEquals(apps.worn(asked, space(null), app, {}, who), null)
+  assertEquals(apps.worn(visit, space(null), app, {}, who), {
     badge: 'https://yaks.app/',
+    bar: null,
   })
-  assertEquals(apps.worn(visit, space('plus'), app, {}), { badge: null })
+  assertEquals(apps.worn(visit, space('plus'), app, {}, who), {
+    badge: null,
+    bar: null,
+  })
+})
+
+// A stranger served a published app's sample, or their own store of it,
+// wears the bar that keeps it (visit.ts `barOf`), beside the badge.
+test("a visitor's page wears the bar that keeps what they made", async () => {
+  let { tags, hashes } = await pageScript(ASSETS, '/notes/', 1, {
+    badge: null,
+    bar: { keep: 'https://yaks.app/install?name=notes', says: 'Keep it' },
+  })
+  assertStringIncludes(
+    tags,
+    'data-yak-keep="https://yaks.app/install?name=notes" data-yak-keep-says="Keep it"',
+  )
+  assertEquals(hashes.length, 3)
 })
 
 // The badge is a door (T-131901): a published app's opens its own page on
@@ -2247,7 +2266,7 @@ test("a published app's badge opens its own page", async () => {
     ASSETS,
     '/recipes/',
     1,
-    apps.badgeOf(space, shared, {}),
+    { badge: apps.badgeOf(space, shared, {}) },
   )
   assertStringIncludes(tags, 'data-yak-badge="https://yaks.app/apps/recipes"')
 })
