@@ -72,6 +72,10 @@ packages/draft is a good small one to copy:
   `./vocab` facet re-exports it (packages/draft/vocab.ts), the graph's package
   rows read it, and `deno task jsr` puts it on jsr.io. Its `imports` name
   outside dependencies only; workspace packages resolve through the workspace.
+  An npm name the kernel Worker bundles (anything workers/yak imports, however
+  deep) also needs its exact pin in workers/yak/package.json and an entry in
+  wrangler.toml's `[alias]` pointing at its ESM entry, or main's Workers Build
+  fails and nothing deploys.
 - **The workspace list** in the root deno.json, which names the package.
 - **README.md**, written the way `writing-documentation` describes.
 - **vocab.json and vocab.ts** if it declares words (`vocabulary`).
