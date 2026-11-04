@@ -10,6 +10,7 @@
 
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
+import type { Survey } from '@yaks/testing/deps'
 import type { Prepared } from './check-types.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
@@ -35,9 +36,9 @@ let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
-let { excluded } = await import('./check-types.ts')
+let { excluded, sourceSurvey } = await import('./check-types.ts')
 let { find, tested } = await import('@yaks/testing/find')
-let { took } = await import('@yaks/testing/deps')
+let { survey, took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
@@ -360,6 +361,7 @@ export let chosen = async (
   also: string[] = [],
   changed?: string[],
   sources: string[] = [],
+  inspect = survey,
 ) =>
   await choose(files, {
     budget: SECONDS,
@@ -372,6 +374,7 @@ export let chosen = async (
     also: () => [...ALSO, ...also],
     runner: RUNS,
     owner: member,
+    inspect,
   })
 
 /** Plan a run before starting runtimes, and start checking its sources: `ok`
@@ -386,8 +389,11 @@ export let prepare = async (
     format,
     find,
     chosen,
-    check: (changed: string[], prepared: Prepared) =>
-      check(changed, undefined, undefined, undefined, prepared),
+    check: (
+      changed: string[],
+      prepared: Prepared,
+      snapshot?: Promise<Survey | undefined>,
+    ) => check(changed, undefined, undefined, undefined, prepared, snapshot),
     ready: async (
       quiet: boolean,
       assets: boolean,
@@ -403,6 +409,7 @@ export let prepare = async (
       return prepared
     },
   },
+  resolve = sourceSurvey,
 ) => {
   let flags = args.filter((a) => a.startsWith('--') && !OWN.test(a))
   let paths = args.filter((a) => !a.startsWith('--'))
@@ -415,13 +422,22 @@ export let prepare = async (
   let all = flags.includes('--all')
   let changedPaths = all ? [] : await effects.changes()
   let changedFiles = await effects.format(changedPaths)
+  let snapshot = Promise.withResolvers<Survey | undefined>()
+  void snapshot.promise.catch(() => {})
+  let inspected = false
+  let inspect = (paths: string[]) => {
+    inspected = true
+    let work = all ? survey(paths) : resolve(paths)
+    snapshot.resolve(work)
+    return work
+  }
   let imports = Promise.withResolvers<readonly string[]>()
   // A selection failure still settles the source job, even when no program
   // needs generated imports and therefore nobody awaits this receipt.
   void imports.promise.catch(() => {})
   let ok = all
     ? Promise.resolve(true)
-    : effects.check(changedFiles, imports.promise)
+    : effects.check(changedFiles, imports.promise, snapshot.promise)
       .catch((e) => (console.error(e), false))
   try {
     let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
@@ -437,7 +453,9 @@ export let prepare = async (
       [sqlite],
       changed,
       changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
+      inspect,
     )
+    if (!inspected) snapshot.resolve(undefined)
     let prepared = reaches(READIES)
       ? effects.ready(
         !flags.includes('--verbose'),
@@ -450,6 +468,7 @@ export let prepare = async (
     await prepared
     return { flags, paths, tags, files, keys, run, beyond, ok }
   } catch (error) {
+    snapshot.reject(error)
     imports.reject(error)
     await ok
     throw error

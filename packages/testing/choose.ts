@@ -89,6 +89,7 @@ export let choose = async (
     budget,
     cost = () => 0,
     owner,
+    inspect = survey,
   }: {
     all?: boolean
     observed?: boolean
@@ -100,6 +101,7 @@ export let choose = async (
     budget?: number
     cost?: (file: string) => number
     owner?: (path: string) => string | undefined
+    inspect?: (paths: string[]) => Promise<Survey | undefined>
   } = {},
 ): Promise<Chosen> => {
   if (changed && !changed.length) {
@@ -122,7 +124,7 @@ export let choose = async (
     // by a computed specifier, are surveyed with the rest.
     let read = observed ? recall() : {}
     let reads = (f: string) => observed ? read[f] ?? [] : undefined
-    let s = await survey([
+    let s = await inspect([
       ...files.filter(tested),
       ...plans.values(),
       ...kinds.flatMap(also),

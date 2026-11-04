@@ -407,6 +407,9 @@ export let seal = (
  * is 0 when changes in that package reach it, and 1 otherwise. A file
  * importing a changed package from another is at most 1. */
 export type Survey = {
+  // Exact resolution metadata from this snapshot. Inputs regenerated after
+  // it was taken must still hold; unknown roots need a fresh resolution.
+  info: (roots: string[], refreshed?: string[]) => Promise<Info | undefined>
   of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
   next: (path: string, runtime?: boolean) => string[]
@@ -558,6 +561,36 @@ export let survey = async (
     return wides.get(node)!
   }
   return {
+    info: async (roots, refreshed = []) => {
+      let reached = new Map<string, Module>()
+      let visit = roots.map((r) => at(url(r)))
+      while (visit.length) {
+        let s = visit.pop()!
+        if (reached.has(s)) continue
+        let m = modules.get(s)
+        if (!m) return undefined
+        reached.set(s, m)
+        for (let d of m.dependencies ?? []) {
+          for (let to of [d.code?.specifier, d.type?.specifier]) {
+            if (to) visit.push(at(to))
+          }
+        }
+      }
+      for (let path of refreshed) {
+        if (!reached.has(url(path))) continue
+        if (
+          await facts.get(path)?.then((f) => f.digest) !=
+            await digest(path, true)
+        ) {
+          return undefined
+        }
+      }
+      return {
+        modules: [...reached.values()],
+        redirects,
+        npmPackages: found.npmPackages,
+      }
+    },
     of: (path, run = false) => {
       let key = `${run} ${path}`
       if (!held.has(key)) {

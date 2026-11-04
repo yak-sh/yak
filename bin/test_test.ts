@@ -181,9 +181,9 @@ test('planning and readiness failures settle source jobs waiting for their impor
             read: () => undefined,
           })
         },
-        check: async (_changed, prepared) => {
+        check: async (_changed, prepared, snapshot) => {
           try {
-            await prepared
+            await Promise.all([prepared, snapshot])
             return true
           } catch {
             return false
@@ -195,4 +195,38 @@ test('planning and readiness failures settle source jobs waiting for their impor
       }), new RegExp(failure))
     equal(settled, true)
   }
+})
+
+test('source planning and selection consume one command snapshot', async () => {
+  let queried: string[][] = []
+  let checked: unknown
+  let chosen: unknown
+  let result = await prepare([], '/sqlite.so', {
+    changes: () => Promise.resolve(['a.ts']),
+    format: (paths) => Promise.resolve(paths),
+    find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
+    chosen: async (files, _all, _also, _changed, _sources, inspect) => {
+      chosen = await inspect!([...files, 'a.ts'])
+      return {
+        keys: new Map(),
+        run: files,
+        affected: files,
+        sources: [],
+        beyond: 0,
+        reaches: () => false,
+        read: () => undefined,
+      }
+    },
+    check: async (_changed, _prepared, snapshot) => {
+      checked = await snapshot
+      return true
+    },
+    ready: () => Promise.resolve(),
+  }, (paths) => {
+    queried.push(paths)
+    return Promise.resolve(graph)
+  })
+  equal(await result.ok, true)
+  equal(queried, [['a_test.ts', 'a.ts']])
+  equal(chosen === graph && checked === graph, true)
 })

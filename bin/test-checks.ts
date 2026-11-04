@@ -3,6 +3,7 @@
 // content when it touches a source of it, and the types of what it reaches. Runtime tests
 // follow consumers. Main CI checks every module's types after the push.
 
+import type { Survey } from '@yaks/testing/deps'
 import { publishing } from './release.ts'
 import { type Prepared, types } from './check-types.ts'
 
@@ -102,12 +103,17 @@ export let check = async (
   changed: string[],
   run = command,
   packages = publishing,
-  typed = (changed: string[], prepared: Prepared) =>
-    types(changed, (args) => run({ name: 'types', args }), prepared),
+  typed = (
+    changed: string[],
+    prepared: Prepared,
+    snapshot?: Promise<Survey | undefined>,
+  ) =>
+    types(changed, (args) => run({ name: 'types', args }), prepared, snapshot),
   prepared: Prepared = [],
+  snapshot?: Promise<Survey | undefined>,
 ) =>
   (await Promise.all([
     ...checks(changed, (await packages()).map((p) => p.config))
       .filter((c) => c.name != 'format').map(run),
-    typed(changed, prepared),
+    typed(changed, prepared, snapshot),
   ])).every(Boolean)

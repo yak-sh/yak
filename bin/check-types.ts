@@ -25,7 +25,7 @@
 // copies, publishing their next build info atomically.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
-import { remembered, survey } from '@yaks/testing/deps'
+import { remembered, type Survey, survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -141,11 +141,23 @@ let workers = async () => {
   }
 }
 
+/** One command's resolution snapshot, including source roots and hosted entries. */
+export let sourceSurvey = async (
+  paths: string[],
+): Promise<Survey | undefined> => {
+  let [all, { entries }] = await Promise.all([every(), workers()])
+  return await survey([...paths, ...all, ...entries])
+}
+
 /** The modules a change reaches: those changed and their importers, and the
  * Workers entries reaching one. */
-let reached = async (changed: string[], hosted: string[]) => {
+let reached = async (
+  changed: string[],
+  hosted: string[],
+  snapshot?: Promise<Survey | undefined>,
+) => {
   let all = await every()
-  let s = await survey([...all, ...hosted])
+  let s = snapshot ? await snapshot : await survey([...all, ...hosted])
   if (!s) {
     throw new Error(
       'Cannot say what the change reaches: dependency graph unavailable. ' +
@@ -307,7 +319,7 @@ let manifest = (path: string) => {
 
 /** Check the types of `roots` in a platform's program, and of their doc
  * comment examples where it checks those. */
-let program = async (on: Platform, roots: string[]) => {
+let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
   let docs = on.examples ? await examples(roots) : []
   let graph = `${on.dir}/graph.${Deno.pid}.ts`
   let tsconfig = `${on.dir}/tsconfig.${Deno.pid}.json`
@@ -329,7 +341,12 @@ let program = async (on: Platform, roots: string[]) => {
       return JSON.parse(info.out) as Info
     }
     let [found, globals] = await Promise.all([
-      on.config ? resolve() : remembered(resolve)([...roots, ...docs]),
+      on.config ? resolve() : (async () =>
+        await snapshot?.info(
+          [...roots, ...docs],
+          Object.values(MADE).flat(),
+        ) ??
+          await remembered(resolve)([...roots, ...docs]))(),
       on.globals(),
     ])
     if (!found) throw new Error('Cannot resolve source types')
@@ -426,6 +443,7 @@ let check = async (
   run: Run,
   prepared: Prepared = [],
   hostedMade = made,
+  snapshot?: Survey,
 ) => {
   let hosted = entries.length ? (await workers()).platform : undefined
   return await programs(
@@ -433,7 +451,9 @@ let check = async (
       {
         made,
         check: () =>
-          roots.length ? program(deno(), roots) : Promise.resolve(true),
+          roots.length
+            ? program(deno(), roots, snapshot)
+            : Promise.resolve(true),
       },
       ...hosted
         ? [{
@@ -452,12 +472,25 @@ export let types = async (
   changed: string[],
   run: Run = spawn,
   prepared: Prepared = [],
+  snapshot?: Promise<Survey | undefined>,
 ) => {
   let { entries: hosted } = await workers()
   if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
-  let { roots, entries, made, hostedMade } = await reached(changed, hosted)
+  let { roots, entries, made, hostedMade } = await reached(
+    changed,
+    hosted,
+    snapshot,
+  )
   return !roots.length && !entries.length ||
-    await check(roots, entries, made, run, prepared, hostedMade)
+    await check(
+      roots,
+      entries,
+      made,
+      run,
+      prepared,
+      hostedMade,
+      snapshot ? await snapshot : undefined,
+    )
 }
 
 if (import.meta.main) {

@@ -458,3 +458,34 @@ test('a failed refresh releases queued lookups and new roots and file changes ar
     [at('retry/b.ts')],
   ])
 })
+
+test('a survey shares exact resolution closures and detects regenerated inputs', async () => {
+  write('snapshot/root.ts', 'imports generated')
+  write('snapshot/generated.ts', 'old generated imports')
+  write('snapshot/other.ts', 'unrelated')
+  let npmPackages = {
+    unused: { name: 'unused', dependencies: [], localPath: '/npm/unused' },
+  }
+  let resolve = deno({
+    'snapshot/root.ts': ['snapshot/generated.ts'],
+    'snapshot/generated.ts': [],
+    'snapshot/other.ts': [],
+  })
+  let s = (await survey(
+    [at('snapshot/root.ts'), at('snapshot/other.ts')],
+    async () => ({
+      ...await resolve(),
+      npmPackages,
+    }),
+  ))!
+  let roots = [at('snapshot/root.ts')]
+  let info = await s.info(roots, [at('snapshot/generated.ts')])
+  equal(info!.modules.map((m) => m.specifier).sort(), [
+    `file://${at('snapshot/generated.ts')}`,
+    `file://${at('snapshot/root.ts')}`,
+  ])
+  equal(info!.npmPackages, npmPackages)
+  equal(await s.info([at('snapshot/new.example.ts')]), undefined)
+  write('snapshot/generated.ts', 'new generated imports')
+  equal(await s.info(roots, [at('snapshot/generated.ts')]), undefined)
+})
