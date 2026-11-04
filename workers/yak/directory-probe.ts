@@ -14,7 +14,7 @@ import { status } from '@yaks/graph/errors'
 import { assertEquals } from '@std/assert'
 import { useUntil } from './used.ts'
 import { doorOf, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
-import { EPOCH, READS } from './directory-copy.ts'
+import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { vouchOf } from './graph.ts'
 import { metaOf } from './meta.ts'
@@ -25,12 +25,14 @@ let vocab = platformVocab()
 
 type Composition = {
   handlers?: (env: Env, graph: Graph) => Handlers
+  copy?: ServingCopyDoor
 }
 
 /** The directory's graph and wire, with optional effect handlers drained in memory. */
 export let rows = (
   env: Partial<Env> = {},
   handlers?: (graph: Graph) => Handlers,
+  copy?: ServingCopyDoor,
 ) => {
   let g = graph({ vocab, storage: ram(vocab) })
   g.use(
@@ -103,10 +105,18 @@ export let rows = (
             ...(v.via ? { via: v.via } : {}),
           }
           : null
-        let out = await g.apply(signed(await req.json() as Bundle[], actor), {
-          trusted: req.headers.get('x-yak-kernel') == '1',
-          stamp: url.searchParams.get('stamp') != '0',
-        })
+        let bundles = signed(await req.json() as Bundle[], actor)
+        let write = async (at = revision) => {
+          let out = await g.apply(bundles, {
+            trusted: req.headers.get('x-yak-kernel') == '1',
+            stamp: url.searchParams.get('stamp') != '0',
+          })
+          revision = at
+          return out
+        }
+        let out = copy
+          ? await fenced(copy, write, () => revision, env.CLOCK)
+          : await write()
         if (fx) {
           await fx.work(g)
           await fx.idle()
@@ -128,13 +138,14 @@ export let rows = (
  * Store-specific behavior keeps using the runtime's app namespace. */
 export let hosting = <T extends ReturnType<typeof runtime>>(
   scenario: T,
-  { handlers }: Composition = {},
+  { handlers, copy }: Composition = {},
 ): T => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
-  if (scenario.env.SERVING_COPY) return scenario
+  if (scenario.env.SERVING_COPY && !copy) return scenario
   let directory = rows(
     scenario.env,
     handlers && ((graph) => handlers(scenario.env, graph)),
+    copy,
   )
   let stores = scenario.env.STORE
   scenario.env.STORE = {

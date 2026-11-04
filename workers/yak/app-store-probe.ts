@@ -5,17 +5,18 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { api, json, refuse, subscriptions } from '@yaks/api'
 import { apiDoc } from '@yaks/api/vocab'
 import { type Graph, graph, signed, type Tool } from '@yaks/graph'
-import { personalsIn, policy } from '@yaks/member'
+import { type Mode, personalsIn, policy } from '@yaks/member'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import { runner } from '@yaks/tools'
 import { answerOf, toolEid } from '@yaks/tools/result'
 import { ram } from '@yaks/ram'
 import { cleanup } from '@yaks/testing'
+import { assertEquals } from '@std/assert'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { PLATFORM_OBJECT, USES } from './door.ts'
 import type { Env } from './env.ts'
-import { authenticating } from './graph.ts'
-import { appVocab } from './vocab.ts'
+import { appGuard, authenticating, vouchOf } from './graph.ts'
+import { appDoc, appVocab } from './vocab.ts'
 import { kinded, naming } from './app-subs.ts'
 import { asking, screened } from './listing.ts'
 
@@ -23,6 +24,7 @@ let base = appVocab()
 let vocab = loadVocab([...base.docs, apiDoc], base.keywords)
 
 type Composition = {
+  app?: { eid: string; mode: Mode; manifest: VocabDoc }
   declaration?: VocabDoc
   graph?: (vocab: Vocab) => Graph
   settled?: (graph: Graph) => Promise<void>
@@ -33,6 +35,16 @@ type Composition = {
 let app = (vocab: Vocab, name: string, composition: Composition) => {
   let g = composition.graph?.(vocab) ?? graph({ vocab, storage: ram(vocab) })
   let request = new AsyncLocalStorage<Request>()
+  if (composition.app) {
+    let { eid, mode, manifest } = composition.app
+    g.apply([{ entity: { eid }, access: { mode } }], { trusted: true })
+    g.use(appGuard(eid, vocab, manifest, {
+      level: () => {
+        let req = request.getStore()
+        return req ? vouchOf(req).level : undefined
+      },
+    }))
+  }
   let view: Graph = {
     ...g,
     apply: (rows, options) => {
@@ -49,7 +61,10 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     },
   }
   let subs = subscriptions(view)
-  let authenticate = authenticating(policy(g.storage), () => null)
+  let authenticate = authenticating(
+    policy(g.storage),
+    () => composition.app?.eid ?? null,
+  )
   let live = composition.sockets && sockets(
     naming(subs, {
       query: (line) =>
@@ -102,8 +117,12 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
       }
     }
     if (path == '/uses') return Response.json({})
-    if (path == '/vocab' && composition.declaration && req.method == 'GET') {
-      return Response.json(composition.declaration)
+    if (path == '/vocab' && composition.declaration) {
+      if (req.method == 'GET') return Response.json(composition.declaration)
+      if (req.method == 'POST' && req.headers.get('x-yak-kernel') == '1') {
+        assertEquals(appDoc(await req.json()), composition.declaration)
+        return Response.json({ comps: vocab.comps })
+      }
     }
     // The Store descriptor identifies which app door a route reached.
     if (path == '/graph') return Response.json({ db: `do:${name}` })
@@ -121,7 +140,7 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     return answer
   }
   let fetch = async (req: Request) => {
-    let answer = await route(req)
+    let answer = await request.run(req, () => route(req))
     await composition.settled?.(g)
     return answer
   }

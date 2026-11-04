@@ -5,6 +5,7 @@ import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './directory-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore, directoryOf } from './directory.ts'
+import { stores } from './app-store-probe.ts'
 import { operating, readOperator } from './operator.ts'
 import { conversations, frameOf } from './operator-host.ts'
 import { TOOLS } from './tools.ts'
@@ -12,7 +13,7 @@ import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
 import { KERNEL } from './meta.ts'
-import { appDoc } from './vocab.ts'
+import { appDoc, appVocab } from './vocab.ts'
 import { withKinds } from './kinds.ts'
 import { declared } from './testing.ts'
 
@@ -38,7 +39,7 @@ let fixture = async () => {
   }
   let { env } = platform('operator-test', {
     SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
-  })
+  }, { copy: rpc })
   let dir = directoryOf(env.STORE)
   await dir.apply({
     entities: [
@@ -90,6 +91,10 @@ let fixture = async () => {
         },
       },
     },
+  })
+  stores(env, appVocab(words), {
+    declaration: words,
+    app: { eid: app.eid, mode: 'public', manifest: words },
   })
   let accepted = await appStore(env.STORE, space, app)('/vocab', {
     method: 'POST',
