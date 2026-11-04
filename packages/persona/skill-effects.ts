@@ -36,6 +36,10 @@ export type SkillRuntime = {
   stamp?: typeof stampOf
   pause?: typeof sleep
   poll?: number
+  files?: Pick<
+    typeof fs,
+    'makeTempDir' | 'readTextFile' | 'writeTextFile' | 'remove'
+  >
 }
 
 /** Continuous polling is intentional: filesystem watches miss renames and
@@ -48,6 +52,7 @@ export let skillEffects = (
   runtime: SkillRuntime = {},
 ): Handlers => {
   if (!options.skills) return {}
+  let files = runtime.files ?? fs
   let roots = runtime.roots ?? skillRoots
   let sync = runtime.sync ?? syncSkills
   let stamp = runtime.stamp ?? stampOf
@@ -64,14 +69,14 @@ export let skillEffects = (
     let name = names.get(root)
     if (!name) names.set(root, name = `${derivedEid(`skills|${root}`)}.json`)
     let dir = persistent ?? await (temporary ??= (async () => {
-      let dir = await fs.makeTempDir({ prefix: 'yak-skills-' })
+      let dir = await files.makeTempDir({ prefix: 'yak-skills-' })
       try {
         for (let [name, body] of saved) {
-          await fs.writeTextFile(join(dir, name), body)
+          await files.writeTextFile(join(dir, name), body)
         }
         return dir
       } catch (error) {
-        await fs.remove(dir, { recursive: true })
+        await files.remove(dir, { recursive: true })
         throw error
       }
     })())
@@ -90,7 +95,7 @@ export let skillEffects = (
       try {
         for (let name of names.values()) {
           try {
-            saved.set(name, await fs.readTextFile(join(dir, name)))
+            saved.set(name, await files.readTextFile(join(dir, name)))
           } catch (error) {
             if (!fs.isNotFound(error)) throw error
             saved.delete(name)
@@ -100,7 +105,7 @@ export let skillEffects = (
         // for the trailing pass; callers cannot observe completion yet.
         retained = trailing && dirty && !host.stopping?.aborted
       } finally {
-        if (!retained) await fs.remove(dir, { recursive: true })
+        if (!retained) await files.remove(dir, { recursive: true })
       }
     } finally {
       if (!retained) temporary = undefined

@@ -1,4 +1,5 @@
 import { test, until } from '@yaks/testing'
+import * as files from '@yaks/file/io'
 import { assert, assertEquals, assertIsError, assertRejects } from '@std/assert'
 import { derivedEid, type Graph } from '@yaks/graph'
 import { held, take, until as stopped } from '@yaks/effects'
@@ -235,22 +236,24 @@ test('skill effects coalesce an event arriving during temporary cleanup', async 
   let release = deferred()
   let path = ''
   let calls = 0
-  let read = Deno.readTextFile
   let fx = fixture({
+    files: {
+      ...files,
+      readTextFile: async (file) => {
+        if (file == path && calls == 1) {
+          entered.resolve()
+          await release.promise
+        }
+        return await files.readTextFile(file)
+      },
+    },
     sync: async (_g, _root, memory) => {
       calls++
       path = memory
-      await Deno.writeTextFile(memory, '{}')
+      await files.writeTextFile(memory, '{}')
       return report()
     },
   })
-  Deno.readTextFile = async (file, options) => {
-    if (file == path && calls == 1) {
-      entered.resolve()
-      await release.promise
-    }
-    return await read(file, options)
-  }
   try {
     let first = invoke(fx)
     await entered.promise
@@ -262,7 +265,6 @@ test('skill effects coalesce an event arriving during temporary cleanup', async 
     assert(!await exists(dirname(path)))
   } finally {
     release.resolve()
-    Deno.readTextFile = read
   }
 })
 
@@ -292,23 +294,25 @@ test('skill effects do not restore a deliberately removed temporary memo', async
 
 test('skill effects await cleanup errors, remove their directory, and allow retry', async () => {
   let path = ''
-  let read = Deno.readTextFile
   let problem = new Error('memo read failed')
+  let failing = true
   let fx = fixture({
+    files: {
+      ...files,
+      readTextFile: (file) =>
+        failing && file == path
+          ? Promise.reject(problem)
+          : files.readTextFile(file),
+    },
     sync: async (_g, _root, memory) => {
       path = memory
-      await Deno.writeTextFile(memory, '{}')
+      await files.writeTextFile(memory, '{}')
       return report()
     },
   })
-  Deno.readTextFile = (file, options) =>
-    file == path ? Promise.reject(problem) : read(file, options)
-  try {
-    await assertRejects(() => invoke(fx), Error, 'memo read failed')
-    assert(!await exists(dirname(path)))
-  } finally {
-    Deno.readTextFile = read
-  }
+  await assertRejects(() => invoke(fx), Error, 'memo read failed')
+  assert(!await exists(dirname(path)))
+  failing = false
   await invoke(fx)
   assert(!await exists(dirname(path)))
 })
