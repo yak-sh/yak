@@ -11,6 +11,7 @@ import type { Tool } from '@yaks/graph'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { argsFor, type Reads, Usage } from './args.ts'
 import { appStray, appTools } from './commands.ts'
+import { Unauthorized } from './rpc.ts'
 import { commands } from './platform.ts'
 import { globals as adminGlobals } from '../admin/cli.ts'
 import { adminDoc } from '../admin/vocab.ts'
@@ -461,6 +462,32 @@ test('a word the graph found at home lacks is the host’s, run as the host’s'
     2,
   )
   assertEquals(aimedAt.includes(undefined), false)
+})
+
+test('a word nothing here has says where commands are listed, and how to sign in to the host', async () => {
+  let home = (name: string) => name == 'YAK_CONFIG' ? 'home.json' : undefined
+  let more = (failure: Error): Opts['more'] => (c) => {
+    if (!c.config) throw failure
+    return []
+  }
+  for (
+    let [failure, why] of [
+      [
+        new Unauthorized('sign in at a page'),
+        'sign in to it with `yak auth yaks.test`',
+      ],
+      [new Error('connection refused'), 'connection refused'],
+    ] as const
+  ) {
+    assertEquals(
+      await ran([], ['nonsense'], { more: more(failure), env: home }),
+      1,
+    )
+    assertEquals(printed, [
+      'yak: home.json has nothing called nonsense (`yak help` lists what ' +
+      `it has), and yaks.test could not be asked: ${why}`,
+    ])
+  }
 })
 
 test('an undeclared positional is refused after fetching the app schema', async () => {

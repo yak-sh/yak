@@ -571,9 +571,14 @@ export let cli = async (
         try {
           theirs = [...await opts.more(far, {})]
         } catch (e) {
+          // Most often a typo, and the host only a second place to look: say
+          // where the commands are listed, then what asking the host needs.
           throw new Error(
-            `${config} has nothing called ${rest[0]}, and ${host} could ` +
-              `not be asked: ${(e as Error).message}`,
+            `${config} has nothing called ${rest[0]} (\`yak help\` lists ` +
+              `what it has), and ${host} could not be asked: ` +
+              (e instanceof Unauthorized
+                ? `sign in to it with \`yak auth ${host}\``
+                : (e as Error).message),
           )
         }
         found = commandFor(theirs, rest)

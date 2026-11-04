@@ -89,9 +89,12 @@ export let invoke = async (
     ) {
       await opts.report?.(error, call, tool.name)
     }
+    // A refusal is said in its own words, which its code already classes;
+    // a defect keeps the name of what was thrown.
+    let said = code != undefined && (error as Error).message
     return [{
       entity: { eid: '$fault' },
-      content: { body: String(error) },
+      content: { body: said || String(error) },
       output: { source: id },
       ...code == undefined
         ? { exception: exceptionOf(error) }
