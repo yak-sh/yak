@@ -77,10 +77,17 @@ let scenario = async (
   let uploads: FormData[] = []
   let was = globalThis.fetch
   globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
-    let r = new Request(input as string, init)
-    if (new URL(r.url).hostname != 'api.cloudflare.com') return was(r)
-    if (r.headers.get('content-type')?.startsWith('multipart/')) {
-      uploads.push(await r.formData())
+    let url = new URL(input instanceof Request ? input.url : input)
+    if (url.hostname != 'api.cloudflare.com') return was(input, init)
+    // The upload's files are the compiler's result; fetch owns their encoding.
+    if (init?.body instanceof FormData) {
+      assertEquals(new Headers(init.headers).has('content-type'), false)
+      uploads.push(init.body)
+    } else if (input instanceof Request) {
+      let request = new Request(input, init)
+      if (request.headers.get('content-type')?.startsWith('multipart/')) {
+        uploads.push(await request.formData())
+      }
     }
     return Response.json({ success: true, errors: [], result: {} })
   }) as typeof fetch
