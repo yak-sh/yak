@@ -8,18 +8,18 @@ needs nothing configured, and keeps everything on your machine.
 
 ## Install on a Mac
 
-You need git, a C compiler and [Deno](https://deno.com) 2.9 or later.
+You need [Deno](https://deno.com) 2.9 or later.
 
 ```sh
-xcode-select --install   # git and a C compiler, if you don't have them yet
 brew install deno        # or: curl -fsSL https://deno.land/install.sh | sh
-git clone https://github.com/yak-sh/yak.git ~/yak
-~/yak/bin/install
+deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
 ```
 
-The installer builds SQLite once, which takes about a minute, and puts `yak` in
-`~/.deno/bin`. If that folder isn't on your `PATH` yet, it prints the line that
-adds it; run that line and open a new terminal.
+The installer takes `yak` and its plugins from [jsr.io](https://jsr.io/@yaks)
+and puts the command in `~/.deno/bin`. If that folder isn't on your `PATH` yet,
+add it (`echo 'export PATH="$HOME/.deno/bin:$PATH"' >> ~/.zshrc`) and open a new
+terminal. `--minimum-dependency-age=0` lets it take a release published today,
+which Deno otherwise waits a day for.
 
 ## See your spend
 
@@ -52,12 +52,7 @@ The same report is in the terminal: `yak spend show` for this week, or
 
 ## Updating
 
-```sh
-git -C ~/yak pull
-```
-
-`yak` runs the checkout itself, so the next command uses the new code. Restart
-`yak serve` if it is running.
+Run the install command again. Restart `yak serve` if it is running.
 
 ## The rest of yak
 
