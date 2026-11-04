@@ -67,6 +67,11 @@
           "stamped": true,
           "description": "the token holding edits while a release copies its selected draft"
         },
+        "followed": {
+          "type": "string",
+          "stamped": true,
+          "description": "the draft a preview link follows: each write to it is told to the link's pages"
+        },
         "store": {
           "type": "string",
           "unique": true,

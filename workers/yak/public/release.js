@@ -1,11 +1,140 @@
 // Every HTML page hears releases without changing its client or opening a
 // socket of its own. Nothing here reloads until the person presses Reload.
 // Woven inline into the page beside the reporter (page-script.ts).
+//
+// A page from a draft's preview link (preview.ts, `data-yak-draft`) follows
+// the draft instead: it opens a socket of its own, and takes each write the
+// draft's store tells it of (`{"draft":…}`). A cancelable `yak-draft` event
+// goes first, so a page can take the write itself; else a write of only
+// stylesheets the page links swaps each in place, and any other reloads the
+// page, keeping the window's scroll and the values typed into its fields.
 ;(() => {
   let script = document.currentScript
   if (!script) return
   let version = Number(script.dataset.yakVersion)
   let at = new URL(script.dataset.yakAt, location.href)
+  let following = (draft) => {
+    // What a reload keeps, in sessionStorage, or in the window's name where a
+    // sandboxed page has no storage: both outlive a reload of the tab.
+    let KEY = `yak-draft:${at.pathname}`
+    let put = (value) => {
+      try {
+        sessionStorage.setItem(KEY, value)
+      } catch {
+        name = KEY + value
+      }
+    }
+    let take = () => {
+      let value = null
+      try {
+        value = sessionStorage.getItem(KEY)
+        sessionStorage.removeItem(KEY)
+      } catch { /* the window's name holds it instead */ }
+      if (value == null && name.startsWith(KEY)) {
+        value = name.slice(KEY.length)
+        name = ''
+      }
+      try {
+        return value && JSON.parse(value)
+      } catch {
+        return null
+      }
+    }
+    let SKIP = ['password', 'file', 'hidden', 'submit', 'button', 'reset']
+    // Each field by its id or name, and its place among those sharing it.
+    let fields = () => {
+      let seen = {}
+      return [...document.querySelectorAll('input, textarea, select')]
+        .filter((el) => !SKIP.includes(el.type))
+        .map((el) => {
+          let key = el.id || el.name || el.tagName
+          seen[key] = (seen[key] ?? 0) + 1
+          return [`${key}:${seen[key]}`, el]
+        })
+    }
+    let reload = () => {
+      put(JSON.stringify({
+        x: scrollX,
+        y: scrollY,
+        fields: fields().map(([key, el]) => [key, el.value, el.checked]),
+      }))
+      location.reload()
+    }
+    let kept = take()
+    if (kept) {
+      let restore = () => {
+        let typed = new Map(kept.fields.map(([key, ...v]) => [key, v]))
+        for (let [key, el] of fields()) {
+          if (!typed.has(key)) continue
+          let [value, checked] = typed.get(key)
+          if (el.type == 'checkbox' || el.type == 'radio') el.checked = checked
+          else el.value = value
+        }
+        scrollTo(kept.x, kept.y)
+      }
+      if (document.readyState == 'complete') restore()
+      else addEventListener('load', restore, { once: true })
+    }
+    let path = (url) => new URL(url, document.baseURI).pathname
+    // The link each stylesheet in `files` names, the newest where a swap is
+    // still loading; none unless the page links every one.
+    let sheets = (files) => {
+      let links = [...document.querySelectorAll('link[rel~="stylesheet"]')]
+      let found = files.map((file) =>
+        file.sha && /\.css$/i.test(file.path)
+          ? links.filter((link) =>
+            path(link.href) == path(new URL(file.path, at))
+          ).at(-1)
+          : undefined
+      )
+      return found.length && found.every(Boolean) ? found : null
+    }
+    let swap = (link, sha) => {
+      let next = link.cloneNode()
+      let url = new URL(link.href, document.baseURI)
+      url.searchParams.set('yak-draft', sha)
+      next.href = String(url)
+      next.addEventListener('load', () => link.remove(), { once: true })
+      link.after(next)
+    }
+    let took = (news) => {
+      if (news.draft != draft || !Array.isArray(news.files)) return
+      let event = new CustomEvent('yak-draft', {
+        detail: news,
+        cancelable: true,
+      })
+      if (!dispatchEvent(event)) return
+      let links = sheets(news.files)
+      if (links) links.forEach((link, i) => swap(link, news.files[i].sha))
+      else reload()
+    }
+    let door = new URL('api/ws', at)
+    door.protocol = door.protocol == 'https:' ? 'wss:' : 'ws:'
+    let wait = 1000
+    let opened = false
+    let connect = () => {
+      let socket = new WebSocket(door)
+      socket.addEventListener('open', () => {
+        // A socket that dropped may have missed a write; the page reloads
+        // to show the draft as it stands.
+        if (opened) reload()
+        opened = true
+        wait = 1000
+      })
+      socket.addEventListener('message', ({ data }) => {
+        if (typeof data != 'string' || !data.startsWith('{"draft":')) return
+        try {
+          took(JSON.parse(data).draft)
+        } catch { /* a malformed packet is not a write */ }
+      })
+      socket.addEventListener('close', () => {
+        setTimeout(connect, wait)
+        wait = Math.min(wait * 2, 30000)
+      })
+    }
+    connect()
+  }
+  if (script.dataset.yakDraft) return following(script.dataset.yakDraft)
   let door = new URL('api/release', at)
   door.searchParams.set('version', String(version))
   let socketDoor = new URL('api/ws', at)

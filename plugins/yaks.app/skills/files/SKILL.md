@@ -48,12 +48,31 @@ shows up to 30 problems and five review items, with remaining counts. Findings
 never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
-The URL is a private bearer link lasting one hour. Anyone holding it can
-exercise the preview as its author while that author remains a writer; keep it
-private. Draft files, vocabulary, seed data and worker run with a separate test
-store. Preview edits do not change released app data, and do not become released
-data later. The preview store, script and snapshot expire together. External D1,
-R2, Vectorize and Durable Object bindings are unavailable in a draft preview.
+The URL is a private bearer link that follows the draft until the next
+`app_deploy` releases it. Anyone holding it can exercise the preview as its
+author while that author remains a writer; keep it private. Draft files,
+vocabulary, seed data and worker run with a separate test store, one per draft,
+kept while the draft is. Preview edits do not change released app data, and do
+not become released data later. External D1, R2, Vectorize and Durable Object
+bindings are unavailable in a draft preview.
+
+### A preview that follows the draft
+
+Leave the preview URL open, on a laptop or a TV, and each write to the draft
+shows there as it lands, without calling `app_preview` again:
+
+- a write of only stylesheets the page links swaps each one in place;
+- any other write reloads the page, keeping its scroll position and what was
+  typed into its fields;
+- a change to `worker.js`, `vocab.json` or a seed file sets up the preview's
+  worker or test store again first. A seed file applied again rewrites the rows
+  it seeded rather than adding new ones.
+
+Before either, the page receives a cancelable **`yak-draft` event on `window`**.
+Its `detail` is `{app, draft, files: [{path, sha}], at}`, where `sha` is null
+for a deleted file. Call `event.preventDefault()` synchronously to take the
+write yourself, for example by fetching the one module that changed. This
+happens only on the preview URL; released pages keep the reload notice below.
 
 Calls a draft worker makes to external services still reach those services; the
 separate test store isolates app data, not external side effects.

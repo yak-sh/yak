@@ -57,7 +57,8 @@ let scripts = (assets: Assets) => {
 
 /** The tags for a page mounted at `at`, of release `version`, wearing a badge
  * that opens `badge` unless it is null, and the hashes a policy needs to admit
- * them. A page
+ * them. A page of a draft's preview link (preview.ts) carries the release
+ * listener alone, told the `draft` it follows (`data-yak-draft`). A page
  * whose scripts could not be read is served without them, and the failure is
  * reported: a page that paints without its reporter beats one that fails. */
 export let pageScript = async (
@@ -65,11 +66,18 @@ export let pageScript = async (
   at: string,
   version: number,
   badge: string | null,
+  draft?: string,
 ) => {
   try {
     let [report, release, badged] = await scripts(assets)
     let tag = ({ text }: Script, more = '') =>
       `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
+    if (draft) {
+      return {
+        tags: tag(release, ` data-yak-draft="${esc(draft)}"`),
+        hashes: [release.hash],
+      }
+    }
     let all = badge == null ? [report, release] : [report, release, badged]
     return {
       tags: tag(report) + tag(release) +

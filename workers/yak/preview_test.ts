@@ -1,11 +1,11 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import { appStore } from './directory.ts'
 import { handler } from './kernel.ts'
-import { opened, seal } from './lib/token.ts'
 import { fetch as preview, tools, viewport } from './preview.ts'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { homed } from './page-graph.ts'
+import { sha256 } from './versions.ts'
 
 let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
   handler.fetch(req, env)
@@ -194,21 +194,77 @@ test('a store-scoped page keeps borrowed component homes out of its graph', asyn
   equal(graph.uses, {})
 })
 
-test('an expired private preview is unavailable', async () => {
-  let claims = await opened<Record<string, unknown>>(
-    'preview',
-    token,
-    env.SESSION_SECRET!,
+// A socket on the link, as the store holds one: what it was sent.
+let heard = () => {
+  let sent: { draft: { draft: string; files: unknown } }[] = []
+  let name = [...scenario.sockets.keys()].find((n) =>
+    n.includes(`preview/${app.draft}`)
+  )!
+  scenario.sockets.get(name)!.push({
+    readyState: 1,
+    send: (data: string) => void sent.push(JSON.parse(data)),
+    close: () => {},
+    serializeAttachment: () => {},
+    deserializeAttachment: () => null,
+  } as never)
+  return sent
+}
+let write = (path: string, content: string) =>
+  run('app_files', { app: 'draft', path, content })
+
+test('the link follows the draft: each write is told to its pages and served on the next request, and the released page stays as it was', async () => {
+  await run('app_deploy', { app: 'draft' })
+  let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  let link = String(out.value!.url)
+  let at = (path = '') => kernel(new Request(new URL(path, link)), env)
+  let page = await (await at()).text()
+  ok(page.includes(`data-yak-draft="${out.value!.draft}"`), page)
+  app = (await dir.app(space, 'draft'))!
+  let sent = heard()
+  await write('style.css', 'body { color: tomato }')
+  await write(
+    'index.html',
+    '<html><head></head><body>Soup tonight</body></html>',
   )
-  let expired = await seal(
-    'preview',
-    { ...claims, exp: 0 },
-    env.SESSION_SECRET!,
+  equal(await (await at('style.css')).text(), 'body { color: tomato }')
+  ok((await (await at()).text()).includes('Soup tonight'))
+  equal(sent.map((m) => m.draft.draft), [app.draft, app.draft])
+  equal(sent[0].draft.files, [{
+    path: 'style.css',
+    sha: await sha256(new TextEncoder().encode('body { color: tomato }')),
+  }])
+  let live = await kernel(new Request('https://ada.yaks.app/draft/'), env)
+  let released = await live.text()
+  ok(released.includes('Private draft') && !released.includes('Soup'))
+  ok(!released.includes('data-yak-draft="'))
+})
+
+test("a seed edited in the draft rewrites the rows it seeded in the link's store, never adding them again", async () => {
+  let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  let link = String(out.value!.url)
+  let notes = async () =>
+    (await (await kernel(
+      new Request(new URL('api/query?q=.draft_note', link)),
+      env,
+    )).json()).map((r: { draft_note: { text: string } }) => r.draft_note.text)
+  equal(await notes(), ['seeded privately'])
+  await write(
+    'seed.json',
+    JSON.stringify([{
+      entity: { eid: '$note' },
+      draft_note: { text: 'seeded again' },
+    }]),
   )
-  equal(
-    (await kernel(new Request(url.replace(token, expired)), env)).status,
-    404,
-  )
+  await kernel(new Request(link), env)
+  equal(await notes(), ['seeded again'])
+})
+
+test('a deploy releases the draft and ends its link', async () => {
+  let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  let link = String(out.value!.url)
+  equal((await kernel(new Request(link), env)).status, 200)
+  await run('app_deploy', { app: 'draft' })
+  equal((await kernel(new Request(link), env)).status, 404)
 })
 
 test('preview viewport uses CSS pixels at phone and desktop widths', async () => {

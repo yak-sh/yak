@@ -231,6 +231,8 @@ export type AppInfo = {
   blobs?: string | null
   draft?: string | null
   fence?: string | null
+  // The draft a preview link follows (preview.ts), whose writes are told.
+  followed?: string | null
   script?: string | null
   // The worker its release built: empty when it built none, so a page asks
   // the dispatch namespace for nothing (dispatch.ts `called`); null where no
@@ -461,6 +463,7 @@ export type Row = {
     blobs?: string | null
     draft?: string | null
     fence?: string | null
+    followed?: string | null
     script?: string | null
     worker?: string | null
     access?: Access | null
@@ -1035,6 +1038,7 @@ export let appAbout = (r: Row): AppInfo => ({
   blobs: r.app!.blobs ?? null,
   draft: r.app!.draft ?? null,
   fence: r.app!.fence ?? null,
+  followed: r.app!.followed ?? null,
   script: r.app!.script ?? null,
   worker: r.app!.worker ?? null,
   access: r.app!.access ?? unsaid(r.entity.eid),

@@ -15,7 +15,9 @@ import { addressed, sha256 } from './versions.ts'
 import {
   type Change,
   deleting,
+  type Drafted,
   drafting,
+  followed,
   history,
   modifying,
   replaced,
@@ -53,6 +55,7 @@ let vocab = loadVocab({
         source: 'string',
         version: 'number',
         fence: 'string',
+        followed: 'string',
       },
       written: {
         app: 'string',
@@ -129,6 +132,7 @@ let made = () => {
   } as unknown as Directory
   let bytes = new Map<string, Uint8Array<ArrayBuffer>>()
   let puts: string[] = []
+  let heard: Drafted[] = []
   let raw: Objects = {
     has: (key) => Promise.resolve(bytes.has(key)),
     put: (key, value) =>
@@ -185,6 +189,7 @@ let made = () => {
       app(),
       WHO,
       act,
+      (news) => Promise.resolve(void heard.push(news)),
       () => new Date(time.now() + skew).toISOString(),
     )
   let write = (sent: Record<string, string>) =>
@@ -225,6 +230,8 @@ let made = () => {
     write,
     read,
     puts,
+    heard,
+    follow: () => followed(dir, SPACE, app(), WHO),
     past,
     restore,
     remove,
@@ -251,6 +258,25 @@ test('a first write sends every new file at its content address', async () => {
     puts.sort(),
     [addressed(sha('one')), addressed(sha('two'))].sort(),
   )
+})
+let unfollowed = made()
+test('a write to a draft a link follows tells its files and shas once they land; one that changes nothing, or that no link follows, tells nobody', async () => {
+  let { write, heard, draft, follow } = made()
+  await follow()
+  await write({ 'a.txt': 'one', 'b.txt': 'two' })
+  await write({ 'a.txt': 'one' })
+  await unfollowed.write({ 'a.txt': 'one' })
+  assertEquals(unfollowed.heard, [])
+  let { rows } = await draft()
+  assertEquals(heard, [{
+    app: APP,
+    draft: rows[0].draft!,
+    files: [
+      { path: 'a.txt', sha: sha('one') },
+      { path: 'b.txt', sha: sha('two') },
+    ],
+    at: rows[0].at!,
+  }])
 })
 test('a write sent again sends only what did not land, and says so', async () => {
   let { write, puts } = repeatedWrite

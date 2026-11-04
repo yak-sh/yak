@@ -68,7 +68,6 @@ test('a draft preview carries serving authority to its store reads and writes', 
   equal(rows[0].doc.title, 'Private')
 })
 
-let { opened, seal } = await import('./lib/token.ts')
 let { shim } = await import('./dispatch.ts')
 let data = (source: string) =>
   'data:text/javascript,' + encodeURIComponent(source)
@@ -95,21 +94,23 @@ p.env.DISPATCH = {
       }, {}),
   }),
 }
-let ticket = new URL(url).pathname.split('/')[3]
-let claims = await opened<Record<string, unknown>>(
-  'preview',
-  ticket,
-  p.env.SESSION_SECRET!,
-)
-let withWorker = await seal(
-  'preview',
-  { ...claims, worker: 'private-worker' },
-  p.env.SESSION_SECRET!,
-)
-let workerRead = await handler.fetch(
-  new Request(url.replace(ticket, withWorker)),
-  p.env,
-)
+// The draft's worker.js makes the link's next state upload one, here to a
+// Cloudflare that only says yes.
+Object.assign(p.env, { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' })
+let cloudflare = globalThis.fetch
+globalThis.fetch = (() =>
+  Promise.resolve(Response.json({
+    success: true,
+    errors: [],
+    result: { id: 'preview', deployment_id: 'dep-1' },
+  }))) as typeof fetch
+await tool('app_files', {
+  app: 'authority',
+  path: 'worker.js',
+  content: 'export default { fetch: () => new Response("unused") }',
+})
+let workerRead = await handler.fetch(new Request(url), p.env)
+globalThis.fetch = cloudflare
 let workerText = await workerRead.text()
 test('a concurrent directory edit leaves a preview worker able to read its isolated store', () => {
   equal(workerRead.status, 200)

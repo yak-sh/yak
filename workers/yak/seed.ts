@@ -34,6 +34,7 @@
 // bigger than a part (`parts`). A seed is one part at most; a load bigger than
 // one is written a part per batch, each whole or not at all.
 import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
@@ -120,6 +121,43 @@ export let loaded = (files: Text[], as?: Sheet): Sown[] =>
         : bundles(f.path, f.text)
           .map((bundle, index) => ({ file: f.path, index, bundle }))
     )
+
+/** A seed's bundles with each `$alias` they mint named for `salt` instead,
+ * so applying the seed again writes the rows it wrote before rather than new
+ * ones: how a preview's store takes an edited seed (preview.ts).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { derivedEid } from '@yaks/graph/identity'
+ * let note = derivedEid('seed|s|$note')
+ * let sown = [
+ *   { entity: { eid: '$note' }, doc: { title: 'A note' } },
+ *   { entity: { eid: '$pin' }, pin: { on: '$note' } },
+ * ].map((bundle, index) => ({ file: 'seed.json', index, bundle }))
+ * assertEquals(pinned(sown, 's'), [
+ *   { entity: { eid: note }, doc: { title: 'A note' } },
+ *   { entity: { eid: derivedEid('seed|s|$pin') }, pin: { on: note } },
+ * ])
+ * ```
+ */
+export let pinned = (sown: Sown[], salt: string): Bundle[] => {
+  let aliases = new Set(
+    sown.map((s) => s.bundle.entity?.eid).filter((eid) =>
+      typeof eid == 'string' && eid.startsWith('$')
+    ),
+  )
+  let named = (value: unknown): unknown =>
+    typeof value == 'string'
+      ? aliases.has(value) ? derivedEid(`seed|${salt}|${value}`) : value
+      : Array.isArray(value)
+      ? value.map(named)
+      : value && typeof value == 'object'
+      ? Object.fromEntries(
+        Object.entries(value).map(([key, v]) => [key, named(v)]),
+      )
+      : value
+  return sown.map((s) => named(s.bundle) as Bundle)
+}
 
 /** Every bundle an app's seed holds — the seed files among its own, read as
  * one. */

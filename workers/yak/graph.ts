@@ -3253,6 +3253,18 @@ export class Store {
     return this.#profile ? this.#profile.run('alarm', run) : run()
   }
 
+  // One packet to every socket, subscribed or not: a page decides what to do
+  // with a release or a draft write.
+  #broadcast(packet: string, request: string) {
+    for (let ws of this.#ctx.getWebSockets()) {
+      try {
+        ws.send(packet)
+      } catch (error) {
+        caught(error, { request, store: this.#name() })
+      }
+    }
+  }
+
   async #expiring(expires: Expiry) {
     try {
       await this.#sleep()
@@ -4686,15 +4698,30 @@ export class Store {
       } catch (error) {
         return refuse(error, request)
       }
-      let packet = JSON.stringify({ release: { version } })
-      for (let ws of this.#ctx.getWebSockets()) {
-        try {
-          ws.send(packet)
-        } catch (error) {
-          caught(error, { request: 'POST /released', store: this.#name() })
-        }
-      }
+      this.#broadcast(
+        JSON.stringify({ release: { version } }),
+        'POST /released',
+      )
       return Response.json({ version })
+    }
+    // A write to the draft this store previews (preview.ts `told`), told to
+    // every page on its link the way a release is.
+    if (path == '/drafted') {
+      if (!kernel || request.method != 'POST') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let draft
+      try {
+        draft = (JSON.parse(await readBody(request)) as { draft?: unknown })
+          .draft
+        if (!draft || typeof draft != 'object' || Array.isArray(draft)) {
+          throw new Refused('/drafted needs a draft')
+        }
+      } catch (error) {
+        return refuse(error, request)
+      }
+      this.#broadcast(JSON.stringify({ draft }), 'POST /drafted')
+      return Response.json({ ok: true })
     }
     if (path == '/api/vocab') {
       return this.#route(new Request(new URL('/vocab', request.url), request))

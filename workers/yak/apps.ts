@@ -477,8 +477,9 @@ export let reported = async (
   page: Response,
   version: number,
   badge: string | null,
+  draft?: string,
 ) => {
-  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badge)
+  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badge, draft)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -1004,7 +1005,7 @@ export let woven = async (
   bare: string,
   app: App,
   tags: string,
-  scripts: { badge: string | null } | null,
+  scripts: { badge: string | null; draft?: string } | null,
   base = at,
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source, base), app)
@@ -1017,7 +1018,14 @@ export let woven = async (
     base,
   )
   if (scripts) {
-    page = await reported(env, at, page, app.version ?? 0, scripts.badge)
+    page = await reported(
+      env,
+      at,
+      page,
+      app.version ?? 0,
+      scripts.badge,
+      scripts.draft,
+    )
   }
   return await page.text()
 }

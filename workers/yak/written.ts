@@ -148,6 +148,51 @@ let over = async (dir: Directory, app: App, base: Promise<Files>) => {
   return { files: overlaid(files, rows), rows }
 }
 
+/** One write to a draft as the pages following it hear it: the files it
+ * left, each at its sha, null for a delete. */
+export type Drafted = {
+  app: string
+  draft: string
+  files: { path: string; sha: string | null }[]
+  at: string
+}
+
+/** Where a draft's writes are told: its preview link's pages (preview.ts
+ * `watching`). Never refuses: the write has already landed. */
+export type Tell = (news: Drafted) => Promise<void>
+
+/** The app's draft, opened if it has none, and marked as one a link
+ * follows (`app.followed`, preview.ts), so its writes are told; a write to a
+ * draft no link follows costs nothing more. */
+export let followed = async (
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+): Promise<App> => {
+  let row = app
+  for (let n = 0; n < 5; n++) {
+    row = await waiting(dir, space, row, who)
+    if (row.draft && row.followed == row.draft) return row
+    let draft = row.draft ?? mint()
+    try {
+      await dir.stamp({
+        entities: [{
+          entity: { eid: row.eid },
+          app: { draft, followed: draft },
+          $was: {
+            app: { draft: token(row.draft ?? null), fence: token(null) },
+          },
+        }],
+      }, vouched(who))
+      return { ...row, draft, followed: draft }
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+    }
+  }
+  throw refuse('conflict', `app ${app.slug} changed while opening its draft`)
+}
+
 /** One path a write changes: to new bytes, to a sha already stored (a restore,
  * an install), or to nothing (a delete). `sha` is the bytes' own when they
  * are sent. */
@@ -166,7 +211,8 @@ export type Change = {
  *
  * A change that leaves a path as the draft already holds it is left out: a
  * write sent again after it was cut off puts and records only what did not
- * land, and says which were there (`already`). Answers which paths it wrote.
+ * land, and says which were there (`already`). Answers which paths it wrote,
+ * and once they have landed tells `tell`, if a link follows the draft.
  * `now` is the writer's clock; persisted draft stamps order edits even when
  * that clock stops or moves backwards.
  */
@@ -181,6 +227,7 @@ export let modifying = async <T>(
     app: App,
     attempt: number,
   ) => Promise<{ changes: Change[]; value: T }>,
+  tell: Tell,
   now = () => new Date().toISOString(),
 ): Promise<{ value: T; wrote: string[]; already: string[] }> => {
   // Bytes this call already put, so a write that goes round again does not
@@ -259,6 +306,14 @@ export let modifying = async <T>(
           })),
         ],
       }, vouched(who))
+      if (row.followed == id) {
+        await tell({
+          app: row.eid,
+          draft: id,
+          files: todo.map((c) => ({ path: c.path, sha: c.sha ?? null })),
+          at,
+        })
+      }
       return { value, wrote: todo.map((c) => c.path), already }
     } catch (e) {
       if (!(e instanceof Stale)) throw e

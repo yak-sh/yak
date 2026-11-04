@@ -108,7 +108,7 @@ import {
 import * as dirPart from './directory.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
-import { tools as previewTools } from './preview.ts'
+import { tools as previewTools, watching } from './preview.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
@@ -1791,6 +1791,7 @@ let copied = async (
         value: { wrote: own(Object.keys(from)), gone: own(gone) },
       })
     },
+    watching(ctx.env, onto.space, onto.app),
   )).value
 
 let answer = (
@@ -2129,6 +2130,7 @@ export let drafted = async (
       config.catch(() => {})
       return Promise.resolve({ changes, value: null })
     },
+    watching(env, space, app),
   )
   if (!who.administrative) scheduleUse(env, app.eid)
   return { config: await config, already }
@@ -2186,6 +2188,7 @@ let swept = async (
         value: gone,
       })
     },
+    watching(env, space, app),
   )).value
 }
 
@@ -3282,6 +3285,7 @@ let OURS: Row[] = [
           app,
           who,
           (d, _app, attempt) => Promise.resolve(deleting(d, path, attempt)),
+          watching(ctx.env, space, app),
         )
         if (!who.administrative) scheduleUse(ctx.env, app.eid)
         return {
