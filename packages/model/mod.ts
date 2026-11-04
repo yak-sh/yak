@@ -166,6 +166,9 @@ export let models = (): Plugin => ({
 /** One line of a conversation as a model sees it. */
 export type Item =
   | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
+  /** a document the model reads as it is, such as a PDF; a provider that
+   * reads none refuses the request */
+  | { kind: 'document'; bytes: Uint8Array; mediaType: string; label: string }
   | { kind: 'instruction'; text: string }
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string; id?: string }

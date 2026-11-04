@@ -15,7 +15,7 @@ let obj = (v: unknown): Record<string, unknown> =>
 
 /** Music models read the conversation's words as their prompt, not tools. */
 export let musicInput = (req: Request): Record<string, unknown> => {
-  if (req.questions || req.items.some((i) => i.kind == 'image')) {
+  if (req.questions || req.items.some((i) => 'bytes' in i)) {
     throw new ModelError(
       'music_input',
       'Music takes text, not questions/images',

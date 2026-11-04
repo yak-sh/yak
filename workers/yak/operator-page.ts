@@ -15,7 +15,23 @@ import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
 import { CONSENT, handed, type Texting, texts } from './operator-texts.ts'
 import { CallError } from '@yaks/tools/errors'
-import { reply, sidebar, type Worked, worked } from './operator-view.ts'
+import {
+  attached,
+  PICTURES,
+  reply,
+  sidebar,
+  type Worked,
+  worked,
+} from './operator-view.ts'
+import { DOCUMENTS } from './documents.ts'
+
+// What the message box takes: up to COUNT files at a time, each up to SIZE
+// (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
+// `fileText`, and Claude's own); a file of another kind is kept with the
+// message, and the box says the Operator can't read it.
+let COUNT = 10
+let SIZE = 16 * 1000 * 1000
+let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)].join(',')
 
 let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
@@ -90,16 +106,20 @@ let textingOf = async (env: Env, space: Space, who: Who) => {
 }
 
 /** A request no session has taken yet, as its conversation draws it: what
- * was asked, and what became of it in plain words, never the error. */
-export let conversation = (rows: Bundle[], at = '') =>
+ * was asked with the files sent with it, and what became of it in plain
+ * words, never the error. */
+export let conversation = (rows: Bundle[]) =>
   rows.map((row) => {
     let request = row.operator_request as Intake
     let doc = row.doc as { title?: string; body?: string }
     let answer = row.operator_answer as { text?: string } | undefined
     let failed = row.failed ?? row.bounced
+    let files = request.files ?? []
     return `<div class="Talk_Thread"${
       answer || failed ? '' : ' data-pending'
-    }><div class="Talk_Said"><p class="Talk_You">${esc(doc.body ?? '')}</p>${
+    }><div class="Talk_Said"><div>${
+      doc.body ? `<p class="Talk_You">${esc(doc.body)}</p>` : ''
+    }${attached(row.entity.eid, files)}</div>${
       answer?.text
         ? reply(answer.text)
         : `<p class="Talk_Note">${
@@ -111,17 +131,7 @@ export let conversation = (rows: Bundle[], at = '') =>
       failed && answer
         ? '<p class="Talk_Note">The answer could not be sent to you. It is kept here.</p>'
         : ''
-    }</div>${
-      request.files?.length
-        ? `<p class="Talk_Files">${
-          request.files.map((f, i) =>
-            `<a href="${esc(at)}?attachment=${row.entity.eid}&file=${i}">${
-              esc(f.name)
-            }</a>`
-          ).join('')
-        }</p>`
-        : ''
-    }</div>`
+    }</div></div>`
   }).join('')
 
 let page = (html: string) =>
@@ -165,12 +175,17 @@ export let operatorAnswer = async (
     }
     let kept = await env.BLOBS.get(file.key)
     if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
+    // A picture opens in place, as the conversation draws it; anything else
+    // is saved. Neither is ever read as a page of yaks.app.
+    let shows = PICTURES.includes(file.mime)
     return new Response(await kept.arrayBuffer(), {
       headers: {
-        'content-type': file.mime,
-        'content-disposition': `attachment; filename*=UTF-8''${
-          encodeURIComponent(file.name)
-        }`,
+        'content-type': shows ? file.mime : 'application/octet-stream',
+        'content-disposition': `${
+          shows ? 'inline' : 'attachment'
+        }; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "sandbox; default-src 'none'",
         'cache-control': 'private, no-store',
       },
     })
@@ -215,6 +230,9 @@ export let operatorAnswer = async (
     let form = new FormData()
     let files = []
     for await (let part of parts(req)) {
+      if (part.filename && files.length == COUNT) {
+        throw refuse('arguments', `Send up to ${COUNT} files at a time.`)
+      }
       let bytes = await gathered(
         part.body,
         part.filename ? 16 * 1024 * 1024 : 1024 * 1024,
@@ -316,7 +334,7 @@ let conversationOf = async (
     'conversation',
     { at, open },
   ) as { task: string; title: string; html: string; waiting: Bundle[] }
-  return { task, title, html: html + conversation(waiting, at) }
+  return { task, title, html: html + conversation(waiting) }
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
@@ -450,14 +468,16 @@ ${chatScript(at, who, space, open)}`,
 }
 
 // The box a person writes in, at the foot of the conversation: their words,
-// files to send with them, Send, and Stop while the Operator works.
+// the files going with them along its top (a gathering drop part,
+// public/drop.js: picked, pasted or dropped anywhere on the box, each a
+// preview or a chip to take back), Send, and Stop while the Operator works.
 let composer = (at: string, task: string) =>
   `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
 <input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="${
     esc(task)
   }">
-<div class="Talk_Write"><textarea class="Field Talk_Field" name="say" placeholder="Message the Operator" aria-label="Message the Operator"></textarea>
-<div class="Talk_Tools"><label class="Talk_Attach">＋ Add files<input type="file" name="file" multiple></label><span class="Talk_Chosen" data-chosen></span><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
+<div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="Message the Operator" aria-label="Message the Operator"></textarea>
+<div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
 
 // The chat app's script: the durable draft and sending, Stop, and the
@@ -511,10 +531,6 @@ let follow = (was) => { if (was) globalThis.scrollTo?.(0, document.body.scrollHe
 // Enter sends, Shift+Enter starts a new line.
 form?.elements.say.addEventListener('keydown', (e) => {
   if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit?.() }
-})
-let files = form?.elements.file
-files?.addEventListener('change', () => {
-  form.querySelector('[data-chosen]').textContent = [...(files.files ?? [])].map((f) => f.name).join(', ')
 })
 // Stop takes effect on the page at once; the Operator's own word follows.
 document.addEventListener('click', async (e) => {

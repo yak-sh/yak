@@ -59,22 +59,31 @@ let str = (value: unknown, fallback = '') =>
   typeof value == 'string' ? value : fallback
 
 // The neutral items in the API's four shapes.
+let dataUrl = (m: Extract<Item, { bytes: Uint8Array }>) => {
+  let chunks: string[] = []
+  for (let at = 0; at < m.bytes.length; at += 8192) {
+    chunks.push(String.fromCharCode(...m.bytes.subarray(at, at + 8192)))
+  }
+  return 'data:' + m.mediaType + ';base64,' + btoa(chunks.join(''))
+}
 let shape: Record<Item['kind'], (item: Item) => unknown> = {
   image: (i) => {
     let image = i as Extract<Item, { kind: 'image' }>
-    let chunks: string[] = []
-    for (let at = 0; at < image.bytes.length; at += 8192) {
-      chunks.push(String.fromCharCode(...image.bytes.subarray(at, at + 8192)))
-    }
     return {
       role: 'user',
       content: [
         { type: 'input_text', text: image.label },
-        {
-          type: 'input_image',
-          image_url: 'data:' + image.mediaType + ';base64,' +
-            btoa(chunks.join('')),
-        },
+        { type: 'input_image', image_url: dataUrl(image) },
+      ],
+    }
+  },
+  document: (i) => {
+    let doc = i as Extract<Item, { kind: 'document' }>
+    return {
+      role: 'user',
+      content: [
+        { type: 'input_text', text: doc.label },
+        { type: 'input_file', filename: doc.label, file_data: dataUrl(doc) },
       ],
     }
   },

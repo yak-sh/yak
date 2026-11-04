@@ -377,6 +377,6 @@ export let itemLines = (items: Item[]): Line[] => {
       ? (calls.set(i.id, i.name), [`call ${i.name}`, i.args.length])
       : i.kind == 'result'
       ? [`result ${calls.get(i.id) ?? 'tool'}`, i.output.length]
-      : ['image', i.bytes.length]
+      : [i.kind, i.bytes.length]
   )
 }

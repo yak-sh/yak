@@ -64,6 +64,46 @@ let spoken = (body: string) =>
 
 let yours = (text: string) => `<p class="Talk_You">${esc(text)}</p>`
 
+type Sent = { name: string; mime?: string }
+
+/** What a person said who sent files and no words. */
+export let unsaid = (files: Sent[]) =>
+  'Attached: ' + files.map((f) => f.name).join(', ')
+
+// The kinds a browser draws as a picture, never a drawing that runs (SVG).
+export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+
+/** The files a person sent, under their words as a chat app shows them: a
+ * picture as itself, any other file as its kind and name, each opening the
+ * original (operator-page.ts `?attachment=`, answered on either page). */
+export let attached = (request: string, files: Sent[]) =>
+  files.length
+    ? `<div class="Talk_Files">${
+      files.map((f, i) => {
+        let href = `?attachment=${esc(request)}&amp;file=${i}`
+        return PICTURES.includes(f.mime ?? '')
+          ? `<a class="Talk_Picture" href="${href}" target="_blank"><img src="${href}" alt="${
+            esc(f.name)
+          }" loading="lazy"></a>`
+          : `<a class="Talk_File" href="${href}"><span class="Drop_Kind">${
+            esc(
+              f.name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File',
+            )
+          }</span><span class="Drop_Name">${esc(f.name)}</span></a>`
+      }).join('')
+    }</div>`
+    : ''
+
+// A person's input: their words, and the files that came with them.
+let input = (b: Bundle, body: string) => {
+  let sent = comp(b, 'operator_files')
+  let files = (sent?.files ?? []) as Sent[]
+  let said = spoken(body)
+  return `${said && said != unsaid(files) ? yours(said) : ''}${
+    sent ? attached(String(sent.request), files) : ''
+  }`
+}
+
 /** A reply as the Operator wrote it, in Markdown, drawn as text: markup in it
  * stays words (@yaks/markdown). */
 export let reply = (text: string) =>
@@ -159,7 +199,7 @@ export let rows = (entries: Bundle[], names: Names): Row[] => {
       return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
     }
     if (body && !NOT_INPUT.some((c) => b[c])) {
-      return [{ id, html: yours(spoken(body)) }]
+      return [{ id, html: input(b, body) }]
     }
     return []
   })
@@ -220,6 +260,11 @@ export let talk = (
   at: string,
 ) => {
   let working = now(entries, names)
+  // Files drawn under the words they came with are not listed again.
+  let drawn = new Set(
+    entries.map((b) => comp(b, 'operator_files')?.request).filter(Boolean),
+  )
+  let rest = files.filter((f) => !drawn.has(f.request))
   return `<div class="Talk_Thread" data-task="${esc(task.entity.eid)}"${
     working ? ' data-pending' : ''
   }><div class="Talk_Said" data-rows>${
@@ -227,9 +272,9 @@ export let talk = (
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
   }</div><p class="Talk_Now" role="status" data-now>${esc(working)}</p>${
-    files.length
+    rest.length
       ? `<p class="Talk_Files">${
-        files.map((f) =>
+        rest.map((f) =>
           `<a href="${esc(at)}?attachment=${esc(f.request)}&file=${f.index}">${
             esc(f.name)
           }</a>`

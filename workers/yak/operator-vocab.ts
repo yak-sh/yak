@@ -38,6 +38,15 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    operator_files: {
+      component: true,
+      description:
+        'The files that came with an input, from the request they were sent in: the model is shown the ones it reads as they are, beside the words.',
+      properties: {
+        request: { type: 'string', ref: 'entity', death: 'keep' },
+        files: { type: 'array', items: { type: 'object' } },
+      },
+    },
     operator_answer: {
       component: true,
       description: 'The answer kept before its channel attempts delivery.',

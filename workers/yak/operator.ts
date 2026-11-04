@@ -10,9 +10,9 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { listing } from '@yaks/mcp'
-import { billed, type Model, type Price } from '@yaks/model'
+import { billed, type Item, type Model, type Price } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
-import { claude, providerOf } from './claude.ts'
+import { claude, providerOf, readsOf } from './claude.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools } from '@yaks/graph/tools'
@@ -35,7 +35,7 @@ import { caught, defect } from './defects.ts'
 import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
-import type { File } from './operator-channels.ts'
+import { asIs, type File, SHOWN } from './operator-channels.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
@@ -337,6 +337,41 @@ export let operating = (
     model: identityEid('model', [name]),
   }
   let base = options.model ?? operatorModel(env, provider)
+  let reads = readsOf(provider)
+  // The files the model reads as they are, shown beside the words they came
+  // with: the newest first, until SHOWN bytes are in the request; one past
+  // that is named instead, and its words still say what it held.
+  let shown = async (window: Bundle[]) => {
+    let out = new Map<string, Item[]>()
+    let room = SHOWN
+    for (let entry of [...window].reverse()) {
+      let files = (comp(entry, 'operator_files')?.files ?? []) as File[]
+      let items: Item[] = []
+      for (let file of files.filter((f) => asIs(reads, f))) {
+        if (file.size! > room) {
+          items.push({
+            kind: 'user',
+            text:
+              `${file.name} was attached earlier, and is not shown again beside the newer files.`,
+          })
+          continue
+        }
+        let kept = await env.BLOBS.get(file.key)
+        if (!kept) {
+          throw new Error('Operator attachment is missing: ' + file.name)
+        }
+        room -= file.size!
+        items.push({
+          kind: file.mime == 'application/pdf' ? 'document' : 'image',
+          bytes: new Uint8Array(await kept.arrayBuffer()),
+          mediaType: file.mime,
+          label: 'Attached: ' + file.name,
+        })
+      }
+      if (items.length) out.set(entry.entity.eid, items)
+    }
+    return out
+  }
   // A model's price, from what its provider lists, asked once per name.
   let prices = new Map<string, Promise<Price | undefined>>()
   let priced = (model: string) => {
@@ -435,6 +470,7 @@ export let operating = (
       provider,
       // Its text is shown as it is written (@yaks/session run.ts `step`).
       streaming: true,
+      context: shown,
       tools: delegate ? sessionTools(g).filter((t) => t.name == 'spawn') : [],
       // A child works for the same space and person as the session that
       // started it, and is charged to that space.
@@ -558,6 +594,9 @@ export let operating = (
         entity: { eid: input },
         entry: { session },
         content: { body: newest ? text : JSON.stringify({ task: row }) },
+        ...o.request && o.files?.length
+          ? { operator_files: { request: o.request, files: o.files } }
+          : {},
         using,
         $actor: { by, via: session },
       },
@@ -624,7 +663,7 @@ export let operating = (
     return { task, session, stopped: true }
   }
 
-  return { store, ask, run, stop }
+  return { store, reads, ask, run, stop }
 }
 
 export type Asking = {
@@ -640,6 +679,8 @@ export type Asking = {
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {
   store: Store
+  /** What its model reads as it is, beside text (claude.ts `readsOf`). */
+  reads: Record<string, number>
   /** Words on a task: a new task and session, or the next input of the
    * task's newest session. Answers at once with where they went. */
   ask: (

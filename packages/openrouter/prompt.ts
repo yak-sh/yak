@@ -1,5 +1,5 @@
 /** Stable tool declarations and append-only provider cache boundaries. */
-import type { Item, Request, Tool } from '@yaks/model'
+import { type Item, ModelError, type Request, type Tool } from '@yaks/model'
 import { input, type ResponseRequest } from '@yaks/openai'
 import { encoded } from './bytes.ts'
 
@@ -55,9 +55,15 @@ export let alibabaCache = (model: string) => alibaba.has(model.split(':')[0])
 export let explicit = (model: string) =>
   model.startsWith('anthropic/') || alibabaCache(model)
 
+let unread = (): never => {
+  throw new ModelError(
+    'document',
+    'OpenRouter chat models are sent no documents',
+  )
+}
 let text = (value: string): Part[] => [{ type: 'text', text: value }]
 let message = (item: Item): Message =>
-  item.kind == 'call'
+  item.kind == 'document' ? unread() : item.kind == 'call'
     ? {
       role: 'assistant',
       tool_calls: [{

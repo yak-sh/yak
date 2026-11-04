@@ -16,9 +16,22 @@ export type Conversion = { format: string; data?: string; error?: string }
 export type Markdown = (
   file: { name: string; blob: Blob },
 ) => Promise<Conversion>
+/** The documents read as their text, by extension. */
+export let DOCUMENTS = [
+  'pdf',
+  'docx',
+  'xlsx',
+  'xlsm',
+  'xlsb',
+  'xls',
+  'ods',
+  'odt',
+  'csv',
+  'numbers',
+]
+let documentName = new RegExp(`\\.(${DOCUMENTS.join('|')})$`, 'i')
 export let supported = (name: string, mime: string) =>
-  mime == 'application/pdf' ||
-  /\.(pdf|docx|xlsx|xlsm|xlsb|xls|ods|odt|csv|numbers)$/i.test(name)
+  mime == 'application/pdf' || documentName.test(name)
 export let isPdf = (name: string, mime: string) =>
   mime == 'application/pdf' || /\.pdf$/i.test(name)
 

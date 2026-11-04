@@ -11,6 +11,7 @@ export let FRAMING = 1024
 
 let media = new Set([
   'image',
+  'document',
   'image_url',
   'input_image',
   'audio',
@@ -21,7 +22,8 @@ let textual = (value: unknown): boolean =>
   value == null || typeof value != 'object' ||
   !ArrayBuffer.isView(value) && !(value instanceof ArrayBuffer) &&
     (Array.isArray(value) ? value.every(textual) : Object.entries(value).every(
-      ([k, v]) => !media.has(k) && !(k == 'kind' && v == 'image') && textual(v),
+      ([k, v]) =>
+        !media.has(k) && !(k == 'kind' && media.has(String(v))) && textual(v),
     ))
 
 /** An upper bound on the input tokens a text prompt can bill, never above the

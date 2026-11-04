@@ -144,6 +144,11 @@ let messages = (req: Request): Message[] => {
     let last = out.at(-1)
     if (i.kind == 'image') {
       throw new ModelError('image', 'Workers AI models are sent no images')
+    } else if (i.kind == 'document') {
+      throw new ModelError(
+        'document',
+        'Workers AI models are sent no documents',
+      )
     } else if (i.kind == 'instruction') {
       out.push({ role: 'system', content: i.text })
     } else if (i.kind == 'user') out.push({ role: 'user', content: i.text })

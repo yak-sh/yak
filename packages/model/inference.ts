@@ -18,6 +18,9 @@ export type Executor = {
   resume: (call: string) => Promise<Reply | undefined>
 }
 
+// The items that carry bytes, frozen as arrays of numbers.
+type Media = 'image' | 'document'
+
 /** JSON input to an executor. Functions and process-local cancellation never
  * enter the private frozen object. */
 export type FrozenModelRequest =
@@ -36,8 +39,8 @@ export type FrozenModelRequest =
     | 'conversation'
   >
   & {
-    items: (Exclude<Request['items'][number], { kind: 'image' }> | {
-      kind: 'image'
+    items: (Exclude<Request['items'][number], { kind: Media }> | {
+      kind: Media
       bytes: number[]
       mediaType: string
       label: string
@@ -71,7 +74,7 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
     anchor,
     conversation,
     items: req.items.map((item) =>
-      item.kind === 'image' ? { ...item, bytes: [...item.bytes] } : item
+      'bytes' in item ? { ...item, bytes: [...item.bytes] } : item
     ),
   }))
 }
@@ -79,9 +82,7 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
 export let thawedRequest = (req: FrozenModelRequest): Request => ({
   ...req,
   items: req.items.map((item) =>
-    item.kind === 'image'
-      ? { ...item, bytes: Uint8Array.from(item.bytes) }
-      : item
+    'bytes' in item ? { ...item, bytes: Uint8Array.from(item.bytes) } : item
   ),
 })
 

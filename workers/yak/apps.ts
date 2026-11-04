@@ -2509,10 +2509,11 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   }
   // The Operator is open to every member who may change the space; its own
   // requests are answered by it, its settings page is drawn like every
-  // other, and each conversation with it opens in its chat app.
+  // other, and each conversation with it opens in its chat app, which
+  // opens the files sent in it where it stands (operator-view.ts `attached`).
   if (view == 'operator' && writes(who.role) && !space.trashed) {
     let { chatPage, operatorAnswer } = await import('./operator-page.ts')
-    if (at.open) {
+    if (at.open && !new URL(req.url).searchParams.has('attachment')) {
       return req.method == 'GET' || req.method == 'HEAD'
         ? chatPage(env, space, who, at.open)
         : nothingHere(env)

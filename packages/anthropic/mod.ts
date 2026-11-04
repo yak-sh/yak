@@ -38,8 +38,9 @@ import {
 } from '@yaks/model'
 import { anthropicDoc } from './vocab.ts'
 import { mark } from './mark.ts'
+import { READS } from './reads.ts'
 
-export { anthropicDoc, mark }
+export { anthropicDoc, mark, READS }
 
 export type Options = {
   /** Obtain an Anthropic API key at the moment of the call. */
@@ -66,35 +67,51 @@ export let system = (req: Request): string | undefined => {
   return text || undefined
 }
 
-let block = (i: Item): ['user' | 'assistant', Block] | undefined => {
+let blocks = (i: Item): ['user' | 'assistant', Block[]] | undefined => {
   switch (i.kind) {
     case 'user':
     case 'instruction':
-      return i.text ? ['user', { type: 'text', text: i.text }] : undefined
+      return i.text ? ['user', [{ type: 'text', text: i.text }]] : undefined
     case 'assistant':
-      return i.text ? ['assistant', { type: 'text', text: i.text }] : undefined
+      return i.text
+        ? ['assistant', [{ type: 'text', text: i.text }]]
+        : undefined
+    // Named first, so Claude knows which file it is looking at.
     case 'image':
-      return ['user', {
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: i.mediaType as 'image/png',
-          data: base64(i.bytes),
-        },
-      }]
+    case 'document': {
+      let source = { type: 'base64', data: base64(i.bytes) }
+      return ['user', [
+        ...i.label ? [{ type: 'text' as const, text: i.label }] : [],
+        i.kind == 'image'
+          ? {
+            type: 'image',
+            source: {
+              ...source,
+              media_type: i.mediaType as 'image/png',
+            } as Anthropic.Base64ImageSource,
+          }
+          : {
+            type: 'document',
+            source: {
+              ...source,
+              media_type: i.mediaType as 'application/pdf',
+            } as Anthropic.Base64PDFSource,
+          },
+      ]]
+    }
     case 'call':
-      return ['assistant', {
+      return ['assistant', [{
         type: 'tool_use',
         id: i.id,
         name: i.name,
         input: parsed(i.args),
-      }]
+      }]]
     case 'result':
-      return ['user', {
+      return ['user', [{
         type: 'tool_result',
         tool_use_id: i.id,
         content: i.output,
-      }]
+      }]]
   }
 }
 
@@ -104,12 +121,12 @@ export let conversation = (req: Request): Param[] => {
   let lead = req.items.findIndex((i) => i.kind != 'instruction')
   let out: Param[] = []
   for (let i of lead < 0 ? [] : req.items.slice(lead)) {
-    let b = block(i)
+    let b = blocks(i)
     if (!b) continue
     let [role, content] = b
     let last = out.at(-1)
-    if (last?.role == role) (last.content as Block[]).push(content)
-    else out.push({ role, content: [content] })
+    if (last?.role == role) (last.content as Block[]).push(...content)
+    else out.push({ role, content })
   }
   return out
 }

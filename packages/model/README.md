@@ -61,9 +61,11 @@ deno add jsr:@yaks/model
 and JSON Schema `parameters`. A `call` item holds JSON arguments in `args`; a
 `result` item answers that call by its `id`. The caller executes tools.
 
-An `image` item holds `bytes`, `mediaType` and a textual `label`. The caller
-resolves stored media into bytes before calling the model. A provider adapter
-translates items into its protocol and determines which inputs it supports.
+An `image` item holds `bytes`, `mediaType` and a textual `label`; a `document`
+item holds the same for a document the model reads as it is, such as a PDF. The
+caller resolves stored media into bytes before calling the model. A provider
+adapter translates items into its protocol and determines which inputs it
+supports, refusing a request with one it does not.
 
 A **text delta** (`TextDelta`) is output text delivered to `Request.onText`; its
 `index` identifies the final assistant item in `Reply.items`. It excludes
@@ -605,7 +607,7 @@ distinguish it from an interrupted inline call before the request is frozen.
 private object references on the original ask. Its receipt reference is absent
 until delivery can resume. Requests and receipts contain conversation data and
 must stay private. `frozenRequest` removes process callbacks and serializes
-image bytes; `thawedRequest` restores the model request.
+image and document bytes; `thawedRequest` restores the model request.
 
 ```ts
 import { frozenRequest, thawedRequest } from '@yaks/model'

@@ -80,7 +80,7 @@ export let claude = (opts: Options = {}): Model =>
       )
     }
     if (
-      req.input || req.items.some((i) => i.kind == 'image') ||
+      req.input || req.items.some((i) => 'bytes' in i) ||
       req.modalities?.some((m) => m != 'text')
     ) {
       throw new ModelError(

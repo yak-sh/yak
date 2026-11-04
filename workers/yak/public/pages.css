@@ -1197,6 +1197,8 @@
       opacity: .45;
     }
   }
+  /* The files a person sent, under their words at the right: a picture as
+     itself, any other file as a chip with its kind and name. */
   .Talk_Files {
     display: flex;
     flex-wrap: wrap;
@@ -1206,6 +1208,34 @@
   }
   .Talk_Files a {
     overflow-wrap: anywhere;
+  }
+  .Talk_Said .Talk_Files {
+    justify-self: end;
+    justify-content: flex-end;
+    max-width: 85%;
+  }
+  .Talk_Said > div:has(> .Talk_Files) {
+    display: grid;
+    gap: .5rem;
+  }
+  .Talk_Picture img {
+    display: block;
+    width: auto;
+    max-width: min(100%, 16rem);
+    max-height: 12rem;
+    border-radius: .75rem;
+    object-fit: cover;
+  }
+  .Talk_File {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    max-width: 16rem;
+    padding: .35rem .75rem .35rem .35rem;
+    border-radius: .75rem;
+    background: var(--mine);
+    color: var(--ink);
+    text-decoration: none;
   }
   /* The box to write in, held at the foot of the window. */
   .Talk_Box {
@@ -1255,11 +1285,9 @@
     outline: 3px solid var(--accent);
     outline-offset: 3px;
   }
-  .Talk_Chosen {
+  .Talk_Tools .Drop_Said {
     flex: 1;
     min-width: 0;
-    color: var(--soft-ink);
-    font-size: var(--fine);
     overflow-wrap: anywhere;
   }
   .Talk_Stop,
