@@ -25,6 +25,7 @@ import {
 import { queryCache } from './query-cache.ts'
 import { appRead } from './app-read.ts'
 import { eraseStore, weighing } from './app-storage.ts'
+import { reviveStore, suspendStore } from './app-dormancy.ts'
 import {
   candidate,
   declarationSlot,
@@ -959,14 +960,10 @@ export class Store {
   async #sleep() {
     this.#dormant = true
     this.#moveOnly = false
-    await this.#ctx.storage.put?.('moving', false)
-    await this.#ctx.storage.put?.('dormant', true)
-    await this.#ctx.storage.deleteAlarm?.()
-    for (let ws of this.#ctx.getWebSockets() as Closable[]) {
-      try {
-        ws.close?.(1000, 'trashed')
-      } catch { /* already gone */ }
-    }
+    await suspendStore(
+      this.#ctx.storage,
+      this.#ctx.getWebSockets() as Closable[],
+    )
   }
 
   #missing() {
@@ -3579,19 +3576,23 @@ export class Store {
       return json({ ok: true })
     }
     if (kernel && path == '/revive' && request.method == 'POST') {
-      await this.#ctx.storage.put?.('dormant', false)
-      this.#dormant = false
-      this.#moveOnly = false
-      await this.#ctx.storage.put?.('moving', false)
-      // Maintenance skipped ordinary recovery and runtime attachment. Finish
-      // an in-flight boot, then establish the active runtime once on restore.
-      await this.#started
-      if (this.#startedDormant) this.#started = null
-      await this.#ensureStarted()
-      if (this.#refused) return this.#stalled()
-      await this.#arming(new Date(this.#now()).toISOString())
-      return json({ ok: true })
+      return await reviveStore(this.#ctx.storage, {
+        activate: () => {
+          this.#dormant = false
+          this.#moveOnly = false
+        },
+        start: async () => {
+          // Maintenance skipped ordinary recovery and runtime attachment.
+          // Finish an in-flight boot, then establish the active runtime.
+          await this.#started
+          if (this.#startedDormant) this.#started = null
+          await this.#ensureStarted()
+          return this.#refused ? this.#stalled() : undefined
+        },
+        arm: () => this.#arming(new Date(this.#now()).toISOString()),
+      })
     }
+
     if (!await this.#awake()) {
       if (kernel && path == '/move' && request.method == 'POST') {
         await this.#ensureStarted(request)

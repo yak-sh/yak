@@ -1,13 +1,16 @@
 // Trash retains an app's resources while its address belongs to the next app.
-// Address decisions use RAM directory rows; Store lifecycle cases retain
-// their Store. Each case is a space of its own.
+// Address decisions use RAM directory rows; dormant app rows stay in SQLite.
+// Each case is a space of its own.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { call, type Ctx } from './tools.ts'
 import { appStore, directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { declared } from './directory-fixture.ts'
-import { platform } from './serving-scene.ts'
+import { platform } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
+import { operators } from './operator-service-probe.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { platform as isolated } from './deploy-probe.ts'
 import { r2Objects } from './lib/objects.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -16,10 +19,11 @@ import { holding } from './held.ts'
 import { effects } from './facets/trash-effects.ts'
 import type { Stored } from './graph.ts'
 
-let backed = platform({}, {
+let backed = platform('trash-address-backed', { BUILDER: operators }, {
   handlers: (env, graph) =>
     effects(undefined, { store: { meta: true, env, graph } as Stored }),
 })
+lifecycleStores(backed.env, (_name, from) => durable(from))
 let addresses = isolated('trash-address')
 let NOTE = {
   $defs: {

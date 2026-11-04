@@ -151,13 +151,8 @@ export let hosting = <T extends { env: Env }>(
 ): T => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
   if (scenario.env.SERVING_COPY && !copy) return scenario
-  let directory = rows(
-    scenario.env,
-    handlers && ((graph) => handlers(scenario.env, graph)),
-    copy,
-    storage,
-  )
   let stores = scenario.env.STORE
+  let directory: ReturnType<typeof rows>
   scenario.env.STORE = {
     idFromName: (name) => name,
     get: (name, options) =>
@@ -165,6 +160,14 @@ export let hosting = <T extends { env: Env }>(
         ? { fetch: directory.fetch }
         : stores.get(name, options),
   }
+  // Effect handlers register against the namespace they will deliver to.
+  // Install its closure before constructing the graph and its handlers.
+  directory = rows(
+    scenario.env,
+    handlers && ((graph) => handlers(scenario.env, graph)),
+    copy,
+    storage,
+  )
   scenario.env.META = directory.meta
   return scenario
 }

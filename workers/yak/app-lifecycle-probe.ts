@@ -25,6 +25,7 @@ import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { mode } from '@yaks/member'
 import { eraseStore, weighing } from './app-storage.ts'
+import { reviveStore, suspendStore } from './app-dormancy.ts'
 import { weighed } from './meter.ts'
 import { fitSchema, reshapeSlots, shapeOf, slotsOf } from './store-schema.ts'
 import type { durable } from '../../packages/durable-object/testing.ts'
@@ -196,6 +197,40 @@ export let lifecycleStores = (
     let fetch = async (request: Request): Promise<Response> => {
       try {
         let path = new URL(request.url).pathname
+        let kernel = request.headers.get('x-yak-kernel') == '1'
+        if (physical && await physical.get<boolean>('dormant')) {
+          if (kernel && path == '/' && request.method == 'DELETE') {
+            await physical.deleteAll()
+            return json({ ok: true })
+          }
+          if (
+            !(kernel && ['/dormant', '/revive'].includes(path) &&
+              request.method == 'POST')
+          ) {
+            return json(
+              { error: 'NotFound', message: 'app is in the trash' },
+              404,
+            )
+          }
+        }
+        if (kernel && request.method == 'POST' && path == '/dormant') {
+          if (!wire) bind()
+          if (!physical) throw new Error('dormancy needs a storage boundary')
+          await suspendStore(physical, pages.get(name)!)
+          return json({ ok: true })
+        }
+        if (kernel && request.method == 'POST' && path == '/revive') {
+          if (!physical && !wire) bind()
+          if (!physical) throw new Error('revival needs a storage boundary')
+          return await reviveStore(physical, {
+            activate: () => {},
+            start: () => {
+              if (!wire) bind()
+              return undefined
+            },
+            arm: () => physical!.setAlarm(Date.now()),
+          })
+        }
         let learned = false
         for (
           let [header, key] of [['x-yak-app', 'app'], [
