@@ -90,7 +90,7 @@ export let within = (url: string) => `jsr/${url.replace(/^https?:\/\//, '')}`
  */
 export let tree = (packages: Record<string, Package>, direct: string[]) => {
   let top = new Map<string, string>()
-  for (let id of [...direct, ...Object.keys(packages)]) {
+  for (let id of [...direct.toSorted(), ...Object.keys(packages).sort()]) {
     let p = packages[id]
     if (p && !top.has(p.name)) top.set(p.name, id)
   }
@@ -232,7 +232,11 @@ export let project = (
     return []
   }
 
-  for (let m of info.modules) {
+  for (
+    let m of info.modules.toSorted((a, b) =>
+      a.specifier.localeCompare(b.specifier)
+    )
+  ) {
     let remote = /^https?:/.test(m.specifier)
     if (remote && m.local) links[within(m.specifier)] = m.local
     if (m.kind == 'external' && !hosted) external.add(m.specifier)
@@ -272,7 +276,7 @@ export let project = (
     let to = parents.has(path) ? spread : links
     to[`node_modules/${path}`] = info.npmPackages[id].localPath
   }
-  files['externals.d.ts'] = [...external]
+  files['externals.d.ts'] = [...external].sort()
     .map((s) => `declare module ${JSON.stringify(s)}\n`).join('')
   return {
     files,

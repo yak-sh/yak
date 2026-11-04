@@ -25,7 +25,7 @@
 // copies, publishing their next build info atomically.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
-import { survey } from '@yaks/testing/deps'
+import { remembered, survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -312,17 +312,22 @@ let program = async (on: Platform, roots: string[]) => {
         .map((r) => `import '${relative(on.dir, `${CHECKOUT}/${r}`)}'\n`)
         .join(''),
     )
-    let [info, globals] = await Promise.all([
-      output([
+    let resolve = async () => {
+      let info = await output([
         'info',
         '--json',
         ...on.config ? ['--no-lock', '--config', on.config] : [],
         graph,
-      ]),
+      ])
+      if (!info.success) throw new Error(info.err)
+      return JSON.parse(info.out) as Info
+    }
+    let [found, globals] = await Promise.all([
+      on.config ? resolve() : remembered(resolve)([...roots, ...docs]),
       on.globals(),
     ])
-    if (!info.success) throw new Error(info.err)
-    let graphed: Info = JSON.parse(info.out)
+    if (!found) throw new Error('Cannot resolve source types')
+    let graphed = { ...found, npmPackages: found.npmPackages ?? {} } as Info
     let manifests = Object.fromEntries(
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),

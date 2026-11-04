@@ -163,6 +163,56 @@ test('a remembered graph asks deno again only of the modules changed since', asy
   equal(asked.at(-1), [at('g/y.ts')])
 })
 
+test('a remembered resolver retains compiler metadata and returns only the requested module closure', async () => {
+  let roots = ['first', 'second'].map((n) => at(`g/${n}.ts`))
+  let info: Info = {
+    modules: roots.flatMap((root, i) => [
+      {
+        specifier: `file://${root}`,
+        local: root,
+        kind: 'esm',
+        mediaType: 'TypeScript',
+        dependencies: [{
+          specifier: 'lexer',
+          code: { specifier: `npm:lexer@${i}` },
+        }],
+      },
+      { specifier: `npm:/lexer@${i}`, kind: 'npm', npmPackage: `lexer@${i}` },
+    ]),
+    redirects: { 'npm:lexer@0': 'npm:/lexer@0', 'npm:lexer@1': 'npm:/lexer@1' },
+    npmPackages: {
+      'lexer@0': {
+        name: 'lexer',
+        dependencies: ['dep@0'],
+        localPath: '/cache/lexer/0',
+      },
+      'lexer@1': {
+        name: 'lexer',
+        dependencies: [],
+        localPath: '/cache/lexer/1',
+      },
+      'dep@0': { name: 'dep', dependencies: [], localPath: '/cache/dep/0' },
+    },
+  }
+  let calls = 0
+  let ask = remembered(() => {
+    calls++
+    return Promise.resolve(info)
+  }, at('g/metadata.json'))
+  let bytes = () => Promise.resolve('source')
+  await ask(roots, bytes)
+  let found = (await ask([roots[0]], bytes))!
+  equal(calls, 1)
+  equal(
+    found.modules.toSorted((a, b) => a.specifier.localeCompare(b.specifier)),
+    info.modules.slice(0, 2).toSorted((a, b) =>
+      a.specifier.localeCompare(b.specifier)
+    ),
+  )
+  equal(found.npmPackages, info.npmPackages)
+  equal(found.redirects, info.redirects)
+})
+
 let store = `${dir}/passed.json`
 let reads = `${dir}/read.json`
 remember(['a', 'b', 'c'], store)

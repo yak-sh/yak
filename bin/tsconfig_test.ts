@@ -6,30 +6,46 @@ test('one source project resolves two directly imported versions of an npm packa
   let versions = ['1', '2']
   let info: Info = {
     redirects: {},
-    modules: versions.flatMap((v) => [
-      {
-        specifier: `file:///app/${v}.ts`,
-        dependencies: [{
-          specifier: `lexer${v}/js`,
-          code: { specifier: `npm:/lexer@${v}/js` },
-        }],
-      },
-      { specifier: `npm:/lexer@${v}/js`, npmPackage: `lexer@${v}` },
-    ]),
+    modules: [
+      ...versions.flatMap((v) => [
+        {
+          specifier: `file:///app/${v}.ts`,
+          dependencies: [{
+            specifier: `lexer${v}/js`,
+            code: { specifier: `npm:/lexer@${v}/js` },
+          }],
+        },
+        { specifier: `npm:/lexer@${v}/js`, npmPackage: `lexer@${v}` },
+      ]),
+      { specifier: 'host:a', kind: 'external' },
+      { specifier: 'host:b', kind: 'external' },
+    ],
     npmPackages: Object.fromEntries(versions.map((v) => [
       `lexer@${v}`,
       { name: 'lexer', dependencies: [], localPath: `/cache/lexer/${v}` },
     ])),
   }
-  let p = project(
-    info,
-    '/app',
-    '/app/.types',
-    ['1.ts', '2.ts'],
-    Object.fromEntries(versions.map((v) => [
-      `lexer@${v}`,
-      { exports: { './js': { types: `./types/${v}.d.ts` } } },
-    ])),
+  let compile = (info: Info) =>
+    project(
+      info,
+      '/app',
+      '/app/.types',
+      ['1.ts', '2.ts'],
+      Object.fromEntries(versions.map((v) => [
+        `lexer@${v}`,
+        { exports: { './js': { types: `./types/${v}.d.ts` } } },
+      ])),
+    )
+  let p = compile(info)
+  assertEquals(
+    compile({
+      ...info,
+      modules: info.modules.toReversed(),
+      npmPackages: Object.fromEntries(
+        Object.entries(info.npmPackages).reverse(),
+      ),
+    }),
+    p,
   )
   let paths = p.config.compilerOptions.paths as Record<string, string[]>
   let resolved = versions.map((v) => {

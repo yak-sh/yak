@@ -27,13 +27,22 @@ export type Info = {
   modules: {
     specifier: string
     local?: string
+    kind?: string
+    mediaType?: string
+    npmPackage?: string
     dependencies?: {
+      specifier?: string
       code?: { specifier?: string }
       type?: { specifier?: string }
       isDynamic?: boolean
     }[]
   }[]
   redirects: Record<string, string>
+  npmPackages?: Record<string, {
+    name: string
+    dependencies: string[]
+    localPath: string
+  }>
 }
 
 let hex = (data: string | Uint8Array): string =>
@@ -85,22 +94,29 @@ export type Bytes = (path: string) => Promise<string>
 
 /** Where what deno said each module imports is kept, by the module's bytes,
  * for every checkout on the machine. */
-export let GRAPH: string = `${cache}/yak/tests-graph.json`
+export let GRAPH: string = `${cache}/yak/tests-graph-v2.json`
 
 // What the store keeps of a module: what `Info` reads, without the source
 // spans and sizes deno says beside it.
 type Module = Info['modules'][number]
 type Kept = {
+  version: number
   deno: string
   configs: Record<string, string>
   modules: Record<string, { digest: string; module: Module }>
   redirects: Record<string, string>
+  npmPackages: NonNullable<Info['npmPackages']>
 }
 
 let slim = (m: Module): Module => ({
   specifier: m.specifier,
+  ...m.local && { local: m.local },
+  ...m.kind && { kind: m.kind },
+  ...m.mediaType && { mediaType: m.mediaType },
+  ...m.npmPackage && { npmPackage: m.npmPackage },
   ...m.dependencies && {
     dependencies: m.dependencies.map((d) => ({
+      ...d.specifier && { specifier: d.specifier },
       ...d.code?.specifier && { code: { specifier: d.code.specifier } },
       ...d.type?.specifier && { type: { specifier: d.type.specifier } },
       ...d.isDynamic && { isDynamic: true },
@@ -145,7 +161,14 @@ export let remembered = (
 ) =>
 async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   let here = `${system.cwd()}/`, pid = `.${system.pid}.example.`
-  let kept: Kept = { deno: '', configs: {}, modules: {}, redirects: {} }
+  let kept: Kept = {
+    version: 0,
+    deno: '',
+    configs: {},
+    modules: {},
+    redirects: {},
+    npmPackages: {},
+  }
   try {
     kept = {
       ...kept,
@@ -160,7 +183,8 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   let held = await Promise.all(
     Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
   )
-  let whole = kept.deno != system.runtimeVersion || !held.every(Boolean)
+  let whole = kept.version != 1 || kept.deno != system.runtimeVersion ||
+    !held.every(Boolean)
   let at = (s: string) => kept.redirects[s] ?? s
   // Walked a wave at a time, each wave's bytes read together.
   let reached = new Map<string, Module>()
@@ -189,37 +213,59 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   }
   if (whole) {
     kept = {
+      version: 1,
       deno: system.runtimeVersion,
       configs: {},
       modules: {},
       redirects: {},
+      npmPackages: {},
     }
     stale = new Set(roots)
   }
-  if (!stale.size) {
-    return { modules: [...reached.values()], redirects: kept.redirects }
+  if (stale.size) {
+    let fresh = await info([...stale])
+    if (!fresh) return undefined
+    let digests = await Promise.all(fresh.modules.map((m) => now(m.specifier)))
+    for (let [i, m] of fresh.modules.entries()) {
+      reached.set(m.specifier, m)
+      kept.modules[m.specifier] = { digest: digests[i], module: slim(m) }
+    }
+    Object.assign(kept.redirects, fresh.redirects)
+    Object.assign(kept.npmPackages, fresh.npmPackages)
+    let local = fresh.modules.map((m) => m.specifier).filter(file).map(rel)
+    let unseen = configs(local).filter((c) => !(c in kept.configs))
+    let found = await Promise.all(unseen.map(bytes))
+    for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
+    io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+    let draft = `${store}.${system.pid}`
+    io.writeTextFileSync(
+      draft,
+      JSON.stringify(kept).replaceAll(here, '<checkout>/')
+        .replaceAll(pid, '.<pid>.example.'),
+    )
+    io.renameSync(draft, store)
   }
-  let fresh = await info([...stale])
-  if (!fresh) return undefined
-  let digests = await Promise.all(fresh.modules.map((m) => now(m.specifier)))
-  for (let [i, m] of fresh.modules.entries()) {
-    reached.set(m.specifier, m)
-    kept.modules[m.specifier] = { digest: digests[i], module: slim(m) }
+  let modules = new Map<string, Module>()
+  let visit = roots.map((r) => at(url(r)))
+  while (visit.length) {
+    let s = visit.pop()!
+    if (modules.has(s)) continue
+    let m = reached.get(s)
+    if (!m) continue
+    modules.set(s, m)
+    for (let d of m.dependencies ?? []) {
+      for (let to of [d.code?.specifier, d.type?.specifier]) {
+        if (to) visit.push(at(to))
+      }
+    }
   }
-  Object.assign(kept.redirects, fresh.redirects)
-  let local = fresh.modules.map((m) => m.specifier).filter(file).map(rel)
-  let unseen = configs(local).filter((c) => !(c in kept.configs))
-  let found = await Promise.all(unseen.map(bytes))
-  for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
-  io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
-  let draft = `${store}.${system.pid}`
-  io.writeTextFileSync(
-    draft,
-    JSON.stringify(kept).replaceAll(here, '<checkout>/')
-      .replaceAll(pid, '.<pid>.example.'),
-  )
-  io.renameSync(draft, store)
-  return { modules: [...reached.values()], redirects: kept.redirects }
+  // Deno's npm table is the lock's resolution context, including packages
+  // outside these modules. Keep it whole, as Deno reports it.
+  return {
+    modules: [...modules.values()],
+    redirects: kept.redirects,
+    npmPackages: kept.npmPackages,
+  }
 }
 
 /// named("new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> ['x/a.json']
