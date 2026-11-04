@@ -4,29 +4,11 @@ import { env } from '@yaks/process/env'
 // reference stays unresolved: servers have no 1Password sign-in, and only a
 // person's interactive command reads references through opRead.
 
-import type { Bundle, Eid } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { identityEid } from '@yaks/graph/identity'
 import { isOpRef } from './ref.ts'
+import { secretEid } from './sealed.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Sealed, Vault } from './vault.ts'
-
-/** The entity a secret is: its id is derived from its name, so one name is
- * one secret and nobody has to look an id up. */
-export let secretEid = (name: string): Eid => identityEid('secret', [name])
-
-/** The bundle that writes a secret: its value, or an `op://` reference. The
- * graph keeps the handle; the vault keeps what it stands for. */
-export let sealed = (name: string, value: string): Bundle => ({
-  entity: { eid: secretEid(name) },
-  secret: { name, value },
-})
-
-/** The bundle that forgets one, value and all. */
-export let unsealed = (name: string): Bundle => ({
-  entity: { eid: secretEid(name) },
-  tombstone: {},
-})
 
 /** Where a name absent from the vault may be found. */
 export type Sources = {

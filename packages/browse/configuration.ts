@@ -2,7 +2,7 @@
 // is sent once to the server's vault boundary and never retained for replay.
 import type { Bundle } from '@yaks/graph'
 import type { AuthAction, AuthReply } from '@yaks/connections'
-import { sealed } from '@yaks/secrets'
+import { sealed } from '@yaks/secrets/sealed'
 import { base } from './live.ts'
 import { hosting } from './hosting.ts'
 

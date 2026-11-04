@@ -11,7 +11,8 @@
 // otherwise each spend the refresh token the other one needs.
 
 import type { Bundle } from '@yaks/graph'
-import { reveal, sealed, secretEid } from './reveal.ts'
+import { reveal } from './reveal.ts'
+import { sealed, secretEid } from './sealed.ts'
 import type { Vault } from './vault.ts'
 
 /** Private records by key, each the secret `<prefix><key>`. */

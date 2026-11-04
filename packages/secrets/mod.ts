@@ -65,13 +65,6 @@ export {
   type Vault,
 } from './vault.ts'
 export { isOpRef } from './ref.ts'
-export {
-  peek,
-  reveal,
-  sealed,
-  secretEid,
-  sentinelOf,
-  type Sources,
-  unsealed,
-} from './reveal.ts'
+export { peek, reveal, sentinelOf, type Sources } from './reveal.ts'
+export { sealed, secretEid, unsealed } from './sealed.ts'
 export { type Records, records } from './records.ts'
