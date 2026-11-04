@@ -6,8 +6,9 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import * as apps from './apps.ts'
-import { resourceName, SCOPES } from './bindings.ts'
-import { directory, stamp } from './directory.ts'
+import { provision, resourceName, SCOPES } from './bindings.ts'
+import { configured, deployWorker } from './deploy_worker.ts'
+import { directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './deploy-probe.ts'
 import { meta } from './meta.ts'
@@ -16,6 +17,7 @@ import { connect, envOf, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { ctxOf } from './connections.ts'
+import type { Config } from './wrangler_app.ts'
 
 let PERSON = 'a0000000-0000-4000-8000-0000000000ad'
 let who = { 'x-yak-person': PERSON, 'x-yak-role': 'owner' }
@@ -32,12 +34,25 @@ let configuration = {
     dimensions: 3,
     metric: 'cosine',
   }],
+} satisfies Config
+
+// Worker decisions take their files as data, before a release stages them.
+let sources = (config: unknown, files: Record<string, string> = {}) => ({
+  'worker.js': 'export default { fetch() {} }',
+  'dist/server.mjs': 'export default { fetch() {} }',
+  'wrangler.jsonc': JSON.stringify(config),
+  ...files,
+})
+
+let refusal = (result: { ready: boolean; lines: string[] }) => {
+  assertEquals(result.ready, false)
+  return result.lines.join('\n')
 }
 
 // Resource lifecycle through the tools and RAM directory. The Store accepts
 // the empty app declaration; controlled Cloudflare API replies expose resource
 // requests and multipart uploads without starting an app Store.
-let fixture = async (active = true, vault = false) => {
+let fixture = async (vault = false) => {
   let scenario = platform('bindings-probe', {
     CF_ACCOUNT: 'acct',
     CF_WORKERS_TOKEN: 'test-token',
@@ -104,21 +119,37 @@ let fixture = async (active = true, vault = false) => {
   let resources = new Map<string, Record<string, unknown>>()
   let was = globalThis.fetch
   let fetching = (async (input: string | Request, init?: RequestInit) => {
-    let request = new Request(input as string, init)
-    let url = new URL(request.url)
-    if (url.hostname != 'api.cloudflare.com') return was(request)
+    let url = new URL(input instanceof Request ? input.url : input)
+    if (url.hostname != 'api.cloudflare.com') return was(input, init)
+    let request = input instanceof Request
+      ? new Request(input, init)
+      : undefined
+    let method = (init?.method ?? request?.method ?? 'GET').toUpperCase()
     let path = url.pathname.replace('/client/v4/accounts/acct', '')
-    let multipart = request.headers.get('content-type')?.startsWith(
-      'multipart/',
-    )
-    let form = multipart ? await request.formData() : undefined
+    // Inspect what the uploader hands fetch; multipart byte encoding belongs
+    // to fetch. A caller handing a Request is read through that interface.
+    if (init?.body instanceof FormData) {
+      assertEquals(
+        new Headers(init.headers).has('content-type'),
+        false,
+        'fetch supplies the multipart boundary',
+      )
+    }
+    let form = init?.body instanceof FormData
+      ? init.body
+      : request?.headers.get('content-type')?.startsWith('multipart/')
+      ? await request.formData()
+      : undefined
+    let multipart = form != null
     if (form) uploadedFiles.push(form)
     let body = form
       ? JSON.parse(await (form.get('metadata') as File).text())
-      : ['POST', 'PUT'].includes(request.method)
-      ? await request.json()
+      : ['POST', 'PUT'].includes(method)
+      ? typeof init?.body == 'string'
+        ? JSON.parse(init.body)
+        : await new Request(input, init).json()
       : {}
-    calls.push({ method: request.method, path, body })
+    calls.push({ method, path, body })
     if (state.fail && path.includes(state.fail)) {
       return Response.json({
         success: false,
@@ -136,7 +167,7 @@ let fixture = async (active = true, vault = false) => {
       uploads.push(body)
       state.scripts.add(path)
       result = { version_id: `worker-${uploads.length}` }
-    } else if (request.method == 'POST') {
+    } else if (method == 'POST') {
       let before = state.beforeCreate
       state.beforeCreate = undefined
       await before?.()
@@ -145,14 +176,14 @@ let fixture = async (active = true, vault = false) => {
         : { name: body.name, config: body.config }
       resources.set(`${path}/${result.uuid ?? result.name}`, result)
     } else if (path.includes('/objects')) {
-      if (request.method == 'GET') {
+      if (method == 'GET') {
         return Response.json({
           success: true,
           result: [...state.objects].map((key) => ({ key })),
         })
       }
       state.objects.delete(decodeURIComponent(path.split('/objects/')[1]))
-    } else if (request.method == 'GET') {
+    } else if (method == 'GET') {
       // An uploaded script's secrets: names only, and none set here.
       if (path.endsWith('/secrets') && state.scripts.has(path.slice(0, -8))) {
         return Response.json({ success: true, result: [] })
@@ -169,17 +200,13 @@ let fixture = async (active = true, vault = false) => {
       return found
         ? Response.json({ success: true, result: found })
         : Response.json({ success: false, result: null }, { status: 404 })
-    } else if (request.method == 'DELETE') {
+    } else if (method == 'DELETE') {
       resources.delete(path)
       state.scripts.delete(path)
     }
     return Response.json({ success: true, errors: [], result })
   }) as typeof fetch
-  let activate = () => {
-    was = globalThis.fetch
-    globalThis.fetch = fetching
-  }
-  if (active) activate()
+  globalThis.fetch = fetching
   // The dispatch namespace a page asks for the app's worker, which answers as
   // a worker that passes to the files; `asked` is every script asked for.
   let asked: string[] = []
@@ -195,8 +222,17 @@ let fixture = async (active = true, vault = false) => {
     },
   } as typeof env
   return {
-    activate,
     env,
+    worker: async (files: Record<string, string>) => {
+      let read = (path: string) =>
+        Promise.resolve(
+          path in files ? new TextEncoder().encode(files[path]) : null,
+        )
+      let space = (await dir.space('ada'))!
+      return deployWorker(env, space, app, read, await configured(read))
+    },
+    provision: (config: Parameters<typeof provision>[3]) =>
+      provision(env, app, storeName(space, app), config),
     serving,
     asked,
     dir,
@@ -310,9 +346,8 @@ test('rollback selects the kept files and worker without uploading or minting a 
 })
 
 test('a release is uploaded bound to its connections, and its script is never read back', async () => {
-  let k = await fixture(true, true)
+  let k = await fixture(true)
   try {
-    await k.write({ main: 'worker.js' })
     let space = (await k.dir.space('ada'))!
     let c = ctxOf(k.env, { person: PERSON, role: 'owner' })
     let made = await c.graph.apply(
@@ -325,7 +360,8 @@ test('a release is uploaded bound to its connections, and its script is never re
     )
     await connect(c, made.find((b) => b.connection)!.entity.eid, { key: 'k' })
     let { HUB } = await envOf(c, k.app.eid)
-    await k.tool('app_deploy')
+    let result = await k.worker(sources({ main: 'worker.js' }))
+    assertEquals(result.ready, true, result.lines.join('\n'))
     assertEquals(
       (k.uploads[0].bindings as Record<string, unknown>[])
         .filter((b) => b.type == 'secret_text'),
@@ -338,7 +374,7 @@ test('a release is uploaded bound to its connections, and its script is never re
 })
 
 test('a release put back is bound to the connections the app has now', async () => {
-  let k = await fixture(true, true)
+  let k = await fixture(true)
   try {
     await k.write({ main: 'worker.js' })
     await k.tool('app_deploy')
@@ -377,8 +413,10 @@ test('a vpc_services door needs a tunnel, and the script never holds it', async 
   let k = await fixture()
   try {
     let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
-    await k.write({ vpc_services: [{ binding: 'BOX', service_id: 'theirs' }] })
-    await assertRejects(() => k.tool('app_deploy'), Error, 'has no tunnel')
+    let files = sources({
+      vpc_services: [{ binding: 'BOX', service_id: 'theirs' }],
+    })
+    assertStringIncludes(refusal(await k.worker(files)), 'has no tunnel')
     assertEquals(k.uploads.length, 0)
     let space = (await k.dir.space('ada'))!
     await stamp(k.env, {
@@ -387,7 +425,9 @@ test('a vpc_services door needs a tunnel, and the script never holds it', async 
         tunnel: { id: space.eid, service, adopted: true },
       }],
     })
-    let deployed = await k.tool('app_deploy')
+    let result = await k.worker(files)
+    assertEquals(result.ready, true)
+    let deployed = result.lines.join('\n')
     assertStringIncludes(deployed, 'service_id: BOX reaches the machine')
     let bindings = k.uploads[0].bindings as Record<string, unknown>[]
     assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [])
@@ -425,24 +465,11 @@ test('a static app may deploy its browser entry.js', async () => {
 // Deletion runs before the in-flight API call creates its remote effect.
 // The late reply must compensate, since deletion could not see that resource.
 for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
-  // Prepare this case's own store and files without holding the fetch mock
-  // across other cases. A second module load prepares a new fixture.
-  let prepared = phase == 'beforeCreate' ? await fixture(false) : undefined
-  if (prepared) {
-    try {
-      await prepared.write(configuration)
-    } catch (error) {
-      await prepared.done()
-      throw error
-    }
-  }
   test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
-    let k = prepared ?? await fixture()
-    if (prepared) k.activate()
+    let k = await fixture()
     try {
-      if (!prepared) await k.write(configuration)
       k.state[phase] = () => k.tool('app_delete', { forever: true })
-      await assertRejects(() => k.tool('app_deploy'))
+      await assertRejects(() => k.worker(sources(configuration)))
       assertEquals(await k.rows(`.entity.eid=${k.app.eid}&.app`), [])
       assertEquals(await k.rows('.binding'), [])
       assertEquals(k.resources.size, 0)
@@ -574,24 +601,20 @@ test('JSONC takes precedence over JSON and neither config is served publicly', a
 test('malformed JSONC keeps the prior worker and never falls back to JSON', async () => {
   let k = await fixture()
   try {
-    await k.write(configuration)
-    await k.tool('app_deploy')
+    let result = await k.worker(sources(configuration))
+    assertEquals(result.ready, true)
     let calls = k.calls.length
-    await k.tool('app_files', {
-      files: [
-        { path: 'wrangler.jsonc', content: '{"d1_databases": [' },
-        {
-          path: 'wrangler.json',
-          content: '{"d1_databases": [{"binding": "NEW"}]}',
-        },
-      ],
-    })
-    let error = await assertRejects(() => k.tool('app_deploy'), Error)
+    let error = refusal(
+      await k.worker(sources(configuration, {
+        'wrangler.jsonc': '{"d1_databases": [',
+        'wrangler.json': '{"d1_databases": [{"binding": "NEW"}]}',
+      })),
+    )
     assertStringIncludes(
-      error.message,
+      error,
       'refused wrangler config: expected valid JSON or JSONC',
     )
-    assertStringIncludes(error.message, 'the prior worker is unchanged')
+    assertStringIncludes(error, 'the prior worker is unchanged')
     assertEquals(k.calls.length, calls)
     assertEquals(k.uploads.length, 1)
     assertEquals((await k.rows('.binding')).length, 3)
@@ -604,12 +627,15 @@ test('a partial resource creation is recorded and reused on retry', async () => 
   let k = await fixture()
   try {
     k.state.fail = '/r2/'
-    await k.write(configuration)
-    await assertRejects(() => k.tool('app_deploy'), Error, 'R2 Edit')
+    assertStringIncludes(
+      refusal(await k.worker(sources(configuration))),
+      'R2 Edit',
+    )
     assertEquals(k.uploads.length, 0)
     assertEquals((await k.rows('.binding')).length, 2)
     k.state.fail = ''
-    await k.tool('app_deploy')
+    let result = await k.worker(sources(configuration))
+    assertEquals(result.ready, true)
     assertEquals(k.uploads.length, 1)
     assertEquals(
       k.calls.filter((c) => c.method == 'POST' && c.path == '/d1/database')
@@ -625,8 +651,7 @@ test('a partial resource creation is recorded and reused on retry', async () => 
 test('permanent deletion empties R2 and keeps ownership through a failed retry', async () => {
   let k = await fixture()
   try {
-    await k.write(configuration)
-    await k.tool('app_deploy')
+    await k.provision(configuration)
     k.state.objects.add('first.txt').add('folder/second file.txt')
     k.state.fail = '/objects/folder/second%20file.txt'
     await assertRejects(
@@ -717,11 +742,11 @@ test('explicit worker.js and entry.js are valid server sources', async () => {
   let k = await fixture()
   try {
     for (let main of ['worker.js', 'entry.js']) {
-      await k.write({ main })
-      await k.tool('app_files', {
-        files: [{ path: main, content: 'export default { fetch() {} }' }],
-      })
-      let result = await k.tool('app_deploy')
+      let deployed = await k.worker(sources({ main }, {
+        [main]: 'export default { fetch() {} }',
+      }))
+      assertEquals(deployed.ready, true)
+      let result = deployed.lines.join('\n')
       assertStringIncludes(result, `worker: ${main} answers first`)
       let form = k.uploadedFiles.at(-1)!
       assertEquals([...form.keys()], ['metadata', '__yak_entry.js', main])
