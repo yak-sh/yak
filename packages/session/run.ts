@@ -41,7 +41,7 @@ import {
   type TranscriptStatus,
 } from './state.ts'
 import { UnknownSession } from './unknown.ts'
-import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
+import { cleanEnd, requested, rouse, unlinked, waits, wake } from './wake.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -110,6 +110,8 @@ let holds = (g: Graph) =>
 // run cut short between the two leaves the child still `active`, which the
 // queued recovery can run again, and telling is idempotent.
 let ended = async (g: Graph, session: Eid, r: Runner) => {
+  await rouse(g, session)
+  if (await currentStatus(g, session) == 'pending') return
   if (g.vocab.comp('provisional')) {
     let owed = await g.read(`.entry.session=${session}&.ask&.provisional`)
     if (owed.length) {
@@ -342,7 +344,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
     (await openOf(g, session)).some((b) => comp(b, 'entry')?.session == session)
   if (ENDED.includes(status) && !older) {
     await ended(g, session, r)
-    return newest(g, session)
+    if (await currentStatus(g, session) != 'pending') return newest(g, session)
   }
   if (!await admitted(g, session, r)) return newest(g, session)
   while (!r.stopping?.aborted) {
@@ -355,6 +357,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
     if (s.did != 'nothing') await r.attempt?.progressed()
     if (ENDED.includes(s.status)) {
       await ended(g, session, r)
+      if (await currentStatus(g, session) == 'pending') continue
       break
     }
     if (s.did == 'nothing') {
@@ -779,10 +782,13 @@ export let running = (g: Graph, runner: Runner): Handlers => {
 // A task finished, or a dependency link went away: read as the commit found
 // it, since a deleted edge no longer says which ends it had.
 let woken = async (g: Graph, e: Event): Promise<void> => {
-  if (e.kind != 'removed') return await wake(g, e.entity.eid)
   let edge = comp(e.before, 'edge') ??
     comp(await one(g, e.entity.eid, ['edge']), 'edge')
-  if (edge) await unlinked(g, String(edge.from), String(edge.to))
+  if (!edge) return await wake(g, e.entity.eid)
+  if (e.kind == 'removed') {
+    await unlinked(g, String(edge.from), String(edge.to))
+  }
+  await wake(g, String(edge.from))
 }
 
 let declared = (g: Graph, name: string) =>

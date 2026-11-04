@@ -227,14 +227,25 @@ not finished wakes the transcript parked on the task it led from the same way
 (`unlinked(graph, task, dep)`), read from the edge as the commit found it
 (`@yaks/effects` `Event.before`).
 
+Before parking, the transcript follows its unfinished dependency chains. It
+claims unattended runnable leaves and receives an instruction to work them on
+its existing provider. A resting worker that already holds a leaf receives the
+instruction instead; a failed or missing worker's claim goes through
+`session_release` first. Changes to claims and dependency links reconcile the
+waiting ancestors, so losing a worker after parking resumes the work too.
+Decisions, explicit outside blockers and tasks assigned to a person remain
+external waits. A cycle, missing task or missing provider is reported to the
+spawning session through a knock as soon as it is found; repairable dependency
+problems also give the waiting transcript a turn to fix them.
+
 News is a dependency that finished after the claim was taken, by somebody other
 than the holder, or the link to an unfinished one going away. Each wake is named
 for the transcript, the task and what it tells of, so the same news is told
-once. A managed run that ends calls `rouse(graph, session)` itself, so a
-dependency that finished while it ran is told at once.
-`waits(graph, session, task)` says whether a held task still waits on something
-the holder is to be woken for, and `unanswered(graph, session)` lists what a
-transcript was told that its last turn or run was not given.
+once. A native turn settling or a managed run ending calls
+`rouse(graph, session)`, so a dependency that finished while it ran is told at
+once. `waits(graph, session, task)` says whether a held task still waits on
+something the holder is to be woken for, and `unanswered(graph, session)` lists
+what a transcript was told that its last turn or run was not given.
 `parkedLine(graph, session)` says where a parked transcript stands, for a
 person. A wake records the task it woke its transcript for (`woken{task}`), so
 `carrying(graph, task)` finds the transcript already on a task, its claim held

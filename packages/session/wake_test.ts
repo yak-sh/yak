@@ -4,7 +4,7 @@
 // `using`. A managed run that ends keeps the claim it is parked on, and lets
 // it go once nothing is left to wait for.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { ram } from '@yaks/ram'
@@ -16,9 +16,13 @@ import { taskDoc } from '@yaks/task'
 import { processDoc } from '@yaks/process'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { notifyDoc } from '@yaks/notify/vocab'
+import { personaDoc } from '@yaks/persona/vocab'
+import { projectDoc } from '@yaks/project/vocab'
+import { sessions } from './plugin.ts'
 import { sessionDoc } from './comp.ts'
 import { statusComputed, textOf } from './status.ts'
-import { running } from './run.ts'
+import { running, settle } from './run.ts'
 import { runs } from './tools.ts'
 import { rouse, wake } from './wake.ts'
 import { transcript } from './react.ts'
@@ -33,6 +37,9 @@ let vocab = loadVocab([
   processDoc,
   edgeDoc,
   taskDoc,
+  notifyDoc,
+  personaDoc,
+  projectDoc,
 ], [kernelKeywords, edgeKeywords])
 
 let P = identityEid('provider', ['fake'])
@@ -92,7 +99,7 @@ let world = (rows: Bundle[]) => {
     tx.patch(rows.filter((b) => !dead(b)))
     tx.remove(rows.filter(dead).map((b) => b.entity))
   })
-  let g = graph({ storage, vocab })
+  let g = graph({ storage, vocab, plugins: [sessions()] })
   let h = running(g, {
     holder: 'w1',
     model: () => Promise.reject(new Error('no turn is taken here')),
@@ -116,6 +123,11 @@ let world = (rows: Bundle[]) => {
         entity: { eid },
         before: { entity: { eid }, edge },
       }),
+    abandon: (task: string) =>
+      fire('session_wake', 'removed', {
+        entity: { eid: task },
+        before: { entity: { eid: task }, claim: { session: 'worker' } },
+      }),
     // a terminal entry landed: the commit's `session_release`
     release: (entry: string) =>
       fire('session_release', 'created', { entity: { eid: entry } }),
@@ -130,7 +142,7 @@ let world = (rows: Bundle[]) => {
 let image = async (
   ...batches: Bundle[][]
 ): Promise<ReturnType<typeof world>> => {
-  let g = graph({ storage: memory(), vocab })
+  let g = graph({ storage: memory(), vocab, plugins: [sessions()] })
   let rows = await g.apply([
     { entity: { eid: 'x' }, task: {} },
     { entity: { eid: 'y' }, task: {} },
@@ -193,7 +205,13 @@ let WOKEN_Z = await image(
   finished('z'),
 )
 let DONE = await image([...managed('m1', 0), ...doneBy('x', 'z'), ...rerun(2)])
-let OWN = await image([...managed('m1', 0), ...doneBy('z')], deleted(CONTAINS))
+let OWN = await image(
+  [...managed('m1', 0), ...doneBy('z')],
+  deleted(CONTAINS),
+  [
+    { entity: { eid: 'x' }, blocked: { on: 'vendor' } },
+  ],
+)
 // A managed run still going, holding `y` and `x`.
 let GOING = await image([
   ...managed('m1', 0).slice(0, 4),
@@ -217,6 +235,203 @@ test('a managed run that ends waiting on a dependency is parked', async () => {
   let w = PARKED
   await w.release('m1:end')
   assertEquals(await w.claim('y'), 'm1')
+})
+
+let OUTSIDE: Bundle[] = [{ entity: { eid: 'z' }, blocked: { on: 'vendor' } }]
+let UNATTENDED = await image(managed('m1', 0), OUTSIDE)
+let SELF = await image(managed('m1', 0), OUTSIDE, [
+  { entity: { eid: 'x' }, claim: { session: 'm1' } },
+])
+let WORKER: Bundle[] = [
+  { entity: { eid: 'worker' }, session: {}, process: { pid: 2 } },
+  { entity: { eid: 'worker:end' }, entry: { session: 'worker' }, stop: {} },
+  { entity: { eid: 'x' }, claim: { session: 'worker' } },
+]
+let ATTENDED = await image(managed('m1', 0), OUTSIDE, WORKER)
+let ABANDONED = await image(managed('m1', 0), OUTSIDE, WORKER, [
+  { entity: { eid: 'worker' }, exit: { code: 1 } },
+])
+let RELEASED = await image(managed('m1', 0), OUTSIDE, WORKER, [
+  { entity: { eid: 'x' }, claim: null },
+])
+let NESTED = await image(managed('m1', 0), OUTSIDE, [
+  { entity: { eid: 'leaf' }, task: {} },
+  link('x', 'requires', 'leaf'),
+  { entity: { eid: 'x' }, claim: { session: 'm1' } },
+])
+let EXTERNAL = await image(managed('m1', 0), OUTSIDE, [{
+  entity: { eid: 'x' },
+  decision: {
+    question: 'Which?',
+    choices: [{ label: 'a', description: 'a' }, {
+      label: 'b',
+      description: 'b',
+    }],
+  },
+}])
+let CYCLE = await image(managed('m1', 0), OUTSIDE, [
+  link('x', 'requires', 'y'),
+  { entity: { eid: 'parent' }, session: {} },
+  { entity: { eid: 'm1' }, spawned: { parent: 'parent' } },
+])
+let NATIVE_WORK = await image(native, OUTSIDE, [
+  { entity: { eid: 'worker' }, session: {} },
+])
+let WRAPPING = await image(managed('m1', 0), OUTSIDE, WORKER, [
+  { entity: { eid: 'worker' }, session: { ended: true } },
+])
+let HUMAN = await image(managed('m1', 0), OUTSIDE, [
+  { entity: { eid: 'human' }, person: {} },
+  { entity: { eid: 'x' }, filed: { assignee: 'human' } },
+])
+let NO_PROVIDER = await image(managed('m1', 0), OUTSIDE, [
+  { entity: { eid: 'parent' }, session: {} },
+  { entity: { eid: 'm1' }, spawned: { parent: 'parent' } },
+  { entity: { eid: 'm1:in' }, using: null },
+])
+let LEAF_GONE = await image(managed('m1', 0), OUTSIDE, [
+  { entity: { eid: 'leaf' }, task: {} },
+  link('x', 'requires', 'leaf'),
+], deleted(edgeEid('x', 'requires', 'leaf')))
+let RESTING_WORKER = await image(managed('m1', 0), OUTSIDE, [
+  ...managed('worker', 0).filter((b) => b.entity.eid != 'y'),
+  { entity: { eid: 'x' }, claim: { session: 'worker' } },
+])
+let CONTENDED = await image(managed('m1', 0), OUTSIDE, [
+  ...managed('m2', 0).filter((b) => b.entity.eid != 'y'),
+  { entity: { eid: 'r' }, task: {}, claim: { session: 'm2' } },
+  link('r', 'requires', 'x'),
+])
+
+test('an unattended dependency is claimed and given to the waiting run on its provider', async () => {
+  await rouse(UNATTENDED.g, 'm1')
+  assertEquals(await UNATTENDED.claim('x'), 'm1')
+  let input = await newest(UNATTENDED.g, 'm1')
+  assertEquals(input.using, { provider: CLI })
+  assert(textOf(input).includes('#x'))
+  let before = await count(UNATTENDED.g, 'm1')
+  await rouse(UNATTENDED.g, 'm1')
+  assertEquals(await count(UNATTENDED.g, 'm1'), before)
+})
+
+test('a run resumes work it already holds instead of waiting on itself', async () => {
+  let before = await count(SELF.g, 'm1')
+  await rouse(SELF.g, 'm1')
+  assertEquals(await SELF.claim('x'), 'm1')
+  assertEquals(await count(SELF.g, 'm1'), before + 1)
+})
+
+test('a dependency with a running worker stays with that worker', async () => {
+  let before = await count(ATTENDED.g, 'm1')
+  await rouse(ATTENDED.g, 'm1')
+  assertEquals(await ATTENDED.claim('x'), 'worker')
+  assertEquals(await count(ATTENDED.g, 'm1'), before)
+})
+
+test('a resting dependency holder resumes its own work without a second writer', async () => {
+  await rouse(RESTING_WORKER.g, 'm1')
+  assertEquals(await RESTING_WORKER.claim('x'), 'worker')
+  let input = await newest(RESTING_WORKER.g, 'worker')
+  assertEquals(input.using, { provider: CLI })
+  assert(textOf(input).includes('#x'))
+  let before = await count(RESTING_WORKER.g, 'worker')
+  await rouse(RESTING_WORKER.g, 'm1')
+  assertEquals(await count(RESTING_WORKER.g, 'worker'), before)
+})
+
+test('two waiting runs give an unattended dependency to one worker', async () => {
+  await Promise.all([rouse(CONTENDED.g, 'm1'), rouse(CONTENDED.g, 'm2')])
+  let holder = await CONTENDED.claim('x')
+  assert(holder == 'm1' || holder == 'm2')
+  let inputs = await CONTENDED.g.read('.woken&.fields=entry.session')
+  assertEquals(inputs.length, 1)
+  assertEquals((inputs[0].entry as Comp).session, holder)
+})
+
+test('a failed worker does not strand the run waiting on its task', async () => {
+  await rouse(ABANDONED.g, 'm1')
+  assertEquals(
+    (await ABANDONED.g.read('.effect.handler=session_release')).length,
+    1,
+  )
+  await ABANDONED.release('x')
+  await ABANDONED.abandon('x')
+  assertEquals(await ABANDONED.claim('x'), 'm1')
+})
+
+test('wrapping does not take work from a managed process that still runs', async () => {
+  let before = await count(WRAPPING.g, 'm1')
+  await rouse(WRAPPING.g, 'm1')
+  assertEquals(await WRAPPING.claim('x'), 'worker')
+  assertEquals(await count(WRAPPING.g, 'm1'), before)
+})
+
+test('a task assigned to a person remains in that person’s queue', async () => {
+  let before = await count(HUMAN.g, 'm1')
+  await rouse(HUMAN.g, 'm1')
+  assertEquals(await HUMAN.claim('x'), undefined)
+  assertEquals(await count(HUMAN.g, 'm1'), before)
+})
+
+test('removing a nested dependency resumes the ancestor’s newly runnable task', async () => {
+  await LEAF_GONE.drop(edgeEid('x', 'requires', 'leaf'), {
+    from: 'x',
+    to: 'leaf',
+  })
+  assertEquals(await LEAF_GONE.claim('x'), 'm1')
+})
+
+test('a run without a provider reports its impossible wait to its parent before failing', async () => {
+  await assertRejects(() => rouse(NO_PROVIDER.g, 'm1'), Error, 'no provider')
+  let [notice] = await NO_PROVIDER.g.read('.knock.target=parent&?content')
+  assert(String((notice.content as Comp).body).includes('no provider'))
+})
+
+test('losing a worker wakes a parked dependent through the claim removal effect', async () => {
+  await RELEASED.abandon('x')
+  assertEquals(await RELEASED.claim('x'), 'm1')
+})
+
+test('a dependency chain resumes its runnable leaf', async () => {
+  await rouse(NESTED.g, 'm1')
+  assertEquals(await NESTED.claim('leaf'), 'm1')
+  assert((await last(NESTED)).includes('#leaf'))
+})
+
+test('decisions and explicit outside blockers keep their external wait', async () => {
+  let before = await count(EXTERNAL.g, 'm1')
+  await rouse(EXTERNAL.g, 'm1')
+  assertEquals(await EXTERNAL.claim('x'), undefined)
+  assertEquals(await count(EXTERNAL.g, 'm1'), before)
+})
+
+test('an impossible dependency wakes its run and immediately notifies the spawning session', async () => {
+  await rouse(CYCLE.g, 'm1')
+  assert((await last(CYCLE)).includes('Dependency cycle'))
+  let [notice] = await CYCLE.g.read('.knock.target=parent&?content')
+  assert(String((notice.content as Comp).body).includes('Dependency cycle'))
+})
+
+test('a native transcript resumes unattended dependencies when it settles', async () => {
+  let calls = 0
+  await settle(NATIVE_WORK.g, 's1', {
+    holder: 'worker',
+    tools: [],
+    model: async () => {
+      calls++
+      await NATIVE_WORK.g.apply([{
+        entity: { eid: 'x' },
+        completed: { via: 's1' },
+      }], { trusted: true })
+      return {
+        id: 'reply',
+        model: 'fake-1',
+        items: [{ kind: 'assistant', text: 'finished x' }],
+      }
+    },
+  })
+  assertEquals(calls, 1)
+  assertEquals(await NATIVE_WORK.claim('x'), 's1')
 })
 
 test('a native transcript parked on a task takes a turn when a dependency finishes', async () => {

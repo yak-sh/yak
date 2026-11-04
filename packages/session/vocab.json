@@ -896,13 +896,20 @@
       "effect": true,
       "created": [
         "completed",
-        "cancelled"
+        "cancelled",
+        "claim",
+        "requires",
+        "contains"
+      ],
+      "changed": [
+        "claim.session"
       ],
       "removed": [
-        "edge"
+        "edge",
+        "claim"
       ],
-      "target": ".completed|.cancelled|.requires|.contains",
-      "description": "wake every transcript parked on a task that waits on the one that finished, or on a task whose link to an unfinished dependency went away (a `requires` or `contains` edge going, read by the ends it had): where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
+      "target": ".task|.requires|.contains",
+      "description": "resume a resting transcript on its provider when a dependency finishes, loses its worker or changes its links. Unattended runnable dependencies are claimed by the waiting transcript; external decisions and blockers remain waits. A dependency that cannot run is told to the transcript and its parent. Removed links are read by the ends they had"
     },
     "native": {
       "component": true,

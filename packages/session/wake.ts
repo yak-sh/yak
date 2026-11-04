@@ -34,6 +34,8 @@ import {
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { currentStatus } from './react.ts'
+import { unattended } from './dependencies.ts'
+import { enqueue } from '@yaks/effects'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -367,6 +369,28 @@ let telling = (g: Graph, task: Bundle, { done, gone }: Told, left: number) => {
   ].filter(Boolean).join('; ') + '.'
 }
 
+let dependencyNotice = async (
+  g: Graph,
+  session: Eid,
+  body: string,
+): Promise<Bundle[]> => {
+  if (!g.vocab.comp('knock')) return []
+  let eid = derivedEid(`session dependency notice ${session} ${body}`)
+  if ((await g.get([eid], ['knock']))[0]?.knock) return []
+  let self = await one(g, session, ['session', 'spawned'])
+  let source = comp(self, 'session')?.source
+  let call = source
+    ? await one(g, String(source), ['entry', 'created'])
+    : undefined
+  let parent = comp(self, 'spawned')?.parent ??
+    comp(call, 'entry')?.session ?? comp(call, 'created')?.via
+  return [{
+    entity: { eid },
+    content: { body: `A dependency cannot progress.\n${body}` },
+    knock: { target: String(parent ?? session) },
+  }]
+}
+
 /**
  * Wake a transcript for news of the tasks it holds: where its run is over,
  * append an input carrying the `using` in force for each held task with a
@@ -388,10 +412,83 @@ export let rouse = async (
   if (!holds(g)) return
   let row = await one(g, session, SEEN)
   if (!await resting(g, session, row)) return
-  let using = await inForce(g, session)
-  if (!using) return
   let held = await g.read(`.task&.${CLAIM}.session=${session}&*`)
+  let open = held.filter((task) => !settled(taskStatus(g.vocab, task)))
+  let work = await unattended(g, session, open)
+  for (let task of work.release) {
+    if (g.vocab.comp('effect')) await enqueue(g, 'session_release', task)
+    else {work.problems.push(
+        `Dependency ${task} needs its terminal holder's claim released`,
+      )}
+  }
+  let using = await inForce(g, session)
+  if (!using) {
+    if (work.tasks.length || work.problems.length || work.resume.size) {
+      let message =
+        `Session ${session} cannot resume unattended dependencies: no provider`
+      await g.apply(await dependencyNotice(g, session, message), {
+        trusted: true,
+      })
+      throw new Error(message)
+    }
+    return
+  }
   let wakes: Bundle[] = []
+  for (let [holder, tasks] of work.resume) {
+    if (await requested(g, holder)) continue
+    if (!await inForce(g, holder)) {
+      work.problems.push(`Dependency worker ${holder} has no provider`)
+      continue
+    }
+    wakes.push(
+      ...await handing(
+        g,
+        holder,
+        tasks[0].entity.eid,
+        `Continue the unfinished tasks you hold: ${
+          tasks.map(human(g.vocab)).join(', ')
+        }. Work them or give them a worker; do not park on unattended work.`,
+      ),
+    )
+  }
+  if (work.tasks.length || work.problems.length) {
+    let id = human(g.vocab)
+    let body = [
+      work.tasks.length &&
+      `Work these unattended dependencies now: ${
+        work.tasks.map(id).join(', ')
+      }. Their claims are yours. Finish them or give them a worker before waiting on them.`,
+      ...work.problems.map((problem) =>
+        `${problem}. Repair this dependency so the run can progress.`
+      ),
+    ].filter(Boolean).join('\n')
+    // A problem is told once for this topology, rather than asking a model
+    // forever about a dependency it cannot run. Runnable work is owed each run.
+    let eid = work.tasks.length ? crypto.randomUUID() : derivedEid(
+      `session dependency problem ${session} ${
+        work.problems.toSorted().join('\n')
+      }`,
+    )
+    if (!(await g.get([eid], ['entry']))[0]?.entry) {
+      wakes.push(...work.claims, {
+        entity: { eid },
+        entry: { session },
+        content: { body },
+        using,
+        [WOKEN]: { task: open[0].entity.eid },
+        $was: { entry: { session: null } },
+      })
+      if (work.problems.length) {
+        wakes.push(
+          ...await dependencyNotice(
+            g,
+            session,
+            work.problems.toSorted().join('\n'),
+          ),
+        )
+      }
+    }
+  }
   for (let task of held) {
     if (settled(taskStatus(g.vocab, task))) continue
     let deps = await looked(g, task)
@@ -423,7 +520,16 @@ export let rouse = async (
 export let wake = async (g: Graph, task: Eid): Promise<void> => {
   let [row] = await g.get([task], ['task'])
   if (!row?.task) return
-  let waiting = await g.get(await dependents(g, task), [CLAIM])
+  let ids = new Set<Eid>([task])
+  let pending = [task]
+  while (pending.length) {
+    for (let parent of await dependents(g, pending.shift()!)) {
+      if (ids.has(parent)) continue
+      ids.add(parent)
+      pending.push(parent)
+    }
+  }
+  let waiting = await g.get([...ids], [CLAIM])
   let holders = new Set(
     waiting.map((b) => comp(b, CLAIM)?.session)
       .filter((s): s is string => typeof s == 'string'),
