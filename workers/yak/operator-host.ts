@@ -5,6 +5,102 @@ import { readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { texts, textsEid } from './operator-texts.ts'
+import { transcript } from '@yaks/session'
+import { frame, type Names, talk } from './operator-view.ts'
+
+type Store = ReturnType<typeof operatorStore>
+let comp = (b: Bundle | undefined, name: string) =>
+  b?.[name] as Record<string, unknown> | undefined
+
+// The names of the tools a transcript's calls name (`call.to` is a tool's
+// eid).
+let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
+  let tools = await store.g.get([
+    ...new Set(
+      entries.flatMap((b) => b.call ? [String(comp(b, 'call')!.to)] : []),
+    ),
+  ])
+  let names = new Map(
+    tools.filter(Boolean).map((
+      b,
+    ) => [b.entity.eid, String(comp(b, 'tool')?.name)]),
+  )
+  return (tool) => names.get(tool) ?? 'a tool'
+}
+
+// A task's sessions, oldest first.
+let sessionsOf = async (store: Store, task: string) => {
+  let links = await store.g.read(`.contains .edge.from=${task}`)
+  return (await store.g.get(links.map((b) => String(comp(b, 'edge')!.to))))
+    .filter((b) => b?.session)
+    .sort((a, b) =>
+      String(comp(a, 'created')?.at).localeCompare(
+        String(comp(b, 'created')?.at),
+      )
+    )
+}
+
+let entriesOf = async (store: Store, sessions: Bundle[]) =>
+  (await Promise.all(sessions.map((b) => transcript(store.g, b.entity.eid))))
+    .flat()
+
+/**
+ * The Operator page's conversations: its newest tasks, each drawn with its
+ * sessions' transcripts (operator-view.ts `talk`), and the requests no
+ * session has taken yet, for the page to draw as it always has.
+ */
+export let conversations = async (store: Store, at: string) => {
+  let tasks = (await store.g.read('.task ?doc .order=-created.at .limit=20'))
+    .reverse()
+  let requests = (await store.g.read(
+    '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100',
+  )).reverse()
+  let drawn = await Promise.all(tasks.map(async (task) => {
+    let sessions = await sessionsOf(store, task.entity.eid)
+    let ids = new Set(sessions.map((b) => b.entity.eid))
+    let entries = await entriesOf(store, sessions)
+    let files = requests.filter((r) =>
+      ids.has(String(comp(r, 'operator_request')?.session)) ||
+      comp(r, 'operator_answer')?.task == task.entity.eid
+    ).flatMap((r) =>
+      ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
+        .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
+    )
+    return talk(task, entries, await namesOf(store, entries), files, at)
+  }))
+  return {
+    html: drawn.join(''),
+    waiting: requests.filter((r) =>
+      !comp(r, 'operator_request')?.session &&
+      !comp(r, 'operator_answer')?.task
+    ),
+  }
+}
+
+/**
+ * What a session's step changed, as its task's frame for the page's socket:
+ * the lines past `from` (by `entry.seq`, the last 30 when unknown), and the
+ * newest seq it covers, to start the next from.
+ */
+export let frameOf = async (store: Store, session: string, from?: number) => {
+  let [link] = await store.g.read(`.contains .edge.to=${session}`)
+  let task = String(comp(link, 'edge')?.from ?? '')
+  if (!task) return null
+  let entries = await transcript(store.g, session)
+  let seq = Math.max(
+    0,
+    ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
+  )
+  return {
+    seq,
+    frame: frame(
+      task,
+      entries,
+      await namesOf(store, entries),
+      from ?? seq - 30,
+    ),
+  }
+}
 
 let drafts = (bundles: Bundle[], person: string) =>
   bundles.filter((b) => b.draft).map((b) => ({
@@ -113,6 +209,9 @@ export let operatorRequest = async (
         }
         : row
     }))
+  }
+  if (path == '/operator/conversations') {
+    return Response.json(await conversations(store, String(args.at ?? '')))
   }
   if (path == '/operator/read') {
     return Response.json(

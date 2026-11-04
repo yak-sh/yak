@@ -222,9 +222,16 @@ export let operatorAnswer = async (
     if (form.has('draft')) return Response.json(received)
     return new Response(null, { status: 303, headers: { location: at } })
   }
+  if (url.searchParams.has('live')) {
+    if ((req.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
+      return new Response("This is the Operator page's WebSocket.", {
+        status: 426,
+      })
+    }
+    return watching(env, space, req, who)
+  }
   if (url.searchParams.has('messages')) {
-    let rows = await operatorDoor(env, space, who, 'messages', {}) as Bundle[]
-    return new Response(conversation(rows, at), {
+    return new Response(await conversations(env, space, who, at), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'private, no-store',
@@ -233,12 +240,38 @@ export let operatorAnswer = async (
   }
 }
 
+// The page's socket, carried to the Builder object with the kernel's vouch
+// on it and nothing of the client's (build.ts `joining`, the same way).
+let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
+  builderOf(env, space.eid)(() => {
+    let out = new Request('https://builder/operator/ws', req)
+    for (let [h] of [...out.headers]) {
+      if (h.startsWith('x-yak-')) out.headers.delete(h)
+    }
+    out.headers.set(SPACE, space.eid)
+    for (let [h, v] of Object.entries(vouched(who))) out.headers.set(h, v)
+    return out
+  })
+
+// Every conversation the page shows: each task with its sessions as they ran
+// (operator-view.ts `talk`), then the requests no session has taken yet.
+let conversations = async (env: Env, space: Space, who: Who, at: string) => {
+  let { html, waiting } = await operatorDoor(
+    env,
+    space,
+    who,
+    'conversations',
+    { at },
+  ) as { html: string; waiting: Bundle[] }
+  return html + conversation(waiting, at)
+}
+
 // The Operator page's content, which the dashboard draws beside its side like
 // every other page (pages.ts `desk`).
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [rows, consent, seats] = await Promise.all([
-    operatorDoor(env, space, who, 'messages', {}) as Promise<Bundle[]>,
+  let [talks, consent, seats] = await Promise.all([
+    conversations(env, space, who, at),
     operatorDoor(env, space, who, 'texts', {}) as Promise<Consent | null>,
     who.person ? directoryOf(env.STORE).seats(who.person, 'owner') : [],
   ])
@@ -251,7 +284,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   }<p>Email from your member address: <a href="mailto:${
     esc(mailFrom(space.slug, null, env))
   }">${esc(mailFrom(space.slug, null, env))}</a></p></section>
-<div data-conversation aria-live="polite">${conversation(rows, at)}</div>
+<div data-conversation aria-live="polite">${talks}</div>
 <form class="Card Form" id="ask" method="post" action="${at}" enctype="multipart/form-data">
 <input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="">
 <p data-continuing hidden>Continuing a request. <button type="button" class="Button Button-quiet" data-new>Start a new request</button></p>
@@ -318,9 +351,39 @@ let read = async () => {
   if (!response.ok) throw new Error('Could not read the operator. Your request is saved; reload to try again.')
   box.innerHTML = await response.text()
 }
+// Each step the Operator takes arrives on the socket as the lines it changed,
+// put in place by id; a task the page has not drawn yet reads them all again.
+let live = false
+let hear = (frame) => {
+  let o = frame.operator
+  if (!o) return
+  let card = [...box.querySelectorAll('[data-task]')].find((c) => c.dataset.task == o.task)
+  if (!card) return void read().catch((e) => { status.textContent = e.message })
+  for (let row of o.rows) {
+    let at = document.getElementById('row-' + row.id)
+    if (!at) {
+      at = document.createElement('div')
+      at.id = 'row-' + row.id
+      card.querySelector('[data-rows]').append(at)
+    }
+    if (at.dataset.html == row.html) continue
+    let open = at.querySelector('details')?.open
+    at.innerHTML = row.html
+    at.dataset.html = row.html
+    if (open) at.querySelector('details').open = true
+  }
+  card.querySelector('[data-now]').textContent = o.now
+  card.toggleAttribute('data-pending', !!o.now)
+}
+let listen = () => {
+  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
+  socket.onopen = () => { live = true; read().catch((e) => { status.textContent = e.message }) }
+  socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { status.textContent = error.message } }
+  socket.onclose = () => { live = false; poll(); setTimeout(listen, 3000) }
+}
 let waiting = false
 let poll = async () => {
-  if (waiting || !box.querySelector('[data-pending]')) return
+  if (live || waiting || !box.querySelector('[data-pending]')) return
   waiting = true
   try { await read() } catch (e) { status.textContent = e.message }
   finally { waiting = false; if (box.querySelector('[data-pending]')) setTimeout(poll, 2000) }
@@ -340,6 +403,6 @@ form.addEventListener('submit', async (e) => {
   } catch (error) { status.textContent = error.message }
   finally { button.disabled = false }
 })
-poll()
+listen()
 </script>`
 }

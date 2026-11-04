@@ -921,6 +921,7 @@ export let lasting = (
       let ctx = ownedState()
       builders.set(name, held = new Builder(ctx, env))
       alarmed(`builder ${name}`, ctx, () => builders.get(name)!.alarm())
+      sockets.set(`builder ${name}`, ctx.live)
     }
     return held
   }

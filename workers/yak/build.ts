@@ -121,6 +121,10 @@ export type Held = {
   administrative?: boolean
 }
 
+// Who is at a socket, and whether the page is watching the Operator rather
+// than a build.
+type Watching = Held & { operator?: boolean }
+
 /** The header the kernel names the space with at the handshake — the object's
  * own name is that eid, and this is how it learns it. */
 export let SPACE = 'x-space-eid'
@@ -293,7 +297,7 @@ export class Builder {
   // Everyone watching this space, including the socket the frame came in on: a
   // build is the space's, not one tab's, so a second tab sees it happen too.
   #tell(frames: Frame[]) {
-    for (let ws of this.#ctx.getWebSockets()) {
+    for (let ws of this.#builds()) {
       for (let f of frames) {
         try {
           ws.send(JSON.stringify(f))
@@ -391,7 +395,7 @@ export class Builder {
     // A caller on a later deploy restarts this object first, but only an idle
     // one: a build in flight (a model call can take minutes) or a page's
     // socket is never cut for it, and keeps the code it started on.
-    if (!this.#building && !this.#ctx.getWebSockets().length) {
+    if (!this.#building && !this.#builds().length) {
       await behind(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx)
     }
     let url = new URL(request.url)
@@ -456,6 +460,15 @@ export class Builder {
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
     let operator = await this.#work()
+    if (new URL(request.url).pathname == '/operator/ws') {
+      return this.#accept({
+        person,
+        role,
+        space: spaceId,
+        administrative: access.administrative,
+        operator: true,
+      })
+    }
     let args = await request.json() as Record<string, unknown>
     let { operatorRequest } = await import('./operator-host.ts')
     let held = {
@@ -493,10 +506,52 @@ export class Builder {
       })
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
+        tell: (session) =>
+          void this.#hear(session).catch((e) =>
+            caught(e, { request: 'operator socket' })
+          ),
       })
       handleChannels(operator, this.#env)
       return operator
     })()
+  }
+
+  // The sockets of pages watching a build (pages.ts `chat`), not the
+  // Operator's: a page watching the Operator is cut by a restart and joins
+  // again, and never holds this object on old code.
+  #builds() {
+    return this.#ctx.getWebSockets().filter((ws) =>
+      !(ws.deserializeAttachment() as Watching | null)?.operator
+    )
+  }
+
+  // Where each Operator session's frames got to, so the next sends only what
+  // moved. In memory: a woken object sends a session's last lines again, and
+  // the page puts each where it already was.
+  #told = new Map<string, number>()
+
+  /** A session moved: its frame, to every page watching the Operator. */
+  async #hear(session: string) {
+    let watching = this.#ctx.getWebSockets().filter((ws) =>
+      (ws.deserializeAttachment() as Watching | null)?.operator
+    )
+    if (!watching.length) return
+    let { frameOf } = await import('./operator-host.ts')
+    let made = await frameOf(
+      (await this.#work()).store,
+      session,
+      this.#told.get(session),
+    )
+    if (!made) return
+    this.#told.set(session, made.seq)
+    let sent = JSON.stringify(made.frame)
+    for (let ws of watching) {
+      try {
+        ws.send(sent)
+      } catch {
+        // A page that has gone away hears nothing more.
+      }
+    }
   }
 
   async alarm() {
@@ -520,10 +575,13 @@ export class Builder {
   }
 
   // The 101, and the socket handed to the runtime so it outlives this object.
-  #accept(held: Held): Response {
+  #accept(held: Watching): Response {
     let pair = new WebSocketPair()
     this.#ctx.acceptWebSocket(pair[1])
-    this.joined(pair[1], held)
+    if (held.operator) {
+      pair[1].serializeAttachment(held)
+      pair[1].send(JSON.stringify({ ready: true }))
+    } else this.joined(pair[1], held)
     return new Response(
       null,
       { status: 101, webSocket: pair[0] } as ResponseInit & {
@@ -534,7 +592,9 @@ export class Builder {
 
   /** A frame from a page. The only one it may send is `{say}`. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
-    let held = ws.deserializeAttachment() as Held | null
+    let held = ws.deserializeAttachment() as Watching | null
+    // A page watching the Operator says nothing on its socket.
+    if (held?.operator) return
     if (!held?.person) return void ws.send(JSON.stringify({ done: NOBODY }))
     let said = read(data)
     if (said == null) return

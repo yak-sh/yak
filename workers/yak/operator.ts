@@ -33,6 +33,9 @@ export type Options = {
   name?: string
   price?: Price
   tools?: (ctx: Ctx, files: File[]) => Tool[]
+  // Told each time a session moved (a step landed, words were given), so a
+  // page watching it hears at once (the Builder object's socket).
+  tell?: (session: string) => void
 }
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -375,7 +378,9 @@ export let operating = (
           )}`
       },
       each: async (step, session) => {
-        if (session && ENDED.includes(step.status)) await answered(session)
+        if (!session) return
+        if (ENDED.includes(step.status)) await answered(session)
+        options.tell?.(session)
       },
       report: (e, where) => caught(e, { request: 'operator', ...where }),
     }),
@@ -473,6 +478,7 @@ export let operating = (
         $actor: { by, via: session },
       },
     ], { trusted: true })
+    options.tell?.(session)
     return { task, session, input }
   }
 

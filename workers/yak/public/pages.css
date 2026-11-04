@@ -180,6 +180,28 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* A tool the Operator called, folded to its line: open, what it sent and
+     what came back. */
+  .Chat_Detail > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  .Chat_Detail > summary::-webkit-details-marker {
+    display: none;
+  }
+  .Chat_Detail pre {
+    max-height: 20rem;
+    margin: .3rem 0 .6rem;
+    padding: .5rem .7rem;
+    overflow: auto;
+    background: var(--ground);
+    font: var(--fine)/1.5 var(--mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .Chat_Note-no {
+    color: var(--warn);
+  }
   .Chat_Built {
     --pencil: var(--accent);
     margin: .4rem 0;

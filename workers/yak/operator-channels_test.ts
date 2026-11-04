@@ -383,8 +383,47 @@ let email = (id: string, reply?: string, authenticated = true): Inbound => {
     setReject: () => {},
   }
 }
+// A page watching the Operator, at the object's sockets the way the
+// handshake leaves one (build.ts `#accept`), and a page watching a build.
+let watched = (operator: boolean) => {
+  let sent: {
+    operator?: { task: string; rows: { html: string }[]; now: string }
+  }[] = []
+  let held: unknown = {
+    person: f.person,
+    role: 'owner',
+    space: f.space.eid,
+    operator,
+  }
+  let ws = {
+    readyState: 1,
+    send: (data: string) => void sent.push(JSON.parse(data)),
+    serializeAttachment: (v: unknown) => void (held = v),
+    deserializeAttachment: () => held,
+  }
+  f.builder(f.space.eid)
+  f.sockets.get(`builder ${f.space.eid}`)!.push(ws)
+  return sent
+}
+let operatorPage = watched(true)
+let buildPage = watched(false)
 let firstEmail = await arrived(email('request-1'), f.env)
 await f.builder(f.space.eid).alarm()
+let heard = operatorPage.flatMap((frame) =>
+  frame.operator ? [frame.operator] : []
+)
+test('a page watching the Operator hears each step as the lines it changed, and a build page hears none', () => {
+  assertEquals(heard.length > 1, true)
+  assertStringIncludes(heard[0].rows[0].html, 'Schedule the special meeting.')
+  assertEquals(heard[0].now, 'Thinking…')
+  assertStringIncludes(
+    heard.flatMap((h) => h.rows.map((r) => r.html)).join(''),
+    'Chat_Bubble-them',
+  )
+  // Ended, however it ended: nothing is said to be under way.
+  assertEquals(heard.at(-1)!.now.endsWith('…'), false)
+  assertEquals(buildPage.length, 0)
+})
 let duplicateEmail = await arrived(email('request-1'), f.env)
 await f.builder(f.space.eid).alarm()
 let secondEmail = await arrived(email('request-2', 'reply-1'), f.env)

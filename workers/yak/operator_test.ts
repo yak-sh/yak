@@ -6,6 +6,7 @@ import { platform } from './directory-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { directoryOf } from './directory.ts'
 import { operating, readOperator } from './operator.ts'
+import { conversations, frameOf } from './operator-host.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
@@ -150,6 +151,15 @@ let out = await operator.run(f.held, f.space, {
 })
 
 let history = await readOperator(f.store, out.task)
+let drawn = await conversations(f.store, '/manage/clerk/operator')
+test('the Operator page draws a task as its session ran: the words, each tool with what it sent and got, and the reply', () => {
+  assertStringIncludes(drawn.html, 'Chat_Bubble-you">Post a special meeting')
+  assertStringIncludes(drawn.html, '✓ graph_schema')
+  assertStringIncludes(drawn.html, '&quot;component&quot;: &quot;doc&quot;')
+  assertStringIncludes(drawn.html, 'notice is posted')
+  assertEquals(drawn.html.includes('data-pending'), false)
+  assertEquals(drawn.waiting.length, 0)
+})
 let ctx = await operatorContext(f.env, f.held, f.space)
 let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
@@ -260,12 +270,14 @@ test("the Operator on a person's own space is their PA, reaching each of their s
 let steered = operatorMemory()
 let steering: Request[] = []
 let given: { task: string; session: string } | undefined
+let mid: Awaited<ReturnType<typeof frameOf>> = null
 let steerer = operating(
   steered,
   f.env,
   operatorModel(async (req) => {
     steering.push(req)
     if (steering.length == 1) {
+      mid = await frameOf(steered, given!.session)
       await steerer.ask(f.held, f.space, {
         task: given!.task,
         say: 'Make it Friday instead.',
@@ -290,6 +302,8 @@ let steeredRead = await readOperator(steered, given.task)
 test('words given while the Operator works land in its running session, which answers after them', () => {
   assertEquals(before, 0)
   assertEquals(steeredRead.sessions?.length, 1)
+  assertEquals(mid?.frame.operator.now, 'Thinking…')
+  assertStringIncludes(mid!.frame.operator.rows[0].html, 'Post the meeting.')
   assertEquals(steering.length, 2)
   assertStringIncludes(
     JSON.stringify(steering[1].items),
