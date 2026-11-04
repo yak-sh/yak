@@ -41,6 +41,8 @@ import { sweep } from './usage.ts'
 import { FREE, monthOf, PLUS, size } from './meter.ts'
 import { ADA, ADA_OWNS, as, seeded, visit } from './serving-probe.ts'
 import { platform } from './serving-scene.ts'
+import { stores } from './app-store-probe.ts'
+import { appVocab } from './vocab.ts'
 import { addressed, sha256 } from './versions.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -262,56 +264,31 @@ test('a new release serves its files beside the old cached release', async () =>
   assertEquals(misses, 6)
 })
 
+let positionVocab = appVocab({
+  $defs: {
+    position: {
+      component: true,
+      sync: 'peers',
+      durable: 'connection',
+      properties: { x: { type: 'number' }, z: { type: 'number' } },
+    },
+  },
+})
+
 test('an app worker query can read a connected peer position', async () => {
   await using scenario = platform()
-  let { env, object, states } = scenario
+  let { env } = scenario
+  let at = stores(env, positionVocab)
   let { space, app } = await seeded(env)
-  let name = storeName(space, app)
-  let store = object(name)
-  let headers = {
-    'x-store': name,
-    'x-yak-app': app.eid,
-    'x-yak-access': 'public',
-    'x-yak-person': ADA,
-    'x-yak-role': 'owner',
-  }
-  let vocab = JSON.stringify({
-    $defs: {
-      position: {
-        component: true,
-        sync: 'peers',
-        durable: 'connection',
-        properties: { x: { type: 'number' }, z: { type: 'number' } },
-      },
-    },
-  })
-  let deployed = await store.fetch(
-    new Request('http://store/vocab', {
-      method: 'POST',
-      headers,
-      body: vocab,
+  let store = at(storeName(space, app))
+  let actor = await store.authenticate(
+    new Request('http://store/ws', {
+      headers: { 'x-yak-person': ADA, 'x-yak-role': 'owner' },
     }),
   )
-  assertEquals(deployed.status, 200)
-  let actor = await (await store.door).authenticate(
-    new Request('http://store/ws', { headers }),
-  )
-  let attachment: unknown = { writer: { actor } }
-  let ws = {
-    readyState: 1,
-    send: () => {},
-    serializeAttachment: (value: unknown) => {
-      attachment = value
-    },
-    deserializeAttachment: () => attachment,
-  }
-  states.get(name)!.live.push(ws)
-  await store.webSocketMessage(
-    ws,
-    JSON.stringify({
-      relay: [{ entity: { eid: CAKE }, position: { x: 4, z: 7 } }],
-    }),
-  )
+  await store.subs.relay(() => {}, [
+    { entity: { eid: CAKE }, position: { x: 4, z: 7 } },
+  ], { actor })
   let q = encodeURIComponent(`.entity.eid=${CAKE}&.position`)
   let res = await apps.fetch(
     visit(`/cookbook/api/query?live=1&q=${q}`),
@@ -324,6 +301,7 @@ test('an app worker query can read a connected peer position', async () => {
 test('an app worker can send a stored query as one encoded filter', async () => {
   await using scenario = platform()
   let { env } = scenario
+  stores(env)
   await seeded(env)
   let title = 'Smith & Wren'
   await client(env, await as(ADA)).apply([{
@@ -930,6 +908,7 @@ test('a store tells the directory its size within the storage allowance step', a
 test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
   await using scenario = platform()
   let { env } = scenario
+  stores(env)
   await seeded(env)
   let cookie = await as(ADA)
   let page = client(env, cookie)
@@ -1023,6 +1002,7 @@ test('a subscription is that query still answering', async () => {
 
 test('an open app takes a write from nobody, and a public one does not', async () => {
   await using open = platform()
+  stores(open.env)
   await seeded(open.env, 'open')
   let stranger = client(open.env)
   let wrote = await stranger.apply([
@@ -1036,6 +1016,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
   // The same write on a `public` app is the member guard's no, said in the
   // sentence a page shows its person.
   await using shut = platform()
+  stores(shut.env)
   await seeded(shut.env, 'public')
   let no = await apps.fetch(
     visit('/cookbook/api/apply', {
@@ -1379,6 +1360,7 @@ test('visitors are served however many request units a month has seen', async ()
 
 test("a stranger's reads are held to a rate per source, a member's are not", async () => {
   await using k = await router()
+  stores(k.env)
   let spent = 0
   k.env.API_RATE = { limit: () => Promise.resolve({ success: ++spent <= 2 }) }
   let from = (cookie?: string) =>
@@ -1920,6 +1902,7 @@ test("a private app's release asset is its worker's to give a stranger", async (
 test('a page and an upload are served where the cache hop is refused', async () => {
   await using scenario = platform()
   let { env, files } = scenario
+  stores(env)
   await seeded(env)
   files.held.set(
     'ada/cookbook/index.html',
@@ -1958,6 +1941,7 @@ test('a page and an upload are served where the cache hop is refused', async () 
 test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
   await using scenario = platform()
   let { env, files } = scenario
+  stores(env)
   let { dir, space, app } = await seeded(env)
   let cookie = await as(ADA)
   env.FILES = {

@@ -1,19 +1,20 @@
 // Trash retains an app's resources while its address belongs to the next app.
-// One platform holds every case; each case is a space of its own.
+// Address decisions use RAM directory rows; Store lifecycle cases retain
+// their Store. Each case is a space of its own.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { call, type Ctx } from './tools.ts'
 import { appStore, directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { declared, platform } from './testing.ts'
+import { platform as isolated } from './deploy-probe.ts'
 import { r2Objects } from './lib/objects.ts'
 import { blobPrefix } from './blob-key.ts'
 import { publicPrefix } from './public-files.ts'
 import { holding } from './held.ts'
 
-let { env } = platform('trash-address')
-let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
-let blobs = r2Objects(env.BLOBS)
+let backed = platform('trash-address')
+let addresses = isolated('trash-address')
 let NOTE = {
   $defs: {
     note: {
@@ -28,7 +29,13 @@ let NOTE = {
 // directory holds: its mutable files, uploads and published bytes all under
 // its address prefix. Then trashed, and its address taken again on `reuse`.
 // Only a case that reads the app's rows back has its store woken to save one.
-let fixture = async (slug: string, { reuse = false, saving = false } = {}) => {
+let fixture = async (
+  slug: string,
+  { reuse = false, saving = false, store = false } = {},
+) => {
+  let { env } = saving || store ? backed : addresses
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+  let blobs = r2Objects(env.BLOBS)
   let person = crypto.randomUUID()
   let by = { 'x-yak-person': person, 'x-yak-role': 'owner' }
   let ctx: Ctx = { env, dir, person }
@@ -86,28 +93,31 @@ let fixture = async (slug: string, { reuse = false, saving = false } = {}) => {
   if (reuse) {
     await call(ctx, 'app_new', { space: slug, slug: 'notes', title: 'New' })
   }
-  return { ctx, slug, space, app, deleted, row, deploys, by }
+  return { env, dir, blobs, ctx, slug, space, app, deleted, row, deploys, by }
 }
-let free = await fixture('free')
+let free = await fixture('free', { store: true })
 let restoring = await fixture('restoring', { saving: true })
 let reuse = await fixture('reuse', { reuse: true })
 let chosen = await fixture('chosen')
 let renamed = await fixture('renamed')
 
-let text = async (key: string) =>
+let text = async (blobs: ReturnType<typeof r2Objects>, key: string) =>
   new TextDecoder().decode((await blobs.get(key))!)
 
 test('trash releases the slug while retaining every owned byte and store', async () => {
-  let { space, app, deleted, slug, by } = free
+  let { env, dir, blobs, space, app, deleted, slug, by } = free
   assertEquals(await dir.app(space, 'notes'), null)
   let kept = (await dir.appAt(app.eid))!.app
   assertEquals(kept.slug, 'notes')
   assertEquals(storeName(space, kept), storeName(space, app))
   assertStringIncludes(deleted.text, app.eid)
-  assertEquals(await text(`${slug}/notes/draft.txt`), 'kept')
-  assertEquals(await text(blobPrefix(space, kept) + 'image'), 'kept')
-  assertEquals(await text(publicPrefix(space, kept) + 'page.html'), 'kept')
-  assertEquals(await text(`${slug}/notes/blobs/image`), 'kept')
+  assertEquals(await text(blobs, `${slug}/notes/draft.txt`), 'kept')
+  assertEquals(await text(blobs, blobPrefix(space, kept) + 'image'), 'kept')
+  assertEquals(
+    await text(blobs, publicPrefix(space, kept) + 'page.html'),
+    'kept',
+  )
+  assertEquals(await text(blobs, `${slug}/notes/blobs/image`), 'kept')
   // Its store is kept, answering nothing while it is in the trash.
   let words = await appStore(env.STORE, space, kept)('/vocab', {}, by)
   assertEquals(words.status, 404)
@@ -115,7 +125,7 @@ test('trash releases the slug while retaining every owned byte and store', async
 })
 
 test('restore returns to the old address when it is free', async () => {
-  let { ctx, slug, space, app, deploys, row, by } = restoring
+  let { env, dir, ctx, slug, space, app, deploys, row, by } = restoring
   await call(ctx, 'app_restore', { space: slug, app: app.eid })
   let restored = (await dir.app(space, 'notes'))!
   assertEquals(restored.eid, app.eid)
@@ -130,7 +140,7 @@ test('restore returns to the old address when it is free', async () => {
 })
 
 test('restore chooses a numbered address and leaves the replacement independent', async () => {
-  let { ctx, slug, space, app } = reuse
+  let { dir, blobs, ctx, slug, space, app } = reuse
   let replacement = (await dir.app(space, 'notes'))!
   assertEquals(await blobs.read(blobPrefix(space, replacement) + 'image'), null)
   let kept = (await dir.appAt(app.eid))!.app
@@ -151,13 +161,13 @@ test('restore chooses a numbered address and leaves the replacement independent'
 })
 
 test('restore accepts a chosen address', async () => {
-  let { ctx, slug, space, app } = chosen
+  let { dir, ctx, slug, space, app } = chosen
   await call(ctx, 'app_restore', { space: slug, app: app.eid, slug: 'archive' })
   assertEquals((await dir.app(space, 'archive'))!.eid, app.eid)
 })
 
 test('a rename and a new app can take released and former addresses', async () => {
-  let { ctx, slug, space } = renamed
+  let { dir, ctx, slug, space } = renamed
   await call(ctx, 'app_new', { space: slug, slug: 'draft', title: 'Draft' })
   await call(ctx, 'app_set', { space: slug, app: 'draft', slug: 'notes' })
   let moved = (await dir.app(space, 'notes'))!
