@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn, txt, vocabFile } from './probe.ts'
-import { KERNEL, meta } from './meta.ts'
+import { meta } from './meta.ts'
 import { crowded, KEPT, lapsed, MOVED, visits } from './visit.ts'
 import { stores } from './sweep.ts'
 import { closed, collected } from './erase.ts'
@@ -56,7 +56,8 @@ let titles = async (c: ReturnType<typeof client>) =>
     .sort()
 let adaIn = await signIn(k)
 let ada = client(k, host, 'notes', adaIn.cookie)
-let bo = client(k, host, 'notes', (await signIn(k)).cookie)
+let boIn = await signIn(k)
+let bo = client(k, host, 'notes', boIn.cookie)
 let owner = client(k, host, 'notes', k.owner.cookie)
 let nobody = client(k, host, 'notes')
 
@@ -97,6 +98,7 @@ let boStatuses = [x.status, y.status]
 await x.body?.cancel()
 await y.body?.cancel()
 let boRows = await titles(bo)
+let boClaimed = (await visits(env, { by: boIn.person })).length
 
 // A browser nobody is signed in on: its cookie is all it is.
 let opened = await k.at(host, '/notes/api/me')
@@ -185,10 +187,6 @@ let made = await cyc.post([{ entity: { eid: '$c' }, note: { title: 'C' } }])
 await made.body?.cancel()
 let cys = (await meta(env).query('.visit ?edge'))
   .find((r) => !before.has(r.entity.eid))!
-await meta(env).apply([{
-  entity: { eid: (cys.edge as { from: string }).from },
-  browser: { by: cy.person },
-}], KERNEL)
 
 let claimedLapsed = (await lapsed(env, new Date(Date.now() + 2 * KEPT)))
   .filter((g) => g.eid == cys.entity.eid).length
@@ -241,6 +239,10 @@ test('two writes at once make one store', () => {
   assertEquals(vias, 3)
 })
 
+test('a signed-in stranger’s store is theirs from its first write', () => {
+  assertEquals(boClaimed, 1)
+})
+
 test('the sample is not the app’s store', () => {
   assert(app.demo)
   assertNotEquals(app.demo.store, app.store)
@@ -275,12 +277,12 @@ test('past its rate or its cap, a first write is asked to sign up', () => {
 
 test('a closed account takes the store its browser was given', () => {
   assertEquals(claimedLapsed, 0)
-  assertEquals(afterClosing, 3)
+  assertEquals(afterClosing, 2)
 })
 
-test('a store nobody claimed is erased after 90 days unused', () => {
-  assertEquals([soon, lapsing], [0, 3])
-  assertEquals(afterSweep, 0)
+test('a store nobody claimed is erased after 90 days unused, and a claimed one kept', () => {
+  assertEquals([soon, lapsing], [0, 1])
+  assertEquals(afterSweep, 1)
   assertEquals(adaAgain, ['Sample'])
 })
 

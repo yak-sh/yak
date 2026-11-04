@@ -3843,7 +3843,7 @@ let served = async (
       }
       let own = await c.time(
         'birth',
-        () => born(env, space!, stranger.app, who.via!),
+        () => born(env, space!, stranger.app, who.via!, who.person),
       )
       ;({ app, who, visit } = visiting(
         space,

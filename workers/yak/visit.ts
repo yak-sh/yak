@@ -242,19 +242,23 @@ let births = new Map<string, Promise<Visit>>()
 /**
  * A store of this browser's own, copied from the app's sample at one instant,
  * then written on its edge. Answers the store the edge holds, which is another
- * birth's where one won the race; the loser's copy is emptied.
+ * birth's where one won the race; the loser's copy is emptied. A browser
+ * someone is signed in on is theirs before the copy is made (`by`, the way
+ * attribution.ts `claimed` writes it at sign-in), so what they make there is
+ * claimed from its first write, and no sweep takes it for nobody's.
  */
 export let born = (
   env: Env,
   space: Space,
   app: App,
   via: string,
+  by: string | null,
   now = new Date(),
 ): Promise<Visit> => {
   let key = `${app.eid} ${instrumentEid(via)}`
   let held = births.get(key)
   if (held) return held
-  let birth = bear(env, space, app, instrumentEid(via), now)
+  let birth = bear(env, space, app, instrumentEid(via), by, now)
     .finally(() => births.delete(key))
   births.set(key, birth)
   return birth
@@ -265,8 +269,10 @@ let bear = async (
   space: Space,
   app: App,
   via: string,
+  by: string | null,
   now: Date,
 ): Promise<Visit> => {
+  if (by) await owned(env, via, by)
   let id = crypto.randomUUID()
   let store = `${storeName(space, app)}/visit/${id}`
   let copy = await storeOf(env.STORE, app.demo!.store)(
@@ -298,6 +304,20 @@ let bear = async (
     let kept = await visitOf(env, via, app.eid)
     if (!kept) throw error
     return kept
+  }
+}
+
+/** The browser `via` made `by`'s, unless it is somebody's already: the first
+ * person to hold a browser keeps it, as at sign-in. */
+let owned = async (env: Pick<Env, 'STORE'>, via: string, by: string) => {
+  try {
+    await meta(env).apply([{
+      entity: { eid: via },
+      browser: { by },
+      $was: { browser: { by: null } },
+    }], KERNEL)
+  } catch (error) {
+    if (!(error instanceof Stale)) throw error
   }
 }
 
