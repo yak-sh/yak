@@ -41,23 +41,17 @@ import {
   unpacked,
 } from './sell.ts'
 import type { Space } from './directory.ts'
+import { space as spaceOf } from './directory-fixture.ts'
 
-let space = (over: Partial<Space> = {}): Space => ({
-  eid: 'e-space',
-  slug: 'ada',
-  store: 'ada',
-  title: 'Ada',
-  tier: null,
-  plan: null,
-  stripe: null,
-  fee: 0,
-  meter: null,
-  told: false,
-  trashed: null,
-  slugs: [],
-  tunnel: null,
-  ...over,
-})
+let space = (over: Partial<Space> = {}): Space =>
+  spaceOf({
+    eid: 'e-space',
+    slug: 'ada',
+    store: 'ada',
+    title: 'Ada',
+    tier: null,
+    ...over,
+  })
 
 test('the account is the charge-merchants-directly model, in full', () => {
   assertEquals(account(space(), 'ada@example.com'), {

@@ -4,6 +4,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { joining, posting, SPACE, wiped } from './build-door.ts'
 import type { Space } from './directory.ts'
+import { space as spaceOf } from './directory-fixture.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { platform, sandboxes, workspaces } from './testing.ts'
@@ -16,21 +17,13 @@ import {
 import { backoff, evicted, retried } from '@yaks/durable-object'
 import { listen, rostered, told } from './stream.ts'
 
-let space: Space = {
+let space: Space = spaceOf({
   eid: 'space-eid',
   slug: 'ada',
   store: 'ada',
   title: 'Ada',
   tier: null,
-  plan: null,
-  stripe: null,
-  fee: 0,
-  meter: null,
-  told: false,
-  trashed: null,
-  slugs: [],
-  tunnel: null,
-}
+})
 let who = { person: 'person-eid', role: 'owner' as const }
 let flagged = () => Object.assign(new Error('reset'), { retryable: true })
 let failures = [

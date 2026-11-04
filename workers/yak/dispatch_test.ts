@@ -23,6 +23,7 @@ import { clock } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { COOKIE, seal, sign } from './lib/token.ts'
 import type { App, Space } from './directory.ts'
+import { space as spaceOf } from './directory-fixture.ts'
 import {
   carried,
   commandWorker,
@@ -50,21 +51,13 @@ import { nobody, type Who } from './session.ts'
 
 let SECRET = 'a-probe-secret'
 
-let space: Space = {
+let space: Space = spaceOf({
   eid: 's1',
   slug: 'jeff',
   store: 'jeff',
   title: 'jeff',
   tier: null,
-  plan: null,
-  stripe: null,
-  fee: 0,
-  meter: null,
-  told: false,
-  trashed: null,
-  slugs: [],
-  tunnel: null,
-}
+})
 let app: App = {
   policy: 0,
   eid: '00000000-0000-4000-8000-000000000002',
