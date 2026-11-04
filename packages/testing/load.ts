@@ -8,10 +8,10 @@ import * as system from '@yaks/process/system'
 import {
   compileDoctests,
   compileFence,
-  doctests,
+  type Examples,
   fenceName,
-  fences,
   module,
+  scan,
   specifiers,
 } from './examples.ts'
 import { written } from './find.ts'
@@ -58,21 +58,20 @@ export let sweep = async (pages: string[]) => {
   }
 }
 
-let runs = (source: string, page: string) => ({
-  fenced: fences(source, page).filter((f) => !f.skip),
-  lines: module(page) ? doctests(source) : [],
-})
-
 /**
  * For each page, a module importing what its examples import, fenced or
  * doctest, statically or by a literal `import(…)` (the page itself too, when
  * it is a module), written beside it: what the page's examples depend on, as
  * a module graph can say. The caller removes them.
  */
-export let plan = (pages: string[]) =>
+export let plan = (
+  pages: string[],
+  parsed?: ReadonlyMap<string, Examples>,
+) =>
   Promise.try(() =>
     pages.map((page) => {
-      let { fenced, lines } = runs(io.readTextFileSync(page), page)
+      let { fenced, lines } = parsed?.get(page) ??
+        scan(io.readTextFileSync(page), page)
       let base = page.slice(page.lastIndexOf('/') + 1)
       let named = new Set([
         ...module(page) ? [`./${base}`] : [],
@@ -113,8 +112,8 @@ let exported = async (page: string): Promise<string[]> =>
   Object.keys(await import(url(page)))
 
 /** Loads a page's examples, each declaring its test. */
-export let examples = async (page: string) => {
-  let { fenced, lines } = runs(io.readTextFileSync(page), page)
+export let examples = async (page: string, parsed?: Examples) => {
+  let { fenced, lines } = parsed ?? scan(io.readTextFileSync(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
     let name = await fenceName(page, f)

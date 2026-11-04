@@ -14,6 +14,7 @@ import {
   type Survey,
   survey,
 } from './deps.ts'
+import type { Examples } from './examples.ts'
 import { tested } from './find.ts'
 import { plan, sweep } from './load.ts'
 
@@ -90,6 +91,7 @@ export let choose = async (
     cost = () => 0,
     owner,
     inspect = survey,
+    parsed,
   }: {
     all?: boolean
     observed?: boolean
@@ -102,6 +104,7 @@ export let choose = async (
     cost?: (file: string) => number
     owner?: (path: string) => string | undefined
     inspect?: (paths: string[]) => Promise<Survey | undefined>
+    parsed?: ReadonlyMap<string, Examples>
   } = {},
 ): Promise<Chosen> => {
   if (changed && !changed.length) {
@@ -117,7 +120,7 @@ export let choose = async (
   }
   let pages = files.filter((f) => !tested(f))
   await sweep(pages)
-  let plans = new Map(await plan(pages))
+  let plans = new Map(await plan(pages, parsed))
   try {
     let kinds = [...new Set(files.map(kind))]
     // What each file read as it last passed: the modules among them, imported

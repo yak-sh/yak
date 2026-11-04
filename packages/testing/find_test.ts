@@ -1,0 +1,61 @@
+import { equal, test } from './mod.ts'
+import { discover, find } from './find.ts'
+
+let dir = Deno.makeTempDirSync({ prefix: 'yaks-find-' })
+let files = {
+  'module.ts': [
+    '/**',
+    ' * ```tsx',
+    ' * await import("./fence.tsx")',
+    ' * ```',
+    ' * ```ts ignore',
+    ' * await import("./ignored.ts")',
+    ' * ```',
+    ' */',
+    '/// await import("./line.ts")',
+    '// / await import("./skipped.ts")',
+  ].join('\n'),
+  'skipped.ts': '// / skipped()',
+  'guide.md': '```ts\nawait import("./guide.ts")\n```',
+  'ignored.md': '```ts ignore\nignored()\n```',
+  'data.md': '```json\n{}\n```',
+  'plain.ts': 'export let value = 1',
+  'unit_test.ts': '/// a test module is not an example page',
+}
+for (let [file, source] of Object.entries(files)) {
+  Deno.writeTextFileSync(`${dir}/${file}`, source)
+}
+let found = await discover([dir])
+let names = await find([dir])
+
+test('discovery retains the same runnable pages and shares their parsed examples', () => {
+  equal(names, { tests: found.tests, pages: found.pages })
+  equal(found.tests, [`${dir}/unit_test.ts`])
+  equal(
+    found.pages,
+    ['guide.md', 'module.ts', 'skipped.ts'].map((p) => `${dir}/${p}`),
+  )
+  equal([...found.parsed!.keys()], found.pages)
+  equal(found.parsed!.get(`${dir}/module.ts`), {
+    fenced: [{
+      line: 2,
+      skip: false,
+      lang: 'tsx',
+      code: 'await import("./fence.tsx")',
+    }],
+    lines: [
+      {
+        line: 9,
+        skip: false,
+        code: 'await import("./line.ts")',
+        op: undefined,
+      },
+      {
+        line: 10,
+        skip: true,
+        code: 'await import("./skipped.ts")',
+        op: undefined,
+      },
+    ],
+  })
+})

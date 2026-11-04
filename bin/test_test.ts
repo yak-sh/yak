@@ -230,3 +230,29 @@ test('source planning and selection consume one command snapshot', async () => {
   equal(queried, [['a_test.ts', 'a.ts']])
   equal(chosen === graph && checked === graph, true)
 })
+
+test('selection receives the example snapshot from the same discovery', async () => {
+  let parsed = new Map([['guide.md', { fenced: [], lines: [] }]])
+  let received: unknown
+  let result = await prepare(['--all'], '/sqlite.so', {
+    changes: () => Promise.resolve([]),
+    format: (paths) => Promise.resolve(paths),
+    find: () => Promise.resolve({ tests: [], pages: ['guide.md'], parsed }),
+    chosen: (files, _all, _also, _changed, _sources, _inspect, examples) => {
+      received = examples
+      return Promise.resolve({
+        keys: new Map(),
+        run: files,
+        affected: files,
+        sources: [],
+        beyond: 0,
+        reaches: () => false,
+        read: () => undefined,
+      })
+    },
+    check: () => Promise.resolve(true),
+    ready: () => Promise.resolve(),
+  })
+  equal(received === parsed, true)
+  equal(result.run, ['guide.md'])
+})

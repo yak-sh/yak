@@ -29,7 +29,7 @@ import * as system from '@yaks/process/system'
 import { choose } from './choose.ts'
 import { drive } from './drive.ts'
 import { note, proof, remember, survey, tally } from './deps.ts'
-import { find, tested } from './find.ts'
+import { discover, tested } from './find.ts'
 import { examples } from './load.ts'
 import { observe } from './reads.ts'
 import { summary, timed } from './run.ts'
@@ -62,9 +62,13 @@ let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 
 // The files given, or found under the paths, and the key of each.
-let { tests: found, pages: shown } = given
-  ? { tests: paths.filter(tested), pages: paths.filter((p) => !tested(p)) }
-  : await find(paths)
+let { tests: found, pages: shown, parsed } = given
+  ? {
+    tests: paths.filter(tested),
+    pages: paths.filter((p) => !tested(p)),
+    parsed: undefined,
+  }
+  : await discover(paths)
 let chosen = given
   ? {
     keys: new Map(Object.entries(JSON.parse(await io.readTextFile(given)))),
@@ -73,6 +77,7 @@ let chosen = given
   : await choose([...found, ...shown], {
     all,
     observed: true,
+    parsed,
     kind: () => platform,
     also: () => ['deno.json', 'deno.jsonc', 'deno.lock', ...flag('also')],
     runner: [
@@ -96,7 +101,9 @@ let load = async (path: string) => {
   observation.mark(path)
   from(path)
   try {
-    await (tested(path) ? import(here(path)) : examples(path))
+    await (tested(path)
+      ? import(here(path))
+      : examples(path, parsed?.get(path)))
   } catch (error) {
     test(`${path} loads`, () => {
       throw error

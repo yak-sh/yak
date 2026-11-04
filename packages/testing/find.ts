@@ -3,7 +3,7 @@ import * as io from '@yaks/file/io'
 // A path names a file or a directory; a directory is walked, never into
 // another project's code (`node_modules`, `vendor`, a build's scratch) or a
 // hidden one.
-import { doctests, fences, module } from './examples.ts'
+import { type Examples, module, scan } from './examples.ts'
 
 let SKIP = ['vendor', 'node_modules', '.wrangler']
 
@@ -53,17 +53,36 @@ export let walk = (paths: string[]): Promise<string[]> =>
   })
 
 /** Whether a page's source holds an example that runs. */
-export let examples = (path: string, source: string): boolean =>
-  fences(source, path).some((f) => !f.skip) ||
-  module(path) && doctests(source).length > 0
+export let examples = (path: string, source: string): boolean => {
+  let { fenced, lines } = scan(source, path)
+  return !!(fenced.length || lines.length)
+}
+
+export type Found = {
+  tests: string[]
+  pages: string[]
+  parsed?: ReadonlyMap<string, Examples>
+}
+
+/** Test modules, example pages and their parsed inputs for one command. */
+export let discover = async (
+  paths: string[],
+): Promise<Found> => {
+  let files = await walk(paths)
+  let parsed = new Map<string, Examples>()
+  for (let file of files.filter(paged)) {
+    let examples = scan(io.readTextFileSync(file), file)
+    if (examples.fenced.length || examples.lines.length) {
+      parsed.set(file, examples)
+    }
+  }
+  return { tests: files.filter(tested), pages: [...parsed.keys()], parsed }
+}
 
 /** The test modules and the example pages under the paths. */
 export let find = async (
   paths: string[],
 ): Promise<{ tests: string[]; pages: string[] }> => {
-  let files = await walk(paths)
-  let pages = files.filter((f) =>
-    paged(f) && examples(f, io.readTextFileSync(f))
-  )
-  return { tests: files.filter(tested), pages }
+  let { tests, pages } = await discover(paths)
+  return { tests, pages }
 }

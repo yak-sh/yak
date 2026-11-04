@@ -11,6 +11,7 @@
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
 import type { Survey } from '@yaks/testing/deps'
+import type { Examples } from '@yaks/testing/examples'
 import type { Prepared } from './check-types.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
@@ -37,7 +38,7 @@ let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
 let { excluded, sourceSurvey } = await import('./check-types.ts')
-let { find, tested } = await import('@yaks/testing/find')
+let { discover, tested } = await import('@yaks/testing/find')
 let { survey, took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
@@ -362,6 +363,7 @@ export let chosen = async (
   changed?: string[],
   sources: string[] = [],
   inspect = survey,
+  parsed?: ReadonlyMap<string, Examples>,
 ) =>
   await choose(files, {
     budget: SECONDS,
@@ -375,6 +377,7 @@ export let chosen = async (
     runner: RUNS,
     owner: member,
     inspect,
+    parsed,
   })
 
 /** Plan a run before starting runtimes, and start checking its sources: `ok`
@@ -387,7 +390,7 @@ export let prepare = async (
   effects = {
     changes,
     format,
-    find,
+    find: discover,
     chosen,
     check: (
       changed: string[],
@@ -440,7 +443,9 @@ export let prepare = async (
     : effects.check(changedFiles, imports.promise, snapshot.promise)
       .catch((e) => (console.error(e), false))
   try {
-    let { tests, pages } = await effects.find(paths.length ? paths : ROOTS)
+    let { tests, pages, parsed } = await effects.find(
+      paths.length ? paths : ROOTS,
+    )
     let files = [
       ...tests.filter((f) => on(platform(f))),
       ...on('deno') ? pages : [],
@@ -454,6 +459,7 @@ export let prepare = async (
       changed,
       changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
       inspect,
+      parsed,
     )
     if (!inspected) snapshot.resolve(undefined)
     let prepared = reaches(READIES)

@@ -145,6 +145,13 @@ export let fences = (source: string, path = 'page.md'): Fence[] => {
   return out
 }
 
+/** A page's runnable fences and doctest lines, parsed once for a command. */
+export type Examples = { fenced: Fence[]; lines: Doctest[] }
+export let scan = (source: string, page: string): Examples => ({
+  fenced: fences(source, page).filter((f) => !f.skip),
+  lines: module(page) ? doctests(source) : [],
+})
+
 // Statements an example opens with that a module holds at its top level.
 let IMPORT = /^import[\s{*'"]/
 let ENDS =
