@@ -4,13 +4,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { handler } from './kernel.ts'
-import { platform } from './serving-scene.ts'
-import { as } from './serving-data-probe.ts'
+import { platform } from './deploy-probe.ts'
+import { as, SECRET } from './serving-data-probe.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { operatorContext } from './operator.ts'
 import { call, TOOLS } from './tools.ts'
 
-await using p = platform()
+await using p = platform(SECRET)
 let { env } = p
 let dir = directory({ fetch: (req) => directoryFetch(req, env) })
 let books = 'books', shop = 'shop'
