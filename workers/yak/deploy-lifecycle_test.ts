@@ -11,7 +11,9 @@ import { platform as directoryPlatform } from './directory-probe.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
-import { pins, sha256 } from './versions.ts'
+import { pins, record, releaseOf, sha256 } from './versions.ts'
+import type { Reload } from '@yaks/platform'
+import { staged } from './release.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let fixture = async (env: Env) => {
@@ -30,7 +32,50 @@ let fixture = async (env: Env) => {
     let space = (await dir.space('ada'))!
     return dir.deploys((await dir.app(space, 'recipes'))!)
   }
-  return { ctx, dir, args, write, history }
+  // Pin a kept history before selecting its pointer, using the same release
+  // index and record as deployment. Rollback starts from those releases.
+  let kept = async (
+    version: number,
+    text: string,
+    reload?: Reload,
+    extra: Record<string, string> = {},
+  ) => {
+    let space = (await dir.space('ada'))!
+    let app = (await dir.app(space, 'recipes'))!
+    let source = releaseOf(space, app)
+    let stage = staged(r2Objects(env.BLOBS), {}, source)
+    for (
+      let [path, content] of Object.entries({
+        'index.html': `<h1>${text}</h1>`,
+        ...extra,
+      })
+    ) {
+      let bytes = new TextEncoder().encode(content)
+      await stage.files.put(`${source}/${path}`, bytes)
+    }
+    let files = await stage.finish()
+    let next = { ...app, source }
+    await declared(env, space, {
+      ...next,
+      version,
+      declaration: String(version),
+    })
+    await record(
+      dir,
+      { person: ADA, role: 'owner' },
+      next,
+      version,
+      files,
+      '',
+      [],
+      app.source,
+      app.draft,
+      app.fence,
+      false,
+      reload,
+    )
+  }
+  return { ctx, dir, args, write, history, kept }
 }
 
 test('deploy reload marks survive recording, and pointer notices follow the commit', async () => {
@@ -164,12 +209,8 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 let crossed = await (async () => {
   await using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
-  await f.write('1')
-  await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
-  let deploy = async (n: number, reload?: string) => {
-    await f.write(String(n))
-    await call(f.ctx, 'app_deploy', { ...f.args, ...reload ? { reload } : {} })
-  }
+  await f.kept(1, '1', 'required')
+  let deploy = (n: number, reload?: Reload) => f.kept(n, String(n), reload)
   let publish = () =>
     call(f.ctx, 'app_publish', {
       ...f.args,
@@ -339,15 +380,8 @@ test('rollback admits a kept declaration again without changing its version or f
 let rollback = await (async () => {
   let scenario = platform('rollback-secret')
   let f = await fixture(scenario.env)
-  await f.write('one')
-  await call(f.ctx, 'app_deploy', f.args)
-  await f.write('two')
-  await call(f.ctx, 'app_files', {
-    ...f.args,
-    path: 'main.js',
-    content: "import './missing.js'",
-  })
-  await call(f.ctx, 'app_deploy', f.args)
+  await f.kept(1, 'one')
+  await f.kept(2, 'two', undefined, { 'main.js': "import './missing.js'" })
   let before = await f.history()
   await scenario.settled()
   return { scenario, f, before }
@@ -447,10 +481,8 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
   await using scenario = platform('rollback-errors')
   let f = await fixture(scenario.env)
-  await f.write('one')
-  await call(f.ctx, 'app_deploy', f.args)
-  await f.write('two')
-  await call(f.ctx, 'app_deploy', f.args)
+  await f.kept(1, 'one')
+  await f.kept(2, 'two')
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
   let space = (await f.dir.space('ada'))!
   let app = (await f.dir.app(space, 'recipes'))!
@@ -502,10 +534,8 @@ test('worker errors after rollback and an in-flight pointer move name the routed
 let legacyRollback = await (async () => {
   await using scenario = platform('rollback-legacy')
   let f = await fixture(scenario.env)
-  await f.write('one')
-  await call(f.ctx, 'app_deploy', f.args)
-  await f.write('two')
-  await call(f.ctx, 'app_deploy', f.args)
+  await f.kept(1, 'one')
+  await f.kept(2, 'two')
   let all = await f.history()
   await f.dir.stamp({
     entities: [{
