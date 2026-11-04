@@ -329,15 +329,21 @@ let conversationOf = async (
   at: string,
   open: string,
 ) => {
-  if (open == 'new') return { task: '', title: '', html: '' }
-  let { task, title, html, waiting } = await operatorDoor(
+  if (open == 'new') return { task: '', begun: '', title: '', html: '' }
+  let { task, begun, title, html, waiting } = await operatorDoor(
     env,
     space,
     who,
     'conversation',
     { at, open },
-  ) as { task: string; title: string; html: string; waiting: Bundle[] }
-  return { task, title, html: html + conversation(waiting) }
+  ) as {
+    task: string
+    begun: string
+    title: string
+    html: string
+    waiting: Bundle[]
+  }
+  return { task, begun, title, html: html + conversation(waiting) }
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
@@ -477,7 +483,7 @@ export let chatPage = async (
 ${fresh || talked.title ? composer(at, talked.task) : ''}
 </div>
 </div>
-${chatScript(at, who, space, open, talked.task || open)}`,
+${chatScript(at, who, space, open, talked.begun || open)}`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Talk_Page',
   )

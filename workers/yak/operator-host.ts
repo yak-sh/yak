@@ -116,7 +116,9 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
  * One conversation in the Operator's chat app, opened by its task or by a
  * request: its title and the task drawn with its sessions' transcripts
  * (operator-view.ts `talk`), or the request alone while no session has taken
- * it, for the page to draw as it always has.
+ * it, for the page to draw as it always has. `begun` is the request it began
+ * with, the same before and after a task takes it up (the task, for one no
+ * request began).
  */
 export let conversationOf = async (store: Store, at: string, open: string) => {
   let [row] = await store.g.get([open])
@@ -128,22 +130,35 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
   let [held] = task ? await store.g.get([task]) : []
   if (!held?.task) {
     return row?.operator_request
-      ? { task: '', title: firstLine(row), html: '', waiting: [row] }
-      : { task: '', title: '', html: '', waiting: [] }
+      ? {
+        task: '',
+        begun: open,
+        title: firstLine(row),
+        html: '',
+        waiting: [row],
+      }
+      : { task: '', begun: '', title: '', html: '', waiting: [] }
   }
   let requests = await store.g.read(REQUESTS)
   let sessions = await sessionsOf(store, task)
   let ids = new Set(sessions.map((b) => b.entity.eid))
   let entries = await entriesOf(store, sessions)
-  let files = requests.filter((r) =>
+  // The requests this conversation was asked in, first to last.
+  let asked = requests.filter((r) =>
     ids.has(String(comp(r, 'operator_request')?.session)) ||
     comp(r, 'operator_answer')?.task == task
-  ).flatMap((r) =>
+  ).sort((a, b) =>
+    String(comp(a, 'created')?.at ?? '').localeCompare(
+      String(comp(b, 'created')?.at ?? ''),
+    )
+  )
+  let files = asked.flatMap((r) =>
     ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
       .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
   )
   return {
     task,
+    begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
     html: talk(held, entries, await namesOf(store, entries), files, at),
     waiting: [],

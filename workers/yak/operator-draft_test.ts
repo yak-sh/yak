@@ -83,10 +83,16 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
     timers.add(t)
     return t
   }
-  let fetch = (url: string, init?: RequestInit) =>
-    cut && init?.method == 'POST'
-      ? new Promise<Response>(() => {})
-      : serve(url, init)
+  // The draft reads the page has had answered, each taken in before the next.
+  let reads = 0
+  let fetch = async (url: string, init?: RequestInit) => {
+    if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
+    let answer = await serve(url, init)
+    if (url.includes('draft=1') && !init?.method) {
+      queueMicrotask(() => void reads++)
+    }
+    return answer
+  }
   let kept: ReturnType<typeof browserDrafts>[] = []
   let opened: typeof browserDrafts = (client, scope, opts) => {
     let d = browserDrafts(client, scope, { ...opts, stash, pace: 0 })
@@ -127,6 +133,11 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
   return {
     say,
     focused,
+    // Once the page has heard the store's drafts.
+    heard: async () => {
+      while (!reads) await new Promise((ok) => setTimeout(ok, 1))
+      await settle()
+    },
     type: (text: string) => {
       say.value = text
       say.dispatchEvent(new Event('input'))
@@ -208,26 +219,26 @@ let road = await begun('Post the road millage notice')
 let park = await begun('Book the park pavilion for June')
 
 let onRoad = await load(stash, false, road)
-await settle()
+await onRoad.heard()
 let roadFocused = onRoad.focused
 onRoad.type('Add the hearing date')
 await settle()
 onRoad.leave()
 
 let onPark = await load(stash, false, park)
-await settle()
+await onPark.heard()
 let parkShown = onPark.say.value
 onPark.type('Ask for the north shelter')
 await settle()
 onPark.leave()
 
 let backOnRoad = await load(stash, false, road)
-await settle()
+await backOnRoad.heard()
 let roadShown = backOnRoad.say.value
 backOnRoad.leave()
 
 let fresh = await load(stash)
-await settle()
+await fresh.heard()
 let freshFocused = fresh.focused
 fresh.leave()
 
