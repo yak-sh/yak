@@ -52,7 +52,7 @@ let fixture = (
         ...live,
       })
     },
-    pushed: () => Promise.resolve(undefined),
+    began: () => Promise.resolve(undefined),
     answers: () => Promise.resolve(undefined),
     same: () => Promise.resolve(same),
     build: () => Promise.resolve(build),
@@ -226,17 +226,21 @@ test('removing the marks asks for another start', async () => {
   equal(f.started, 2)
 })
 
-// A live head whose look shows a deploy per `took` (seconds from push to live,
+// A live head whose look shows a deploy per `took` (seconds from start to live,
 // oldest first, an hour apart, the head's last) and whose home page answers
 // `home`. Says what the look reported, and how often it asked the home page.
 let deploys = (took: number[], home?: string) => {
   let f = fixture({ sha: HEAD })
   let shas = took.map((_, i) => i == took.length - 1 ? HEAD : `${i}`.repeat(40))
   let push = (i: number) => landed - (took.length - 1 - i) * 60 * MIN
-  let debuts = took.map((s, i) => ({ sha: shas[i], at: push(i) + s * 1000 }))
+  let debuts = took.map((s, i) => ({
+    sha: shas[i],
+    at: push(i) + s * 1000,
+    version: `v${i}`,
+  }))
   f.doors.live = () =>
     Promise.resolve({ sha: HEAD, at: landed, rollback: false, debuts })
-  f.doors.pushed = (sha) => Promise.resolve(push(shas.indexOf(sha)))
+  f.doors.began = (version) => Promise.resolve(push(Number(version.slice(1))))
   let asked = 0
   f.doors.answers = () => (asked++, Promise.resolve(home))
   f.at.now = landed + LATE
@@ -256,7 +260,7 @@ test('each deploy a look shows is timed once, and the head asks yaks.app once', 
   equal(await f.look(), { faults: [], asked: 1 })
   let [row] = await f.g.get([HEAD], ['deployed'])
   equal(row.deployed, {
-    pushed: '2026-10-13T12:42:23.000Z',
+    began: '2026-10-13T12:42:23.000Z',
     live: '2026-10-13T12:43:23.000Z',
   })
 })

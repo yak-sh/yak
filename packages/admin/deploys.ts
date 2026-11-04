@@ -164,13 +164,14 @@ export let serving = (deployments: Deployment[]) => {
 }
 
 /// let put = (sha: string, created_on: string, triggered = 'upload') => ({ id: created_on, created_on, versions: [{ version_id: sha, percentage: 100 }], annotations: { 'workers/message': `${sha.repeat(40)} subject`, 'workers/triggered_by': triggered } })
-/// debuts([put('b', '2026-10-28T12:36:58Z'), put('b', '2026-10-28T12:36:52Z'), put('a', '2026-10-28T12:25:58Z')]) -> [{ sha: 'a'.repeat(40), at: '2026-10-28T12:25:58Z' }, { sha: 'b'.repeat(40), at: '2026-10-28T12:36:52Z' }]
+/// debuts([put('b', '2026-10-28T12:36:58Z'), put('b', '2026-10-28T12:36:52Z'), put('a', '2026-10-28T12:25:58Z')]) -> [{ sha: 'a'.repeat(40), at: '2026-10-28T12:25:58Z', version: 'a' }, { sha: 'b'.repeat(40), at: '2026-10-28T12:36:52Z', version: 'b' }]
 /// debuts([put('a', '2026-10-28T12:25:58Z', 'rollback')]) -> []
-/** Each commit the deploy door put live, and when its first deployment did,
- * oldest first: deployments that serve one version and name their commit. A
- * rollback is an operator's choice of what serves, not a commit's way live. */
+/** Each commit the deploy door put live, when its first deployment did, and
+ * the version that deployment served, oldest first: deployments that serve one
+ * version and name their commit. A rollback is an operator's choice of what
+ * serves, not a commit's way live. */
 export let debuts = (deployments: Deployment[]) => {
-  let first = new Map<string, string>()
+  let first = new Map<string, { at: string; version: string }>()
   for (
     let d of deployments.toSorted((a, b) =>
       Date.parse(a.created_on) - Date.parse(b.created_on)
@@ -180,9 +181,11 @@ export let debuts = (deployments: Deployment[]) => {
         d.annotations?.['workers/triggered_by'] != 'rollback'
       ? shaIn(d.annotations?.['workers/message'])
       : undefined
-    if (sha && !first.has(sha)) first.set(sha, d.created_on)
+    if (sha && !first.has(sha)) {
+      first.set(sha, { at: d.created_on, version: d.versions[0].version_id })
+    }
   }
-  return [...first].map(([sha, at]) => ({ sha, at }))
+  return [...first].map(([sha, debut]) => ({ sha, ...debut }))
 }
 
 export let deploymentsFor = (id: string, deployments: Deployment[]) =>
@@ -205,7 +208,7 @@ export let deploysIn = (
       throw new Error('version has no id or creation time')
     }
     let message = v.annotations?.['workers/message'] ?? ''
-    let named = message.match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
+    let named = message.split('\n')[0].match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
     let commit = named
       ? log.find((c) => c.sha.startsWith(named[1])) ?? {
         sha: named[1],

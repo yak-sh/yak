@@ -21,10 +21,13 @@
 // once until a look succeeds again.
 //
 // A deploy is timed from the same reads: wrangler's deployments say when each
-// commit went live, and a commit's push to main is when GitHub made its first
-// check suite, which it does as the push arrives; the box's own first sight
-// of a head is a minute coarse. yaks.app's home page is asked a few times
-// apart, since a fresh deploy can leave it cold for seconds.
+// commit went live, and the version that went live says when the deploy door
+// began the deploy that made it (workers/yak/wrangler.ts `versionMessage`),
+// one more wrangler read for each deploy. The push is not the start: Workers
+// Builds can hold a build for minutes before it runs (T-133165), and that
+// wait is Cloudflare's, nothing this repo can make faster. yaks.app's home
+// page is asked a few times apart, since a fresh deploy can leave it cold for
+// seconds.
 
 import { checkout } from './checkout.ts'
 import type { Comp, Graph } from '@yaks/graph'
@@ -33,7 +36,7 @@ import { token } from '@yaks/graph/sha256'
 import { Interrupted } from '@yaks/tools/errors'
 import type { Host } from '@yaks/host'
 import { sleep } from '@yaks/fp'
-import { WATCHED } from '../../workers/yak/wrangler.ts'
+import { beganIn, WATCHED } from '../../workers/yak/wrangler.ts'
 import {
   BOUND,
   type Build,
@@ -96,8 +99,9 @@ export type Options = {
   account?: string
 }
 
-/** A commit's first deployment: its sha, and when it went live (ms). */
-export type Debut = { sha: string; at: number }
+/** A commit's first deployment: its sha, when it went live (ms), and the
+ * version it served. */
+export type Debut = { sha: string; at: number; version: string }
 
 /** Where the catch-up reads and acts: the box's own ({@link box}), or a
  * test's. */
@@ -107,8 +111,9 @@ export type Doors = {
   /** what yak serves, and each commit its recent deployments put live with
    * when the first of them did (ms) */
   live: () => Promise<Omit<Live, 'has'> & { debuts: Debut[] }>
-  /** when a commit was pushed to main (ms), if GitHub has seen it */
-  pushed: (sha: string) => Promise<number | undefined>
+  /** when the deploy door began the deploy that made a version (ms), if the
+   * version says */
+  began: (version: string) => Promise<number | undefined>
   /** whether yaks.app's home page answers 200: nothing, or why it does not */
   answers: () => Promise<string | undefined>
   /** whether two commits hold the same Worker source */
@@ -216,21 +221,9 @@ export let box = (
         debuts: debuts(rows).map((d) => ({ ...d, at: Date.parse(d.at) })),
       }
     },
-    pushed: async (sha) => {
-      let at = Date.parse(
-        await command(
-          dir,
-          'gh',
-          [
-            'api',
-            `repos/{owner}/{repo}/commits/${sha}/check-suites`,
-            '--jq',
-            '[.check_suites[].created_at] | min',
-          ],
-          stopping,
-        ),
-      )
-      return Number.isFinite(at) ? at : undefined
+    began: async (version) => {
+      let raw = await wrangled(['versions', 'view', version])
+      return beganIn((raw.result ?? raw).annotations?.['workers/message'])
     },
     answers: async () => {
       for (let tries = 1;; tries++) {
@@ -394,22 +387,23 @@ let untimed = async (g: Graph, shown: Debut[]): Promise<Debut[]> => {
   return shown.filter((d) => !had.has(d.sha))
 }
 
-/** Times each deploy, oldest first, and answers the ones it timed. A commit
- * GitHub has no push of, or one pushed after it went live, is left untimed. */
+/** Times each deploy, oldest first, and answers the ones it timed. A version
+ * that does not say when its deploy began, or says after it went live, is
+ * left untimed. */
 let measure = async (
   g: Graph,
   doors: Doors,
   fresh: Debut[],
 ): Promise<Deployed[]> => {
   let timed: Deployed[] = []
-  for (let { sha, at } of fresh) {
-    let pushed = await doors.pushed(sha)
-    if (pushed != null && pushed <= at) timed.push({ sha, pushed, live: at })
+  for (let { sha, at, version } of fresh) {
+    let began = await doors.began(version)
+    if (began != null && began <= at) timed.push({ sha, began, live: at })
   }
   if (timed.length) {
     await g.apply(timed.map((d) => ({
       entity: { eid: d.sha },
-      deployed: { pushed: iso(d.pushed), live: iso(d.live) },
+      deployed: { began: iso(d.began), live: iso(d.live) },
     })))
   }
   return timed
@@ -422,7 +416,7 @@ let latest = async (g: Graph): Promise<Deployed[]> =>
       let d = row.deployed as Comp
       return {
         sha: row.entity.eid,
-        pushed: Date.parse(String(d.pushed)),
+        began: Date.parse(String(d.began)),
         live: Date.parse(String(d.live)),
       }
     })

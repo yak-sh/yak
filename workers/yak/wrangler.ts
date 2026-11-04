@@ -539,6 +539,21 @@ let annotation = (release: { annotations?: Record<string, string> } | null) => {
 }
 let INPUTS = /(?:\ninputs:[a-f0-9]{64}$|^inputs:[A-Za-z0-9_-]{43}(?:\n|$))/
 
+/// beganIn(versionMessage('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A subject', new Date(0))) -> 0
+/// beganIn('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A subject') -> undefined
+/** The kernel version's message: its commit and subject, then when this door
+ * began the deploy that made it. Cloudflare cuts a deployment's copy to 50
+ * characters, so the `began:` line lives on the version alone. */
+export let versionMessage = (commit: string, began: Date) =>
+  `${commit}\nbegan:${began.toISOString()}`
+
+/** When the deploy door began the deploy that made a version (ms), as its
+ * message's `began:` line says; a version deployed before the line, nothing. */
+export let beganIn = (message?: string): number | undefined => {
+  let at = Date.parse(message?.match(/^began:(\S+)$/m)?.[1] ?? '')
+  return Number.isFinite(at) ? at : undefined
+}
+
 // All 256 bits fit in Cloudflare's 50-character deployment summary. Keep the
 // full commit on the next line of the version's annotation.
 export let siblingMessage = (digest: string, commit = '') =>
@@ -1263,6 +1278,7 @@ let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
 }
 
 if (system.main(import.meta.url)) {
+  let began = new Date()
   let started = performance.now()
   let argv = [...system.args]
   // npm ci pins this executable already. npx adds an npm process and package
@@ -1276,7 +1292,8 @@ if (system.main(import.meta.url)) {
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true
   if (command(argv) === 'deploy') {
-    // Versions carry their commit so `yak admin deploys` need not infer it by time.
+    // Versions carry their commit so `yak admin deploys` need not infer it by
+    // time, and when this door began, which the deploy catch-up times.
     let commit = await spawnCommand('git', {
       args: ['log', '-1', '--format=%H %s'],
       cwd: dir,
@@ -1284,7 +1301,10 @@ if (system.main(import.meta.url)) {
       stderr: 'inherit',
     }).output()
     if (!commit.success) system.exit(commit.code)
-    argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
+    argv.push(
+      '--message',
+      versionMessage(new TextDecoder().decode(commit.stdout).trim(), began),
+    )
   }
   let children = new Set<system.ChildProcess>()
   let stopped = new AbortController()

@@ -28,10 +28,16 @@
 // another try.
 //
 // A look that reads what is live also times the deploys it shows: each
-// commit's first deployment, from its push to main to the moment yaks.app
-// served it, kept on the commit as `deployed{pushed, live}`. The latest
-// `WINDOW` of them are judged together, and a median past `SLOW` is reported
-// as deploys that got slower, a bug of its own. Once main's head goes live
+// commit's first deployment, from the moment the deploy door began it in
+// Workers Builds to the moment yaks.app served it, kept on the commit as
+// `deployed{began, live}`. That is the part of a deploy this repo makes fast
+// or slow (bundling, installing, uploading). Before it, Builds may hold the
+// build: on 2026-11-03 0057e019 and 367ab6c4 waited 498 and 564 s for a build
+// environment and 27 to 87 s more for Cloudflare's clone and cache, then went
+// live 63 and 47 s after the door began. A wait we cannot shorten is no bug of
+// ours, so it is not timed. The latest `WINDOW` deploys are judged together,
+// and a median past `SLOW` is reported as deploys that got slower, a bug of
+// its own. Once main's head goes live
 // through its own deploy, yaks.app's home page has to answer 200; one that
 // does not is reported too.
 
@@ -201,20 +207,18 @@ export let stuck = (head: Head, live: Live, answer: string, bound = BOUND) =>
       `build's log says why it did not deploy.`,
   )
 
-/** A deploy of main as the catch-up timed it: its commit, when the commit was
- * pushed to main, and when yaks.app first served it (ms). */
-export type Deployed = { sha: string; pushed: number; live: number }
+/** A deploy of main as the catch-up timed it: its commit, when the deploy
+ * door began it, and when yaks.app first served it (ms). */
+export type Deployed = { sha: string; began: number; live: number }
 
 /** How many of main's latest deploys are judged together. One deploy says
- * little: Cloudflare's build alone varied 27 to 97 s from one push to the next
- * (T-131399) with nothing in the repo changed. */
+ * little: of 58 on 2026-11-04, the deploy command to live took 31 to 96 s
+ * with nothing in the repo changed between neighbours. */
 export let WINDOW = 10
 
-/** The median push to live past which deploys got slower: about twice what
- * one takes. The nine before 2026-10-28T14:02Z went live 56 to 96 s after
- * their push, 65 s at the median, besides one whose build failed and was built
- * again (322 s); from 10-10 to 10-21 they took 27 to 96 s, 63 s at the
- * median. */
+/** The median from the door's start to live past which deploys got slower:
+ * about twice what one takes. Those 58 deploys took 50 s at the median and
+ * 62 s at the 90th percentile. */
 export let SLOW = 2 * 60_000
 
 /** Deploys that got slower: the error the tracker is handed. */
@@ -224,20 +228,22 @@ export class Slow extends Error {
 
 let seconds = (ms: number) => `${Math.round(ms / 1000)} s`
 
-/// let at = (s: number, i: number) => ({ sha: `${i}abcdef0`, pushed: i * 600_000, live: i * 600_000 + s * 1000 })
+/// let at = (s: number, i: number) => ({ sha: `${i}abcdef0`, began: i * 600_000, live: i * 600_000 + s * 1000 })
 /// slow([60, 70, 80].map(at), 3) -> undefined
-/// slow([60, 130, 300].map(at), 3)?.message -> "main's deploys got slower: push to live took 130 s at the median of the last 3, past 120 s. Newest first: 2abcdef0 300 s, 1abcdef0 130 s, 0abcdef0 60 s"
+/// slow([60, 130, 300].map(at), 3)?.message -> "main's deploys got slower: a deploy took 130 s from its start to live at the median of the last 3, past 120 s. Newest first: 2abcdef0 300 s, 1abcdef0 130 s, 0abcdef0 60 s"
 /// slow([300, 300].map(at), 3) -> undefined
-/** Whether main's deploys got slower: the median push to live of the latest
- * `window` past `bound`. Fewer than a window say nothing yet. */
+/** Whether main's deploys got slower: the median from start to live of the
+ * latest `window` past `bound`. Fewer than a window say nothing yet. */
 export let slow = (rows: Deployed[], window = WINDOW, bound = SLOW) => {
   let latest = rows.toSorted((a, b) => b.live - a.live).slice(0, window)
-  let took = (d: Deployed) => d.live - d.pushed
+  let took = (d: Deployed) => d.live - d.began
   let typical = median(latest.map(took))
   return latest.length < window || typical <= bound ? undefined : new Slow(
-    `main's deploys got slower: push to live took ${
+    `main's deploys got slower: a deploy took ${
       seconds(typical)
-    } at the median of the last ${window}, past ${seconds(bound)}. ` +
+    } from its start to live at the median of the last ${window}, past ${
+      seconds(bound)
+    }. ` +
       `Newest first: ${
         latest.map((d) => `${short(d.sha)} ${seconds(took(d))}`).join(', ')
       }`,
