@@ -323,6 +323,8 @@ export let exported = (source: string): string[] => [
   ]),
 ]
 
+/// import { basename as exampleBase } from 'node:path'
+/// exampleBase('/a/b') -> 'b'
 /**
  * A page's doctests as one module: its statements run in order, and each
  * check declares a test named for its line and code.
@@ -335,6 +337,7 @@ export let compileDoctests = (
   let base = page.slice(page.lastIndexOf('/') + 1)
   let lines = 1
   let body = ''
+  let imports: string[] = []
   let at = (line: number) => {
     body += pad(lines, line)
     lines = Math.max(lines + 1, line)
@@ -342,8 +345,10 @@ export let compileDoctests = (
   for (let t of tests) {
     at(t.line)
     let parts = split(t.code)
+    let statement = !parts && !t.skip ? hoist(t.code) : undefined
+    if (statement) imports.push(...statement.imports)
     let check = !parts
-      ? t.skip ? '' : t.code
+      ? statement?.rest.join('\n') ?? ''
       : `$test(${
         JSON.stringify(`${page}:${t.line} ${t.code.split('\n')[0]}`)
       }, async () => ${
@@ -357,11 +362,12 @@ export let compileDoctests = (
     lines += t.code.split('\n').length - 1
   }
   return head([
+    ...imports,
     `import { test as $test } from ${JSON.stringify(own('suite.ts'))}`,
     `import { equal as $equal, match as $match, throws as $throws } from ${
       JSON.stringify(own('assert.ts'))
     }`,
-    imported(usable(exports), base),
+    imported(usable(exports, imports.flatMap(bound)), base),
     'await (async () => {',
   ]) + body + '\n})()\n'
 }
