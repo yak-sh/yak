@@ -77,7 +77,7 @@ import {
 import { KERNEL, meta } from './meta.ts'
 import { type Given, lapsed, VISITS, visits } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
-import { wiped } from './build.ts'
+import { wiped } from './build-door.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
   addresses,

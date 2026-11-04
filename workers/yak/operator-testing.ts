@@ -8,7 +8,7 @@ import { operatorGraph, operatorVocab } from './operator-store.ts'
 import type { Model } from '@yaks/model'
 import { assertEquals } from '@std/assert'
 import { refusing } from './defects.ts'
-import type { Held } from './build.ts'
+import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
 import { operating, type Options } from './operator.ts'
 import {

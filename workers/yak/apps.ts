@@ -31,7 +31,7 @@ import { copyOf } from './directory-copy.ts'
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
-import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
+import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
 import { browserImmutable } from './cache.ts'
 import {
   apiOut,

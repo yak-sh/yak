@@ -10,7 +10,7 @@ import { next } from '@yaks/wake'
 import { r2Objects } from './lib/objects.ts'
 import { receiptPrefix } from './blob-key.ts'
 import type { Wire } from '@yaks/durable-object'
-import type { Held } from './build.ts'
+import type { Held } from './build-door.ts'
 import {
   abandoned,
   collected,

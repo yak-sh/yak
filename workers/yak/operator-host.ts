@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
-import type { Held } from './build.ts'
+import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'

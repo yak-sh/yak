@@ -2,7 +2,7 @@
 // before failing, and each new stub permits only one call.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { joining, posting, SPACE, wiped } from './build.ts'
+import { joining, posting, SPACE, wiped } from './build-door.ts'
 import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'

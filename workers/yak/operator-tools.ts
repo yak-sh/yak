@@ -1,6 +1,6 @@
 import type { Args, Ctx, Tool } from './tool.ts'
 import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
-import { builderOf, SPACE as HEADER } from './build.ts'
+import { builderOf, SPACE as HEADER } from './build-door.ts'
 import { writes } from '@yaks/member'
 import { vouched } from './session.ts'
 

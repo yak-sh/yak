@@ -10,7 +10,7 @@
 // the HTML host's escaping. A page carries an email address a stranger typed,
 // and web content never speaks HTML (the repo's md.ts rule, one floor down).
 
-import type { Frame } from './build.ts'
+import type { Frame } from './build-door.ts'
 import type { Agent } from './connected.ts'
 import type {
   Borrowed,
