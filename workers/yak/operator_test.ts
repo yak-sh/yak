@@ -4,13 +4,17 @@ import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './directory-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
-import { directoryOf } from './directory.ts'
+import { appStore, directoryOf } from './directory.ts'
 import { operating, readOperator } from './operator.ts'
 import { conversations, frameOf } from './operator-host.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
+import { KERNEL } from './meta.ts'
+import { appDoc } from './vocab.ts'
+import { withKinds } from './kinds.ts'
+import { declared } from './testing.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {
@@ -60,35 +64,42 @@ let fixture = async () => {
           },
         },
       ]),
+      {
+        entity: { eid: '$notices' },
+        doc: { title: 'Notices' },
+        app: {
+          slug: 'notices',
+          space: '$clerk',
+          version: 1,
+          access: 'public',
+          store: 'clerk/notices',
+        },
+        former: { slug: 'notices' },
+      },
     ],
   }, { 'x-yak-person': owner, 'x-yak-role': 'owner' })
   let space = (await dir.space('clerk'))!
   let held = { person: owner, role: 'owner' as const, space: space.eid }
-  let ctx = await operatorContext(env, held, space)
-  await TOOLS.find((t) => t.name == 'app_new')!.run(ctx, {
-    slug: 'notices',
-    title: 'Notices',
-  })
-  await TOOLS.find((t) => t.name == 'app_files')!.run(ctx, {
-    app: 'notices',
-    files: [
-      { path: 'index.html', content: '<h1>Notices</h1>' },
-      {
-        path: 'vocab.json',
-        content: JSON.stringify({
-          $defs: {
-            meeting: {
-              properties: {
-                subject: { type: 'string' },
-                at: { type: 'string' },
-              },
-            },
-          },
-        }),
+  let app = (await dir.app(space, 'notices'))!
+  let words = appDoc({
+    $defs: {
+      meeting: {
+        properties: {
+          subject: { type: 'string' },
+          at: { type: 'string' },
+        },
       },
-    ],
+    },
   })
-  await TOOLS.find((t) => t.name == 'app_deploy')!.run(ctx, { app: 'notices' })
+  let accepted = await appStore(env.STORE, space, app)('/vocab', {
+    method: 'POST',
+    body: JSON.stringify(words),
+  }, KERNEL)
+  assertEquals(accepted.status, 200)
+  await declared(env, space, app, {
+    vocab: words,
+    tools: withKinds({}, words, 'clerk/notices'),
+  })
   let store = operatorMemory()
   return { env, space, held, store }
 }
