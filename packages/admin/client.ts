@@ -1,7 +1,8 @@
 // An OAuth client copied explicitly from 1Password by the person at a
 // terminal. This command is never a stored call a server can replay.
 import type { CliCommand } from '@yaks/cli/host'
-import { isOpRef, type OpRead, opRead } from '@yaks/secrets'
+import { isOpRef } from '@yaks/secrets'
+import { type OpRead, opRead } from '@yaks/secrets/op'
 import { CallError } from '@yaks/tools/errors'
 import { account } from './account.ts'
 import { keepClient, renewing, zone } from './api.ts'

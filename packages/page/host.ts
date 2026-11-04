@@ -18,7 +18,8 @@ import { command as processCommand } from '@yaks/process/command'
 // a graph fed only by A browser wants, since those bytes arrive over
 // `POST /page` and were never going to be refetched.
 
-import { type Blobs, fileBlobs } from '@yaks/blob'
+import type { Blobs } from '@yaks/blob'
+import { fileBlobs } from '@yaks/blob/file'
 import type { Archive } from './freeze.ts'
 
 /** The configuration `@yaks/page` reads. */

@@ -1,20 +1,14 @@
 // Explicit 1Password reads for a person's interactive command. Runtime
 // secret readers (reveal and peek) never start op. A read uses a cleared
 // environment, closed stdin, bounded output and the caller's abort signal.
+import { command } from '@yaks/process/command'
+import { env } from '@yaks/process/env'
+import { isNotFound } from '@yaks/file/io'
 
 /** Resolve a reference to its value. Injectable, so a test needs no `op`. */
 export type OpRead = (reference: string, signal: AbortSignal) => Promise<string>
 
 let MAX_OUT = 65_536
-
-/** Whether a written value is a reference rather than a value: `op://` and at
- * least vault, item and field. Spaces are fine — it is an argument, never a
- * shell word — but a control character is not. */
-export let isOpRef = (value: string): boolean =>
-  value.startsWith('op://') &&
-  // deno-lint-ignore no-control-regex
-  !/[\u0000-\u001f\u007f]/.test(value) &&
-  value.slice(5).split('/').filter((s) => s.length > 0).length >= 3
 
 type Env = (name: string) => string | undefined
 
@@ -48,11 +42,6 @@ let answer = (
 /** `op read`, awaited under the signal it is given. */
 export let opRead =
   (environment?: Env): OpRead => async (reference, signal) => {
-    let [{ command }, { env }, { isNotFound }] = await Promise.all([
-      import('@yaks/process/command'),
-      import('@yaks/process/env'),
-      import('@yaks/file/io'),
-    ])
     let out = await command('op', {
       args: ['read', '--no-newline', reference],
       clearEnv: true,

@@ -59,7 +59,7 @@
  * - **One byte-store interface.** {@link Blobs} is `has`, `get` and `put` over
  *   `Uint8Array`, keyed by {@link address}. Three implementations ship with the
  *   package: {@link sqliteBlobs} (a table beside your rows — synchronous, and
- *   the only one SQL can read through), {@link fileBlobs} (a directory), and
+ *   the only one SQL can read through), `fileBlobs` (a directory, from `@yaks/blob/file`), and
  *   {@link objectBlobs} (an S3-shaped bucket, R2 included).
  * - **Two read paths.** Over SQL, {@link blobRead} resolves the address in the
  *   statement itself; over any other store, {@link hydrate} resolves the
@@ -70,8 +70,8 @@
  *
  * The core — the keyword, the plugin, the interface, and the SQLite store —
  * imports no platform API, so the same code runs on a server, in a worker, and
- * in a browser tab. {@link fileBlobs} looks its runtime's filesystem up rather
- * than importing one, and throws where there is none.
+ * in a browser tab. `fileBlobs` is the one store that needs a filesystem, so it
+ * is its own entry, `@yaks/blob/file`, which those runtimes never load.
  *
  * @module
  */
@@ -82,12 +82,10 @@ export * from './store.ts'
 export * from './plugin.ts'
 export * from './sqlite.ts'
 export * from './hydrate.ts'
-export * from './file.ts'
 export * from './object.ts'
 export * from './accepts.ts'
 export * from './parts.ts'
 export * from './sha256.ts'
-export * from './backend.ts'
 export * from './image.ts'
 export { broken } from './broken.ts'
 export * from './serve.ts'

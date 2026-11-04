@@ -32,7 +32,8 @@
  * as `{"secret": "NAME"}` (@yaks/cli). A name nothing was written for falls
  * back to the environment variable of that name. A kept `op://` reference
  * stays unresolved; interactive commands can read one explicitly with
- * {@link opRead}.
+ * `opRead` from `@yaks/secrets/op`, which starts the `op` command and so
+ * never loads where there is no operating system.
  *
  * This package says what a vault is ({@link Vault}) and keeps one in memory;
  * a vault that stores somewhere lives with that storage: private files on a
@@ -63,7 +64,7 @@ export {
   type Sealed,
   type Vault,
 } from './vault.ts'
-export { isOpRef, type OpRead, opRead } from './op.ts'
+export { isOpRef } from './ref.ts'
 export {
   peek,
   reveal,

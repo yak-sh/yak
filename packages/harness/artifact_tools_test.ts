@@ -5,12 +5,8 @@ import { local } from './local.ts'
 import { input } from '@yaks/openai'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Item } from '@yaks/model'
-import {
-  artifactBytes,
-  artifactStore,
-  fileBlobs,
-  memoryBlobs,
-} from '@yaks/blob'
+import { artifactBytes, artifactStore, memoryBlobs } from '@yaks/blob'
+import { fileBlobs } from '@yaks/blob/file'
 import { harness } from './testing.ts'
 
 const png = Uint8Array.from(

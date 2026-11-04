@@ -85,7 +85,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `blobs`, `BlobOpts`, `Reference`                                                                  | Graph write plugin and optional stored-reference mapping |
 | `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                             | Store interface and text addressing                      |
 | `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                                  | SQLite text storage                                      |
-| `fileBlobs`, `objectBlobs`, `Bucket`, `patient`                                                   | Filesystem and object storage                            |
+| `objectBlobs`, `Bucket`, `patient`                                                                | Object storage                                           |
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
 | `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`      | Resumable uploads in parts, checked against their hash   |
 | `hasher`, `fold`, `START`                                                                         | SHA-256 carried from one piece of bytes to the next      |
@@ -95,14 +95,15 @@ host records that, and refuses the store to a config without @yaks/blob
 | `Size`, `sizeOf`, `mediaTypeOf`, `contentType`, `mediaType`, `matchesMediaType`, `mimeOf`         | Image dimensions, signatures and media types             |
 | `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`                | HTTP responses, streaming and validators                 |
 | `Representation`, `representation`, `represents`, `addressed`, `representations`                  | Immutable representations and their graph plugin         |
-| `Backend`, `backend`, `artifactsAt`                                                               | Configured and default artifact backends                 |
 | `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |
 
-| Sub-module export   | Purpose                                                                                                    |
-| ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
-| `@yaks/blob/graph`  | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
-| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings                                                |
+| Sub-module export    | Purpose                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@yaks/blob/vocab`   | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
+| `@yaks/blob/graph`   | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
+| `@yaks/blob/routes`  | `routes(host, options)`, backend helpers and route settings                                                |
+| `@yaks/blob/file`    | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
+| `@yaks/blob/backend` | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
 
 ## Addresses
 
@@ -199,11 +200,11 @@ statements. A **Layout** names the SQL table and columns holding body text. It
 can rename `table`, `key` and `value`, whose defaults are `blob_text`, `sha` and
 `value`. Existing tables must have the matching shape.
 
-`fileBlobs` uses `globalThis.Deno` filesystem functions. It creates the
-directory on the first write; writes fail without those functions, while reads
-return `undefined` on filesystem errors. Pass only validated SHA-256 addresses
-to this low-level adapter: it joins the supplied key directly to the directory
-path.
+`fileBlobs` comes from `@yaks/blob/file`, which imports `@yaks/file/io`, so a
+Worker or a browser tab never loads it. It creates the directory on the first
+write, and reads return `undefined` on filesystem errors. Pass only validated
+SHA-256 addresses to this low-level adapter: it joins the supplied key directly
+to the directory path.
 
 A **Bucket** supplies object storage operations (`head`, `get`, `put`, `delete`
 and `list`). `objectBlobs` accepts its `head`, `get` and `put` methods.
@@ -469,7 +470,8 @@ keeps a valid declared type; unknown bytes use `application/octet-stream`:
 
 ```ts
 import { equal } from '@yaks/testing'
-import { artifactBytes, artifactStore, fileBlobs } from '@yaks/blob'
+import { artifactBytes, artifactStore } from '@yaks/blob'
+import { fileBlobs } from '@yaks/blob/file'
 
 let dir = await Deno.makeTempDir()
 try {

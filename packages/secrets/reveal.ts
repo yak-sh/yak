@@ -7,7 +7,7 @@ import { env } from '@yaks/process/env'
 import type { Bundle, Eid } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { identityEid } from '@yaks/graph/identity'
-import { isOpRef } from './op.ts'
+import { isOpRef } from './ref.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Sealed, Vault } from './vault.ts'
 
