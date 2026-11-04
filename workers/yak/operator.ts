@@ -36,17 +36,23 @@ export type Options = {
 }
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
-export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
+// Each space has its own Operator, working on that space alone. The one on a
+// person's own space (`member.own`) is their PA: it reaches every space they
+// sit in, as they would, so their role in each is what it may do there.
+export let operatorContext = async (
+  env: Env,
+  held: Held,
+  space: Space,
+): Promise<Ctx> => {
+  let open = () =>
+    directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
+      copy: copyOf(env),
+      time: env.CLOCK,
+    })
+  let pa = (await open().seats(held.person, 'owner'))
+    .some((s) => s.own && s.space.eid == space.eid)
   let reopen = () =>
-    narrowed(
-      directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
-        copy: copyOf(env),
-        time: env.CLOCK,
-      }),
-      space.slug,
-      space.eid,
-      held.administrative,
-    )
+    pa ? open() : narrowed(open(), space.slug, space.eid, held.administrative)
   return {
     env,
     dir: reopen(),
@@ -55,11 +61,22 @@ export let operatorContext = (env: Env, held: Held, space: Space): Ctx => {
     who: {
       person: held.person,
       via: 'session',
-      space: space.slug,
-      spaceEid: space.eid,
+      ...pa ? {} : { space: space.slug, spaceEid: space.eid },
       actor: space.eid,
     },
   }
+}
+
+// What the Operator is told of the spaces it reaches beyond its own: none,
+// except as a PA.
+let beyond = async (ctx: Ctx, space: Space) => {
+  let others = (await ctx.dir.seats(ctx.person))
+    .filter((s) => s.space.eid != space.eid && !s.space.trashed)
+  return others.length
+    ? `\n\n${space.slug} is this person's own space, so you are their personal assistant and also reach their other spaces, with their role in each: ${
+      others.map((s) => `${s.space.slug} (${s.role})`).join(', ')
+    }. Name the space, or the app as space/app, to work in one of them.`
+    : ''
 }
 
 let workbench = new Set([
@@ -232,7 +249,7 @@ export let runOperator = async (
       task: history.task,
       comments: history.comments,
     })
-    let ctx = operatorContext(env, held, space)
+    let ctx = await operatorContext(env, held, space)
     let name = options.name ?? env.OPERATOR_MODEL ?? env.BUILDER_MODEL_PAID ??
       '@cf/zai-org/glm-5.3'
     if (!options.model && !name.startsWith('@cf/')) {
@@ -296,7 +313,10 @@ export let runOperator = async (
         ...options.tools?.(ctx) ?? [],
       ],
       instructions: `${instructions(env)}\n\n${await standing(ctx)
-        .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.`,
+        .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${await beyond(
+          ctx,
+          space,
+        )}`,
       report: (e, where) =>
         caught(e, { request: 'operator', ...where, space: space.slug }),
     })

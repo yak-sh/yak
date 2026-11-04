@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
-import type { Space } from './directory.ts'
+import { directoryOf, type Space } from './directory.ts'
 import { builderOf, SPACE } from './build.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
@@ -230,12 +230,18 @@ export let operatorAnswer = async (
 // every other page (pages.ts `desk`).
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [rows, consent] = await Promise.all([
+  let [rows, consent, seats] = await Promise.all([
     operatorDoor(env, space, who, 'messages', {}) as Promise<Bundle[]>,
     operatorDoor(env, space, who, 'texts', {}) as Promise<Consent | null>,
+    who.person ? directoryOf(env.STORE).seats(who.person, 'owner') : [],
   ])
+  let pa = seats.some((s) => s.own && s.space.eid == space.eid)
   return `
-<section class="Card"><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p><p>Email from your member address: <a href="mailto:${
+<section class="Card"><p>Ask for a change in your apps, or send a PDF or a photo. Your space's plan covers the operator's model use.</p>${
+    pa
+      ? '<p>This is your own space, so its operator is your personal assistant: it can also work in your other spaces, with your role in each.</p>'
+      : ''
+  }<p>Email from your member address: <a href="mailto:${
     esc(mailFrom(space.slug, null, env))
   }">${esc(mailFrom(space.slug, null, env))}</a></p></section>
 <div data-conversation aria-live="polite">${conversation(rows, at)}</div>

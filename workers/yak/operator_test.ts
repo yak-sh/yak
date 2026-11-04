@@ -40,7 +40,12 @@ let fixture = async () => {
   await dir.apply({
     entities: [
       { entity: { eid: owner }, person: {} },
-      ...['clerk', 'other'].flatMap((slug) => [
+      ...[
+        ['clerk', 'owner'],
+        ['other', 'owner'],
+        ['home', 'owner', true],
+        ['peek', 'viewer'],
+      ].flatMap(([slug, role, own]) => [
         {
           entity: { eid: `$${slug}` },
           space: { slug, store: slug },
@@ -48,14 +53,19 @@ let fixture = async () => {
         },
         {
           entity: { eid: `$seat-${slug}` },
-          member: { person: owner, space: `$${slug}`, role: 'owner' },
+          member: {
+            person: owner,
+            space: `$${slug}`,
+            role,
+            ...own ? { own } : {},
+          },
         },
       ]),
     ],
   }, { 'x-yak-person': owner, 'x-yak-role': 'owner' })
   let space = (await dir.space('clerk'))!
   let held = { person: owner, role: 'owner' as const, space: space.eid }
-  let ctx = operatorContext(env, held, space)
+  let ctx = await operatorContext(env, held, space)
   await TOOLS.find((t) => t.name == 'app_new')!.run(ctx, {
     slug: 'notices',
     title: 'Notices',
@@ -141,7 +151,7 @@ let out = await runOperator(f.store, f.env, f.held, f.space, {
 }, operatorModel(model))
 
 let history = await readOperator(f.store, out.task)
-let ctx = operatorContext(f.env, f.held, f.space)
+let ctx = await operatorContext(f.env, f.held, f.space)
 let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
 let g = await reaching(ctx, await inReach(ctx))
@@ -171,6 +181,7 @@ test('the operator edits app rows through agent tools and records its work priva
   assertEquals(comp(meetings[0], 'created').via, out.session)
   assertEquals(tasks.length, 0)
   assertEquals(other, null)
+  assertEquals(String(asked[0].instructions).includes('assistant'), false)
 })
 
 let continued = await runOperator(
@@ -221,4 +232,43 @@ let pastTwelve = await runOperator(
 test('the space budget, rather than twelve model rounds, bounds the operator', () => {
   assertEquals(rounds, 14)
   assertEquals(pastTwelve.status, 'settled')
+})
+
+let homeSpace = (await directoryOf(f.env.STORE).space('home'))!
+let pa = await operatorContext(
+  f.env,
+  { ...f.held, space: homeSpace.eid },
+  homeSpace,
+)
+let paGraph = await reaching(pa, await inReach(pa))
+let paMeetings = await paGraph.read('.meeting')
+let paAsked: Request[] = []
+await runOperator(
+  operatorStore(durable()),
+  f.env,
+  { ...f.held, space: homeSpace.eid },
+  homeSpace,
+  { say: 'What can you reach?' },
+  operatorModel((req) => {
+    paAsked.push(req)
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Your spaces.' }],
+      cost: 0.001,
+    })
+  }),
+)
+let refused = await TOOLS.find((t) => t.name == 'app_new')!
+  .run(pa, { space: 'peek', slug: 'notes', title: 'Notes' })
+  .then(() => null, (e: Error) => e.message)
+
+test("the Operator on a person's own space is their PA, reaching each of their spaces with their role there", () => {
+  assertEquals(paMeetings.length, meetings.length)
+  assertStringIncludes(refused ?? '', 'peek')
+  let told = String(paAsked[0].instructions)
+  for (let said of ['clerk (owner)', 'other (owner)', 'peek (viewer)']) {
+    assertStringIncludes(told, said)
+  }
+  assertEquals(told.includes('home ('), false)
 })

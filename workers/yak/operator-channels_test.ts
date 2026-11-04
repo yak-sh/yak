@@ -47,7 +47,7 @@ let fixture = async () => {
   let raw = durable()
   let store = operatorStore(raw)
   let held = { person, role: 'owner' as const, space: eid }
-  let ctx = operatorContext(p.env, held, space)
+  let ctx = await operatorContext(p.env, held, space)
   await TOOLS.find((t) => t.name == 'app_new')!.run(ctx, {
     slug: 'notices',
     title: 'Notices',
@@ -197,6 +197,16 @@ test('an email needs the receiving MTA DMARC pass aligned with the member From',
 })
 
 let html = await operatorBody(f.env, f.space, f.held)
+let seatDir = directoryOf(f.env.STORE)
+let [seat] = await seatDir.seats(f.held.person, 'owner')
+await seatDir.apply({
+  entities: [{ entity: { eid: seat.seat }, member: { own: true } }],
+}, { 'x-yak-person': f.held.person, 'x-yak-role': 'owner' })
+let ownHtml = await operatorBody(f.env, f.space, f.held)
+test("the operator page on a person's own space says it is their personal assistant", () => {
+  assertEquals(html.includes('personal assistant'), false)
+  assertStringIncludes(ownHtml, 'your personal assistant')
+})
 test('the operator page names its email address, keeps a durable draft and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
   assertStringIncludes(html, 'browserDrafts')
