@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // How long a thread was held, and whether the box held it. Linux keeps, for
 // each thread, the time it ran on a CPU and the time it waited, runnable, for
 // one (/proc/<thread>/schedstat). A span's own time is its wall clock less
@@ -13,7 +15,7 @@ export type Spent = { cpu: number; wait: number }
  * has spent; undefined where the platform does not say. */
 export let spent = (thread: string): Spent | undefined => {
   try {
-    let [cpu, wait] = Deno.readTextFileSync(`/proc/${thread}/schedstat`)
+    let [cpu, wait] = disk.readTextFileSync(`/proc/${thread}/schedstat`)
       .split(' ').map(Number)
     return Number.isFinite(wait)
       ? { cpu: cpu / 1e6, wait: wait / 1e6 }
@@ -27,7 +29,7 @@ export let spent = (thread: string): Spent | undefined => {
  * thread of the same process; undefined where the platform has none. */
 export let thread = (): string | undefined => {
   try {
-    return Deno.readLinkSync('/proc/thread-self')
+    return disk.readLinkSync('/proc/thread-self')
   } catch {
     return undefined
   }
@@ -73,9 +75,9 @@ export let stalls = ({
   now = () => performance.now(),
   sample,
   tick = (fn: () => void, ms: number) => {
-    let id = setInterval(fn, ms)
-    Deno.unrefTimer(id)
-    return () => clearInterval(id)
+    let id = system.setInterval(fn, ms)
+    system.unrefTimer(id)
+    return () => system.clearInterval(id)
   },
 }: {
   report: (error: Error) => void

@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // Derived command declarations, kept between processes while their inputs and
 // sources agree. A memo is disposable: an unreadable memo or a source whose
 // dependencies cannot be proved leaves the ordinary derivation in charge.
@@ -14,12 +16,12 @@ export type MemoFiles = {
   readTextFileSync: (path: string) => string
   statSync: (
     path: string,
-  ) => Pick<Deno.FileInfo, 'size' | 'mtime' | 'ctime' | 'ino'>
-  mkdirSync: (path: string, options: Deno.MkdirOptions) => void
+  ) => Pick<disk.FileInfo, 'size' | 'mtime' | 'ctime' | 'ino'>
+  mkdirSync: (path: string, options: disk.MkdirOptions) => void
   writeTextFileSync: (
     path: string,
     text: string,
-    options: Deno.WriteFileOptions,
+    options: disk.WriteFileOptions,
   ) => void
   renameSync: (from: string, to: string) => void
   removeSync: (path: string) => void
@@ -143,8 +145,8 @@ let importsOf = async (
 
 let directory = (): string | undefined => {
   try {
-    let root = Deno.env.get('XDG_CACHE_HOME')
-    let home = Deno.env.get('HOME')
+    let root = system.env.get('XDG_CACHE_HOME')
+    let home = system.env.get('HOME')
     return root || home ? `${root ?? `${home}/.cache`}/yak/cli` : undefined
   } catch {
     return undefined
@@ -164,7 +166,7 @@ export let remember = async <T>(
   make: () => T | Promise<T>,
   opts: MemoOptions & { valid?: (value: T) => boolean | Promise<boolean> } = {},
 ): Promise<T> => {
-  let io = opts.files ?? Deno
+  let io = opts.files ?? disk
   let digest = opts.digest ?? sha256
   let locate = opts.resolve ?? import.meta.resolve
   let resolved = new Map<string, string>()
@@ -186,7 +188,7 @@ export let remember = async <T>(
     file = `${dir}/${await digest(
       JSON.stringify([
         VERSION,
-        Deno.version,
+        system.version,
         inputs,
         roots,
         opts.callbacks ?? {},
@@ -238,7 +240,7 @@ export let remember = async <T>(
     try {
       return io.readTextFileSync(path)
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) return null
+      if (e instanceof disk.errors.NotFound) return null
       throw e
     }
   }
@@ -253,7 +255,7 @@ export let remember = async <T>(
         ? ''
         : `${size} ${at.join(' ')} ${ino}`
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) return 'absent'
+      if (e instanceof disk.errors.NotFound) return 'absent'
       throw e
     }
   }
@@ -375,7 +377,7 @@ export let remember = async <T>(
       }
     }
   } catch (error) {
-    if (error instanceof Deno.errors.PermissionDenied) return await make()
+    if (error instanceof disk.errors.PermissionDenied) return await make()
     // A damaged memo is rebuilt.
   }
 

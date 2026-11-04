@@ -7,6 +7,8 @@
 // where that text becomes files: each project's personas in its checkout
 // (./files.ts), and a line for each file that moved.
 
+import * as systemProcess from '@yaks/process/system'
+
 import type { Bundle, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
@@ -55,7 +57,7 @@ let drift = async (graph: Graph, db?: string): Promise<string> =>
  * config names the database, beside which `persona_sync` remembers what each
  * file last agreed on. */
 export let runs = (host?: { config?: { db?: string } }): Runs => {
-  let db = host?.config?.db ?? Deno.env.get('DB_PATH')
+  let db = host?.config?.db ?? systemProcess.env.get('DB_PATH')
   return {
     persona_read: async (call, graph): Promise<Bundle[]> => {
       let said = String(argsOf(call).persona ?? '').trim()

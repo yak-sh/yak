@@ -1,3 +1,12 @@
+import * as systemProcess from '@yaks/process/system'
+import type { Signal } from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
+import type {
+  ChildProcess,
+  CommandOptions,
+  CommandOutput,
+  CommandStatus,
+} from '@yaks/process/command'
 import { Interrupted } from '@yaks/tools/errors'
 
 /** How long an interrupted command has to stop before its group is killed. */
@@ -9,7 +18,7 @@ let interrupted = () =>
 let SIGNALS = ['SIGTERM', 'SIGINT', 'SIGHUP']
 
 /** Whether the process was interrupted directly, before its host observed it. */
-export let wasInterrupted = (status: Deno.CommandStatus): boolean =>
+export let wasInterrupted = (status: CommandStatus): boolean =>
   status.signal != null && SIGNALS.includes(status.signal)
 
 /**
@@ -20,21 +29,21 @@ export let wasInterrupted = (status: Deno.CommandStatus): boolean =>
  */
 export let spawn = (
   command: string,
-  options: Deno.CommandOptions,
+  options: CommandOptions,
   stopping: AbortSignal,
 ): {
-  child: Deno.ChildProcess
+  child: ChildProcess
   stopped: () => boolean
   stop: () => void
   finish: () => Promise<void>
 } => {
   if (stopping.aborted) throw interrupted()
-  let child = new Deno.Command(command, { ...options, detached: true }).spawn()
+  let child = processCommand(command, { ...options, detached: true }).spawn()
   let stopped = false
   let kill: ReturnType<typeof setTimeout> | undefined
-  let group = (signal: Deno.Signal) => {
+  let group = (signal: Signal) => {
     try {
-      Deno.kill(-child.pid, signal)
+      systemProcess.kill(-child.pid, signal)
     } catch { /* The group is gone. */ }
   }
   let stop = () => {
@@ -62,9 +71,9 @@ export let spawn = (
 /** Run a finite platform command and collect what it wrote. */
 export let output = async (
   command: string,
-  options: Deno.CommandOptions,
+  options: CommandOptions,
   stopping: AbortSignal,
-): Promise<Deno.CommandOutput> => {
+): Promise<CommandOutput> => {
   let run = spawn(command, options, stopping)
   let finished = false
   try {

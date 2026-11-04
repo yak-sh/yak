@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import { command as launchCommand } from '@yaks/process/command'
 // A systemd ExecStopPost reports outside the failed process, so a timeout or
 // SIGKILL cannot silence it. Exit metadata and bounded output from that
 // invocation go to the ordinary spool; the environment is never copied.
@@ -92,7 +94,7 @@ export let others = async (
 }
 
 let execute: Run = async (command, args) => {
-  let output = await new Deno.Command(command, {
+  let output = await launchCommand(command, {
     args,
     stdout: 'piped',
     stderr: 'null',
@@ -116,7 +118,7 @@ export let unitOutput = async (
     '--lines=40',
     `_SYSTEMD_USER_UNIT=${exit.unit}`,
     `_SYSTEMD_INVOCATION_ID=${exit.invocation}`,
-    `_UID=${Deno.uid()}`,
+    `_UID=${system.uid()}`,
     '_TRANSPORT=stdout',
   ]
   for (
@@ -176,12 +178,12 @@ export let unitFailureCommand: Command = {
   run: async (args, context) => {
     let exit: UnitExit = {
       unit: String(args.unit),
-      result: Deno.env.get('SERVICE_RESULT'),
-      code: Deno.env.get('EXIT_CODE'),
-      status: Deno.env.get('EXIT_STATUS'),
-      invocation: Deno.env.get('INVOCATION_ID'),
+      result: system.env.get('SERVICE_RESULT'),
+      code: system.env.get('EXIT_CODE'),
+      status: system.env.get('EXIT_STATUS'),
+      invocation: system.env.get('INVOCATION_ID'),
     }
-    let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
+    let runtimeDir = system.env.get('XDG_RUNTIME_DIR')
     if (exit.result == 'success' && runtimeDir) {
       exit.others = await others(exit.unit, runtimeDir)
     }

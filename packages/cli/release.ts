@@ -1,3 +1,4 @@
+import * as disk from '@yaks/file/io'
 // A release of this toolkit on JSR, as Deno resolves it. Every @yaks package
 // publishes together at one version, and Deno 2.9 waits a day before it
 // resolves any version newer than that (its minimum dependency age). On the
@@ -50,10 +51,11 @@ export let released: Resolving = exempt(names)
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let dir = () => Deno.makeTempDir()
+ * import * as disk from '@yaks/file/io'
+ * let dir = () => disk.makeTempDir()
  * assertEquals(await launching(dir, 'file:///repo/packages/cli/release.ts'), '/repo/deno.json')
  * let config = await launching(dir, 'https://jsr.io/@yaks/cli/1.2.3/release.ts')
- * assertEquals(JSON.parse(await Deno.readTextFile(config)), released)
+ * assertEquals(JSON.parse(await disk.readTextFile(config)), released)
  * ```
  */
 export let launching = async (
@@ -65,6 +67,6 @@ export let launching = async (
     return fileURLToPath(new URL('../../deno.json', here))
   }
   let config = `${await dir()}/deno.json`
-  await Deno.writeTextFile(config, JSON.stringify(released))
+  await disk.writeTextFile(config, JSON.stringify(released))
   return config
 }

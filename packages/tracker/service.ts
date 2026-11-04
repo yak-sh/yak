@@ -1,3 +1,5 @@
+import { clock } from '@yaks/process/clock'
+import { freshFetch } from '@yaks/process/http'
 // Local admission and remote delivery share a durable outbox, not a clock.
 // Only admission plus successful forwarding may acknowledge an error record.
 
@@ -50,7 +52,7 @@ export let service = async (
   let source = options.source ?? (dir ? files(dir).source : undefined)
   if (!source) return
   let send = options.remote
-    ? delivery(options.remote, options.fetch)
+    ? delivery(options.remote, options.fetch ?? freshFetch())
     : undefined
   // An already aborted signal requests one complete pass. A live service stops
   // between records, finishing the record in hand before releasing its lease.
@@ -118,7 +120,7 @@ export let service = async (
   }
   let every = options.every ?? 1000
   let reconcileEvery = options.reconcileEvery ?? 30_000
-  let notices = options.notice ? undefined : syncNotice(host.graph)
+  let notices = options.notice ? undefined : syncNotice(host.graph, clock)
   let health = (direction: Direction, every: number) =>
     syncing(direction, options.notice ?? notices!, {
       every,

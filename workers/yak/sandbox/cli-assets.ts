@@ -1,6 +1,9 @@
 // The sandbox runs the CLI sources carried by the Worker it talks to. Each
 // release serves a content-addressed workspace and a small current descriptor;
 // changing CLI source never changes the sandbox's toolchain image.
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as spawnCommand } from '@yaks/process/command'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,9 +42,9 @@ export let assets = async (
 ): Promise<Release & { files: number; bytes: number }> => {
   root = resolve(root)
   let { workspace = [] } = JSON.parse(
-    await Deno.readTextFile(join(root, 'deno.json')),
+    await io.readTextFile(join(root, 'deno.json')),
   ) as { workspace?: string[] }
-  let listed = await new Deno.Command('git', {
+  let listed = await spawnCommand('git', {
     args: ['ls-files', '-z'],
     cwd: root,
     stdout: 'piped',
@@ -56,7 +59,7 @@ export let assets = async (
   )
   let files: Record<string, string> = {}
   for (let path of paths) {
-    files[path] = await Deno.readTextFile(join(root, path))
+    files[path] = await io.readTextFile(join(root, path))
   }
   let body = new TextEncoder().encode(serialized(files))
   let hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', body))]
@@ -67,32 +70,32 @@ export let assets = async (
     ).arrayBuffer(),
   )
   let release = { hash, url: `/_cli/${hash}.json.gz` }
-  await Deno.mkdir(output, { recursive: true })
-  await Deno.writeFile(join(output, `${hash}.json.gz`), compressed)
-  await Deno.copyFile(
+  await io.mkdir(output, { recursive: true })
+  await io.writeFile(join(output, `${hash}.json.gz`), compressed)
+  await io.copyFile(
     join(root, 'workers/yak/sandbox/launch.ts'),
     join(output, 'launch.ts'),
   )
-  let descriptor = join(output, `current.json.${Deno.pid}`)
-  await Deno.writeTextFile(descriptor, JSON.stringify(release))
-  await Deno.rename(descriptor, join(output, 'current.json'))
+  let descriptor = join(output, `current.json.${system.pid}`)
+  await io.writeTextFile(descriptor, JSON.stringify(release))
+  await io.rename(descriptor, join(output, 'current.json'))
   // Only this release's workspace goes into the next asset upload.
-  for await (let entry of Deno.readDir(output)) {
+  for await (let entry of io.readDir(output)) {
     if (
       /^[a-f0-9]{64}\.json\.gz$/.test(entry.name) &&
       entry.name != `${hash}.json.gz`
     ) {
-      await Deno.remove(join(output, entry.name))
+      await io.remove(join(output, entry.name))
     }
   }
   return { ...release, files: paths.length, bytes: compressed.byteLength }
 }
 
-if (import.meta.main) {
+if (system.main(import.meta.url)) {
   let started = performance.now()
-  let root = Deno.args[0] ??
+  let root = system.args[0] ??
     fileURLToPath(new URL('../../../', import.meta.url))
-  let output = Deno.args[1] ?? join(root, 'workers/yak/public/_cli')
+  let output = system.args[1] ?? join(root, 'workers/yak/public/_cli')
   let release = await assets(root, output)
   console.log(
     `Sandbox CLI: ${release.files} files, ${release.bytes} bytes, ${

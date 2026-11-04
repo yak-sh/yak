@@ -1,6 +1,8 @@
 // The owner's deployment history. Uploading code does not move data; giving
 // it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
+
+import * as systemProcess from '@yaks/process/system'
 import type { Ran } from '@yaks/git/land'
 import { CallError, Interrupted } from '@yaks/tools/errors'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
@@ -518,7 +520,7 @@ export let rollback = async (
       `yaks.app emergency rollback to ${target.commit?.sha}: build path broken`,
     ], stopping),
   )
-  let checked = await output(Deno.execPath(), {
+  let checked = await output(systemProcess.execPath(), {
     cwd: root,
     args: ['run', '-A', 'bin/verify-deploy.ts', '--tail', '0'],
     stdin: 'null',

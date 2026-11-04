@@ -1,3 +1,4 @@
+import * as disk from '@yaks/file/io'
 /**
  * A page a plugin serves, exported as `@yaks/cli/page`: what a plugin's
  * routes answer with besides the graph's doors, in the process that serves
@@ -154,9 +155,9 @@ let configAt = async (at: URL): Promise<string | undefined> => {
     for (let name of ['deno.json', 'deno.jsonc']) {
       let path = new URL(name, dir)
       try {
-        if ((await Deno.stat(path)).isFile) return path.pathname
+        if ((await disk.stat(path)).isFile) return path.pathname
       } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
+        if (!(error instanceof disk.errors.NotFound)) throw error
       }
     }
     let parent = new URL('../', dir)
@@ -182,12 +183,12 @@ export let bundle = async (
   let at = entry instanceof URL ? entry : entry.at
   let dir = at.protocol == 'file:'
     ? undefined
-    : await Deno.makeTempDir({ prefix: 'yaks-page-' })
+    : await disk.makeTempDir({ prefix: 'yaks-page-' })
   let from = entry instanceof URL ? entry : new URL('./.yak-page.ts', at)
   let virtual = urlToEsbuildResolution(from)
   try {
     if (dir) {
-      await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
+      await disk.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
     }
     let configPath = dir ? `${dir}/deno.json` : await configAt(at)
     if (signal?.aborted) throw new Error('browser bundle was stopped')
@@ -232,6 +233,6 @@ export let bundle = async (
     })
     return await compiled(build, signal)
   } finally {
-    if (dir) await Deno.remove(dir, { recursive: true })
+    if (dir) await disk.remove(dir, { recursive: true })
   }
 }

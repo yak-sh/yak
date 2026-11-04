@@ -114,22 +114,23 @@ with `become(eid)`, and writes that `exit` for it.
 ```ts
 import { equal } from '@yaks/testing'
 import { ended, started } from '@yaks/process'
+import * as system from '@yaks/process/system'
 
 let beginning = started()
 let ending = ended(0)
 equal(ending.entity, beginning.entity)
 // The command is the program and its arguments; under `deno run`, the program
 // is the script, so `deno run -A yak.ts task new` is `yak task new`.
-let script = Deno.mainModule.split('/').pop()!.replace(/\.[cm]?[jt]sx?$/, '')
+let script = system.mainModule.split('/').pop()!.replace(/\.[cm]?[jt]sx?$/, '')
 equal(beginning.process, {
-  pid: Deno.pid,
-  command: [script, ...Deno.args].join(' '),
-  cwd: Deno.cwd(),
+  pid: system.pid,
+  command: [script, ...system.args].join(' '),
+  cwd: system.cwd(),
 })
 equal(beginning.runtime, {
-  name: 'deno',
-  version: Deno.version.deno,
-  os: `${Deno.build.os} ${Deno.osRelease()}`,
+  name: system.runtimeName,
+  version: system.runtimeVersion,
+  os: `${system.os} ${system.osRelease()}`,
 })
 equal(ending.exit, { code: 0 })
 

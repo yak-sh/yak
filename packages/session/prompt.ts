@@ -4,6 +4,8 @@
 // The transcript may lag the hook. Prefer a matching queued submission's
 // timestamp; otherwise label the hook's clock as an observation, not a send.
 
+import * as fs from '@yaks/file/io'
+
 type Row = Record<string, unknown>
 let object = (value: unknown): Row =>
   value && typeof value == 'object' ? value as Row : {}
@@ -66,14 +68,14 @@ export let promptTiming = (
  * unreadable or non-file transcripts mean no context, never a failed prompt. */
 export let promptContext = (hook: Row, now = new Date()): string => {
   if (typeof hook.transcript_path != 'string') return ''
-  let file: Deno.FsFile | undefined
+  let file: fs.FsFile | undefined
   try {
     // Check before opening so a FIFO cannot wedge the hook.
-    if (!Deno.statSync(hook.transcript_path).isFile) return ''
-    file = Deno.openSync(hook.transcript_path, { read: true })
+    if (!fs.statSync(hook.transcript_path).isFile) return ''
+    file = fs.openSync(hook.transcript_path, { read: true })
     let size = file.statSync().size
     let start = Math.max(0, size - 1024 * 1024)
-    file.seekSync(start, Deno.SeekMode.Start)
+    file.seekSync(start, 0)
     let bytes = new Uint8Array(size - start)
     let read = 0
     while (read < bytes.length) {

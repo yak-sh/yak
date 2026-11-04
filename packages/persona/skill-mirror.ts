@@ -1,5 +1,7 @@
 // Skills import from the primary checkout. Graph exports are proposals in a
 // dedicated linked worktree: no mirror write is allowed to touch main.
+
+import * as fs from '@yaks/file/io'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { fileOf } from '@yaks/file'
@@ -88,9 +90,9 @@ let syncRepository = async (
     return r.out
   }
   let fail = (e: unknown) => out.failed.push(String(e))
-  let lock: Deno.FsFile | undefined
+  let lock: fs.FsFile | undefined
   try {
-    root = await Deno.realPath(root)
+    root = await fs.realPath(root)
     // Ask only about this checkout. Listing every linked worktree makes each
     // ordinary poll pay for unrelated agent checkouts in the repository.
     let check = await command([
@@ -115,8 +117,8 @@ let syncRepository = async (
         check.err || check.out || 'skills: cannot inspect checkout',
       )
     }
-    let common = await Deno.realPath(shared)
-    let gitdir = await Deno.realPath(own)
+    let common = await fs.realPath(shared)
+    let gitdir = await fs.realPath(own)
     // An unborn branch has no HEAD object yet; symbolic-ref still names it.
     if (!check.ok) branch = (await git(root, ['symbolic-ref', 'HEAD'])).trim()
     if (top != root || gitdir != common || !branch?.startsWith('refs/heads/')) {
@@ -125,7 +127,7 @@ let syncRepository = async (
     }
     // Keep the inode: unlinking it races with waiters. The kernel releases
     // this advisory lock even when a CLI/effects process crashes.
-    lock = await Deno.open(`${common}/skill-mirror.lock`, {
+    lock = await fs.open(`${common}/skill-mirror.lock`, {
       create: true,
       write: true,
     })
@@ -192,11 +194,11 @@ let syncRepository = async (
         let at = root
         for (let part of path.split('/')) {
           at += `/${part}`
-          if (Deno.lstatSync(at).isSymlink) {
+          if (fs.lstatSync(at).isSymlink) {
             throw new Refused(`skills: symlink ${at}`)
           }
         }
-        let bytes = Deno.readFileSync(full)
+        let bytes = fs.readFileSync(full)
         if (bytes.includes(0)) throw new Refused(`skills: binary file ${path}`)
         let text: string
         try {
@@ -208,7 +210,7 @@ let syncRepository = async (
         raw.set(path, text)
         blobs.set(full, await blobOf(text))
       } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e
+        if (!fs.isNotFound(e)) throw e
       }
     }
     // Parsing all tracked documents before mutation avoids half an import.
@@ -414,24 +416,24 @@ let syncRepository = async (
       for (let part of d.path.slice(tree.length + 1).split('/')) {
         target += `/${part}`
         try {
-          if ((await Deno.lstat(target)).isSymlink) {
+          if ((await fs.lstat(target)).isSymlink) {
             throw new Refused(`skills: symlink ${target}`)
           }
         } catch (e) {
-          if (!(e instanceof Deno.errors.NotFound)) throw e
+          if (!fs.isNotFound(e)) throw e
           break
         }
       }
       if (d.text == undefined) {
-        Deno.removeSync(d.path)
+        fs.removeSync(d.path)
         learned.set(d.path, null)
         result.removed.push(d.path)
       } else {
         let folder = d.path.slice(0, d.path.lastIndexOf('/'))
-        Deno.mkdirSync(folder, { recursive: true })
+        fs.mkdirSync(folder, { recursive: true })
         let tmp = `${d.path}.${crypto.randomUUID()}.tmp`
-        Deno.writeTextFileSync(tmp, d.text)
-        Deno.renameSync(tmp, d.path)
+        fs.writeTextFileSync(tmp, d.text)
+        fs.renameSync(tmp, d.path)
         learned.set(d.path, { blob: d.sides.value!, hash: d.sides.value })
         result.wrote.push(d.path)
       }
@@ -449,7 +451,7 @@ let syncRepository = async (
       let paths = (await git(tree, ['ls-files', '-z', '--', '.claude/skills']))
         .split('\0').filter(Boolean)
       for (let path of paths.filter(primary)) {
-        parseSkill(await Deno.readTextFile(`${tree}/${path}`), titleOf(path))
+        parseSkill(await fs.readTextFile(`${tree}/${path}`), titleOf(path))
       }
       outcome = await land({ cwd: tree, run: command, write: () => {} })
     }
@@ -595,7 +597,7 @@ export let syncSkills = async (
   opts: SkillSyncOpts = {},
 ): Promise<SkillSync> => {
   try {
-    root = Deno.realPathSync(root)
+    root = fs.realPathSync(root)
   } catch (error) {
     throw failed(root, error)
   }

@@ -8,6 +8,8 @@
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
 
+import * as fs from '@yaks/file/io'
+
 import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
 
@@ -122,12 +124,12 @@ let shaOf = async (file: File) => {
 export let read = async (dir: string): Promise<File[]> => {
   let files: File[] = []
   let walk = async (rel: string) => {
-    for await (let e of Deno.readDir(`${dir}/${rel}`)) {
+    for await (let e of fs.readDir(`${dir}/${rel}`)) {
       if (e.name.startsWith('.')) continue
       let path = rel ? `${rel}/${e.name}` : e.name
       if (e.isDirectory) await walk(path)
       else if (e.isFile) {
-        files.push(fileOf(path, await Deno.readFile(`${dir}/${path}`)))
+        files.push(fileOf(path, await fs.readFile(`${dir}/${path}`)))
       }
     }
   }
@@ -351,24 +353,24 @@ export let versions = async (
   let path = `${dir}/${hash}.json`
   let base: number | undefined
   try {
-    let value = JSON.parse(await Deno.readTextFile(path))
+    let value = JSON.parse(await fs.readTextFile(path))
     if (typeof value != 'number' || !Number.isSafeInteger(value) || value < 0) {
       throw new Error(`invalid push base version in ${path}`)
     }
     base = value
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if (!fs.isNotFound(e)) throw e
   }
   return {
     base,
     remember: async (version) => {
-      await Deno.mkdir(dir, { recursive: true })
-      let temporary = await Deno.makeTempFile({ dir, prefix: hash })
+      await fs.mkdir(dir, { recursive: true })
+      let temporary = await fs.makeTempFile({ dir, prefix: hash })
       try {
-        await Deno.writeTextFile(temporary, JSON.stringify(version))
-        await Deno.rename(temporary, path)
+        await fs.writeTextFile(temporary, JSON.stringify(version))
+        await fs.rename(temporary, path)
       } catch (e) {
-        await Deno.remove(temporary)
+        await fs.remove(temporary)
         throw e
       }
     },

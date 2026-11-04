@@ -25,6 +25,9 @@
 // It also projects the three store configs and package exports into load.ts:
 // literal facet imports that esbuild can bundle without runtime discovery,
 // and every package's `./vocab`, which an app may name as a dependency.
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as spawnCommand } from '@yaks/process/command'
 import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
@@ -38,13 +41,13 @@ let PLUGIN = new URL('../../plugins/yaks.app/', HERE)
 
 let refuse = (why: string): never => {
   console.error(why)
-  Deno.exit(1)
+  system.exit(1)
 }
 
 // Every file of a kind, by name, so the emitted module is stable whatever
 // order the directory hands them back in.
 let filesIn = (dir: URL, ext: string) =>
-  [...Deno.readDirSync(dir)]
+  [...io.readDirSync(dir)]
     .map((e) => e.name)
     .filter((n) => n.endsWith(ext))
     .sort()
@@ -68,7 +71,7 @@ let guides = () =>
   filesIn(new URL('public/docs/', HERE), '.md').flatMap((name) => {
     let file = `public/docs/${name}`
     let slug = name.slice(0, -3)
-    let { meta, body } = front(Deno.readTextFileSync(new URL(file, HERE)), file)
+    let { meta, body } = front(io.readTextFileSync(new URL(file, HERE)), file)
     let doc = meta.doc as Record<string, unknown> ?? {}
     let guide = meta.guide as Record<string, unknown> | undefined
     if (!guide) return []
@@ -103,7 +106,7 @@ let prompts = () => {
   for (let file of filesIn(dir, '.md')) {
     let at = `prompts/${file}`
     let name = file.slice(0, -3)
-    let { meta, body } = front(Deno.readTextFileSync(new URL(file, dir)), at)
+    let { meta, body } = front(io.readTextFileSync(new URL(file, dir)), at)
     let row = meta.prompt as Record<string, unknown> ?? {}
     contentIdentity(meta, 'prompt', name, at)
     out[name] = {
@@ -123,7 +126,7 @@ let prompts = () => {
 /** What every tool says about itself, by name: tools.yml. */
 let words = () => {
   let at = 'tools.yml'
-  let held = read(Deno.readTextFileSync(new URL(at, HERE)), at)
+  let held = read(io.readTextFileSync(new URL(at, HERE)), at)
   if (!held || typeof held != 'object' || Array.isArray(held)) {
     refuse(`${at} is not a map of tool name to {title, description}`)
   }
@@ -174,15 +177,15 @@ let body = () =>
 // project, where the fmt subprocess resolves this repo's config.
 let formatted = async (text: string) => {
   let tmp = new URL('.content.gen.ts', HERE)
-  await Deno.writeTextFile(tmp, text)
-  let p = await new Deno.Command('deno', {
+  await io.writeTextFile(tmp, text)
+  let p = await spawnCommand('deno', {
     args: ['fmt', '-q', `--ignore=!${fileURLToPath(tmp)}`, fileURLToPath(tmp)],
   }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
   }
-  let out = await Deno.readTextFile(tmp)
-  await Deno.remove(tmp)
+  let out = await io.readTextFile(tmp)
+  await io.remove(tmp)
   return out
 }
 
@@ -211,13 +214,13 @@ let bytes = new TextEncoder()
 // config, the same deal `formatted` above makes for content.ts.
 let formattedMd = async (held: Record<string, string>) => {
   let tmp = new URL('../../plugins/.gen/', HERE)
-  await Deno.remove(tmp, { recursive: true }).catch(() => {})
+  await io.remove(tmp, { recursive: true }).catch(() => {})
   for (let [path, text] of Object.entries(held)) {
     let to = new URL(path, tmp)
-    await Deno.mkdir(new URL('.', to), { recursive: true })
-    await Deno.writeTextFile(to, text)
+    await io.mkdir(new URL('.', to), { recursive: true })
+    await io.writeTextFile(to, text)
   }
-  let p = await new Deno.Command('deno', {
+  let p = await spawnCommand('deno', {
     args: ['fmt', '-q', `--ignore=!${fileURLToPath(tmp)}`, fileURLToPath(tmp)],
   }).output()
   if (!p.success) {
@@ -225,9 +228,9 @@ let formattedMd = async (held: Record<string, string>) => {
   }
   let out: Record<string, string> = {}
   for (let path of Object.keys(held)) {
-    out[path] = await Deno.readTextFile(new URL(path, tmp))
+    out[path] = await io.readTextFile(new URL(path, tmp))
   }
-  await Deno.remove(tmp, { recursive: true })
+  await io.remove(tmp, { recursive: true })
   return out
 }
 
@@ -243,10 +246,10 @@ let packaged = async (): Promise<Record<string, Uint8Array>> => {
     }\n---\n\n${body.replace(/^\n+/, '').replace(/\n+$/, '')}\n`
   }
   let out: Record<string, Uint8Array> = {
-    'assets/logo.png': Deno.readFileSync(
+    'assets/logo.png': io.readFileSync(
       new URL('public/connector-512.png', HERE),
     ),
-    'assets/icon.png': Deno.readFileSync(new URL('public/yaks-app.png', HERE)),
+    'assets/icon.png': io.readFileSync(new URL('public/yaks-app.png', HERE)),
   }
   for (let [path, text] of Object.entries(await formattedMd(md))) {
     out[path] = bytes.encode(text)
@@ -257,9 +260,9 @@ let packaged = async (): Promise<Record<string, Uint8Array>> => {
 // Every file under a directory, by path relative to it — absent is empty, so
 // a package that was never generated reads as one that is stale.
 let under = (dir: URL, at = ''): string[] => {
-  let held: Deno.DirEntry[] = []
+  let held: io.DirEntry[] = []
   try {
-    held = [...Deno.readDirSync(dir)]
+    held = [...io.readDirSync(dir)]
   } catch {
     return []
   }
@@ -282,7 +285,7 @@ let stale = (files: Record<string, Uint8Array>) => {
     return true
   }
   return Object.entries(files).some(([path, want]) =>
-    !same(want, Deno.readFileSync(new URL(path, PLUGIN)))
+    !same(want, io.readFileSync(new URL(path, PLUGIN)))
   )
 }
 
@@ -291,15 +294,15 @@ let stale = (files: Record<string, Uint8Array>) => {
 let pack = (files: Record<string, Uint8Array>) => {
   for (let d of OWNED) {
     try {
-      Deno.removeSync(new URL(`${d}/`, PLUGIN), { recursive: true })
+      io.removeSync(new URL(`${d}/`, PLUGIN), { recursive: true })
     } catch {
       // never generated, or already gone
     }
   }
   for (let [path, held] of Object.entries(files)) {
     let to = new URL(path, PLUGIN)
-    Deno.mkdirSync(new URL('.', to), { recursive: true })
-    Deno.writeFileSync(to, held)
+    io.mkdirSync(new URL('.', to), { recursive: true })
+    io.writeFileSync(to, held)
   }
 }
 
@@ -308,10 +311,10 @@ let fresh = await formatted(body())
 // runtime free of filesystem discovery and every generated import literal.
 let root = new URL('../../', HERE)
 let workspace: { workspace: string[] } = JSON.parse(
-  Deno.readTextFileSync(new URL('deno.json', root)),
+  io.readTextFileSync(new URL('deno.json', root)),
 )
 let manifests: Manifest[] = workspace.workspace.map((path) =>
-  JSON.parse(Deno.readTextFileSync(new URL(`${path}/deno.json`, root)))
+  JSON.parse(io.readTextFileSync(new URL(`${path}/deno.json`, root)))
 )
 let local = Object.fromEntries(
   Object.entries(domains).flatMap(([plugin, facets]) =>
@@ -338,14 +341,14 @@ let loaded = await formatted(
   ),
 )
 let files = await packaged()
-if (Deno.args.includes('--check')) {
-  let held = await Deno.readTextFile(TARGET).catch(() => '')
+if (system.args.includes('--check')) {
+  let held = await io.readTextFile(TARGET).catch(() => '')
   if (held != fresh) {
     refuse(
       'workers/yak/content.ts is stale — run `deno task content` and commit it',
     )
   }
-  if (await Deno.readTextFile(LOAD).catch(() => '') != loaded) {
+  if (await io.readTextFile(LOAD).catch(() => '') != loaded) {
     refuse(
       'workers/yak/load.ts is stale — run `deno task content` and commit it',
     )
@@ -356,7 +359,7 @@ if (Deno.args.includes('--check')) {
     )
   }
 } else {
-  await Deno.writeTextFile(TARGET, fresh)
-  await Deno.writeTextFile(LOAD, loaded)
+  await io.writeTextFile(TARGET, fresh)
+  await io.writeTextFile(LOAD, loaded)
   pack(files)
 }

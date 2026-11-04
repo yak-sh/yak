@@ -1,3 +1,6 @@
+import { freshFetch } from '@yaks/process/http'
+import * as process from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 import { getStarts } from './get_starts.ts'
 import { workspaceCapabilities } from './workspaces.ts'
 import { resolveHome } from './machines.ts'
@@ -269,7 +272,7 @@ export type ComposeOpts = {
 
 // The mode a process opens its graph in, as its environment says.
 let moding = (): ComposeOpts['mode'] => {
-  let at = Deno.env.get('YAK_AT'), branch = Deno.env.get('YAK_BRANCH')
+  let at = process.env.get('YAK_AT'), branch = process.env.get('YAK_BRANCH')
   return at
     ? { at: Number(at) }
     : branch
@@ -417,7 +420,7 @@ let composed = async (
     config.tracker && !opts.readOnly
       ? config.tracker.commit ?? revision()
       : undefined,
-    { command: command(Deno.args), roles: roles.join(',') },
+    { command: command(process.args), roles: roles.join(',') },
   )
   opts.reader?.overrun?.((error) =>
     void report(error, { tags: { step: 'read' } })
@@ -456,10 +459,10 @@ let composed = async (
     let exists = false
     if (path != ':memory:') {
       try {
-        Deno.statSync(path)
+        disk.statSync(path)
         exists = true
       } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
+        if (!(error instanceof disk.errors.NotFound)) throw error
       }
     }
     // What the store's data requires (a plugin that shaped how its rows are
@@ -617,6 +620,7 @@ let composed = async (
     let built = plan.bind({
       tools: { package: '@yaks/cli', offer: operations },
       host: {
+        fetch: freshFetch(),
         vault,
         blobs: sqliteBlobs(sql),
         artifacts,
@@ -753,8 +757,6 @@ let composed = async (
           lease: config.lease,
           gone: built.gone,
           // How busy a worker says its process is (@yaks/effects worker).
-          // Deno's `process` global loads node:process when it is first
-          // read, about 20 ms that a command running no worker never pays.
           cpu: () => {
             let { user, system } = process.cpuUsage()
             return (user + system) / 1000

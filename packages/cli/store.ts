@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // What this machine remembers between commands: the bearer token `yak login`
 // saved, and the tool list a host last served.
 //
@@ -34,7 +36,7 @@ export type Env = (name: string) => string | undefined
 
 let env: Env = (name) => {
   try {
-    return Deno.env.get(name)
+    return system.env.get(name)
   } catch {
     return undefined
   }
@@ -43,10 +45,10 @@ let env: Env = (name) => {
 /** Where this operating system keeps a program's configuration. */
 export let configDir = (vars: Env = env): string => {
   let home = vars('HOME') ?? vars('USERPROFILE') ?? '.'
-  if (Deno.build.os == 'windows') {
+  if (system.build.os == 'windows') {
     return vars('APPDATA') ?? `${home}/AppData/Roaming`
   }
-  if (Deno.build.os == 'darwin') return `${home}/Library/Preferences`
+  if (system.build.os == 'darwin') return `${home}/Library/Preferences`
   return vars('XDG_CONFIG_HOME') ?? `${home}/.config`
 }
 
@@ -58,11 +60,11 @@ export let stateDir = (vars: Env = env): string =>
  * per-host cache use the same operations on a disk or an in-memory filesystem. */
 export type RosterFiles = {
   readTextFileSync: (path: string) => string
-  mkdirSync: (path: string, options: Deno.MkdirOptions) => void
+  mkdirSync: (path: string, options: disk.MkdirOptions) => void
   writeTextFileSync: (
     path: string,
     body: string,
-    options: Deno.WriteFileOptions,
+    options: disk.WriteFileOptions,
   ) => void
   renameSync: (from: string, to: string) => void
   linkSync: (from: string, to: string) => void
@@ -79,7 +81,7 @@ export type Rosters = {
   forget: (host: string, dir?: string) => Promise<void>
 }
 
-export let rosters = (files: RosterFiles = Deno): Rosters => {
+export let rosters = (files: RosterFiles = disk): Rosters => {
   let read = (path: string): Record<string, unknown> => {
     try {
       return JSON.parse(files.readTextFileSync(path))
@@ -103,7 +105,7 @@ export let rosters = (files: RosterFiles = Deno): Rosters => {
     try {
       files.removeSync(path)
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e
+      if (!(e instanceof disk.errors.NotFound)) throw e
     }
   }
   let saved = (dir: string, path: string, roster: unknown, fresh = false) => {
@@ -115,7 +117,7 @@ export let rosters = (files: RosterFiles = Deno): Rosters => {
         try {
           files.linkSync(temp, path)
         } catch (e) {
-          if (!(e instanceof Deno.errors.AlreadyExists)) throw e
+          if (!(e instanceof disk.errors.AlreadyExists)) throw e
         }
       }
     } finally {
@@ -129,7 +131,7 @@ export let rosters = (files: RosterFiles = Deno): Rosters => {
     try {
       files.statSync(legacy)
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) return
+      if (e instanceof disk.errors.NotFound) return
       throw e
     }
     for (let [host, roster] of Object.entries(read(legacy))) {
@@ -137,14 +139,14 @@ export let rosters = (files: RosterFiles = Deno): Rosters => {
       try {
         files.statSync(path)
       } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e
+        if (!(e instanceof disk.errors.NotFound)) throw e
         saved(dir, path, roster, true)
       }
     }
     try {
       files.removeSync(legacy)
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e
+      if (!(e instanceof disk.errors.NotFound)) throw e
     }
   }
 
@@ -178,7 +180,7 @@ export let rosters = (files: RosterFiles = Deno): Rosters => {
     try {
       files.removeSync(rosterPath(host, dir))
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e
+      if (!(e instanceof disk.errors.NotFound)) throw e
     }
   }
   return { cached, remember, forget }

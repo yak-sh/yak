@@ -1,11 +1,16 @@
+import { build } from '@yaks/process/system'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
 import { type Driver, revision, type Statements } from '@yaks/sql'
 import { unit } from './unit.ts'
 
 let held = new WeakMap<Driver, Statements>()
-let platform =
-  (globalThis as { Deno?: { build: { os: string; arch: string } } }).Deno?.build
+let platform = {
+  ...build,
+  arch: ({ x64: 'x86_64', arm64: 'aarch64' } as Record<string, string>)[
+    build.arch
+  ] ?? build.arch,
+}
 /** The platform library's path, only when the name resolves to a local file. */
 export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
   let names: Record<string, string> = {

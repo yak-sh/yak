@@ -1,10 +1,11 @@
+import * as system from '@yaks/process/system'
 /**
  * The entry point: take the terminal, mount the app, and give the terminal
  * back. Raw mode and the alt screen go up, the fake document is installed, a
  * dirty tree repaints on the next microtask (so a burst of keys costs one
  * paint), SIGWINCH is a resize and a full repaint, and every exit — a clean
  * quit, an interrupt, a throw, an uncaught error or rejection anywhere, or a
- * Deno.exit — gives the terminal back exactly once.
+ * system.exit — gives the terminal back exactly once.
  *
  * Ctrl-C is the process's interrupt, the same one a signal is
  * (@yaks/process/wind): the terminal holds the process open while it winds
@@ -61,7 +62,7 @@ let once = (fn: () => void) => {
 
 /**
  * Call `release` when the process ends without unwinding: an uncaught error,
- * an unhandled rejection, or `unload` (Deno.exit, or the event loop running
+ * an unhandled rejection, or `unload` (system.exit, or the event loop running
  * dry). An event a listener prevented does not end the process, so it
  * releases nothing. Returns the function that stops listening.
  */
@@ -98,8 +99,8 @@ export let run = async (
       // What this terminal can do, unless the caller says: inside tmux, and
       // whether it draws kitty graphics (HARNESS_GRAPHICS=kitty).
       graphics: opts.graphics ??
-        (Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none'),
-      tmux: opts.tmux ?? !!Deno.env.get('TMUX'),
+        (system.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none'),
+      tmux: opts.tmux ?? !!system.env.get('TMUX'),
     })
   let screen = opts.screen ?? install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
@@ -149,10 +150,10 @@ export let run = async (
   let release = once(() => {
     attempt(() => setClipboard())
     attempt(() => backend.stop())
-    attempt(() => Deno.stdin.setRaw(false))
+    attempt(() => system.stdin.setRaw(false))
   })
   // A throw nobody caught (a render that crashes), a rejection nobody
-  // handled, or a Deno.exit from anywhere ends the process without reaching
+  // handled, or a system.exit from anywhere ends the process without reaching
   // the finally below: the terminal is given back on the way out all the same.
   let unguard = fatal(globalThis, release)
   let bye = () => {
@@ -164,18 +165,18 @@ export let run = async (
     clear()
     screen.free()
     try {
-      Deno.removeSignalListener('SIGWINCH', resize)
+      system.removeSignalListener('SIGWINCH', resize)
     } catch { /* never added */ }
     release()
     unguard()
   }
 
   try {
-    Deno.stdin.setRaw(true)
+    system.stdin.setRaw(true)
     backend.start()
     setClipboard(backend.copy ? (text) => backend.copy!(text) : undefined)
     size.value = backend.size()
-    Deno.addSignalListener('SIGWINCH', resize)
+    system.addSignalListener('SIGWINCH', resize)
     onPaint(() => {
       let frame = backend.draw(screen.root)
       painted = frame.lines ?? []
@@ -200,7 +201,7 @@ export let run = async (
         if (key.ctrl && key.text == 'c') done = true
       }
     }
-    let reader = Deno.stdin.readable.getReader()
+    let reader = system.stdin.readable.getReader()
     cancelRead = () => reader.cancel().catch(() => {})
     let dec = new TextDecoder()
     while (!done) {

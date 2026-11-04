@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // The `yak` command. It has built-in subcommands — `help`, `work`, `restart`, `init`,
 // `auth`, `apply` — and other subcommands are graph tools (local.ts),
 // an MCP server's tools (platform.ts), plugin terminal controls, or an app's
@@ -160,7 +162,7 @@ export let YAK: Opts = {
 // who works there, so what they type is signed as them from the first command.
 // It never replaces a config: one already there is somebody's graph.
 let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
-  let path = c.config ?? Deno.env.get('YAK_CONFIG') ?? ownConfig()
+  let path = c.config ?? system.env.get('YAK_CONFIG') ?? ownConfig()
   if (!path) {
     throw new Usage('no $HOME to keep a config in — name one with --config')
   }
@@ -168,15 +170,15 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   if (!name) throw new Usage('yak init <your name>')
   let person = crypto.randomUUID()
   let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
-  Deno.mkdirSync(dir, { recursive: true })
+  disk.mkdirSync(dir, { recursive: true })
   try {
-    Deno.writeTextFileSync(
+    disk.writeTextFileSync(
       path,
       JSON.stringify(starter(person), null, 2) + '\n',
       { createNew: true },
     )
   } catch (error) {
-    if (!(error instanceof Deno.errors.AlreadyExists)) throw error
+    if (!(error instanceof disk.errors.AlreadyExists)) throw error
     c.note(`a config is already at ${path} — yak init never replaces one`)
     return 1
   }
@@ -189,7 +191,7 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   } catch (error) {
     // A config naming a person its graph never made is worse than none: the
     // next `yak init` could not replace it.
-    Deno.removeSync(path)
+    disk.removeSync(path)
     throw error
   }
   c.out(`wrote ${path}, a graph worked at by ${name}`)
@@ -256,26 +258,28 @@ export let own: Command[] = [
       },
     },
     run: async (args, c) => {
-      let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
+      let runtimeDir = system.env.get('XDG_RUNTIME_DIR')
       if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
       let { restart, queueRestart } = await import('./restart.ts')
       let path = configPath(c.config)
       if (!args.handover) {
         let { launching } = await import('./release.ts')
         let launch = [
-          Deno.execPath(),
+          system.execPath(),
           'run',
           '-A',
           '--config',
           await launching(() =>
-            Deno.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' })
+            disk.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' })
           ),
           new URL('./yak.ts', import.meta.url).href,
         ]
         c.out(
           await queueRestart(
             launch,
-            path ? new URL(path, `file://${Deno.cwd()}/`).pathname : undefined,
+            path
+              ? new URL(path, `file://${system.cwd()}/`).pathname
+              : undefined,
           ),
         )
         return 0
@@ -366,7 +370,7 @@ export let main = async (
     return code = await cli([...extra, ...TOOLS], {
       ...YAK,
       argv,
-      invoke: import.meta.main
+      invoke: system.main(import.meta.url)
         ? async (command, c) =>
           c.config &&
             (command.name == 'work' || command.roles?.includes('web'))
@@ -392,9 +396,9 @@ export let main = async (
 // that takes. A command with nothing open has nothing to finish, and ends at
 // once. A second interrupt ends its duty threads where they stand (./held.ts
 // `cut`), closes with the interrupt's code, and exits.
-if (import.meta.main) {
+if (system.main(import.meta.url)) {
   listen()
-  let ran = main(Deno.args)
+  let ran = main(system.args)
   wind.hold({
     drain: () => held.stop() || runtimeCall ? ran : undefined,
     force: () => held.cut(),
@@ -402,7 +406,7 @@ if (import.meta.main) {
   wind.done.then(async (code) => {
     await held.close(code)
     await closeAccounts()
-    Deno.exit(code)
+    system.exit(code)
   })
-  ran.then(Deno.exit)
+  ran.then(system.exit)
 }

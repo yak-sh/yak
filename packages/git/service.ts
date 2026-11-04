@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 // Host-checkout maintenance: idle, landed worktrees can be reclaimed only
 // when no graph session's explicitly attached machine or local process uses
 // them. Machine-provisioned sandboxes are their provider's business, not this
@@ -34,7 +35,7 @@ export type Options = {
   every?: number
 }
 
-let there = (path: string) => Deno.stat(path).then(() => true, () => false)
+let there = (path: string) => io.stat(path).then(() => true, () => false)
 
 let text = (value: unknown): value is string => typeof value == 'string'
 
@@ -102,7 +103,7 @@ export let collect = async (
   for (let path of await linked(common)) {
     if (signal?.aborted) break
     if (await idleFor(path, now) < idle) continue
-    let real = await Deno.realPath(path).catch(() => path)
+    let real = await io.realPath(path).catch(() => path)
     let [row] = await g.get([worktreeEid(repository, real)])
     let tree = row?.worktree as Comp | undefined
     if (!tree?.managed) continue

@@ -1,6 +1,8 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // An explicitly armed, short-lived PID-local caller capture. Reading an
 // absent sidecar never creates it. Consumption only decrements local memory.
-export let getStarts = (db: string, pid = Deno.pid, now = Date.now) => {
+export let getStarts = (db: string, pid = system.pid, now = Date.now) => {
   let file = `${db}.get-starts.json`
   let arm = '', left = 0, until = 0, checked = 0
   let kind = '', match = ''
@@ -9,7 +11,7 @@ export let getStarts = (db: string, pid = Deno.pid, now = Date.now) => {
     if (at >= checked) {
       checked = at + 250
       try {
-        let x = JSON.parse(Deno.readTextFileSync(file))
+        let x = JSON.parse(disk.readTextFileSync(file))
         if (
           x.pid == pid && typeof x.arm == 'string' && x.arm != arm &&
           Number.isInteger(x.next) && x.next > 0 && x.next <= 16 &&

@@ -1,5 +1,6 @@
 // One app worker beside an isolated HTTP kernel. Dispatch runs the source
 // entry through the shipped shim, whose doors spend the vouched grants.
+import * as io from '@yaks/file/io'
 import { SHIM } from './dispatch.ts'
 import { fresh, type Kernel } from './probe.ts'
 
@@ -13,10 +14,10 @@ export let serverSource = {
 }
 
 export let workerKernel = async (source: URL): Promise<Kernel> => {
-  let dir = Deno.makeTempDirSync({ prefix: 'yak-worker-probe-' })
+  let dir = io.makeTempDirSync({ prefix: 'yak-worker-probe-' })
   try {
-    Deno.writeTextFileSync(`${dir}/entry.js`, SHIM)
-    Deno.writeTextFileSync(
+    io.writeTextFileSync(`${dir}/entry.js`, SHIM)
+    io.writeTextFileSync(
       `${dir}/worker.js`,
       `export { default } from ${JSON.stringify(source.href)}`,
     )
@@ -46,12 +47,12 @@ export let workerKernel = async (source: URL): Promise<Kernel> => {
         try {
           await k.stop()
         } finally {
-          Deno.removeSync(dir, { recursive: true })
+          io.removeSync(dir, { recursive: true })
         }
       },
     }
   } catch (e) {
-    Deno.removeSync(dir, { recursive: true })
+    io.removeSync(dir, { recursive: true })
     throw e
   }
 }

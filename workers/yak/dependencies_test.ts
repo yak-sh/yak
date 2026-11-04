@@ -1,4 +1,6 @@
 import { test } from '@yaks/testing'
+import { build } from '@yaks/process/system'
+import { errors } from '@yaks/file/io'
 import { createHash } from 'node:crypto'
 import { assertEquals, assertRejects } from '@std/assert'
 import { dependencies, type Host, type Lock, matching } from './dependencies.ts'
@@ -41,8 +43,8 @@ test('npm cache reuse follows package contents, including omitted optional packa
 
 // Files and links obey the same boundary as the production filesystem; npm
 // writes its hidden lock before an install script can fail.
-let notFound = new Deno.errors.NotFound(),
-  alreadyExists = new Deno.errors.AlreadyExists()
+let notFound = new errors.NotFound(),
+  alreadyExists = new errors.AlreadyExists()
 let memory = () => {
   type Entry = string | null | { target: string }
   let entries = new Map<string, Entry>([['/', null]])
@@ -212,7 +214,7 @@ let legacyCache = memory()
     (file) => [file, m.read(`${m.root}/${file}`)],
   )
   let key = createHash('sha256').update(
-    JSON.stringify([Deno.build.os, Deno.build.arch, files]),
+    JSON.stringify([build.os, build.arch, files]),
   ).digest('hex')
   let project = `${m.cache}/yak-installed/${key}`
   m.inputs(project, m.root)

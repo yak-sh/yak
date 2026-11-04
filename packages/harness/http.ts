@@ -2,7 +2,9 @@
 // broken connection. A failed send gets one fresh-pool attempt; an interrupted
 // answer is not replayed after its headers have reached the provider adapter.
 
-type Client = Pick<Deno.HttpClient, 'close'>
+import { httpClient } from '@yaks/process/http'
+
+type Client = { close: () => void; fetch?: typeof fetch }
 type Generation = { client: Client; active: number; retired: boolean }
 
 /** A host-owned fetch pool, with an injectable connection seam. */
@@ -10,8 +12,8 @@ export let pooledHttp = (options: {
   fetch?: typeof fetch
   client?: () => Client
 } = {}) => {
-  let go = options.fetch ?? fetch
-  let create = options.client ?? (() => Deno.createHttpClient({}))
+  let go = options.fetch
+  let create = options.client ?? httpClient
   let current: Generation | undefined
   let closed = false
   let pool = () => {
@@ -44,7 +46,7 @@ export let pooledHttp = (options: {
           ...init,
           client: g.client,
         }
-        response = await go(input, sent)
+        response = await (go ?? g.client.fetch ?? fetch)(input, sent)
       } catch (error) {
         let broken = !signal?.aborted && error instanceof TypeError
         if (broken) retire(g)

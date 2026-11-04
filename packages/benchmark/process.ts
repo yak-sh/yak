@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 /** CPU used by an external process tree. Process CPU clocks include every
  * thread at nanosecond precision; proc supplies descendants and reaped work. */
 let library = () =>
@@ -9,7 +11,7 @@ let clocks: ReturnType<typeof library> | undefined
 let times = new BigInt64Array(2)
 
 export let processCpu = (pid: number): number => {
-  if (Deno.build.os != 'linux') throw new Error('Process CPU clocks need Linux')
+  if (system.os != 'linux') throw new Error('Process CPU clocks need Linux')
   clocks ??= library()
   let ticks = Number(clocks.symbols.sysconf(2))
   let seen = new Set<number>()
@@ -18,9 +20,9 @@ export let processCpu = (pid: number): number => {
     seen.add(id)
     let stat: string
     try {
-      stat = Deno.readTextFileSync(`/proc/${id}/stat`)
+      stat = io.readTextFileSync(`/proc/${id}/stat`)
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) return 0
+      if (io.isNotFound(error)) return 0
       throw error
     }
     let fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
@@ -29,15 +31,15 @@ export let processCpu = (pid: number): number => {
       ? Number(times[0]) * 1000 + Number(times[1]) / 1e6
       : (Number(fields[11]) + Number(fields[12])) * 1000 / ticks
     let children = new Set<number>()
-    for (let task of Deno.readDirSync(`/proc/${id}/task`)) {
+    for (let task of io.readDirSync(`/proc/${id}/task`)) {
       try {
         for (
-          let child of Deno.readTextFileSync(
+          let child of io.readTextFileSync(
             `/proc/${id}/task/${task.name}/children`,
           ).trim().split(/\s+/).filter(Boolean)
         ) children.add(Number(child))
       } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
+        if (!io.isNotFound(error)) throw error
       }
     }
     return own + (Number(fields[13]) + Number(fields[14])) * 1000 / ticks +

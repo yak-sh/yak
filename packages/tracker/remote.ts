@@ -49,17 +49,10 @@ export class Unavailable extends Error {}
 export let unanswered = (error: unknown): unknown =>
   late(error) ? new Unavailable('Remote tracker did not answer in time') : error
 
-// One attempt on a connection of its own, closed once the whole answer is in
-// hand. Outside Deno the runtime owns the connections.
+// Each host supplies its transport; the portable default is standard fetch.
 let attempt = async (go: typeof fetch, url: URL, init: RequestInit) => {
-  let client = globalThis.Deno?.createHttpClient({})
-  let own: RequestInit & { client?: Deno.HttpClient } = { ...init, client }
-  try {
-    let response = await go(url, client ? own : init)
-    return new Response(response.body && await response.arrayBuffer(), response)
-  } finally {
-    client?.close()
-  }
+  let response = await go(url, init)
+  return new Response(response.body && await response.arrayBuffer(), response)
 }
 
 // The Worker's door for each mark, by the mark's name; a reopening takes a

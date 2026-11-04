@@ -1,7 +1,9 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
 /** The process boundary: host config and machine metadata are read for each
  * run, not when a bench is declared. Reporter factories receive this context;
  * the default factory is empty until a reporting provider is installed. */
-import { cpus, loadavg } from 'node:os'
 import type { Run } from './result.ts'
 import { layouts, milliseconds } from './rusage.ts'
 
@@ -40,28 +42,28 @@ export let configure = (factory: Reporters): () => void => {
 export let reporters = (host: Host): ReturnType<Reporters> => resolve(host)
 
 export let host = async (): Promise<Host> => {
-  let path = Deno.env.get('YAK_CONFIG')
+  let path = system.env.get('YAK_CONFIG')
   let required = !!path
-  let home = Deno.env.get('HOME')
+  let home = system.env.get('HOME')
   path ??= home ? `${home}/.yak/yak.json` : undefined
   let config: Record<string, unknown> = {}
   let configURL: string | null = null
   if (path) {
-    let url = new URL(path, `file://${Deno.cwd()}/`)
+    let url = new URL(path, `file://${system.cwd()}/`)
     try {
-      let read: unknown = JSON.parse(await Deno.readTextFile(url))
+      let read: unknown = JSON.parse(await io.readTextFile(url))
       if (!read || typeof read != 'object' || Array.isArray(read)) {
         throw new Error('Host config must be a JSON object')
       }
       config = read as Record<string, unknown>
       configURL = url.href
     } catch (error) {
-      if (required || !(error instanceof Deno.errors.NotFound)) throw error
+      if (required || !io.isNotFound(error)) throw error
     }
   }
   let commit: string | null = null
   try {
-    let result = await new Deno.Command('git', {
+    let result = await processCommand('git', {
       args: ['rev-parse', 'HEAD'],
       stdout: 'piped',
       stderr: 'null',
@@ -72,9 +74,10 @@ export let host = async (): Promise<Host> => {
     config,
     configURL,
     commit,
-    runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
-    cpu: cpus()[0]?.model ?? 'unknown',
-    load: loadavg(),
+    runtime:
+      `${system.runtimeName}/${system.runtimeVersion} ${system.build.target}`,
+    cpu: system.cpus()[0]?.model ?? 'unknown',
+    load: system.loadavg(),
     busy: () => busy(),
   }
 }
@@ -83,7 +86,7 @@ export let host = async (): Promise<Host> => {
  * container's own); undefined where the box does not say. */
 let used = (): number | undefined => {
   try {
-    let n = Deno.readTextFileSync('/sys/fs/cgroup/cpu.stat')
+    let n = io.readTextFileSync('/sys/fs/cgroup/cpu.stat')
       .match(/^usage_usec (\d+)/m)
     return n ? Number(n[1]) : undefined
   } catch {
@@ -112,10 +115,10 @@ let rusage: ((who: number) => number) | undefined
  * measurement must report its CPU separately. */
 export let cputime = (): number => {
   if (!rusage) {
-    let layout = layouts[Deno.build.os]
+    let layout = layouts[system.os]
     if (!layout) {
       throw new Error(
-        `CPU accounting with child processes is unsupported on ${Deno.build.os}`,
+        `CPU accounting with child processes is unsupported on ${system.os}`,
       )
     }
     let { symbols } = Deno.dlopen(layout.library, {
@@ -141,7 +144,7 @@ export let cputime = (): number => {
  * what the span would have taken on an idle box. */
 export let waited = (): number | undefined => {
   try {
-    let delay = Deno.readTextFileSync('/proc/thread-self/schedstat')
+    let delay = io.readTextFileSync('/proc/thread-self/schedstat')
       .split(' ')[1]
     return delay ? Number(delay) / 1e6 : undefined
   } catch {

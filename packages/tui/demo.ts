@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 /**
  * The package, driven: `deno run -A packages/tui/demo.ts`. A transcript of 500
  * lines you can scroll (arrows, page keys, the wheel), an input box that
@@ -108,4 +109,4 @@ let sheet = {
   Dim: { dim: true },
 }
 
-if (import.meta.main) await run(App, { sheet })
+if (system.main(import.meta.url)) await run(App, { sheet })

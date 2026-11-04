@@ -7,6 +7,7 @@
  *
  * ```ts
  * import { h } from 'preact'
+ * import { main } from '@yaks/process/system'
  * import { Frame, Scroll, Textarea, run } from '@yaks/tui'
  *
  * let App = () =>
@@ -14,7 +15,7 @@
  *     h(Scroll, { id: 'log', grow: '1' }, h('div', null, 'hello')),
  *     h(Textarea, { onSubmit: (text: string) => console.log(text) }))
  *
- * if (import.meta.main) await run(App)
+ * if (main(import.meta.url)) await run(App)
  * ```
  *
  * @module

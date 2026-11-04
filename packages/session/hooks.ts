@@ -3,6 +3,9 @@
 // keeps its additionalContext and retries through the local CLI on failure.
 // The harness transcript remains the source of turns (./service.ts).
 
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
+
 import { PATH } from './routes.ts'
 
 /** One lifecycle entry, in the form a harness settings file stores it. */
@@ -16,8 +19,9 @@ export type Hook = {
 }
 
 /** Where the entries go, unless the caller names another path. */
-export let settingsPath = (home = Deno.env.get('HOME') ?? '.'): string =>
-  `${home}/.claude/settings.json`
+export let settingsPath = (
+  home = systemProcess.env.get('HOME') ?? '.',
+): string => `${home}/.claude/settings.json`
 
 let cmd = (command: string, timeout?: number): Hook => ({
   hooks: [{
@@ -132,9 +136,9 @@ export let install = (
 ): string => {
   let settings: Record<string, unknown> = {}
   try {
-    settings = JSON.parse(Deno.readTextFileSync(path))
+    settings = JSON.parse(fs.readTextFileSync(path))
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if (!fs.isNotFound(e)) throw e
   }
   let hooks = merged(
     settings.hooks as Record<string, unknown> | undefined,
@@ -144,7 +148,7 @@ export let install = (
   let next: Record<string, unknown> = { ...settings, hooks }
   if (!Object.keys(hooks).length) delete next.hooks
   let dir = path.slice(0, path.lastIndexOf('/'))
-  if (dir) Deno.mkdirSync(dir, { recursive: true })
-  Deno.writeTextFileSync(path, `${JSON.stringify(next, null, 2)}\n`)
+  if (dir) fs.mkdirSync(dir, { recursive: true })
+  fs.writeTextFileSync(path, `${JSON.stringify(next, null, 2)}\n`)
   return path
 }

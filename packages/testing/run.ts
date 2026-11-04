@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // Runs collected tests one at a time, in the order they were declared, and
 // says how each went in the lines `deno test` prints (`name ... ok (12ms)`),
 // which what watches a run reads.
@@ -80,7 +81,7 @@ export let one = async (
   // busy box as on an idle one. The clock is read each second, and first
   // looks then, so a test that ends sooner never pays for a look.
   let late = new Promise((_, no) => {
-    let spent = own(Deno.pid, { every: 500, time: now })
+    let spent = own(system.pid, { every: 500, time: now })
     let check = () => {
       let left = timeout - spent()
       if (left > 0) timer = later(check, Math.min(left, 1000))
@@ -131,9 +132,9 @@ export let at = (path: string) => path.startsWith('/') ? path : `./${path}`
 let bytes = new TextEncoder()
 let say = (text: string) => {
   let b = bytes.encode(text)
-  while (b.length) b = b.subarray(Deno.stdout.writeSync(b))
+  while (b.length) b = b.subarray(system.stdout.writeSync(b))
 }
-let colored = Deno.stdout.isTerminal() && !Deno.env.get('NO_COLOR')
+let colored = system.stdout.isTerminal() && !system.env.get('NO_COLOR')
 let paint = (code: number, text: string) =>
   colored ? `\x1b[${code}m${text}\x1b[0m` : text
 
@@ -219,7 +220,7 @@ export let timed = (
 })
 
 let shown = (error: unknown) =>
-  error instanceof Error ? error.stack ?? String(error) : Deno.inspect(error)
+  error instanceof Error ? error.stack ?? String(error) : system.inspect(error)
 
 // This package's own modules: the runner's frames sit under every test's,
 // and an assertion's or a wait's atop the line that called it.
@@ -255,7 +256,7 @@ export let brief = (text: string, root: string, lines = LINES) => {
 
 /** A failure's errors, a line each: whole when `verbose`, else `brief`. */
 let told = (o: Outcome, verbose: boolean) => {
-  let root = `file://${Deno.cwd()}/`
+  let root = `file://${system.cwd()}/`
   return o.errors.map((e) => `${verbose ? shown(e) : brief(shown(e), root)}\n`)
     .join('')
 }

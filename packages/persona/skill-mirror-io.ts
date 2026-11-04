@@ -1,4 +1,6 @@
 // Filesystem agreement and linked-export boundaries for the skills mirror.
+
+import * as fs from '@yaks/file/io'
 import { Refused } from '@yaks/graph/errors'
 import type { Run } from '@yaks/git/land'
 import type { Agreed } from '@yaks/mirror'
@@ -9,9 +11,9 @@ export let agreement = (path: string) => {
   let load = async (): Promise<Map<string, Agreed>> => {
     let text: string
     try {
-      text = await Deno.readTextFile(path)
+      text = await fs.readTextFile(path)
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) return new Map()
+      if (fs.isNotFound(e)) return new Map()
       throw e
     }
     let value: unknown
@@ -39,15 +41,15 @@ export let agreement = (path: string) => {
     remember: async (changed: Map<string, Agreed | null>) => {
       let all = await load()
       for (let [p, a] of changed) a ? all.set(p, a) : all.delete(p)
-      await Deno.mkdir(path.slice(0, path.lastIndexOf('/')) || '.', {
+      await fs.mkdir(path.slice(0, path.lastIndexOf('/')) || '.', {
         recursive: true,
       })
       let tmp = `${path}.${crypto.randomUUID()}.tmp`
-      await Deno.writeTextFile(
+      await fs.writeTextFile(
         tmp,
         JSON.stringify(Object.fromEntries(all), null, 1) + '\n',
       )
-      await Deno.rename(tmp, path)
+      await fs.rename(tmp, path)
     },
   }
 }
@@ -65,9 +67,9 @@ export let prepareTree = async (
   run: Run,
 ): Promise<void> => {
   try {
-    await Deno.lstat(tree)
+    await fs.lstat(tree)
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
+    if (!fs.isNotFound(error)) throw error
     await git(root, [
       'worktree',
       'add',
@@ -90,8 +92,8 @@ export let prepareTree = async (
   let branch = (await git(tree, ['symbolic-ref', '--quiet', 'HEAD'])).trim()
   let primary = (await git(root, ['symbolic-ref', '--quiet', 'HEAD'])).trim()
   if (
-    await Deno.realPath(dir) != common || await Deno.realPath(tree) == root ||
-    await Deno.realPath(gitdir) == common || top != await Deno.realPath(tree) ||
+    await fs.realPath(dir) != common || await fs.realPath(tree) == root ||
+    await fs.realPath(gitdir) == common || top != await fs.realPath(tree) ||
     branch == primary ||
     (await git(tree, ['status', '--porcelain=v1', '--untracked-files=all']))
       .trim()
@@ -122,22 +124,22 @@ export let exact = async (
     let at = root
     for (let part of path.slice(root.length + 1).split('/')) {
       at += `/${part}`
-      if ((await Deno.lstat(at)).isSymlink) return false
+      if ((await fs.lstat(at)).isSymlink) return false
     }
     if (expected == undefined) return false
-    let bytes = await Deno.readFile(path)
+    let bytes = await fs.readFile(path)
     let wanted = new TextEncoder().encode(expected)
     return bytes.length == wanted.length &&
       bytes.every((b, i) => b == wanted[i])
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return expected == undefined
+    if (fs.isNotFound(error)) return expected == undefined
     throw error
   }
 }
 
 let gone = (error: unknown) =>
-  error instanceof Deno.errors.NotFound ||
-  error instanceof Deno.errors.NotADirectory
+  fs.isNotFound(error) ||
+  fs.isNotADirectory(error)
 
 /** How long a change time stays racy: past the coarsest timestamp tick a
  * filesystem keeps, so a rewrite of equal size can no longer share it. */
@@ -148,7 +150,7 @@ export let RACY = 2_000
 // the same tick would leave every stat equal, so it has no stable mark.
 let mark = (path: string, now: number): string | undefined => {
   try {
-    let i = Deno.lstatSync(path)
+    let i = fs.lstatSync(path)
     let kind = i.isSymlink ? 'l' : i.isDirectory ? 'd' : 'f'
     let changed = i.ctime?.getTime() ?? i.mtime?.getTime() ?? now
     if (changed > now - RACY) return
@@ -163,9 +165,9 @@ let walk = (dir: string, out: string[], now: number): boolean => {
   let line = mark(dir, now)
   if (line === undefined) return false
   out.push(line)
-  let entries: Deno.DirEntry[]
+  let entries: fs.DirEntry[]
   try {
-    entries = [...Deno.readDirSync(dir)]
+    entries = [...fs.readDirSync(dir)]
   } catch (error) {
     if (gone(error)) return true
     throw error

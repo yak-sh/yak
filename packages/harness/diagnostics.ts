@@ -2,6 +2,8 @@
  * writing transcript entries or local defect rows. With no reporter, or when
  * delivery fails, stderr keeps the failure. There is no second journal.
  */
+
+import * as systemProcess from '@yaks/process/system'
 import type { Host } from '@yaks/host'
 import { cpuUsage } from 'node:process'
 
@@ -61,7 +63,7 @@ export let createDiagnostics = (opts: {
     let record = {
       id,
       at: new Date().toISOString(),
-      pid: Deno.pid,
+      pid: systemProcess.pid,
       ...context,
       ...state,
       body,
@@ -116,7 +118,7 @@ let shared: ReturnType<typeof createDiagnostics> | undefined
 export let diagnostics = () =>
   shared ??= createDiagnostics({
     secrets: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].map((k) =>
-      Deno.env.get(k) ?? ''
+      systemProcess.env.get(k) ?? ''
     ),
   })
 

@@ -27,6 +27,9 @@
 // and drops kernels under parallel load (`Network connection lost`), where
 // 4.111.0 runs them at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as spawnCommand } from '@yaks/process/command'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
@@ -69,7 +72,7 @@ type Member = { name?: string; exports?: string | Record<string, string> }
 /** Every import name the workspace exports, to the file it is. */
 export let members = (root = repo): Record<string, string> => {
   let config = (at: string) =>
-    JSON.parse(Deno.readTextFileSync(join(root, at, 'deno.json')))
+    JSON.parse(io.readTextFileSync(join(root, at, 'deno.json')))
   let { workspace = [] } = config('.') as { workspace?: string[] }
   return Object.fromEntries(workspace.flatMap((at) => {
     let { name, exports } = config(at) as Member
@@ -92,10 +95,10 @@ export let aliased = (root = repo, to = TSCONFIG) => {
       [name, file],
     ) => [name, [relative(dirname(to), file)]]),
   )
-  Deno.mkdirSync(dirname(to), { recursive: true })
-  let tmp = `${to}.${Deno.pid}`
-  Deno.writeTextFileSync(tmp, JSON.stringify({ compilerOptions: { paths } }))
-  Deno.renameSync(tmp, to)
+  io.mkdirSync(dirname(to), { recursive: true })
+  let tmp = `${to}.${system.pid}`
+  io.writeTextFileSync(tmp, JSON.stringify({ compilerOptions: { paths } }))
+  io.renameSync(tmp, to)
 }
 
 // A prerequisite made, and what making it took; `quiet` says only a failure.
@@ -111,7 +114,7 @@ let timed = async <T>(name: string, make: () => Promise<T>, quiet = false) => {
 }
 
 let generated = async (name: string, args: string[], quiet = false) => {
-  let result = await new Deno.Command('deno', {
+  let result = await spawnCommand('deno', {
     args: ['run', '--no-lock', '-A', ...args],
     stdin: 'null',
     stdout: quiet ? 'null' : 'inherit',
@@ -148,8 +151,8 @@ export let readiness = (
 
 let modules = (root: string, timeout: number, quiet: boolean) =>
   timed('npm dependencies', async () => {
-    let cache = Deno.env.get('XDG_CACHE_HOME') ??
-      Deno.env.get('HOME')?.concat('/.cache')
+    let cache = system.env.get('XDG_CACHE_HOME') ??
+      system.env.get('HOME')?.concat('/.cache')
     let changed = cache
       ? await restored(join(cache, 'yak'), root, { timeout, mode: 'copy' })
       : await installed(root, { timeout })
@@ -206,7 +209,7 @@ export let ready = async (
   quiet = false,
   { root = dir, timeout = 600_000, assets: made = true } = {},
 ) => {
-  if (Deno.env.get(READIED) == root) return false
+  if (system.env.get(READIED) == root) return false
   let dependencies = modules(root, timeout, quiet)
   let make = async () => {
     await preparing(root, quiet, () => dependencies).all
@@ -219,7 +222,7 @@ export let ready = async (
     if (result.status == 'rejected') throw result.reason
   }
   let changed = await dependencies
-  if (made) Deno.env.set(READIED, root)
+  if (made) system.env.set(READIED, root)
   return changed
 }
 
@@ -338,9 +341,9 @@ let forwarded = async (
 
 let logTail = (path: string) => {
   try {
-    using file = Deno.openSync(path)
+    using file = io.openSync(path)
     let bytes = new Uint8Array(Math.min(file.statSync().size, 65536))
-    file.seekSync(-bytes.length, Deno.SeekMode.End)
+    file.seekSync(-bytes.length, io.SeekMode.End)
     let size = file.readSync(bytes) ?? 0
     return new TextDecoder().decode(bytes.subarray(0, size))
   } catch {
@@ -395,7 +398,7 @@ export let images = (
   root = dir,
 ): Record<string, Uint8Array> => {
   let path = join(root, config)
-  let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
+  let parsed = parse(io.readTextFileSync(path)) as Containers & {
     env?: Record<string, Containers>
   }
   return imageInputs(
@@ -413,10 +416,10 @@ let imageInputs = (
 ) => {
   let out: Record<string, Uint8Array> = {}
   let add = (file: string) => {
-    out[relative(root, file)] = Deno.readFileSync(file)
+    out[relative(root, file)] = io.readFileSync(file)
   }
   let walk = (at: string) => {
-    for (let entry of Deno.readDirSync(at)) {
+    for (let entry of io.readDirSync(at)) {
       let file = join(at, entry.name)
       if (entry.isDirectory) walk(file)
       else if (entry.isFile) add(file)
@@ -427,7 +430,7 @@ let imageInputs = (
     let file = join(dirname(path), image)
     let stat
     try {
-      stat = Deno.statSync(file)
+      stat = io.statSync(file)
     } catch {
       continue
     }
@@ -598,7 +601,7 @@ export let siblingImages = async (
   wrangler = WRANGLER,
 ) => {
   let path = join(root, config)
-  let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
+  let parsed = parse(io.readTextFileSync(path)) as Containers & {
     env?: Record<string, Containers>
   }
   let refs = new Map<string, string>()
@@ -608,7 +611,7 @@ export let siblingImages = async (
       if (!image) continue
       let dockerfile = join(dirname(path), image)
       try {
-        if (Deno.statSync(dockerfile).isDirectory) {
+        if (io.statSync(dockerfile).isDirectory) {
           dockerfile = join(dockerfile, 'Dockerfile')
         }
       } catch {
@@ -640,18 +643,18 @@ export let siblingImages = async (
     }
   }
   if (!refs.size) return { config, remove: () => {} }
-  let temp = Deno.makeTempFileSync({
+  let temp = io.makeTempFileSync({
     dir: dirname(path),
     prefix: '.images-',
     suffix: '.toml',
   })
   try {
-    Deno.writeTextFileSync(temp, stringify(parsed))
+    io.writeTextFileSync(temp, stringify(parsed))
   } catch (error) {
-    Deno.removeSync(temp)
+    io.removeSync(temp)
     throw error
   }
-  return { config: relative(root, temp), remove: () => Deno.removeSync(temp) }
+  return { config: relative(root, temp), remove: () => io.removeSync(temp) }
 }
 
 type Bundle = { entry: string; output: string }
@@ -662,7 +665,7 @@ type Bundle = { entry: string; output: string }
 export let modelBound = async (
   args: string[],
   read = (args: string[]) =>
-    new Deno.Command('env', {
+    spawnCommand('env', {
       args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...args],
       cwd: dir,
       stdout: 'piped',
@@ -676,7 +679,7 @@ export let modelBound = async (
     args.some((arg) => /^--dry-run(=|$)/.test(arg))
   ) return unchanged
   let model = '../model/wrangler.toml'
-  let name = parse(Deno.readTextFileSync(join(root, model))).name
+  let name = parse(io.readTextFileSync(join(root, model))).name
   if (typeof name != 'string') {
     throw Error('Executor config has no release name')
   }
@@ -699,32 +702,32 @@ export let modelBound = async (
   }
   let at = args.indexOf('-c')
   let path = resolve(root, at >= 0 ? args[at + 1] : 'wrangler.toml')
-  let parsed = parse(Deno.readTextFileSync(path))
+  let parsed = parse(io.readTextFileSync(path))
   let services = Array.isArray(parsed.services) ? parsed.services : []
   parsed.services = [
     ...services.filter((service) => service.binding != 'MODEL'),
     { binding: 'MODEL', service: name },
   ]
-  let config = Deno.makeTempFileSync({
+  let config = io.makeTempFileSync({
     dir: dirname(path),
     prefix: '.model-',
     suffix: '.toml',
   })
   try {
-    Deno.writeTextFileSync(config, stringify(parsed))
+    io.writeTextFileSync(config, stringify(parsed))
   } catch (error) {
-    Deno.removeSync(config)
+    io.removeSync(config)
     throw error
   }
   let bound = [...args]
   if (at >= 0) bound[at + 1] = relative(root, config)
   else bound.push('-c', relative(root, config))
   console.log(`${name}: serving executor bound as MODEL`)
-  return { args: bound, remove: () => Deno.removeSync(config) }
+  return { args: bound, remove: () => io.removeSync(config) }
 }
 
 let bundleEntry = (output: string, meta: string, base: string): Bundle => {
-  let { outputs } = JSON.parse(Deno.readTextFileSync(meta)) as {
+  let { outputs } = JSON.parse(io.readTextFileSync(meta)) as {
     outputs: Record<string, { entryPoint?: string }>
   }
   let entries = Object.entries(outputs).filter(([, output]) =>
@@ -735,7 +738,7 @@ let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   if (!entry.startsWith(output + '/')) {
     throw new Error('Entrypoint is outside its bundle')
   }
-  Deno.removeSync(meta)
+  io.removeSync(meta)
   return { entry, output }
 }
 
@@ -758,7 +761,7 @@ export let direct = (
 // These modules already contain the pin's transforms and source maps.
 let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
   let path = join(root, from)
-  let parsed = parse(Deno.readTextFileSync(path))
+  let parsed = parse(io.readTextFileSync(path))
   if (parsed.assets) {
     direct(parsed, plan(sources(join(dirname(path), 'public'))).names)
   }
@@ -773,16 +776,16 @@ let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
       ...(Array.isArray(parsed.rules) ? parsed.rules : []),
     ],
   })
-  let config = Deno.makeTempFileSync({
+  let config = io.makeTempFileSync({
     dir: dirname(path),
     prefix: '.bundle-',
     suffix: '.toml',
   })
   try {
-    Deno.writeTextFileSync(config, stringify(parsed))
+    io.writeTextFileSync(config, stringify(parsed))
     return config
   } catch (error) {
-    Deno.removeSync(config)
+    io.removeSync(config)
     throw error
   }
 }
@@ -800,14 +803,14 @@ export let bundled = async (
   ) {
     return { args, remove: () => {} }
   }
-  let output = Deno.makeTempDirSync({
+  let output = io.makeTempDirSync({
     dir: join(root, '.wrangler'),
     prefix: 'kernel-',
   })
   let config: string | undefined
   let remove = () => {
-    if (config) Deno.removeSync(config)
-    Deno.removeSync(output, { recursive: true })
+    if (config) io.removeSync(config)
+    io.removeSync(output, { recursive: true })
   }
   try {
     let metaAt = args.findIndex((arg) =>
@@ -857,7 +860,7 @@ export let prepareSibling = async (
   wrangler = WRANGLER,
   root = dir,
   query = (argv: string[]) =>
-    new Deno.Command('env', {
+    spawnCommand('env', {
       args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...argv],
       cwd: root,
       stdout: 'piped',
@@ -869,11 +872,11 @@ export let prepareSibling = async (
   if (args.includes('--dry-run')) {
     return { args, config, root, started, remove: () => {} }
   }
-  let output = Deno.makeTempDirSync({
+  let output = io.makeTempDirSync({
     dir: join(root, '.wrangler'),
     prefix: 'sibling-',
   })
-  let remove = () => Deno.removeSync(output, { recursive: true })
+  let remove = () => io.removeSync(output, { recursive: true })
   let meta = join(output, 'metafile.json')
   try {
     // A dry run with no rollout bundles the Worker and builds no image: the
@@ -903,18 +906,18 @@ export let prepareSibling = async (
     }
     let bundle = bundleEntry(output, meta, dirname(join(root, config)))
     let modules: Record<string, Uint8Array> = {}
-    for (let file of Deno.readDirSync(output)) {
+    for (let file of io.readDirSync(output)) {
       // Wrangler emits these beside the actual multipart upload modules.
       if (
         file.isFile && file.name != 'README.md' && !file.name.endsWith('.map')
       ) {
-        modules[file.name] = Deno.readFileSync(join(output, file.name))
+        modules[file.name] = io.readFileSync(join(output, file.name))
       }
     }
     Object.assign(modules, images(config, root))
     let digest = siblingDigest(
       JSON.stringify({
-        config: Deno.readTextFileSync(join(root, config)),
+        config: io.readTextFileSync(join(root, config)),
         wrangler: WRANGLER,
         // Flags can override config bindings too; the commit annotation alone
         // changes on every push and is not part of the serving code.
@@ -1018,7 +1021,7 @@ export let uploadSibling = async (
     annotated[annotated.indexOf('-c') + 1] = artifact ?? image.config
     result = await run(annotated, true)
   } finally {
-    if (artifact) Deno.removeSync(artifact)
+    if (artifact) io.removeSync(artifact)
     image.remove()
   }
   console.log(
@@ -1038,7 +1041,7 @@ export let PINNED = ['WRANGLER_CI_OVERRIDE_NAME', 'WRANGLER_CI_MATCH_TAG']
 // Every process under `pid`, children before parents. Through pgrep(1):
 // reading /proc is something Deno grants only to --allow-all.
 export let descendants = (pid: number): number[] => {
-  let out = new Deno.Command('pgrep', { args: ['-P', String(pid)] })
+  let out = spawnCommand('pgrep', { args: ['-P', String(pid)] })
     .outputSync()
   let kids = new TextDecoder().decode(out.stdout).split('\n').filter(Boolean)
     .map(Number)
@@ -1091,7 +1094,7 @@ export let superseded = ({ head, tip, changed, live }: Seen): string | null => {
 }
 
 let git = async (root: string, ...args: string[]) => {
-  let r = await new Deno.Command('git', {
+  let r = await spawnCommand('git', {
     args,
     cwd: root,
     stdout: 'piped',
@@ -1288,7 +1291,7 @@ let envs = (args: string[]): string[] =>
  * environment. Anything wrangler will not answer names no commit. */
 let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
   let read = async (args: string[]) => {
-    let r = await new Deno.Command(wrangler[0], {
+    let r = await spawnCommand(wrangler[0], {
       args: [...wrangler.slice(1), ...args, ...env, '--json'],
       cwd: dir,
       stdout: 'piped',
@@ -1322,9 +1325,9 @@ let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
   return named.filter((sha) => sha != null)
 }
 
-if (import.meta.main) {
+if (system.main(import.meta.url)) {
   let started = performance.now()
-  let argv = [...Deno.args]
+  let argv = [...system.args]
   // npm ci pins this executable already. npx adds an npm process and package
   // resolution to every read/upload even when the exact package is installed.
   let executable = join(dir, 'node_modules/.bin/wrangler')
@@ -1340,33 +1343,33 @@ if (import.meta.main) {
   let still = async () => door ? await door.still() : true
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by time.
-    let commit = await new Deno.Command('git', {
+    let commit = await spawnCommand('git', {
       args: ['log', '-1', '--format=%H %s'],
       cwd: dir,
       stdout: 'piped',
       stderr: 'inherit',
     }).output()
-    if (!commit.success) Deno.exit(commit.code)
+    if (!commit.success) system.exit(commit.code)
     argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
   }
-  let children = new Set<Deno.ChildProcess>()
+  let children = new Set<system.ChildProcess>()
   let stopped = new AbortController()
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
   // child is npx, which does not pass a signal to the wrangler it spawned, so
   // the whole subtree is signalled, deepest first. Through kill(1), not
-  // Deno.kill: that needs the unrestricted run permission, and this door
+  // system.kill: that needs the unrestricted run permission, and this door
   // runs with an allowlist (npm, npx, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
-    Deno.addSignalListener(signal, () => {
+    system.addSignalListener(signal, () => {
       stopped.abort()
       let pids = [...children].flatMap((child) => [
         ...descendants(child.pid),
         child.pid,
       ]).map(String)
       if (!pids.length) return
-      new Deno.Command('kill', {
+      spawnCommand('kill', {
         args: ['-s', signal.slice(3), ...pids],
         stderr: 'null',
       }).spawn()
@@ -1384,9 +1387,9 @@ if (import.meta.main) {
         ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
         : wrangler
       let capture = deploying(argv)
-      let log = capture ? Deno.makeTempFileSync({ suffix: '.log' }) : undefined
+      let log = capture ? io.makeTempFileSync({ suffix: '.log' }) : undefined
       try {
-        let child = new Deno.Command(cmd, {
+        let child = spawnCommand(cmd, {
           args: [...args, ...argv],
           cwd: dir,
           ...(log
@@ -1405,15 +1408,15 @@ if (import.meta.main) {
         try {
           let completed = await Promise.allSettled([
             child.status,
-            capture ? forwarded(child.stdout, Deno.stdout) : '',
-            capture ? forwarded(child.stderr, Deno.stderr) : '',
+            capture ? forwarded(child.stdout, system.stdout) : '',
+            capture ? forwarded(child.stderr, system.stderr) : '',
           ])
           for (let result of completed) {
             if (result.status == 'rejected') throw result.reason
           }
           let [status, stdout, stderr] = completed.map((result) =>
             (result as PromiseFulfilledResult<unknown>).value
-          ) as [Deno.CommandStatus, string, string]
+          ) as [system.CommandStatus, string, string]
           return {
             code: status.code,
             output: `${stdout}\n${stderr}`,
@@ -1423,7 +1426,7 @@ if (import.meta.main) {
           children.delete(child)
         }
       } finally {
-        if (log) Deno.removeSync(log)
+        if (log) io.removeSync(log)
       }
     }, { signal: stopped.signal, allowed: still })
   let made = preparing()
@@ -1457,7 +1460,7 @@ if (import.meta.main) {
         let bound = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
           ? { args: bundle.args, remove: () => {} }
           : await modelBound(bundle.args, (args) =>
-            new Deno.Command('env', {
+            spawnCommand('env', {
               args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...args],
               cwd: dir,
               stdout: 'piped',
@@ -1490,5 +1493,5 @@ if (import.meta.main) {
   for (let result of completed) {
     if (result.status == 'rejected') throw result.reason
   }
-  Deno.exit((completed[0] as PromiseFulfilledResult<number>).value)
+  system.exit((completed[0] as PromiseFulfilledResult<number>).value)
 }

@@ -16,6 +16,8 @@
 // The platform's own names are imported, never retyped: `PLATFORM` from the
 // router, `COOKIE` from the token. A drift on either side is a type error
 // rather than a puzzling 401.
+
+import * as systemProcess from '@yaks/process/system'
 import { sleep } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/api/timing'
@@ -30,7 +32,7 @@ import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
-export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM
+export let zone = () => systemProcess.env.get('YAKS_ZONE') ?? PLATFORM
 
 export let apex = (path: string) => `https://${zone()}${path}`
 
@@ -98,7 +100,8 @@ export let renewing = (note: (fresh: string) => unknown) => (told = note)
 // line this process was started with, since these calls go to the apex
 // rather than through the door the flag was parsed for.
 export let timing = {
-  on: Deno.args.includes('--timing') || Deno.env.get('YAKS_TIMING') == '1',
+  on: systemProcess.args.includes('--timing') ||
+    systemProcess.env.get('YAKS_TIMING') == '1',
   say: (line: string) => console.error(line),
 }
 

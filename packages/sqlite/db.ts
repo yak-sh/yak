@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 // The embedded driver itself — @db/sqlite, opened against a library that
 // works. This module is its one door, and it hands out none of it: a caller
 // gets `open(path)`, a {@link Driver} over the database there (./native.ts),
@@ -50,7 +51,7 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
   // A file's directory, made when absent. A name with none (`graph.db`, a
   // `file:` URI such as `file:x?mode=memory`) is SQLite's to resolve.
   let dir = path.startsWith('file:') ? 0 : path.lastIndexOf('/')
-  if (dir > 0) Deno.mkdirSync(path.slice(0, dir), { recursive: true })
+  if (dir > 0) io.mkdirSync(path.slice(0, dir), { recursive: true })
   let db = new Database(path)
   // The busy timeout before anything else: the driver reads the schema as it
   // is built, and a file another connection holds locked (its last checkpoint,

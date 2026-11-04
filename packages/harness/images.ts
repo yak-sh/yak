@@ -1,5 +1,7 @@
 /** Host composition for native generated images: @yaks/blob artifacts in the
  * graph's own byte store. No image bytes enter graph prose. */
+
+import * as systemProcess from '@yaks/process/system'
 import { artifactStore, type Blobs } from '@yaks/blob'
 import type { ImageGeneration, Images } from '@yaks/openai'
 
@@ -18,7 +20,7 @@ export let images = (blobs: Blobs, options: ImageOptions = {}): Images => ({
 export let configuredImages = (
   blobs: Blobs,
   options: ImageOptions | false | undefined,
-  setting = Deno.env.get('HARNESS_IMAGES'),
+  setting = systemProcess.env.get('HARNESS_IMAGES'),
 ): Images | undefined => {
   if (options === false) return undefined
   if (options) return images(blobs, options)

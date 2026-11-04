@@ -1,3 +1,4 @@
+import * as disk from '@yaks/file/io'
 // The implementations of the tools declared with `tool: true` in
 // ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, stop it,
 // wait for it to finish, and read what it has said so far.
@@ -167,10 +168,10 @@ let cleaned = async (graph: Graph, row: Bundle, entries: Bundle[]) => {
   let path = comp(source, 'file')?.path
   if (typeof path != 'string' || !path.endsWith('.out')) return false
   try {
-    await Deno.stat(path)
+    await disk.stat(path)
     return false
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return true
+    if (error instanceof disk.errors.NotFound) return true
     throw error
   }
 }

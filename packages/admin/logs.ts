@@ -1,3 +1,4 @@
+import { freshFetch } from '@yaks/process/http'
 // The owner’s view of yaks.app failures: tail watches live traffic through
 // Wrangler, and errors reads grouped failures through the signed tracker door.
 import type { Route } from '@yaks/api'
@@ -311,7 +312,7 @@ let letters = async (
 export let errors = async (
   since: string | undefined,
   options: Options,
-  { fetch = globalThis.fetch, graph, resolved = false }: {
+  { fetch = freshFetch(), graph, resolved = false }: {
     fetch?: typeof globalThis.fetch
     graph?: Pick<Graph, 'read' | 'vocab'>
     resolved?: boolean

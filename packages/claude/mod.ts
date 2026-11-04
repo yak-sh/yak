@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import { command as processCommand } from '@yaks/process/command'
 import { claudeDoc } from './vocab.ts'
 /**
  * Claude Code as a one-turn @yaks/model implementation. The MCP server only
@@ -88,8 +90,10 @@ export let claude = (opts: Options = {}): Model =>
     }
     req.signal?.throwIfAborted()
     let bridge = offer(req.tools)
-    let cwd = await Deno.makeTempDir({ prefix: 'yak-claude-' })
-    let child: Deno.ChildProcess | undefined
+    let cwd = await io.makeTempDir({ prefix: 'yak-claude-' })
+    let child:
+      | ReturnType<ReturnType<typeof processCommand>['spawn']>
+      | undefined
     let killed = false
     let kill = () => {
       if (child && !killed) {
@@ -110,7 +114,7 @@ export let claude = (opts: Options = {}): Model =>
       req.signal?.throwIfAborted()
       await submitted(req)
       req.signal?.throwIfAborted()
-      child = new Deno.Command(opts.command ?? 'claude', {
+      child = processCommand(opts.command ?? 'claude', {
         args: [
           ...opts.args ?? [],
           '-p',
@@ -249,7 +253,7 @@ export let claude = (opts: Options = {}): Model =>
       return Object.assign(reply, { claudeSession: session })
     } catch (error) {
       kill()
-      if (error instanceof Deno.errors.NotFound) {
+      if (io.isNotFound(error)) {
         throw new ModelError(
           'claude_missing',
           'Install and sign in to Claude Code on the harness host',
@@ -262,7 +266,7 @@ export let claude = (opts: Options = {}): Model =>
       await child?.status
       await stderr
       await bridge.close()
-      await Deno.remove(cwd, { recursive: true })
+      await io.remove(cwd, { recursive: true })
     }
   }, {
     list: () => Promise.resolve(listing()),

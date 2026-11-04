@@ -1,3 +1,4 @@
+import * as systemProcess from '@yaks/process/system'
 import { ShuttingDown } from './shutdown.ts'
 import type { EntrySource } from './detail.ts'
 import type {
@@ -58,7 +59,8 @@ export let remote = async (
     clock?: Clock
   },
 ) => {
-  let { env = Deno.env.get, worker: lent, clock = system, ...config } = options
+  let { env = systemProcess.env.get, worker: lent, clock = system, ...config } =
+    options
   let worker = lent ?? new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },

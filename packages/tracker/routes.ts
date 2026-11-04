@@ -117,9 +117,9 @@ export let read = async (
 
 /** Only bug and bounded trace reads leave the box. */
 export let routes = (
-  _host: unknown,
+  host: { fetch?: typeof fetch },
   options: Options = {},
-  go: typeof fetch = fetch,
+  go: typeof fetch = host.fetch ?? fetch,
 ): Route[] =>
   (['traces', 'trace', 'bugs'] as const).map((path) => ({
     method: 'GET',

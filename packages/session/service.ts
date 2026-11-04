@@ -38,6 +38,8 @@
 // what a session says now never waits behind it. What a person typed and what
 // the model said stay, and so does everything nobody imported.
 
+import * as fs from '@yaks/file/io'
+
 import { sleep } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
@@ -123,7 +125,7 @@ export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
 let meta = (path: string): { call?: string; title?: string } => {
   try {
     let m = JSON.parse(
-      Deno.readTextFileSync(`${path.slice(0, -'.jsonl'.length)}.meta.json`),
+      fs.readTextFileSync(`${path.slice(0, -'.jsonl'.length)}.meta.json`),
     )
     let said = (v: unknown) => typeof v == 'string' && v ? v : undefined
     return { call: said(m?.toolUseId), title: said(m?.description) }
@@ -320,7 +322,7 @@ let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
 
 let stat = (path: string) => {
   try {
-    return Deno.statSync(path)
+    return fs.statSync(path)
   } catch {
     return undefined
   }

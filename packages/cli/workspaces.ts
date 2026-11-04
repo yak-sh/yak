@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 import { importing } from '@yaks/fp/imports'
 // Bind explicitly configured computer transports to existing workspace records.
 // No connector is enabled by the graph server's own launch directory.
@@ -19,8 +20,8 @@ export let workspaceCapabilities = (
     receipts: config.db && config.db != ':memory:'
       ? (config.db.slice(0, config.db.lastIndexOf('/')) || '.') +
         '/workspace-receipts'
-      : (Deno.env.get('TMPDIR') ?? '/tmp') + '/yak-workspace-receipts-' +
-        Deno.uid(),
+      : (system.env.get('TMPDIR') ?? '/tmp') + '/yak-workspace-receipts-' +
+        system.uid(),
   }
   return {
     connect: async (id) => {

@@ -7,9 +7,10 @@
  *
  * ```ts ignore
  * import { fromEnv, responses } from '@yaks/openai'
+ * import { env } from '@yaks/process/system'
  *
  * let model = responses({
- *   credential: () => fromEnv(Deno.env.get)!,
+ *   credential: () => fromEnv(env.get)!,
  * })
  * let reply = await model({
  *   model: 'gpt-6-astra',

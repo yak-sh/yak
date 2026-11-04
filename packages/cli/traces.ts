@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // Box telemetry observes the runtime channel, never the watched database.
 // Selection happens after a root completes; all unselected trees die in memory.
 //
@@ -114,7 +115,7 @@ export let traces = (
       }
       if (options.reportGetStart) options.reportGetStart(stack)
       else {console.error(
-          JSON.stringify({ diagnostic: 'get-start', pid: Deno.pid, stack }),
+          JSON.stringify({ diagnostic: 'get-start', pid: system.pid, stack }),
         )}
     }
     let root = roots.get(event.id) ?? (event.parent && roots.get(event.parent))

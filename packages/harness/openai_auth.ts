@@ -1,6 +1,8 @@
 // OpenAI's credential for this harness: an explicit API key, or the ChatGPT
 // grant in the person's default OpenAI connection. Refresh stays in the vault.
 
+import * as systemProcess from '@yaks/process/system'
+
 import { Refused } from '@yaks/graph/errors'
 import {
   CODEX,
@@ -19,7 +21,7 @@ export type OpenAIAuth = {
 
 export let openaiCredential = (
   h: Pick<Harness, 'g' | 'vault' | 'person'>,
-  env: (name: string) => string | undefined = Deno.env.get,
+  env: (name: string) => string | undefined = systemProcess.env.get,
   signin: SignIns = signins(h),
 ): OpenAIAuth => {
   let credential = async (): Promise<Credential> => {

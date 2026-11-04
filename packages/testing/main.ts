@@ -1,4 +1,6 @@
 #!/usr/bin/env -S deno run -A
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // The runner: every test module and example page it is given, loaded into
 // this one runtime a file at a time, each file's tests run as it loads.
 //
@@ -34,29 +36,29 @@ import { summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
 // Before anything a test could start inherits it.
-Deno.env.delete('DENO_AUDIT_PERMISSIONS')
+system.env.delete('DENO_AUDIT_PERMISSIONS')
 let observation = observe()
 
 let FLAGS = /^--(tag|platform|also|keys|timeout|times)=(.*)$|^--(all|verbose)$/
-let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
+let odd = system.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
-  Deno.exit(2)
+  system.exit(2)
 }
 let flag = (name: string) =>
-  Deno.args.map((a) => a.match(FLAGS)).filter((m) => m?.[1] == name)
+  system.args.map((a) => a.match(FLAGS)).filter((m) => m?.[1] == name)
     .map((m) => m![2])
 let platform = flag('platform').at(-1) ?? ''
 // Every test here carries the platform's tag, so naming it picks them all.
 let tags = flag('tag').flatMap((t) => t.split(','))
   .filter((t) => t && t != platform)
 let timeout = Number(flag('timeout').at(-1) ?? 50_000)
-let all = Deno.args.includes('--all')
-let verbose = Deno.args.includes('--verbose')
-let paths = Deno.args.filter((a) => !a.startsWith('--'))
+let all = system.args.includes('--all')
+let verbose = system.args.includes('--verbose')
+let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
 let started = performance.now()
-let here = (path: string) => new URL(path, `file://${Deno.cwd()}/`).href
+let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 
 // The files given, or found under the paths, and the key of each.
@@ -65,7 +67,7 @@ let { tests: found, pages: shown } = given
   : await find(paths)
 let chosen = given
   ? {
-    keys: new Map(Object.entries(JSON.parse(await Deno.readTextFile(given)))),
+    keys: new Map(Object.entries(JSON.parse(await io.readTextFile(given)))),
     run: [...found, ...shown],
   }
   : await choose([...found, ...shown], {
@@ -75,7 +77,7 @@ let chosen = given
     also: () => ['deno.json', 'deno.jsonc', 'deno.lock', ...flag('also')],
     runner: [
       new URL('./run.ts', import.meta.url).pathname.replace(
-        `${Deno.cwd()}/`,
+        `${system.cwd()}/`,
         '',
       ),
     ],
@@ -138,12 +140,12 @@ let wall = performance.now() - started
 summary(outcomes, wall, { left, planned, loading }, verbose)
 let times = flag('times').at(-1)
 if (times) {
-  await Deno.mkdir(times, { recursive: true })
-  await Deno.writeTextFile(
+  await io.mkdir(times, { recursive: true })
+  await io.writeTextFile(
     `${times}/${platform || 'tests'}.json`,
     JSON.stringify(
       timed(outcomes, { wall, planned, loading, loads, remembered, left }),
     ),
   )
 }
-Deno.exit(outcomes.some((o) => !o.ok) ? 1 : 0)
+system.exit(outcomes.some((o) => !o.ok) ? 1 : 0)

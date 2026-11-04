@@ -1,3 +1,7 @@
+import { connect, isConnectionRefused } from '@yaks/process/socket'
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
 // Bubblewrap sandboxes with one aggregate systemd user scope per sandbox.
 // Only workspace is writable and visible to commands; durable control files
 // stay outside that mount. The supervisor outlives the host that requested it.
@@ -45,10 +49,10 @@ let quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`
 let delay = () => new Promise((go) => setTimeout(go, 10))
 let exists = async (path: string) => {
   try {
-    await Deno.lstat(path)
+    await io.lstat(path)
     return true
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if (!io.isNotFound(e)) throw e
     return false
   }
 }
@@ -69,7 +73,7 @@ let checkLimits = (limits: SandboxLimits) => {
  * Reconstruct this provider with the same data to connect sandboxes or recover
  * command receipts. Release stops the whole scope before deleting its files. */
 export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
-  if (Deno.build.os != 'linux') throw new Error('sandbox: Linux is required')
+  if (system.os != 'linux') throw new Error('sandbox: Linux is required')
   checkLimits(o.limits)
   o = { ...o, limits: { ...o.limits } }
   let root = resolve(o.dir)
@@ -92,7 +96,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
     return { dir, control, socket, unit, workspace: `${dir}/workspace` }
   }
   let systemctl = async (args: string[]) => {
-    let output = await new Deno.Command('/usr/bin/systemctl', {
+    let output = await processCommand('/usr/bin/systemctl', {
       args: ['--user', ...args],
       stdout: 'piped',
       stderr: 'piped',
@@ -108,7 +112,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
     request: Record<string, unknown>,
   ): Promise<T> => {
     let { socket } = location(ref)
-    let conn = await Deno.connect({ transport: 'unix', path: socket })
+    let conn = await connect({ transport: 'unix', path: socket })
     let timeout = setTimeout(() => {
       try {
         conn.close()
@@ -176,11 +180,11 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
   // A filesystem lock, not a module Map: request/wake/release by independent
   // host processes must never start two supervisors for the same machine.
   let locked = async <T>(ref: SandboxRef, fn: () => Promise<T>): Promise<T> => {
-    await Deno.mkdir(root, { recursive: true, mode: 0o700 })
+    await io.mkdir(root, { recursive: true, mode: 0o700 })
     // flock runs in its own process: Deno's POSIX record locks are shared
     // by a process and would not serialize concurrent calls in one host.
     // EOF releases this lock even when the requesting host crashes.
-    let lock = new Deno.Command('/usr/bin/flock', {
+    let lock = processCommand('/usr/bin/flock', {
       args: [
         '--exclusive',
         `${root}/.${ref.id}.lock`,
@@ -206,7 +210,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
   }
   let configuration = async (ref: SandboxRef) => {
     let { control } = location(ref)
-    let config = JSON.parse(await Deno.readTextFile(`${control}/config.json`))
+    let config = JSON.parse(await io.readTextFile(`${control}/config.json`))
     if (
       JSON.stringify(config.limits) != JSON.stringify(o.limits) ||
       config.network != !!o.network
@@ -224,8 +228,8 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
       return
     } catch (e) {
       if (
-        !(e instanceof Deno.errors.NotFound ||
-          e instanceof Deno.errors.ConnectionRefused)
+        !(io.isNotFound(e) ||
+          isConnectionRefused(e))
       ) {
         throw e
       }
@@ -233,7 +237,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
     // Retire the previous scope before replacing a supervisor: stale PIDs
     // cannot be trusted, and commands must not outlive a lost control socket.
     await stop(ref)
-    if (await exists(socket)) await Deno.remove(socket)
+    if (await exists(socket)) await io.remove(socket)
     let argv = [
       '/usr/bin/systemd-run',
       '--user',
@@ -260,7 +264,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
     ]
     // The launcher's redirections must happen before backgrounding. Nothing
     // inherits the calling host's output pipes or lifetime after it exits.
-    let launcher = await new Deno.Command('/bin/sh', {
+    let launcher = await processCommand('/bin/sh', {
       args: [
         '-c',
         `${argv.map(quote).join(' ')} </dev/null >>${
@@ -280,15 +284,15 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
         return
       } catch (e) {
         if (
-          !(e instanceof Deno.errors.NotFound ||
-            e instanceof Deno.errors.ConnectionRefused)
+          !(io.isNotFound(e) ||
+            isConnectionRefused(e))
         ) throw e
       }
       await delay()
     }
     await stop(ref)
     throw new Error(
-      `sandbox: supervisor failed to start: ${await Deno.readTextFile(
+      `sandbox: supervisor failed to start: ${await io.readTextFile(
         `${control}/runner.log`,
       )}`,
     )
@@ -359,14 +363,14 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
           throw new Error('sandbox: sandbox was disposed; request a new id')
         }
         if (!await exists(dir)) {
-          let staging = await Deno.makeTempDir({
+          let staging = await io.makeTempDir({
             dir: root,
             prefix: `.${request.id}-`,
           })
           try {
             let stagedControl = `${staging}/control`
-            await Deno.mkdir(stagedControl, { mode: 0o700 })
-            await Deno.mkdir(`${staging}/workspace`, { mode: 0o700 })
+            await io.mkdir(stagedControl, { mode: 0o700 })
+            await io.mkdir(`${staging}/workspace`, { mode: 0o700 })
             let bwrap = [
               '/usr/bin/bwrap',
               '--unshare-all',
@@ -400,14 +404,14 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
               'HOME',
               '/workspace',
             )
-            await Deno.writeTextFile(
+            await io.writeTextFile(
               `${stagedControl}/runner.py`,
               sandboxRunner,
               {
                 mode: 0o600,
               },
             )
-            await Deno.writeTextFile(
+            await io.writeTextFile(
               `${stagedControl}/config.json`,
               JSON.stringify({
                 limits: o.limits,
@@ -417,10 +421,10 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
               }),
               { mode: 0o600 },
             )
-            await Deno.rename(staging, dir)
+            await io.rename(staging, dir)
           } finally {
             if (await exists(staging)) {
-              await Deno.remove(staging, { recursive: true })
+              await io.remove(staging, { recursive: true })
             }
           }
         }
@@ -434,7 +438,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
           if (request.from != null) {
             await o.prepare!(request.from, lent.workspace, lent.root!)
           }
-          await Deno.writeTextFile(`${control}/ready`, '', { mode: 0o600 })
+          await io.writeTextFile(`${control}/ready`, '', { mode: 0o600 })
         }
         return lent
       })
@@ -458,11 +462,11 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
       await locked(ref, async () => {
         // Keep the tombstone outside the destroyed directory. A crash during
         // stop/remove may be retried, but can never reprovision this identity.
-        await Deno.writeTextFile(`${root}/.${ref.id}.released`, '', {
+        await io.writeTextFile(`${root}/.${ref.id}.released`, '', {
           mode: 0o600,
         })
         await stop(ref)
-        if (await exists(dir)) await Deno.remove(dir, { recursive: true })
+        if (await exists(dir)) await io.remove(dir, { recursive: true })
       })
     },
     export: async function* (ref, paths) {

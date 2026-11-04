@@ -1,5 +1,8 @@
 // Platform operations run as the selected yaks.app connection. Without --as,
 // connections computes the person's own account, else the oldest sign-in.
+
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
 import { checkout } from './checkout.ts'
 import { basename, dirname } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -398,7 +401,7 @@ export let runs = (
       let file = await storeUpload(
         at.bearer,
         where,
-        await Deno.readFile(path),
+        await fs.readFile(path),
         mime,
         name,
       )
@@ -420,11 +423,11 @@ export let runs = (
       let known = await versions(
         host.config.db && host.config.db != ':memory:'
           ? dirname(host.config.db)
-          : `${Deno.env.get('HOME')}/.yak`,
+          : `${systemProcess.env.get('HOME')}/.yak`,
         JSON.stringify([
           zone(),
           at.address,
-          await Deno.realPath(dir),
+          await fs.realPath(dir),
           to.space,
           to.app,
         ]),

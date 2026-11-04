@@ -1,3 +1,9 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
+import {
+  type ChildProcess,
+  command as launchCommand,
+} from '@yaks/process/command'
 // A long-lived command pins its source tree. Deno's resolver is fixed when a
 // process starts, so deferred imports must never read a checkout that can land.
 import { wind } from '@yaks/process/wind'
@@ -19,15 +25,15 @@ let launcherPid: number | undefined
 
 /** The process a caller owns: its validated runtime launcher, or itself when
  * work() was imported directly rather than launched through the CLI. */
-export let readinessPid = (): number => launcherPid ?? Deno.pid
+export let readinessPid = (): number => launcherPid ?? system.pid
 
 /** Runtime metadata belongs only to code loaded from that runtime's tree,
  * not to another checkout invoked with an inherited environment. */
 export let runtimeRoot = (): boolean =>
-  Deno.env.get('YAK_RUNTIME_ROOT') == ROOT.href.replace(/\/$/, '')
+  system.env.get('YAK_RUNTIME_ROOT') == ROOT.href.replace(/\/$/, '')
 
 let git = async (root: string, ...args: string[]) => {
-  let result = await new Deno.Command('git', {
+  let result = await launchCommand('git', {
     args,
     cwd: root,
     stdout: 'piped',
@@ -42,7 +48,7 @@ let feed = async (
   bytes: Uint8Array,
   cwd?: string,
 ) => {
-  let child = new Deno.Command(command, {
+  let child = launchCommand(command, {
     args,
     cwd,
     stdin: 'piped',
@@ -97,7 +103,7 @@ let escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * When processes can't be listed, every entry counts as live. */
 let live = async (cache: string, names: string[]): Promise<Set<string>> => {
   try {
-    let { stdout } = await new Deno.Command('ps', {
+    let { stdout } = await launchCommand('ps', {
       args: ['-axww', '-o', 'command='],
       stdout: 'piped',
       stderr: 'null',
@@ -120,7 +126,7 @@ export let snapshot = async (
   if (runtimeRoot()) {
     return {
       root,
-      commit: Deno.env.get('YAK_RUNTIME_COMMIT')!,
+      commit: system.env.get('YAK_RUNTIME_COMMIT')!,
       release: () => {},
     }
   }
@@ -146,8 +152,8 @@ export let snapshot = async (
   let files = await Promise.all(
     untracked.sort().map(async (name) => ({
       name,
-      bytes: await Deno.readFile(`${root}/${name}`),
-      mode: (await Deno.stat(`${root}/${name}`)).mode,
+      bytes: await disk.readFile(`${root}/${name}`),
+      mode: (await disk.stat(`${root}/${name}`)).mode,
     })),
   )
   let hash = await digest(new TextEncoder().encode(JSON.stringify([
@@ -161,12 +167,12 @@ export let snapshot = async (
       ) => [name, mode, await digest(bytes)]),
     ),
   ])))
-  let cache = Deno.env.get('YAK_RUNTIME_CACHE') ??
+  let cache = system.env.get('YAK_RUNTIME_CACHE') ??
     `${
-      Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
+      system.env.get('XDG_CACHE_HOME') ?? `${system.env.get('HOME')}/.cache`
     }/yak/runtime`
-  await Deno.mkdir(cache, { recursive: true })
-  let lock = await Deno.open(`${cache}/.lock`, { create: true, write: true })
+  await disk.mkdir(cache, { recursive: true })
+  let lock = await disk.open(`${cache}/.lock`, { create: true, write: true })
   await lock.lock(true)
   let held = true
   let release = () => {
@@ -175,9 +181,9 @@ export let snapshot = async (
   }
   try {
     let entries = []
-    for await (let { name } of Deno.readDir(cache)) {
+    for await (let { name } of disk.readDir(cache)) {
       if (name == '.lock') continue
-      let mark = await Deno.readTextFile(`${cache}/${name}/.hash`)
+      let mark = await disk.readTextFile(`${cache}/${name}/.hash`)
         .catch(() => undefined)
       entries.push({ name, hash: mark })
     }
@@ -188,7 +194,7 @@ export let snapshot = async (
     )
     let target = `${cache}/${pick.name}`
     for (let name of pick.prune) {
-      await Deno.remove(`${cache}/${name}`, { recursive: true })
+      await disk.remove(`${cache}/${name}`, { recursive: true })
     }
     if (pick.fresh) await build({ root, commit, patch, files, target, hash })
     return { root: target, commit, release }
@@ -208,34 +214,34 @@ let build = async ({ root, commit, patch, files, target, hash }: {
   target: string
   hash: string
 }) => {
-  await Deno.remove(target, { recursive: true }).catch((error) => {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
+  await disk.remove(target, { recursive: true }).catch((error) => {
+    if (!(error instanceof disk.errors.NotFound)) throw error
   })
-  await Deno.mkdir(target)
+  await disk.mkdir(target)
   await feed('tar', ['-x', '-C', target], await git(root, 'archive', commit))
   if (patch.length) await feed('git', ['apply', '--binary', '-'], patch, target)
   for (let { name, bytes, mode } of files) {
     let to = `${target}/${name}`
-    await Deno.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
-    await Deno.writeFile(to, bytes, { mode: mode ?? undefined })
+    await disk.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
+    await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
   // Absolute source imports from a file plugin or provider follow the same
   // tree, including imports made by modules outside the source checkout.
-  let config = JSON.parse(await Deno.readTextFile(`${target}/deno.json`))
+  let config = JSON.parse(await disk.readTextFile(`${target}/deno.json`))
   config.imports = {
     ...config.imports,
     [new URL(`file://${root}/`).href]: new URL(`file://${target}/`).href,
   }
-  await Deno.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
-  await Deno.writeTextFile(`${target}/.hash`, hash)
+  await disk.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
+  await disk.writeTextFile(`${target}/.hash`, hash)
 }
 
 /** A file plugin inside the checkout follows the runtime's private tree too.
  * Paths outside it, including the graph's database, keep their own identity. */
 export let runtimePath = (
   spec: string,
-  from = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_FROM') : undefined,
-  to = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_ROOT') : undefined,
+  from = runtimeRoot() ? system.env.get('YAK_RUNTIME_FROM') : undefined,
+  to = runtimeRoot() ? system.env.get('YAK_RUNTIME_ROOT') : undefined,
 ): string =>
   from && to && spec.startsWith(from + '/')
     ? to + spec.slice(from.length)
@@ -249,10 +255,10 @@ export let runtimePath = (
 export let runtimeSource = (
   url: string,
   from: string | undefined = runtimeRoot()
-    ? Deno.env.get('YAK_RUNTIME_FROM')
+    ? system.env.get('YAK_RUNTIME_FROM')
     : undefined,
   to: string | undefined = runtimeRoot()
-    ? Deno.env.get('YAK_RUNTIME_ROOT')
+    ? system.env.get('YAK_RUNTIME_ROOT')
     : undefined,
 ): string =>
   from && to && url.startsWith(to + '/') ? from + url.slice(to.length) : url
@@ -260,20 +266,21 @@ export let runtimeSource = (
 /** Stack traces keep the checkout's source addresses for the code catalog. */
 export let runtimeStack = (
   stack: string,
-  from = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_FROM') : undefined,
-  to = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_ROOT') : undefined,
+  from = runtimeRoot() ? system.env.get('YAK_RUNTIME_FROM') : undefined,
+  to = runtimeRoot() ? system.env.get('YAK_RUNTIME_ROOT') : undefined,
 ): string => from && to ? stack.replaceAll(to + '/', from + '/') : stack
 
-/// alive(Deno.pid) -> true
+/// import { pid } from '@yaks/process/system'
+/// alive(pid) -> true
 /// alive(1) -> true
 /// alive(2 ** 31 - 1) -> false
 /** Whether a pid names a process: one this user may not signal still does. */
 export let alive = (pid: number): boolean => {
   try {
-    Deno.kill(pid, 0)
+    system.kill(pid, 0)
     return true
   } catch (error) {
-    return !(error instanceof Deno.errors.NotFound)
+    return !(error instanceof disk.errors.NotFound)
   }
 }
 
@@ -316,18 +323,18 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
   let root = fileURLToPath(ROOT).replace(/\/$/, '')
   let here = ROOT.href.replace(/\/$/, '')
   let privateTree = runtimeRoot()
-  if (privateTree && Deno.env.get('YAK_RUNTIME_PINNED') == '1') {
+  if (privateTree && system.env.get('YAK_RUNTIME_PINNED') == '1') {
     // Consume the launch token: an independent CLI invocation must own its
     // child, even if it inherits this process's environment and sources.
-    Deno.env.delete('YAK_RUNTIME_PINNED')
-    let launcher = Number(Deno.env.get('YAK_LAUNCH_PID'))
-    if (launcher > 0 && launcher == Deno.ppid) launcherPid = launcher
+    system.env.delete('YAK_RUNTIME_PINNED')
+    let launcher = Number(system.env.get('YAK_LAUNCH_PID'))
+    if (launcher > 0 && launcher == system.ppid) launcherPid = launcher
     // The tie holds from when it was made: a launcher gone before then left
     // this child to the reaper, so it ends now as the tie would have ended it.
     else if (launcher > 0 && !alive(launcher)) return 137
     return
   }
-  let child: Deno.ChildProcess | undefined
+  let child: ChildProcess | undefined
   let finished = Promise.withResolvers<void>()
   let stopped = wind.draining
   let stop = () => {
@@ -335,7 +342,7 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     try {
       child?.kill('SIGTERM')
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!(error instanceof disk.errors.NotFound)) throw error
     }
     return finished.promise
   }
@@ -347,7 +354,7 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     if (stopped) return 143
     let url = new URL(`file://${dir}`).href
     let [command, ...args] = tethered([
-      Deno.execPath(),
+      system.execPath(),
       'run',
       // Deno's own lines as a fresh tree fetches its modules say nothing to
       // whoever started the command; its errors print all the same.
@@ -356,24 +363,24 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       // TODO: deno.json's "no-legacy-abort" says this; Deno 2.9.1 ignores it
       // there (./install.ts).
       '--unstable-no-legacy-abort',
-      ...Deno.env.get('YAK_WORK_INSPECT') && argv.includes('work')
-        ? [inspector(Deno.env.get('YAK_WORK_INSPECT')!)]
+      ...system.env.get('YAK_WORK_INSPECT') && argv.includes('work')
+        ? [inspector(system.env.get('YAK_WORK_INSPECT')!)]
         : [],
       '--config',
       `${dir}/deno.json`,
       `${dir}/packages/cli/yak.ts`,
       ...argv,
     ])
-    child = new Deno.Command(command, {
+    child = launchCommand(command, {
       args,
       env: {
         YAK_RUNTIME_FROM: privateTree
-          ? Deno.env.get('YAK_RUNTIME_FROM')!
+          ? system.env.get('YAK_RUNTIME_FROM')!
           : here,
         YAK_RUNTIME_ROOT: url,
         YAK_RUNTIME_COMMIT: commit,
         YAK_RUNTIME_PINNED: '1',
-        YAK_LAUNCH_PID: String(Deno.pid),
+        YAK_LAUNCH_PID: String(system.pid),
       },
       stdin: 'inherit',
       stdout: 'inherit',

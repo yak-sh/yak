@@ -49,6 +49,8 @@ export type MigrationMonitor = {
  * a `runs` factory is asked for its tools before there is a runner to run
  * them. */
 export interface Host {
+  /** HTTP transport owned by this host; portable callers use standard fetch. */
+  fetch?: typeof fetch
   /** Already-observed composition metadata; never imports a lazy facet. */
   anatomy: () => Anatomy
   /** Already-loaded metadata only; never triggers an import or a factory. */

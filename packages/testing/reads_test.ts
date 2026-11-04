@@ -1,3 +1,4 @@
+import { readFile } from '@yaks/file/io'
 import { importing } from '@yaks/fp/imports'
 import { equal, test, throws } from './mod.ts'
 import { observe } from './reads.ts'
@@ -15,7 +16,7 @@ let contents = Deno.readTextFileSync(new URL(`file://${fixture}`))
 let missing = `${dir}/missing`
 let error = await throws(() => Deno.readTextFileSync(missing))
 observed.mark('two_test.ts')
-await Deno.readFile(fixture)
+await readFile(fixture)
 let reads = observed.reads()
 observed.close()
 

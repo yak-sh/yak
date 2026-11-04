@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // A command line authorizes one connection in one process. The return URL is
 // read with terminal echo off, never passed as a tool argument or graph data.
 
@@ -62,26 +63,26 @@ export let readHidden = async (
 
 let hidden = async (): Promise<string> => {
   let bytes = new Uint8Array(1024)
-  let raw = Deno.stdin.isTerminal()
+  let raw = system.stdin.isTerminal()
   if (raw) {
-    Deno.stdin.setRaw(true)
-    Deno.stderr.writeSync(new TextEncoder().encode('\x1b[?2004h'))
+    system.stdin.setRaw(true)
+    system.stderr.writeSync(new TextEncoder().encode('\x1b[?2004h'))
   }
   try {
     return await readHidden(
       async () => {
-        let n = await Deno.stdin.read(bytes)
+        let n = await system.stdin.read(bytes)
         return n == null ? null : bytes.subarray(0, n)
       },
       (shown) =>
-        Deno.stderr.writeSync(
+        system.stderr.writeSync(
           new TextEncoder().encode(shown ? '****' : '\b\b\b\b    \b\b\b\b'),
         ),
     )
   } finally {
     if (raw) {
-      Deno.stderr.writeSync(new TextEncoder().encode('\x1b[?2004l\n'))
-      Deno.stdin.setRaw(false)
+      system.stderr.writeSync(new TextEncoder().encode('\x1b[?2004l\n'))
+      system.stdin.setRaw(false)
     }
   }
 }

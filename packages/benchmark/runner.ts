@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 /** Run workloads sequentially, persist JSON before reporting, and accept one
  * suite's baseline only on request. External collectors use the same ratchet
  * and reporting path as timed callbacks. */
@@ -35,17 +37,17 @@ export type Files = {
 }
 /** An interrupted write never leaves a partial result or baseline. */
 export let files: Files = {
-  read: (path) => Deno.readTextFile(path),
+  read: (path) => io.readTextFile(path),
   write: async (path, value) => {
     let tmp = `${path}.${crypto.randomUUID()}.tmp`
     try {
-      await Deno.writeTextFile(tmp, JSON.stringify(value, null, 2) + '\n')
-      await Deno.rename(tmp, path)
+      await io.writeTextFile(tmp, JSON.stringify(value, null, 2) + '\n')
+      await io.rename(tmp, path)
     } catch (error) {
       try {
-        await Deno.remove(tmp)
+        await io.remove(tmp)
       } catch (cleanup) {
-        if (!(cleanup instanceof Deno.errors.NotFound)) {
+        if (!io.isNotFound(cleanup)) {
           console.error('Benchmark temporary file cleanup failed', cleanup)
         }
       }
@@ -79,6 +81,7 @@ export type Options = {
   /** A box-wide flock, held for each round and publication, so queued suites
    * can measure between rounds. Compatible with shell flock; never unlink it. */
   lock?: string
+  open?: typeof io.open
   /** Scoped observations may measure only part of a suite, including new work.
    * Unbanked measurements are reported as measured; acceptance retains the
    * other workloads in the suite's baseline. Exact coverage is the default. */
@@ -97,7 +100,7 @@ export let run = async (
 ): Promise<Run> => {
   try {
     if (!options.lock) return await execute(suite, options)
-    using lock = await Deno.open(options.lock, {
+    using lock = await (options.open ?? io.open)(options.lock, {
       create: true,
       read: true,
       write: true,
@@ -106,7 +109,7 @@ export let run = async (
       await lock.lock(true)
       try {
         await lock.truncate(0)
-        await lock.write(new TextEncoder().encode(`${Deno.pid}\n`))
+        await lock.write(new TextEncoder().encode(`${system.pid}\n`))
         return await work()
       } finally {
         await lock.unlock()
@@ -153,14 +156,14 @@ let execute = async (
   if (options.baseline && !options.files) {
     try {
       let [output, base] = await Promise.all([
-        Deno.realPath(options.output),
-        Deno.realPath(options.baseline),
+        io.realPath(options.output),
+        io.realPath(options.baseline),
       ])
       if (output == base) {
         throw new Error('Result and baseline need separate paths')
       }
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!io.isNotFound(error)) throw error
     }
   }
   if (mode != 'run' && !options.baseline) {
@@ -181,7 +184,7 @@ let execute = async (
       try {
         base = JSON.parse(await store.read(options.baseline!))
       } catch (error) {
-        if (mode == 'check' || !(error instanceof Deno.errors.NotFound)) {
+        if (mode == 'check' || !io.isNotFound(error)) {
           throw error
         }
       }

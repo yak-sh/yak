@@ -1,5 +1,7 @@
 /** Harness graphs, runners and workspace fixtures that stay in process. */
 
+import * as fs from '@yaks/file/io'
+
 import { type Runner, running } from '@yaks/session'
 import { compose, type Config } from '@yaks/cli/host'
 import { install } from '@yaks/connections'
@@ -131,24 +133,24 @@ export let attachedWorkspace = async (h: Pick<Harness, 'g'>, root: string) => {
     kill: () => Promise.resolve(),
     read: (path) =>
       inside(path)
-        ? Deno.readTextFile(path)
+        ? fs.readTextFile(path)
         : Promise.reject(new Error('Outside fixture workspace')),
     write: (path, body) =>
       inside(path)
-        ? Deno.writeTextFile(path, body)
+        ? fs.writeTextFile(path, body)
         : Promise.reject(new Error('Outside fixture workspace')),
     stat: (paths) =>
       Promise.all(paths.map(async (path) => {
         if (!inside(path)) return { kind: 'missing' as const }
         try {
-          let info = await Deno.stat(path)
+          let info = await fs.stat(path)
           return {
             kind: info.isDirectory ? 'directory' as const : 'file' as const,
-            canonical: await Deno.realPath(path),
+            canonical: await fs.realPath(path),
           }
         } catch (error) {
-          if (!(error instanceof Deno.errors.NotFound)) throw error
-          let link = await Deno.lstat(path).catch(() => undefined)
+          if (!fs.isNotFound(error)) throw error
+          let link = await fs.lstat(path).catch(() => undefined)
           return {
             kind: link?.isSymlink ? 'dangling' as const : 'missing' as const,
           }

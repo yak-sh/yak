@@ -2,6 +2,8 @@
 // pipe backpressure; no expanded private file is kept, and EOF is successful
 // only once the decoder has closed cleanly.
 
+import { command as processCommand } from '@yaks/process/command'
+
 export type Chunks = {
   read: () => Promise<string | undefined>
   close: () => Promise<void>
@@ -9,7 +11,7 @@ export type Chunks = {
 }
 
 export let archive = (path: string, signal?: AbortSignal): Chunks => {
-  let child = new Deno.Command('zstd', {
+  let child = processCommand('zstd', {
     args: ['-dcq', '--', path],
     stdout: 'piped',
     stderr: 'piped',

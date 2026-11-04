@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 /** The terminal door installs its DOM and history before loading Browse's
  * one App; its registry, domain host and writes are the browser app's. */
 import { install, quit, run, Scroll, useKeys } from '@yaks/tui'
@@ -18,8 +20,8 @@ export let open = async (url: string, opts: {
 } = {}): Promise<void> => {
   let screen = install()
   let port = terminalHistory({ path: '/', state: null })
-  let state = Deno.env.get('TASKS_TUI_STATE') ??
-    `${Deno.env.get('HOME')}/.yak/browse-terminal.json`
+  let state = system.env.get('TASKS_TUI_STATE') ??
+    `${system.env.get('HOME')}/.yak/browse-terminal.json`
   let go = opts.wire?.fetch ?? fetch
   let at = new URL(url)
   let vocab = await go(
@@ -81,7 +83,7 @@ export let open = async (url: string, opts: {
     h(Md, { text, repo: repo ?? undefined, inline })
   )
   try {
-    port.restore(JSON.parse(Deno.readTextFileSync(state)))
+    port.restore(JSON.parse(io.readTextFileSync(state)))
   } catch { /* first run */ }
   if (opts.what || opts.inspect) {
     let { start } = await import('./terminal-route.ts')
@@ -92,7 +94,7 @@ export let open = async (url: string, opts: {
   }
   bindHistory(port)
   let unlisten = port.listen(() =>
-    Deno.writeTextFileSync(state, JSON.stringify(port.snapshot()))
+    io.writeTextFileSync(state, JSON.stringify(port.snapshot()))
   )
   await live.boot()
   void lone()

@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // The tests' one sanctioned wait. A test never sleeps a fixed span: it yields
 // with `tick` and waits on a fact with `until`, both deterministic, so nothing
 // pads for a settle that a loaded box would stretch past the pad. Its timeout
@@ -21,12 +22,9 @@ export type Wait = {
 }
 
 // The clock `until` keeps unless told: this runtime's own time and that of
-// every process it started, and the runtime's timers. Without Deno (a page, a
-// Worker) its time is the wall clock.
+// every process it started, and the runtime's timers.
 let mine = (): Pick<Clock, 'now' | 'after'> => ({
-  now: typeof Deno == 'undefined'
-    ? () => Date.now()
-    : own(Deno.pid, { time: () => Date.now() }),
+  now: own(system.pid, { time: () => Date.now() }),
   after: (ms, callback) => {
     let timer = setTimeout(callback, ms)
     return () => clearTimeout(timer)

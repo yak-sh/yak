@@ -10,6 +10,8 @@
 // Ctrl-C waits for the worker to finish what it admitted, a second forces it
 // (@yaks/tui `useHold`).
 
+import * as systemProcess from '@yaks/process/system'
+
 import { h } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -34,7 +36,7 @@ let boot = async (
 ): Promise<Up> => {
   let config = read(path)
   let drafts = await openDrafts(dbOf(config))
-  let backend = await remote({ cwd: Deno.cwd(), config }).catch(
+  let backend = await remote({ cwd: systemProcess.cwd(), config }).catch(
     async (error) => {
       await drafts.close()
       throw error

@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // Capture controls live beside the watched database, not inside it. Idle work
 // consults memory only; an unreferenced timer refreshes it between operations.
 import type { Command } from './run.ts'
@@ -61,21 +63,21 @@ let decoded = (text: string): State => {
  * Opening never writes. Only arming or consuming an armed capture writes, and
  * an advisory lock serializes those changes across independent box processes.
  * Another process's arming is noticed within `every` ms. */
-export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
+export let traceControl = (db: string, pid = system.pid, every = 250) => {
   let memory = db == ':memory:'
-  let path = new URL(`${db}.trace.json`, `file://${Deno.cwd()}/`).pathname
+  let path = new URL(`${db}.trace.json`, `file://${system.cwd()}/`).pathname
   let directory = path.slice(0, path.lastIndexOf('/')) || '.'
   let state = empty()
   let closed = false
-  let timer: ReturnType<typeof setInterval> | undefined
+  let timer: ReturnType<typeof system.setInterval> | undefined
   let signature: string | undefined
   let changing = false
   let read = (): State => {
     if (memory) return state
     try {
-      return decoded(Deno.readTextFileSync(path))
+      return decoded(disk.readTextFileSync(path))
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) return empty()
+      if (error instanceof disk.errors.NotFound) return empty()
       throw error
     }
   }
@@ -92,7 +94,7 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
   // that can interfere with the host's HTTP drain in Deno.
   let fingerprint = () => {
     try {
-      let file = Deno.statSync(path)
+      let file = disk.statSync(path)
       return JSON.stringify([file.mtime?.getTime(), file.size, file.ino])
     } catch {
       return undefined
@@ -101,7 +103,7 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
   signature = fingerprint()
   refresh()
   if (!memory) {
-    timer = setInterval(() => {
+    timer = system.setInterval(() => {
       if (changing) return
       let next = fingerprint()
       if (next !== signature) {
@@ -109,7 +111,7 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
         refresh()
       }
     }, every)
-    Deno.unrefTimer(timer)
+    system.unrefTimer(timer)
   }
   let rate = () => state.processes[String(pid)]?.rate ?? state.rate
   let armed = () =>
@@ -119,8 +121,8 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
     if (memory) return change()
     return await serial(path, async () => {
       if (closed) throw new Error('trace control is closed')
-      await Deno.mkdir(directory, { recursive: true })
-      let file = await Deno.open(`${path}.lock`, { create: true, write: true })
+      await disk.mkdir(directory, { recursive: true })
+      let file = await disk.open(`${path}.lock`, { create: true, write: true })
       try {
         await file.lock(true)
         if (closed) throw new Error('trace control is closed')
@@ -132,12 +134,12 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
         if (before == after) return result
         let temporary = `${path}.${crypto.randomUUID()}.tmp`
         try {
-          await Deno.writeTextFile(temporary, after + '\n', {
+          await disk.writeTextFile(temporary, after + '\n', {
             mode: 0o600,
           })
-          await Deno.rename(temporary, path)
+          await disk.rename(temporary, path)
         } finally {
-          await Deno.remove(temporary).catch(() => {})
+          await disk.remove(temporary).catch(() => {})
         }
         signature = fingerprint()
         return result
@@ -178,7 +180,7 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
     },
     close: () => {
       closed = true
-      if (timer != null) clearInterval(timer)
+      if (timer != null) system.clearInterval(timer)
     },
   }
 }

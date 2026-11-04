@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
 // Landing a branch: the plain Git operation, and the guard that keeps a rebase
 // from quietly reverting the base. It reads nothing from a graph — the
 // checkout you are standing in and `git worktree list` supply every
@@ -81,7 +83,7 @@ let execute = async (
   cwd: string,
 ): Promise<Ran> => {
   try {
-    let out = await new Deno.Command(command, {
+    let out = await processCommand(command, {
       args,
       cwd,
       env: quiet,
@@ -108,7 +110,7 @@ let execute = async (
 export let run: Run = (args, cwd) => execute('git', args, cwd)
 
 let format: Run = (files, cwd) =>
-  execute(Deno.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
+  execute(system.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
 
 /** Landed carries the merged commit sha and the shared checkout's path, so
  * the caller can clean up whatever the merge left behind. */
@@ -317,7 +319,7 @@ let regular = (raw: string) => {
 export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   let command = ops.run ?? run
   let write = ops.write ?? defaultWrite
-  let cwd = ops.cwd ?? Deno.cwd()
+  let cwd = ops.cwd ?? system.cwd()
   let git = async (at: string, args: string[], show = true) => {
     let r = await command(args, at)
     if (show) {

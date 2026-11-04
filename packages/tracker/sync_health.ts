@@ -8,7 +8,7 @@
 // is independent of remote delivery. They must never enter their own outbox.
 import type { Graph } from '@yaks/graph'
 import { ingest } from './intake.ts'
-import { coalesce, type Coalesced, report } from './report.ts'
+import { coalesce, type Coalesced, report, type WindowClock } from './report.ts'
 import { type Outage, outage, type Timer } from './outage.ts'
 
 export type Direction = 'delivery' | 'standing'
@@ -47,8 +47,11 @@ export let syncing = (
 
 /** Sync failures admitted to `graph` itself, a flood of one coalesced
  * (./report.ts `coalesce`); `close` sends the repeats a window holds. */
-export let syncNotice = (graph: Graph): Notice & Pick<Coalesced, 'close'> => {
-  let sink = coalesce((rows) => ingest(graph, rows))
+export let syncNotice = (
+  graph: Graph,
+  clock?: WindowClock,
+): Notice & Pick<Coalesced, 'close'> => {
+  let sink = coalesce((rows) => ingest(graph, rows), { clock })
   return Object.assign(
     (error: Error, direction: Direction) =>
       report(error, {

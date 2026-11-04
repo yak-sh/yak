@@ -14,6 +14,8 @@
 // over once it has been quiet and holds nothing, a day if its turn is
 // unfinished. Anything new said to it clears the mark (./reopen.ts).
 
+import * as fs from '@yaks/file/io'
+
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { absolute } from '@yaks/file/local'
@@ -41,18 +43,18 @@ export let runningSessions = async (
 ): Promise<Set<string> | undefined> => {
   let names: string[]
   try {
-    names = [...Deno.readDirSync(dir)].map((f) => f.name)
+    names = [...fs.readDirSync(dir)].map((f) => f.name)
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return undefined
+    if (fs.isNotFound(e)) return undefined
     throw e
   }
   let ids = new Set<string>()
   for (let name of names.filter((n) => n.endsWith('.json'))) {
     let text: string
     try {
-      text = Deno.readTextFileSync(`${dir}/${name}`)
+      text = fs.readTextFileSync(`${dir}/${name}`)
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) continue // it just ended
+      if (fs.isNotFound(e)) continue // it just ended
       throw e
     }
     let { pid, sessionId } = JSON.parse(text)
@@ -64,7 +66,7 @@ export let runningSessions = async (
 
 let mtime = (path: string): number | undefined => {
   try {
-    return Deno.statSync(path).mtime?.getTime()
+    return fs.statSync(path).mtime?.getTime()
   } catch {
     return undefined
   }
@@ -75,14 +77,14 @@ let mtime = (path: string): number | undefined => {
 // The second stat closes a race with a harness appending during the read.
 let endedFile = (path: string, read: Comp, cutoff: number): boolean => {
   try {
-    let before = Deno.statSync(path)
+    let before = fs.statSync(path)
     if (!before.isFile || (before.mtime?.getTime() ?? Infinity) > cutoff) {
       return false
     }
     if (path.endsWith('.zst')) return read.finished == versionOf(before)
     let consumed = Number(read.consumed)
-    let bytes = Deno.readFileSync(path)
-    let after = Deno.statSync(path)
+    let bytes = fs.readFileSync(path)
+    let after = fs.statSync(path)
     if (
       before.size != after.size ||
       before.mtime?.getTime() != after.mtime?.getTime() ||

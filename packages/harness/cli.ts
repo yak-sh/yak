@@ -1,6 +1,8 @@
 // Commands belonging to a person at this terminal. Authorization has a
 // private input and must never be stored as a tool call for later replay.
 
+import * as systemProcess from '@yaks/process/system'
+
 import type { CliCommand } from '@yaks/cli/host'
 export let commands: CliCommand[] = [
   {
@@ -33,7 +35,7 @@ export let tools = {
       { process: false },
     )
     try {
-      let home = await homeAt(host.graph, Deno.cwd())
+      let home = await homeAt(host.graph, systemProcess.cwd())
       if (home.workspace) {
         args.workspace = home.workspace
         args.cwd ??= home.cwd

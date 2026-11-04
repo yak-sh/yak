@@ -1,5 +1,7 @@
 // Revert a main commit and publish its correction. Workers Builds and the
 // deploy catch-up report deployment failures after this command returns.
+
+import * as fs from '@yaks/file/io'
 import { CallError } from '@yaks/tools/errors'
 import { land, type Run } from '@yaks/git/land'
 import { git } from './deploys.ts'
@@ -64,7 +66,7 @@ export let revert = async (
 
   let name = `yak-revert-${crypto.randomUUID().slice(0, 8)}`
   let parent = `${root}/.claude/worktrees`
-  await Deno.mkdir(parent, { recursive: true })
+  await fs.mkdir(parent, { recursive: true })
   let tree = `${parent}/${name}`
   await need(
     root,

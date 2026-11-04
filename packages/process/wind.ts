@@ -1,3 +1,4 @@
+import * as system from './system.ts'
 // How this process ends when it is asked to: wound down, not cut off, unless
 // it is asked twice.
 //
@@ -89,7 +90,7 @@ export let wind: Wind = winding()
 /** The signals a process winds down on, and the code each ends it with: 128
  * plus the signal's number, as a shell reports it. Windows delivers SIGINT
  * alone. */
-export let SIGNALS: [Deno.Signal, number][] = Deno.build.os == 'windows'
+export let SIGNALS: [system.Signal, number][] = system.build.os == 'windows'
   ? [['SIGINT', 130]]
   : [['SIGTERM', 143], ['SIGINT', 130], ['SIGHUP', 129]]
 
@@ -104,9 +105,9 @@ export let listen = (w: Wind = wind): () => void => {
   if (heard.has(w)) return () => {}
   heard.add(w)
   let on = SIGNALS.map(([s, code]) => [s, () => w.interrupt(code)] as const)
-  for (let [s, fn] of on) Deno.addSignalListener(s, fn)
+  for (let [s, fn] of on) system.addSignalListener(s, fn)
   return () => {
     heard.delete(w)
-    for (let [s, fn] of on) Deno.removeSignalListener(s, fn)
+    for (let [s, fn] of on) system.removeSignalListener(s, fn)
   }
 }

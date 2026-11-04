@@ -33,45 +33,10 @@ let opEnv = (env: Env) => {
 
 let dec = new TextDecoder()
 
-// The runtime's way to start a process, as much of it as `op read` needs. A
-// Worker has none, and this package runs in one (yaks.app), so it is looked
-// for rather than assumed.
-type Output = { success: boolean; stdout: Uint8Array; stderr: Uint8Array }
-type Runtime = {
-  Command: new (
-    cmd: string,
-    opts: Record<string, unknown>,
-  ) => { output(): Promise<Output> }
-  errors: { NotFound: new (...a: never[]) => Error }
-  env: { get(name: string): string | undefined }
-}
-let runtime = (): Runtime => {
-  let deno = (globalThis as { Deno?: Runtime }).Deno
-  if (!deno) throw new Error('op needs a runtime that can start a process')
-  return deno
-}
-let processEnv: Env = (n) => runtime().env.get(n)
-
-// `op read`, run the way the header says.
-let read = (deno: Runtime, env: Env, reference: string, signal?: AbortSignal) =>
-  new deno.Command('op', {
-    args: ['read', '--no-newline', reference],
-    clearEnv: true,
-    env: opEnv(env),
-    stdin: 'null',
-    stdout: 'piped',
-    stderr: 'piped',
-    ...signal ? { signal } : {},
-  })
-
-// An op that could not start because it is not there says so.
-let absent = (deno: Runtime, e: unknown) =>
-  e instanceof deno.errors.NotFound
-    ? new Error('op is not installed or not on PATH')
-    : e
-
 // What op answered: the value, or its own words as the error.
-let answer = (out: Output): string => {
+let answer = (
+  out: { success: boolean; stdout: Uint8Array; stderr: Uint8Array },
+): string => {
   if (!out.success) {
     throw new Error(
       dec.decode(out.stderr.slice(0, MAX_OUT)).trim() || 'op read failed',
@@ -82,9 +47,24 @@ let answer = (out: Output): string => {
 
 /** `op read`, awaited under the signal it is given. */
 export let opRead =
-  (env: Env = processEnv): OpRead => async (reference, signal) => {
-    let deno = runtime()
-    let out = await read(deno, env, reference, signal).output()
-      .catch((e) => Promise.reject(absent(deno, e)))
+  (environment?: Env): OpRead => async (reference, signal) => {
+    let [{ command }, { env }, { isNotFound }] = await Promise.all([
+      import('@yaks/process/command'),
+      import('@yaks/process/system'),
+      import('@yaks/file/io'),
+    ])
+    let out = await command('op', {
+      args: ['read', '--no-newline', reference],
+      clearEnv: true,
+      env: opEnv(environment ?? env.get),
+      stdin: 'null',
+      stdout: 'piped',
+      stderr: 'piped',
+      signal,
+    }).output().catch((error) => {
+      throw isNotFound(error)
+        ? new Error('op is not installed or not on PATH')
+        : error
+    })
     return answer(out)
   }

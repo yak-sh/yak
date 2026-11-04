@@ -1,6 +1,9 @@
 // The kernel's npm install, shared by Workers Builds, Wrangler and probes.
 // Keep successful install inputs beside the tree: npm versions omit different
 // metadata from their hidden lockfiles, and restored mtimes tell us nothing.
+import * as io from '@yaks/file/io'
+import * as platform from '@yaks/process/system'
+import { command as spawnCommand } from '@yaks/process/command'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -39,29 +42,29 @@ export type Host = {
 }
 
 let system: Host = {
-  read: Deno.readTextFileSync,
-  write: Deno.writeTextFileSync,
-  mkdir: (path, recursive = false) => Deno.mkdirSync(path, { recursive }),
+  read: io.readTextFileSync,
+  write: io.writeTextFileSync,
+  mkdir: (path, recursive = false) => io.mkdirSync(path, { recursive }),
   remove: (path) => {
     try {
-      Deno.removeSync(path, { recursive: true })
+      io.removeSync(path, { recursive: true })
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!(error instanceof io.errors.NotFound)) throw error
     }
   },
-  directory: (path) => Deno.statSync(path).isDirectory,
+  directory: (path) => io.statSync(path).isDirectory,
   exists: existsSync,
-  realpath: Deno.realPathSync,
+  realpath: io.realPathSync,
   copy: (from, to) =>
     cpSync(from, to, { recursive: true, verbatimSymlinks: true }),
-  rename: Deno.renameSync,
-  symlink: (target, path) => Deno.symlinkSync(target, path, { type: 'dir' }),
+  rename: io.renameSync,
+  symlink: (target, path) => io.symlinkSync(target, path, { type: 'dir' }),
   link: (path) =>
-    Deno.lstatSync(path).isSymlink ? Deno.readLinkSync(path) : undefined,
+    io.lstatSync(path).isSymlink ? io.readLinkSync(path) : undefined,
   now: Date.now,
   wait: () => new Promise((ok) => setTimeout(ok, 200)),
   npm: async (root) => {
-    let { code } = await new Deno.Command('npm', {
+    let { code } = await spawnCommand('npm', {
       args: ['ci', '--prefer-offline', '--no-audit', '--no-fund'],
       cwd: root,
       stdin: 'null',
@@ -74,7 +77,7 @@ let system: Host = {
 
 let key = (inputs: string[][]) =>
   createHash('sha256').update(
-    JSON.stringify([Deno.build.os, Deno.build.arch, inputs]),
+    JSON.stringify([platform.build.os, platform.build.arch, inputs]),
   ).digest('hex')
 let receipt = (root: string) => `${root}/node_modules/.yak-install`
 let identity = ['version', 'resolved', 'integrity', 'link'] as const
@@ -127,7 +130,7 @@ export let dependencies = (host: Host = system) => {
       }
     } catch (error) {
       return `lockfile ${
-        error instanceof Deno.errors.NotFound ? 'missing' : 'unreadable'
+        error instanceof io.errors.NotFound ? 'missing' : 'unreadable'
       }: ${JSON.stringify(`${root}/${path}`)}`
     }
   }
@@ -141,7 +144,7 @@ export let dependencies = (host: Host = system) => {
         held = host.read(receipt(root))
       } catch (error) {
         return `receipt ${
-          error instanceof Deno.errors.NotFound ? 'missing' : 'unreadable'
+          error instanceof io.errors.NotFound ? 'missing' : 'unreadable'
         }: ${JSON.stringify(receipt(root))}`
       }
       let wanted = key(files(root))
@@ -174,7 +177,7 @@ export let dependencies = (host: Host = system) => {
     try {
       return host.link(`${root}/node_modules`) !== undefined
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) return false
+      if (error instanceof io.errors.NotFound) return false
       throw error
     }
   }
@@ -195,7 +198,7 @@ export let dependencies = (host: Host = system) => {
       try {
         host.mkdir(lock)
       } catch (error) {
-        if (!(error instanceof Deno.errors.AlreadyExists)) throw error
+        if (!(error instanceof io.errors.AlreadyExists)) throw error
         if (host.now() > due) {
           throw new Error(
             `npm ci in ${root} never finished; if nothing is installing, ` +
@@ -296,7 +299,7 @@ export let dependencies = (host: Host = system) => {
         host.link(modules) === `${project}/node_modules`
       ) return changed
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!(error instanceof io.errors.NotFound)) throw error
     }
     remove(modules)
     host.symlink(`${project}/node_modules`, modules)
@@ -308,7 +311,7 @@ export let dependencies = (host: Host = system) => {
 
 export let { stale, installed, restored } = dependencies()
 
-if (import.meta.main) {
-  if (Deno.args[0]) await restored(Deno.args[0])
+if (platform.main(import.meta.url)) {
+  if (platform.args[0]) await restored(platform.args[0])
   else await installed()
 }

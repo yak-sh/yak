@@ -19,6 +19,8 @@
 // every one, and its first pass learns the set. Passes run one at a time; the timer is dropped when the
 // host shuts down.
 
+import * as systemProcess from '@yaks/process/system'
+
 import type { Handlers } from '@yaks/effects'
 import type { Comp, Eid } from '@yaks/graph'
 import { EDGE } from '@yaks/edge'
@@ -78,7 +80,7 @@ export let effects = (
 ): Handlers => {
   let skills = skillEffects(host, options, runtime)
   if (!options.files) return skills
-  let db = host.config?.db ?? Deno.env.get('DB_PATH')
+  let db = host.config?.db ?? systemProcess.env.get('DB_PATH')
   let said = new Set<Eid>()
   let timer: ReturnType<typeof setTimeout> | undefined
   let last = Promise.resolve()

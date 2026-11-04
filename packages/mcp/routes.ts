@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // The routes facet, exported as `@yaks/mcp/routes`: `/mcp` as one route on a
 // host's own listener.
 //
@@ -48,10 +50,10 @@ export let routes = (host: Hosting): Route[] => {
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
     reply: host.reply,
-    readFile: (path) => Deno.readTextFile(path),
+    readFile: (path) => io.readTextFile(path),
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>
-      attachSkills(built, { graph: host.graph, cwd: Deno.cwd() }, exchange),
+      attachSkills(built, { graph: host.graph, cwd: system.cwd() }, exchange),
     instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
       doc.instructions?.trim()
     )

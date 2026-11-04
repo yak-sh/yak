@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // A process's own time: the wall clock less what the box kept it, or any
 // process it started, waiting for a CPU. Linux keeps, for each thread, the
 // time it ran on a CPU and the time it waited, runnable, for one
@@ -31,7 +33,7 @@ export let waits = (pid: number): Map<string, number> => {
  * started, as Deno starts every child there, and the ones theirs did. A
  * process's other threads are left out, so a look costs two reads a process,
  * and one with no child costs one. */
-export let started = (pid: number = Deno.pid): Map<string, number> => {
+export let started = (pid: number = system.pid): Map<string, number> => {
   let found = new Map<string, number>()
   let visit = (pid: number) => {
     for (let child of kids(pid)) {
@@ -55,13 +57,13 @@ let kids = (pid: number) =>
 // gives: a plain Error saying `No such process (os error 3)`, then the call,
 // with no code.
 let gone = (error: unknown) =>
-  error instanceof Deno.errors.NotFound ||
-  error instanceof Deno.errors.NotCapable ||
-  error instanceof Deno.errors.PermissionDenied ||
+  io.isNotFound(error) ||
+  error instanceof Error && error.name == 'NotCapable' ||
+  io.isPermissionDenied(error) ||
   /^No such process \(os error 3\)/.test((error as Error)?.message ?? '')
 let read = (path: string): string | undefined => {
   try {
-    return Deno.readTextFileSync(path)
+    return io.readTextFileSync(path)
   } catch (error) {
     if (gone(error)) return undefined
     throw error
@@ -69,7 +71,7 @@ let read = (path: string): string | undefined => {
 }
 let tasks = (pid: number): string[] => {
   try {
-    return [...Deno.readDirSync(`/proc/${pid}/task`)].map((e) => e.name)
+    return [...io.readDirSync(`/proc/${pid}/task`)].map((e) => e.name)
   } catch (error) {
     if (gone(error)) return []
     throw error
@@ -112,7 +114,7 @@ export let held = (look: () => Map<string, number>): () => number => {
  * the platform does not say, it is the wall clock (the README has an
  * example). */
 export let own = (
-  pid: number = Deno.pid,
+  pid: number = system.pid,
   { every = 250, look = waits, time = () => performance.now() }: Looks = {},
 ): () => number => {
   let start = time()

@@ -1,3 +1,4 @@
+import * as system from './system.ts'
 // The process you are IN, recorded like any other.
 //
 // This package already describes a program running on a machine, with
@@ -67,15 +68,15 @@ export type SelfOpts = {
 // runs — `yak.ts` is `yak` — since `deno run … yak.ts task new` is what a `yak`
 // on the PATH execs, and `yak task new` is what the person typed.
 let program = (): string => {
-  let exe = Deno.execPath().split('/').pop() ?? 'deno'
-  if (!/^deno(\.exe)?$/.test(exe)) return exe
-  let script = new URL(Deno.mainModule).pathname.split('/').pop() ?? ''
+  let exe = system.execPath().split('/').pop() ?? 'deno'
+  if (!/^(deno|node)(\.exe)?$/.test(exe)) return exe
+  let script = new URL(system.mainModule).pathname.split('/').pop() ?? ''
   return script.replace(/\.[cm]?[jt]sx?$/, '') || exe
 }
 
 let line = (): string => {
   try {
-    return [program(), ...Deno.args].join(' ')
+    return [program(), ...system.args].join(' ')
   } catch {
     return 'yak'
   }
@@ -83,7 +84,7 @@ let line = (): string => {
 
 let here = (): string | undefined => {
   try {
-    return Deno.cwd()
+    return system.cwd()
   } catch {
     return undefined
   }
@@ -91,20 +92,20 @@ let here = (): string | undefined => {
 
 // The operating system and its release, or only its name where reading the
 // release is not permitted.
-let system = (): string => {
+let operating = (): string => {
   try {
-    return `${Deno.build.os} ${Deno.osRelease()}`
+    return `${system.build.os} ${system.osRelease()}`
   } catch {
-    return Deno.build.os
+    return system.build.os
   }
 }
 
 /** What this process runs on: the runtime, its version and the operating
  * system. */
 export let runtime = (): Runtime => ({
-  name: 'deno',
-  version: Deno.version.deno,
-  os: system(),
+  name: system.runtimeName,
+  version: system.runtimeVersion,
+  os: operating(),
 })
 
 /**
@@ -122,7 +123,7 @@ export let started = (o: SelfOpts = {}): Bundle => {
   return {
     entity: { eid: selfEid() },
     [PROCESS]: {
-      pid: o.pid ?? Deno.pid,
+      pid: o.pid ?? system.pid,
       command: o.command ?? line(),
       ...cwd ? { cwd } : {},
       ...o.roles ? { roles: o.roles } : {},

@@ -1,3 +1,5 @@
+import { watchReads } from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // Dependency observation at file and module-loading boundaries. FFI calls never
 // pass through either boundary, and no permission audit is produced.
 import { basename, resolve } from 'node:path'
@@ -26,7 +28,7 @@ export let path = (value: string, root: string): string | undefined => {
 
 /** Observe only reads, retaining one path per file. Restore the runtime's doors
  * after the run; wrappers preserve arguments, receiver, result and exceptions. */
-export let observe = (root: string = Deno.cwd()): {
+export let observe = (root: string = system.cwd()): {
   mark: (name: string) => void
   reads: () => Map<string, string[]>
   close: () => void
@@ -76,6 +78,7 @@ export let observe = (root: string = Deno.cwd()): {
       door[name] = original as typeof door[string]
     }
   })
+  let offFile = watchReads(record)
   let off = watchImports((specifier) => {
     if (specifier.startsWith('file:')) record(specifier)
   })
@@ -88,6 +91,7 @@ export let observe = (root: string = Deno.cwd()): {
     reads: () => new Map([...out].map(([f, paths]) => [f, [...paths].sort()])),
     close: () => {
       off()
+      offFile()
       restore.forEach((f) => f())
     },
   }

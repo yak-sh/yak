@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 // What a run is given: test modules, and the pages whose examples it runs.
 // A path names a file or a directory; a directory is walked, never into
 // another project's code (`node_modules`, `vendor`, a build's scratch) or a
@@ -38,9 +39,9 @@ export let walk = (paths: string[]): Promise<string[]> =>
     let go = (path: string): void => {
       if (visited.has(path)) return
       visited.add(path)
-      let info = Deno.statSync(path)
+      let info = io.statSync(path)
       if (info.isFile) return void out.add(path)
-      for (let e of Deno.readDirSync(path)) {
+      for (let e of io.readDirSync(path)) {
         if (e.name.startsWith('.') || SKIP.includes(e.name)) continue
         let at = `${path}/${e.name}`
         if (e.isDirectory) go(at)
@@ -62,7 +63,7 @@ export let find = async (
 ): Promise<{ tests: string[]; pages: string[] }> => {
   let files = await walk(paths)
   let pages = files.filter((f) =>
-    paged(f) && examples(f, Deno.readTextFileSync(f))
+    paged(f) && examples(f, io.readTextFileSync(f))
   )
   return { tests: files.filter(tested), pages }
 }

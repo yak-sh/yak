@@ -1,3 +1,5 @@
+import * as disk from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // A managed session: the provider run as a detached command, its stdout read
 // back into the graph as the transcript.
 //
@@ -321,7 +323,7 @@ export let checkoutOf = (session: string, worktrees: string): string =>
 // after the session. Committed work only: what is uncommitted in the source
 // stays there.
 let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
-  let tree = await createWorktree(g, o.cwd ?? Deno.cwd(), {
+  let tree = await createWorktree(g, o.cwd ?? system.cwd(), {
     path: checkoutOf(session, o.worktrees!),
     branch: `session-${session}`,
     base: 'refs/heads/main',
@@ -332,8 +334,8 @@ let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
 // A file's text, or nothing where there is none: a link that dangles is no
 // file.
 let text = (path: string): Promise<string | undefined> =>
-  Deno.readTextFile(path).catch((e) => {
-    if (e instanceof Deno.errors.NotFound) return undefined
+  disk.readTextFile(path).catch((e) => {
+    if (e instanceof disk.errors.NotFound) return undefined
     throw e
   })
 
@@ -417,7 +419,7 @@ export let start = async (
     job = carried
   }
   let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
-  let persona = await given(g, session, cwd ?? Deno.cwd(), adapter)
+  let persona = await given(g, session, cwd ?? system.cwd(), adapter)
   let argv = adapter.argv({ ...job, persona, mcp: o.mcp })
   // Placed before the child writes a line: a log cleaned since the last run
   // is new, and its lines are numbered on from where the transcript stands.
@@ -426,7 +428,7 @@ export let start = async (
     command: argv[0],
     args: argv.slice(1),
     cwd,
-    env: sessionEnv(session, o.env ?? Deno.env.toObject()),
+    env: sessionEnv(session, o.env ?? system.env.toObject()),
   }, {
     ...o,
     eid: session, // one entity: the transcript is the thing running
@@ -563,13 +565,13 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   let logs = new Set<string>()
   let dir = paths('', o).out.replace(/\/[^/]*$/, '')
   try {
-    for await (let file of Deno.readDir(dir)) {
+    for await (let file of disk.readDir(dir)) {
       if (file.isFile && file.name.endsWith('.out')) {
         logs.add(file.name.slice(0, -4))
       }
     }
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
+    if (!(error instanceof disk.errors.NotFound)) throw error
   }
   let unread = (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}`))
     .map((b) => b.entity.eid)
@@ -646,7 +648,7 @@ let ended = async (
 // holds work (uncommitted, or commits nothing has landed) is kept.
 let taken = async (g: Graph, path: string): Promise<void> => {
   try {
-    await Deno.stat(path)
+    await disk.stat(path)
   } catch {
     return
   }
@@ -730,7 +732,7 @@ export let recounted = async (
 
 let mtime = (path: string) => {
   try {
-    return Deno.statSync(path).mtime?.getTime()
+    return disk.statSync(path).mtime?.getTime()
   } catch {
     return undefined
   }

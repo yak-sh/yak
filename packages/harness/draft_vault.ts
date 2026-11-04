@@ -1,4 +1,7 @@
 /** Host-local client vault. Draft bytes never pass through the backend worker. */
+
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
 import type { Saved, Vault } from '@yaks/client'
 import { join } from '@std/path/join'
 import { resolve } from '@std/path/resolve'
@@ -8,8 +11,8 @@ let home = (env: (name: string) => string | undefined) =>
   env('HARNESS_HOME') || `${env('HOME') || '.'}/.yak`
 
 export let draftVault = async (directory: string): Promise<Vault> => {
-  await Deno.mkdir(directory, { recursive: true, mode: 0o700 })
-  await Deno.chmod(directory, 0o700)
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 })
+  await fs.chmod(directory, 0o700)
   const path = async (id: string) => {
     const hash = await crypto.subtle.digest(
       'SHA-256',
@@ -24,10 +27,10 @@ export let draftVault = async (directory: string): Promise<Vault> => {
   return {
     load: async () => {
       const rows: Saved[] = []
-      for await (const file of Deno.readDir(directory)) {
+      for await (const file of fs.readDir(directory)) {
         if (!file.isFile || !file.name.endsWith('.json')) continue
         const row = JSON.parse(
-          await Deno.readTextFile(join(directory, file.name)),
+          await fs.readTextFile(join(directory, file.name)),
         ) as Saved
         if (typeof row.eid != 'string' || !row.comps) {
           throw new Error('Invalid draft vault record')
@@ -40,26 +43,26 @@ export let draftVault = async (directory: string): Promise<Vault> => {
       for (const row of rows) {
         const target = await path(row.eid)
         const temporary = target + '.' + crypto.randomUUID() + '.tmp'
-        await Deno.writeTextFile(temporary, JSON.stringify(row), {
+        await fs.writeTextFile(temporary, JSON.stringify(row), {
           mode: 0o600,
           createNew: true,
         })
-        await Deno.rename(temporary, target)
+        await fs.rename(temporary, target)
       }
     },
     drop: async (ids) => {
       for (const id of ids) {
         try {
-          await Deno.remove(await path(id))
+          await fs.remove(await path(id))
         } catch (e) {
-          if (!(e instanceof Deno.errors.NotFound)) throw e
+          if (!fs.isNotFound(e)) throw e
         }
       }
     },
     clear: async () => {
-      for await (const file of Deno.readDir(directory)) {
+      for await (const file of fs.readDir(directory)) {
         if (file.name.endsWith('.json')) {
-          await Deno.remove(join(directory, file.name))
+          await fs.remove(join(directory, file.name))
         }
       }
     },
@@ -69,13 +72,13 @@ export let draftVault = async (directory: string): Promise<Vault> => {
 /** Stable per-terminal identity, overridable for moving between terminals. */
 export let openDrafts = async (
   database: string,
-  env: (name: string) => string | undefined = Deno.env.get,
+  env: (name: string) => string | undefined = systemProcess.env.get,
 ) => {
   database = env('HARNESS_DB') || database
   let terminal = env('HARNESS_FRONTEND') ?? env('TMUX_PANE')
   if (!terminal) {
     try {
-      terminal = await Deno.readLink('/proc/self/fd/0')
+      terminal = await fs.readLink('/proc/self/fd/0')
     } catch {
       terminal = 'default'
     }
@@ -95,7 +98,7 @@ export let openDrafts = async (
   const vault = await draftVault(directory)
   // Refuse concurrent use of the same profile rather than overwrite its drafts.
   const lockPath = join(directory, 'owner')
-  const lock = await Deno.open(lockPath, {
+  const lock = await fs.open(lockPath, {
     create: true,
     write: true,
     mode: 0o600,

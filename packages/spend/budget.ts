@@ -1,3 +1,5 @@
+import { env } from '@yaks/process/system'
+import * as io from '@yaks/file/io'
 /**
  * The Claude plan's limits, as `rate_limit` rows (@yaks/model). Claude Code
  * hands its status line the account's limits, and claude-status keeps the
@@ -62,24 +64,23 @@ export let limits = (text: string): Bundle[] => {
 
 /** Where claude-status keeps its readings. */
 export let usageDir = (): string | undefined => {
-  let env = globalThis.Deno?.env
-  return env?.get('CLAUDE_USAGE_DIR') ??
-    (env?.get('HOME') ? `${env.get('HOME')}/.cache/claude-usage` : undefined)
+  return env.get('CLAUDE_USAGE_DIR') ??
+    (env.get('HOME') ? `${env.get('HOME')}/.cache/claude-usage` : undefined)
 }
 
 // The newest reading in a directory, or nothing.
 let newest = (dir: string): string | undefined => {
   let best: [number, string] | undefined
   try {
-    for (let f of Deno.readDirSync(dir)) {
+    for (let f of io.readDirSync(dir)) {
       if (!f.isFile || !f.name.startsWith('usage.')) continue
-      let at = Deno.statSync(`${dir}/${f.name}`).mtime?.getTime() ?? 0
+      let at = io.statSync(`${dir}/${f.name}`).mtime?.getTime() ?? 0
       if (!best || at > best[0]) best = [at, `${dir}/${f.name}`]
     }
   } catch {
     return undefined // no cache: Claude Code has no status line here
   }
-  return best && Deno.readTextFileSync(best[1])
+  return best && io.readTextFileSync(best[1])
 }
 
 /** Keep the newest reading as rows, where it is newer than the one kept. */

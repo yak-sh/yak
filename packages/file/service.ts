@@ -1,3 +1,5 @@
+import * as disk from '@yaks/file/io'
+import { command as processCommand } from '@yaks/process/command'
 /**
  * What fills this computer's disks, as a duty: the module a server imports at
  * `@yaks/file/service`. Each pass reads the computer's disks (`df`), and walks
@@ -57,7 +59,7 @@ let run = async (
   [command, ...args]: string[],
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
-  let out = await new Deno.Command(command, {
+  let out = await processCommand(command, {
     args,
     stdin: 'null',
     stdout: 'piped',
@@ -104,7 +106,7 @@ export let computer: Looking = {
     let found = entries(out)
     let dirs = new Set<string>()
     for (let [, path] of found) {
-      let stat = await Deno.lstat(path).catch(() => undefined)
+      let stat = await disk.lstat(path).catch(() => undefined)
       if (stat?.isDirectory) dirs.add(path)
     }
     return walked(found, mount, dirs)

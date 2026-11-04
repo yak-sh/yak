@@ -36,6 +36,8 @@
 // This module reads files; it is reached through `@yaks/session/tail`, never
 // the main module, which a browser loads.
 
+import * as fs from '@yaks/file/io'
+
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { onDisk } from '@yaks/file/local'
@@ -359,7 +361,7 @@ let after = (path: string, lines: number): number => {
   if (!lines) return 0
   let f
   try {
-    f = Deno.openSync(path)
+    f = fs.openSync(path)
   } catch {
     return 0 // never written: there is nothing to skip
   }
@@ -455,12 +457,12 @@ export let tail = async (
 let sip = (t: Tail): string => {
   let f
   try {
-    f = Deno.openSync(t.path)
+    f = fs.openSync(t.path)
   } catch {
     return '' // never written: the log has said nothing yet
   }
   try {
-    f.seekSync(t.at, Deno.SeekMode.Start)
+    f.seekSync(t.at, 0)
     let buf = new Uint8Array(64 * 1024)
     let text = ''
     for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
@@ -560,7 +562,7 @@ let follow = async (t: Tail, read: Reader, o: Pull) => {
   if (!t.line || t.stream || !t.session) return
   let text: string
   try {
-    text = await Deno.readTextFile(t.path)
+    text = await fs.readTextFile(t.path)
   } catch {
     return // gone: what follows is all there is
   }
@@ -751,7 +753,7 @@ export let recount = async (
 ): Promise<number> => {
   let text: string
   try {
-    text = await Deno.readTextFile(path)
+    text = await fs.readTextFile(path)
   } catch {
     return 0 // gone: nothing to read again
   }

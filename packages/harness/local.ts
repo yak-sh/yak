@@ -2,6 +2,8 @@
 // graph and machines, never a host checkout. Credentials, MCP and diagnostics
 // remain host integrations; shell and file work is routed through providers.
 
+import * as systemProcess from '@yaks/process/system'
+
 import { artifactStore } from '@yaks/blob'
 import { type Model, prefixCacheMark } from '@yaks/model'
 import { claudeDoc } from '@yaks/claude/vocab'
@@ -127,7 +129,7 @@ export type Here = {
  * servers, the pictures, the instruction files where a session opens, and
  * where a defect is written. */
 export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
-  let env = opts.env ?? Deno.env.get
+  let env = opts.env ?? systemProcess.env.get
   let detach = h.report ? diagnostics().attach(h.report) : () => {}
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
@@ -296,7 +298,7 @@ export let local = (opts: Opts): Local => {
     }
   }
   let h = opts.h
-  let env = opts.env ?? Deno.env.get
+  let env = opts.env ?? systemProcess.env.get
   let { lent, authorize, anchor, report } = here(h, opts)
   let watch: { stop: () => void } | undefined
   let a = agent({

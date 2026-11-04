@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 // Which of its files a run runs: each test module and example page is keyed
 // by what it depends on (./deps.ts), and one whose pass is kept is left out,
 // unless the run asks for all. A page is keyed by a module importing what its
@@ -209,7 +210,7 @@ export let choose = async (
     }
   } finally {
     await Promise.all(
-      [...plans.values()].map((p) => Deno.remove(p).catch(() => {})),
+      [...plans.values()].map((p) => io.remove(p).catch(() => {})),
     )
   }
 }

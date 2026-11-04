@@ -4,6 +4,7 @@
 // points at (the pencil, the paper, the fonts) gets a name of its bytes too,
 // beside it. public/ keeps the sources, and those keep answering at their own
 // addresses.
+import * as io from '@yaks/file/io'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
@@ -48,19 +49,19 @@ export let plan = (read: Read) => {
 
 /** Reading the sources from a directory. */
 export let from = (dir: string): Read => (name) =>
-  Deno.readFileSync(join(dir, name))
+  io.readFileSync(join(dir, name))
 
 /** Write the plan into public/, leaving no earlier deploy's names behind. */
 export let written = async (
   to = new URL('./public/', import.meta.url).pathname,
 ) => {
-  await Deno.remove(join(to, DIR), { recursive: true }).catch((error) => {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
+  await io.remove(join(to, DIR), { recursive: true }).catch((error) => {
+    if (!(error instanceof io.errors.NotFound)) throw error
   })
-  await Deno.mkdir(join(to, DIR), { recursive: true })
+  await io.mkdir(join(to, DIR), { recursive: true })
   await Promise.all(
     [...plan(from(to)).files].map(([at, bytes]) =>
-      Deno.writeFile(join(to, at), bytes)
+      io.writeFile(join(to, at), bytes)
     ),
   )
 }

@@ -1,3 +1,6 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
+import { command as launchCommand } from '@yaks/process/command'
 // `serve` owns HTTP, not duties. Fill uncovered duty roles with an independent
 // invocation of this checkout's CLI; singleton services still take the host's
 // leases, and effects remain a pool. A fallback worker drains when its requesting web host ends.
@@ -265,7 +268,7 @@ export let ready = async (
       try {
         child.kill('SIGTERM')
       } catch (failure) {
-        if (!(failure instanceof Deno.errors.NotFound)) throw failure
+        if (!(failure instanceof disk.errors.NotFound)) throw failure
       }
     }
     throw error
@@ -279,7 +282,7 @@ let start = async (
   roles: string[],
   signal: AbortSignal,
 ): Promise<void> => {
-  let dir = await Deno.makeTempDir({ prefix: 'yak-work-' })
+  let dir = await disk.makeTempDir({ prefix: 'yak-work-' })
   let file = `${dir}/ready`
   try {
     // Null stdio and a detached child keep the worker outside web shutdown's
@@ -289,20 +292,20 @@ let start = async (
     // Role names may start with @ (a package service). The CLI expands @file
     // values, so pass the list through a file rather than as a literal path.
     let selected = `${dir}/roles`
-    await Deno.writeTextFile(selected, roles.join(','))
-    let child = new Deno.Command(Deno.execPath(), {
+    await disk.writeTextFile(selected, roles.join(','))
+    let child = launchCommand(system.execPath(), {
       args: [
         'run',
         '-q',
         '-A',
         '--config',
         await launching(() => Promise.resolve(dir)),
-        Deno.mainModule,
+        system.mainModule,
         '--config',
         resolve(path),
         'work',
         '--starter',
-        String(Deno.pid),
+        String(system.pid),
         '--roles',
         `@${selected}`,
         '--ready',
@@ -317,9 +320,9 @@ let start = async (
       child,
       async () => {
         try {
-          return await Deno.readTextFile(file)
+          return await disk.readTextFile(file)
         } catch (error) {
-          if (error instanceof Deno.errors.NotFound) return undefined
+          if (error instanceof disk.errors.NotFound) return undefined
           throw error
         }
       },
@@ -329,7 +332,7 @@ let start = async (
       signal,
     )
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    await disk.remove(dir, { recursive: true })
   }
 }
 

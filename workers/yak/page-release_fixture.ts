@@ -1,6 +1,7 @@
+import * as io from '@yaks/file/io'
 // A local page environment for the served release script. No network or live store.
 
-let code = await Deno.readTextFile(
+let code = await io.readTextFile(
   new URL('./public/release.js', import.meta.url),
 )
 export let tick = async () => {

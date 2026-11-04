@@ -1,6 +1,8 @@
 // The kernel's modules: optional doors stay dynamic imports, and the modules
 // every invocation needs share one chunk. This keeps both singleton state
 // and the exported runtime classes while avoiding hundreds of eager links.
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 import { build, type Metafile, stop } from 'npm:esbuild@0.28.1'
 import { rollup } from 'npm:rollup@4.65.1'
 import { createRequire } from 'node:module'
@@ -42,8 +44,8 @@ let aliases = (root: string, names: Record<string, string>) => ({
 /** Build the source once, then group its eager closure without duplicating
  * the modules shared with a deferred door. Both passes compose source maps. */
 export let bundle = async (root: string, output: string, meta: string) => {
-  let config = parse(Deno.readTextFileSync(join(root, 'wrangler.toml')))
-  let scratch = Deno.makeTempDirSync({
+  let config = parse(io.readTextFileSync(join(root, 'wrangler.toml')))
+  let scratch = io.makeTempDirSync({
     dir: dirname(output),
     prefix: '.modules-',
   })
@@ -84,8 +86,8 @@ export let bundle = async (root: string, output: string, meta: string) => {
         name: 'source-maps',
         load(id) {
           return {
-            code: Deno.readTextFileSync(id),
-            map: JSON.parse(Deno.readTextFileSync(id + '.map')),
+            code: io.readTextFileSync(id),
+            map: JSON.parse(io.readTextFileSync(id + '.map')),
           }
         },
       }],
@@ -114,22 +116,22 @@ export let bundle = async (root: string, output: string, meta: string) => {
           imports: part.imports,
           dynamicImports: part.dynamicImports,
         }))
-      Deno.writeTextFileSync(
+      io.writeTextFileSync(
         meta + '.modules.json',
         JSON.stringify(modules, null, 2),
       )
     } finally {
       await grouped.close()
     }
-    Deno.writeTextFileSync(meta, JSON.stringify(source, null, 2))
+    io.writeTextFileSync(meta, JSON.stringify(source, null, 2))
   } finally {
-    Deno.removeSync(scratch, { recursive: true })
+    io.removeSync(scratch, { recursive: true })
     stop()
   }
 }
 
-if (import.meta.main) {
+if (system.main(import.meta.url)) {
   let root = dirname(fileURLToPath(import.meta.url))
-  let [output, meta] = Deno.args.map((arg) => resolve(arg))
+  let [output, meta] = system.args.map((arg) => resolve(arg))
   await bundle(root, output, meta)
 }

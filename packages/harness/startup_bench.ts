@@ -1,4 +1,7 @@
 /** Isolated startup benchmark. Does not open the configured harness database. */
+
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
@@ -55,7 +58,7 @@ export async function measure(
 ): Promise<Record<string, Samples>> {
   let samples: Record<string, Samples> = {}
 
-  let directory = await Deno.makeTempDir({ prefix: 'harness-startup-' })
+  let directory = await fs.makeTempDir({ prefix: 'harness-startup-' })
   let count = Number(args[0] ?? 300)
   let depth = Number(args[1] ?? 4000)
   let path = directory + '/bench.db'
@@ -130,9 +133,9 @@ export async function measure(
       }
     }
   } finally {
-    await Deno.remove(directory, { recursive: true })
+    await fs.remove(directory, { recursive: true })
   }
   return samples
 }
 
-if (import.meta.main) await standaloneMain('harness-startup')
+if (systemProcess.main(import.meta.url)) await standaloneMain('harness-startup')

@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // The concrete host's operations are tools beside its plugins' tools, without
 // making a config load its own CLI as a plugin.
 import type { NamedTool } from '@yaks/graph'
@@ -22,7 +23,8 @@ export let operations = (
     name: tool.name!,
     run: async (call) => {
       if (tool.name == 'restart') {
-        let runtimeDir = options?.runtimeDir ?? Deno.env.get('XDG_RUNTIME_DIR')
+        let runtimeDir = options?.runtimeDir ??
+          system.env.get('XDG_RUNTIME_DIR')
         if (!runtimeDir) {
           throw new CallError(
             'config',

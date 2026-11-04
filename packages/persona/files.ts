@@ -27,6 +27,8 @@
 // a person works. A graph composed without either package has no checkouts,
 // and writes no files. An archived project keeps what it last had.
 
+import * as fs from '@yaks/file/io'
+
 import { type Binding, memo, present as exists } from '@yaks/mirror'
 import { and, eq, every, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
@@ -180,7 +182,7 @@ export let personaFiles = async (g: Graph): Promise<Files> => {
 let held = (dir: string): string[] => {
   let out = [`${dir}/AGENTS.md`]
   try {
-    for (let e of Deno.readDirSync(`${dir}/personas`)) {
+    for (let e of fs.readDirSync(`${dir}/personas`)) {
       if (e.isFile && e.name.endsWith('.md')) {
         out.push(`${dir}/personas/${e.name}`)
       }

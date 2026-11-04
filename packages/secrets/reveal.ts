@@ -1,3 +1,4 @@
+import { env } from '@yaks/process/system'
 // Trusted code reads a value from the vault at the moment it uses it. A name
 // the vault has no value for falls back to the environment. A kept 1Password
 // reference stays unresolved: servers have no 1Password sign-in, and only a
@@ -35,9 +36,7 @@ export type Sources = {
 // The process environment, where the runtime has one: a Worker has none.
 let environment = (name: string): string | undefined => {
   try {
-    return (globalThis as {
-      Deno?: { env: { get(name: string): string | undefined } }
-    }).Deno?.env.get(name)
+    return env.get(name)
   } catch {
     return undefined
   }

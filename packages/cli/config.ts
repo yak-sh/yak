@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 import { imported as observed, importing } from '@yaks/fp/imports'
 // The config file, read. It is the one statement of where a graph IS: the
 // SQLite file, the plugins that read and write it, and how the host behaves.
@@ -38,7 +40,7 @@ export let person = async (
 /** Where this machine keeps the config for its own graph, whether or not it
  * has one yet: under `$HOME`, or nowhere for a process that has none. */
 export let ownConfig = (
-  env: (name: string) => string | undefined = Deno.env.get,
+  env: (name: string) => string | undefined = system.env.get,
 ): string | undefined => {
   let home = env('HOME')
   return home ? `${home}/${OWN_CONFIG}` : undefined
@@ -51,7 +53,7 @@ export let ownConfig = (
  * there means no config. */
 export let configPath = (
   said?: string,
-  env: (name: string) => string | undefined = Deno.env.get,
+  env: (name: string) => string | undefined = system.env.get,
 ): string | undefined => {
   let named = said ?? env('YAK_CONFIG')
   if (named) return named
@@ -60,7 +62,7 @@ export let configPath = (
   // The command may be running without read permission at all; that is no
   // config.
   try {
-    return Deno.statSync(own).isFile ? own : undefined
+    return disk.statSync(own).isFile ? own : undefined
   } catch {
     return undefined
   }
@@ -273,10 +275,10 @@ export let names = (path: string | undefined, part: keyof Config): boolean => {
  * resolved against the file itself.
  */
 export let read = (path: string): Config => {
-  let base = new URL(path, `file://${Deno.cwd()}/`)
+  let base = new URL(path, `file://${system.cwd()}/`)
   let said: unknown
   try {
-    said = JSON.parse(Deno.readTextFileSync(base))
+    said = JSON.parse(disk.readTextFileSync(base))
   } catch (e) {
     throw new Error(`${path}: ${(e as Error).message}`)
   }
@@ -324,7 +326,7 @@ export let read = (path: string): Config => {
  * graph. */
 export let dbOf = (
   config: Config,
-  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
+  env: (name: string) => string | undefined = (n) => system.env.get(n),
 ): string => {
   let db = config.db ?? env('DB_PATH')
   if (!db) {

@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 import { importing } from '@yaks/fp/imports'
 // Remote account credentials come from the configured graph, or a small
 // personal graph beside the CLI's other state. Nothing reads a token file.
@@ -20,14 +22,14 @@ export let personalPath = (state: string): string => `${state}/accounts.json`
 export let personal = async (state: string = stateDir()): Promise<string> => {
   let path = personalPath(state)
   try {
-    await Deno.stat(path)
+    await disk.stat(path)
     return path
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if (!(e instanceof disk.errors.NotFound)) throw e
   }
-  await Deno.mkdir(state, { recursive: true, mode: 0o700 })
+  await disk.mkdir(state, { recursive: true, mode: 0o700 })
   let person = crypto.randomUUID()
-  await Deno.writeTextFile(
+  await disk.writeTextFile(
     path,
     JSON.stringify(
       {
@@ -128,7 +130,7 @@ export let accounts = <H extends AccountHost>(
     state: string = stateDir(),
     opts: AccountOptions = {},
   ): Promise<string | null> => {
-    let env = opts.env ?? ((name: string) => Deno.env.get(name))
+    let env = opts.env ?? ((name: string) => system.env.get(name))
     let explicit = env('YAKS_TOKEN')
     if (explicit) return explicit
     let path = opts.config ?? configPath(undefined, env) ?? personalPath(state)
@@ -181,9 +183,9 @@ export let accounts = <H extends AccountHost>(
 let command: Accounts<Served> = accounts({
   config: async (path) => {
     try {
-      await Deno.stat(path)
+      await disk.stat(path)
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) return undefined
+      if (e instanceof disk.errors.NotFound) return undefined
       throw e
     }
     return read(path)

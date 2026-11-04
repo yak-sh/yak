@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import { command as processCommand } from '@yaks/process/command'
 // The codebase, read into a graph: a read-only @yaks/mirror binding over the
 // files Git tracks in one checkout.
 //
@@ -44,7 +46,7 @@ let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 /** Run a command in a directory and return its stdout; a failure throws with
  * its stderr. */
 let run = async (cmd: string, args: string[], cwd: string) => {
-  let out = await new Deno.Command(cmd, {
+  let out = await processCommand(cmd, {
     args,
     cwd,
     stdout: 'piped',
@@ -66,7 +68,7 @@ export let checkout = async (
     '--show-toplevel',
     '--git-common-dir',
   ], cwd)).trim().split('\n')
-  return { root: await Deno.realPath(top), common: await Deno.realPath(git) }
+  return { root: await io.realPath(top), common: await io.realPath(git) }
 }
 
 /** Which tracked files are code: TS/JS modules, markdown, package manifests
@@ -88,7 +90,7 @@ export let exported = async (
   let refused: string[] = []
   let left = paths.filter(isCode)
   while (left.length) {
-    let out = await new Deno.Command('deno', {
+    let out = await processCommand('deno', {
       args: ['doc', '--json', '-q', ...left],
       cwd: root,
       env: { NO_COLOR: '1' },
@@ -161,7 +163,7 @@ export let codeMirror = async (
     .filter((l) => /^100/.test(l)).map((l) => l.slice(l.indexOf('\t') + 1))
     .filter(covered)
   let isTracked = new Set(tracked)
-  let text = (path: string) => Deno.readTextFileSync(`${root}/${path}`)
+  let text = (path: string) => io.readTextFileSync(`${root}/${path}`)
   let pkgs = tracked.filter((p) => p.endsWith('deno.json')).flatMap((p) => {
     try {
       return [manifest(p, text(p))].filter((m): m is Manifest => !!m)

@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 import { importing } from '@yaks/fp/imports'
 // Account selection and delivery belong to the concrete host. Domain tools
 // forward ordinary arguments and never handle credentials or MCP envelopes.
@@ -107,7 +108,7 @@ export let delivery = (
     name: string,
     as?: string,
   ): Promise<string | null> => {
-    let explicit = Deno.env.get('YAKS_TOKEN')
+    let explicit = system.env.get('YAKS_TOKEN')
     if (explicit) return explicit
     let owner = await person(host)
     if (!owner || !host.graph.vocab.comp('connection')) return null

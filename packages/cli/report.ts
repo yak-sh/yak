@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import { command as launchCommand } from '@yaks/process/command'
 // Box hosts report to a durable spool without opening the tracker graph. The
 // tracker service owns admission, remote delivery and retry.
 
@@ -8,11 +10,11 @@ import type { Config } from './config.ts'
 import { runtimeRoot, runtimeStack } from './runtime.ts'
 
 export let revision = async (): Promise<string | undefined> => {
-  let pinned = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_COMMIT') : undefined
+  let pinned = runtimeRoot() ? system.env.get('YAK_RUNTIME_COMMIT') : undefined
   if (pinned) return pinned
   if (!import.meta.url.startsWith('file:')) return undefined
   try {
-    let result = await new Deno.Command('git', {
+    let result = await launchCommand('git', {
       args: ['rev-parse', 'HEAD'],
       cwd: new URL('../../', import.meta.url),
       stdout: 'piped',

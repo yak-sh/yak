@@ -2,6 +2,9 @@
 // Worker deploys name its immutable registry tag and never build it. The CLI
 // workspace is a Worker asset, downloaded by sandbox/launch.ts on first use.
 
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as spawnCommand } from '@yaks/process/command'
 import { sha256 } from '@yaks/graph/sha256'
 
 export let REGISTRY = 'registry.cloudflare.com'
@@ -21,7 +24,7 @@ type Run = (cmd: string[], input?: string) => Promise<
 >
 
 let run: Run = async ([cmd, ...args], input) => {
-  let child = new Deno.Command(cmd, {
+  let child = spawnCommand(cmd, {
     args,
     stdin: input == null ? 'null' : 'piped',
     stdout: 'piped',
@@ -90,8 +93,8 @@ export let based = async (
     has?: (ref: string, password: string) => Promise<boolean>
   },
 ) => {
-  let want = tag(await Deno.readTextFile(here('base/Dockerfile')))
-  let from = pinned(await Deno.readTextFile(here('../wrangler.toml')))
+  let want = tag(await io.readTextFile(here('base/Dockerfile')))
+  let from = pinned(await io.readTextFile(here('../wrangler.toml')))
   if (!from?.endsWith(':' + want)) {
     throw new Error(
       `wrangler.toml names ${from}, but base/Dockerfile is ${want}`,
@@ -166,7 +169,7 @@ export let imaged = async (
     '-t',
     from,
     ...dockerfile ? ['-f', dockerfile] : [],
-    ...Deno.env.get('WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST')
+    ...system.env.get('WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST')
       ? ['--network', 'host']
       : [],
     context,
@@ -180,9 +183,9 @@ export let imaged = async (
   throw new Error(`docker push ${from} failed three times`)
 }
 
-if (import.meta.main) {
+if (system.main(import.meta.url)) {
   let { WRANGLER } = await import('../wrangler.ts')
   console.log(
-    await based({ wrangler: WRANGLER, dry: Deno.args.includes('--dry-run') }),
+    await based({ wrangler: WRANGLER, dry: system.args.includes('--dry-run') }),
   )
 }

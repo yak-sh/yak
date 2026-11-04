@@ -8,11 +8,12 @@
 // and the one global it reads as it loads, the compatibility flags
 // wrangler.toml gives the Worker, which is where it learns whether it may
 // fetch a client's metadata document (identity.ts `cimd`).
+import * as io from '@yaks/file/io'
 import { parse } from '@std/toml'
 
 type Flags = { compatibility_flags: string[] }
 let { compatibility_flags } = parse(
-  Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
+  io.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
 ) as Flags
 ;(globalThis as { Cloudflare?: unknown }).Cloudflare ??= {
   compatibilityFlags: Object.fromEntries(

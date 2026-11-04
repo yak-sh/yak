@@ -1,3 +1,5 @@
+import * as disk from '@yaks/file/io'
+import { command as launchCommand } from '@yaks/process/command'
 // Ready-first handover for the box's processes. Each role's replacement is
 // started from its unit template and waited on until it says it is ready (its
 // readiness file); only once every replacement is ready are the old units asked
@@ -44,7 +46,7 @@ export let ROLES: Role[] = [
 export let PATIENCE = 120_000
 
 let run: NonNullable<RestartOptions['run']> = async (command, args) => {
-  let result = await new Deno.Command(command, {
+  let result = await launchCommand(command, {
     args,
     signal: AbortSignal.timeout(1_000),
     stdout: 'piped',
@@ -107,9 +109,9 @@ export let readyFile = (
 /** Whether a ready file is there. */
 export let ready = async (path: string): Promise<boolean> => {
   try {
-    return (await Deno.stat(path)).isFile
+    return (await disk.stat(path)).isFile
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false
+    if (error instanceof disk.errors.NotFound) return false
     throw error
   }
 }
@@ -124,7 +126,7 @@ let matches = (pattern: string, unit: string) => {
 // Keep the inode: unlinking it would let a waiter and a new caller lock
 // different files. The OS releases the lock even if the CLI is killed.
 let lock = async (path: string) => {
-  let file = await Deno.open(path, { create: true, write: true })
+  let file = await disk.open(path, { create: true, write: true })
   try {
     if (!await file.tryLock(true)) {
       throw new Error('A restart is already in progress')

@@ -1,3 +1,6 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
+import { command as launchCommand } from '@yaks/process/command'
 // `deno run -A jsr:@yaks/cli/install`: puts `yak` on this machine at the
 // release this module came from, so the command, every plugin a config names
 // by package (./config.ts `located`) and the canvas it bundles are one set.
@@ -117,18 +120,18 @@ let answered = async (url: string, by: number) => {
 }
 
 let deno = (args: string[], cwd: string, quiet = false) =>
-  new Deno.Command(Deno.execPath(), {
+  launchCommand(system.execPath(), {
     args,
     cwd,
     stdout: quiet ? 'null' : 'inherit',
     stderr: quiet ? 'piped' : 'inherit',
   }).output()
 
-if (import.meta.main) {
-  let dir = await Deno.makeTempDir({ prefix: 'yak-install-' })
+if (system.main(import.meta.url)) {
+  let dir = await disk.makeTempDir({ prefix: 'yak-install-' })
   try {
     let config = `${dir}/deno.json`
-    await Deno.writeTextFile(config, JSON.stringify(released))
+    await disk.writeTextFile(config, JSON.stringify(released))
     // Run from the empty directory, since `deno install` also folds in the
     // dependencies of any package.json it finds above where it runs.
     let { code } = await deno(install(cli.version, config), dir)
@@ -147,7 +150,7 @@ if (import.meta.main) {
       }
       if (warm) {
         let port = free()
-        let server = new Deno.Command(Deno.execPath(), {
+        let server = launchCommand(system.execPath(), {
           args: run(cli.version, config, serving(dir, port)),
           cwd: dir,
           stdout: 'null',
@@ -170,8 +173,8 @@ if (import.meta.main) {
           'which starts a graph on this machine',
       )
     }
-    Deno.exitCode = code
+    system.setExitCode(code)
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    await disk.remove(dir, { recursive: true })
   }
 }

@@ -326,4 +326,4 @@ graph separately.
 
 `.` and `./vocab` run in Deno, Node and the browser — they call no platform API.
 `./views` are Preact components a host mounts through @yaks/inspect's contract.
-`./tools` and `./effects` write files through Deno.
+`./tools` and `./effects` write files through @yaks/file.

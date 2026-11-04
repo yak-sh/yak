@@ -1,3 +1,4 @@
+import { freshFetch } from '@yaks/process/http'
 // The Worker is a fetch double whose first answers fail the way a connection
 // on a lossy path does.
 import { equal, test } from '@yaks/testing'
@@ -9,13 +10,19 @@ let timeout = () => new DOMException('timed out', 'TimeoutError')
 // connection.
 let worker = (...failures: Error[]) => {
   let clients: unknown[] = []
-  let go = ((_: unknown, init?: RequestInit & { client?: unknown }) => {
-    clients.push(init?.client)
-    let failure = failures.shift()
-    return failure
-      ? Promise.reject(failure)
-      : Promise.resolve(Response.json([]))
-  }) as typeof fetch
+  let go = freshFetch(() => {
+    let client = {}
+    return {
+      fetch: (() => {
+        clients.push(client)
+        let failure = failures.shift()
+        return failure
+          ? Promise.reject(failure)
+          : Promise.resolve(Response.json([]))
+      }) as typeof fetch,
+      close: () => {},
+    }
+  })
   return { go, clients }
 }
 // What a request answered, or how it failed: `Unavailable` where the tracker

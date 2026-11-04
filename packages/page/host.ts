@@ -1,3 +1,4 @@
+import { command as processCommand } from '@yaks/process/command'
 // The configuration this plugin reads, turned into the objects it uses.
 //
 // Two things about archiving a page belong to the server and not to the graph:
@@ -61,7 +62,7 @@ export let archiver = ({ run, timeout = 60_000 }: Run): Archive => {
   return async (url) => {
     let said = rest.map((a) => a.replaceAll('{url}', url))
     let args = said.some((a, i) => a != rest[i]) ? said : [...said, url]
-    let out = await new Deno.Command(cmd, {
+    let out = await processCommand(cmd, {
       args,
       stdout: 'piped',
       stderr: 'piped',

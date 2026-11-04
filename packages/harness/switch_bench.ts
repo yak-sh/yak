@@ -1,4 +1,7 @@
 /** Isolated session-switch benchmark. No default database is opened. */
+
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
@@ -38,7 +41,7 @@ let seeded = fixture(async (path: string, count: number, depth: number) => {
 export async function measure(
   args: string[] = [],
 ): Promise<Record<string, Samples>> {
-  let directory = await Deno.makeTempDir()
+  let directory = await fs.makeTempDir()
   let count = Number(args[0] ?? 100)
   let depth = Number(args[1] ?? 1000)
   await seeded(directory + '/test.db', count, depth)
@@ -88,8 +91,8 @@ export async function measure(
     screen.free()
     ui.close()
     await r.close()
-    await Deno.remove(directory, { recursive: true })
+    await fs.remove(directory, { recursive: true })
   }
 }
 
-if (import.meta.main) await standaloneMain('harness-switch')
+if (systemProcess.main(import.meta.url)) await standaloneMain('harness-switch')

@@ -1,9 +1,12 @@
 // The transcript files each CLI keeps: discovery and the first metadata line.
 // Discovery describes sources; the bounded session duty decides when to read.
 
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
+
 /** Where Claude keeps its transcripts on this machine. */
 export let claudeProjects = (): string | undefined => {
-  let env = globalThis.Deno?.env
+  let env = systemProcess.env
   let root = env?.get('CLAUDE_CONFIG_DIR') ??
     (env?.get('HOME') ? `${env.get('HOME')}/.claude` : undefined)
   return root && `${root}/projects`
@@ -11,7 +14,7 @@ export let claudeProjects = (): string | undefined => {
 
 /** Where Claude keeps one file per running process, naming its session. */
 export let claudeRunning = (): string | undefined => {
-  let env = globalThis.Deno?.env
+  let env = systemProcess.env
   let root = env?.get('CLAUDE_CONFIG_DIR') ??
     (env?.get('HOME') ? `${env.get('HOME')}/.claude` : undefined)
   return root && `${root}/sessions`
@@ -19,7 +22,7 @@ export let claudeRunning = (): string | undefined => {
 
 /** Where Codex keeps its rollout files. */
 export let codexSessions = (): string | undefined => {
-  let env = globalThis.Deno?.env
+  let env = systemProcess.env
   let root = env?.get('CODEX_HOME') ??
     (env?.get('HOME') ? `${env.get('HOME')}/.codex` : undefined)
   return root && `${root}/sessions`
@@ -27,8 +30,9 @@ export let codexSessions = (): string | undefined => {
 
 /** What a compressed transcript is at a moment: its size and when it was
  * written. A read that reached its end records this as `transcript.finished`. */
-export let versionOf = (file: Deno.FileInfo | undefined): string =>
-  file ? `${file.size}:${file.mtime?.getTime() ?? 0}` : ''
+export let versionOf = (
+  file: Pick<fs.FileInfo, 'size' | 'mtime'> | undefined,
+): string => file ? `${file.size}:${file.mtime?.getTime() ?? 0}` : ''
 
 /** One transcript on disk: the harness's id for the session, and the file. */
 export type Found = {
@@ -46,7 +50,7 @@ export let transcripts = (dir: string): Found[] => {
   let agents: Found[] = []
   let list = (d: string) => {
     try {
-      return [...Deno.readDirSync(d)]
+      return [...fs.readDirSync(d)]
     } catch {
       return []
     }
@@ -76,9 +80,9 @@ export let transcripts = (dir: string): Found[] => {
 // Rollouts are dated YYYY/MM/DD, and the filename carries the thread UUID.
 // The same bounded look follows both providers; no second duty scans them.
 export let rollouts = (dir: string, depth = 0): Found[] => {
-  let files: Deno.DirEntry[]
+  let files: fs.DirEntry[]
   try {
-    files = [...Deno.readDirSync(dir)]
+    files = [...fs.readDirSync(dir)]
   } catch {
     return []
   }
@@ -103,7 +107,7 @@ export let rollouts = (dir: string, depth = 0): Found[] => {
 // Only the header is needed to identify a child. Never read its whole log
 // merely to open a tail; the importer will read the remaining bytes once.
 export let header = (path: string): Record<string, unknown> => {
-  let file = Deno.openSync(path)
+  let file = fs.openSync(path)
   try {
     let buf = new Uint8Array(4096), text = '', dec = new TextDecoder()
     for (let n = file.readSync(buf); n; n = file.readSync(buf)) {

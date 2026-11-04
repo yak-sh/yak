@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 /**
  * @yaks/mirror — one sync between files and a graph, each direction optional.
  *
@@ -132,16 +133,16 @@ export let plan = async (
 // reader mid-write — a harness loading its instructions — sees the old file or
 // the new one, never an empty one.
 let put = (path: string, text: string) => {
-  Deno.mkdirSync(path.slice(0, path.lastIndexOf('/')) || '.', {
+  io.mkdirSync(path.slice(0, path.lastIndexOf('/')) || '.', {
     recursive: true,
   })
   let tmp = `${path}.${crypto.randomUUID()}.tmp`
   try {
-    Deno.writeTextFileSync(tmp, text)
-    Deno.renameSync(tmp, path)
+    io.writeTextFileSync(tmp, text)
+    io.renameSync(tmp, path)
   } catch (e) {
     try {
-      Deno.removeSync(tmp)
+      io.removeSync(tmp)
     } catch { /* nothing to clean */ }
     throw e
   }
@@ -168,7 +169,7 @@ export let sync = async (b: Binding): Promise<Report> => {
     } else if (act == 'write') {
       try {
         if (text == null) {
-          Deno.removeSync(path)
+          io.removeSync(path)
           out.removed.push(path)
           learned.set(path, null)
         } else {
@@ -204,7 +205,7 @@ export let present = async (paths: string[]): Promise<Map<string, string>> => {
   for (let path of paths) {
     let text: string
     try {
-      text = Deno.readTextFileSync(path)
+      text = io.readTextFileSync(path)
     } catch {
       continue
     }
@@ -220,7 +221,7 @@ export let memo = (
 ): Pick<Binding, 'agreed' | 'remember'> => {
   let load = (): Record<string, Agreed> => {
     try {
-      return JSON.parse(Deno.readTextFileSync(file))
+      return JSON.parse(io.readTextFileSync(file))
     } catch {
       return {}
     }

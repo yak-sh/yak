@@ -97,6 +97,7 @@
     "npm:typescript@5.6.3": "5.6.3",
     "npm:typescript@6.0.3": "6.0.3",
     "npm:typescript@7.0.2": "7.0.2",
+    "npm:undici@^7.28.0": "7.28.0",
     "npm:web-tree-sitter@0.20.8": "0.20.8",
     "npm:wrangler@4.111.0": "4.111.0_@cloudflare+workers-types@4.20260702.1",
     "npm:zod-to-json-schema@3.25.2": "3.25.2_zod@3.25.76",
@@ -3141,7 +3142,8 @@
         "dependencies": [
           "jsr:@std/assert@1",
           "jsr:@std/encoding@^1.0.10",
-          "jsr:@std/path@1"
+          "jsr:@std/path@1",
+          "npm:undici@^7.28.0"
         ]
       },
       "packages/project": {

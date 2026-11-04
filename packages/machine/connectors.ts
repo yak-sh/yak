@@ -1,3 +1,4 @@
+import { command as processCommand } from '@yaks/process/command'
 // Explicit computer transports. Scripts cross only the configured connection;
 // connector failures never fall back to the graph server's filesystem.
 import { Refused } from '@yaks/graph/errors'
@@ -13,7 +14,7 @@ export type ControlRunner = (
 
 /** Run a bounded control command; managed user commands are detached elsewhere. */
 export let control: ControlRunner = async (command, args, input) => {
-  let child = new Deno.Command(command, {
+  let child = processCommand(command, {
     args,
     stdin: 'piped',
     stdout: 'piped',

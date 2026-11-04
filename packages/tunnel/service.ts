@@ -1,3 +1,4 @@
+import { command as processCommand } from '@yaks/process/command'
 // The machine's end of a tunnel, as a duty: the module a machine's `yak`
 // imports at `@yaks/tunnel/service` to keep its tunnel up for as long as the
 // process that holds the role is (M-39540: one process at a time runs a
@@ -51,7 +52,7 @@ export let MOST = 60_000
 
 /** `cloudflared` as a child of this process, its warnings on our stderr. */
 export let spawned: Spawn = (cmd, args, env) => {
-  let child = new Deno.Command(cmd, {
+  let child = processCommand(cmd, {
     args,
     env,
     stdin: 'null',

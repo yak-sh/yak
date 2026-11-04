@@ -1,3 +1,6 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
 // Git checkouts on the machine this process runs on: find one, record what Git
 // reports about it, create a new worktree, take one back once it holds
 // nothing, and create it again where it stood.
@@ -29,7 +32,7 @@ export let worktreeEid = (repository: string, path: string): string =>
   derivedEid('worktree|' + repository + '|' + path)
 
 let git = async (cwd: string, args: string[], optional = false) => {
-  let p = await new Deno.Command('git', {
+  let p = await processCommand('git', {
     cwd,
     args,
     stdout: 'piped',
@@ -49,10 +52,10 @@ let canonical = async (path: string): Promise<string> => {
   // The parent directories that do exist are canonicalized, so a path can be
   // canonicalized before the checkout at the end of it has been created.
   try {
-    return await Deno.realPath(path)
+    return await io.realPath(path)
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
-    let absolute = path.startsWith('/') ? path : Deno.cwd() + '/' + path
+    if (!io.isNotFound(e)) throw e
+    let absolute = path.startsWith('/') ? path : system.cwd() + '/' + path
     let parts: string[] = []
     for (let part of absolute.split('/')) {
       if (part == '..') parts.pop()
@@ -78,8 +81,8 @@ let locked = async <T>(
   let before = pending.get(path) ?? Promise.resolve()
   let run = before.catch(() => {}).then(async () => {
     let dir = common + '/yaks-locks'
-    await Deno.mkdir(dir, { recursive: true })
-    let file = await Deno.open(
+    await io.mkdir(dir, { recursive: true })
+    let file = await io.open(
       dir + '/' + derivedEid('worktree lock|' + common + '|' + path),
       { create: true, write: true },
     )
@@ -119,28 +122,28 @@ export let locate = async (cwd: string): Promise<
       error.message.includes('fatal: not a git repository')
     ) {
       try {
-        await Deno.lstat(`${cwd}/.git`)
+        await io.lstat(`${cwd}/.git`)
       } catch (missing) {
-        if (missing instanceof Deno.errors.NotFound) return undefined
+        if (io.isNotFound(missing)) return undefined
         throw missing
       }
     }
-    if (!(error instanceof Deno.errors.NotFound)) {
+    if (!io.isNotFound(error)) {
       throw new Error(`Git checkout ${cwd}: ${String(error)}`, { cause: error })
     }
     // ENOENT can also mean the git executable is missing. Only a missing
     // checkout directory is an absent observation.
     try {
-      await Deno.stat(cwd)
+      await io.stat(cwd)
     } catch (missing) {
-      if (missing instanceof Deno.errors.NotFound) return undefined
+      if (io.isNotFound(missing)) return undefined
       throw missing
     }
     throw new Error(`Git checkout ${cwd}: ${String(error)}`, { cause: error })
   }
   if (!dirs) return undefined
   let [path, common, gitdir] = await Promise.all(
-    dirs.split('\n').map((dir) => Deno.realPath(dir)),
+    dirs.split('\n').map((dir) => io.realPath(dir)),
   )
   return { path, common, gitdir }
 }
@@ -373,10 +376,10 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   }
   if (!intent) {
     try {
-      await Deno.stat(path)
+      await io.stat(path)
       throw new Error('checkout path already exists; attach with home instead')
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e
+      if (!io.isNotFound(e)) throw e
     }
   }
   await g.apply([{
@@ -458,7 +461,7 @@ export let createWorktree = async (
   request: CheckoutRequest,
 ): Promise<Bundle> => {
   let path = await canonical(request.path)
-  let common = await Deno.realPath(
+  let common = await io.realPath(
     (await git(source, [
       'rev-parse',
       '--path-format=absolute',
@@ -485,10 +488,10 @@ export type Held = 'dirty' | 'unlanded' | 'failed'
 let processCwd = async (pid: string): Promise<string> => {
   let path = `/proc/${pid}/cwd`
   try {
-    return await Deno.realPath(path)
+    return await io.realPath(path)
   } catch (error) {
-    if (!(error instanceof Deno.errors.PermissionDenied)) throw error
-    let read = await new Deno.Command('systemd-run', {
+    if (!io.isPermissionDenied(error)) throw error
+    let read = await processCommand('systemd-run', {
       args: [
         '--user',
         '--quiet',
@@ -501,8 +504,8 @@ let processCwd = async (pid: string): Promise<string> => {
         pid,
       ],
       env: {
-        XDG_RUNTIME_DIR: `/run/user/${Deno.uid()}`,
-        DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${Deno.uid()}/bus`,
+        XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
+        DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${system.uid()}/bus`,
       },
       stdout: 'piped',
       stderr: 'piped',
@@ -511,7 +514,7 @@ let processCwd = async (pid: string): Promise<string> => {
     let cwd = output.startsWith('[') ? JSON.parse(output)[0] : output
     if (!read.success || !cwd.startsWith('/')) {
       // A process may have exited while the helper was starting.
-      await Deno.stat(`/proc/${pid}`)
+      await io.stat(`/proc/${pid}`)
       throw new Error(
         `Worktree collection cannot inspect ${path}: ` +
           new TextDecoder().decode(read.stderr).trim(),
@@ -526,22 +529,22 @@ let processCwd = async (pid: string): Promise<string> => {
  * including agents outside the graph. Other users' sessions are protected by
  * their graph homes. An unreadable same-user cwd refuses collection. */
 export let processCwds = async (): Promise<Set<string>> => {
-  if (Deno.build.os != 'linux') {
+  if (system.os != 'linux') {
     throw new Error(
       'Worktree collection requires a local process directory scan',
     )
   }
   let cwds = await scan(await running(), async (pid) => {
     // Linux restricts other users' cwd links even when procfs is readable.
-    if ((await Deno.stat(`/proc/${pid}`)).uid != Deno.uid()) return []
+    if ((await io.stat(`/proc/${pid}`)).uid != system.uid()) return []
     return [await processCwd(pid)]
   })
-  return new Set([await Deno.realPath(Deno.cwd()), ...cwds])
+  return new Set([await io.realPath(system.cwd()), ...cwds])
 }
 
 // Every process listed in procfs, by pid.
 let running = async (): Promise<string[]> =>
-  (await Array.fromAsync(Deno.readDir('/proc')))
+  (await Array.fromAsync(io.readDir('/proc')))
     .map((entry) => entry.name).filter((name) => /^\d+$/.test(name))
 
 // What `read` finds for each process, asked of them all at once: a hidden one
@@ -555,7 +558,7 @@ let scan = async (
   (await Promise.all(pids.map((pid) =>
     read(pid).catch((error) => {
       if (
-        error instanceof Deno.errors.NotFound ||
+        io.isNotFound(error) ||
         error instanceof Error && /\(os error [23]\)/.test(error.message)
       ) return []
       throw error
@@ -569,32 +572,32 @@ let scan = async (
 export let processPaths = async (
   pids?: string[],
 ): Promise<Set<string>> => {
-  if (Deno.build.os != 'linux') {
+  if (system.os != 'linux') {
     throw new Error('Worktree collection requires a local process path scan')
   }
   return new Set(
     await scan(pids ?? await running(), async (pid) => {
       let proc = `/proc/${pid}`
-      if ((await Deno.stat(proc)).uid != Deno.uid()) return []
+      if ((await io.stat(proc)).uid != system.uid()) return []
       let paths: string[] = []
       try {
-        paths.push(await Deno.realPath(proc + '/cwd'))
-        for await (let fd of Deno.readDir(proc + '/fd')) {
+        paths.push(await io.realPath(proc + '/cwd'))
+        for await (let fd of io.readDir(proc + '/fd')) {
           try {
-            let path = await Deno.readLink(proc + '/fd/' + fd.name)
+            let path = await io.readLink(proc + '/fd/' + fd.name)
             if (path.startsWith('/')) {
               paths.push(path.replace(/ \(deleted\)$/, ''))
             }
           } catch (error) {
-            if (!(error instanceof Deno.errors.NotFound)) throw error
+            if (!io.isNotFound(error)) throw error
           }
         }
         return paths
       } catch (error) {
-        if (!(error instanceof Deno.errors.PermissionDenied)) throw error
+        if (!io.isPermissionDenied(error)) throw error
         // The helper's JSON response proves both cwd and descriptors were
         // inspected. An older cwd-only helper cannot prove safe collection.
-        let read = await new Deno.Command('systemd-run', {
+        let read = await processCommand('systemd-run', {
           args: [
             '--user',
             '--quiet',
@@ -607,13 +610,13 @@ export let processPaths = async (
             pid,
           ],
           env: {
-            XDG_RUNTIME_DIR: `/run/user/${Deno.uid()}`,
-            DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${Deno.uid()}/bus`,
+            XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
+            DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${system.uid()}/bus`,
           },
           stdout: 'piped',
           stderr: 'piped',
         }).output()
-        await Deno.stat(proc)
+        await io.stat(proc)
         let found: unknown
         try {
           found = JSON.parse(new TextDecoder().decode(read.stdout))
@@ -648,7 +651,7 @@ let quiet = (cwd: string, args: string[]): Promise<string | undefined> =>
 // `--relative-paths` names it relative to itself, never to this process.
 let gitdirOf = async (path: string): Promise<string | undefined> => {
   let named = /^gitdir:\s*(.+)$/m.exec(
-    await Deno.readTextFile(path + '/.git').catch(() => ''),
+    await io.readTextFile(path + '/.git').catch(() => ''),
   )?.[1]?.trim()
   return named && !named.startsWith('/') ? `${path}/${named}` : named
 }
@@ -657,7 +660,7 @@ let gitdirOf = async (path: string): Promise<string | undefined> => {
  * so nothing can be committed from it and nothing read out of it. */
 export let lost = async (path: string): Promise<boolean> => {
   let named = await gitdirOf(path)
-  return !!named && !await Deno.stat(named).then(() => true, () => false)
+  return !!named && !await io.stat(named).then(() => true, () => false)
 }
 
 /** How long, in milliseconds, since Git last wrote this linked worktree's own
@@ -673,7 +676,7 @@ export let idleFor = async (
   if (!dir) return 0
   let times = await Promise.all(
     ['HEAD', 'index', 'logs/HEAD'].map((f) =>
-      Deno.stat(dir + '/' + f).then((s) => s.mtime?.getTime() ?? 0, () => 0)
+      io.stat(dir + '/' + f).then((s) => s.mtime?.getTime() ?? 0, () => 0)
     ),
   )
   return Math.max(0, now - Math.max(...times))
@@ -803,7 +806,7 @@ export let reclaim = async (
   if (await lost(path)) {
     // Without Git's index and HEAD, cleanliness and landing cannot be proved.
     if (landed) return 'unlanded'
-    return await Deno.remove(path, { recursive: true })
+    return await io.remove(path, { recursive: true })
       .then(() => undefined, () => 'failed' as Held)
   }
   let { held, branch } = await holding(path, landed, base)
@@ -846,7 +849,7 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
   }
   let common = repo.common
   if (typeof common != 'string') {
-    if (await Deno.stat(path).then(() => true, () => false)) return path
+    if (await io.stat(path).then(() => true, () => false)) return path
     throw new Error('nothing recorded to cut ' + path + ' again from')
   }
   return locked(common, path, () => replace(g, path, w))
@@ -855,7 +858,7 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
 // Called with the checkout path locked by create or restore. A peer may have
 // restored it while this request waited; an existing path is never replaced.
 let replace = async (g: Graph, path: string, w: Comp): Promise<string> => {
-  if (await Deno.stat(path).then(() => true, () => false)) return path
+  if (await io.stat(path).then(() => true, () => false)) return path
   let common = ((await row(g, String(w.repository)))?.repository as Comp)
     ?.common
   let head = w.head

@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 // A page's examples, loaded as the tests they declare. Each compiled module
 // is written beside its page, so its imports resolve as the page's do, as a
 // hidden file named for the page, the example and this process
@@ -15,7 +17,7 @@ import {
 import { written } from './find.ts'
 import { test } from './suite.ts'
 
-let url = (path: string) => new URL(path, `file://${Deno.cwd()}/`).href
+let url = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 
 let EXT: Record<string, string> = {
   tsx: 'tsx',
@@ -30,14 +32,14 @@ export let beside = (page: string, tag: string, lang = 'ts') => {
   let i = page.lastIndexOf('/')
   return `${page.slice(0, i + 1)}.${
     page.slice(i + 1)
-  }.${tag}.${Deno.pid}.example.${EXT[lang] ?? 'ts'}`
+  }.${tag}.${system.pid}.example.${EXT[lang] ?? 'ts'}`
 }
 
 let alive = (pid: number) => {
   try {
-    return Deno.statSync(`/proc/${pid}`).isDirectory
+    return io.statSync(`/proc/${pid}`).isDirectory
   } catch {
-    return !Deno.statSync('/proc').isDirectory
+    return !io.statSync('/proc').isDirectory
   }
 }
 
@@ -47,10 +49,10 @@ export let sweep = async (pages: string[]) => {
     pages.map((p) => p.slice(0, p.lastIndexOf('/') + 1) || './'),
   )
   for (let dir of dirs) {
-    for (let e of Deno.readDirSync(dir)) {
+    for (let e of io.readDirSync(dir)) {
       let pid = written(e.name)
       if (pid && !alive(pid)) {
-        await Deno.remove(`${dir}${e.name}`).catch(() => {})
+        await io.remove(`${dir}${e.name}`).catch(() => {})
       }
     }
   }
@@ -70,7 +72,7 @@ let runs = (source: string, page: string) => ({
 export let plan = (pages: string[]) =>
   Promise.try(() =>
     pages.map((page) => {
-      let { fenced, lines } = runs(Deno.readTextFileSync(page), page)
+      let { fenced, lines } = runs(io.readTextFileSync(page), page)
       let base = page.slice(page.lastIndexOf('/') + 1)
       let named = new Set([
         ...module(page) ? [`./${base}`] : [],
@@ -78,7 +80,7 @@ export let plan = (pages: string[]) =>
           .flatMap((e) => specifiers(e.code)),
       ])
       let path = beside(page, 'plan')
-      Deno.writeTextFileSync(
+      io.writeTextFileSync(
         path,
         [...named].map((s) => `import ${JSON.stringify(s)}\n`).join(''),
       )
@@ -94,7 +96,7 @@ let load = async (
   lang?: string,
 ) => {
   let path = beside(page, tag, lang)
-  await Deno.writeTextFile(path, code)
+  await io.writeTextFile(path, code)
   try {
     await import(url(path))
   } catch (error) {
@@ -102,7 +104,7 @@ let load = async (
       throw error
     })
   } finally {
-    await Deno.remove(path).catch(() => {})
+    await io.remove(path).catch(() => {})
   }
 }
 
@@ -112,7 +114,7 @@ let exported = async (page: string): Promise<string[]> =>
 
 /** Loads a page's examples, each declaring its test. */
 export let examples = async (page: string) => {
-  let { fenced, lines } = runs(Deno.readTextFileSync(page), page)
+  let { fenced, lines } = runs(io.readTextFileSync(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
     let name = await fenceName(page, f)

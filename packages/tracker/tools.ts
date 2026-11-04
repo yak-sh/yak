@@ -189,9 +189,9 @@ export type ToolOptions = Options & {
 }
 
 export let runs = (
-  _host: unknown = {},
+  host: { fetch?: typeof fetch } = {},
   options: ToolOptions = {},
-  go: typeof fetch = fetch,
+  go: typeof fetch = host.fetch ?? fetch,
 ): Runs => {
   let source = (call: Bundle) =>
     str(argsOf(call).source) || options.source || 'box'

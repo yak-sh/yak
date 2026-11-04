@@ -1,3 +1,5 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 import type { Application } from './app.ts'
 // Build the same page and stylesheet the routes facet serves, into a static
 // host's asset directory. The runtime only supplies mounts and authentication.
@@ -5,10 +7,10 @@ import { bundle } from '@yaks/cli/page'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 
 export let assets = async (to: string, app: Application) => {
-  await Deno.mkdir(to, { recursive: true })
+  await io.mkdir(to, { recursive: true })
   let here = new URL('./', import.meta.url)
   await Promise.all([
-    Deno.writeTextFile(
+    io.writeTextFile(
       `${to}/app.js`,
       await bundle({
         code: `import ${
@@ -17,10 +19,10 @@ export let assets = async (to: string, app: Application) => {
         at: app.entry,
       }) as string,
     ),
-    Deno.writeTextFile(
+    io.writeTextFile(
       `${to}/styles.css`,
       (await stylesheet({ kits, theme: everforest })) + '\n' +
-        (app.styles ? await Deno.readTextFile(app.styles) : ''),
+        (app.styles ? await io.readTextFile(app.styles) : ''),
     ),
     ...[
       'index.html',
@@ -29,11 +31,13 @@ export let assets = async (to: string, app: Application) => {
       'icon-512.png',
       'icon-maskable-512.png',
       'apple-touch-icon.png',
-    ].map((name) => Deno.copyFile(new URL(name, here), `${to}/${name}`)),
+    ].map((name) => io.copyFile(new URL(name, here), `${to}/${name}`)),
   ])
 }
-if (import.meta.main) {
-  if (!Deno.args[1]) throw new Error('assets needs an application ./web module')
-  let { app } = await import(Deno.args[1])
-  await assets(Deno.args[0], app)
+if (system.main(import.meta.url)) {
+  if (!system.args[1]) {
+    throw new Error('assets needs an application ./web module')
+  }
+  let { app } = await import(system.args[1])
+  await assets(system.args[0], app)
 }

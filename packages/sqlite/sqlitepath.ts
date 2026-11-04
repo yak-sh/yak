@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // Which SQLite library the FFI driver opens, set before the driver loads.
 //
 // @db/sqlite reaches a native library through FFI, and when nothing names one
@@ -25,10 +26,10 @@ let paths: Record<string, string> = {
 
 /** The library @db/sqlite will open: what the environment already names, else
  * this platform's system SQLite. */
-export let sqlitePath: string = Deno.env.get('DENO_SQLITE_PATH') ??
-  paths[Deno.build.os]
+export let sqlitePath: string = system.env.get('DENO_SQLITE_PATH') ??
+  paths[system.os]
 
 if (!sqlitePath) {
-  throw new Error(`No system SQLite library for ${Deno.build.os}`)
+  throw new Error(`No system SQLite library for ${system.os}`)
 }
-Deno.env.set('DENO_SQLITE_PATH', sqlitePath)
+system.env.set('DENO_SQLITE_PATH', sqlitePath)

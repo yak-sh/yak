@@ -1,4 +1,6 @@
 // Reuse generated assets while their complete source set and output bytes agree.
+import * as io from '@yaks/file/io'
+import { command as spawnCommand } from '@yaks/process/command'
 import { remember } from '@yaks/cli/memo'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
@@ -10,15 +12,15 @@ let hash = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
 let stamp = async (paths: string[]) =>
   await Promise.all(
-    paths.map(async (path) => [path, hash(await Deno.readFile(path))] as const),
+    paths.map(async (path) => [path, hash(await io.readFile(path))] as const),
   )
 let agrees = async (files: readonly (readonly [string, string])[]) => {
   try {
     return (await Promise.all(
-      files.map(async ([path, was]) => hash(await Deno.readFile(path)) == was),
+      files.map(async ([path, was]) => hash(await io.readFile(path)) == was),
     )).every(Boolean)
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false
+    if (error instanceof io.errors.NotFound) return false
     throw error
   }
 }
@@ -44,11 +46,11 @@ export let materialized = async (
       valid: agrees,
       imports: () => Promise.resolve([]),
       files: {
-        ...Deno,
+        ...io,
         readTextFileSync: (path) =>
           paths.has(path) && !/\.(?:jsonc?|lock)$/.test(path)
-            ? Buffer.from(Deno.readFileSync(path)).toString('base64')
-            : Deno.readTextFileSync(path),
+            ? Buffer.from(io.readFileSync(path)).toString('base64')
+            : io.readTextFileSync(path),
       },
     },
   )
@@ -69,7 +71,7 @@ export let assetInputs = (paths: string[]) =>
 let outputs = async (root: string) => {
   let publicDir = join(root, 'public')
   let { url } = JSON.parse(
-    await Deno.readTextFile(join(publicDir, '_cli/current.json')),
+    await io.readTextFile(join(publicDir, '_cli/current.json')),
   )
   return [
     ...[
@@ -104,7 +106,7 @@ export let assets = async (
   root: string,
   make: () => Promise<unknown>,
 ) => {
-  let listed = await new Deno.Command('git', {
+  let listed = await spawnCommand('git', {
     args: ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
     cwd: repo,
     stdout: 'piped',

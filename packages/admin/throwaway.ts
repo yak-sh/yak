@@ -2,6 +2,8 @@
 // the account, sign out. The account reaches the command through its own
 // environment, so no other process on the box sees it selected. A terminal
 // command, because a stored tool call must not be able to run a shell.
+
+import { command as processCommand } from '@yaks/process/command'
 import type { CliCommand } from '@yaks/cli/host'
 import { person } from '@yaks/cli/config'
 import { AccountError, authorize, disconnect, pick } from '@yaks/connections'
@@ -21,7 +23,7 @@ export type Run = (
 ) => Promise<number>
 
 let shell: Run = async (command, env) =>
-  (await new Deno.Command('sh', { args: ['-c', command], env }).spawn().status)
+  (await processCommand('sh', { args: ['-c', command], env }).spawn().status)
     .code
 
 let signIn = async (host: Host, owner: string, address: string) => {

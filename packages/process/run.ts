@@ -1,3 +1,7 @@
+import * as disk from 'node:fs'
+import { readdir } from 'node:fs/promises'
+import * as system from './system.ts'
+import { command as processCommand } from './command.ts'
 // The supervisor: start a process, adopt one that is already running, pick
 // every unfinished one back up at start-up, and keep the wanted ones running.
 // Four entry points over one loop — watch the pid, write what the process
@@ -83,7 +87,7 @@ export type Opts = {
    * wanted it. The previous attempt's `exit` is deleted by the same
    * transaction, so nothing ever reads a fresh pid beside a stale exit code. */
   eid?: string
-  /** which machine's launcher to use (default this one's, `Deno.build.os`);
+  /** which machine's launcher to use (default this one's, `system.build.os`);
    * the macOS one runs anywhere perl does, which is how Linux tests it */
   os?: string
   /** whether a pid is running (default: `kill -0`) */
@@ -128,7 +132,7 @@ let beat = (o: Opts) => Math.min(o.poll ?? 1000, BEAT)
 /** Where this supervisor keeps its files. */
 export let dirOf = (
   o: Opts = {},
-  env: (name: string) => string | undefined = Deno.env.get,
+  env: (name: string) => string | undefined = system.env.get,
 ): string =>
   o.dir ?? env('PROCESS_DIR') ??
     `${env('TASKS_HOME') || `${env('HOME')}/.tasks`}/processes`
@@ -251,7 +255,7 @@ let line = (argv: string[]): string =>
   argv.map((a) => a.length > WORD ? `${a.slice(0, WORD)}…` : a).join(' ')
 
 let platformOf = (o: Opts): Platform => {
-  let os = o.os ?? Deno.build.os
+  let os = o.os ?? system.build.os
   let platform = platforms[os]
   if (!platform) throw new Error(`@yaks/process cannot launch on ${os}`)
   return platform
@@ -271,10 +275,10 @@ let spawn = (
   // `sh wrapper.sh` opened in between ran an empty script, so its child never
   // started. A rename replaces the file whole, and a shell already reading the
   // old one keeps reading all of it.
-  Deno.writeTextFileSync(`${wrapper}.${eid}`, WRAPPER)
-  Deno.renameSync(`${wrapper}.${eid}`, wrapper)
-  let p = platform({ unit: unit(eid), uid: Deno.uid() ?? 0 })
-  let child = new Deno.Command('sh', {
+  disk.writeFileSync(`${wrapper}.${eid}`, WRAPPER)
+  disk.renameSync(`${wrapper}.${eid}`, wrapper)
+  let p = platform({ unit: unit(eid), uid: system.uid() ?? 0 })
+  let child = processCommand('sh', {
     args: [
       '-c',
       LAUNCHER,
@@ -304,7 +308,7 @@ let spawn = (
 // The pidfile holds two numbers: the process group, then the child's pid.
 let pids = (path: string) => {
   try {
-    return Deno.readTextFileSync(path).trim().split(/\s+/)
+    return disk.readFileSync(path, 'utf8').trim().split(/\s+/)
       .map(Number).filter((n) => n > 0)
   } catch {
     return []
@@ -326,7 +330,7 @@ let groupOf = (path: string) => {
 
 let textOf = (path: string) => {
   try {
-    return Deno.readTextFileSync(path)
+    return disk.readFileSync(path, 'utf8')
   } catch {
     return '' // not written yet
   }
@@ -353,7 +357,7 @@ let exitIn = (path: string) => {
 
 let mtimeOf = (path: string) => {
   try {
-    return Deno.statSync(path).mtime?.getTime() ?? null
+    return disk.statSync(path).mtime?.getTime() ?? null
   } catch {
     return null // not written yet
   }
@@ -377,7 +381,7 @@ let elapsedOf = (dir: string, eid: string) => {
 // that it is still alive, and a signal to stop it. A negative target is a
 // process group.
 let kill = async (target: number, sig: string) =>
-  (await new Deno.Command('kill', {
+  (await processCommand('kill', {
     args: [`-${sig}`, String(target)],
     stdout: 'null',
     stderr: 'null',
@@ -417,9 +421,9 @@ export let signal = (
 // handed the previous attempt's result.
 let clear = (path: string) => {
   try {
-    Deno.removeSync(path)
+    disk.unlinkSync(path)
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if ((e as NodeJS.ErrnoException).code != 'ENOENT') throw e
   }
 }
 
@@ -435,9 +439,9 @@ export let clean = (eid: string, o: Opts = {}): void => {
 
 let fileInfo = (path: string) => {
   try {
-    return Deno.lstatSync(path)
+    return disk.lstatSync(path)
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if ((e as NodeJS.ErrnoException).code != 'ENOENT') throw e
     return undefined
   }
 }
@@ -482,7 +486,7 @@ export let sweep = async (
       let end = code?.mtime?.getTime()
       let exit = exitIn(f.code)
       if (
-        !code?.isFile || !started?.isFile || start == null || start <= 0 ||
+        !code?.isFile() || !started?.isFile() || start == null || start <= 0 ||
         end == null || end >= before || start > end ||
         exit == null || !Number.isInteger(exit) || exit < 0 || exit > 255
       ) continue
@@ -492,8 +496,8 @@ export let sweep = async (
     candidates = []
   }
   try {
-    for await (let e of Deno.readDir(dir)) {
-      if (!e.isFile || !e.name.endsWith('.code')) continue
+    for (let e of await readdir(dir, { withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith('.code')) continue
       if ((mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
       let eid = e.name.slice(0, -'.code'.length)
       // No launch marker means another package's file, not a finished run.
@@ -503,7 +507,7 @@ export let sweep = async (
     }
     await remove()
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+    if ((e as NodeJS.ErrnoException).code != 'ENOENT') throw e
   }
   return n
 }
@@ -517,19 +521,18 @@ let BLOCK = 64 * 1024
 let ending = (path: string, n: number): string[] => {
   let f
   try {
-    f = Deno.openSync(path)
+    f = disk.openSync(path, 'r')
   } catch {
     return [] // the file does not exist yet: nothing has been printed
   }
   try {
-    let at = f.statSync().size
+    let at = disk.fstatSync(f).size
     let blocks: Uint8Array[] = []
     for (let breaks = 0; at > 0 && breaks <= n;) {
       let from = Math.max(0, at - BLOCK)
       let buf = new Uint8Array(at - from)
-      f.seekSync(from, Deno.SeekMode.Start)
       for (let got = 0; got < buf.length;) {
-        let k = f.readSync(buf.subarray(got))
+        let k = disk.readSync(f, buf, got, buf.length - got, from + got)
         if (!k) break
         got += k
       }
@@ -540,7 +543,7 @@ let ending = (path: string, n: number): string[] => {
     let all = lines(new TextDecoder().decode(join(blocks)))
     return (at > 0 ? all.slice(1) : all).slice(-n)
   } finally {
-    f.close()
+    disk.closeSync(f)
   }
 }
 
@@ -630,17 +633,17 @@ export let launch = async (
   let platform = platformOf(o)
   let eid = o.eid ?? (o.mint ?? uuid)()
   let dir = dirOf(o)
-  Deno.mkdirSync(dir, { recursive: true })
+  disk.mkdirSync(dir, { recursive: true })
   let f = files(dir, eid)
   let argv = [spec.command, ...(spec.args ?? [])]
-  let cwd = spec.cwd ?? Deno.cwd()
+  let cwd = spec.cwd ?? system.cwd()
   // Deal with everything the last attempt on this row left behind before this
   // one starts: the pidfile and exit-code file are deleted — read as if they
   // belonged to this attempt, they would report the previous process both
   // alive and already finished. The output files are appended to.
   clear(f.pid)
   clear(f.code)
-  Deno.writeTextFileSync(f.started, String(Date.now()))
+  disk.writeFileSync(f.started, String(Date.now()))
   spawn(eid, argv, cwd, spec.env ?? {}, dir, platform)
   let pid = 0
   for (let end = Date.now() + (o.birth ?? 10_000); !pid && Date.now() < end;) {
@@ -847,7 +850,7 @@ let again = (restart: Restart | null | undefined, code: number) =>
 // command it may never run (see the header). Matching the basename catches
 // every way of writing the path that would start it again.
 let mine = () => {
-  let name = (Deno.mainModule ?? '').split('/').pop() ?? ''
+  let name = (system.mainModule ?? '').split('/').pop() ?? ''
   return (command: string) =>
     !!name && command.split(/\s+/).some((a) => a.split('/').pop() == name)
 }

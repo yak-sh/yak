@@ -1,6 +1,8 @@
 // Graph reads and working-tree views. A local view never imports files into
 // the graph: uncommitted edits belong to the checkout until its mirror runs.
 
+import * as fs from '@yaks/file/io'
+
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
@@ -380,10 +382,10 @@ export let skillFiles = async (
 // not permission to fall back to the graph's last imported instructions.
 let plain = async (path: string, directory: boolean): Promise<boolean> => {
   try {
-    let stat = await Deno.lstat(path)
+    let stat = await fs.lstat(path)
     return !stat.isSymlink && (directory ? stat.isDirectory : stat.isFile)
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false
+    if (fs.isNotFound(error)) return false
     throw error
   }
 }
@@ -405,7 +407,7 @@ let localSkills = async (
     if (path) byPath.set(path, skill)
   }
   let skills: Bundle[] = []
-  for await (let entry of Deno.readDir(dir)) {
+  for await (let entry of fs.readDir(dir)) {
     if (!entry.isDirectory || entry.isSymlink || !folder(entry.name)) continue
     let path = pathOf(entry.name)
     let local = `${root}/${path}`
@@ -416,9 +418,9 @@ let localSkills = async (
     }
     let source: string
     try {
-      source = await Deno.readTextFile(local)
+      source = await fs.readTextFile(local)
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) continue
+      if (fs.isNotFound(error)) continue
       throw error
     }
     let parsed: ReturnType<typeof parseSkill>

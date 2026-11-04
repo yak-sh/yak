@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as disk from '@yaks/file/io'
 // The graph this process opens. `yak --config yak.json task list` reads that
 // config file, imports the plugins it names over the SQLite file it names,
 // runs the tool right here and exits — no server, no socket, nothing
@@ -249,7 +251,7 @@ export let work = async (
     if (ready) {
       // Readiness identifies the launcher a caller owns and signals. The
       // graph's process row identifies the child running these duties.
-      await Deno.writeTextFile(
+      await disk.writeTextFile(
         ready,
         `${readinessPid()}\n`,
       )
@@ -258,8 +260,8 @@ export let work = async (
   } finally {
     clearInterval(timer)
     if (ready) {
-      await Deno.remove(ready).catch((error) => {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
+      await disk.remove(ready).catch((error) => {
+        if (!(error instanceof disk.errors.NotFound)) throw error
       })
     }
   }
@@ -277,7 +279,7 @@ export { close, cut, stop } from './held.ts'
 export let signer = async (
   host: Pick<Served, 'who' | 'config' | 'graph'>,
   via?: string,
-  typed: boolean = Deno.stdin.isTerminal(),
+  typed: boolean = system.stdin.isTerminal(),
 ): Promise<{ $actor?: Actor }> => {
   let actor = await host.who(
     new Request('http://localhost/', { headers: via ? { [VIA]: via } : {} }),

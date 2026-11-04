@@ -1,3 +1,4 @@
+import * as io from '@yaks/file/io'
 // A file spool appends immutable JSONL segments. The newline publishes one
 // complete record; only committed intake removes it. Writers share no offsets.
 
@@ -7,7 +8,7 @@ import type { Source } from './service.ts'
 // Every write and sync is asynchronous: a host reporting into the spool keeps
 // its thread while a busy disk takes seconds over an fsync.
 let sync = async (dir: string) => {
-  let file = await Deno.open(dir, { read: true })
+  let file = await io.open(dir, { read: true })
   try {
     await file.sync()
   } finally {
@@ -20,9 +21,9 @@ export let files = (dir: string): {
   source: Source
 } => ({
   append: async (line) => {
-    await Deno.mkdir(dir, { recursive: true, mode: 0o700 })
+    await io.mkdir(dir, { recursive: true, mode: 0o700 })
     let name = `${dir}/${Date.now()}-${crypto.randomUUID()}`
-    let file = await Deno.open(`${name}.jsonl`, {
+    let file = await io.open(`${name}.jsonl`, {
       write: true,
       createNew: true,
       mode: 0o600,
@@ -40,23 +41,23 @@ export let files = (dir: string): {
   source: async function* () {
     let names: string[] = []
     try {
-      for await (let entry of Deno.readDir(dir)) {
+      for await (let entry of io.readDir(dir)) {
         if (entry.isFile && entry.name.endsWith('.jsonl')) {
           names.push(entry.name)
         }
       }
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) return
+      if (io.isNotFound(error)) return
       throw error
     }
     for (let name of names.sort()) {
       let path = `${dir}/${name}`
       let text: string
       try {
-        text = await Deno.readTextFile(path)
+        text = await io.readTextFile(path)
       } catch (error) {
         // Another intake can acknowledge a segment after this directory read.
-        if (error instanceof Deno.errors.NotFound) continue
+        if (io.isNotFound(error)) continue
         throw error
       }
       // A writer may still be filling this segment. Neither a partial tail
@@ -72,20 +73,20 @@ export let files = (dir: string): {
         admit: async () => {
           if (admitted) return
           let next = path.replace(/\.jsonl$/, '.local.jsonl')
-          await Deno.rename(path, next)
+          await io.rename(path, next)
           path = next
           admitted = true
           await sync(dir)
         },
         refuse: async () => {
-          await Deno.rename(path, path.replace(/\.jsonl$/, '.refused'))
+          await io.rename(path, path.replace(/\.jsonl$/, '.refused'))
           await sync(dir)
         },
         ack: async () => {
           try {
-            await Deno.remove(path)
+            await io.remove(path)
           } catch (error) {
-            if (!(error instanceof Deno.errors.NotFound)) throw error
+            if (!io.isNotFound(error)) throw error
           }
           await sync(dir)
         },

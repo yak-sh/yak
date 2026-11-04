@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 // Host preparation of a native fixer's explicitly configured worktree.
 import type { Config, Host } from '@yaks/host'
 import { given, used } from '@yaks/host/config'
@@ -19,7 +20,7 @@ export let resolveHome =
     let { createWorktree } = await import('@yaks/git/host')
     let tree = await createWorktree(
       host.graph,
-      typeof options.cwd == 'string' ? options.cwd : Deno.cwd(),
+      typeof options.cwd == 'string' ? options.cwd : system.cwd(),
       {
         path: `${options.worktrees}/${session}`,
         branch: `session-${session}`,

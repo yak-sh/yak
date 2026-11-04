@@ -1,3 +1,4 @@
+import * as system from '@yaks/process/system'
 import { visualLines } from './visual.ts'
 import { scrollbar } from './scrollbar.ts'
 /**
@@ -969,9 +970,9 @@ export let ansiBackend = (opts: {
     changed: touch,
   })
   let sheet = () => typeof opts.sheet == 'function' ? opts.sheet() : opts.sheet
-  let size = opts.size ?? (() => Deno.consoleSize())
+  let size = opts.size ?? (() => system.consoleSize())
   let write = opts.write ??
-    ((s: string) => void Deno.stdout.writeSync(enc.encode(s)))
+    ((s: string) => void system.stdout.writeSync(enc.encode(s)))
   let last: string[] = []
   return {
     size,

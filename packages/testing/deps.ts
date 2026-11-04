@@ -1,3 +1,6 @@
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
+import { command as processCommand } from '@yaks/process/command'
 // Which files a run can leave out: one whose tests all passed, when nothing
 // it depends on has changed since. Before it runs, a file depends on its
 // module graph, as `deno info` resolves it (a dynamic import of a literal
@@ -36,7 +39,7 @@ export type Info = {
 let hex = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex')
 
-let base = () => `file://${Deno.cwd()}/`
+let base = () => `file://${system.cwd()}/`
 let url = (path: string) => new URL(path, base()).href
 // A file's path from the checkout, so keys agree between checkouts; one
 // outside it, whole. Any other specifier is itself.
@@ -47,23 +50,24 @@ let rel = (specifier: string) =>
     ? decodeURIComponent(new URL(specifier).pathname)
     : specifier
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
-let cache = Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
+let cache = system.env.get('XDG_CACHE_HOME') ??
+  `${system.env.get('HOME')}/.cache`
 
 /** The module graph reached from `roots`, or undefined when deno cannot
  * say. Deno resolves it by the checkout's lock, and writes what it resolved
  * anew (a module's `/// <reference types>`) to a copy: the lock is in every
  * key, and a run that wrote it would leave its own passes behind. */
 export let graph = async (roots: string[]): Promise<Info | undefined> => {
-  let dir = await Deno.makeTempDir({ prefix: 'yaks-testing-' })
+  let dir = await io.makeTempDir({ prefix: 'yaks-testing-' })
   try {
     let entry = `${dir}/entry.ts`
-    await Deno.writeTextFile(
+    await io.writeTextFile(
       entry,
       roots.map((r) => `import ${JSON.stringify(url(r))}`).join('\n'),
     )
-    let lock = await Deno.copyFile('deno.lock', `${dir}/deno.lock`)
+    let lock = await io.copyFile('deno.lock', `${dir}/deno.lock`)
       .then(() => `--lock=${dir}/deno.lock`, () => '--no-lock')
-    let out = await new Deno.Command(Deno.execPath(), {
+    let out = await processCommand(system.execPath(), {
       args: ['info', '--json', lock, entry],
       stdout: 'piped',
       stderr: 'null',
@@ -72,7 +76,7 @@ export let graph = async (roots: string[]): Promise<Info | undefined> => {
       ? JSON.parse(new TextDecoder().decode(out.stdout))
       : undefined
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    await io.remove(dir, { recursive: true })
   }
 }
 
@@ -140,13 +144,13 @@ export let remembered = (
   store = GRAPH,
 ) =>
 async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
-  let here = `${Deno.cwd()}/`, pid = `.${Deno.pid}.example.`
+  let here = `${system.cwd()}/`, pid = `.${system.pid}.example.`
   let kept: Kept = { deno: '', configs: {}, modules: {}, redirects: {} }
   try {
     kept = {
       ...kept,
       ...JSON.parse(
-        Deno.readTextFileSync(store).replaceAll('<checkout>/', here)
+        io.readTextFileSync(store).replaceAll('<checkout>/', here)
           .replaceAll('.<pid>.example.', pid),
       ),
     }
@@ -156,7 +160,7 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   let held = await Promise.all(
     Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
   )
-  let whole = kept.deno != Deno.version.deno || !held.every(Boolean)
+  let whole = kept.deno != system.runtimeVersion || !held.every(Boolean)
   let at = (s: string) => kept.redirects[s] ?? s
   // Walked a wave at a time, each wave's bytes read together.
   let reached = new Map<string, Module>()
@@ -184,7 +188,12 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
     wave = next
   }
   if (whole) {
-    kept = { deno: Deno.version.deno, configs: {}, modules: {}, redirects: {} }
+    kept = {
+      deno: system.runtimeVersion,
+      configs: {},
+      modules: {},
+      redirects: {},
+    }
     stale = new Set(roots)
   }
   if (!stale.size) {
@@ -202,14 +211,14 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   let unseen = configs(local).filter((c) => !(c in kept.configs))
   let found = await Promise.all(unseen.map(bytes))
   for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
-  Deno.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
-  let draft = `${store}.${Deno.pid}`
-  Deno.writeTextFileSync(
+  io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+  let draft = `${store}.${system.pid}`
+  io.writeTextFileSync(
     draft,
     JSON.stringify(kept).replaceAll(here, '<checkout>/')
       .replaceAll(pid, '.<pid>.example.'),
   )
-  Deno.renameSync(draft, store)
+  io.renameSync(draft, store)
   return { modules: [...reached.values()], redirects: kept.redirects }
 }
 
@@ -234,14 +243,14 @@ export let digest = (path: string, place = false): Promise<string> =>
   Promise.try(() => {
     let info
     try {
-      info = Deno.statSync(path)
+      info = io.statSync(path)
     } catch {
       return 'absent'
     }
-    if (info.isFile) return hex(Deno.readFileSync(path))
+    if (info.isFile) return hex(io.readFileSync(path))
     if (place) return 'place'
     let names: string[] = []
-    for (let e of Deno.readDirSync(path)) {
+    for (let e of io.readDirSync(path)) {
       if (!written(e.name)) names.push(e.isDirectory ? `${e.name}/` : e.name)
     }
     return hex(names.sort().join('\n'))
@@ -365,7 +374,7 @@ export let survey = async (
     if (!facts.has(path)) {
       let bytes: Uint8Array | undefined
       try {
-        bytes = Deno.readFileSync(path)
+        bytes = io.readFileSync(path)
       } catch { /* a directory or a missing file */ }
       facts.set(
         path,
@@ -567,7 +576,7 @@ export let shared = async (
 ): Promise<string> =>
   hex(
     [
-      `${Deno.version.deno} ${salt}`,
+      `${system.runtimeVersion} ${salt}`,
       ...(await Promise.all([
         ...also.map(async (p) => `${p} ${await s.of(p)}`),
         ...runner.map(async (p) => `${p} loads ${await s.loads(p)}`),
@@ -627,7 +636,7 @@ let KEEP = 100_000
 
 let load = <T>(store: string): Record<string, T> => {
   try {
-    return JSON.parse(Deno.readTextFileSync(store))
+    return JSON.parse(io.readTextFileSync(store))
   } catch {
     return {}
   }
@@ -707,8 +716,8 @@ let save = (all: Record<string, number>, store: string) =>
   )
 
 let write = (all: unknown, store: string) => {
-  Deno.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
-  let draft = `${store}.${Deno.pid}`
-  Deno.writeTextFileSync(draft, JSON.stringify(all))
-  Deno.renameSync(draft, store)
+  io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+  let draft = `${store}.${system.pid}`
+  io.writeTextFileSync(draft, JSON.stringify(all))
+  io.renameSync(draft, store)
 }

@@ -1,5 +1,7 @@
 /** Native step overhead with an instantly answered scripted model and no I/O.
  * Fixture composition, verification and cleanup are outside the timed boundary. */
+
+import * as systemProcess from '@yaks/process/system'
 import { type Samples, stopwatch } from '@yaks/benchmark'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
@@ -158,4 +160,4 @@ export async function measure(
   return samples
 }
 
-if (import.meta.main) await standaloneMain('harness-steps')
+if (systemProcess.main(import.meta.url)) await standaloneMain('harness-steps')

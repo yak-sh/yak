@@ -1,3 +1,4 @@
+import * as disk from '@yaks/file/io'
 // Where a box keeps its graph's secrets: one private file per secret, in a
 // `secrets` directory beside the database. @yaks/secrets says what a vault is
 // and keeps no storage of its own; this host owns `~/.yak`, so the files are
@@ -27,11 +28,11 @@ import { type Local, queue, ramVault, type Sealed } from '@yaks/secrets'
 // else never came from this vault, and is never turned into a path.
 let OURS = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-let lstat = (path: string): Deno.FileInfo | null => {
+let lstat = (path: string): disk.FileInfo | null => {
   try {
-    return Deno.lstatSync(path)
+    return disk.lstatSync(path)
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return null
+    if (e instanceof disk.errors.NotFound) return null
     throw e
   }
 }
@@ -45,15 +46,15 @@ let refuse = (path: string) => {
 let own = (dir: string): void => {
   let at = lstat(dir)
   if (at && (at.isSymlink || !at.isDirectory)) refuse(dir)
-  if (!at) Deno.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  Deno.chmodSync(dir, 0o700)
+  if (!at) disk.mkdirSync(dir, { recursive: true, mode: 0o700 })
+  disk.chmodSync(dir, 0o700)
 }
 
 let readIn = (path: string): string | undefined => {
   let at = lstat(path)
   if (!at) return undefined
   if (at.isSymlink || !at.isFile) refuse(path)
-  return Deno.readTextFileSync(path)
+  return disk.readTextFileSync(path)
 }
 
 let writeIn = (dir: string, path: string, text: string): void => {
@@ -62,12 +63,12 @@ let writeIn = (dir: string, path: string, text: string): void => {
   if (at && (at.isSymlink || !at.isFile)) refuse(path)
   let temp = `${path}.${crypto.randomUUID()}.tmp`
   try {
-    Deno.writeTextFileSync(temp, text, { createNew: true, mode: 0o600 })
-    Deno.chmodSync(temp, 0o600)
-    Deno.renameSync(temp, path)
+    disk.writeTextFileSync(temp, text, { createNew: true, mode: 0o600 })
+    disk.chmodSync(temp, 0o600)
+    disk.renameSync(temp, path)
   } catch (e) {
     try {
-      Deno.removeSync(temp)
+      disk.removeSync(temp)
     } catch { /* never written */ }
     throw e
   }
@@ -105,12 +106,12 @@ export let fileVault = (dir: string): Local => {
     },
     drop: (eid) => {
       if (!OURS.test(eid) || !lstat(file(eid))) return
-      Deno.removeSync(file(eid))
+      disk.removeSync(file(eid))
     },
     all: () => {
       if (!lstat(dir)) return []
       let out: [Eid, Sealed][] = []
-      for (let e of Deno.readDirSync(dir)) {
+      for (let e of disk.readDirSync(dir)) {
         let eid = e.name.replace(/\.json$/, '')
         if (e.name == eid || !OURS.test(eid)) continue
         let text = readIn(file(eid))
@@ -124,7 +125,7 @@ export let fileVault = (dir: string): Local => {
       held(eid, async () => {
         if (!OURS.test(eid)) throw new Error(`not a secret's id: ${eid}`)
         own(dir)
-        using lock = await Deno.open(`${dir}/${eid}.lock`, {
+        using lock = await disk.open(`${dir}/${eid}.lock`, {
           create: true,
           write: true,
           mode: 0o600,

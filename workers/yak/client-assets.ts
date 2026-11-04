@@ -4,6 +4,8 @@
 // were a round trip after the client's own on every load. The parts are
 // written beside it, for the bundle to read and for a page that loaded the
 // client before it was one.
+import * as io from '@yaks/file/io'
+import * as system from '@yaks/process/system'
 import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
 
@@ -16,15 +18,15 @@ let parts = {
 export let assets = async (to = new URL('./public/', import.meta.url)) => {
   await Promise.all(
     Object.entries(parts).map(async ([name, from]) =>
-      Deno.writeTextFile(
+      io.writeTextFile(
         new URL(name, to),
         await bundle(new URL(from, import.meta.url)),
       )
     ),
   )
-  await Deno.writeTextFile(
+  await io.writeTextFile(
     new URL('_client.js', to),
     await bundle(new URL('client.js', to)),
   )
 }
-if (import.meta.main) await Promise.all([assets(), written()])
+if (system.main(import.meta.url)) await Promise.all([assets(), written()])

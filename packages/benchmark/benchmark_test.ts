@@ -2,7 +2,6 @@
  * filesystem and host effects in memory so no throughput work runs as a test. */
 import { equal, match, ok, test, throws } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
-import { stub } from '@std/testing/mock'
 import {
   baseline,
   type Bench,
@@ -756,7 +755,7 @@ test('queued suites measure between rounds without losing a faster acceptance', 
   let waiting = Promise.withResolvers<void>()
   let requests = 0
   // The filesystem boundary queues independent handles like blocking flock.
-  using _open = stub(Deno, 'open', () => {
+  let open = () => {
     let release: (() => void) | undefined
     return Promise.resolve({
       async lock() {
@@ -774,13 +773,14 @@ test('queued suites measure between rounds without losing a faster acceptance', 
       truncate: () => Promise.resolve(),
       write: (bytes: Uint8Array) => Promise.resolve(bytes.length),
       [Symbol.dispose]() {},
-    } as unknown as Deno.FsFile)
-  })
+    } as Awaited<ReturnType<typeof import('@yaks/file/io').open>>)
+  }
   let f = fixture(), order: string[] = []
   let fast: Promise<Run> | undefined
   let options = {
     ...f.options,
     lock: 'shared',
+    open,
     mode: 'accept' as const,
     tolerance: 0,
   }

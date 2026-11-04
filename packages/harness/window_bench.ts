@@ -2,6 +2,9 @@
  * Arguments: entries (default 10000), body characters (default 1000), runs (1).
  * Never opens the configured/live harness database.
  */
+
+import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { at, harness } from './testing.ts'
@@ -39,7 +42,7 @@ export async function measure(
   if (![count, length, runs].every((v) => Number.isSafeInteger(v) && v > 0)) {
     throw new Error('positive integer arguments required')
   }
-  const directory = await Deno.makeTempDir({ prefix: 'harness-window-bench-' })
+  const directory = await fs.makeTempDir({ prefix: 'harness-window-bench-' })
   const db = directory + '/bench.sqlite'
   let phases: (ReturnType<ReturnType<typeof stopwatch>> & {
     phase: string
@@ -103,10 +106,10 @@ export async function measure(
       }
     }
   } finally {
-    await Deno.remove(directory, { recursive: true })
+    await fs.remove(directory, { recursive: true })
     console.error('harness-window phases:', JSON.stringify(phases))
   }
   return samples
 }
 
-if (import.meta.main) await standaloneMain('harness-window')
+if (systemProcess.main(import.meta.url)) await standaloneMain('harness-window')

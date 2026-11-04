@@ -473,11 +473,6 @@ let clock: WindowClock = {
   now: Date.now,
   after: (ms, run) => {
     let timer = setTimeout(() => void run(), ms)
-    // One-shot commands need not live a minute just to forget an empty window.
-    let deno = (globalThis as {
-      Deno?: { unrefTimer: (timer: ReturnType<typeof setTimeout>) => void }
-    }).Deno
-    deno?.unrefTimer(timer)
     return () => clearTimeout(timer)
   },
 }

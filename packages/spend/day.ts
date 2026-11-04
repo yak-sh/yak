@@ -1,3 +1,4 @@
+import { env } from '@yaks/process/system'
 /**
  * A day's tally, read from the graph and kept as its `spend` row: the
  * requests whose entries were written that UTC day (an imported entry is
@@ -233,7 +234,7 @@ export let known = async (
   }
   let tasks = new Map(sessions.map((s) => [s, of(s)]))
   let plan = planOf(
-    PLANS(!!globalThis.Deno?.env.get('OPENAI_API_KEY')),
+    PLANS(!!env.get('OPENAI_API_KEY')),
     await located(g, rows),
   )
   let plans = new Map(

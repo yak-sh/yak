@@ -1,3 +1,5 @@
+import * as system from '@yaks/process/system'
+import * as files from '@yaks/file/io'
 // One command line, run. `cli(commands, opts)` is the whole interface: hand
 // it the commands and it reads the command line — the subcommand, either order
 // of a two-word tool, the arguments through that tool's own input schema —
@@ -36,7 +38,7 @@ import { configPath } from './config.ts'
 import { type Env, stateDir, tokenFor } from './store.ts'
 
 // This process's environment: what every `env` seam here defaults to.
-let own: Env = (name) => Deno.env.get(name)
+let own: Env = (name) => system.env.get(name)
 
 /** What a command is handed: where it runs, where to print, and the global
  * flags. */
@@ -86,9 +88,9 @@ export type Tty = { columns: number; write: (text: string) => void }
 // terminal that reports no size (`script` run without one) is the usual 80
 // wide, rather than a width nothing fits in.
 let terminal = (env: Env): Tty | undefined =>
-  Deno.stdout.isTerminal() && !env('NO_COLOR')
+  system.stdout.isTerminal() && !env('NO_COLOR')
     ? {
-      columns: Deno.consoleSize().columns || 80,
+      columns: system.consoleSize().columns || 80,
       write: (t) => console.log(t),
     }
     : undefined
@@ -130,7 +132,7 @@ export type GlobalFlag =
 
 /** What a program brings besides its tools. */
 export type Opts = {
-  /** The words to read. Defaults to `Deno.args`. */
+  /** The words to read. Defaults to `system.args`. */
   argv?: string[]
   /** What the program calls itself, in its usage and its help pages. */
   name?: string
@@ -455,15 +457,15 @@ let WORKTREE = /\/\.claude\/worktrees\/agent-([0-9a-f]+)(?:\/|$)/
 // This process's directory, or none where it was removed under it.
 let here = (): string => {
   try {
-    return Deno.cwd()
+    return system.cwd()
   } catch {
     return ''
   }
 }
 
 let disk: Reads = {
-  file: (path) => Deno.readTextFile(path),
-  stdin: () => new Response(Deno.stdin.readable).text(),
+  file: (path) => files.readTextFile(path),
+  stdin: () => new Response(system.stdin.readable).text(),
 }
 
 /**
@@ -477,7 +479,7 @@ export let cli = async (
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
   let env = opts.env ?? own
-  let said = globals(opts.argv ?? Deno.args, env)
+  let said = globals(opts.argv ?? system.args, env)
   let { duties, json, tui, help, timing, rest, as } = said
   // Where nothing placed this line, the host's refusal is not the answer: the
   // program's own word for a machine with no graph is.

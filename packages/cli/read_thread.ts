@@ -1,3 +1,4 @@
+import * as disk from '@yaks/file/io'
 // A web host reads through a bounded pool of read-only workers, each started
 // once and kept. A worker is never ended to cancel a read: Deno keeps part of
 // every worker that ends (7 to 14 MB of the modules it loaded, measured on
@@ -61,7 +62,7 @@ let asked = (call: Call): string =>
 let blocked = (thread: string): string => {
   try {
     return `worker kernel wait: ${
-      Deno.readTextFileSync(`/proc/${thread}/wchan`).trim()
+      disk.readTextFileSync(`/proc/${thread}/wchan`).trim()
     }`
   } catch {
     return ''

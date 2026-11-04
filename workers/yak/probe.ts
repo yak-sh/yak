@@ -1,5 +1,6 @@
 // The kernel and its network boundaries, driven in process. Each fixture
 // owns a synthetic origin; requests to it dispatch directly to its handler.
+import * as io from '@yaks/file/io'
 import { apex } from './host.ts'
 import { b64u } from './mcp-probe.ts'
 import { clock, until } from '@yaks/testing'
@@ -126,7 +127,7 @@ type Toml = {
 }
 let toml = () =>
   parse(
-    Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
+    io.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
   ) as Toml
 
 // The kernel's handler and graph bindings share the caller's process.
