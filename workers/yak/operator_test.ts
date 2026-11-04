@@ -370,7 +370,7 @@ test('Stop ends the run after the step in flight with one answer, and new words 
 let pieces: [string, string][] = []
 let writer = operating(
   operatorMemory(),
-  f.env,
+  roundsPlatform.env,
   {
     ...operatorModel((req) => {
       for (let text of ['Posting ', 'it now.']) req.onText?.({ index: 0, text })
@@ -384,7 +384,7 @@ let writer = operating(
     typing: (session, text) => void pieces.push([session, text]),
   },
 )
-let written = await writer.run(f.held, f.space, { say: 'Post it.' })
+let written = await writer.run(roundsHeld, roundsSpace, { say: 'Post it.' })
 test('the Operator tells its host each piece of a reply as the model writes it', () => {
   assertEquals(pieces, [[written.session, 'Posting '], [
     written.session,

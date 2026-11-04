@@ -1034,6 +1034,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
 test('a break is the platform writing about the app, not in it', async () => {
   await using scenario = platform()
   let { env } = scenario
+  stores(env)
   let { space, app } = await seeded(env, 'private')
   // The report door takes anyone: a break belongs to whoever was looking.
   let filed = await apps.fetch(
@@ -1063,6 +1064,7 @@ test('a break is the platform writing about the app, not in it', async () => {
 test('draft edits leave served breaks open until deployment', async () => {
   await using scenario = platform()
   let { env } = scenario
+  stores(env)
   let { space, app } = await seeded(env)
   let who = { person: ADA, role: 'owner' as const }
   // The break the feedback letter was about: a page reporting that the script
@@ -1090,6 +1092,7 @@ test('draft edits leave served breaks open until deployment', async () => {
 test('seen closes a whole deploy at once (T-34338)', async () => {
   await using scenario = platform()
   let { env } = scenario
+  stores(env)
   let { space, app } = await seeded(env)
   let who = { person: ADA, role: 'owner' as const }
   for (let n of [1, 2]) {
@@ -1162,6 +1165,7 @@ type Handler = (req: Request) => Response | Promise<Response>
 let router = async (worker?: Handler, first?: string[]) => {
   let scenario = platform()
   let { env, files } = scenario
+  stores(env)
   let { dir, space, app } = await seeded(env)
   await dir.apply({
     entities: [

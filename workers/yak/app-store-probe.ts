@@ -17,7 +17,7 @@ import { appVocab } from './vocab.ts'
 let base = appVocab()
 let vocab = loadVocab([...base.docs, apiDoc], base.keywords)
 
-let app = (vocab: Vocab) => {
+let app = (vocab: Vocab, name: string) => {
   let g = graph({ vocab, storage: ram(vocab) })
   let request = new AsyncLocalStorage<Request>()
   let view: Graph = {
@@ -46,6 +46,8 @@ let app = (vocab: Vocab) => {
   let fetch = async (req: Request) => {
     let path = new URL(req.url).pathname
     if (path == '/uses') return Response.json({})
+    // The Store descriptor identifies which app door a route reached.
+    if (path == '/graph') return Response.json({ db: `do:${name}` })
     let answer = await request.run(req, () => serve(req))
     if (path == '/query') {
       if (answer.ok) {
@@ -73,7 +75,7 @@ export let stores = (env: Env, words = vocab) => {
   let held = new Map<string, ReturnType<typeof app>>()
   let at = (name: string) => {
     let found = held.get(name)
-    if (!found) held.set(name, found = app(words))
+    if (!found) held.set(name, found = app(words, name))
     return found
   }
   env.STORE = {
