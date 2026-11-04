@@ -5,6 +5,8 @@ import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import { fields, find, schema as ftsSchema, screens, search } from '@yaks/fts'
 import { type Graph, graph, type ReadOpts } from '@yaks/graph'
 import { personal } from '@yaks/member'
+import { aliases } from '@yaks/alias'
+import { keys } from '@yaks/key'
 import { storage } from '@yaks/sqlite'
 import { cleanup } from '@yaks/testing'
 import type { Vocab } from '@yaks/vocab'
@@ -59,6 +61,8 @@ export let sqliteApp = (
       vocab,
       storage: rows,
       plugins: [
+        keys(vocab),
+        aliases(),
         blobs(vocab, sqliteBlobs(driver)),
         personal(vocab, {}, { document_page: 'document' }),
       ],

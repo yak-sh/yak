@@ -16,8 +16,22 @@ import { added, asked } from './examples/shop/cart.js'
 import { signed } from './probe.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx } from './tools.ts'
-import { ADA, ADA_OWNS, as, seeded, visit } from './serving-data-probe.ts'
-import { platform } from './serving-scene.ts'
+import {
+  ADA,
+  ADA_OWNS,
+  as,
+  SECRET,
+  seeded,
+  visit,
+} from './serving-data-probe.ts'
+import { platform as bindings } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
+import { operators } from './operator-service-probe.ts'
+
+let platform = (vars: Partial<Env> = {}) => {
+  let scenario = bindings(SECRET, { BUILDER: operators, ...vars })
+  return { ...scenario, ...lifecycleStores(scenario.env) }
+}
 
 // ---- the shop example, deployed and shopped in (T-34517) --------------------
 
