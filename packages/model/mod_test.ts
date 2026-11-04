@@ -8,7 +8,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { billed, modelDoc, models, submitCall } from './mod.ts'
+import { billed, listPrice, modelDoc, models, submitCall } from './mod.ts'
 
 let using = {
   $defs: {
@@ -85,6 +85,34 @@ test('a new name on a staged builder exists pending, never offered', () => {
   assertEquals(row.model, { name: 'new-release', offered: false })
   assertEquals(!!row.pending, true)
   assertEquals(((g.get([E]) as Bundle[])[0].using as Comp).model, eid)
+})
+
+test('a model met for the first time is priced at its list price', () => {
+  let g = shelf()
+  let priceOf = (name: string) =>
+    (g.get([identityEid('model', [name])]) as Bundle[])[0]?.price
+  g.apply([
+    { entity: { eid: E }, using: { model: 'claude-opus-4-6[1m]' } },
+    { entity: { eid: '$a' }, model: { name: 'claude-haiku-4-5-20251001' } },
+    { entity: { eid: '$b' }, model: { name: 'gpt-5.1-codex' } },
+    { entity: { eid: '$c' }, model: { name: 'no-such-model' } },
+    {
+      entity: { eid: '$d' },
+      model: { name: 'gpt-5' },
+      price: { input: 9, output: 9 },
+    },
+  ])
+  assertEquals(priceOf('claude-opus-4-6[1m]'), listPrice('claude-opus-4-6'))
+  assertEquals(
+    priceOf('claude-haiku-4-5-20251001'),
+    listPrice('claude-haiku-4-5'),
+  )
+  assertEquals(priceOf('gpt-5.1-codex'), listPrice('gpt-5.1-codex'))
+  assertEquals(priceOf('no-such-model'), undefined)
+  assertEquals(priceOf('gpt-5'), { input: 9, output: 9 })
+  // a model the graph already holds keeps the price it has
+  g.apply([{ entity: { eid: E }, using: { model: 'gpt-5' } }])
+  assertEquals(priceOf('gpt-5'), { input: 9, output: 9 })
 })
 
 test('reported cost beats row pricing and unknown cost stays unknown', () => {

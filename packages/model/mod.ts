@@ -60,6 +60,8 @@ import {
   weigh,
 } from './vocab.ts'
 import type { MediaReceipt } from './media.ts'
+import { listPrice } from './prices.ts'
+export { listPrice } from './prices.ts'
 export {
   type Executor,
   type FrozenModelRequest,
@@ -333,7 +335,9 @@ export type Listed = {
   price?: Price
 }
 
-/** A requested name exists before dispatch, but is not offered until answered. */
+/** A requested name exists before dispatch, but is not offered until answered.
+ * A model met for the first time is weighed at its list price ({@link
+ * listPrice}) unless the batch prices it; a price on a stored row stands. */
 export let requesting: Hook = (bundles, tx) => {
   let names = new Map<string, string>()
   let out: Bundle[] = bundles.map((b) => {
@@ -352,17 +356,26 @@ export let requesting: Hook = (bundles, tx) => {
       names.set(identityEid(MODEL, [name]), name)
     }
   }
+  // by name: a batch's new row is still an alias here, minted after
+  let priced = new Set(
+    out.filter((b) => b.price).map((b) =>
+      identityEid(MODEL, [String((b.model as Comp | undefined)?.name)])
+    ),
+  )
   return after(tx.get([...names.keys()], [MODEL, 'pending']), (rows) => {
     let held = new Map(rows.map((b) => [b.entity.eid, b]))
     return [
       ...out,
-      ...[...names].flatMap(([eid, name]): Bundle[] =>
-        held.get(eid)?.model ? [] : [{
+      ...[...names].flatMap(([eid, name]): Bundle[] => {
+        if (held.get(eid)?.model) return []
+        let price = !priced.has(eid) && listPrice(name)
+        return [{
           entity: { eid },
           model: { name, offered: false },
           pending: {},
+          ...price ? { price } : {},
         }]
-      ),
+      }),
     ]
   })
 }

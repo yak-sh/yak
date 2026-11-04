@@ -6,8 +6,17 @@ type Row = {
   name?: string
   context_length?: number
   architecture?: { output_modalities?: string[] }
-  pricing?: { prompt?: string; completion?: string; input_cache_read?: string }
+  pricing?: {
+    prompt?: string
+    completion?: string
+    input_cache_read?: string
+    input_cache_write?: string
+  }
 }
+
+// Dollars per token as OpenRouter writes them, per million as a price says,
+// without the float noise of the product (0.00000625 → 6.25).
+let perMillion = (s: string) => Number((Number(s) * 1e6).toPrecision(12))
 
 export let listed = (r: Row): Listed => ({
   name: r.id,
@@ -23,10 +32,13 @@ export let listed = (r: Row): Listed => ({
   ...r.pricing?.prompt != null && r.pricing.completion != null
     ? {
       price: {
-        input: Number(r.pricing.prompt) * 1e6,
-        output: Number(r.pricing.completion) * 1e6,
+        input: perMillion(r.pricing.prompt),
+        output: perMillion(r.pricing.completion),
         ...r.pricing.input_cache_read != null
-          ? { cached: Number(r.pricing.input_cache_read) * 1e6 }
+          ? { cached: perMillion(r.pricing.input_cache_read) }
+          : {},
+        ...r.pricing.input_cache_write != null
+          ? { cache_write: perMillion(r.pricing.input_cache_write) }
           : {},
       },
     }
