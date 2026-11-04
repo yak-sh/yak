@@ -1,6 +1,8 @@
 import { equal, test } from '@yaks/testing'
 import type { Ask } from '@yaks/esbuild'
-import { ADA, platform, seeded } from './serving-probe.ts'
+import { ADA, seeded } from './serving-probe.ts'
+import { platform } from './deploy-probe.ts'
+import { broadcast, drafted } from './page-notice.ts'
 import { handler } from './kernel.ts'
 import { tools as previews } from './preview-tools.ts'
 import { type Ctx, TOOLS } from './tools.ts'
@@ -9,7 +11,47 @@ import type { Env } from './env.ts'
 
 let fixture = async () => {
   let asks: Ask[] = []
-  let p = platform({
+  let sockets = new Map<string, { send(packet: string): void }[]>()
+  let p = platform('a probe secret', {
+    STORE: {
+      idFromName: (name) => name,
+      get: (name) => ({
+        fetch: async (req: Request) => {
+          let path = new URL(req.url).pathname
+          if (path == '/drafted') {
+            return drafted(req, (packet) => {
+              broadcast(sockets.get(String(name)) ?? [], packet, (error) => {
+                throw error
+              })
+            })
+          }
+          if (req.method == 'GET' && ['/vocab', '/uses'].includes(path)) {
+            return Response.json({})
+          }
+          equal(req.method, 'POST')
+          equal(req.headers.get('x-yak-kernel'), '1')
+          let value = await req.json()
+          if (path == '/expires') {
+            equal(typeof value.at, 'number')
+            if (!sockets.has(String(name))) sockets.set(String(name), [])
+            return Response.json({ ok: true })
+          }
+          if (path == '/vocab') {
+            equal(Object.keys(value.$defs ?? {}), [])
+            return Response.json({
+              comps: [],
+              dropped: [],
+              added: [],
+              kept: [],
+            })
+          }
+          if (['/uses', '/tools'].includes(path)) {
+            return Response.json({ [path.slice(1)]: Object.keys(value) })
+          }
+          throw new Error(`Unhandled preview fixture: ${req.method} ${path}`)
+        },
+      }),
+    },
     ESBUILD: {
       fetch: async (req: Request) => {
         let { ask } = await req.json() as { ask: Ask }
@@ -45,16 +87,12 @@ let fixture = async () => {
   let link = String(out.value!.url)
   let app = (await dir.app(space, 'entries'))!
   let sent: { draft: Drafted }[] = []
-  let name = [...p.sockets.keys()].find((n) =>
+  let name = [...sockets.keys()].find((n) =>
     n.includes(`preview/${app.followed}`)
   )!
-  p.sockets.get(name)!.push({
-    readyState: 1,
+  sockets.get(name)!.push({
     send: (data: string) => void sent.push(JSON.parse(data)),
-    close: () => {},
-    serializeAttachment: () => {},
-    deserializeAttachment: () => null,
-  } as never)
+  })
   let write = (path: string, content: string) =>
     run('app_files', { app: 'entries', path, content })
   let request = (path: string) =>

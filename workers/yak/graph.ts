@@ -222,6 +222,7 @@ import {
 } from '@yaks/trace'
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
+import { broadcast, drafted } from './page-notice.ts'
 import type {
   Actor,
   AdmitOpts,
@@ -3319,13 +3320,9 @@ export class Store {
   // One packet to every socket, subscribed or not: a page decides what to do
   // with a release or a draft write.
   #broadcast(packet: string, request: string) {
-    for (let ws of this.#ctx.getWebSockets()) {
-      try {
-        ws.send(packet)
-      } catch (error) {
-        caught(error, { request, store: this.#name() })
-      }
-    }
+    broadcast(this.#ctx.getWebSockets(), packet, (error) => {
+      caught(error, { request, store: this.#name() })
+    })
   }
 
   async #expiring(expires: Expiry) {
@@ -4770,21 +4767,10 @@ export class Store {
     // A write to the draft this store previews (preview.ts `told`), told to
     // every page on its link the way a release is.
     if (path == '/drafted') {
-      if (!kernel || request.method != 'POST') {
-        return json({ error: 'NotFound', message: 'no route' }, 404)
-      }
-      let draft
-      try {
-        draft = (JSON.parse(await readBody(request)) as { draft?: unknown })
-          .draft
-        if (!draft || typeof draft != 'object' || Array.isArray(draft)) {
-          throw new Refused('/drafted needs a draft')
-        }
-      } catch (error) {
-        return refuse(error, request)
-      }
-      this.#broadcast(JSON.stringify({ draft }), 'POST /drafted')
-      return Response.json({ ok: true })
+      return drafted(
+        request,
+        (packet) => this.#broadcast(packet, 'POST /drafted'),
+      )
     }
     if (path == '/api/vocab') {
       return this.#route(new Request(new URL('/vocab', request.url), request))
