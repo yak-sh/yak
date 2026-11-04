@@ -5,7 +5,7 @@ import { json, readBody, refuse } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { cleanup } from '@yaks/testing'
-import { driver } from '@yaks/durable-object'
+import { driver, type Measure } from '@yaks/durable-object'
 import type { VocabDoc } from '@yaks/vocab'
 import {
   candidate,
@@ -39,6 +39,7 @@ type Physical = ReturnType<typeof durable>
 export let lifecycleStores = (
   env: Env,
   storage?: (name: string, from: Snapshot) => Physical,
+  measure?: Measure,
 ) => {
   let namespace = env.STORE
   let pages = new Map<string, Page[]>()
@@ -63,7 +64,7 @@ export let lifecycleStores = (
       storage && ((from) => {
         let owned = physical = storage(name, from)
         states.set(name, { storage: owned })
-        return Object.assign(driver(owned), {
+        return Object.assign(driver(owned, undefined, measure), {
           [Symbol.dispose]: () => owned[Symbol.dispose](),
         })
       }),

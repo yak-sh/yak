@@ -29,8 +29,15 @@ import {
   uiMeta,
 } from './tools.ts'
 import { sha256 } from './versions.ts'
-import { owned, platform } from './testing.ts'
-import { platform as rows } from './directory-probe.ts'
+import { owned } from './directory-fixture.ts'
+import { platform as rows } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
+import { operators } from './operator-service-probe.ts'
+import { driver } from '@yaks/durable-object'
+import { durable } from '../../packages/durable-object/testing.ts'
+import { snapshot } from '../../packages/sqlite/testing.ts'
+import { storage } from '@yaks/sqlite'
+import { hop } from './lib/hops.ts'
 import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
@@ -60,6 +67,30 @@ import { ServingCopy } from './serving-copy.ts'
 // Every app app_list answered as data, across its spaces.
 let apps = (out: Out) =>
   (out.value as { spaces: Listed[] }).spaces.flatMap((s) => s.apps)
+
+// These fixtures count SQL and store doors, so the directory and app API keep
+// SQLite and its production driver while leaving Store deployment duties out.
+let platform = (secret: string, vars: Partial<Env> = {}) => {
+  let count = () => hop('stmts')
+  let runtime = rows(secret, { BUILDER: operators, ...vars }, {
+    copy: copyOf(vars),
+    storage: (vocab) => {
+      let db = durable(snapshot(vocab))
+      cleanup(() => db[Symbol.dispose]())
+      return storage(driver(db, undefined, count), vocab, {
+        schemaReady: () => true,
+      })
+    },
+  })
+  let host = lifecycleStores(runtime.env, (_name, from) => durable(from), count)
+  return {
+    ...runtime,
+    settled: async () => {
+      await runtime.settled()
+      await host.settled()
+    },
+  }
+}
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
@@ -495,9 +526,8 @@ test('view metadata leaves portable sandbox selection to the host', () => {
   assertEquals(its['openai/widgetCSP'].connect_domains, [])
 })
 
-// Every app's store opened once. A store's first boot plants the models it may
-// ask (models.ts `planting`) and tells the directory what that weighs: the
-// store's cost, once, and not what the gesture measured after it costs.
+// Each app's SQLite API accepts its initial declaration before the measured
+// gesture: installing its graph is setup, not a round trip of the gesture.
 let booted = async (ctx: Ctx) => {
   for (let space of await ctx.dir.spaces(ctx.person)) {
     for (let app of await ctx.dir.apps(space)) {
@@ -518,7 +548,7 @@ let booted = async (ctx: Ctx) => {
 // because something started asking one file at a time. Read back through the
 // bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
 // is what the header says.
-// Run the real deployment and bucket/cache scenarios once; all original
+// Run the deployment and bucket/cache scenarios once; all original
 // cost assertions remain part of fixture admission, outside OS/HTTP timing.
 let deployRoundTrips = await (async () => {
   let { env } = platform('hops-secret')

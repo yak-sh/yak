@@ -1,6 +1,13 @@
 // Directory decisions over rows in memory. App Stores stay behind their own
 // namespace, so a test of a route need not install the platform's Store.
-import { type Bundle, type Graph, graph, signed } from '@yaks/graph'
+import {
+  type Bundle,
+  type Graph,
+  graph,
+  signed,
+  type Storage,
+} from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { secrets } from '@yaks/secrets'
 import { effects, type Handlers } from '@yaks/effects'
 import { cleanup } from '@yaks/testing'
@@ -26,6 +33,7 @@ let vocab = platformVocab()
 type Composition = {
   handlers?: (env: Env, graph: Graph) => Handlers
   copy?: ServingCopyDoor
+  storage?: (vocab: Vocab) => Storage
 }
 
 /** The directory's graph and wire, with optional effect handlers drained in memory. */
@@ -33,8 +41,9 @@ export let rows = (
   env: Partial<Env> = {},
   handlers?: (graph: Graph) => Handlers,
   copy?: ServingCopyDoor,
+  storage?: Composition['storage'],
 ) => {
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: storage?.(vocab) ?? ram(vocab) })
   g.use(
     secrets(vaultOf(env), (rows) => g.apply(rows, { trusted: true }), vocab),
   )
@@ -138,7 +147,7 @@ export let rows = (
  * Store-specific behavior keeps using the runtime's app namespace. */
 export let hosting = <T extends { env: Env }>(
   scenario: T,
-  { handlers, copy }: Composition = {},
+  { handlers, copy, storage }: Composition = {},
 ): T => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
   if (scenario.env.SERVING_COPY && !copy) return scenario
@@ -146,6 +155,7 @@ export let hosting = <T extends { env: Env }>(
     scenario.env,
     handlers && ((graph) => handlers(scenario.env, graph)),
     copy,
+    storage,
   )
   let stores = scenario.env.STORE
   scenario.env.STORE = {
