@@ -15,6 +15,28 @@ import { appDerived } from './vocab.ts'
 import type { Driver } from '@yaks/sql'
 import type { Snapshot } from '../../packages/sqlite/testing.ts'
 
+// A loaded vocabulary is immutable. Share its pure read/schema data while
+// every host still opens its own snapshot and supplies its own graph plugins.
+let shapes = new WeakMap<Vocab, ReturnType<typeof shape>>()
+let shape = (vocab: Vocab) => {
+  let bodies = blobRead(vocab)
+  let derived = { ...bodies, ...appDerived(vocab, bodies) }
+  let searchable = fields(vocab)
+  let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
+  let image: Snapshot | undefined
+  return {
+    derived,
+    searchable,
+    extra,
+    snapshot: () => image ??= snapshot(vocab, { derived }, extra),
+  }
+}
+let shapeOf = (vocab: Vocab) => {
+  let held = shapes.get(vocab)
+  if (!held) shapes.set(vocab, held = shape(vocab))
+  return held
+}
+
 /** Each named app gets private bytes and the vocabulary's read/search shape. */
 export let sqliteApp = (
   using: (dispose: () => void) => unknown = cleanup,
@@ -32,17 +54,15 @@ export let sqliteApp = (
     previous?: Graph,
     prepare?: (driver: Driver) => void,
   ) => {
-    let bodies = blobRead(vocab)
-    let derived = { ...bodies, ...appDerived(vocab, bodies) }
-    let searchable = fields(vocab)
-    let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
+    let held = shapeOf(vocab)
+    let { derived, searchable, extra } = held
     let driver = previous && drivers.get(previous)
     if (!driver) {
       if (initial) {
         driver = initial
         initial = undefined
       } else {
-        driver = open(snapshot(vocab, { derived }, extra))
+        driver = open(held.snapshot())
         let owned = driver
         using(() => owned[Symbol.dispose]())
       }
@@ -71,7 +91,7 @@ export let sqliteApp = (
     return g
   }
   let found = (g: Graph, text: string, opts: ReadOpts, limit: number) => {
-    let searchable = fields(g.vocab)
+    let { searchable } = shapeOf(g.vocab)
     return find(drivers.get(g)!, searchable, text, {
       limit,
       screens: screens(searchable, g.vocab, g.scope(opts)),
