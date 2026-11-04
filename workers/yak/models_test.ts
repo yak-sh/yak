@@ -944,14 +944,22 @@ test('a space past its budget is told so, and the transcript rests', async () =>
   await v.send('/apply', asking(s, FLASH))
   let [stopped] = await v.landed(`.entry.session=${s}&.refusal&*`)
   assertEquals((stopped.refusal as Comp).code, 'limit')
-  assert(String(said(stopped)).includes("ada's budget of $0.20"))
+  assert(
+    String(said(stopped)).includes(
+      "ada's model and voice budget for this month is spent",
+    ),
+  )
   assertEquals(v.asked.length, 0)
   let [session] = await v.read(`.entity.eid=${s}&*`)
   assertEquals((session.session as Comp).status, 'failed')
   // And a call asked outright is answered with the same sentence.
   let { status, said: no } = await v.run({ model: FLASH, input: {} })
   assertEquals(status, 429)
-  assert(no.error.message.includes("ada's budget of $0.20"))
+  assert(
+    no.error.message.includes(
+      "ada's model and voice budget for this month is spent",
+    ),
+  )
   assertEquals(v.asked.length, 0)
 })
 

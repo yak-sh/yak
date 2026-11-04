@@ -4,7 +4,7 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { atCeiling, BUDGET, monthOf } from './meter.ts'
+import { atCeiling, BUDGET, monthOf, plans } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
@@ -117,9 +117,8 @@ export let reserved = async <T extends { dollars: number }>(
         'limit',
         spent >= limit
           ? atCeiling(fresh, what)
-          : `This call has no verified cost bound within the $${
-            Math.max(0, limit - spent).toFixed(8)
-          } remaining in ${fresh.slug}'s monthly model and voice budget`,
+          : `What is left of ${fresh.slug}'s model and voice budget this ` +
+            `month is too little for this call. ${plans(fresh, {})}`,
       )
     }
     try {

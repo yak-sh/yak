@@ -339,8 +339,8 @@ let TOLD = ' The people who run yaks.app have been told.'
  * })
  * equal(replyOf([line(3, {
  *   output: { source: 'a' }, refusal: { code: 'limit' },
- *   content: { body: "clerk's budget of $5 for models and voice is spent" },
- * })]), { text: "clerk's budget of $5 for models and voice is spent" })
+ *   content: { body: "clerk's model and voice budget for this month is spent" },
+ * })]), { text: "clerk's model and voice budget for this month is spent" })
  * equal(replyOf([]).fault, 'ended without an answer')
  * ```
  */

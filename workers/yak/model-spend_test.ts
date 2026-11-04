@@ -1,4 +1,9 @@
-import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
+import {
+  assertAlmostEquals,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { affordable, ModelError } from '@yaks/model'
 import { mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
@@ -39,11 +44,16 @@ test('the pilot last answered call fits the remaining space budget', async () =>
   assertEquals(hold.value.dollars <= 0.08870188, true)
   await hold.settle(hold.value.dollars)
   assertEquals(await pilot.used() <= 0.2, true)
-  await assertRejects(
+  // What is left is said in words and points to the plans; the conversation
+  // that reads it names no amount.
+  let no = await assertRejects(
     () =>
       reserved(p.env, pilot.space, (left) => affordable(price, 100_000, left)),
     ModelError,
   )
+  assertStringIncludes(no.message, 'is too little for this call')
+  assertStringIncludes(no.message, 'Compare paid plans')
+  assertEquals(/\$\d/.test(no.message), false, no.message)
 })
 
 test('model and realtime calls cannot reserve the same remaining dollars', async () => {

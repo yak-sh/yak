@@ -416,6 +416,15 @@ export let dollars = (n: number) =>
     ? `$${n.toFixed(2)}`
     : `$${n.toFixed(1 - Math.floor(Math.log10(n))).replace(/0+$/, '')}`
 
+/** A share of the model and voice budget as a person reads it, a percent:
+ * the budget's dollars are the plan's to say, never a conversation's. */
+let share = (n: number, of: number) =>
+  n <= 0 || !of
+    ? '0%'
+    : n / of < 0.01
+    ? 'under 1%'
+    : `${Math.round((n / of) * 100)}%`
+
 // When the metered figures were last read. Everything but the app count comes
 // from the hourly sweep above, not from a live counter, so a line that prints
 // those numbers bare reads as live and looks broken: the ninth user test made
@@ -502,12 +511,13 @@ export let gauged = (
   let close = shown.filter(([, g]) => full(g) >= WARN)
   let over = close.filter(([, g]) => full(g) >= 1).length
   let state = !over ? 'near' : over == close.length ? 'at' : 'at or near'
-  let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
+  let limit = BUDGET[space.tier ?? 'free']
+  let voice = m.realtime ? ` (${share(m.realtime, limit)} on voice)` : ''
   return `This month${read}: ${
     shown.map(([what, g]) => READ[what](g)).join(', ')
   }${shown.length < all.length ? ', request units not read yet' : ''}, and ${
-    dollars(used(m, 'models'))
-  } of model use and voice${voice} from ${space.slug}'s budget${
+    share(used(m, 'models'), limit)
+  } of ${space.slug}'s model and voice budget used${voice}${
     close.length
       ? ` — ${state} the limit for ${
         close.map(([what]) => NAME[what]).join(', ')
@@ -531,7 +541,6 @@ export let atCeiling = (
 ) => {
   let free = ceilings(space.tier, space.slug)!
   let tier = space.tier ?? 'free'
-  let budget = BUDGET[tier]
   // Comped spaces can hit the letter/build allowances, not the app ceiling.
   let said = {
     apps: () =>
@@ -559,13 +568,11 @@ export let atCeiling = (
     // alike, so it names neither: models answer again on the 1st. Voice
     // spends the same dollars, so each sentence says both.
     models: () =>
-      `${space.slug}'s budget of ${dollars(budget)} for models and voice ` +
-      `this month is spent — ` +
+      `${space.slug}'s model and voice budget for this month is spent — ` +
       `models answer again on the 1st, and a connected agent can keep ` +
       `building`,
     realtime: () =>
-      `${space.slug}'s budget of ${dollars(budget)} for models and voice ` +
-      `this month is spent — ` +
+      `${space.slug}'s model and voice budget for this month is spent — ` +
       `voices go quiet until the 1st`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${

@@ -402,7 +402,7 @@ test("a space's month is one line, and names a ceiling only near or at it", () =
       '39,000 of 50,000 request units',
       '700 MB of 1 GB of app data',
       '0 of 100 emails',
-      '$0.06 of model use and voice ($0.01 of it voice)',
+      "30% of jeff's model and voice budget used (5% on voice)",
     ]
   ) assertStringIncludes(line, said)
   assert(!line.includes('limit') && !line.includes('\n'), line)
@@ -568,14 +568,14 @@ test('the build line warns at 80%, and the line says both numbers', () => {
   // each space's models and voice share its budget.
   let said = gauged(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
   assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 build seconds')
-  assertStringIncludes(said, "$0.04 of model use and voice from jeff's")
+  assertStringIncludes(said, "20% of jeff's model and voice budget used")
   let plus = gauged(
     space({ builds: 4, models: 0.0012, built: 44 }, 'plus'),
     9,
     NOW,
   )
   assertStringIncludes(plus, `4 of ${BUILDS.plus} builds`)
-  assertStringIncludes(plus, '$0.0012 of model use and voice')
+  assertStringIncludes(plus, "under 1% of jeff's model and voice budget used")
 })
 
 test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {

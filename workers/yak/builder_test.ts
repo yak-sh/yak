@@ -216,7 +216,10 @@ test('an account out of budget is told so before a model is asked', async () => 
   } as Space
   let out = await build(env, owner, spent, asked('one more'), { model })
 
-  assertStringIncludes(out.refused!, "ada's budget of $0.20")
+  assertStringIncludes(
+    out.refused!,
+    "ada's model and voice budget for this month is spent",
+  )
   assertEquals(model.asked.length, 0)
 })
 

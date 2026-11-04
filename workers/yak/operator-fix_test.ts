@@ -161,7 +161,10 @@ test('a break starts one Operator run that fixes the app', async () => {
     })
     await broke.body?.cancel()
     let spent = await answered('unknown prop: .spent')
-    assertStringIncludes(spent, 'for models and voice this month is spent')
+    assertStringIncludes(
+      spent,
+      'model and voice budget for this month is spent',
+    )
   } finally {
     await k.stop()
   }
