@@ -657,11 +657,11 @@ The complete list of reserved names:
     lines listed mail mail_answered mail_post mail_task member memory meter model model_reservation
     notice notice_confirmed notice_letter notice_posted notice_subscription
     notified notify_trash occupancy openai opened openrouter operator_reach order output output_of
-    parent pending person plan price product project provider provisional public_file
+    parent pending person phone plan price product project provider provisional public_file
     published quarantined questions reads recalled ref referenced
     refusal register_writes report repository representation requires
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
-    sending serves session session_input session_run sfu signed_in signin space spend staged stop
+    sending serves session session_input session_run sfu signed_in signin sms_consent space spend staged stop
     stripe submitted subscription supersedes supervises sweep switched task theme tool
     topic trashed tree_entry trend tunnel typed updated usage uses using
     verified visit volume wake wants web worked worktree written
