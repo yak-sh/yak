@@ -520,7 +520,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
         JSON.stringify(rendered.console)
       }\nErrors: ${JSON.stringify(rendered.errors)}\n${
         report(rendered.accessibility)
-      }\nEstimated browser cost: $${cost.toFixed(6)} from the space's budget.`,
+      }`,
     space,
     value,
     images: [{ data: image, mime_type: 'image/png' }],
