@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sync",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "exports": {
     ".": "./mod.ts",
     "./port": "./port.ts"
