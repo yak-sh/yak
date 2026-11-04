@@ -71,3 +71,54 @@ test('status precedence is preserved even though schema object keys are unordere
     false,
   )
 })
+
+let annotated = {
+  $defs: {
+    note: {
+      component: true,
+      label: 'notes',
+      properties: { title: { type: 'string', label: 'Title' } },
+    },
+  },
+}
+let plain = loadVocab(annotated)
+test('new keyword registrations cannot reinterpret existing component or property metadata', () => {
+  for (let level of ['comp', 'prop']) {
+    equal(
+      extendsVocab(
+        plain,
+        loadVocab(annotated, [{
+          uri: 'urn:labels',
+          [level]: ['label'],
+        }]),
+      ),
+      false,
+    )
+  }
+})
+
+test('property order is immaterial unless it changes a derived identity', () => {
+  let fields = (identity = false): PropSchema => ({
+    component: true,
+    properties: {
+      first: { type: 'string', identity },
+      last: { type: 'string', identity },
+    },
+  })
+  for (let identity of [false, true]) {
+    let note = fields(identity)
+    let reverse = {
+      ...note,
+      properties: Object.fromEntries(
+        Object.entries(note.properties!).reverse(),
+      ),
+    }
+    equal(
+      extendsVocab(
+        loadVocab({ $defs: { note } }),
+        loadVocab({ $defs: { note: reverse } }),
+      ),
+      !identity,
+    )
+  }
+})
