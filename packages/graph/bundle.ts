@@ -364,7 +364,7 @@ export let formed = (
             holds.join(', ')
           })`
           : '') +
-        `: a new entity is {entity: {eid: '$name'}}, a name of your own, one ` +
+        `: a new entity is {entity: {eid: '$name'}}, a name you choose, one ` +
         `per entity, whose eid the graph makes and the answer gives beside ` +
         `its $alias; an existing one is its eid or name`,
     )

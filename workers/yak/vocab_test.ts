@@ -252,7 +252,7 @@ test('a manifest is refused in the words that fix it', () => {
   assertThrows(
     () => unsaid(appDoc(says({ doc: { headline: txt } }))),
     Error,
-    'doc is a word the platform already says',
+    'doc is a component the platform already declares',
   )
   // Every collision at once, so probing for a free name is one deploy and not
   // one a name (C-32624 item 1).
@@ -260,13 +260,13 @@ test('a manifest is refused in the words that fix it', () => {
     () =>
       unsaid(appDoc(says({ comment: {}, email: { at: txt }, jotting: {} }))),
     Error,
-    'comment, email are words the platform already says',
+    'comment, email are components the platform already declares',
   )
   // A word the store already declares stays the app's, and a stored manifest
   // is read whatever the list has become since.
   let held = appDoc(says({ gallery: {} }))
   assertEquals(Object.keys(unsaid(held, held).$defs ?? {}), ['gallery'])
-  assertThrows(() => unsaid(held), Error, 'gallery is a word')
+  assertThrows(() => unsaid(held), Error, 'gallery is a component')
   assertEquals(unsaid(held, {}, 'vocab.json', ['gallery']), held)
   assertThrows(
     () =>
@@ -274,7 +274,7 @@ test('a manifest is refused in the words that fix it', () => {
         'gallery',
       ]),
     Error,
-    'cost is a word',
+    'cost is a component',
   )
   // The list is every platform vocabulary's: an app's store, the directory,
   // and the git object store.

@@ -765,7 +765,7 @@ sooner than its `pace` allows. So for an unknown property or component,
 `e.message` is:
 
     unknown property: doc.name — doc has title (string), body (string)
-    unknown component: recipy — a component of your own is declared in vocab.json and planted by app_deploy: …
+    unknown component: recipy — the app's vocab.json does not declare it. Declare it there, like …
 
 Both messages explain how to fix the request: a bad property names the
 properties that do exist, and an undeclared component explains how to declare a

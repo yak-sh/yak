@@ -902,9 +902,9 @@ let sheetOf = async (
   if (!(as in words)) {
     throw refuse(
       'arguments',
-      `as: ${as} is not a component — this app says ${
-        Object.keys(mine).sort().join(', ') || 'none of its own yet'
-      }, beside the platform's own words (doc, task, comment, …)${teach(env)}`,
+      `as: ${as} is not a component — this app declares ${
+        Object.keys(mine).sort().join(', ') || 'none yet'
+      }, and the platform declares doc, task, comment, …${teach(env)}`,
     )
   }
   return { as, props: words[as], map }

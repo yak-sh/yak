@@ -126,7 +126,7 @@ let nameIt = (env: Host = {}) =>
   'anyone with the link can read. app_published lists what people have ' +
   `published, and signing in at ${
     url(env, '/login')
-  } reads every app of your own at ` +
+  } reads every app in your spaces at ` +
   'once.'
 
 let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''

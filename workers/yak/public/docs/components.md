@@ -305,10 +305,11 @@ A write or query naming a component nobody declared is refused with an
 explanation of how a new component is declared, never with what some other store
 has:
 
-    unknown component: dayline — a component of your own is declared in
-      vocab.json and planted by app_deploy:
-      {"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}
-      · https://yaks.app/docs.md
+    unknown component: dayline — the app's vocab.json does not declare it.
+      Declare it there, like
+      {"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}},
+      and deploy the app with app_deploy to install it · how to declare one:
+      call guide with page components, or https://yaks.app/docs.md
 
 A write to a property that exists but is set by the server (`created.at`,
 `completed.via`) is refused too, naming the property, and nothing in the batch
@@ -648,8 +649,8 @@ A `vocab.json` may not declare any of the platform's own component names, so
 that `doc` means `doc` in every store on the platform. A manifest that declares
 one is refused entirely:
 
-    vocab.json: comment, email are words the platform already says — pick
-      another name
+    vocab.json: comment, email are components the platform already declares
+      — pick another name
 
 The complete list of reserved names:
 

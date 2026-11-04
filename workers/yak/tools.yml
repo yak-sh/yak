@@ -508,7 +508,7 @@ connection_need:
     Say that an app calls an outside service with a key or a sign-in (an API
     key, a Google account): it makes a connection for the person to connect
     on the space's connections page, and no key ever passes through this
-    tool or this chat. Name a built integration, or any name of your own with
+    tool or this chat. Name a built integration, or any other name with
     the hosts its key may be sent to (integration: 'ESV', hosts:
     ['api.esv.org']). The app is handed a sentinel by binding (default the
     name in capitals), which yaks.app swaps for the key on the way out, only

@@ -385,7 +385,7 @@ export let parseTools = (
       if (!words.includes(comp)) {
         wrong.push(
           `${name}.apply: ${comp} is not a component — declare it in ` +
-            `${file}, or use one the platform already says`,
+            `${file}, or use one the platform declares`,
         )
       }
     }

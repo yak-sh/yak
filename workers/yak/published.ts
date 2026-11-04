@@ -336,7 +336,7 @@ let MEMORY: Row[] = [
       properties: {
         said: str(
           "the words to keep: a person's sentence as they said it, or a " +
-            'note of your own',
+            'note you write',
         ),
         context: str(
           'a line or two saying what was being talked about, where the ' +
@@ -436,8 +436,8 @@ let CONNECTIONS: Row[] = [
         hosts: {
           type: 'array',
           items: { type: 'string' },
-          description: 'for a key of your own naming: the API hosts it may ' +
-            'be sent to, e.g. ["api.weatherapi.com"]',
+          description: 'for an integration that is not built in: the API ' +
+            'hosts its key may be sent to, e.g. ["api.weatherapi.com"]',
         },
         scopes: {
           type: 'array',

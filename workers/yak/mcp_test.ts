@@ -1015,7 +1015,7 @@ test(
         .message
       assertStringIncludes(
         taken,
-        'comment, email are words the platform already says',
+        'comment, email are components the platform already declares',
       )
       assertStringIncludes(taken, GUIDE)
       await assertRejects(

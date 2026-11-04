@@ -178,9 +178,9 @@ export let EXAMPLE =
   '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
 export let GUIDE = url({}, '/docs.md')
 export let teach = (env: Host = {}) =>
-  ' — a component of your own is declared in vocab.json ' +
-  'and planted by app_deploy: ' + `${EXAMPLE} · call guide with page ` +
-  `components, or ${url(env, '/docs.md')}`
+  " — the app's vocab.json does not declare it. Declare it there, like " +
+  `${EXAMPLE}, and deploy the app with app_deploy to install it · how to ` +
+  `declare one: call guide with page components, or ${url(env, '/docs.md')}`
 
 // The words that name a property's type, and the JSON Schema each is. A
 // manifest writes the schema; these are for reading one back in a sentence — a
@@ -484,7 +484,7 @@ export let OPENS: Record<string, string> = {
  * naming the shape.
  *
  * It is checked here rather than at the load: anything a property cannot hold
- * is refused. A name the platform already says is {@link unsaid}'s to refuse,
+ * is refused. A name the platform already declares is {@link unsaid}'s to refuse,
  * at the doors a new manifest comes through, because this one also reads what
  * a store already holds.
  *
@@ -560,7 +560,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
       `${file}: ${keys.join(', ')} — a manifest is a JSON Schema document, ` +
         `one $defs entry per component and one properties entry per property: ` +
         `${EXAMPLE}; the whole of it is in the guide under ` +
-        `"Components of your own" (${GUIDE})`,
+        `"Declaring components in vocab.json" (${GUIDE})`,
     )
   }
   let doc = body as VocabDoc
@@ -601,11 +601,11 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
 }
 
 /**
- * A new manifest, refused if it declares a word the platform already says
+ * A new manifest, refused if it declares a component the platform already declares
  * ({@link reserved}) — all of them at once, before anything is planted: a
  * manifest refused one name at a time is probed one deploy at a time, and every
  * probe that got through left a component behind for good (C-32624 item 1).
- * The sentence is the one the guide prints under "The names already taken",
+ * The sentence is the one the guide prints under "Reserved component names",
  * and it says where the whole list is, because the agent reading it has no
  * other source.
  *
@@ -633,9 +633,9 @@ export let unsaid = (
     throw refuse(
       'arguments',
       `${file}: ${taken.join(', ')} ${
-        taken.length == 1 ? 'is a word' : 'are words'
-      } the platform already says — pick another name; the whole list is in ` +
-        `the guide under "Components of your own" (${GUIDE})`,
+        taken.length == 1 ? 'is a component' : 'are components'
+      } the platform already declares — pick another name; the whole list is ` +
+        `in the guide under "Reserved component names" (${GUIDE})`,
     )
   }
   return doc
