@@ -1,6 +1,6 @@
 {
   "name": "@yaks/benchmark",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "exports": {
     ".": "./mod.ts",
     "./deno": "./deno.ts"

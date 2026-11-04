@@ -1,6 +1,6 @@
 {
   "name": "@yaks/ux",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "exports": {
     ".": "./mod.ts",
     "./views": "./views.ts",

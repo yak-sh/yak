@@ -1,6 +1,6 @@
 {
   "name": "@yaks/browse",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "exports": {
     ".": "./mod.ts",
     "./main": "./main.tsx",
