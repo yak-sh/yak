@@ -595,12 +595,14 @@ type Listed = {
 }
 
 /** A space the side's selector offers: whether it is the person's to own,
- * and whether it is the one they open first (`member.own`). */
+ * whether it is the one they open first (`member.own`), and of one they are
+ * only a member of, its owner's name. */
 export type Picked = {
   slug: string
   title: string
   owner: boolean
   own: boolean
+  whose?: string
 }
 
 export type DeskPage = {
@@ -775,9 +777,11 @@ let chooser = (at: DeskPage, view: ManageView, env: Host) => {
       }>${
         box(
           s,
-          `${spaceHost(env, s.slug)} · ${
-            s.owner ? 'yours' : 'you’re a member'
-          }`,
+          s.owner
+            ? `${spaceHost(env, s.slug)} · yours`
+            : `${
+              s.whose ? `${s.whose}’s space` : spaceHost(env, s.slug)
+            } · you’re a member`,
         )
       }${s.slug == here.slug ? '<span class="Desk_Tick">✓</span>' : ''}</a>`
     ).join('')

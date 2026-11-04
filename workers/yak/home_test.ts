@@ -127,7 +127,14 @@ test('the selector names the space and keeps the page when another is chosen', a
   let spaces = [
     { slug: 'dana', title: 'Dana', owner: true, own: true },
     { slug: 'grove', title: 'Locust Grove', owner: true, own: false },
-    { slug: 'club', title: 'Book club', owner: false, own: false },
+    {
+      slug: 'club',
+      title: 'Book club',
+      owner: false,
+      own: false,
+      whose: 'Ana',
+    },
+    { slug: 'quilt', title: 'Quilts', owner: false, own: false },
   ]
   let rows = (html: string) =>
     [...parseHTML(html).document.querySelectorAll('.Desk_Row')].map((a) => ({
@@ -154,7 +161,13 @@ test('the selector names the space and keeps the page when another is chosen', a
     // A space they are a member of opens at its Operator.
     {
       href: '/manage/club/operator',
-      text: 'BBook clubclub.yaks.app · you’re a member',
+      text: 'BBook clubAna’s space · you’re a member',
+      here: false,
+    },
+    // One whose owner has no name says where it is.
+    {
+      href: '/manage/quilt/operator',
+      text: 'QQuiltsquilt.yaks.app · you’re a member',
       here: false,
     },
   ])

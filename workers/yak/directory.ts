@@ -308,9 +308,15 @@ export type AppInfo = {
 export type Role = 'owner' | 'editor' | 'viewer'
 
 /** A person's place in a space: the space, what they are in it, the seat's
- * eid, and whether the space is their own (`member.own`, {@link directory}'s
- * `own`). */
-export type Seat = { space: Space; role: Role; seat: string; own: boolean }
+ * eid, whether the space is their own (`member.own`, {@link directory}'s
+ * `own`), and the person who owns it. */
+export type Seat = {
+  space: Space
+  role: Role
+  seat: string
+  own: boolean
+  owner?: string
+}
 
 /** One app a person is a guest of, and what the grant lets them do. */
 export type Granted = { space: Space; app: App; access: Role }
@@ -2101,11 +2107,20 @@ export let directory = (
     // `spoken`), which is a seat in `yak` like any other.
     seated: async (person: string, role?: Role): Promise<Seat[]> => {
       if (!person) return []
+      // The owner's seat in each space comes back in the same read, so a
+      // space they are only a member of says whose it is.
+      let mine = `.members_space.member.person=${person}`
       let rows = await query(
-        `(.member.person=${person})|(.space&.members_space.member.person=${person})&*`,
+        `(.member.person=${person})|(.space&${mine})|(.member.role=owner&.member.space${mine})&*`,
       )
+      let seats = rows.filter((r) => r.member)
       let held = new Map(
-        rows.filter((r) => r.member).map((r) => [idOf(r.member!.space), r]),
+        seats.filter((r) => idOf(r.member!.person) == person)
+          .map((r) => [idOf(r.member!.space), r]),
+      )
+      let owners = new Map(
+        seats.filter((r) => r.member!.role == 'owner')
+          .map((r) => [idOf(r.member!.space), idOf(r.member!.person)]),
       )
       return rows.flatMap((r) => {
         let seat = r.space && held.get(r.entity.eid)
@@ -2115,6 +2130,7 @@ export let directory = (
           role: seat.member!.role as Role,
           seat: seat.entity.eid,
           own: !!seat.member!.own,
+          owner: owners.get(r.entity.eid),
         }]
       })
     },

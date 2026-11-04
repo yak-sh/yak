@@ -21,7 +21,15 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { managePath } from './route.ts'
-import { client, connector, kernel, seed, signIn, unique } from './probe.ts'
+import {
+  accepted,
+  client,
+  connector,
+  kernel,
+  seed,
+  signIn,
+  unique,
+} from './probe.ts'
 
 // What the browser would ask for, given a page and a URL written in it: the
 // page's `<base href>` resolved against the address it was served at.
@@ -387,4 +395,31 @@ test('a dashboard page reads the directory in two trips at most', async () => {
   for (let view of ['profile', 'shared'] as const) {
     assertEquals(await trips(managePath(view)), '1', view)
   }
+})
+
+test("the selector names whose space each one you're a member of is", async () => {
+  let k = await kernel()
+  let slug = unique('whose')
+  let them = await seed(k, [{ slug, apps: [] }])
+  let guest = await signIn(k)
+  await connector(k, them.cookie).tool('member_add', {
+    space: slug,
+    email: guest.email,
+    role: 'editor',
+  })
+  await accepted(k, guest.email, guest.cookie)
+  let rows = async (cookie: string) => {
+    await k.settled()
+    let page = await k.at('yaks.app', managePath('profile'), {
+      headers: { cookie },
+    })
+    return [...(await page.text()).matchAll(/<small>([^<]*)<\/small>/g)]
+      .map((m) => m[1])
+  }
+  let owner = them.email.split('@')[0]
+  // The owner's own row says it is theirs; the member's names the owner.
+  assert((await rows(them.cookie)).includes(`${slug}.yaks.app · yours`))
+  assert(
+    (await rows(guest.cookie)).includes(`${owner}’s space · you’re a member`),
+  )
 })

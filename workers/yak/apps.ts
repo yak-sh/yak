@@ -2579,19 +2579,27 @@ let sentFrom = (req: Request, env: Env) => {
 
 // The spaces the side's selector offers (pages.ts `Picked`): every one this
 // person may work in, the one they open first at the top, then those they
-// own, then those they are a member of.
-let pickable = (seats: Seat[]) =>
-  seats.filter((s) => !s.space.trashed && writes(s.role))
+// own, then those they are a member of, each named by whose it is: every
+// owner's name in one read.
+let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
+  let kept = seats.filter((s) => !s.space.trashed && writes(s.role))
     .sort((a, b) =>
       Number(b.own) - Number(a.own) ||
       Number(b.role == 'owner') - Number(a.role == 'owner')
     )
-    .map((s) => ({
-      slug: s.space.slug,
-      title: s.space.title,
-      owner: s.role == 'owner',
-      own: s.own,
-    }))
+  let names = await dir.persons([
+    ...new Set(
+      kept.flatMap((s) => s.role != 'owner' && s.owner ? [s.owner] : []),
+    ),
+  ])
+  return kept.map((s) => ({
+    slug: s.space.slug,
+    title: s.space.title,
+    owner: s.role == 'owner',
+    own: s.own,
+    whose: s.role == 'owner' ? undefined : names.get(s.owner!)?.name,
+  }))
+}
 
 // One page of a space's (pages.ts `desk`), for its owner, or its Operator for
 // a member who may change it.
@@ -2619,7 +2627,7 @@ let desk = async (
     agents,
     people,
     connections,
-    seats,
+    picks,
     operator,
     billed,
   ] = await Promise.all([
@@ -2671,7 +2679,7 @@ let desk = async (
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.
-    dir.seats(owner),
+    dir.seats(owner).then((seats) => pickable(dir, seats)),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who)
@@ -2686,7 +2694,6 @@ let desk = async (
       })
       : undefined,
   ])
-  let picks = pickable(seats)
   let page = deskPage({
     views,
     viewDays: DAYS,
@@ -2768,15 +2775,14 @@ let mine = async (
     return nothingHere(env)
   }
   if (req.method != 'POST') foresee(dir, person, view)
-  let [seats, name, email, agents, theirs, own] = await Promise.all([
-    dir.seats(person),
+  let [picks, name, email, agents, theirs, own] = await Promise.all([
+    dir.seats(person).then((seats) => pickable(dir, seats)),
     dir.nameAt(person),
     view == 'profile' ? dir.emailAt(person) : undefined,
     view == 'agents' ? identity().then((part) => part.agents(env, person)) : [],
     view == 'shared' ? shared(dir, person) : undefined,
     dir.own(person),
   ])
-  let picks = pickable(seats)
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
   let page = deskPage({
