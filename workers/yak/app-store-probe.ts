@@ -27,7 +27,7 @@ import type { Env } from './env.ts'
 import { appGuard, authenticating, vouchOf } from './app-authority.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { appRead } from './app-read.ts'
-import { lowering, vouching } from './app-writes.ts'
+import { lowering, staleGrant, vouching } from './app-writes.ts'
 import type { Hit } from '@yaks/fts'
 import { kinded, naming } from './app-subs.ts'
 import { asking, screened } from './listing.ts'
@@ -48,6 +48,12 @@ export type Composition = {
 export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
   let g = composition.graph?.(vocab) ?? graph({ vocab, storage: ram(vocab) })
   let request = new AsyncLocalStorage<Request>()
+  let ignore = (row: Bundle) =>
+    staleGrant(row, (person) => {
+      let req = request.getStore()
+      let held = req && vouchOf(req)
+      return held && held.person == person ? held : undefined
+    })
   if (composition.app) {
     let { eid, mode, manifest } = composition.app
     g.apply([{ entity: { eid }, access: { mode } }], { trusted: true })
@@ -60,6 +66,7 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
       },
     }))
     g.use(appGuard(eid, vocab, manifest, {
+      ignore,
       level: () => {
         let req = request.getStore()
         return req ? vouchOf(req).level : undefined
@@ -82,10 +89,12 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
     },
   }
   let subs = subscriptions(view)
-  let authenticate = authenticating(
-    policy(g.storage),
+  let authenticated = authenticating(
+    policy(g.storage, { ignore }),
     () => composition.app?.eid ?? null,
   )
+  let authenticate: typeof authenticated = (req) =>
+    request.run(req, () => authenticated(req))
   let live = composition.sockets && sockets(
     naming(subs, {
       query: (line) =>

@@ -1,3 +1,4 @@
+import { servingAuthority } from './app-serving-authority.ts'
 import {
   fitOf,
   fitSchema,
@@ -13,7 +14,6 @@ export { fitOf, KV, shapeOf, stands } from './store-schema.ts'
 import {
   copyOf,
   EPOCH,
-  FENCE_WAIT,
   fenced,
   mend,
   READS,
@@ -50,7 +50,7 @@ export {
   type Vouch,
   vouchOf,
 } from './app-authority.ts'
-import { grantEid, lowering, vouching } from './app-writes.ts'
+import { lowering, staleGrant, vouching } from './app-writes.ts'
 export { grantEid } from './app-writes.ts'
 import {
   type Context as AppContext,
@@ -1706,112 +1706,24 @@ export class Store {
   // store takes it at that word: it was the directory's answer when the
   // request asked. Only an answer older than one this store already acted on
   // is read again, so what the store holds never goes back in time.
-  async #learn(req: Request) {
-    let revision = this.#policy(req)
-    if (this.#appMetadata(req) && this.#bind.SERVING_COPY) {
-      if (revision == null) {
-        throw Object.assign(new Refused('Serving authorization unavailable'), {
-          status: 503,
-        })
-      }
-      let began = this.#now()
-      while (revision < Number(this.#get('policy') ?? 0)) {
-        if (!this.#bind.STORE || this.#now() - began >= FENCE_WAIT) {
-          throw Object.assign(
-            new Refused('Serving authorization unavailable'),
-            {
-              status: 503,
-            },
-          )
-        }
-        revision = await this.#recheck(req)
-      }
-    }
-    // Reject outside #atomic: that helper treats a failure as a broken schema.
-    // No yield separates this check from the synchronous transaction below.
-    this.#policyFloor(req)
-    // The authority check yields. Recheck the local floor inside #remember:
-    // another request may have accepted a newer revision while it was away.
-    // An equal persisted revision with unchanged metadata has nothing to write.
-    if (
-      this.#heard(req).length ||
-      (revision != null && this.#get('policy') != String(revision))
-    ) {
-      this.#atomic(() => this.#remember(req))
-    } else if (this.#appMetadata(req) && this.#get('policy') != null) {
-      this.#remember(req)
-    }
-  }
+  #serving = servingAuthority({
+    read: (key) => this.#get(key),
+    write: (key, value) => this.#put(key, value),
+    copy: () => this.#bind.SERVING_COPY,
+    directory: () => this.#bind.STORE,
+    now: () => this.#now(),
+    transport: () => this.#directoryTransport(),
+    vouch: (value) => this.#vouch(value),
+    atomic: (run) => {
+      this.#atomic(run)
+    },
+    bind: () => this.#build(),
+    mode: (value) => this.#mode(value),
+  })
 
-  // Reread metadata and standing in one directory snapshot. A write between
-  // the kernel's read and this store's check invalidates the snapshot, not the
-  // request. Never carry its old role into the newly accepted revision.
-  async #recheck(req: Request): Promise<number> {
-    let app = req.headers.get('x-yak-app') ?? this.#get('app')
-    let person = req.headers.get('x-yak-person')
-    let q = `.entity.eid=${app}&?app`
-    if (person) {
-      q +=
-        `|.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`
-    }
-    let answer = await this.#directoryTransport().fetch(
-      new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
-    )
-    let raw = answer.headers.get(EPOCH)
-    if (!answer.ok || raw == null || !/^\d+$/.test(raw)) {
-      throw Object.assign(new Refused('Serving authorization unavailable'), {
-        status: 503,
-      })
-    }
-    let rows: Bundle[] = await answer.json()
-    let definition = rows.find((r) => r.entity.eid == app)?.app as
-      | Comp
-      | undefined
-    if (!definition || definition.trashed) throw new Refused('app unavailable')
-    let space = typeof definition.space == 'string'
-      ? definition.space
-      : (definition.space as { eid?: string } | undefined)?.eid
-    let member = rows.find((r) => {
-      let m = r.member as Comp | undefined
-      let held = typeof m?.space == 'string'
-        ? m.space
-        : (m?.space as { eid?: string } | undefined)?.eid
-      return held == space && !!m
-    })?.member as Comp | undefined
-    let grant = rows.find((r) => r.grant)?.grant as Comp | undefined
-    let role = member?.role ?? grant?.access
-    req.headers.set('x-yak-app', app!)
-    req.headers.set('x-yak-access', mode(definition.access))
-    req.headers.set('x-yak-policy', raw)
-    req.headers.delete('x-yak-role')
-    if (person) this.#vouch({ ...vouchOf(req), level: null })
-    if (person && (role == 'owner' || role == 'editor' || role == 'viewer')) {
-      req.headers.set('x-yak-role', String(role))
-    }
-    return Number(raw)
-  }
+  #learn = (req: Request) => this.#serving.learn(req)
 
-  #appMetadata(req: Request): boolean {
-    return (req.headers.get('x-store') ?? this.#get('name')) !=
-        PLATFORM_STORE &&
-      ['x-yak-app', 'x-yak-access', 'x-yak-mail', 'x-yak-policy'].some((h) =>
-        req.headers.has(h)
-      )
-  }
-
-  #policy(req: Request): number | null {
-    if (!this.#appMetadata(req)) return null
-    let raw = req.headers.get('x-yak-policy')
-    if (raw == null) return null
-    let revision = /^\d+$/.test(raw) ? Number(raw) : NaN
-    if (!Number.isSafeInteger(revision) || revision < 0) {
-      throw Object.assign(
-        new Refused('Invalid serving authorization revision'),
-        { status: 503 },
-      )
-    }
-    return revision
-  }
+  #recheck = (req: Request) => this.#serving.recheck(req)
 
   // Draft declarations and seed wait for the directory's release pointer,
   // including the first release from an empty store.
@@ -1913,58 +1825,7 @@ export class Store {
   // object it is talking to, so the word is ignored rather than believed:
   // believing it installs @yaks/member's guard on a store with no seats and
   // writes a grant into a table that does not exist.
-  #heard(req: Request): [Word, string][] {
-    let name = req.headers.get('x-store')
-    let said: [Word, string | null][] = [['name', name]]
-    if ((name ?? this.#get('name')) != PLATFORM_STORE) {
-      said.push(
-        ['app', req.headers.get('x-yak-app')],
-        ['access', req.headers.get('x-yak-access')],
-        // The address this app's letters leave from (directory.ts `mailbox`).
-        // Like the access mode it is the directory's word and is followed
-        // rather than argued with — an app renamed, or made the space's front
-        // page, writes from its new address on the very next request. Nothing
-        // is rebuilt for it: `#posting` reads the word at write time.
-        ['mail', req.headers.get('x-yak-mail')],
-      )
-    }
-    return said.filter((s): s is [Word, string] =>
-      !!s[1] && s[1] != this.#get(s[0])
-    )
-  }
-
-  #policyFloor(req: Request) {
-    let revision = this.#policy(req)
-    let floor = this.#get('policy')
-    if (
-      this.#appMetadata(req) && floor != null &&
-      (revision == null || revision < Number(floor))
-    ) {
-      throw Object.assign(new Refused('Stale serving authorization'), {
-        status: 503,
-      })
-    }
-  }
-
-  #remember(req: Request) {
-    this.#policyFloor(req)
-    let revision = this.#policy(req)
-    let floor = this.#get('policy')
-    // No metadata, mode or person vouch may be installed before this check.
-    if (revision != null && (floor == null || revision > Number(floor))) {
-      this.#put('policy', String(revision))
-    }
-    let heard = new Map(this.#heard(req))
-    for (let [k, v] of heard) this.#put(k, v)
-    // The name is what says whether this object is the directory, so learning
-    // it for the first time can change which vocabulary it speaks — and the
-    // object was constructed before any request could tell it. The app it
-    // holds is what its guard asks about. Either is one rebuild, however many
-    // of them a request said.
-    if (heard.has('name') || heard.has('app')) this.#build()
-    let access = heard.get('access')
-    if (access) this.#mode(mode(access))
-  }
+  #heard = (req: Request) => this.#serving.heard(req)
 
   // The app's access mode, in this store's own rows — what @yaks/member reads
   // to answer "and everyone else?". It is written straight through storage,
@@ -2164,13 +2025,8 @@ export class Store {
 
   #lowering = lowering(() => this.#vocab)
 
-  #staleGrant = (row: Bundle): boolean => {
-    let grant = row.grant as Comp | null | undefined
-    let app = grant?.app, person = grant?.person
-    return typeof app == 'string' && typeof person == 'string' &&
-      row.entity.eid == grantEid(app, person) &&
-      this.#vouched.get(person)?.level === null
-  }
+  #staleGrant = (row: Bundle): boolean =>
+    staleGrant(row, (person) => this.#vouched.get(person))
 
   #vouching = vouching({
     app: () => this.#get('app'),

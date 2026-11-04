@@ -1,3 +1,7 @@
+import { servingAuthority } from './app-serving-authority.ts'
+import { copyOf, servingDirectory } from './directory-copy.ts'
+import { fetch as directoryFetch } from './directory.ts'
+import type { Driver } from '@yaks/sql'
 // App graph lifecycle over private SQLite rows. The production declaration
 // selector owns staging and release changes; this host supplies transactions,
 // graph binding and sockets without Durable Object alarms or runtime duties.
@@ -27,7 +31,13 @@ import { mode } from '@yaks/member'
 import { eraseStore, weighing } from './app-storage.ts'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
 import { weighed } from './meter.ts'
-import { fitSchema, reshapeSlots, shapeOf, slotsOf } from './store-schema.ts'
+import {
+  fitSchema,
+  KV,
+  reshapeSlots,
+  shapeOf,
+  slotsOf,
+} from './store-schema.ts'
 import type { durable } from '../../packages/durable-object/testing.ts'
 import type { Snapshot } from '../../packages/sqlite/testing.ts'
 
@@ -61,12 +71,13 @@ export let lifecycleStores = (
     let slots = new Map<string, string>()
     let unselectable = new Set<string>()
     let physical: Physical | undefined
+    let sql: (Driver & Disposable) | undefined
     let backend = sqliteApp(
       (dispose) => disposals.add(dispose),
       storage && ((from) => {
         let owned = physical = storage(name, from)
         states.set(name, { storage: owned })
-        return Object.assign(driver(owned, undefined, measure), {
+        return sql = Object.assign(driver(owned, undefined, measure), {
           [Symbol.dispose]: () => owned[Symbol.dispose](),
         })
       }),
@@ -76,12 +87,12 @@ export let lifecycleStores = (
     let raw: ReturnType<typeof slotsOf> | undefined
     if (restored) {
       let owned = physical = restored
-      let sql = Object.assign(driver(owned, undefined, measure), {
+      sql = Object.assign(driver(owned, undefined, measure), {
         [Symbol.dispose]: () => owned[Symbol.dispose](),
       })
       states.set(name, { storage: owned })
       backend.adopt(sql)
-      raw = slotsOf(() => sql, slotCache)
+      raw = slotsOf(() => sql!, slotCache)
       reshapeSlots(raw.read, raw.write)
     }
     let wire: ReturnType<typeof appWire>
@@ -119,6 +130,12 @@ export let lifecycleStores = (
           }
           : undefined,
       )
+      if (sql && !raw) {
+        sql.query(KV)
+        raw = slotsOf(() => sql!, slotCache)
+        for (let [key, value] of slots) raw.write(key, value)
+        slots.clear()
+      }
       let eid = read('app')
       let next = appWire(words, name, {
         ...(eid
@@ -166,6 +183,34 @@ export let lifecycleStores = (
       }
       if (wire != active) active.subs.stop()
     }
+    let authority = servingAuthority({
+      read,
+      write,
+      copy: () => env.SERVING_COPY,
+      directory: () => env.STORE,
+      now: () => Date.now(),
+      transport: () =>
+        servingDirectory({
+          fetch: (request) => directoryFetch(request, env),
+        }, { copy: env.SERVING_COPY ? copyOf(env) : undefined }),
+      // The refreshed request carries its new standing into appWire's
+      // request-local vouch; no prior role survives the header replacement.
+      vouch: () => {},
+      atomic: (run) =>
+        atomic(run, (error) => {
+          throw error
+        }),
+      bind,
+      mode: (value) => {
+        let app = read('app')
+        if (app) {
+          wire.graph.apply(
+            [{ entity: { eid: app }, access: { mode: value } }],
+            { trusted: true },
+          )
+        }
+      },
+    })
     let prepare = (next: string) =>
       JSON.stringify(
         grew(appDoc(read('vocab') ?? '{}'), appDoc(next), rows).doc,
@@ -230,6 +275,10 @@ export let lifecycleStores = (
             },
             arm: () => physical!.setAlarm(Date.now()),
           })
+        }
+        if (env.SERVING_COPY) {
+          if (!wire) bind()
+          await authority.learn(request)
         }
         let learned = false
         for (

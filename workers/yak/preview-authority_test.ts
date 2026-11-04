@@ -1,10 +1,17 @@
 // The production store requires the directory revision on every app request.
-import { equal, test } from '@yaks/testing'
+import { cleanup, equal, test } from '@yaks/testing'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
 import { handler } from './kernel.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
-import { ADA, platform, seeded } from './serving-probe.ts'
+import { ADA, SECRET, seeded } from './serving-data-probe.ts'
+import { platform } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
+import { operators } from './operator-service-probe.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
+import { snapshot } from '../../packages/sqlite/testing.ts'
+import { driver } from '@yaks/durable-object'
+import { storage } from '@yaks/sqlite'
 import { type Ctx, TOOLS } from './tools.ts'
 
 let saved: ServingCopyState | undefined
@@ -25,9 +32,19 @@ let rpc: ServingCopyDoor = {
   valid: (revision) => Promise.resolve(copy.valid(revision)),
   publish: (...args) => Promise.resolve(copy.publish(...args)),
 }
-let p = platform({
-  SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
+let bindings = {
+  BUILDER: operators,
+  SERVING_COPY: { idFromName: (name: string) => name, get: () => rpc },
+}
+let p = platform(SECRET, bindings, {
+  copy: copyOf(bindings),
+  storage: (vocab) => {
+    let db = durable(snapshot(vocab))
+    cleanup(() => db[Symbol.dispose]())
+    return storage(driver(db), vocab, { schemaReady: () => true })
+  },
 })
+lifecycleStores(p.env, (_name, from) => durable(from))
 await seeded(p.env)
 let ctx: Ctx = {
   env: p.env,

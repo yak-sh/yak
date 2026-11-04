@@ -14,6 +14,20 @@ import type { Vouch } from './app-authority.ts'
 export let grantEid = (app: string, person: string): string =>
   sha256(`grant\x00${app}\x00${person}`)
 
+/** A directory vouch has withdrawn a grant previously mirrored here. */
+export let staleGrant = (
+  row: Bundle,
+  held: (person: string) => Vouch | undefined,
+): boolean => {
+  let grant = row.grant as
+    | { app?: unknown; person?: unknown }
+    | null
+    | undefined
+  let app = grant?.app, person = grant?.person
+  return typeof app == 'string' && typeof person == 'string' &&
+    row.entity.eid == grantEid(app, person) && held(person)?.level === null
+}
+
 /** Lower named references to the eid the vocabulary stores. */
 export let lowering = (vocab: () => Vocab): Plugin => ({
   name: 'yak/lower',
