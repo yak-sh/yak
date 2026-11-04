@@ -35,6 +35,8 @@ export type Host = {
   symlink(target: string, path: string): void
   link(path: string): string | undefined
   now(): number
+  pid(): number
+  alive(pid: number): boolean
   wait(): Promise<void>
   npm(root: string): Promise<number>
   report(message: string): void
@@ -62,6 +64,17 @@ let system: Host = {
   link: (path) =>
     io.lstatSync(path).isSymlink ? io.readLinkSync(path) : undefined,
   now: Date.now,
+  pid: () => platform.pid,
+  alive: (pid) => {
+    try {
+      platform.kill(pid, 0)
+      return true
+    } catch (error) {
+      if (error instanceof io.errors.NotFound) return false
+      if (error instanceof io.errors.PermissionDenied) return true
+      throw error
+    }
+  },
   wait: () => new Promise((ok) => setTimeout(ok, 200)),
   npm: async (root) => {
     let { code } = await spawnCommand('npm', {
@@ -182,6 +195,57 @@ export let dependencies = (host: Host = system) => {
     }
   }
 
+  // Publish the owner beside the lock atomically, so a killed installer never
+  // leaves an ownerless lock. Its abandoned directory returns to its unique
+  // claim path: a second cleaner cannot rename a successor over that receipt.
+  let acquire = async (lock: string, due: number, needed: () => boolean) => {
+    let claim = `${lock}.${host.nonce()}`
+    host.mkdir(claim)
+    host.write(
+      `${claim}/owner.json`,
+      JSON.stringify({ pid: host.pid(), claim }),
+    )
+    let conflict = (error: unknown) =>
+      error instanceof io.errors.AlreadyExists ||
+      (error as { code?: string })?.code == 'ENOTEMPTY'
+    try {
+      while (needed()) {
+        if (host.exists(lock)) {
+          let owner: { pid: number; claim: string } | undefined
+          try {
+            owner = JSON.parse(host.read(`${lock}/owner.json`))
+          } catch (error) {
+            if (!(error instanceof io.errors.NotFound)) throw error
+          }
+          if (owner && !host.alive(owner.pid)) {
+            try {
+              host.rename(lock, owner.claim)
+            } catch (error) {
+              if (!conflict(error) && !(error instanceof io.errors.NotFound)) {
+                throw error
+              }
+            }
+            continue
+          }
+        } else {
+          try {
+            host.rename(claim, lock)
+            return () => host.remove(lock)
+          } catch (error) {
+            if (!conflict(error)) throw error
+            continue
+          }
+        }
+        if (host.now() > due) {
+          throw new Error(`npm ci never finished; installer holds ${lock}`)
+        }
+        await host.wait()
+      }
+    } finally {
+      host.remove(claim)
+    }
+  }
+
   /** Install only a stale tree. An atomic directory keeps simultaneous callers
    * from deleting each other's node_modules while npm ci replaces it. */
   let installed = async (root = dir, {
@@ -195,19 +259,8 @@ export let dependencies = (host: Host = system) => {
     let due = host.now() + timeout
     let needed = () => stale(root) || (copy && linked(root))
     while (needed()) {
-      try {
-        host.mkdir(lock)
-      } catch (error) {
-        if (!(error instanceof io.errors.AlreadyExists)) throw error
-        if (host.now() > due) {
-          throw new Error(
-            `npm ci in ${root} never finished; if nothing is installing, ` +
-              `remove ${lock}`,
-          )
-        }
-        await host.wait()
-        continue
-      }
+      let release = await acquire(lock, due, needed)
+      if (!release) return false
       try {
         // Another installer may have finished between the read and the mkdir.
         if (!needed()) return false
@@ -256,7 +309,7 @@ export let dependencies = (host: Host = system) => {
         }
         return true
       } finally {
-        host.remove(lock)
+        release()
       }
     }
     return false

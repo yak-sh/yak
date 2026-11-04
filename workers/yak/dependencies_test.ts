@@ -126,6 +126,12 @@ let memory = () => {
     },
     copy,
     rename: (from, to) => {
+      if (
+        entries.get(to) === null &&
+        [...entries.keys()].some((p) => p.startsWith(to + '/'))
+      ) {
+        throw alreadyExists
+      }
       copy(from, to)
       remove(from)
     },
@@ -140,6 +146,8 @@ let memory = () => {
       return entry && typeof entry === 'object' ? entry.target : undefined
     },
     now: () => 0,
+    pid: () => 1,
+    alive: () => true,
     wait: () => {
       throw new Error('unexpected lock wait')
     },
@@ -395,4 +403,86 @@ test('a copied cache keeps module paths local and remains independent across che
   assertEquals(m.stale(second), false)
   await m.restored(m.cache, m.root, { mode: 'copy' })
   assertEquals(m.state(), [1, false])
+})
+
+let orphan = memory()
+{
+  let lock = `${orphan.root}/node_modules.lock`
+  orphan.host.mkdir(lock)
+  orphan.write(
+    `${lock}/owner.json`,
+    JSON.stringify({ pid: 7, claim: `${lock}.old` }),
+  )
+  orphan.host.alive = (pid) => pid != 7
+}
+
+test('an abandoned installer is replaced without waiting for its timeout', async () => {
+  let m = orphan
+  assertEquals(await m.installed(m.root), true)
+  assertEquals(m.state(), [1, false])
+  assertEquals(m.host.exists(`${m.root}/node_modules.lock`), false)
+})
+
+test('another install keeps a live owner and reuses its completed tree', async () => {
+  let m = memory(), entered = Promise.withResolvers<void>()
+  let resume = Promise.withResolvers<void>(),
+    waiting = Promise.withResolvers<void>()
+  let finished = Promise.withResolvers<void>()
+  let npm = m.host.npm
+  m.host.npm = async (root) => {
+    entered.resolve()
+    await resume.promise
+    return npm(root)
+  }
+  let first = m.installed(m.root)
+  await entered.promise
+  let other = dependencies({
+    ...m.host,
+    pid: () => 2,
+    wait: async () => {
+      waiting.resolve()
+      await finished.promise
+    },
+  }).installed(m.root)
+  await waiting.promise
+  assertEquals(
+    JSON.parse(m.read(`${m.root}/node_modules.lock/owner.json`)).pid,
+    1,
+  )
+  resume.resolve()
+  assertEquals(await first, true)
+  finished.resolve()
+  assertEquals(await other, false)
+  assertEquals(m.state(), [1, false])
+})
+
+test('two cleaners of a dead installer cannot take a successor’s lock', async () => {
+  let m = memory(), lock = `${m.root}/node_modules.lock`, dead = `${lock}.old`
+  m.host.mkdir(lock)
+  m.write(`${lock}/owner.json`, JSON.stringify({ pid: 7, claim: dead }))
+  m.host.alive = (pid) => pid != 7
+  let rename = m.host.rename, crossed = false
+  m.host.rename = (from, to) => {
+    if (!crossed && from == lock && to == dead) {
+      crossed = true
+      rename(lock, dead)
+      let successor = `${lock}.new`
+      m.host.mkdir(successor)
+      m.write(
+        `${successor}/owner.json`,
+        JSON.stringify({ pid: 2, claim: successor }),
+      )
+      rename(successor, lock)
+    }
+    rename(from, to)
+  }
+  m.host.wait = () =>
+    Promise.reject(new Error('waiting for the live installer'))
+  await assertRejects(
+    () => m.installed(m.root),
+    Error,
+    'waiting for the live installer',
+  )
+  assertEquals(JSON.parse(m.read(`${lock}/owner.json`)).pid, 2)
+  assertEquals(m.state(), [0, true])
 })
