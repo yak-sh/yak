@@ -1,6 +1,6 @@
 {
   "name": "@yaks/harness",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "exports": {
     ".": "./mod.ts",
     "./default": "./default.ts",
