@@ -1,12 +1,11 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { durable } from '../../packages/durable-object/testing.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
-import { modelPage, platform } from './testing.ts'
-import { operatorModel } from './operator-testing.ts'
-import { operatorStore } from './operator-store.ts'
+import { modelPage } from './testing.ts'
+import { platform } from './directory-probe.ts'
+import { operatorMemory, operatorModel } from './operator-testing.ts'
 import {
   attachmentTools,
   authenticated,
@@ -56,8 +55,8 @@ let fixture = async () => {
     ],
   }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
   let space = (await dir.at(eid))!
-  let raw = durable()
-  let store = operatorStore(raw)
+  let store = operatorMemory()
+  let raw = store.storage
   let held = { person, role: 'owner' as const, space: eid }
   let ctx = await operatorContext(p.env, held, space)
   await TOOLS.find((t) => t.name == 'app_new')!.run(ctx, {
@@ -163,7 +162,7 @@ await f.store.g.apply([{
   entity: effect.entity,
   effect: { attempts: 1, state: 'pending' },
 }], { trusted: true })
-let reopened = operatorStore(f.raw)
+let reopened = operatorMemory(f.raw)
 handleChannels(operatorOf(reopened, f.env, model), f.env)
 await drain(reopened)
 let [recovered] = await reopened.g.get([pending])
@@ -293,7 +292,7 @@ let file = await keepFile(
   new TextEncoder().encode('The board approved the road millage.'),
 )
 let attachmentRequests: Request[] = []
-let attachmentStore = operatorStore(durable())
+let attachmentStore = operatorMemory()
 let attachmentModel: Model = (req) => {
   attachmentRequests.push(req)
   return Promise.resolve({
@@ -505,7 +504,7 @@ test('a follow-up can publish an earlier request original without asking for it 
   assertEquals((originalRows[0].created as { by: string }).by, f.space.eid)
 })
 
-let media = operatorStore(durable())
+let media = operatorMemory()
 let mediaAsks: Request[] = [], ocrInputs: unknown[] = []
 let beforeMedia = (await f.dir.at(f.space.eid))!.meter!.models
 f.env.MODEL_FETCH = () => Promise.resolve(modelPage(0.1, 0.3))

@@ -1,5 +1,5 @@
 // The space's private work stays beside its builder, outside app restores.
-import { graph } from '@yaks/graph'
+import { graph, type Plugin, type Storage } from '@yaks/graph'
 import { driver, type DurableStorage, storage } from '@yaks/durable-object'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -58,6 +58,16 @@ export let operatorStore = (
   })
   for (let stmt of blobSchema()) sql.query(stmt)
   store.install()
+  return operatorGraph(store, blobs({ vocab, blobs: kept }), options)
+}
+
+/** The Operator's work graph, independent of its durable storage boundary. */
+export let operatorGraph = (
+  storage: Storage,
+  plugins: Plugin[],
+  options: Parameters<typeof effects>[1] = {},
+) => {
+  let vocab = operatorVocab
   // Several runs at once: a person's next words, an email and a tool call
   // are taken while a session waits on its model.
   let fx = effects(vocab, {
@@ -67,9 +77,9 @@ export let operatorStore = (
     ...options,
   })
   let g = graph({
-    storage: store,
+    storage,
     vocab,
-    plugins: [sessions(), drafts(), ...blobs({ vocab, blobs: kept }), fx],
+    plugins: [sessions(), drafts(), ...plugins, fx],
   })
   return { g, fx, vocab }
 }

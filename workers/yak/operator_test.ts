@@ -1,12 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { durable } from '../../packages/durable-object/testing.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
-import { platform } from './testing.ts'
-import { operatorModel } from './operator-testing.ts'
+import { platform } from './directory-probe.ts'
+import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { directoryOf } from './directory.ts'
-import { operatorStore } from './operator-store.ts'
 import { operating, readOperator } from './operator.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
@@ -90,9 +88,8 @@ let fixture = async () => {
     ],
   })
   await TOOLS.find((t) => t.name == 'app_deploy')!.run(ctx, { app: 'notices' })
-  let raw = durable()
-  let store = operatorStore(raw)
-  return { env, space, held, store, raw }
+  let store = operatorMemory()
+  return { env, space, held, store }
 }
 let f = await fixture()
 let calls = (
@@ -232,7 +229,7 @@ let paGraph = await reaching(pa, await inReach(pa))
 let paMeetings = await paGraph.read('.meeting')
 let paAsked: Request[] = []
 await operating(
-  operatorStore(durable()),
+  operatorMemory(),
   f.env,
   operatorModel((req) => {
     paAsked.push(req)
@@ -260,7 +257,7 @@ test("the Operator on a person's own space is their PA, reaching each of their s
 
 // A second message while the model is answering the first: one session takes
 // both, the second as its next input, and it answers after both.
-let steered = operatorStore(durable())
+let steered = operatorMemory()
 let steering: Request[] = []
 let given: { task: string; session: string } | undefined
 let steerer = operating(

@@ -26,18 +26,12 @@ import {
 import { parse } from '@std/toml'
 import { imaged, pinned as from, tag } from './sandbox/base.ts'
 import { build, fake } from './builder.ts'
-import { directory } from './directory.ts'
+import { directory, spaceOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import {
-  kv,
-  owned,
-  platform,
-  type Ran,
-  sandboxes,
-  workspaces,
-} from './testing.ts'
+import { kv, owned, type Ran, sandboxes, workspaces } from './testing.ts'
+import { platform } from './directory-probe.ts'
 import type { Space } from './directory.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
@@ -100,6 +94,17 @@ let seeded = async (vars: Partial<Env> = {}) => {
     settled: scenario.settled,
     [Symbol.asyncDispose]: scenario[Symbol.asyncDispose],
   }
+}
+
+// A workbench needs its container binding and space data alone.
+let bare = (answer?: (cmd: string) => Ran | void) => {
+  let box = sandboxes(answer)
+  let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
+  let space = spaceOf({
+    entity: { eid: ADA },
+    space: { slug: 'ada', store: 'ada' },
+  })
+  return { box, env, space }
 }
 
 let ctxOf = (env: Env, spend = spending()): Ctx => ({
@@ -359,11 +364,9 @@ test('no container bound is a sentence, not a stack trace', async () => {
 })
 
 test('a lend returns a usable machine while the CLI warms', async () => {
-  let box = sandboxes((cmd) =>
+  let { box, env, space } = bare((cmd) =>
     cmd == 'yak --help >/dev/null' ? { running: true } : { stdout: 'ready' }
   )
-  let space = { eid: 'warm', slug: 'warm' } as dirPart.Space
-  let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
   let spend = spending()
   let lent = await workbench(env, space, ADA, spend)
   let warm = await lent.workspace.look('proc-1')
@@ -386,15 +389,13 @@ test('a lend returns a usable machine while the CLI warms', async () => {
 
 for (let failure of ['rpc', 'exit']) {
   test(`a warm-up ${failure} failure still lends a usable machine`, async () => {
-    let box = sandboxes((cmd) => {
+    let { box, env, space } = bare((cmd) => {
       if (cmd == 'yak --help >/dev/null') {
         if (failure == 'rpc') throw new Error('cannot warm the CLI')
         return { exitCode: 1, stderr: 'download failed' }
       }
       return { stdout: 'ready' }
     })
-    let space = { eid: 'warm-failed', slug: 'warm-failed' } as dirPart.Space
-    let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
     let lent = await workbench(env, space, ADA, spending())
     assertEquals(
       (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
@@ -406,8 +407,7 @@ for (let failure of ['rpc', 'exit']) {
 }
 
 test('the budget refuses in a sentence, and only after it is spent', async () => {
-  let box = sandboxes()
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { env, space } = bare()
   let clock = 0
   let now = () => clock
 
@@ -430,8 +430,7 @@ test('the budget refuses in a sentence, and only after it is spent', async () =>
 })
 
 test('a release answers the seconds held, and the container goes', async () => {
-  let box = sandboxes()
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { box, env, space } = bare()
   let clock = 0
   let spend = spending()
   let bench = await workbench(env, space, ADA, spend, () => clock)

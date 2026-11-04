@@ -1,3 +1,9 @@
+import type { Storage } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { statusComputed } from '@yaks/session/status'
+import { attemptComputed } from '../../packages/session/attempt.ts'
+import { executionComputed } from '@yaks/tools'
+import { operatorGraph, operatorVocab } from './operator-store.ts'
 import type { Model } from '@yaks/model'
 
 // A test's Operator model, answered by whatever `answer` is when it is asked:
@@ -20,3 +26,8 @@ export let operatorModel = (answer: Model) => {
     }),
   }
 }
+
+/** Session decisions use the same graph composition over rows in memory. */
+export let operatorMemory = (storage: Storage = ram(operatorVocab, {
+  computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
+})) => ({ ...operatorGraph(storage, []), storage })

@@ -30,6 +30,7 @@ import {
 } from './tools.ts'
 import { sha256 } from './versions.ts'
 import { owned, platform } from './testing.ts'
+import { platform as rows } from './directory-probe.ts'
 import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
@@ -55,7 +56,7 @@ let apps = (out: Out) =>
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
-  let { env } = platform('staging-tool-secret', {
+  let { env } = rows('staging-tool-secret', {
     APEX: 'yaks.fyi',
     MAIL: {
       send: (letter) => {
@@ -150,7 +151,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
 // for every space at once: before this, a client had to ask each space's front
 // app `/me`, one round trip apiece, for a fact the directory already held.
 test('app_list says the caller’s role in each space it lists', async () => {
-  let { env } = platform('member-role-secret', {
+  let { env } = rows('member-role-secret', {
     MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
   })
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
@@ -645,12 +646,22 @@ test('a listing asks the directory a fixed number of times', async () => {
   await call(setup, 'space_new', { slug: 'one', title: 'one' })
   await owned(setup, 'two')
   await owned(setup, 'three')
-  for (let space of ['one', 'two', 'three']) {
-    for (let app of ['a', 'b', 'c']) {
-      await call(setup, 'app_new', { space, slug: `${app}-app`, title: app })
-    }
-  }
-  await booted(setup)
+  let spaces = await dir.spaces(ADA)
+  await dir.apply({
+    entities: spaces.flatMap((space) =>
+      ['a', 'b', 'c'].map((app) => ({
+        entity: { eid: `$${space.slug}-${app}` },
+        doc: { title: app },
+        app: {
+          slug: `${app}-app`,
+          space: space.eid,
+          version: 0,
+          access: 'public',
+        },
+        former: { slug: `${app}-app` },
+      }))
+    ),
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   // What the setup's writes owed runs after them; only the listing is counted.
   await p.settled()
   let costs = async (name: string, args: Record<string, unknown>) => {
@@ -728,7 +739,7 @@ test('a write costs the same however many apps its space holds', async () => {
 // The other half of asking once: every row of the one answer has to find its
 // way back to the app it is about. A binding names its own app, so it does.
 test('one read of the bindings still lands each on its own app', async () => {
-  let { env } = platform('listing-bindings-secret')
+  let { env } = rows('listing-bindings-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let ctx: Ctx = { env, dir, person: ADA }
@@ -761,7 +772,7 @@ test('one read of the bindings still lands each on its own app', async () => {
 })
 
 test('free custom domains return plan settings before provisioning', async () => {
-  const { env } = platform('domain-plan-test', { APEX: 'yaks.fyi' })
+  const { env } = rows('domain-plan-test', { APEX: 'yaks.fyi' })
   const dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
@@ -788,7 +799,7 @@ test('free custom domains return plan settings before provisioning', async () =>
 })
 
 test('paid and comped domain attachment still provisions normally', async () => {
-  const { env } = platform('domain-paid-test', {
+  const { env } = rows('domain-paid-test', {
     CF_ZONE: 'test-zone',
     CF_HOSTNAMES_TOKEN: 'test-only',
   })
