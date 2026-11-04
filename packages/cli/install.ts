@@ -72,6 +72,50 @@ export let warming = (dir: string): string[][] => [
   ['--config', `${dir}/warm/yak.json`, 'task', 'list'],
 ]
 
+/** A first `yak serve` on that scratch graph, at `port`, asked for its canvas
+ * and then stopped: serving imports the facets of the web role and bundles the
+ * page, which no command before it fetched, so a person's first `yak serve`
+ * would otherwise download them as it starts.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(serving('/tmp/i', 9).slice(-3), ['serve', '--port', '9'])
+ * ```
+ */
+export let serving = (dir: string, port: number): string[] => [
+  '--config',
+  `${dir}/warm/yak.json`,
+  'serve',
+  '--port',
+  String(port),
+]
+
+/** What a warm-up of `yak serve` asks for once it listens. */
+export let CANVAS = ['/', '/web/app.js']
+
+// A port nothing listens on, from the system, released for serve to take.
+let free = () => {
+  let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let { port } = listener.addr as Deno.NetAddr
+  listener.close()
+  return port
+}
+
+// The answer to `url`, once something listens there, or an error at `by`.
+let answered = async (url: string, by: number) => {
+  for (;;) {
+    try {
+      let res = await fetch(url)
+      await res.body?.cancel()
+      if (res.ok) return
+      throw new Error(`${url} answered ${res.status}`)
+    } catch (error) {
+      if (!(error instanceof TypeError) || Date.now() > by) throw error
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
+}
+
 let deno = (args: string[], cwd: string, quiet = false) =>
   new Deno.Command(Deno.execPath(), {
     args,
@@ -90,13 +134,35 @@ if (import.meta.main) {
     let { code } = await deno(install(cli.version, config), dir)
     if (code == 0) {
       console.log('fetching the plugins a first command needs…')
+      let warm = true
       for (let args of warming(dir)) {
         let warmed = await deno(run(cli.version, config, args), dir, true)
         // A warm-up that failed costs the first command its wait, and says
         // why; the install itself stands.
         if (!warmed.success) {
           console.error(new TextDecoder().decode(warmed.stderr).trim())
+          warm = false
           break
+        }
+      }
+      if (warm) {
+        let port = free()
+        let server = new Deno.Command(Deno.execPath(), {
+          args: run(cli.version, config, serving(dir, port)),
+          cwd: dir,
+          stdout: 'null',
+          stderr: 'null',
+        }).spawn()
+        try {
+          let by = Date.now() + 120_000
+          for (let path of CANVAS) {
+            await answered(`http://127.0.0.1:${port}${path}`, by)
+          }
+        } catch (error) {
+          console.error(`yak serve could not be warmed: ${error}`)
+        } finally {
+          server.kill('SIGINT')
+          await server.status
         }
       }
       console.log(
