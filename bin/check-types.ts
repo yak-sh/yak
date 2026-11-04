@@ -18,10 +18,11 @@
 // types it, `cloudflare:workers` included, which Deno's program can only call
 // `any`. Those types are globals, so they never share a program with Deno's.
 //
-// tsc checks a fresh worktree's Worker change in seconds where `deno check`
-// took 17 s, needs no build info from an earlier run and keeps no lock. Each
-// run's project lies in `.types/` with its process id; the links into Deno's
-// caches there are shared, and the same for every run.
+// Each run's project lies in `.types/` with its process id; the links into
+// Deno's caches there are shared. Each platform keeps incremental build info:
+// the compiler reuses unchanged work and validates source versions, options
+// and resolutions itself. Checks hold no lock and compile against private
+// copies, publishing their next build info atomically.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { survey } from '@yaks/testing/deps'
@@ -29,6 +30,7 @@ import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
 import { platformConfig } from './check-platform.ts'
+import { incremental } from './check-incremental.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -205,12 +207,16 @@ let spawn: Run = async (args) =>
   (await new Deno.Command(Deno.execPath(), { args }).spawn().status).success
 
 let output = async (args: string[]) => {
-  let { success, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
-    args,
-    cwd: CHECKOUT,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
+  let { success, stdout, stderr, signal } = await new Deno.Command(
+    Deno.execPath(),
+    {
+      args,
+      cwd: CHECKOUT,
+      stdout: 'piped',
+      stderr: 'piped',
+    },
+  ).output()
+  if (signal) throw new Error(`deno ${args.join(' ')} stopped by ${signal}`)
   let text = new TextDecoder()
   return { success, out: text.decode(stdout), err: text.decode(stderr) }
 }
@@ -336,15 +342,22 @@ let program = async (on: Platform, roots: string[]) => {
       put(`${on.dir}/${name}`, text)
     }
     put(tsconfig, JSON.stringify(p.config, null, 1))
-    let tsc = await output([
-      'run',
-      '-A',
-      TSC,
-      '-p',
-      tsconfig,
-      '--pretty',
-      'false',
-    ])
+    let tsc = await incremental(
+      `${on.dir}/build.tsbuildinfo`,
+      (info) =>
+        output([
+          'run',
+          '-A',
+          TSC,
+          '-p',
+          tsconfig,
+          '--pretty',
+          'false',
+          '--incremental',
+          '--tsBuildInfoFile',
+          info,
+        ]),
+    )
     let errors = reported(tsc.out)
     if (errors.length) console.error(errors.join('\n'))
     if (!tsc.success && !/error TS/.test(tsc.out)) {
