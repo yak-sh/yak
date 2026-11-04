@@ -3,47 +3,90 @@
 // ask it at home (operator-reach.ts, T-136179).
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { connector, fresh, signIn } from './probe.ts'
-import type { Env } from './env.ts'
+import { handler } from './kernel.ts'
+import { platform } from './serving-scene.ts'
+import { as } from './serving-probe.ts'
+import { directory, fetch as directoryFetch } from './directory.ts'
 import { operatorContext } from './operator.ts'
-import { TOOLS } from './tools.ts'
+import { call, TOOLS } from './tools.ts'
 
-let env: Env
-let k = await fresh({}, (e) => void (env = e))
-// Ada owns the books, Carl the shop, where Ada is an editor too.
-let [ada, carl] = [await signIn(k), await signIn(k)]
-let [books, shop] = [ada, carl].map((p) => p.email.split('@')[0])
-await connector(k, ada.cookie)
-  .tool('app_new', { space: books, slug: 'list', title: 'List' })
-let page = (path: string, fields?: Record<string, string>) =>
-  k.at('yaks.app', path, {
-    redirect: 'manual',
-    ...fields
-      ? {
-        method: 'POST',
-        headers: {
-          cookie: ada.cookie,
-          origin: 'https://yaks.app',
-          'content-type': 'application/x-www-form-urlencoded',
+await using p = platform()
+let { env } = p
+let dir = directory({ fetch: (req) => directoryFetch(req, env) })
+let books = 'books', shop = 'shop'
+let ada = {
+  person: crypto.randomUUID(),
+  email: 'ada@example.com',
+}
+let carl = {
+  person: crypto.randomUUID(),
+  email: 'carl@example.com',
+}
+let cookie = await as(ada.person)
+// Ada owns the books, Carl the shop. Session cookies reach the People page;
+// signing in and provisioning their accounts have their own checks.
+await dir.apply({
+  entities: [
+    ...[ada, carl].map((person) => ({
+      entity: { eid: person.person },
+      person: {},
+      email: { address: person.email },
+    })),
+    ...([[books, ada], [shop, carl]] as const).flatMap(([slug, owner]) => [
+      {
+        entity: { eid: `$${slug}` },
+        doc: { title: slug },
+        space: { slug, store: slug },
+      },
+      {
+        entity: { eid: `$${slug}-owner` },
+        member: {
+          space: `$${slug}`,
+          person: owner.person,
+          role: 'owner',
+          own: true,
         },
-        body: new URLSearchParams(fields),
-      }
-      : { headers: { cookie: ada.cookie } },
-  })
+      },
+    ]),
+  ],
+}, { 'x-yak-person': ada.person, 'x-yak-role': 'owner' })
+await call({ env, dir, person: ada.person }, 'app_new', {
+  space: books,
+  slug: 'list',
+  title: 'List',
+})
+let page = (path: string, fields?: Record<string, string>) =>
+  handler.fetch(
+    new Request(new URL(path, 'https://yaks.app'), {
+      redirect: 'manual',
+      ...fields
+        ? {
+          method: 'POST',
+          headers: {
+            cookie,
+            origin: 'https://yaks.app',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams(fields),
+        }
+        : { headers: { cookie } },
+    }),
+    env,
+  )
 let people = `/manage/${books}/people`
 
 // Bea writes in the shop too and sits nowhere else.
 let bea = crypto.randomUUID()
-let shopSpace = (await k.dir.space(shop))!
+let shopSpace = (await dir.space(shop))!
 let seat = (person: string) => ({
   entity: { eid: crypto.randomUUID() },
   member: { space: shopSpace.eid, person, role: 'editor' },
 })
-await k.dir.apply({
+await dir.apply({
   entities: [{ entity: { eid: bea }, person: {} }, seat(bea), seat(ada.person)],
 }, { 'x-yak-person': carl.person, 'x-yak-role': 'owner' })
 let reach = async () => {
-  let ctx = await operatorContext(env!, { person: bea }, shopSpace)
+  let ctx = await operatorContext(env, { person: bea }, shopSpace)
   let there = await ctx.dir.space(books)
   return {
     there: there?.slug ?? null,
@@ -64,7 +107,6 @@ let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
 let { eid } = shopSpace
 let out = await page(people, { unreach: eid })
 let after = await reach()
-await k.stop()
 
 test("a space's Operator reaches no other space until that space lets it in", () => {
   assertEquals(before.there, null)
