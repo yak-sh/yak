@@ -167,21 +167,25 @@ export let admitted = member
  * cost less to score directly than to scan the whole corpus. */
 export let FEW = 5000
 
-// Whether the screen admits at most FEW entities, counting no further.
-let few = (db: Statements, within: Raw): boolean =>
-  Number(
+// Whether a bounded screen is small absolutely or relative to the corpus.
+let few = (db: Statements, within: Raw): boolean => {
+  // A sparse screen stays cheaper than reading unrelated vector payloads,
+  // even when the matching set has outgrown the small-corpus threshold.
+  let limit = Math.max(FEW, Math.floor(tally(db, TABLE) / 8))
+  return Number(
     db.query(select({
       cols: [as(count(), 'n')],
       from: from(
         select({
           cols: [lit(1)],
           from: from(within, 's'),
-          limit: lit(FEW + 1),
+          limit: lit(limit + 1),
         }),
         'f',
       ),
     }))[0].n,
-  ) <= FEW
+  ) <= limit
+}
 
 /** Exact native candidates, screened before the result is limited. Small
  * screens use the ordinary vector reader to avoid scanning the whole corpus. */
