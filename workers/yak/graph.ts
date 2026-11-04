@@ -747,17 +747,40 @@ export let KV: CreateTable = {
 }
 
 /** What the kernel vouched for one request: who is asking, the level the
- * platform says they hold on this app, and what to call them. */
+ * platform says they hold on this app, what to call them, and whether they
+ * stand in the app as a visitor (visit.ts). */
 export type Vouch = {
   person: string | null
   actor?: string
   via: string | null
   level: Level | null
   title: string | null
+  visit?: boolean
 }
 
+/** The header the kernel marks a visitor's request with: a stranger reading
+ * the sample or standing in a store of their own (visit.ts, session.ts
+ * `vouched`). */
+export let VISIT = 'x-yak-visit'
+
 /** The kernel's authenticated person and verified instrument are separate:
- * a browser's via never supplies a person or a permission level. */
+ * a browser's via never supplies a person. The principal is `person ?? via`,
+ * and it holds the level the kernel vouched, so a signed-out visitor is the
+ * editor of a store of their own and the viewer of the sample (D-134327).
+ *
+ * ```ts
+ * import { vouchOf } from './graph.ts'
+ * import { assertEquals } from '@std/assert'
+ * let v = vouchOf(new Request('http://store', {
+ *   headers: {
+ *     'x-yak-via': '0190e0c4-4a52-7b0e-9a3c-1f2d3e4f5a6b',
+ *     'x-yak-role': 'editor',
+ *     'x-yak-visit': '1',
+ *   },
+ * }))
+ * assertEquals([v.person, v.level, v.visit], [null, 'editor', true])
+ * ```
+ */
 export let vouchOf = (req: Request): Vouch => {
   let said = req.headers.get('x-yak-role')
   let person = req.headers.get('x-yak-person')
@@ -768,8 +791,9 @@ export let vouchOf = (req: Request): Vouch => {
       ? { actor: req.headers.get('x-yak-actor')! }
       : {}),
     via: via ? instrumentEid(via) : null,
-    level: person && said ? level(said) : null,
+    level: (person || via) && said ? level(said) : null,
     title: person ? req.headers.get('x-yak-title') : null,
+    ...(req.headers.has(VISIT) ? { visit: true } : {}),
   }
 }
 
@@ -910,16 +934,37 @@ export let FLOORS: Floors = {
   builder: 'editor',
 }
 
+/**
+ * The floors a visitor stands below in a store of their own (visit.ts), where
+ * the door makes them its editor: the letter that would leave under the app's
+ * address, and the model turns and builders the owner's space pays for. Only
+ * the owner reaches these, and nobody is the owner of a visitor's store until
+ * it is installed.
+ */
+let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
+
 /** The floors an app's own manifest leaves standing: every one, less the
- * floor on asking its models where it opens them to anyone who may write. */
-export let floorsOf = (manifest: VocabDoc): Floors => ({
-  ...(manifest.models == 'open'
-    ? Object.fromEntries(Object.entries(FLOORS).filter(([k]) => k != 'using'))
-    : FLOORS),
-  ...Object.fromEntries(
-    noticeComponents(manifest).map((name) => [name, 'editor']),
-  ),
-})
+ * floor on asking its models where it opens them to anyone who may write;
+ * for a visitor, raised to {@link VISITING}.
+ *
+ * ```ts
+ * import { floorsOf } from './graph.ts'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(floorsOf({}).deliver, 'editor')
+ * assertEquals(floorsOf({}, true).deliver, 'owner')
+ * assertEquals(floorsOf({ models: 'open' }, true).using, undefined)
+ * ```
+ */
+export let floorsOf = (manifest: VocabDoc, visit = false): Floors =>
+  Object.fromEntries(
+    Object.entries({
+      ...FLOORS,
+      ...(visit ? VISITING : {}),
+      ...Object.fromEntries(
+        noticeComponents(manifest).map((name) => [name, 'editor']),
+      ),
+    }).filter(([k]) => !(manifest.models == 'open' && k == 'using')),
+  ) as Floors
 
 /** The rows an open app's visitor writes only inside a row of their own: a
  * line of a transcript, since after an entry with `using` every line asks for
@@ -932,18 +977,20 @@ let WITHIN = { entry: 'session' }
  * ({@link floorsOf}) and its {@link WITHIN}. `level` is the standing the door
  * vouched for a writer, and `ignore` the grant rows that standing has outlived.
  * So an open app's visitor adds rows and changes or deletes only their own (an
- * upload's content row, and so its bytes, included), and its owner any. */
+ * upload's content row, and so its bytes, included), and its owner any.
+ * `visit` holds the writer below the floors a visitor never reaches. */
 export let appGuard = (
   app: string,
   vocab: Vocab,
   manifest: VocabDoc,
   standing: Pick<Parameters<typeof members>[0], 'level' | 'ignore'>,
+  visit = false,
 ): Plugin =>
   members({
     app,
     vocab,
     instrument: instrumentEid,
-    floors: floorsOf(manifest),
+    floors: floorsOf(manifest, visit),
     within: WITHIN,
     ...standing,
   })
@@ -2464,6 +2511,9 @@ export class Store {
 
   #vouched = new Map<string, Vouch>()
   #delegated = new Map<string, Vouch>()
+  // What the kernel vouched for a browser with nobody signed in, by its
+  // instrument: a visitor reading the sample or in a store of their own.
+  #browsers = new Map<string, Vouch>()
   #told = new Map<string, string>()
 
   #writerKey(actor: Actor) {
@@ -2471,7 +2521,11 @@ export class Store {
   }
 
   #vouch(v: Vouch) {
-    if (!v.person) return
+    if (!v.person) {
+      if (v.via && v.level) this.#browsers.set(v.via, v)
+      else if (v.via) this.#browsers.delete(v.via)
+      return
+    }
     this.#vouched.set(v.person, v)
     if (v.actor && v.actor != v.person) {
       this.#delegated.set(
@@ -2488,6 +2542,8 @@ export class Store {
     return actor?.by
       ? this.#delegated.get(this.#writerKey(actor)) ??
         this.#vouched.get(actor.by)
+      : actor?.via
+      ? this.#browsers.get(instrumentEid(actor.via))
       : undefined
   }
 
@@ -2665,14 +2721,19 @@ export class Store {
    *
    * The rule itself stays @yaks/member's, and so do the floors and paces an
    * app's own words declare (`vocab`). Only who it is asked about is ours, and
-   * which of this platform's words ask a level of their own (`FLOORS`).
+   * which of this platform's words ask a level of their own (`FLOORS`), and
+   * those a visitor's writes are held below (`VISITING`).
    */
   #guarding(app: string, vocab: Vocab, manifest: VocabDoc): Plugin {
-    let plugin = appGuard(app, vocab, manifest, {
-      level: (_who, writer) => this.#authority(writer)?.level ?? undefined,
+    let standing = {
+      level: (_who: unknown, writer: Actor) =>
+        this.#authority(writer)?.level ?? undefined,
       ignore: this.#staleGrant,
-    })
+    }
+    let plugin = appGuard(app, vocab, manifest, standing)
     let guard = plugin.hooks?.precondition
+    let visitor = appGuard(app, vocab, manifest, standing, true).hooks
+      ?.precondition
     return {
       ...plugin,
       hooks: {
@@ -2680,6 +2741,8 @@ export class Store {
         precondition: (bundles, tx, err, context) =>
           this.#kernelling || !guard
             ? bundles
+            : this.#authority(writerOf(bundles))?.visit && visitor
+            ? visitor(bundles, tx, err, context)
             : guard(bundles, tx, err, context),
       },
     }

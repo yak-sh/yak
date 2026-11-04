@@ -119,6 +119,8 @@ export type Visiting = 'sample' | 'own' | 'kept'
  * let kept = visiting(space, app, who, { ...own, adopted: 'b' })
  * assertEquals([kept.visit, kept.app.store, kept.who.role], ['kept', 'ada/notes.1f7c3e/demo/d', 'viewer'])
  * assertEquals(onSample(kept.app), false)
+ * let browser = { person: null, role: null, via: 'v' }
+ * assertEquals(visiting(space, app, browser, own).who.role, 'editor')
  * ```
  */
 export let visiting = (
@@ -200,14 +202,10 @@ export let barOf = (env: Host, app: App, who: Who): Bar | null => {
  * written yet. */
 export let onSample = (app: App) => !!app.demo && app.store == app.demo.store
 
-/** Whether this caller is a stranger the app keeps a sample for.
- *
- * TODO(T-134901): a stranger who isn't signed in is held to the sign-in page
- * until an app's store takes a level the door vouches for a browser with no
- * person (graph.ts `vouchOf` gives a `via` none), since the store would refuse
- * their every read. That task drops the `who.person` here. */
+/** Whether this caller is a stranger the app keeps a sample for, signed in or
+ * not: their browser is who they are (graph.ts `vouchOf`). */
 export let visitable = (app: App, who: Who) =>
-  !who.role && !!who.person && !!who.via && sampling(app) && !!app.demo
+  !who.role && !!who.via && sampling(app) && !!app.demo
 
 /** The edge a browser's visits to an app are kept on (attribution.ts
  * `contributed` writes the same one). */

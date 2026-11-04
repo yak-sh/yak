@@ -97,9 +97,36 @@ let boStatuses = [x.status, y.status]
 await x.body?.cancel()
 await y.body?.cancel()
 let boRows = await titles(bo)
-let signedOut = (await nobody.get('q=.note')) as unknown as {
-  error?: { code: string }
-}
+
+// A browser nobody is signed in on: its cookie is all it is.
+let opened = await k.at(host, '/notes/api/me')
+let cookie = opened.headers.get('set-cookie')!.split(';')[0]
+let meOut = await opened.json()
+let out = client(k, host, 'notes', cookie)
+let outBefore = await titles(out)
+let outFirst = await out.post([{
+  entity: { eid: '$o' },
+  note: { title: 'Out' },
+}])
+let outMoved = outFirst.headers.get(MOVED)
+await outFirst.body?.cancel()
+let outAfter = await titles(out)
+let [outSeed] = await out.get('q=.note.title=Sample')
+let outEdit = await out.post([{
+  entity: { eid: outSeed.entity.eid },
+  note: { title: 'Sample, mine' },
+}])
+let outEditStatus = outEdit.status
+await outEdit.body?.cancel()
+let letter = await out.post([{
+  entity: { eid: '$l' },
+  doc: { title: 'Hi', body: 'From the app' },
+  mail: {},
+  deliver: { to: outSeed.entity.eid },
+}])
+let refused = [letter.status, (await letter.json()).error.message]
+let ownerAfter = await titles(owner)
+let nobodyRows = await titles(nobody)
 let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
 let vias = (await meta(env).query('.visit')).length
 
@@ -146,7 +173,7 @@ let adoptedAgain = await titles(adopted)
 // What a sweep reaches, and what makes no store.
 let listed = (await stores(env)).map((s) => s.at)
 // Ada's store is her app's now, so it is neither a visit nor counted.
-let crowding = [await crowded(env, app.eid, 1), await crowded(env, app.eid, 2)]
+let crowding = [await crowded(env, app.eid, 2), await crowded(env, app.eid, 3)]
 let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
 let cyc = client(k, host, 'notes', cy.cookie)
 env.BIRTH_RATE = { limit: () => Promise.resolve({ success: false }) }
@@ -211,18 +238,32 @@ test('nobody else sees it: not the owner, not another stranger', () => {
 test('two writes at once make one store', () => {
   assertEquals(boStatuses, [200, 200])
   assertEquals(boRows, ['Sample', 'X', 'Y'])
-  assertEquals(vias, 2)
+  assertEquals(vias, 3)
 })
 
-test('the sample is not the app’s store, and signed out is still sign-in', () => {
+test('the sample is not the app’s store', () => {
   assert(app.demo)
   assertNotEquals(app.demo.store, app.store)
-  assertEquals(signedOut.error?.code, 'not_a_reader')
+})
+
+test('signed out, a browser reads the sample and its first write gives it a store', () => {
+  assertEquals(meOut.writes, true)
+  assertEquals(outBefore, ['Sample'])
+  assertEquals(outMoved, '1')
+  assertEquals(outAfter, ['Out', 'Sample'])
+  assertEquals(outEditStatus, 200)
+  assertEquals(nobodyRows, ['Sample'])
+  assertEquals(ownerAfter, ['Owner only', 'Sample'])
+})
+
+test('a visitor sends no mail from the app’s address', () => {
+  assertEquals(refused[0], 403)
+  assertStringIncludes(refused[1], 'may not write deliver')
 })
 
 test('a sweep reaches the sample and every visitor store', () => {
   assert(listed.includes('owner/notes sample'))
-  assertEquals(listed.filter((at) => at == 'owner/notes visit').length, 1)
+  assertEquals(listed.filter((at) => at == 'owner/notes visit').length, 2)
 })
 
 test('past its rate or its cap, a first write is asked to sign up', () => {
@@ -234,11 +275,11 @@ test('past its rate or its cap, a first write is asked to sign up', () => {
 
 test('a closed account takes the store its browser was given', () => {
   assertEquals(claimedLapsed, 0)
-  assertEquals(afterClosing, 2)
+  assertEquals(afterClosing, 3)
 })
 
 test('a store nobody claimed is erased after 90 days unused', () => {
-  assertEquals([soon, lapsing], [0, 2])
+  assertEquals([soon, lapsing], [0, 3])
   assertEquals(afterSweep, 0)
   assertEquals(adaAgain, ['Sample'])
 })

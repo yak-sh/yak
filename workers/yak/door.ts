@@ -182,6 +182,7 @@ let VOUCH = [
   'x-yak-write',
   'x-yak-kernel',
   'x-yak-administrative',
+  'x-yak-visit',
   'x-yak-observe',
   'x-via',
   'x-yak-via',

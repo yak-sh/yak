@@ -115,9 +115,10 @@ for (let app of cases) {
     let shown = await connector(k, undefined, undefined, '/mcp?auth=mixed')
       .tool('gallery_search', { words: app })
     assertStringIncludes(shown, `app_install(name: 'private-${app}')`)
-    let original = await k.at('home.yaks.app', `/${app}/`)
-    assertEquals(original.status, 303)
-    await original.body?.cancel()
+    // A stranger at the private original is served its sample, never its
+    // records (visit.ts).
+    let original = await k.at('home.yaks.app', `/${app}/api/query?q=.note`)
+    assert(!(await original.text()).includes('Private records stay home'))
     let demo = await k.at('yourname.yaks.app', `/${app}/`)
     assertEquals(demo.status, 200)
     await demo.body?.cancel()

@@ -52,7 +52,8 @@ export type Who = {
   guest?: boolean
   /** A stranger at a private published app, served it from its sample or
    * from a store of their own (visit.ts): `kept` once that store became an
-   * app of theirs. */
+   * app of theirs. Their role is that store's, and it never reaches the
+   * floors only an owner stands on (graph.ts `VISITING`). */
   visit?: { kept: boolean }
   /** The unix second the credential this caller came in on dies at: the
    * cookie's `exp`, or a page token's. A sandboxed app's page token is minted
@@ -144,6 +145,7 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.role ? { 'x-yak-role': who.role } : {}),
   ...(who.via ? { 'x-yak-via': instrumentEid(who.via) } : {}),
   ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),
+  ...(who.visit ? { 'x-yak-visit': '1' } : {}),
 })
 
 // The header a write adds to that vouch: what to call this person, so the
