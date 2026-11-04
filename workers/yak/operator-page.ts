@@ -464,7 +464,7 @@ export let chatPage = async (
 ${fresh || talked.title ? composer(at, talked.task) : ''}
 </div>
 </div>
-${chatScript(at, who, space, open)}`,
+${chatScript(at, who, space, open, talked.task || open)}`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Talk_Page',
   )
@@ -486,7 +486,13 @@ let composer = (at: string, task: string) =>
 // The chat app's script: the durable draft and sending, Stop, and the
 // conversation kept current from the Builder object's socket, each step's
 // lines put in place by id.
-let chatScript = (at: string, who: Who, space: Space, open: string) =>
+let chatScript = (
+  at: string,
+  who: Who,
+  space: Space,
+  open: string,
+  talk: string,
+) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 let open = ${JSON.stringify(open)}
@@ -523,7 +529,9 @@ let draftClient = {
   }
 }
 let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
-if (form) drafts.bind(form.elements.say, 'operator')
+// Each conversation keeps its own draft, and the box is ready to type in.
+let place = ${JSON.stringify('operator:' + talk)}
+if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
 let said = (e) => { status.textContent = e.message }
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
@@ -643,7 +651,7 @@ form?.addEventListener('submit', async (e) => {
   try {
     submission = new FormData(form)
     let request = form.elements.request.value
-    let saved = await drafts.spend('operator', [{ entity: { eid: request } }])
+    let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
     form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = ''

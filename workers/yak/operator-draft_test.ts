@@ -54,8 +54,8 @@ let storage = (): Stash => {
 
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
-let load = async (stash: Stash, cut = false) => {
-  let html = await (await chatPage(p.env, space, who, 'new')).text()
+let load = async (stash: Stash, cut = false, open = 'new') => {
+  let html = await (await chatPage(p.env, space, who, open)).text()
   let { document, Event } = parseHTML(html)
   // What linkedom's forms lack: their fields by name, their action, and a
   // FormData of them.
@@ -93,6 +93,10 @@ let load = async (stash: Stash, cut = false) => {
     kept.push(d)
     return d
   }
+  // linkedom keeps no focus: the box records being given it.
+  let say = document.querySelector('[name=say]') as HTMLTextAreaElement
+  let focused = false
+  say.focus = () => void (focused = true)
   let source = document.querySelector('script[type=module]')!.textContent!
     .replace(/^import .*$/m, '')
   new Function(
@@ -120,9 +124,9 @@ let load = async (stash: Stash, cut = false) => {
       onclose?: () => void
     },
   )
-  let say = document.querySelector('[name=say]') as HTMLTextAreaElement
   return {
     say,
+    focused,
     type: (text: string) => {
       say.value = text
       say.dispatchEvent(new Event('input'))
@@ -140,8 +144,10 @@ let load = async (stash: Stash, cut = false) => {
 let settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
 }
-let stored = async () =>
-  (await (await serve(`${base}?draft=1`)).json()).bundles[0]?.draft?.text ?? ''
+let stored = async (place = 'operator:new') =>
+  ((await (await serve(`${base}?draft=1`)).json()).bundles as {
+    draft: { place: string; text: string }
+  }[]).find((b) => b.draft.place == place)?.draft.text ?? ''
 
 let stash = storage()
 let first = await load(stash, true)
@@ -189,4 +195,50 @@ test("a message sent as the Operator's chat app is left comes back as its draft"
     afterSend,
     'Post the road millage notice by Friday, with the agenda',
   )
+})
+
+// Two conversations, each begun by a message sent without the page's script.
+let begun = async (say: string) => {
+  let body = new FormData()
+  body.set('say', say)
+  let sent = await serve(base, { method: 'POST', body })
+  return sent.headers.get('location')!.split('/').at(-1)!
+}
+let road = await begun('Post the road millage notice')
+let park = await begun('Book the park pavilion for June')
+
+let onRoad = await load(stash, false, road)
+await settle()
+let roadFocused = onRoad.focused
+onRoad.type('Add the hearing date')
+await settle()
+onRoad.leave()
+
+let onPark = await load(stash, false, park)
+await settle()
+let parkShown = onPark.say.value
+onPark.type('Ask for the north shelter')
+await settle()
+onPark.leave()
+
+let backOnRoad = await load(stash, false, road)
+await settle()
+let roadShown = backOnRoad.say.value
+backOnRoad.leave()
+
+let fresh = await load(stash)
+await settle()
+let freshFocused = fresh.focused
+fresh.leave()
+
+test('each Operator conversation keeps its own draft', async () => {
+  assertEquals(parkShown, '')
+  assertEquals(roadShown, 'Add the hearing date')
+  assertEquals(await stored('operator:' + road), 'Add the hearing date')
+  assertEquals(await stored('operator:' + park), 'Ask for the north shelter')
+})
+
+test('opening or starting a conversation puts the cursor in the message box', () => {
+  assertEquals(roadFocused, true)
+  assertEquals(freshFocused, true)
 })

@@ -222,12 +222,18 @@ export let operatorFrames = (store: Store, sockets: () => Listener[]) => {
   }
 }
 
+// Each conversation keeps its own draft, at `operator:<conversation>`; a
+// draft named for no conversation is the one the chat app kept before.
+let placeOf = (b: Bundle) => {
+  let place = String((b.draft as { place?: string })?.place ?? '')
+  return /^operator(:|$)/.test(place) ? place : 'operator'
+}
 let drafts = (bundles: Bundle[], person: string) =>
   bundles.filter((b) => b.draft).map((b) => ({
-    entity: { eid: draftEid(person, 'operator') },
+    entity: { eid: draftEid(person, placeOf(b)) },
     draft: {
       by: person,
-      place: 'operator',
+      place: placeOf(b),
       text: String((b.draft as { text?: string })?.text ?? ''),
     },
     typed: { over: String((b.typed as { over?: string })?.over ?? '') },
@@ -248,11 +254,10 @@ export let operatorRequest = async (
     return Response.json(await operator.stop(String(args.task ?? ''), person))
   }
   if (path == '/operator/draft') {
-    let eid = draftEid(person, 'operator')
     if (Array.isArray(args.bundles)) {
       await store.g.apply(drafts(args.bundles as Bundle[], person))
     }
-    return Response.json({ bundles: await store.g.get([eid]) })
+    return Response.json({ bundles: await store.g.read(`.draft.by=${person}`) })
   }
   // The opt-ins this store kept before the number moved onto the person
   // (operator-texts.ts `handed`): listed for the page to hand to the
