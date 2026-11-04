@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // App serving and the page wire: requests through the app router, with the
-// directory's decisions over RAM rows. Tests of the app Store's wire keep
-// its Store; the Operator is a service boundary, checked in operator_test.ts.
+// directory's decisions over RAM rows. Storage's size and erasure use private
+// SQLite through the same host seams as Store; the Operator is a service door.
 import {
   assert,
   assertEquals,
@@ -49,14 +49,36 @@ import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
 import { FREE, monthOf, PLUS, size } from './meter.ts'
-import { ADA, ADA_OWNS, as, seeded, visit } from './serving-data-probe.ts'
-import { platform } from './serving-scene.ts'
+import {
+  ADA,
+  ADA_OWNS,
+  as,
+  SECRET,
+  seeded,
+  visit,
+} from './serving-data-probe.ts'
+import { platform as bindings } from './directory-rows-probe.ts'
+import { operators } from './operator-service-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed, sha256 } from './versions.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
+
+let platform = (vars: Partial<Env> = {}) => {
+  let runtime = bindings(SECRET, { BUILDER: operators, ...vars })
+  let host = lifecycleStores(runtime.env, (_name, from) => durable(from))
+  return {
+    ...runtime,
+    ...host,
+    settled: async () => {
+      await runtime.settled()
+      await host.settled()
+    },
+  }
+}
 
 // A release a deploy finished: each file's bytes at their address, and its
 // index naming them.
@@ -597,6 +619,7 @@ test('a page view is one data point, and it names no visitor', async () => {
   let seen = dataset()
   await using scenario = platform({ VIEWS: seen })
   let { env, files } = scenario
+  stores(env)
   let { app } = await seeded(env)
   files.held.set(
     'ada/cookbook/index.html',

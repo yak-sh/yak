@@ -5,6 +5,7 @@ import { json, readBody, refuse } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { cleanup } from '@yaks/testing'
+import { driver } from '@yaks/durable-object'
 import type { VocabDoc } from '@yaks/vocab'
 import {
   candidate,
@@ -23,14 +24,32 @@ import { sqliteApp } from './sqlite-app-probe.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { mode } from '@yaks/member'
+import { eraseStore, weighing } from './app-storage.ts'
+import { weighed } from './meter.ts'
+import type { durable } from '../../packages/durable-object/testing.ts'
+import type { Snapshot } from '../../packages/sqlite/testing.ts'
 
-type Page = { send(packet: string): void }
+type Page = {
+  send(packet: string): void
+  close?(code: number, reason: string): void
+}
+type Physical = ReturnType<typeof durable>
 
 /** An independent graph for each app or preview name; the directory stays put. */
-export let lifecycleStores = (env: Env) => {
+export let lifecycleStores = (
+  env: Env,
+  storage?: (name: string, from: Snapshot) => Physical,
+) => {
   let namespace = env.STORE
   let pages = new Map<string, Page[]>()
   let held = new Map<string, ReturnType<typeof store>>()
+  let states = new Map<string, { storage: Physical }>()
+  let pending = new Set<Promise<void>>()
+  let failures: unknown[] = []
+  let wait = (work: Promise<void>) => {
+    pending.add(work)
+    work.then(() => pending.delete(work), () => pending.delete(work))
+  }
   let disposals = new Set<() => void>()
   cleanup(() => {
     for (let dispose of disposals) dispose()
@@ -38,19 +57,54 @@ export let lifecycleStores = (env: Env) => {
   let store = (name: string) => {
     let slots = new Map<string, string>()
     let unselectable = new Set<string>()
-    let backend = sqliteApp((dispose) => disposals.add(dispose))
+    let physical: Physical | undefined
+    let backend = sqliteApp(
+      (dispose) => disposals.add(dispose),
+      storage && ((from) => {
+        let owned = physical = storage(name, from)
+        states.set(name, { storage: owned })
+        return Object.assign(driver(owned), {
+          [Symbol.dispose]: () => owned[Symbol.dispose](),
+        })
+      }),
+    )
     let wire: ReturnType<typeof appWire>
     let deployed = false
     let read = (key: string) => slots.get(key) ?? null
     let write = (key: string, value: string) => void slots.set(key, value)
+    let weigh = weighing({
+      read: () =>
+        physical && read('app') && !name.startsWith('preview/')
+          ? { bytes: physical.sql.databaseSize, told: read('weighed') }
+          : null,
+      tell: (bytes) => weighed(env, read('app')!, bytes),
+      remember: (bytes) => write('weighed', String(bytes)),
+      failed: (error) => void failures.push(error),
+      wait,
+    })
     let make = (doc: VocabDoc) => {
       let words = wireVocab(appVocab(doc))
       let g = backend.graph(words, wire?.graph)
-      return appWire(words, name, {
-        app: { eid: read('app')!, mode: mode(read('access')), manifest: doc },
+      let eid = read('app')
+      let next = appWire(words, name, {
+        ...(eid
+          ? { app: { eid, mode: mode(read('access')), manifest: doc } }
+          : {}),
         graph: () => g,
         found: backend.found,
       })
+      if (physical) {
+        g.use({
+          name: 'yak/weigh',
+          hooks: {
+            effect: (rows) => {
+              weigh()
+              return rows
+            },
+          },
+        })
+      }
+      return next
     }
     let bind = () => wire = make(appDoc(read('vocab') ?? '{}'))
     let rows = (comp: string, prop?: string) => {
@@ -107,6 +161,7 @@ export let lifecycleStores = (env: Env) => {
     let fetch = async (request: Request): Promise<Response> => {
       try {
         let path = new URL(request.url).pathname
+        let learned = false
         for (
           let [header, key] of [['x-yak-app', 'app'], [
             'x-yak-access',
@@ -114,9 +169,17 @@ export let lifecycleStores = (env: Env) => {
           ]]
         ) {
           let value = request.headers.get(header)
-          if (value) write(key, value)
+          if (value && value != read(key)) {
+            write(key, value)
+            learned = true
+          }
         }
         if (!wire) bind()
+        else if (learned) {
+          let before = wire
+          bind()
+          before.subs.stop()
+        }
         let selected = selectDeclaration(request, {
           read,
           write,
@@ -141,6 +204,25 @@ export let lifecycleStores = (env: Env) => {
         })
         if (selected.deploymentMoved) deployed = true
         for (let effect of selected.effects) await effect()
+        if (path == '/' && request.method == 'DELETE') {
+          if (request.headers.get('x-yak-kernel') != '1') {
+            return json({ error: 'NotFound', message: 'no route' }, 404)
+          }
+          if (!physical) throw new Error('erasure needs a storage boundary')
+          return await eraseStore(name, {
+            pages: pages.get(name)!,
+            close: () => wire.subs.stop(),
+            clear: () => physical!.deleteAll(),
+            plant: () => {
+              wire.subs.stop()
+              slots.clear()
+              unselectable.clear()
+              deployed = false
+              bind()
+              return json({ ok: true })
+            },
+          })
+        }
         if (path == '/drafted') return drafted(request, send)
         if (path == '/released') return released(request, send)
         if (path == '/expires') {
@@ -264,5 +346,13 @@ export let lifecycleStores = (env: Env) => {
       return found
     },
   }
-  return pages
+  return {
+    sockets: pages,
+    states,
+    object: (name: string) => env.STORE.get(env.STORE.idFromName(name)),
+    settled: async () => {
+      while (pending.size) await Promise.all(pending)
+      if (failures.length) throw failures.shift()
+    },
+  }
 }

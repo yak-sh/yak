@@ -20,7 +20,7 @@ let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
   handler.fetch(req, env)
 
 let runtime = platform(SECRET, { BUILDER: operators })
-let scenario = { ...runtime, sockets: lifecycleStores(runtime.env) }
+let scenario = { ...runtime, ...lifecycleStores(runtime.env) }
 let { env } = scenario
 let { dir, space } = await seeded(env)
 let ctx: Ctx = { env, dir, person: ADA }

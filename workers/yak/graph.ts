@@ -12,6 +12,7 @@ import {
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
 import { appRead } from './app-read.ts'
+import { eraseStore, weighing } from './app-storage.ts'
 import {
   candidate,
   declarationSlot,
@@ -3589,8 +3590,6 @@ export class Store {
   // One report per turn, with no catch-up loop: writes arriving while it is
   // in flight are folded into the next qualifying write. A failed report
   // likewise waits for a write, never retries on its own.
-  #weighing: Promise<void> | null = null
-
   #weigh = (bundles: Bundle[]): Bundle[] => {
     if (this.#name()?.startsWith('preview/')) return bundles
     this.#tell()
@@ -3618,26 +3617,21 @@ export class Store {
     )
   }
 
-  #tell() {
-    if (this.#weighing) return
-    this.#weighing = this.#telling().finally(() => (this.#weighing = null))
-    this.#ctx.waitUntil?.(this.#weighing)
-  }
-
-  async #telling(): Promise<void> {
-    try {
-      let app = this.#get('app')
-      let ns = this.#bind.STORE
-      if (!app || !ns) return
-      let bytes = this.#ctx.storage.sql.databaseSize
-      let told = this.#get('weighed')
-      if (told != null && Math.abs(bytes - Number(told)) < 1024 ** 2) return
-      await weighed({ STORE: ns }, app, bytes)
-      this.#put('weighed', String(bytes))
-    } catch (e) {
-      defect(e, { request: 'meter bytes', store: this.#name() })
-    }
-  }
+  #tell = weighing({
+    read: () =>
+      this.#get('app') && this.#bind.STORE
+        ? {
+          bytes: this.#ctx.storage.sql.databaseSize,
+          told: this.#get('weighed'),
+        }
+        : null,
+    tell: (bytes) =>
+      weighed({ STORE: this.#bind.STORE! }, this.#get('app')!, bytes),
+    remember: (bytes) => this.#put('weighed', String(bytes)),
+    failed: (error) =>
+      defect(error, { request: 'meter bytes', store: this.#name() }),
+    wait: (work) => this.#ctx.waitUntil?.(work),
+  })
 
   // A failure of the Store's own work belongs to the platform tracker,
   // tagged by its catch and store, rather than written into the app's rows.
@@ -5070,27 +5064,19 @@ export class Store {
   // with it, so the name it answers to is written back before it boots — that
   // word is what says which vocabulary it speaks.
   async #erase(): Promise<Response> {
-    let name = this.#get('name') ?? ''
-    if (name == PLATFORM_STORE) {
-      throw new Refused('The directory cannot be erased')
-    }
-    // The pages watching this app are watching nothing now. `close` is the
-    // runtime's own on a server-side socket; @yaks/durable-object's `Wire` names
-    // only what it sends, so the method is asked for structurally here.
-    for (let ws of this.#ctx.getWebSockets() as Closable[]) {
-      this.#live.close(ws)
-      try {
-        ws.close?.(1000, 'deleted')
-      } catch { /* already gone */ }
-    }
-    await this.#ctx.storage.deleteAll()
-    this.#kv.clear()
-    this.#sql.query(KV)
-    raise(this.#sql)
-    if (name) this.#put('name', name)
-    this.#boot()
-    if (this.#refused) return this.#stalled()
-    return Response.json({ ok: true })
+    return await eraseStore(this.#get('name') ?? '', {
+      pages: this.#ctx.getWebSockets() as Closable[],
+      close: (page) => this.#live.close(page),
+      clear: () => this.#ctx.storage.deleteAll(),
+      plant: (name) => {
+        this.#kv.clear()
+        this.#sql.query(KV)
+        raise(this.#sql)
+        if (name) this.#put('name', name)
+        this.#boot()
+        return this.#refused ? this.#stalled() : Response.json({ ok: true })
+      },
+    })
   }
 
   /**

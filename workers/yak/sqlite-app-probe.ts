@@ -10,10 +10,15 @@ import { cleanup } from '@yaks/testing'
 import type { Vocab } from '@yaks/vocab'
 import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { appDerived } from './vocab.ts'
+import type { Driver } from '@yaks/sql'
+import type { Snapshot } from '../../packages/sqlite/testing.ts'
 
 /** Each named app gets private bytes and the vocabulary's read/search shape. */
-export let sqliteApp = (using: (dispose: () => void) => unknown = cleanup) => {
-  let drivers = new WeakMap<Graph, ReturnType<typeof preparedDriver>>()
+export let sqliteApp = (
+  using: (dispose: () => void) => unknown = cleanup,
+  open: (from: Snapshot) => Driver & Disposable = preparedDriver,
+) => {
+  let drivers = new WeakMap<Graph, Driver & Disposable>()
   let make = (vocab: Vocab, previous?: Graph) => {
     let bodies = blobRead(vocab)
     let derived = { ...bodies, ...appDerived(vocab, bodies) }
@@ -21,7 +26,7 @@ export let sqliteApp = (using: (dispose: () => void) => unknown = cleanup) => {
     let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
     let driver = previous && drivers.get(previous)
     if (!driver) {
-      driver = preparedDriver(snapshot(vocab, { derived }, extra))
+      driver = open(snapshot(vocab, { derived }, extra))
       let owned = driver
       using(() => owned[Symbol.dispose]())
     }
