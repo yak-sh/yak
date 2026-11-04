@@ -2996,11 +2996,13 @@ export class Store {
 
   #moveRows = async (): Promise<void> => {
     if (this.#dormant && !this.#moveOnly) return
+    // The bound is in batches that found rows: a rule with none left to move
+    // is one read, and finishes without spending one.
     let left = BATCHES
     let name = this.#get('name') ?? ''
     for (let rule of this.#owing()) {
       while (
-        left-- > 0 && !this.#refused && (!this.#dormant || this.#moveOnly)
+        left > 0 && !this.#refused && (!this.#dormant || this.#moveOnly)
       ) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
@@ -3011,6 +3013,7 @@ export class Store {
           let m = this.#mover(held, rule)
           let copy = name == PLATFORM_STORE ? copyOf(this.#bind) : undefined
           let plan = this.#tx(() => batch(m, rule, was, SIZE))
+          if (plan.rows.length) left--
           if (plan.forward.length) {
             if (!this.#bind.ERRORS) {
               throw new Error('mover delivery is unavailable')

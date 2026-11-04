@@ -1,7 +1,9 @@
 // The Operator's chat app, drawn in process for a conversation whose session
 // called tools: what a person meets on the page, the list beside it, the
 // address from before the chat app, Stop reaching the Operator, and a
-// conversation the provider refused, which reads as ended.
+// conversation the provider refused, which reads as ended. Each Operator has a
+// name: a new one is given one, and a renamed one goes by its new name on the
+// page and in its instructions.
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -12,6 +14,7 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
+import { NAMES, pick } from './operator-name.ts'
 import { chatPath, managed, managePath } from './route.ts'
 
 let p = platform('operator-chat')
@@ -57,11 +60,13 @@ let REFUSED = JSON.stringify({
       'tools.26.custom.input_schema: input_schema does not support oneOf',
   },
 })
+let told = ''
 let service = operatorService(
   p.env,
   who,
   operatorModel((req) =>
-    JSON.stringify(req.items).includes(BREAKS)
+    (told = String(req.instructions ?? '')) &&
+      JSON.stringify(req.items).includes(BREAKS)
       ? Promise.reject(
         new ModelError('request', `400 ${REFUSED}`, undefined, {
           body: REFUSED,
@@ -168,25 +173,38 @@ test('a new conversation asks what to do, and one that is gone says so', () => {
 
 test("the chat app says whose Operator it is, and opens another space's", async () => {
   let spaces = [
-    { slug: 'clerk', title: 'Township', owner: true, own: false },
-    { slug: 'jeff', title: 'Jeff', owner: true, own: true },
+    {
+      slug: 'clerk',
+      title: 'Township',
+      owner: true,
+      own: false,
+      operator: space.operator,
+    },
+    { slug: 'jeff', title: 'Jeff', owner: true, own: true, operator: 'Wren' },
   ]
   // The test's Operator serves one store, so the other space shares it.
-  let mill = { ...space, slug: 'mill', title: 'Mill Pond' }
+  let mill = { ...space, slug: 'mill', title: 'Mill Pond', operator: 'Fern' }
   for (let [at, name] of [[space, 'Township'], [mill, 'Mill Pond']] as const) {
     let { document } = parseHTML(
       await (await chatPage(p.env, at, who, 'new', spaces)).text(),
     )
     let said = (s: string) => document.querySelector(s)?.textContent?.trim()
-    assertEquals(
-      said('title'),
-      `New conversation · ${name}’s Operator · yaks.app`,
-    )
+    assertEquals(said('title'), `New conversation · ${at.operator} · yaks.app`)
     assertEquals(said('.Talk_Whose .Desk_Space b'), name)
-    assertEquals(said('.Talk_Who'), `${name}’s Operator`)
+    assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(
       said('.Talk_Hello')!,
-      `You’re talking to ${name}’s Operator.`,
+      `You’re talking to ${at.operator}, ${name}’s Operator.`,
+    )
+    assertEquals(
+      [...document.querySelectorAll('.Talk_Whose .Desk_Row small')].map((a) =>
+        a.textContent
+      ),
+      [
+        ...(at == mill ? ['Fern'] : []),
+        space.operator,
+        'Wren',
+      ],
     )
     assertEquals(
       [...document.querySelectorAll('.Talk_Whose .Desk_Row')].map((a) =>
@@ -286,4 +304,48 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
     crashed.querySelector('.Talk_Item[aria-current="page"][data-pending]'),
     null,
   )
+})
+
+let dir = directoryOf(p.env.STORE)
+let headers = { 'x-yak-person': person, 'x-yak-role': 'owner' }
+let orchard =
+  (await dir.at(await dir.mint(person, 'orchard', 'Orchard', headers)))!
+let pond = (await dir.at(await dir.mint(person, 'pond', 'Pond', headers)))!
+test('a new Operator is given a name, clear of the Operators its person already reaches', () => {
+  assertEquals(space.operator, pick(eid))
+  for (let s of [orchard, pond]) assertEquals(NAMES.includes(s.operator), true)
+  assertEquals(new Set([space, orchard, pond].map((s) => s.operator)).size, 3)
+})
+
+let rename = (name: string) =>
+  answer(`${at}?name=1`, {
+    method: 'POST',
+    body: new URLSearchParams({ name }),
+  }).then((r) => r!.json().then((json) => ({ status: r!.status, json })))
+let empty = await rename('  ')
+let renamed = await rename('  Marlowe   Quince ')
+let after = (await dir.at(eid))!
+let again = parseHTML(
+  await (await chatPage(p.env, after, who, 'new')).text(),
+).document
+let named = parseHTML(await operatorBody(p.env, after, who)).document
+await receive(service.store, {
+  space: eid,
+  person,
+  channel: 'chat',
+}, 'Who are you?')
+await service.drain()
+test('a renamed Operator goes by its new name in its chat app, its settings and its instructions', () => {
+  assertEquals(empty.status, 400)
+  assertEquals(renamed.json, { name: 'Marlowe Quince' })
+  assertEquals(after.operator, 'Marlowe Quince')
+  assertEquals(
+    again.querySelector('.Talk_Who')?.textContent,
+    'Marlowe Quince, Township’s Operator',
+  )
+  assertEquals(
+    named.querySelector('#name [name=name]')?.getAttribute('value'),
+    'Marlowe Quince',
+  )
+  assertStringIncludes(told, 'You are Marlowe Quince, the Operator of clerk')
 })

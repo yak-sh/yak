@@ -297,6 +297,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   slug: 'jeff',
   store: 'jeff',
   title: 'Jeff',
+  operator: 'Wren',
   tier,
   plan: null,
   stripe: null,

@@ -131,7 +131,7 @@ export let posting = (
   send: async (m: Message): Promise<Receipt> => {
     if (!mail) throw new Error('this deploy has no mail binding')
     let sent = await mail.send({
-      from: m.from,
+      from: m.name ? { name: m.name, email: m.from } : m.from,
       ...sink(env, m.to, m.subject),
       text: m.text,
       html: m.html,

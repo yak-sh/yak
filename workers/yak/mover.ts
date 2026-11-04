@@ -48,6 +48,7 @@ import { workerRule } from './worker-move.ts'
 import { blobsRule } from './blobs-move.ts'
 import { importedRule } from './imported-move.ts'
 import { integrationOwnerRule } from './integration-move.ts'
+import { operatorNameRule } from './operator-name.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -174,6 +175,7 @@ export let RULES: Rule[] = [
   blobsRule,
   importedRule,
   integrationOwnerRule,
+  operatorNameRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

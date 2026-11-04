@@ -14,6 +14,7 @@ import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
 import { CONSENT, handed, type Texting, texts } from './operator-texts.ts'
+import { given } from './operator-name.ts'
 import { CallError } from '@yaks/tools/errors'
 import {
   attached,
@@ -61,7 +62,17 @@ export let textsCard = (at: string, consent: Texting | null) =>
     )
   }</span></label>
 <p>Agreeing is not required to use yaks.app.</p>
-<button class="Button" type="submit">Save</button><p role="status" data-texts-status></p></form>`
+<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+
+// Where a space's people change what its Operator is called.
+export let nameCard = (at: string, name: string) =>
+  `<form class="Card Form" id="name" method="post" action="${at}?name=1">
+<h2 class="Card_Title">Name</h2>
+<p>What this Operator goes by. It introduces itself by this name and signs its letters with it.</p>
+<label class="Form_Field">Name<input class="Field" name="name" value="${
+    esc(name)
+  }" maxlength="40" required autocomplete="off"></label>
+<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
 
 export let operatorDoor = async (
   env: Env,
@@ -206,6 +217,20 @@ export let operatorAnswer = async (
         ),
       }, vouched(who))
       return Response.json(await dir.texting(person))
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return Response.json({ message: e.message }, { status: 400 })
+    }
+  }
+  if (q.has('name') && req.method == 'POST') {
+    let form = await req.formData()
+    try {
+      let named = await directoryOf(env.STORE).christen(
+        space,
+        given(String(form.get('name') ?? '')),
+        vouched(who),
+      )
+      return Response.json({ name: named.operator })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -360,7 +385,9 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let doing = (role: string) => role == 'viewer' ? 'can look' : 'can change'
   let address = mailFrom(space.slug, null, env)
   return `
-<section class="Card"><p>Ask the Operator for a change in your apps, or send it a PDF or a photo. Your space's plan covers its work.</p>${
+<section class="Card"><p>${esc(space.operator)} is this space’s Operator. Ask ${
+    esc(space.operator)
+  } for a change in your apps, or send a PDF or a photo. Your space's plan covers its work.</p>${
     pa
       ? '<p>This is your own space, so its Operator can also work in your other spaces, with your role in each.</p>'
       : ''
@@ -378,6 +405,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     esc(address)
   }</a></p></section>
 <div data-work aria-live="polite">${worked(items, space.slug)}</div>
+${nameCard(at, space.operator)}
 ${textsCard(at, consent)}
 ${settingsScript(at)}`
 }
@@ -386,20 +414,21 @@ ${settingsScript(at)}`
 // conversations kept current from the Builder object's socket.
 let settingsScript = (at: string) =>
   `<script type="module">
-let texts = document.querySelector('#texts')
-texts?.addEventListener('submit', async (e) => {
-  e.preventDefault()
-  let said = texts.querySelector('[data-texts-status]')
-  let body = new FormData(texts)
-  if (e.submitter?.name == 'stop') body.set('stop', '1')
-  said.textContent = 'Saving…'
-  try {
-    let response = await fetch(texts.action, { method: 'POST', body })
-    let answer = await response.json().catch(() => null)
-    if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')
-    location.reload()
-  } catch (error) { said.textContent = error.message }
-})
+for (let form of document.querySelectorAll('#texts, #name')) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    let said = form.querySelector('[data-status]')
+    let body = new FormData(form)
+    if (e.submitter?.name == 'stop') body.set('stop', '1')
+    said.textContent = 'Saving…'
+    try {
+      let response = await fetch(form.action, { method: 'POST', body })
+      let answer = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')
+      location.reload()
+    } catch (error) { said.textContent = error.message }
+  })
+}
 let box = document.querySelector('[data-work]')
 let read = async () => {
   let response = await fetch('${at}?messages=1')
@@ -437,12 +466,17 @@ export let chatPage = async (
   let fresh = open == 'new'
   let title = fresh ? 'New conversation' : talked.title || 'Not here'
   let named = space.title || space.slug
-  let whose = `${named}’s Operator`
-  let here = spaces.find((s) => s.slug == space.slug) ??
-    { slug: space.slug, title: space.title, owner: true, own: false }
+  let whose = `${space.operator}, ${named}’s Operator`
+  let here = spaces.find((s) => s.slug == space.slug) ?? {
+    slug: space.slug,
+    title: space.title,
+    owner: true,
+    own: false,
+    operator: space.operator,
+  }
   return shell(
     env,
-    `${esc(title)} · ${esc(whose)}`,
+    `${esc(title)} · ${esc(space.operator)}`,
     null,
     fresh || talked.title ? 200 : 404,
     `<a class="Desk_Skip" href="#ask">Skip to the message box</a>
@@ -458,6 +492,8 @@ export let chatPage = async (
         here,
         spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
         (s) => chatPath(s.slug),
+        '',
+        (s) => s.operator ?? '',
       )
     }</div>
 <a class="Button Talk_New" href="${chatPath(space.slug)}">+ New conversation</a>
@@ -475,9 +511,9 @@ export let chatPage = async (
       (fresh
         ? `<div class="Talk_Hello"><h2>What would you like done in ${
           esc(named)
-        }?</h2><p>You’re talking to ${
-          esc(whose)
-        }. Ask it for a change in the space’s apps, or send it a document or a photo.</p></div>`
+        }?</h2><p>You’re talking to ${esc(whose)}. Ask ${
+          esc(space.operator)
+        } for a change in the space’s apps, or send a document or a photo.</p></div>`
         : '<div class="Talk_Hello"><h2>This conversation is not here</h2><p>It may have been removed. Your other conversations are listed beside this one.</p></div>')
     }</div>
 ${fresh || talked.title ? composer(at, talked.task) : ''}

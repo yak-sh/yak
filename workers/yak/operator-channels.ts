@@ -159,6 +159,10 @@ export let requestId = (space: string, message: string) =>
     ? derivedEid(`operator-email|${space}|${message}`)
     : crypto.randomUUID()
 
+/** How a letter from a space's Operator is signed: its name, and whose. */
+export let signed = (space: Space) =>
+  `${space.operator}\n${space.title || space.slug}’s Operator`
+
 export let channels = (env: Env): Record<string, Channel> => ({
   chat: () => Promise.resolve({}),
   // A break's request is answered beside the break, on the dashboard.
@@ -167,12 +171,14 @@ export let channels = (env: Env): Record<string, Channel> => ({
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
     let from = mailFrom(space.slug, null, env)
+    let text = `${answer.text}\n\n${signed(space)}`
     return metering(env, () => from, posting(env.MAIL, env)).send({
       from,
+      name: space.operator,
       to: request.address!,
       subject: /^re:/i.test(subject) ? subject : 'Re: ' + subject,
-      text: answer.text,
-      html: `<p>${esc(answer.text).replaceAll('\n', '<br>')}</p>`,
+      text,
+      html: `<p>${esc(text).replaceAll('\n', '<br>')}</p>`,
       ...(request.reply_to ? { replyTo: request.reply_to } : {}),
     })
   },

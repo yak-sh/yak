@@ -1,4 +1,5 @@
 import type { ByDay } from '@yaks/ui/chart'
+import { calledOf, christened, pick } from './operator-name.ts'
 import {
   EPOCH,
   MEND,
@@ -175,6 +176,8 @@ export type Space = {
   // slug, which is where its bytes already were (925e91572).
   store: string
   title: string
+  // What its Operator is called (operator-name.ts).
+  operator: string
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
   tier: Tier | null
@@ -700,6 +703,7 @@ let seed = async (store: Meta) => {
       // Its handle is the bare slug, as every space from before handles
       // wears its own (925e91572), since it never moves.
       space: { slug: META.space, store: META.space },
+      operator: { name: pick(META.space) },
     }, {
       entity: { eid: '$app' },
       doc: { title: META.app },
@@ -945,6 +949,7 @@ export let SPACE_PARTS = [
   'fee',
   'former',
   'tunnel',
+  'operator',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1001,6 +1006,7 @@ export let spaceOf = (r: Row): Space => ({
   slug: r.space!.slug,
   store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
+  operator: calledOf(r),
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
   stripe: stripeOf(r),
@@ -1644,7 +1650,8 @@ export let directory = (
     },
     // A space minted at `slug`, owned by `person`: the batch both doors that
     // make one write (tools.ts `space_new`, `own` below) — the person's own
-    // row (they may have none yet), the space with its handle, their seat,
+    // row (they may have none yet), the space with its handle and its
+    // Operator's name, clear of the Operators they already reach, their seat,
     // and the name taken from a space it still redirected for. The eid is
     // minted here rather than by a `$alias` the store resolves, because the
     // handle is made out of it and there is no second moment to write it in
@@ -1659,7 +1666,14 @@ export let directory = (
       own = false,
     ) => {
       let eid = crypto.randomUUID()
-      let claims = await self.claimed(slug)
+      let [claims, seats] = await Promise.all([
+        self.claimed(slug),
+        self.seats(person),
+      ])
+      let name = christened(
+        eid,
+        seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
+      )
       await (claims.length ? self.stamp : self.apply)({
         entities: [
           { entity: { eid: person }, person: {} },
@@ -1667,6 +1681,7 @@ export let directory = (
             entity: { eid },
             doc: { title },
             space: { slug, store: spaceHandle(slug, eid) },
+            operator: { name },
           },
           {
             entity: { eid: '$seat' },
@@ -1709,6 +1724,17 @@ export let directory = (
           ...(moving ? { space: { slug: to } } : {}),
           ...(had ? { former: addresses(had.filter((s) => s != to)) } : {}),
         }, ...claims],
+      }, headers)
+      return (await self.at(space.eid))!
+    },
+    // The space's Operator called `name` (operator-name.ts `given`).
+    christen: async (
+      space: Space,
+      name: string,
+      headers: Record<string, string>,
+    ): Promise<Space> => {
+      await self.apply({
+        entities: [{ entity: { eid: space.eid }, operator: { name } }],
       }, headers)
       return (await self.at(space.eid))!
     },

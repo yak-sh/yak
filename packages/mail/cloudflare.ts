@@ -45,7 +45,7 @@ export type Payload = {
  * a network anywhere.
  */
 export let payload = (m: Message): Payload => ({
-  from: { address: m.from, name: m.from.split('@')[0] },
+  from: { address: m.from, name: m.name ?? m.from.split('@')[0] },
   to: [m.to],
   reply_to: m.from,
   subject: m.subject,

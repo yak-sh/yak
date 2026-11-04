@@ -63,6 +63,7 @@ let space: Space = {
   slug: 'jeff',
   store: 'jeff',
   title: 'jeff',
+  operator: 'Wren',
   tier: null,
   plan: null,
   stripe: null,

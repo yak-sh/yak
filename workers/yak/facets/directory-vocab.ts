@@ -116,6 +116,16 @@ export let directoryDoc: VocabDoc = {
         by: owned(ref('keep')),
       },
     },
+    // What the space's Operator is called (operator-name.ts). The space is its
+    // Operator's entity, as `operator_reach.operator` says, so its name sits
+    // here: given when the space is made, changed by its people.
+    operator: {
+      component: true,
+      type: 'object',
+      description:
+        "The space's Operator, the assistant that works in it: the name it goes by.",
+      properties: { name: text },
+    },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
     // is the space (a seat) or the app (a grant), one property the way
     // `hostname.serves` is, and accepting is one batch that writes the

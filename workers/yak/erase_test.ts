@@ -46,6 +46,7 @@ import { KERNEL, meta } from './meta.ts'
 import { call } from './tools.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
+  operator: 'Wren',
   eid: 'space-eid',
   slug: 'shoplab',
   store: 'shoplab',

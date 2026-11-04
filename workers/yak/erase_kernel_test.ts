@@ -28,6 +28,7 @@ import {
 } from './probe.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
+  operator: 'Wren',
   eid: 'space-eid',
   slug: 'shoplab',
   store: 'shoplab',

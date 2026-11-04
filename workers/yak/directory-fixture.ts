@@ -18,6 +18,7 @@ export let space = (over: Partial<Space> = {}): Space => ({
   slug: 'jeff',
   store: 'jeff',
   title: 'jeff',
+  operator: 'Wren',
   tier: 'free',
   plan: null,
   stripe: null,

@@ -86,6 +86,10 @@ export let operatorContext = async (
   }
 }
 
+/** Who the Operator is, as its instructions open: its name and whose it is. */
+export let introduced = (space: Space) =>
+  `You are ${space.operator}, the Operator of ${space.slug}: introduce yourself as ${space.operator}, and answer to it. Don't sign your replies; a letter is signed for you.`
+
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
   ctx: Awaited<ReturnType<typeof operatorContext>>,
@@ -569,7 +573,9 @@ export let operating = (
         let [row] = await g.get([session])
         let asks = delegate && !row?.spawned
         return `${instructions(env)}\n\n${await standing(ctx)
-          .notes()}\n\nYou work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${
+          .notes()}\n\n${
+          introduced(space)
+        } You work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${
           asks
             ? ` For writing or fixing code, or a task that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you, and you tell the person.`
             : ''

@@ -608,6 +608,8 @@ export type Picked = {
   owner: boolean
   own: boolean
   whose?: string
+  // What its Operator is called.
+  operator?: string
 }
 
 export type DeskPage = {
@@ -762,20 +764,24 @@ let chooser = (at: DeskPage, view: ManageView) =>
   )
 
 /** The space selector over `all`, holding `here`: each space opens at `to`,
- * and `make` follows the list (the dashboard's side, and the Operator's chat
- * app, operator-page.ts `chatPage`). */
+ * `make` follows the list, and `about` leads the line under each space's name
+ * (the dashboard's side, and the Operator's chat app, which names each
+ * space's Operator: operator-page.ts `chatPage`). */
 export let spaceChoice = (
   here: Picked,
   all: Picked[],
   to: (s: Picked) => string,
   make = '',
+  about: (s: Picked) => string = () => '',
 ) => {
-  let box = (s: Picked, line = '') =>
-    `<span class="Desk_Tile" aria-hidden="true">${
+  let box = (s: Picked, line = '') => {
+    let said = [about(s), line].filter(Boolean).join(' · ')
+    return `<span class="Desk_Tile" aria-hidden="true">${
       esc(named(s).charAt(0).toUpperCase())
     }</span><span class="Desk_Name"><b>${esc(named(s))}</b>${
-      line && `<small>${esc(line)}</small>`
+      said && `<small>${esc(said)}</small>`
     }</span>`
+  }
   if (all.length < 2) {
     return `<div class="Desk_Space">${box(here)}</div>${make}`
   }

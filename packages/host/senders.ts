@@ -5,6 +5,8 @@
 export type Message = {
   /** the address it is from */
   from: string
+  /** the name it is from, as the reader's mail shows it beside the address */
+  name?: string
   /** the address it is going to */
   to: string
   /** the subject line */

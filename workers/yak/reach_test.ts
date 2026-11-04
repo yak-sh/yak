@@ -31,6 +31,7 @@ let space = (slug: string): Space => ({
   slug,
   store: slug,
   title: slug,
+  operator: 'Wren',
   tier: null,
   plan: null,
   stripe: null,

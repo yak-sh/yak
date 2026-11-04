@@ -2643,6 +2643,7 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
     owner: s.role == 'owner',
     own: s.own,
     whose: s.role == 'owner' ? undefined : names.get(s.owner!)?.name,
+    operator: s.space.operator,
   }))
 }
 
