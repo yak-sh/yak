@@ -5,6 +5,9 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { api, json, refuse, subscriptions } from '@yaks/api'
 import { apiDoc } from '@yaks/api/vocab'
 import {
+  type Actor,
+  type ApplyOpts,
+  type Bundle,
   type Graph,
   graph,
   type ReadOpts,
@@ -32,7 +35,7 @@ import { asking, screened } from './listing.ts'
 let base = appVocab()
 let vocab = loadVocab([...base.docs, apiDoc], base.keywords)
 
-type Composition = {
+export type Composition = {
   app?: { eid: string; mode: Mode; manifest: VocabDoc }
   declaration?: VocabDoc
   graph?: (vocab: Vocab) => Graph
@@ -42,7 +45,7 @@ type Composition = {
   sockets?: Hibernation
 }
 
-let app = (vocab: Vocab, name: string, composition: Composition) => {
+export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
   let g = composition.graph?.(vocab) ?? graph({ vocab, storage: ram(vocab) })
   let request = new AsyncLocalStorage<Request>()
   if (composition.app) {
@@ -186,8 +189,20 @@ let app = (vocab: Vocab, name: string, composition: Composition) => {
     await composition.settled?.(g)
     return answer
   }
-  return { graph: g, subs, fetch, authenticate, live }
+  let write = (
+    req: Request,
+    rows: Bundle[],
+    actor: Actor | null,
+    opts: ApplyOpts = {},
+  ) => request.run(req, () => g.apply(signed(rows, actor), opts))
+  return { graph: g, subs, fetch, authenticate, live, write }
 }
+
+/** The graph API's receipt words beside the app's declared vocabulary. */
+export let wireVocab = (words: Vocab) =>
+  words.comp('apply_receipt')
+    ? words
+    : loadVocab([...words.docs, apiDoc], words.keywords)
 
 /** Keep each app's API rows apart, with the fixture's directory unchanged. */
 export let stores = (
@@ -195,14 +210,12 @@ export let stores = (
   words = vocab,
   composition: Composition = {},
 ) => {
-  if (!words.comp('apply_receipt')) {
-    words = loadVocab([...words.docs, apiDoc], words.keywords)
-  }
+  words = wireVocab(words)
   let directory = env.STORE
-  let held = new Map<string, ReturnType<typeof app>>()
+  let held = new Map<string, ReturnType<typeof appWire>>()
   let at = (name: string) => {
     let found = held.get(name)
-    if (!found) held.set(name, found = app(words, name, composition))
+    if (!found) held.set(name, found = appWire(words, name, composition))
     return found
   }
   env.STORE = {

@@ -185,8 +185,8 @@ export let appGuard = (
   manifest: VocabDoc,
   standing: Pick<Parameters<typeof members>[0], 'level' | 'ignore'>,
   visit = false,
-): Plugin =>
-  members({
+): Plugin => {
+  let guard = members({
     app,
     vocab,
     instrument: instrumentEid,
@@ -194,3 +194,16 @@ export let appGuard = (
     within: WITHIN,
     ...standing,
   })
+  return {
+    ...guard,
+    hooks: {
+      ...guard.hooks,
+      // Trusted delivery is the host's internal capability (#asIs in Store).
+      // Its ordinary door already checked the writer before staging the work.
+      precondition: (rows, tx, error, context) =>
+        context?.trusted
+          ? rows
+          : guard.hooks!.precondition!(rows, tx, error, context),
+    },
+  }
+}

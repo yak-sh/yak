@@ -12,24 +12,31 @@ import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { appDerived } from './vocab.ts'
 
 /** Each named app gets private bytes and the vocabulary's read/search shape. */
-export let sqliteApp = () => {
+export let sqliteApp = (using: (dispose: () => void) => unknown = cleanup) => {
   let drivers = new WeakMap<Graph, ReturnType<typeof preparedDriver>>()
-  let make = (vocab: Vocab) => {
+  let make = (vocab: Vocab, previous?: Graph) => {
     let bodies = blobRead(vocab)
     let derived = { ...bodies, ...appDerived(vocab, bodies) }
     let searchable = fields(vocab)
-    let driver = preparedDriver(snapshot(vocab, { derived }, [
-      ...blobSchema(),
-      ...ftsSchema(searchable, bodies),
-    ]))
-    cleanup(() => driver[Symbol.dispose]())
+    let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
+    let driver = previous && drivers.get(previous)
+    if (!driver) {
+      driver = preparedDriver(snapshot(vocab, { derived }, extra))
+      let owned = driver
+      using(() => owned[Symbol.dispose]())
+    }
+    let rows = storage(driver, vocab, {
+      derived,
+      extend: [search(searchable, driver)],
+      schemaReady: () => true,
+    })
+    if (previous) {
+      let [failure] = rows.install(extra)
+      if (failure) throw failure
+    }
     let g = graph({
       vocab,
-      storage: storage(driver, vocab, {
-        derived,
-        extend: [search(searchable, driver)],
-        schemaReady: () => true,
-      }),
+      storage: rows,
       plugins: [
         blobs(vocab, sqliteBlobs(driver)),
         personal(vocab, {}, { document_page: 'document' }),
@@ -45,5 +52,6 @@ export let sqliteApp = () => {
       screens: screens(searchable, g.vocab, g.scope(opts)),
     })
   }
-  return { graph: make, found }
+  let atomic = <T>(g: Graph, run: () => T) => g.storage.tx(() => run())
+  return { graph: make, found, atomic }
 }

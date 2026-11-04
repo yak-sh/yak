@@ -13,6 +13,15 @@ import {
 import { queryCache } from './query-cache.ts'
 import { appRead } from './app-read.ts'
 import {
+  candidate,
+  declarationSlot,
+  heldDeclaration,
+  redeclared,
+  selectDeclaration,
+  stageDeclaration,
+  unseeded,
+} from './app-declarations.ts'
+import {
   appGuard,
   authenticating,
   type Vouch,
@@ -238,7 +247,7 @@ import {
 } from '@yaks/trace'
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
-import { broadcast, drafted } from './page-notice.ts'
+import { broadcast, drafted, released as releaseNotice } from './page-notice.ts'
 import { kinded, naming } from './app-subs.ts'
 import type {
   Actor,
@@ -317,7 +326,6 @@ import { resumed } from './wake.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
-  ACCEPTED,
   doorOf,
   GIT_STORE,
   IDEMPOTENCY,
@@ -433,8 +441,6 @@ import {
   platformVocab,
   storeWords,
   teach,
-  unlent,
-  unsaid,
 } from './vocab.ts'
 
 /**
@@ -1970,14 +1976,7 @@ export class Store {
 
   // Draft declarations and seed wait for the directory's release pointer,
   // including the first release from an empty store.
-  #candidate(req: Request): string | null {
-    let release = req.headers.get('x-yak-release')
-    if (
-      !req.headers.has('x-yak-base-release') ||
-      !release || !/^[a-z0-9-]+$/.test(release)
-    ) return null
-    return release
-  }
+  #candidate = candidate
 
   #prepared(next: string): string {
     let was = this.#get('vocab') ?? '{}'
@@ -2019,75 +2018,28 @@ export class Store {
     deploymentMoved: boolean
     effects: (() => void | Promise<void>)[]
   } {
-    let unchanged = () => ({ deploymentMoved: false, effects: [] })
-    if (this.#candidate(req)) return unchanged()
-    // The platform's own stores have no release of their own: the Worker's
-    // deploy is theirs, and their alarm runs its pass (`#deploying`).
-    if (ownStore(this.#name() ?? '')) return unchanged()
-    let release = req.headers.get('x-yak-release')
-    if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
-    let active = this.#get('release')
-    if (active == release || this.#unselectable.has(release)) return unchanged()
-    let deploymentMoved = false
-    let effects: (() => void | Promise<void>)[] = []
-    let selected = true
-    this.#atomic(() => {
-      if (active == null) {
-        deploymentMoved = release != '0' && !this.#deployedOnce()
-        this.#put('release', release)
-        return
-      }
-      let words = ['vocab', 'uses', 'tools'] as const
-      let was = this.#get('vocab') ?? '{}'
-      let toolsWas = this.#get('tools') ?? '{}'
-      let next = this.#get(`vocab:${release}`) ?? this.#get('vocab') ?? '{}'
-      if (active != '0' && release != '0') next = this.#prepared(next)
-      for (let word of words) {
-        this.#put(`${word}:${active}`, this.#get(word) ?? '{}')
-      }
-      for (let word of words) {
-        this.#put(
-          word,
-          word == 'vocab' ? next : this.#get(`${word}:${release}`) ??
-            this.#get(word) ?? '{}',
-        )
-      }
-      this.#put('release', release)
-      if (this.#get('vocab') != was) this.#build()
-      let seed = this.#get(`seed:${release}`)
-      let planted = seed
-        ? JSON.parse(seed) as {
-          bundles: Bundle[]
-          actor: Actor | null
-          from?: string
-        }
-        : null
-      let mark: Word = planted?.from ? `seeded:${planted.from}` : 'seeded'
-      let seeded = this.#get(mark) ||
-        (planted?.from == this.#get('app') && this.#get('seeded'))
-      if (planted && !seeded && !req.headers.has('x-yak-base-release')) {
-        // The guard had its say when the deployer staged it (`#seedDoor`).
-        // A shared home remembers each originating app's seed separately.
-        let result = this.#asIs(
-          signed(this.#unseeded(planted.bundles), planted.actor),
-          {
-            deferEffects: (run) => effects.push(run),
-          },
-        )
-        if (result instanceof Promise) {
-          throw new Error('a staged seed must apply synchronously')
-        }
-        this.#put(mark, release)
-      }
-      deploymentMoved = this.#get('tools') != toolsWas ||
-        this.#get('vocab') != was || !this.#deployedOnce()
-    }, (e) => {
-      selected = false
-      this.#unselectable.add(release)
-      defect(e, { request: 'select release', store: this.#name(), release })
-      this.#boot()
+    return selectDeclaration(req, {
+      read: (key) => this.#get(key as Word),
+      write: (key, value) => this.#put(key as Word, value),
+      own: ownStore(this.#name() ?? ''),
+      unselectable: this.#unselectable,
+      deployed: () => this.#deployedOnce(),
+      prepare: (next) => this.#prepared(next),
+      bind: () => this.#build(),
+      seed: (bundles, actor, effects) =>
+        this.#asIs(signed(this.#unseeded(bundles), actor), {
+          deferEffects: (run) => effects.push(run),
+        }),
+      atomic: (run, failed) => this.#atomic(run, failed),
+      failed: (error, release) => {
+        defect(error, {
+          request: 'select release',
+          store: this.#name(),
+          release,
+        })
+        this.#boot()
+      },
     })
-    return selected ? { deploymentMoved, effects } : unchanged()
   }
 
   async #enter(draft: boolean): Promise<() => void> {
@@ -4467,22 +4419,12 @@ export class Store {
       }
       let space = request.headers.get('x-yak-space')
       if (space && this.#get('space') != space) this.#put('space', space)
-      let version
-      try {
-        version =
-          (JSON.parse(await readBody(request)) as { version: number }).version
-        if (!Number.isSafeInteger(version) || version < 1) {
-          throw new Refused('/released needs a positive version')
-        }
-      } catch (error) {
-        return refuse(error, request)
-      }
-      this.#broadcast(
-        JSON.stringify({ release: { version } }),
-        'POST /released',
+      return releaseNotice(
+        request,
+        (packet) => this.#broadcast(packet, 'POST /released'),
       )
-      return Response.json({ version })
     }
+
     // A write to the draft this store previews (preview.ts `told`), told to
     // every page on its link the way a release is.
     if (path == '/drafted') {
@@ -5070,9 +5012,7 @@ export class Store {
   // What a slot holds for this request, as JSON text: a candidate release's
   // own, else the serving release's.
   #held(request: Request, word: 'uses' | 'tools'): string {
-    let candidate = this.#candidate(request)
-    return (candidate && this.#get(`${word}:${candidate}`)) ??
-      this.#get(word) ?? '{}'
+    return heldDeclaration(request, word, (key) => this.#get(key as Word))
   }
 
   // One of the object's own memory slots as a door: a GET reads back what it
@@ -5081,33 +5021,12 @@ export class Store {
   // (tools.ts `released`), and a slot that parsed its own content would be a
   // second vocabulary in the object.
   async #slot(request: Request, word: 'uses' | 'tools'): Promise<Response> {
-    let candidate = this.#candidate(request)
-    let key: Word = candidate ? `${word}:${candidate}` : word
-    if (request.method == 'GET') {
-      return Response.json(JSON.parse(this.#held(request, word)))
-    }
-    if (request.method != 'POST') {
-      return Response.json(
-        { error: 'NotAllowed', message: `/${word} takes GET or POST` },
-        { status: 405, headers: { allow: 'GET, POST' } },
-      )
-    }
-    let body = await readBody(request)
-    let held: unknown
-    try {
-      held = JSON.parse(body.trim() || '{}')
-    } catch {
-      held = null
-    }
-    if (!held || typeof held != 'object' || Array.isArray(held)) {
-      return json(
-        { error: 'Refused', message: `/${word} takes a JSON object` },
-        400,
-      )
-    }
-    let now = JSON.stringify(held)
-    if (now != this.#get(key)) this.#put(key, now)
-    return Response.json({ ok: true, [word]: Object.keys(held) })
+    return await declarationSlot(
+      request,
+      word,
+      (key) => this.#get(key as Word),
+      (key, value) => this.#put(key as Word, value),
+    )
   }
 
   // A person's saved keys (apps.ts `/storage`, public/storage.js): GET them
@@ -5228,14 +5147,7 @@ export class Store {
   // A fixed seed identity may already live in a shared home. Keep what the
   // person has written, including a deletion, when another app comes furnished.
   #unseeded(bundles: Bundle[]): Bundle[] {
-    let ids = bundles.map((b) => b.entity?.eid)
-      .filter((id) => typeof id == 'string' && !id.startsWith('$'))
-    let rows = this.#graph.get(ids, ['entity'])
-    if (rows instanceof Promise) {
-      throw new Error('a staged seed must read synchronously')
-    }
-    let held = new Set(rows.map((b) => b.entity.eid))
-    return bundles.filter((b) => !held.has(b.entity?.eid))
+    return unseeded(this.#graph, bundles)
   }
 
   // Check a draft seed with its candidate vocabulary and hold it for the
@@ -5323,16 +5235,10 @@ export class Store {
     return readBody(request).then(async (body) => {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
-        let accepted = JSON.parse(request.headers.get(ACCEPTED) ?? '[]')
-        let next = unlent(
-          unsaid(appDoc(body), was, 'vocab.json', accepted),
+        let { doc, dropped, added, kept, retyped } = redeclared(
+          request,
           was,
-          'vocab.json',
-          accepted,
-        )
-        let { doc, dropped, added, kept, retyped } = grew(
-          was,
-          next,
+          body,
           (name, prop) => this.#rows(name, prop),
         )
         let before = appVocab(was)
@@ -5389,12 +5295,22 @@ export class Store {
               message: undone.message,
             }, { status: 409 })
           }
-          this.#put(`vocab:${candidate}`, JSON.stringify(doc))
+          stageDeclaration(
+            request,
+            'vocab',
+            JSON.stringify(doc),
+            (key, value) => this.#put(key as Word, value),
+          )
         } else {
           // The declaration and its DDL roll back together on boot failure.
           this.#atomic(() => {
             let declared = JSON.stringify(doc)
-            this.#put('vocab', declared)
+            stageDeclaration(
+              request,
+              'vocab',
+              declared,
+              (key, value) => this.#put(key as Word, value),
+            )
             prepare()
             // A declaration already bound here needs its deployment pass,
             // while its graph and host capabilities can keep their lifetime.

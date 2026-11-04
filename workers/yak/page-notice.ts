@@ -38,3 +38,25 @@ export let drafted = async (
   send(JSON.stringify({ draft }))
   return Response.json({ ok: true })
 }
+
+/** The kernel's release notice, sent even before a page subscribes. */
+export let released = async (
+  request: Request,
+  send: (packet: string) => void,
+) => {
+  if (request.headers.get('x-yak-kernel') != '1' || request.method != 'POST') {
+    return json({ error: 'NotFound', message: 'no route' }, 404)
+  }
+  let version
+  try {
+    version =
+      (JSON.parse(await readBody(request)) as { version: number }).version
+    if (!Number.isSafeInteger(version) || version < 1) {
+      throw new Refused('/released needs a positive version')
+    }
+  } catch (error) {
+    return refuse(error, request)
+  }
+  send(JSON.stringify({ release: { version } }))
+  return Response.json({ version })
+}

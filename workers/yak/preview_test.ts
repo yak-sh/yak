@@ -3,8 +3,10 @@ import { appStore } from './directory.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
 import { tools } from './preview-tools.ts'
-import { ADA, ADA_OWNS, seeded } from './serving-probe.ts'
-import { platform } from './serving-scene.ts'
+import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
+import { platform } from './directory-rows-probe.ts'
+import { operators } from './operator-service-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { homed } from './page-graph.ts'
 import { sha256 } from './versions.ts'
@@ -17,7 +19,8 @@ import { CustomEvent, stage } from '../../packages/preact/testing.ts'
 let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
   handler.fetch(req, env)
 
-let scenario = platform()
+let runtime = platform(SECRET, { BUILDER: operators })
+let scenario = { ...runtime, sockets: lifecycleStores(runtime.env) }
 let { env } = scenario
 let { dir, space } = await seeded(env)
 let ctx: Ctx = { env, dir, person: ADA }
