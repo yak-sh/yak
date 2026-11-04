@@ -15,11 +15,10 @@ import { parse } from '@yaks/id'
 import type { Price } from '@yaks/model'
 import { claudeProjects, codexSessions } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
-import { after } from './window.ts'
+import { after, dayEid } from './window.ts'
 import { type Known, type Spend, tally } from './tally.ts'
 
 /** The row that keeps a day's tally. */
-export let dayEid = (day: string): Eid => identityEid('spend', [day])
 
 let PAGE = 2000
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp

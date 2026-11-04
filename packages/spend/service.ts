@@ -2,7 +2,9 @@
  * The tally, as a duty: the module a server imports at `@yaks/spend/service`.
  * Every pass tallies today again from its requests (./day.ts), and yesterday
  * too for the first hours of a day, while its last requests are still being
- * read in; then it keeps the Claude plan's newest limits (./budget.ts). A
+ * read in, and every past day marked `untallied` because requests reached it
+ * late, as a transcript read in after the fact does (./graph.ts); then it
+ * keeps the Claude plan's newest limits (./budget.ts). A
  * page that shows where the tokens went reads these rows, never the
  * requests, so looking costs nothing.
  *
@@ -31,10 +33,15 @@ export type Options = {
 /** How long a pass waits for the next. */
 export let EVERY = 10 * 60 * 1000
 
+/** How often the duty looks for days marked `untallied` between passes, so
+ * transcripts read in on a first `yak serve` show within a minute. */
+export let LOOK = 60 * 1000
+
 /** How long into a day yesterday is tallied again. */
 export let LATE = 3 * 60 * 60 * 1000
 
-/** One pass: today, yesterday while it may still be arriving, the limits.
+/** One pass: today, yesterday while it may still be arriving, the days
+ * requests reached late, the limits.
  * Returns the models its tallies met with no price, which are missing from
  * the dollars, not zero in them. */
 export let pass = async (
@@ -51,6 +58,7 @@ export let pass = async (
     await tally(after(today, -1))
   }
   await tally(today)
+  for (let m of await owed(g)) unpriced.add(m)
   // A day of the past week tallied before tallies kept their plans is
   // tallied again, so its week reads in plan shares too.
   let kept = await g.read(
@@ -64,7 +72,20 @@ export let pass = async (
   return [...unpriced]
 }
 
-/** Tally, then again every `every`, until the signal aborts. An already
+/** Tally each day marked `untallied`. The mark comes off before the day is
+ * read, so a request written while it is tallied marks it again. Returns the
+ * models its tallies met with no price. */
+export let owed = async (g: Graph): Promise<Eid[]> => {
+  let unpriced = new Set<Eid>()
+  for (let b of await g.read('.untallied .fields=untallied.day')) {
+    let day = String((b.untallied as { day: string }).day)
+    await g.apply([{ entity: b.entity, untallied: null }], { trusted: true })
+    for (let m of (await recompute(g, day)).unpriced) unpriced.add(m)
+  }
+  return [...unpriced]
+}
+
+/** Tally, then again every `every`, and the owed days every `LOOK`, until the signal aborts. An already
  * aborted signal is one pass. */
 export let service = async (
   host: {
@@ -78,9 +99,16 @@ export let service = async (
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   let told = new Set<Eid>()
+  let every = options.every ?? EVERY
+  let due = 0
   for (;;) {
     try {
-      for (let m of await pass(host.graph, Date.now(), options)) {
+      let whole = Date.now() >= due
+      if (whole) due = Date.now() + every
+      let unpriced = whole
+        ? await pass(host.graph, Date.now(), options)
+        : await owed(host.graph)
+      for (let m of unpriced) {
         if (told.has(m)) continue
         told.add(m)
         // A model with no price counts as nothing: a failure, fixed with a
@@ -106,7 +134,7 @@ export let service = async (
       ;(host.report ?? console.error)(e, { tags: { step: 'spend pass' } })
     }
     if (signal.aborted) return
-    await sleep(options.every ?? EVERY, signal)
+    await sleep(Math.min(every, LOOK), signal)
     if (signal.aborted) return
   }
 }

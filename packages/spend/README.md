@@ -77,6 +77,14 @@ limits as `rate_limit` rows, read from the cache claude-status writes
 (`~/.cache/claude-usage`, or `$CLAUDE_USAGE_DIR`). Codex's limits arrive with
 its sessions. Options: `every` (milliseconds) and `usage` (the cache directory).
 
+`@yaks/spend/graph` is what marks a day `untallied`: a request written after its
+day ended, as every request of a transcript read in after the fact is, marks its
+day's row in the same transaction, and the duty tallies every marked day within
+a minute. So the first `yak serve` on a machine with months of Claude Code and
+Codex transcripts fills every one of those days as the transcripts are read,
+with no command. The duty takes the mark off before it tallies the day, so a
+request arriving during the tally marks the day again.
+
 - `yak spend show [since] [--until day] [--top n]` reports a span of days, by
   default the Claude plan's week.
 - `yak spend backfill <since>` measures the requests of every transcript,

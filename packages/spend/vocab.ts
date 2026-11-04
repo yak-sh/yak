@@ -7,7 +7,7 @@ import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
 /** The spend vocabulary: `spend{day, requests, tokens, dollars, parts,
- * sessions, tasks, models, entries}` and the `spend_show` and
+ * sessions, tasks, models, entries}`, `untallied{day}`, and the `spend_show` and
  * `spend_backfill` tools, in the form `loadVocab` accepts. */
 export let spendDoc: VocabDoc = doc as VocabDoc
 

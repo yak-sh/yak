@@ -130,6 +130,21 @@
         }
       }
     },
+    "untallied": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "type": "object",
+      "description": "a past day some of whose requests were written after it ended, as when a transcript is read in after the fact: on its day's row until the duty tallies that day again",
+      "properties": {
+        "day": {
+          "type": "string",
+          "stamped": true,
+          "description": "the UTC day, `2026-10-20`"
+        }
+      }
+    },
     "spend_show": {
       "tool": true,
       "noun": "spend",

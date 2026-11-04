@@ -6,6 +6,7 @@
  * @module
  */
 import type { Bundle, Eid } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import type { Spend } from './tally.ts'
 
 /** A plan limit, as its `rate_limit` row reads, its provider named. */
@@ -33,6 +34,9 @@ export let after = (day: string, n = 1): string =>
 /** The UTC day a moment falls on. */
 export let dayOf = (at: number | string): string =>
   new Date(at).toISOString().slice(0, 10)
+
+/** The row a day's tally is kept on. */
+export let dayEid = (day: string): Eid => identityEid('spend', [day])
 
 /** The limits `rate_limit` rows hold, each provider's longest window first. */
 export let limitsOf = (rows: Bundle[], names: Map<Eid, string>): Limit[] =>
