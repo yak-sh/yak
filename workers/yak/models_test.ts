@@ -879,12 +879,12 @@ test('a model calls only the commands marked for it, as the person who asked', a
       : { response: 'The smith is glad.' }, { manifest })
   let s = crypto.randomUUID()
   await v.send('/apply', asking(s, FLASH))
-  await until(
-    async () =>
-      (await v.read(`.entry.session=${s}&.output&*`)).some((b) =>
-        said(b) == 'The smith is glad.'
-      ),
-    { label: 'the answer after the tool' },
+  await v.settled()
+  assert(
+    (await v.read(`.entry.session=${s}&.output&*`)).some((b) =>
+      said(b) == 'The smith is glad.'
+    ),
+    'the answer after the tool',
   )
   let offered = v.asked[0].input.tools as { function: { name: string } }[]
   assertEquals(offered.map((t) => t.function.name), ['set_mood'])
