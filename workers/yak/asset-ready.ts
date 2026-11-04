@@ -37,7 +37,7 @@ export let materialized = async (
     await make()
     return await stamp(await outputs())
   }
-  await remember(
+  let prepared = await remember(
     'worker assets',
     inputs.map((p) => pathToFileURL(p).href),
     made,
@@ -54,6 +54,7 @@ export let materialized = async (
       },
     },
   )
+  return prepared.map(([path]) => path)
 }
 
 /** Inputs to the browser bundles, compiler catalog and sandbox workspace. */
@@ -112,11 +113,14 @@ export let assets = async (
     stdout: 'piped',
     stderr: 'null',
   }).output()
-  if (!listed.success) return await make()
+  if (!listed.success) {
+    await make()
+    return []
+  }
   let paths = assetInputs(
     new TextDecoder().decode(listed.stdout).split('\0').filter(Boolean),
   )
-  await materialized(
+  return await materialized(
     paths.map((path) => join(repo, path)),
     () => outputs(root),
     make,

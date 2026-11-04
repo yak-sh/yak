@@ -207,20 +207,32 @@ export let READIED = 'YAK_WORKER_READIED'
  * asset leaves them as they are. */
 export let ready = async (
   quiet = false,
-  { root = dir, timeout = 600_000, assets: made = true } = {},
+  {
+    root = dir,
+    timeout = 600_000,
+    assets: made = true,
+    prepared,
+  }: {
+    root?: string
+    timeout?: number
+    assets?: boolean
+    prepared?: (outputs: readonly string[]) => void
+  } = {},
 ) => {
   if (system.env.get(READIED) == root) return false
   let dependencies = modules(root, timeout, quiet)
   let make = async () => {
     await preparing(root, quiet, () => dependencies).all
   }
+  let artifacts = made && assets(repo, root, make)
   let completed = await Promise.allSettled([
     dependencies,
-    made && assets(repo, root, make),
+    artifacts,
   ])
   for (let result of completed) {
     if (result.status == 'rejected') throw result.reason
   }
+  if (artifacts) prepared?.(await artifacts)
   let changed = await dependencies
   if (made) system.env.set(READIED, root)
   return changed

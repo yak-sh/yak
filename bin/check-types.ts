@@ -376,18 +376,25 @@ let program = async (on: Platform, roots: string[]) => {
   }
 }
 
-/** Check the types of `roots` in Deno's program and of `entries` in the
- * Workers program, after making what they import. */
+/** Make a source's imports unless readiness validated every output this run. */
+export let generate = async (
+  made: string[],
+  run: Run,
+  prepared: readonly string[] = [],
+) =>
+  (await Promise.all(
+    made.filter((g) => !MADE[g].every((path) => prepared.includes(path)))
+      .map((g) => run(['run', '--no-lock', '-A', g])),
+  )).every(Boolean)
+
 let check = async (
   roots: string[],
   entries: string[],
   made: string[],
   run: Run,
+  prepared: readonly string[] = [],
 ) => {
-  let ok = await Promise.all(
-    made.map((g) => run(['run', '--no-lock', '-A', g])),
-  )
-  if (!ok.every(Boolean)) return false
+  if (!await generate(made, run, prepared)) return false
   let hosted = entries.length ? (await workers()).platform : undefined
   return (await Promise.all([
     roots.length ? program(deno(), roots) : true,
@@ -396,12 +403,16 @@ let check = async (
 }
 
 /** Check the types of the modules the `changed` paths reach. */
-export let types = async (changed: string[], run: Run = spawn) => {
+export let types = async (
+  changed: string[],
+  run: Run = spawn,
+  prepared: readonly string[] = [],
+) => {
   let { entries: hosted } = await workers()
   if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
   let { roots, entries, made } = await reached(changed, hosted)
   return !roots.length && !entries.length ||
-    await check(roots, entries, made, run)
+    await check(roots, entries, made, run, prepared)
 }
 
 if (import.meta.main) {

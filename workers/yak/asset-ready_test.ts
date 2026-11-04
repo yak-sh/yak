@@ -37,8 +37,8 @@ let reused = fixture(),
 
 test('unchanged asset inputs and outputs reuse the completed generation', async () => {
   cleanup(reused.close)
-  await reused.run()
-  await reused.run()
+  equal(await reused.run(), [reused.output])
+  equal(await reused.run(), [reused.output])
   equal(reused.calls(), 1)
 })
 

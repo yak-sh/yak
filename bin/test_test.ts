@@ -129,10 +129,13 @@ let readied = async (read: (file: string) => string[] | undefined) => {
         read,
       })
     },
-    check: () => Promise.resolve(made.length > 0),
+    check: (_changed, prepared) => {
+      equal(prepared, made.at(-1) ? ['workers/yak/public/_client.js'] : [])
+      return Promise.resolve(made.length > 0)
+    },
     ready: (_quiet, assets) => {
       made.push(assets)
-      return Promise.resolve()
+      return Promise.resolve(assets ? ['workers/yak/public/_client.js'] : [])
     },
   })
   equal(await plan.ok, true)

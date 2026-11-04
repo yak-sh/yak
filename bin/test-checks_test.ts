@@ -102,3 +102,19 @@ test('the types of what the change reaches are checked, and their failure fails 
   equal(typed, [[file], ['packages/a/a.md'], ['a.ts']])
   equal(untyped, false)
 })
+
+test('source type preparation receives the outputs readiness completed', async () => {
+  let ready = ['workers/yak/public/_compiler/packages.json']
+  let received: readonly string[] = []
+  await check(
+    [],
+    () => Promise.resolve(true),
+    () => Promise.resolve([]),
+    (_changed, prepared) => {
+      received = prepared
+      return Promise.resolve(true)
+    },
+    ready,
+  )
+  equal(received, ready)
+})

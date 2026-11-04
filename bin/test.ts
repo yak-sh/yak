@@ -385,10 +385,21 @@ export let prepare = async (
     format,
     find,
     chosen,
-    check,
-    ready: async (quiet: boolean, assets: boolean) => {
+    check: (changed: string[], prepared: readonly string[]) =>
+      check(changed, undefined, undefined, undefined, prepared),
+    ready: async (
+      quiet: boolean,
+      assets: boolean,
+    ): Promise<readonly string[] | void> => {
       let { ready } = await import('../workers/yak/wrangler.ts')
-      await ready(quiet, { assets })
+      let prepared: string[] = []
+      await ready(quiet, {
+        assets,
+        prepared: (outputs) => {
+          prepared = outputs.map((path) => relative(Deno.cwd(), path))
+        },
+      })
+      return prepared
     },
   },
 ) => {
@@ -417,13 +428,14 @@ export let prepare = async (
     changed,
     changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
   )
+  let prepared: readonly string[] = []
   if (reaches(READIES)) {
-    await effects.ready(
+    prepared = await effects.ready(
       !flags.includes('--verbose'),
       run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
-    )
+    ) ?? []
   }
-  let ok = all ? Promise.resolve(true) : effects.check(changedFiles)
+  let ok = all ? Promise.resolve(true) : effects.check(changedFiles, prepared)
     .catch((e) => (console.error(e), false))
   return { flags, paths, tags, files, keys, run, beyond, ok }
 }

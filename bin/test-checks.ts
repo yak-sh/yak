@@ -102,11 +102,12 @@ export let check = async (
   changed: string[],
   run = command,
   packages = publishing,
-  typed = (changed: string[]) =>
-    types(changed, (args) => run({ name: 'types', args })),
+  typed = (changed: string[], prepared: readonly string[]) =>
+    types(changed, (args) => run({ name: 'types', args }), prepared),
+  prepared: readonly string[] = [],
 ) =>
   (await Promise.all([
     ...checks(changed, (await packages()).map((p) => p.config))
       .filter((c) => c.name != 'format').map(run),
-    typed(changed),
+    typed(changed, prepared),
   ])).every(Boolean)
