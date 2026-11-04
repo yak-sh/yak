@@ -308,7 +308,9 @@ and `serve` binds a TCP port. The call such a tool is handed carries
 `process{pid, command, cwd}` (@yaks/process), the program that executes the
 call, and `cwd` is its working directory. A locally opened graph uses the
 directory where the user ran `yak`; a remote call uses the server process's
-directory.
+directory. A tool accepting a `cwd` argument receives the CLI's current
+directory when the flag is omitted. `land` requires that argument over MCP,
+where a shared connection cannot identify a sub-agent's working directory.
 
 A tool that declines a call throws `CallError`. The runner records the refusal,
 and `yak` returns exit code `1`.

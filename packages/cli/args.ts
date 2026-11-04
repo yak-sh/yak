@@ -67,6 +67,8 @@ export class Usage extends CallError {
 export type Reads = {
   file: (path: string) => string | Promise<string>
   stdin: () => string | Promise<string>
+  /** The command’s working directory, for tools that accept `cwd`. */
+  cwd?: () => string
 }
 
 /** A parsed command line: options in the order they were given (a bare flag
@@ -211,6 +213,10 @@ export let argsFor = async (
     out[name] = Array.isArray(had) && Array.isArray(value)
       ? [...had, ...value]
       : value
+  }
+
+  if (props.cwd && out.cwd === undefined && reads?.cwd) {
+    out.cwd = reads.cwd()
   }
 
   // Forwarded words keep their spelling until the receiving schema parses

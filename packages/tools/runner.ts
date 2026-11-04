@@ -10,8 +10,8 @@
 // checked against the tool's schema and the entities they name resolved to
 // eids (./args.ts), `who(call)` saying who decided the request even
 // where the graph stamps nothing, and `process{pid, command, cwd}` naming the
-// program on this machine that asked: the run the call came through where it
-// records one with a `cwd`, otherwise the program running it. That is a
+// program running the tool on this machine. A session identifies its author,
+// not its checkout: sub-agents can share a session and connection. This is a
 // bundle, not a row — the stored call never wears `process`.
 //
 // The result entity is emitted by the declared effect's match (./vocab.json,
@@ -125,11 +125,8 @@ export type Opts = {
   owner?: Eid
   /** the program running these calls on this machine, as @yaks/process
    * records one — `{pid, command, cwd}` — put on every call a tool is handed,
-   * for a tool that acts on the machine rather than the graph. A call whose
-   * `via` records a `process` with a `cwd` is handed that one instead: an
-   * MCP server's own directory is not the checkout its caller stands in. The
-   * caller supplies it; this package touches no runtime API and never looks
-   * it up. */
+   * for a tool that acts on the machine rather than the graph. The caller
+   * supplies it; this package touches no runtime API and never looks it up. */
   process?: Comp
   /** Extra bundles a direct caller is owed beside a tool's answer. A plugin
    * may supply them without the tool or its transport knowing about them. */

@@ -463,3 +463,19 @@ test('graph apply refuses a mistyped rehearsal flag with the available arguments
     assert(!e.message.includes('\n'))
   }
 })
+
+test('a checkout tool receives the command directory before validating required inputs', async () => {
+  let tool = {
+    name: 'land',
+    inputSchema: {
+      type: 'object',
+      required: ['cwd'],
+      properties: { cwd: { type: 'string' } },
+    },
+  }
+  let local = { ...reads, cwd: () => '/child' }
+  assertEquals(await argsFor(tool, [], local), { cwd: '/child' })
+  assertEquals(await argsFor(tool, ['--cwd=/other'], local), { cwd: '/other' })
+  await assertRejects(() => argsFor(tool, [], reads), Usage)
+  assertEquals(await argsFor({ name: 'bare' }, [], local), {})
+})

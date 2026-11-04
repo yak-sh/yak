@@ -464,6 +464,7 @@ let here = (): string => {
 }
 
 let disk: Reads = {
+  cwd: system.cwd,
   file: (path) => files.readTextFile(path),
   stdin: () => new Response(system.stdin.readable).text(),
 }

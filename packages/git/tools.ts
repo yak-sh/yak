@@ -1,11 +1,9 @@
 // The implementations behind the `tool: true` declarations in ./vocab.json,
 // exported as `@yaks/git/tools`.
 //
-// All three act on the machine the call runs on as much as on the graph: the
-// checkout at the `cwd` of the process that made the call, which on a command
-// line is the directory the person ran the command in, because `yak land` and
-// `yak cites check` build the graph and call the tool in that same process
-// (@yaks/cli local.ts).
+// File tools read the machine running the call. `land` takes its checkout
+// explicitly as `cwd`: the CLI fills its current directory, and an MCP
+// caller names its own, even when sub-agents share the connection.
 //
 // A landing refused for the caller's own state is an expected invocation
 // failure: a moved base is returned as a divergence, which becomes a
@@ -135,16 +133,16 @@ let verdict = (
     ? ['warn', 'never checked']
     : ['warn', `no answer: ${got.why}`]
 
-/** The implementations of the tools ./vocab.json declares. */
-export let runs = (): Runs => ({
-  land: async (call): Promise<Bundle[]> => {
+/** Landing with Git supplied at the effect boundary. */
+export let landing =
+  (run: typeof land) => async (call: Bundle): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let cwd = cwdOf(call, 'land')
+    let cwd = str(args.cwd)
     // Git's output, exactly as Git wrote it, collected in the order it
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
     let said: string[] = []
-    let outcome = await land({
+    let outcome = await run({
       cwd,
       allow: str(args['allow-revert']).split(',').filter(Boolean),
       write: (text) => {
@@ -160,7 +158,11 @@ export let runs = (): Runs => ({
       content: { body: [...said, `landed ${outcome.landed}`].join('\n') },
       output: { source: call.entity.eid },
     }]
-  },
+  }
+
+/** The implementations of the tools ./vocab.json declares. */
+export let runs = (): Runs => ({
+  land: landing(land),
 
   cites_check: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)

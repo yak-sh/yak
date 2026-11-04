@@ -132,7 +132,7 @@ test('read runners share reference resolution, attribution, limits and receipts'
   equal(answers[0], answers[1])
 })
 
-test('a tool is handed the process of the run that asked, where it has a cwd', async () => {
+test('a session never replaces the process running a tool', async () => {
   let vocab = loadVocab([kernelDoc, callDoc, toolDoc, {
     $defs: {
       process: {
@@ -167,7 +167,7 @@ test('a tool is handed the process of the run that asked, where it has a cwd', a
     })
     return seen
   }
-  equal(await asked(worktree), { pid: 2, cwd: '/worktree' })
+  equal(await asked(worktree), server)
   equal(await asked(bare), server)
   equal(await asked(mint()), server)
 })

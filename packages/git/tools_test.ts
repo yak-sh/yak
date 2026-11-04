@@ -17,7 +17,9 @@ import { keyDoc, keyKeywords } from '@yaks/key'
 import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
-import { runs } from './tools.ts'
+import { landing, runs } from './tools.ts'
+import { runner, toolsDoc } from '@yaks/tools'
+import { faulted, toolEid } from '@yaks/tools/result'
 
 let tools = runs()
 let vocab = loadVocab(
@@ -232,4 +234,37 @@ test('verify refuses a symbol whose file is missing', async () => {
     Error,
     'has no file to check',
   )
+})
+
+test('landing uses the checkout named by the call, even on a shared session', async () => {
+  let seen: string[] = []
+  let tools = loadTools(
+    gitDoc,
+    {
+      ...runs(),
+      land: landing((ops) => {
+        seen.push(ops?.cwd ?? '')
+        return Promise.resolve({ landed: 'sha', root: '/repo' })
+      }),
+    },
+  )
+  let words = loadVocab([kernelDoc, docDoc, toolsDoc, gitDoc])
+  let g = graph({ vocab: words, storage: ram(words) })
+  let r = runner(g, { tools, process: { cwd: '/server' } })
+  let actor = { by: crypto.randomUUID(), via: crypto.randomUUID() }
+  let call = (args: Record<string, unknown>) => ({
+    entity: { eid: crypto.randomUUID() },
+    call: { to: toolEid('land'), args },
+    $actor: actor,
+  })
+  for (let cwd of ['/parent', '/child']) {
+    let asked = call({ cwd })
+    let answer = await r.call(asked)
+    assertEquals(faulted(answer, asked.entity.eid), false)
+  }
+  for (let args of [{}, { cwd: '.' }]) {
+    let asked = call(args)
+    assert(faulted(await r.call(asked), asked.entity.eid))
+  }
+  assertEquals(seen, ['/parent', '/child'])
 })
