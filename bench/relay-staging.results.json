@@ -2,7 +2,7 @@
   "cause": "24ef8e577e7d4ef62c8ca708243972701ef5758b",
   "parent": "77ebf5d382047088fd4aae26df43c6d12b044eca",
   "current": "fcb9fa0dc13d337e4ff2b3483f1527f5e3570436",
-  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "runtime": "deno/2.9.1 x64-linux",
   "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
   "boundary": "one submission through admission and staging; fanout and checked delivery excluded; simulated clock held until delivery",
   "method": "7 alternating parent/main Deno averages; median of 7; copied identical relay-fixture.ts and relay_bench.ts to parent, no production patches; tolerance unchanged",

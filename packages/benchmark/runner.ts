@@ -213,7 +213,19 @@ let execute = async (
     if (mode == 'accept' && !insufficient(current)) {
       current.verdict = loaded(current) ? 'loaded' : 'accepted'
     }
-    if (base && mode == 'check' && !insufficient(current)) {
+    // A baseline banked on another runtime or CPU is no reference for this
+    // box: the run is measured, not judged, until one is banked here.
+    let elsewhere = base && ['runtime', 'cpu'].includes(
+      incomparable(base, current) ?? '',
+    )
+    if (elsewhere && mode == 'check' && !insufficient(current)) {
+      current.verdict = 'measured'
+      console.error(
+        `${current.suite}: baseline banked on ${base!.runtime}, ${
+          base!.cpu
+        }; measured on ${current.runtime}, ${current.cpu}`,
+      )
+    } else if (base && mode == 'check' && !insufficient(current)) {
       current.regressions = compare(base, current, options.coverage)
       current.verdict = current.regressions.length
         ? loaded(current) ? 'loaded' : 'regressed'

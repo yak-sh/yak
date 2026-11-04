@@ -208,6 +208,18 @@ test('acceptance moves a baseline only toward better, past the noise, unless tol
   equal(banked(f), { work: [170, .2] })
 })
 
+test('a check against a baseline banked on another runtime or CPU measures', async () => {
+  for (let field of ['runtime', 'cpu'] as const) {
+    let f = fixture()
+    let options = { ...f.options, rounds: 1 }
+    await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
+    f.context[field] = 'elsewhere'
+    f.suite.benches[0].sample = () => 1e6
+    let current = await run(f.suite, { ...options, mode: 'check' })
+    equal([current.verdict, current.regressions], ['measured', []])
+  }
+})
+
 test('a slower acceptance that names benches banks only those, as measured', async () => {
   let f = fixture([
     { name: 'chosen', unit: 'ms', sample: () => 100 },
