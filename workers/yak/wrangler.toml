@@ -575,6 +575,8 @@ fflate = "./node_modules/fflate/esm/browser.js"
 "@modelcontextprotocol/server" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
 "@modelcontextprotocol/server/_shims" = "./node_modules/@modelcontextprotocol/server/dist/shimsWorkerd.mjs"
 "@modelcontextprotocol/server/validators/cf-worker" = "./node_modules/@modelcontextprotocol/server/dist/validators/cfWorker.mjs"
+# @yaks/anthropic calls the Messages API through the official SDK.
+"@anthropic-ai/sdk" = "./node_modules/@anthropic-ai/sdk/index.mjs"
 
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and
