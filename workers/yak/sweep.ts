@@ -4,8 +4,10 @@
 // over the platform itself, so one request reaches one store.
 //
 //   GET  /api/move                        every store, in the order a sweep
-//                                         takes them: the app stores, the git
-//                                         object store, then the directory
+//                                         takes them: the app stores, their
+//                                         samples and their visitors' stores,
+//                                         the git object store, then the
+//                                         directory
 //   POST /api/move?store=<name>&rehearse=1  that store's rehearsal
 //   POST /api/move?store=<name>           that store woken to move what it
 //                                         owes, and where each rule stands
@@ -26,6 +28,7 @@ import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
 import type { Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
+import { visits } from './visit.ts'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
@@ -41,19 +44,30 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 /** Every store there is, trashed apps' included: a restore brings one back
- * holding whatever shape it was left in. */
+ * holding whatever shape it was left in. An app's sample and the stores its
+ * visitors were given (visit.ts) hold its words too, so a migration reaches
+ * them as well. */
 export let stores = async (env: Env): Promise<Swept[]> => {
   let dir = dirOf(env)
   let spaces = await dir.all()
   let of = new Map(spaces.map((s) => [s.eid, s]))
+  let at = new Map<string, string>()
   let apps = (await dir.apps(spaces)).flatMap((app) => {
     let space = of.get(app.space)
-    return space
-      ? [{ store: storeName(space, app), at: `${space.slug}/${app.slug}` }]
-      : []
+    if (!space) return []
+    let name = `${space.slug}/${app.slug}`
+    at.set(app.eid, name)
+    return [
+      { store: storeName(space, app), at: name },
+      ...app.demo ? [{ store: app.demo.store, at: `${name} sample` }] : [],
+    ]
   })
+  let visited = (await visits(env)).flatMap(({ app, visit }) =>
+    at.has(app) ? [{ store: visit.store, at: `${at.get(app)} visit` }] : []
+  )
   let all = [
     ...apps,
+    ...visited,
     { store: GIT_STORE, at: 'git' },
     { store: PLATFORM_STORE, at: 'directory' },
   ]

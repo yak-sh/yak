@@ -329,6 +329,8 @@ dataset = "yak_views"
 #   API_RATE        300 requests a minute to an app's data, signed out
 #   RTC_RATE        60 requests a minute to an app's voice door (rtc.ts), per
 #                   visitor per app; members are not counted
+#   BIRTH_RATE      10 stores of their own a minute, made by strangers'
+#                   first writes at published apps (visit.ts)
 [[ratelimits]]
 name = "SIGNIN_RATE"
 namespace_id = "1001"
@@ -358,6 +360,11 @@ simple = { limit = 300, period = 60 }
 name = "RTC_RATE"
 namespace_id = "1006"
 simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "BIRTH_RATE"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
 
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
@@ -728,6 +735,11 @@ simple = { limit = 300, period = 60 }
 name = "RTC_RATE"
 namespace_id = "2006"
 simple = { limit = 60, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "BIRTH_RATE"
+namespace_id = "2007"
+simple = { limit = 10, period = 60 }
 
 [[env.staging.r2_buckets]]
 binding = "BLOBS"

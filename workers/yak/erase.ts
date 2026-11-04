@@ -74,7 +74,8 @@ import {
   PROTECTED,
   type Row,
 } from './idle-spaces.ts'
-import { meta } from './meta.ts'
+import { KERNEL, meta } from './meta.ts'
+import { type Given, lapsed, VISITS, visits } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
@@ -319,6 +320,19 @@ let swept = async (env: Env, prefix: string) => {
 let under = (space: Space, app?: App) =>
   app ? `${ownedPrefix(space, app)}/` : `${space.store}/`
 
+// A visitor's store gone (visit.ts): what it saved, its uploads, and the
+// record on its browser's edge that sent them there, last, so an erase that
+// dies halfway is found again by the next sweep. Their next write at the app
+// starts a store afresh from its sample.
+export let unvisited = async (env: Env, { eid, visit }: Given) => {
+  await cleared(env, visit.store)
+  // Only ever a visitor's own prefix: an empty one would be the whole bucket.
+  if (visit.blobs.startsWith(VISITS) && visit.blobs != VISITS) {
+    await swept(env, visit.blobs)
+  }
+  await meta(env).apply([{ entity: { eid }, visit: null }], KERNEL)
+}
+
 // One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
 // is the caller's to bury: app_delete tombstones the app, and a space's death
@@ -362,6 +376,9 @@ export let emptied = async (
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
   if (app.demo) await cleared(env, app.demo.store)
+  for (let given of await visits(env, { app: app.eid })) {
+    await unvisited(env, given)
+  }
   return files
 }
 
@@ -830,6 +847,12 @@ export let collected = async (env: Env, now = new Date()) => {
     standing,
     now.getTime(),
   )
+  // The visitors' stores nobody can reach any more (visit.ts `lapsed`), each
+  // on its own, so one that will not empty holds up none of the rest.
+  for (let given of await lapsed(env, now)) {
+    await unvisited(env, given)
+      .catch((why) => caught(why, { request: 'erase a visitor store' }))
+  }
   let rows = await meta(env).query(CENSUS) as unknown as Row[]
   for (let eid of idleAccounts(rows, now.getTime())) {
     let address = rows.find((r) => r.entity.eid == eid)!.email!.address
@@ -901,6 +924,11 @@ export let closed = async (
   await dir.stamp({
     entities: [{ entity: { eid: c.person }, tombstone: {} }],
   }, vouched(who))
+  // The stores their browsers were given and they never installed: nobody
+  // else can reach them, and they were the account's.
+  for (let given of await visits(env, { by: c.person })) {
+    await unvisited(env, given)
+  }
   return c
 }
 

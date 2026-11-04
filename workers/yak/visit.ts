@@ -15,6 +15,14 @@
 // once the copy has answered, so nobody is ever sent to a store that isn't
 // there, and only by the first birth: a second one racing it finds the edge
 // written, empties its own copy and takes the first.
+//
+// The platform pays for these stores until one is installed, so they are
+// bounded: a source makes at most BIRTH_RATE of them a minute (apps.ts), an
+// app's strangers hold at most CAP, and the daily sweep erases what nobody can
+// reach any more (erase.ts `unvisited`): a store nobody claimed, unused for
+// as long as the cookie that alone reaches it lives, and one whose person
+// closed their account without installing it. The app's own schedule runs in
+// each store as it does in the app's, and stops with it.
 import { edgeEid, link } from '@yaks/edge'
 import { MOVED } from '@yaks/sync'
 import type { Comp } from '@yaks/graph'
@@ -48,6 +56,19 @@ export type Visit = {
 /** The answer on a write that gave its browser a store of its own: the page's
  * client opens its socket again, which now reaches that store. */
 export { MOVED }
+
+/** How long a store nobody claimed is kept unused: the life of the browser
+ * cookie that alone reaches it (session.ts), which use renews as it renews
+ * `seen`. */
+export let KEPT = 90 * 86_400_000
+
+/** How many stores an app's strangers may hold before it is installed: past
+ * it, a stranger's first write is asked to sign up instead. */
+export let CAP = 10_000
+
+/** Where every visitor's uploads are kept, each store under a prefix of its
+ * own: never an app's files, so erasing one touches nobody else's bytes. */
+export let VISITS = '.visits/'
 
 /** What a stranger is served of a published release that is no longer the
  * app's live one: its files, its worker and its words. */
@@ -235,7 +256,7 @@ let bear = async (
   await copy.body?.cancel()
   let visit: Visit = {
     store,
-    blobs: `.visits/${id}/blobs/`,
+    blobs: `${VISITS}${id}/blobs/`,
     seen: now.toISOString(),
     adopted: null,
   }
@@ -256,6 +277,70 @@ let bear = async (
     if (!kept) throw error
     return kept
   }
+}
+
+/** Whether the app's strangers hold as many stores as it keeps. */
+export let crowded = async (
+  env: Pick<Env, 'STORE'>,
+  app: string,
+  cap = CAP,
+) => {
+  let { count } = await meta(env).query(
+    `.visit .edge.to=${app} !visit.adopted .count`,
+  ) as unknown as { count: number }
+  return count >= cap
+}
+
+/** A store a browser was given, with the edge that names it and its app. */
+export type Given = { eid: string; app: string; visit: Visit }
+
+let given = (rows: Record<string, unknown>[]): Given[] =>
+  rows.flatMap((row) => {
+    let visit = visitOfRow(row.visit as Comp | undefined)
+    let eid = (row.entity as { eid: string }).eid
+    let app = String((row.edge as Comp | undefined)?.to ?? '')
+    return visit ? [{ eid, app, visit }] : []
+  })
+
+/** Every store a browser was given that nobody installed, or only those of
+ * one person's browsers, or of one app: an installed one is its app's store,
+ * and is reached as the app's. */
+export let visits = async (
+  env: Pick<Env, 'STORE'>,
+  only: { by?: string; app?: string } = {},
+): Promise<Given[]> =>
+  given(
+    await meta(env).query(
+      [
+        '.visit !visit.adopted',
+        ...only.by ? [`.edge.from.browser.by=${only.by}`] : [],
+        ...only.app ? [`.edge.to=${only.app}`] : [],
+        '?edge',
+      ].join(' '),
+    ),
+  )
+
+/**
+ * The stores nobody can reach any more, which the sweep erases: one nobody
+ * claimed, unused for {@link KEPT}, and one whose person closed their account
+ * without installing it. `by` keeps a dead person's id (attribution-vocab.ts),
+ * so a closed account is a `by` with no person behind it.
+ */
+export let lapsed = async (
+  env: Pick<Env, 'STORE'>,
+  now = new Date(),
+): Promise<Given[]> => {
+  let since = new Date(now.getTime() - KEPT).toISOString()
+  let g = meta(env)
+  return given([
+    ...await g.query(
+      `.visit !visit.adopted !edge.from.browser.by .visit.seen<"${since}" ?edge`,
+    ),
+    ...await g.query(
+      '.visit !visit.adopted .edge.from.browser.by ' +
+        '!edge.from.browser.by.email ?edge',
+    ),
+  ])
 }
 
 /** Whether a visit's last use is old enough to write down again: at most

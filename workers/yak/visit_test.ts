@@ -8,8 +8,11 @@ import { test } from '@yaks/testing'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn, txt, vocabFile } from './probe.ts'
-import { meta } from './meta.ts'
-import { MOVED } from './visit.ts'
+import { KERNEL, meta } from './meta.ts'
+import { crowded, KEPT, lapsed, MOVED, visits } from './visit.ts'
+import { stores } from './sweep.ts'
+import { closed, collected } from './erase.ts'
+import { BOT } from './lib/bots.ts'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)
@@ -98,6 +101,37 @@ let signedOut = (await nobody.get('q=.note')) as unknown as {
 }
 let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
 let vias = (await meta(env).query('.visit')).length
+
+// What a sweep reaches, and what makes no store.
+let listed = (await stores(env)).map((s) => s.at)
+let crowding = [await crowded(env, app.eid, 2), await crowded(env, app.eid, 3)]
+let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
+let cyc = client(k, host, 'notes', cy.cookie)
+env.BIRTH_RATE = { limit: () => Promise.resolve({ success: false }) }
+let held = await cyc.post([{ entity: { eid: '$c' }, note: { title: 'C' } }])
+let heldAnswer = { status: held.status, ...await held.json() }
+delete env.BIRTH_RATE
+let before = new Set((await visits(env)).map((g) => g.eid))
+let made = await cyc.post([{ entity: { eid: '$c' }, note: { title: 'C' } }])
+await made.body?.cancel()
+let cys = (await meta(env).query('.visit ?edge'))
+  .find((r) => !before.has(r.entity.eid))!
+await meta(env).apply([{
+  entity: { eid: (cys.edge as { from: string }).from },
+  browser: { by: cy.person },
+}], KERNEL)
+
+let claimedLapsed = (await lapsed(env, new Date(Date.now() + 2 * KEPT)))
+  .filter((g) => g.eid == cys.entity.eid).length
+// A closed account takes its store; a store nobody claimed lasts 90 days.
+await closed(env, dir, cy.email, { person: k.owner.person, role: 'owner' })
+let afterClosing = (await visits(env)).length
+let soon = (await lapsed(env)).length
+let later = new Date(Date.now() + KEPT + 86_400_000)
+let lapsing = (await lapsed(env, later)).length
+await collected(env, later)
+let afterSweep = (await visits(env)).length
+let adaAgain = await titles(ada)
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -141,4 +175,27 @@ test('the sample is not the app’s store, and signed out is still sign-in', () 
   assert(app.demo)
   assertNotEquals(app.demo.store, app.store)
   assertEquals(signedOut.error?.code, 'not_a_reader')
+})
+
+test('a sweep reaches the sample and every visitor store', () => {
+  assert(listed.includes('owner/notes sample'))
+  assertEquals(listed.filter((at) => at == 'owner/notes visit').length, 2)
+})
+
+test('past its rate or its cap, a first write is asked to sign up', () => {
+  assertEquals(crowding, [true, false])
+  assertEquals(heldAnswer.status, 429)
+  assertEquals(heldAnswer.error.code, 'sign_up')
+  assert(heldAnswer.error.signIn)
+})
+
+test('a closed account takes the store its browser was given', () => {
+  assertEquals(claimedLapsed, 0)
+  assertEquals(afterClosing, 2)
+})
+
+test('a store nobody claimed is erased after 90 days unused', () => {
+  assertEquals([soon, lapsing], [0, 2])
+  assertEquals(afterSweep, 0)
+  assertEquals(adaAgain, ['Sample'])
 })

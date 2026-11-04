@@ -155,14 +155,16 @@ export type Env = {
   // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
   // registration, anonymous connector calls, anonymous feedback, and anonymous
   // requests for an app's data (its `/api/` doors), and a visitor's knocks on
-  // an app's voice door (rtc.ts). Absent in the in-process harness, where
-  // nothing is limited.
+  // an app's voice door (rtc.ts), and a stranger's first write at a published
+  // app, which makes them a store (visit.ts). Absent in the in-process
+  // harness, where nothing is limited.
   SIGNIN_RATE?: Limiter
   REGISTER_RATE?: Limiter
   TOOL_RATE?: Limiter
   FEEDBACK_RATE?: Limiter
   API_RATE?: Limiter
   RTC_RATE?: Limiter
+  BIRTH_RATE?: Limiter
   // An app's own code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace

@@ -184,6 +184,7 @@ import { background, caught, refusing } from './defects.ts'
 import {
   barOf,
   born,
+  crowded,
   due,
   MOVED,
   onSample,
@@ -282,6 +283,10 @@ let SAYS: Record<string, string> = {
   // What the store said no to — an unknown component, a `$was` that moved, a
   // dead entity. Its own sentence rides in `message`; this is the fallback.
   refused: 'the app store would not take that',
+  // A stranger's first write, when no store of their own can be made for it
+  // (visit.ts): too many made from one place, or the app holds all it keeps.
+  sign_up: 'sign up to keep your own copy of this app: too many people are ' +
+    'trying it right now to keep one in this browser',
 }
 
 // The same refusals to someone who is signed in: signing in is no longer the
@@ -3769,6 +3774,24 @@ let served = async (
     let moved = visit == 'sample' && path == '/api/apply' &&
       req.method == 'POST'
     if (moved) {
+      // A store costs the platform until it is installed, so a source makes
+      // only so many a minute, and an app's strangers hold only so many.
+      if (
+        !await within(env.BIRTH_RATE, source(req)) ||
+        await crowded(env, stranger.app.eid)
+      ) {
+        await req.body?.cancel()
+        return wall(reporting(
+          json(
+            429,
+            'sign_up',
+            SAYS.sign_up,
+            signInAt(req.headers.get('referer') || req.url, env),
+          ),
+          req,
+          at,
+        ))
+      }
       let own = await c.time(
         'birth',
         () => born(env, space!, stranger.app, who.via!),
