@@ -54,7 +54,14 @@ The same report is in the terminal: `yak spend show` for this week, or
 
 ## Updating
 
-Run the install command again. Restart `yak serve` if it is running.
+Run the install line with `--reload=jsr:@yaks/cli` added, which asks jsr.io for
+the newest release; running it unchanged keeps the release Deno found before.
+
+```sh
+deno run -A --reload=jsr:@yaks/cli --minimum-dependency-age=0 jsr:@yaks/cli/install
+```
+
+Restart `yak serve` if it is running.
 
 ## The rest of yak
 
