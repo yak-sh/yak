@@ -404,3 +404,31 @@ test('a directory that keeps moving is never listed or rewritten by a hit', asyn
   }
   equal([listed, f.files.get(f.memo()) == kept], [[], true])
 })
+
+// An installed `yak` resolves its packages to jsr.io at one version, which
+// never changes: there is no file to watch, and the version is the proof.
+test('a memo over modules published on jsr.io is kept and hit, and a new version misses', async () => {
+  let at = (version: string) => (s: string) =>
+    `https://jsr.io/@yaks/shop/${version}/${
+      s == 'shop' ? 'mod' : s.slice(5)
+    }.ts`
+  let f = fixture()
+  let get = (version: string) =>
+    remember({}, ['shop'], () => ({ run: ++runs }), {
+      ...f.opts,
+      resolve: at(version),
+      imports: () =>
+        Promise.reject(new Error('a published module is not read')),
+    })
+  let runs = 0
+  equal(await get('1.2.3'), { run: 1 })
+  equal(await get('1.2.3'), { run: 1 })
+  equal(await get('1.2.4'), { run: 2 })
+  let mutable = () =>
+    remember({}, ['shop'], () => ({ run: ++runs }), {
+      ...f.opts,
+      resolve: (s) => `https://jsr.io/@yaks/shop/${s}.ts`,
+    })
+  equal(await mutable(), { run: 3 })
+  equal(await mutable(), { run: 4 })
+})

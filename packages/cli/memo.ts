@@ -67,8 +67,13 @@ let framed = (path: string, text: string | null): string =>
   `${path.length}:${path}${text === null ? 'n' : `s${text.length}:${text}`}`
 let local = (s: string) => s.startsWith('file:')
 let packaged = (s: string) => /^(?:npm|jsr):/.test(s)
+// A version on JSR never changes once published, so a module jsr.io serves at
+// one (what an installed `yak` resolves its packages to) is as fixed as a
+// pinned specifier.
 let immutable = (s: string) =>
   /^(?:npm|jsr):[^\s]+@\d+\.\d+\.\d+(?:[-+][\w.-]+)?(?:\/|$)/.test(s) ||
+  /^https:\/\/jsr\.io\/@[^/]+\/[^/]+\/\d+\.\d+\.\d+(?:[-+][\w.-]+)?\//
+    .test(s) ||
   s.startsWith('node:')
 let packageKey = (s: string): string => {
   let key = /^(?:npm|jsr):(?:@[^/]+\/)?[^/@]+@[^/]+/.exec(s)?.[0] ?? s
@@ -335,7 +340,7 @@ export let remember = async <T>(
     if (
       known?.version == VERSION && 'value' in known &&
       JSON.stringify(known.roots) == JSON.stringify(identities) &&
-      Array.isArray(known.files) && known.files.length > 0 &&
+      Array.isArray(known.files) &&
       Array.isArray(known.stats) && known.stats.length == known.files.length &&
       (!opts.valid || await opts.valid(known.value))
     ) {
@@ -519,7 +524,9 @@ export let remember = async <T>(
     packages.forEach(ancestry)
     starts.filter(local).forEach(ancestry)
     for (let source of starts) await visit(source)
-    proved = sources.size > 0
+    // Sources all immutable leave no file to watch: their identities, which
+    // carry their versions, are the whole proof.
+    proved = true
   } catch { /* A source we cannot prove is derived normally. */ }
   let sourceHash: string | undefined
   try {
