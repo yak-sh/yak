@@ -361,18 +361,28 @@ export let runs = (
 
   hooks_install: async (call): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let { install, settingsPath, installed } = await hooks()
+    let { install, settingsPath, installed, connect, configPath } =
+      await hooks()
     // The `yak serve` of this graph's config, where it would listen.
     let server = str(args.server) ||
       (await import('@yaks/api/tools')).served(host.config ?? {})
+    let remove = !!args.remove
     let path = install(str(args.path) || settingsPath(), {
       server,
       yak: str(args.yak) || undefined,
-      remove: !!args.remove,
+      remove,
+    })
+    let config = str(args.config) || configPath()
+    let name = connect(config, {
+      server,
+      name: str(args.name) || undefined,
+      remove,
     })
     return [{
       entity: { eid: '$said' },
-      content: { body: installed(path, server, !!args.remove) },
+      content: {
+        body: installed(path, server, remove, { path: config, name }),
+      },
       output: { source: call.entity.eid },
     }]
   },

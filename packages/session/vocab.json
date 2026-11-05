@@ -782,11 +782,19 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Writes on this machine; answers the settings path and what to do next, the MCP server to add among it. remove uninstalls these hooks.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, its headersHelper naming the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
       "input": {
         "path": {
           "type": "string",
           "description": "Settings path (default $HOME/.claude/settings.json)."
+        },
+        "config": {
+          "type": "string",
+          "description": "Claude Code config the MCP server goes in (default $HOME/.claude.json)."
+        },
+        "name": {
+          "type": "string",
+          "description": "MCP server name (default yak); an entry already on this server keeps its own name."
         },
         "yak": {
           "type": "string",

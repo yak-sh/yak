@@ -2,11 +2,72 @@
 // Claude Code does not support HTTP SessionStart hooks. A small shell command
 // keeps its additionalContext and retries through the local CLI on failure.
 // The harness transcript remains the source of turns (./service.ts).
+//
+// The MCP connection names its session on every call it makes (`connection`),
+// so a write is stamped with its caller whether or not that call's hook ever
+// arrives. The `PreToolUse` hook still says which subagent made a call, which
+// one connection serving a session and all its subagents cannot
+// (./announce.ts).
 
 import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 
 import { PATH } from './routes.ts'
+
+/** Where Claude Code keeps the MCP servers of every project, unless the
+ * caller names another path. */
+export let configPath = (
+  home = systemProcess.env.get('HOME') ?? '.',
+): string => `${home}/.claude.json`
+
+/** What Claude Code is told about this graph's MCP door. */
+export type Connection = { type: 'http'; url: string; headersHelper: string }
+
+// Claude Code runs a server's `headersHelper` in a shell whose parent is its
+// own process each time it connects, and keeps `sessions/<pid>.json` naming
+// the session that process is. The helper reads it and names the session in
+// `x-via`, the header the door takes a caller from (./graph.ts); where it
+// finds none, the call says nothing and the hook is all there is.
+let HELPER = 'id=$(sed -n \'s/.*"sessionId":"\\([0-9A-Za-z-]*\\)".*/\\1/p\' ' +
+  '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$PPID.json" 2>/dev/null); ' +
+  'if [ -n "$id" ]; then printf \'{"x-via":"%s"}\\n\' "$id"; ' +
+  "else echo '{}'; fi"
+
+/** The entry Claude Code connects to the MCP door of the `yak serve` at
+ * `server` with, naming the session behind each call. */
+export let connection = (server: string): Connection => ({
+  type: 'http',
+  url: `${server.replace(/\/+$/, '')}/mcp`,
+  headersHelper: HELPER,
+})
+
+/**
+ * Write the connection into Claude Code's config, keeping everything else in
+ * it: an entry already on this door is replaced under its own name, else it
+ * is added as `name`. `remove` takes it out. Answers the name it is under.
+ */
+export let connect = (
+  path: string,
+  opts: { server: string; name?: string; remove?: boolean },
+): string => {
+  let config: Record<string, unknown> = {}
+  try {
+    config = JSON.parse(fs.readTextFileSync(path))
+  } catch (e) {
+    if (!fs.isNotFound(e)) throw e
+  }
+  let entry = connection(opts.server)
+  let servers = { ...config.mcpServers as Record<string, { url?: string }> }
+  let name = Object.keys(servers).find((n) => servers[n]?.url == entry.url) ??
+    opts.name ?? 'yak'
+  if (opts.remove) delete servers[name]
+  else servers[name] = entry
+  fs.writeTextFileSync(
+    path,
+    `${JSON.stringify({ ...config, mcpServers: servers }, null, 2)}\n`,
+  )
+  return name
+}
 
 /** One lifecycle entry, in the form a harness settings file stores it. */
 export type Hook = {
@@ -116,15 +177,25 @@ export let installed = (
   path: string,
   server: string,
   removed = false,
+  mcp?: { path: string; name: string },
 ): string =>
-  removed ? `removed this graph's session hooks from ${path}` : [
-    `wrote the session hooks into ${path}.`,
-    'A Claude Code session started from now on, in any directory, is a ' +
-    'session in this graph.',
-    `next: yak serve, which the hooks post each tool call to (${server}${PATH}).`,
-    "To hand Claude Code this graph's tools too:",
-    `  claude mcp add --scope user --transport http yak ${server}/mcp`,
-  ].join('\n')
+  removed
+    ? [
+      `removed this graph's session hooks from ${path}`,
+      ...mcp ? [`and its MCP server ${mcp.name} from ${mcp.path}`] : [],
+    ].join('\n')
+    : [
+      `wrote the session hooks into ${path}.`,
+      ...mcp
+        ? [
+          `wrote this graph's tools into ${mcp.path} as the MCP server ` +
+          `${mcp.name}, each call naming its session.`,
+        ]
+        : [],
+      'A Claude Code session started from now on, in any directory, is a ' +
+      'session in this graph.',
+      `next: yak serve, which the hooks post each tool call to (${server}${PATH}).`,
+    ].join('\n')
 
 /** Write the entries into a settings file, keeping everything else in it.
  * Answers the path written. */

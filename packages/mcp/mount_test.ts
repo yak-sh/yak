@@ -460,7 +460,11 @@ await announced.apply([
   { entity: { eid: MEMBER }, doc: { title: 'A member' } },
   { entity: { eid: 'parent' }, session: { id: 'harness-run', actor: MEMBER } },
 ])
-let made = async (eid: string, hook: Record<string, unknown>) => {
+let made = async (
+  eid: string,
+  hook: Record<string, unknown>,
+  headers: Record<string, string> = {},
+) => {
   let toolu = `toolu_${eid}`
   let hooks = sessionRoutes({ graph: announced })
     .find((r) => r.path == HOOK)!.handle
@@ -474,21 +478,31 @@ let made = async (eid: string, hook: Record<string, unknown>) => {
     graph: announced,
     authenticate: sessionAuth({ graph: announced }),
   })(
-    rpc('tools/call', {
-      name: 'graph_apply',
-      arguments: { bundles: [{ entity: { eid }, book: { price: 12 } }] },
-      _meta: { 'claudecode/toolUseId': toolu },
-    }),
+    new Request(
+      rpc('tools/call', {
+        name: 'graph_apply',
+        arguments: { bundles: [{ entity: { eid }, book: { price: 12 } }] },
+        _meta: { 'claudecode/toolUseId': toolu },
+      }),
+      { headers },
+    ),
   )
   let { by, via } = comp((await announced.get([eid]))[0], 'created')
   return [by, via]
 }
 let own = await made('b1', {})
+let viaParent = await made('b3', { agent_id: 'a3' }, { 'x-via': 'harness-run' })
 let child = sessionEid('a1', 'harness-run')
 let childs = await made('b2', { agent_id: 'a1' })
 
 test("a harness call the hook door announced writes as that call's run", () => {
   assertEquals(own, [MEMBER, 'parent'])
+})
+
+// One connection carries a session and its subagents, so its `x-via` names
+// the session; the hook says which of them made the call.
+test("a subagent's announced call writes as the subagent, not its connection's session", () => {
+  assertEquals(viaParent, [MEMBER, sessionEid('a3', 'harness-run')])
 })
 
 test("a subagent's announced call writes via its own session, its parent's spawn", async () => {

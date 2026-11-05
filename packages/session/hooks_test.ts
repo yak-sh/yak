@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { install, lifecycle, merged } from './hooks.ts'
+import { connect, connection, install, lifecycle, merged } from './hooks.ts'
 
 let at = 'http://127.0.0.1:8787'
 let ours = lifecycle(at)
@@ -83,4 +83,30 @@ test('an install takes out the turn hooks an older one wrote', () => {
   )
   assertEquals(out.Stop, [theirs])
   assertEquals(out.UserPromptSubmit, ours.UserPromptSubmit)
+})
+
+let config = (had: Record<string, unknown>) => {
+  let path = Deno.makeTempFileSync({ suffix: '.json' })
+  Deno.writeTextFileSync(path, JSON.stringify(had))
+  return path
+}
+let read = (path: string) => JSON.parse(Deno.readTextFileSync(path))
+
+test("the connection goes into Claude Code's config beside everything else", () => {
+  let path = config({ numStartups: 3, mcpServers: { docs: { url: 'x' } } })
+  assertEquals(connect(path, { server: at }), 'yak')
+  assertEquals(read(path), {
+    numStartups: 3,
+    mcpServers: { docs: { url: 'x' }, yak: connection(at) },
+  })
+  connect(path, { server: at, remove: true })
+  assertEquals(read(path).mcpServers, { docs: { url: 'x' } })
+})
+
+test('an entry already on this door keeps its name', () => {
+  let path = config({
+    mcpServers: { tasks: { type: 'http', url: `${at}/mcp` } },
+  })
+  assertEquals(connect(path, { server: at, name: 'other' }), 'tasks')
+  assertEquals(read(path).mcpServers, { tasks: connection(at) })
 })

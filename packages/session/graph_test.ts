@@ -11,6 +11,7 @@ import { ids } from '@yaks/id/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 import { authenticate, VIA } from './graph.ts'
+import { connection } from './hooks.ts'
 
 let spine: VocabDoc = {
   $defs: {
@@ -53,4 +54,42 @@ test('the run a request names is who its writes are by, and through', async () =
 test('a request naming nobody, or a run this graph never saw, is left to the host', async () => {
   assertEquals(await asking(), null)
   assertEquals(await asking('nothing-here'), null)
+})
+
+// What Claude Code sends on every call over the connection `hooks install`
+// writes: its `headersHelper`, run in a shell whose parent is the harness,
+// which keeps `sessions/<pid>.json`. This process stands in as the harness.
+let helped = async (session?: string) => {
+  let dir = Deno.makeTempDirSync()
+  Deno.mkdirSync(`${dir}/sessions`)
+  if (session) {
+    Deno.writeTextFileSync(
+      `${dir}/sessions/${Deno.pid}.json`,
+      JSON.stringify({ pid: Deno.pid, sessionId: session, cwd: dir }),
+    )
+  }
+  let { stdout } = await new Deno.Command('sh', {
+    args: ['-c', connection('http://h').headersHelper],
+    env: { CLAUDE_CONFIG_DIR: dir },
+  }).output()
+  return JSON.parse(new TextDecoder().decode(stdout))
+}
+
+// A tool call whose `PreToolUse` hook never reached the hook door.
+let unheard = async (headers: Record<string, string>) =>
+  await authenticate(host())(
+    new Request('http://h/mcp', { method: 'POST', headers }),
+    {
+      method: 'tools/call',
+      params: { _meta: { 'claudecode/toolUseId': 'toolu_never_heard' } },
+    },
+  )
+
+test("a call whose hook never arrives is still its connection's session", async () => {
+  assertEquals(await unheard(await helped('abc')), { by: 'p1', via: 's1' })
+})
+
+test('a harness the helper cannot read says nothing, and is left to the host', async () => {
+  assertEquals(await helped(), {})
+  assertEquals(await unheard(await helped()), null)
 })
