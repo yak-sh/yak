@@ -5,17 +5,12 @@
 // redraws whatever on the page is drawn from that entity.
 import { type FunctionComponent, h } from 'preact'
 import { useState } from 'preact/hooks'
+import { quoted } from '@yaks/cli/grammar'
 import { human } from '@yaks/id'
+import { stringify } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
 import { useTold } from './told.ts'
-
-/** A word the prompt reads as one argument, whatever it holds. */
-export let quote = (s: string) => `'${s.replace(/[\\']/g, '\\$&')}'`
-
-/** A value written as the query grammar writes one in a patch. */
-let literal = (v: string | number) =>
-  typeof v == 'number' ? String(v) : `"${v.replace(/[\\"]/g, '\\$&')}"`
 
 /** How the prompt names an entity: its short id, or its eid when it has no
  * number to type. */
@@ -28,7 +23,15 @@ export let patchLine = (
   comp: string,
   prop: string,
   v: string | number,
-) => `graph apply ${ref} ${quote(`.${comp}.${prop}=${literal(v)}`)}`
+) =>
+  `graph apply ${ref} ${
+    quoted(stringify({
+      kind: 'pred',
+      path: [comp, prop],
+      op: '=',
+      value: { kind: 'scalar', raw: String(v) },
+    }))
+  }`
 
 /** Open an entity: show it in the panel and type `graph show` for it. */
 export let opener = ({ yak, term, figure }: Ctx) => (eid: string) => {
