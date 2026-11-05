@@ -24,6 +24,7 @@
  * @module
  */
 
+import { groupBy } from '@yaks/fp'
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { Head, Loading, Tabs, Value } from '@yaks/ui'
 import { type EffectDecl, effectsIn } from '@yaks/vocab'
@@ -392,13 +393,13 @@ let Slice = ({ slice, ...m }: Schema & { slice: string }) => {
 export let HomePage = ({ io }: { io: Io }): JSX.Element => {
   let census = useCensus(io)
   let vocab = io.vocab
-  let declared = Map.groupBy(
+  let declared = groupBy(
     vocab.all.toSorted(),
     (n) => vocab.comp(n)?.package ?? '',
   )
   // Every package the vocabulary declares, even one declaring no component
   // (it only extends another's), and the components no package declares.
-  let effects = Map.groupBy(
+  let effects = groupBy(
     vocab.docs.flatMap((d) =>
       effectsIn(d).map((x) => ({ ...x, package: d.package ?? '' }))
     ).toSorted((a, b) => a.name.localeCompare(b.name)),

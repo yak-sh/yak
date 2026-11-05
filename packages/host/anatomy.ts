@@ -1,4 +1,5 @@
 /** Per-composition evidence, separate from the shared vocabulary cache. */
+import { groupBy } from '@yaks/fp'
 import {
   type Anatomy,
   anatomy,
@@ -78,7 +79,7 @@ export let compositionAnatomy = (
     scope: 'native',
   },
 ): Composition => {
-  let byPackage = Map.groupBy(packages, (p) => p.name)
+  let byPackage = groupBy(packages, (p) => p.name)
   let names = [...byPackage.keys()]
   let source: AnatomySource = {
     ...where,

@@ -57,7 +57,15 @@ import {
   peek,
   recording,
 } from '@yaks/trace'
-import { after, type Clock, each, isPromise, sleep, system } from '@yaks/fp'
+import {
+  after,
+  type Clock,
+  each,
+  groupBy,
+  isPromise,
+  sleep,
+  system,
+} from '@yaks/fp'
 import {
   type Actor,
   type Bundle,
@@ -549,7 +557,7 @@ export let graph = (opts: Options): Graph => {
   // plugin's, in registration order.
   // The marks come from the vocabulary, so a program that replaces the
   // created/updated pair with a policy of its own still gets them.
-  let stamping = Map.groupBy(
+  let stamping = groupBy(
     [...provenance(opts.provenance), ...marks(vocab)],
     (r) => r.phase,
   )
@@ -1476,7 +1484,7 @@ export let graph = (opts: Options): Graph => {
         plugins,
         outside: outsideRead,
       })
-      let nextStamps = Map.groupBy(
+      let nextStamps = groupBy(
         [...provenance(opts.provenance), ...marks(next)],
         (r) => r.phase,
       )

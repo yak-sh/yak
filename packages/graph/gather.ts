@@ -40,7 +40,7 @@
 
 import { and, eq, list, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { after, isPromise } from '@yaks/fp'
+import { after, groupBy, isPromise } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
@@ -115,7 +115,7 @@ let want = (
  * Durable Object's SQLite takes 100). `null` when there is nothing to ask.
  */
 export let pointing = (pairs: [string, string, Eid][]): Ast | null => {
-  let at = Map.groupBy(pairs, ([c, p]) => `${c}.${p}`)
+  let at = groupBy(pairs, ([c, p]) => `${c}.${p}`)
   return at.size
     ? and(or(...[...at].map(([f, ts]) => eq(f, list(...ts.map((t) => t[2]))))))
     : null

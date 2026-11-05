@@ -1,7 +1,7 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
 import type { Actor, Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import type { graph } from '@yaks/graph'
-import type { Clock } from '@yaks/fp'
+import { type Clock, groupBy } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
 import { loadTools, type Search, tier } from '@yaks/graph/tools'
 import type { Reply, Runner, runner } from '@yaks/tools'
@@ -254,7 +254,7 @@ export let assemble = (
         names && [...new Set(names)].sort(),
         facets && [...new Set(facets)].sort(),
       ])
-    let options = Map.groupBy(
+    let options = groupBy(
       plugins,
       ([plugin, , names, facets]) => key(plugin, names, facets),
     )

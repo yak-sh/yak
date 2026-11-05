@@ -19,6 +19,7 @@
 // that brings it back keeps — and is listed in the `tombstone` table, so every
 // query excludes it.
 
+import { groupBy } from '@yaks/fp'
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { binaryOperand, timeEdges, type Value } from '@yaks/query/core'
 import { bounded, type Frag, spelled } from './ast.ts'
@@ -303,7 +304,7 @@ let equality = (p: Frag): { c: string; v: string | number } | null => {
 // made it.
 let anyOf = (parts: Frag[]): Frag => {
   let hits = parts.map(equality)
-  let sets = Map.groupBy(hits.filter((h) => h != null), (h) => h.c)
+  let sets = groupBy(hits.filter((h) => h != null), (h) => h.c)
   let arms = [
     ...[...sets].map(([c, hs]) => among(c, hs.map((h) => h.v))),
     ...parts.filter((_, i) => !hits[i]),

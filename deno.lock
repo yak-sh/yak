@@ -3679,6 +3679,7 @@
             "npm:@yaks/draft@0.2.17",
             "npm:@yaks/edge@0.2.17",
             "npm:@yaks/filter@0.2.17",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/markdown@0.2.17",
             "npm:@yaks/match@0.2.17",
@@ -4377,6 +4378,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/archetype@0.2.17",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/fts@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/id@0.2.17",

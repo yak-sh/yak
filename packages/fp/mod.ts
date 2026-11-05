@@ -336,6 +336,25 @@ export let tally = (
 ): (xs: readonly unknown[]) => Record<string, number> =>
   fold(compose(incProp, prop(key)), none)
 
+/// groupBy([1, 2, 3], (n) => n % 2 ? 'odd' : 'even') -> new Map([['odd', [1, 3]], ['even', [2]]])
+/**
+ * The items under each key `fn` gives them, keys in the order first met:
+ * `Map.groupBy`, which browsers before Safari 17.4 and Chrome 117 lack.
+ */
+export let groupBy = <X, K>(
+  xs: Iterable<X>,
+  fn: (x: X, i: number) => K,
+): Map<K, X[]> => {
+  let groups = new Map<K, X[]>(), i = 0
+  for (let x of xs) {
+    let k = fn(x, i++)
+    let group = groups.get(k)
+    if (group) group.push(x)
+    else groups.set(k, [x])
+  }
+  return groups
+}
+
 /// map(inc)([1, 2]) -> [2, 3]
 /** A list's items mapped. */
 export let map =

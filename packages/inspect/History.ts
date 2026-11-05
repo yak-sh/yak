@@ -18,6 +18,7 @@
  * @module
  */
 
+import { groupBy } from '@yaks/fp'
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { Timeline, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
@@ -150,7 +151,7 @@ export let History = (p: HistoryProps): JSX.Element => {
       str(o, '_change', 'target') == str(b, '_change', 'target')
     )
   let told = p.prop ? all.filter((b) => p.prop! in (value(b) ?? {})) : all
-  let moments = [...Map.groupBy(told, (b) => str(b, '_change', 'tx'))]
+  let moments = [...groupBy(told, (b) => str(b, '_change', 'tx'))]
   let total = got.total?.count
   let target = (b: Bundle) => str(b, '_change', 'target')
   // An entity's own history opens each moment's version, but the one that

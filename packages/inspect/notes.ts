@@ -17,6 +17,7 @@
  * @module
  */
 
+import { groupBy } from '@yaks/fp'
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { Button, Field, Notes, Say, Section } from '@yaks/ui'
@@ -92,7 +93,7 @@ export let under = (
   subject: string,
   headings: string[],
 ): Map<string, Bundle[]> =>
-  Map.groupBy(
+  groupBy(
     notes,
     (b) =>
       headings.find((h) =>

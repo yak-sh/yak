@@ -24,6 +24,7 @@
 // caller reading the returned batch learns which id each alias became,
 // without a second response channel.
 
+import { groupBy } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
@@ -143,7 +144,7 @@ export let resolve = (
 ): Bundle[] => {
   // One alias may appear on several bundles (a doc in one, a book in
   // another); they are one entity, so they are resolved together.
-  let groups = Map.groupBy(
+  let groups = groupBy(
     bundles.filter((b) => isAlias(b.entity.eid)),
     (b) => b.entity.eid,
   )

@@ -1,3 +1,4 @@
+import { groupBy } from '@yaks/fp'
 import type { Description, Registry } from '@yaks/tools'
 
 type Schema = Record<string, unknown>
@@ -70,7 +71,7 @@ export let catalog = (registry: Registry): Entry[] =>
 
 /** Declarations are generated from the same schemas that discovery serves. */
 export let declarations = (entries: Entry[]): string => {
-  let groups = Map.groupBy(entries, (e) => e.provider)
+  let groups = groupBy(entries, (e) => e.provider)
   return 'declare const tools: {\n' +
     [...groups].map(([set, entries]) =>
       `  ${JSON.stringify(set)}: {\n` + entries.map((t) =>

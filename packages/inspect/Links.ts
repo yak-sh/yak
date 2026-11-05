@@ -16,6 +16,7 @@
  * @module
  */
 
+import { groupBy } from '@yaks/fp'
 import { h, type JSX } from 'preact'
 import { useRef } from 'preact/hooks'
 import { Button, Field, Pairs, Rows, Say, Value } from '@yaks/ui'
@@ -170,7 +171,7 @@ export let Links = ({ e, io, ctx }: Props): JSX.Element | null => {
   let all = rows(got.refs).filter(shown)
   let end = (b: Bundle) => b.edge ? far(b, eid) : b.entity.eid
   let editing = edited(io, eid)
-  let groups = [...Map.groupBy(all, (b) => phrase(io, b, eid, rels))]
+  let groups = [...groupBy(all, (b) => phrase(io, b, eid, rels))]
     .toSorted(([a], [b]) => a.localeCompare(b))
   useNamed(io, groups.flatMap(([, bs]) => bs.slice(0, NAMED).map(end)))
   if (got.refs?.ready && !all.length && !editing) return null

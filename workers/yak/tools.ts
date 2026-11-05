@@ -1,3 +1,4 @@
+import { groupBy } from '@yaks/fp'
 import { operatorTools } from './operator-tools.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
@@ -3599,7 +3600,7 @@ let OURS: Row[] = [
           )
         }
         // A file two paths both named is read once and lands at each.
-        let to = Map.groupBy(landings, (l) => l.from)
+        let to = groupBy(landings, (l) => l.from)
         let files = []
         for await (let file of provider.export(ref, [...to.keys()])) {
           for (let l of to.get(file.path) ?? []) {
