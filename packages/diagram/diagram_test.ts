@@ -12,10 +12,15 @@ import {
   type Layout,
   layout,
   mount,
+  pan,
   progress,
   svg,
   tangles,
   tip,
+  whole,
+  within,
+  zoom,
+  zoomed,
 } from './mod.ts'
 
 let eid = (n: number) =>
@@ -335,4 +340,79 @@ test('ink draws a drawing in a page as far as each item has come, and puts the p
     sheet.querySelector('.Diagram_Pen')!.getAttribute('opacity'),
     '0',
   )
+})
+
+test('a view zooms about a point that stays put, pans, and keeps to the sheet', () => {
+  let sheet = layout([], { width: 600, height: 400 })
+  let all = whole(sheet)
+  let near = zoom(sheet, all, 2, [.25, .5])
+  assertEquals(near, [75, 100, 300, 200])
+  assertEquals(within(near, [150, 200]), [.25, .5])
+  assertEquals(zoom(sheet, all, 100, [0, 0]).map(Math.round), [0, 0, 100, 67])
+  assertEquals(pan(sheet, near, 1000, -1000), [300, 0, 300, 200])
+  assertEquals(zoomed(sheet, near), true)
+  assertEquals(zoomed(sheet, zoom(sheet, near, .1, [.5, .5])), false)
+})
+
+test("a mounted drawing zooms with a pinch or ctrl-scroll, pans with a drag once zoomed, and a drag's click opens nothing", async () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: { component: true, properties: { title: { type: 'string' } } },
+    },
+  })
+  let g = graph({ vocab, storage: ram(vocab) })
+  await g.apply([doc(1, 'Dune')])
+  let { document, window } = parseHTML('<div id="sheet"></div>')
+  let sheet = document.getElementById('sheet')!
+  let views: number[][] = []
+  let drawing = mount(sheet as never, {
+    graph: g,
+    query: '.doc',
+    width: 600,
+    height: 400,
+    viewed: (v) => views.push(v),
+  })
+  await drawing.redraw()
+  let box = () => sheet.querySelector('svg')!.getAttribute('viewBox')
+  let fire = (type: string, props: object) =>
+    sheet.dispatchEvent(Object.assign(new window.Event(type), props))
+  // The svg has no size here, so a pixel is a sheet unit and the drawing
+  // starts at the sheet's corner.
+  fire('wheel', { deltaY: 100, clientX: 0, clientY: 0 })
+  assertEquals(box(), '0 0 600 400')
+  fire('pointerdown', { pointerId: 1, clientX: 10, clientY: 10 })
+  fire('pointermove', { pointerId: 1, clientX: 60, clientY: 10 })
+  assertEquals(box(), '0 0 600 400')
+  fire('pointerup', { pointerId: 1 })
+  fire('wheel', {
+    ctrlKey: true,
+    deltaY: -Math.log(2) * 100,
+    clientX: 0,
+    clientY: 0,
+  })
+  assertEquals(box(), '0 0 300 200')
+  assertEquals(sheet.classList.contains('is-zoomed'), true)
+  fire('pointerdown', { pointerId: 1, clientX: 60, clientY: 10 })
+  fire('pointermove', { pointerId: 1, clientX: 10, clientY: 10 })
+  assertEquals(box(), '50 0 300 200')
+  fire('pointerup', { pointerId: 1 })
+  let opened = 0
+  // A page hears clicks on the sheet, as yak.sh does.
+  sheet.addEventListener('click', () => opened++)
+  sheet.querySelector('svg')!.dispatchEvent(
+    new window.Event('click', { bubbles: true }),
+  )
+  assertEquals(opened, 0)
+  fire('pointerdown', { pointerId: 1, clientX: 10, clientY: 10 })
+  fire('pointerup', { pointerId: 1 })
+  sheet.querySelector('svg')!.dispatchEvent(
+    new window.Event('click', { bubbles: true }),
+  )
+  assertEquals(opened, 1)
+  await g.apply([doc(2, 'Emma')])
+  await drawing.redraw()
+  assertEquals(box(), '50 0 300 200')
+  drawing.show(undefined)
+  assertEquals([box(), views.at(-1)], ['0 0 600 400', [0, 0, 600, 400]])
+  drawing.stop()
 })

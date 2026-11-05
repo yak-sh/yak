@@ -5,6 +5,7 @@
 // `is-new` and `--i`, its place in the order it is drawn.
 import { cut, type Layout, type Link, type Node } from './layout.ts'
 import { curves } from './pen.ts'
+import { type View, whole } from './view.ts'
 import { type Curve, half, outline, radius, tag } from './shape.ts'
 
 /** How a layout is drawn. */
@@ -13,6 +14,8 @@ export type SvgOptions = {
   class?: string
   /** An accessible name for the drawing. */
   title?: string
+  /** The part of the sheet in view (default all of it). */
+  view?: View
 }
 
 let esc = (s: string) =>
@@ -132,7 +135,9 @@ export let svg = (layout: Layout, opts: SvgOptions = {}): string => {
   let title = opts.title ? `<title>${esc(opts.title)}</title>` : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" class="${
     esc(opts.class ?? 'Diagram')
-  }" viewBox="0 0 ${n(layout.width)} ${n(layout.height)}" role="img">${title}` +
+  }" viewBox="${
+    (opts.view ?? whole(layout)).map(n).join(' ')
+  }" role="img">${title}` +
     DEFS +
     `<g class="Diagram_Links">${
       layout.links.map((l) => link(l, index.get(l) ?? 0, lines.get(l.key)!))

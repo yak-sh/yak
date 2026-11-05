@@ -141,7 +141,7 @@ each stage adds with `stage`, then says how far each stage has come in:
 
 ## Mounting
 
-`mount(sheet, { graph, query, width?, height?, at?, shapes?, stage?, drawn?, failed? })`
+`mount(sheet, { graph, query, width?, height?, at?, shapes?, stage?, drawn?, failed?, steered?, viewed? })`
 writes the drawing into `sheet.innerHTML` and draws again after every commit,
 seen through an `effect` hook on the graph (one per graph, however many
 drawings). Commits that land while it reads are drawn by one more read. It
@@ -152,7 +152,9 @@ returns:
   stays.
 - `redraw()`: read and draw again.
 - `layout`: the layout last drawn.
-- `stop()`: stop following the graph.
+- `view` and `show(view)`: the part of the sheet in view, and showing another
+  (`undefined` shows all of it).
+- `stop()`: stop following the graph and the reader's gestures.
 
 `stage()` is asked as each commit lands, and what the commit adds is stamped
 with its answer. `drawn(layout)` is told each layout once it is in the sheet.
@@ -160,3 +162,30 @@ with its answer. `drawn(layout)` is told each layout once it is in the sheet.
 `reportError`.
 
 A page wires clicks itself, from `data-eid` on the box it reaches.
+
+## Zooming and panning
+
+A **view** is the part of the sheet in view, `[x, y, width, height]` in the
+sheet's units. `zoom(layout, view, k, [fx, fy])` zooms by `k` about a point
+given as fractions of the view, which stays where it is;
+`pan(layout, view,
+dx, dy)` moves it. Both are pure and keep the view on the
+sheet, between all of it and a sixth of it across. `whole(layout)` is all of it,
+`zoomed(layout,
+view)` says whether less is shown, and `within(view, point)`
+says where a point of the sheet is, as fractions of the view.
+
+A drawing mounted in a page is steered by its reader
+(`steer(el, { layout,
+view, set })`, unless `steered: false`):
+
+- a pinch, on a touch screen or a trackpad (which a browser reports as a wheel
+  with ctrl held), or ctrl-scroll, zooms about where it happens;
+- a drag pans, once zoomed in;
+- plain scrolling scrolls the page, and so does one finger on a drawing shown
+  whole (`touch-action: pan-x pan-y`, `none` once zoomed);
+- the click that ends a drag or a pinch is stopped before it reaches the page.
+
+The sheet gets `is-zoomed` while zoomed in, and `css` gives it a grab cursor.
+What is in view is kept as the graph changes, and `viewed(view)` is told each
+time it changes, so what a page draws over the drawing can follow it.

@@ -101,6 +101,8 @@ export const css = `
   stroke: var(--_glow);
   stroke-width: 1.6;
 }
+.is-zoomed > .Diagram { cursor: grab; }
+.is-zoomed > .Diagram:active { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   .is-new .Diagram_Stroke, .is-new .Diagram_Line, .is-new text { animation: none; }
   .is-inked .Diagram_Fill, .is-inked text { transition: none; }

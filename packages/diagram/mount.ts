@@ -6,9 +6,12 @@ import { human } from '@yaks/id'
 import type { Bundle, Graph } from '@yaks/graph'
 import { type Layout, layout, type Options } from './layout.ts'
 import { svg, type SvgOptions } from './svg.ts'
+import { steer } from './steer.ts'
+import { pan, type View, whole, zoomed } from './view.ts'
 
-/** What a drawing is drawn into: an element's markup. */
-export type Sheet = { innerHTML: string }
+/** What a drawing is drawn into: an element's markup. An element in a page
+ * is also steered: zoomed and panned by a reader's gestures. */
+export type Sheet = { innerHTML: string } | HTMLElement
 
 /** What a mounted drawing draws, and how. */
 export type MountOptions = SvgOptions & Pick<Options, 'at' | 'shapes'> & {
@@ -24,6 +27,10 @@ export type MountOptions = SvgOptions & Pick<Options, 'at' | 'shapes'> & {
   drawn?: (layout: Layout) => void
   /** Told when a redraw after a commit fails (default: reportError). */
   failed?: (err: unknown) => void
+  /** Zoom and pan with a reader's gestures (default true, in a page). */
+  steered?: boolean
+  /** Told the part of the sheet in view each time it changes. */
+  viewed?: (view: View) => void
 }
 
 /** A mounted drawing. */
@@ -38,6 +45,10 @@ export type Mounted = {
   redraw: () => Promise<Layout>
   /** The layout last drawn. */
   readonly layout: Layout | undefined
+  /** The part of the sheet in view. */
+  readonly view: View | undefined
+  /** Show another part of the sheet; `undefined` shows all of it. */
+  show: (view: View | undefined) => void
   /** Stop following the graph. */
   stop: () => void
 }
@@ -109,6 +120,18 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     stage = undefined
     return s
   }
+  // The part of the sheet a reader zoomed to, kept on each new layout; none
+  // while the whole sheet is shown, which then grows with it.
+  let view: View | undefined
+  let shown = () => last && (view ? pan(last, view, 0, 0) : whole(last))
+  let show = (v: View | undefined) => {
+    view = v && last && zoomed(last, v) ? v : undefined
+    let el = 'querySelector' in sheet ? sheet.querySelector('svg') : null
+    let now = shown()
+    if (!now) return
+    el?.setAttribute('viewBox', now.map((x) => +x.toFixed(1)).join(' '))
+    opts.viewed?.(now)
+  }
   let draw = (bundles: Bundle[], s: number) => {
     last = layout(bundles, {
       was: seen,
@@ -120,7 +143,8 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
       stage: s,
     })
     seen = remember(seen, last)
-    sheet.innerHTML = svg(last, opts)
+    sheet.innerHTML = svg(last, { ...opts, view: shown() })
+    opts.viewed?.(shown()!)
     drawn?.(last)
     return last
   }
@@ -134,6 +158,13 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     })
     return running
   }
+  let unsteer = opts.steered != false && 'addEventListener' in sheet
+    ? steer(sheet, {
+      layout: () => last,
+      view: () => shown() ?? [0, 0, 1, 1],
+      set: show,
+    })
+    : () => {}
   let stop = follow(graph, () => {
     stage ??= opts.stage?.()
     redraw().catch(failed)
@@ -149,6 +180,10 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     get layout() {
       return last
     },
-    stop: () => void stop(),
+    get view() {
+      return shown()
+    },
+    show,
+    stop: () => (stop(), unsteer()),
   }
 }

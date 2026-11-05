@@ -410,6 +410,8 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       ...SHEET,
       stage: term.stage,
       title: 'The graph in this tab',
+      // The leader follows what the reader zoomed or panned to.
+      viewed: () => paint(),
       drawn: (layout) => {
         figure.saw(layout, performance.now())
         paint()

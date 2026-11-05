@@ -10,7 +10,14 @@
 import { type FunctionComponent, h } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Prose, words } from './prose.ts'
-import { type Layout, mount, rim } from '@yaks/diagram'
+import {
+  type Layout,
+  mount,
+  rim,
+  type View,
+  whole,
+  within,
+} from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import { human } from '@yaks/id'
 import { SHEET, STORY } from './figure.ts'
@@ -37,14 +44,24 @@ let slot = (height: number, n: number, i: number) => {
 }
 
 /** Where a window's wire leaves its slot and where it meets what the write
- * changed: a shape's near side, in the desk's units. */
-export let wire = (layout: Layout, n: number, i: number, eid: string) => {
+ * changed: a shape's near side, where the part of the drawing in view puts
+ * it, in the desk's units. */
+export let wire = (
+  layout: Layout,
+  n: number,
+  i: number,
+  eid: string,
+  view = whole(layout),
+) => {
   let node = layout.nodes.find((n) => n.eid == eid)
   if (!node) return
   let [dx] = rim(node.shape, !!node.state, -1, 0)
+  let [fx, fy] = within(view, [node.x + dx, node.y])
+  if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return
   let [top, tall] = slot(layout.height, n, i)
   let x0 = DESK.column, y0 = top + tall / 2
-  let x1 = DESK.column + DESK.space + node.x + dx, y1 = node.y
+  let x1 = DESK.column + DESK.space + fx * layout.width
+  let y1 = fy * layout.height
   let mid = DESK.column + DESK.space / 2
   return `M${x0.toFixed(1)},${y0.toFixed(1)}H${mid.toFixed(1)}V${
     y1.toFixed(1)
@@ -105,6 +122,7 @@ let band = (
   // The same drawing as the top of the page, in its places.
   let sheet = useRef<HTMLDivElement>(null)
   let [layout, setLayout] = useState<Layout>()
+  let [view, setView] = useState<View>()
   useEffect(() => {
     let m = mount(sheet.current!, {
       graph: yak.graph,
@@ -112,6 +130,7 @@ let band = (
       ...SHEET,
       title: 'The graph in this tab',
       drawn: setLayout,
+      viewed: setView,
     })
     return () => m.stop()
   }, [])
@@ -175,7 +194,7 @@ let band = (
     input?.focus({ preventScroll: true })
   })
   let path = layout && last?.eid
-    ? wire(layout, beats.length, last.i, last.eid)
+    ? wire(layout, beats.length, last.i, last.eid, view)
     : undefined
   let desk = layout && {
     width: DESK.column + DESK.space + layout.width,
