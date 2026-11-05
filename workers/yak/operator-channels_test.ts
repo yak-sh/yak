@@ -357,7 +357,12 @@ test('a person agrees to texts with a ticked box and a mobile number, and stops 
   assertEquals(agreed.said.number, '+12695550142')
   assertStringIncludes(agreed.said.consent, 'Msg & data rates may apply')
   assertStringIncludes(textsHtml, '269-555-0142')
-  assertEquals(textsHtml.includes('checked'), false)
+  // The box is never ticked for them, whatever else the page has chosen.
+  assertEquals(
+    parseHTML(textsHtml).document.querySelector('[name=agreed]')
+      ?.hasAttribute('checked'),
+    false,
+  )
   assertEquals(stopped.said, null)
 })
 test("a person's number stays on them, beside their address, after texts stop", () => {
