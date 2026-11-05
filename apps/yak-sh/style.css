@@ -188,9 +188,10 @@ h2 {
   margin: 0;
   padding: 0 0 12vh;
 }
+/* A step is as long as its commands: each takes the same stretch of
+   scrolling, and runs as its comment passes the reading line. */
 .Step {
   position: relative;
-  min-height: 82vh;
   padding: clamp(1.8rem, 4vw, 2.8rem) 0 0 58px;
   border-top: 1px solid var(--rule);
 }
@@ -234,8 +235,15 @@ h2 {
   list-style: none;
   padding: 0;
   margin: 1.2rem 0 0;
-  display: grid;
-  gap: .4rem;
+}
+.Step_Lines > li {
+  min-height: 24vh;
+}
+.Step_Note {
+  display: block;
+  margin-bottom: .2rem;
+  font: 400 .8125rem/1.5 var(--mono);
+  color: var(--soft);
 }
 .Step_Lines code {
   display: block;
@@ -458,6 +466,13 @@ h2 {
 .Prompt_Line.is-fault {
   color: #e8a796;
 }
+.Prompt_Line.is-note {
+  color: #8f9a83;
+  margin-top: .45rem;
+}
+.Prompt_Line.is-note + .Prompt_Line {
+  margin-top: 0;
+}
 .Prompt_Sign {
   color: var(--moss);
 }
@@ -521,7 +536,6 @@ h2 {
     grid-row: 3;
   }
   .Step {
-    min-height: 72svh;
     padding-left: 46px;
   }
   .Step_No {
@@ -673,6 +687,21 @@ h2 {
 .Doors {
   --faint: rgba(54, 83, 45, .08);
   align-items: start;
+}
+/* The steps fill the band down to the bottom of its drawing, so they are
+   spread over all of the scrolling the drawing stays in view for. */
+.Stack_Text,
+.Doors_Text {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.Phases,
+.Beats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 .Stack_Figure,
 .Doors_Figure {
@@ -1042,6 +1071,7 @@ h2 {
    while the drawing stays in view. */
 .Beats li {
   position: relative;
+  flex: 1 0 auto;
   min-height: 30vh;
   padding: .7rem 0 1.4rem;
   border-top: 1px solid var(--faint);

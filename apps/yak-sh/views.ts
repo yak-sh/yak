@@ -12,8 +12,8 @@ import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import { type Figure, into, placeOf, SHEET, WIDER } from './figure.ts'
-import { INSTALL, proseOf, scriptOf } from './site.ts'
+import { type Figure, into, LINE, placeOf, SHEET, WIDER } from './figure.ts'
+import { INSTALL, proseOf, scriptOf, shown } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
 import { Doors, Memory, Rules } from './doors.ts'
@@ -127,7 +127,8 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
   let bodies = () =>
     steps.map((eid) => text(yak.row(eid) ?? { entity: { eid } }, 'doc', 'body'))
   // How far the reader is into each step, measured each frame they scroll:
-  // a step's commands run once it is reached, and the drawing follows.
+  // each command runs as it passes the reading line, and the drawing
+  // follows.
   useEffect(() => {
     if (typeof requestAnimationFrame == 'undefined') return
     let frame = 0
@@ -140,10 +141,16 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
       })
       figure.scroll(p)
       pen.steps.forEach((el, i) => el?.classList.toggle('is-on', p[i] > 0))
-      term.reach(bodies(), p.reduce((k, x, i) => x > 0 ? i + 1 : k, 0))
+      let n = p.reduce((k, x, i) => x > 0 ? i + 1 : k, 0)
+      let lines = pen.steps[n - 1]?.querySelectorAll('.Step_Lines > li') ?? []
+      let m = [...lines].filter((li) =>
+        li.getBoundingClientRect().top < innerHeight * LINE
+      ).length
+      term.reach(bodies(), n, m)
       pen.paint?.()
     }
-    let soon = () => frame ||= requestAnimationFrame(measure)
+    let soon = () =>
+      frame ||= requestAnimationFrame(measure)
     addEventListener('scroll', soon, { passive: true })
     addEventListener('resize', soon)
     soon()
@@ -182,21 +189,20 @@ let Step: FunctionComponent<
   Ctx & { e: Bundle; n: number; at: (el: HTMLElement | null) => void }
 > = ({ e, n, at }) => {
   let body = text(e, 'doc', 'body')
-  let { sh, mcp } = scriptOf(body)
   return h('li', { class: 'Step', ref: at, 'data-eid': e.entity.eid }, [
     h('span', { class: 'Step_No' }, String(n)),
     h('h2', null, text(e, 'doc', 'title')),
     h(Markdown, { source: proseOf(body) }),
-    h('ul', { class: 'Step_Lines' }, [
-      ...sh.map((line) => h('li', null, h('code', null, line))),
-      ...mcp.map(({ tool, args }) =>
-        h(
-          'li',
-          { class: 'is-agent' },
-          h('code', null, `${tool} ${JSON.stringify(args)}`),
-        )
+    h(
+      'ul',
+      { class: 'Step_Lines' },
+      scriptOf(body).map((c) =>
+        h('li', { class: c.kind == 'mcp' ? 'is-agent' : undefined }, [
+          c.note ? h('span', { class: 'Step_Note' }, `# ${c.note}`) : null,
+          h('code', null, shown(c)),
+        ])
       ),
-    ]),
+    ),
   ])
 }
 
@@ -205,6 +211,7 @@ let sign: Record<Line['kind'], string> = {
   agent: 'agent ▸ ',
   out: '',
   fault: '',
+  note: '',
 }
 
 // A printed line with each short id the graph knows as a button that opens

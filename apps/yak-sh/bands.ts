@@ -15,7 +15,7 @@ import type { Change } from './yak.ts'
 import type { Try } from './outbox.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
 import { opener } from './editor.ts'
-import { proseOf, scriptOf } from './site.ts'
+import { proseOf, scriptOf, shown } from './site.ts'
 
 type Band = FunctionComponent<Ctx & { e: Bundle }>
 
@@ -392,12 +392,8 @@ export let Stack: Band = (ctx) => {
       ),
     ])
   // The command the write came from: the band's own until a write is made.
-  let own = scriptOf(body).mcp[0]
-  let call = said ??
-    {
-      kind: 'agent',
-      text: own ? `${own.tool} ${JSON.stringify(own.args)}` : '',
-    }
+  let own = scriptOf(body).find((c) => c.kind == 'mcp')
+  let call = said ?? { kind: 'agent', text: own ? shown(own) : '' }
   // The phases inside the transaction are one box, whatever has run.
   let open = PHASES.indexOf(INSIDE[0])
   let shut = open + INSIDE.length

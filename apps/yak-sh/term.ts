@@ -2,11 +2,15 @@
 // it printed, a line being typed, and the story's steps, each typed in once
 // as its section is reached. The visitor types into the same prompt.
 import type { Yak } from './yak.ts'
-import { scriptOf } from './site.ts'
+import { called, type Command, scriptOf, shown } from './site.ts'
 
-/** A line the prompt shows: what was typed, what the agent called, or what
- * came back (`fault` when it failed). */
-export type Line = { kind: 'in' | 'agent' | 'out' | 'fault'; text: string }
+/** A line the prompt shows: what was typed, what the agent called, what
+ * came back (`fault` when it failed), or the comment saying what a command
+ * of the story does. */
+export type Line = {
+  kind: 'in' | 'agent' | 'out' | 'fault' | 'note'
+  text: string
+}
 
 /** Where in the story a line is: its step (or LIVE and on for a visitor's
  * line), and which of that step's commands it is, counting from 0. */
@@ -73,8 +77,9 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     typing = ''
     await submit(line)
   }
-  let ask = async (tool: string, args: Record<string, unknown>) => {
-    lines.push({ kind: 'agent', text: `${tool} ${JSON.stringify(args)}` })
+  let ask = async (c: Command) => {
+    let { tool, args } = called(c.line)
+    lines.push({ kind: 'agent', text: shown(c) })
     told()
     let { code, out } = await yak.ask(tool, args)
     printed(code, out)
@@ -82,9 +87,10 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     told()
   }
 
-  // The steps reached so far run once each, in order, however fast the page
-  // is scrolled past them.
-  let ran = 0
+  // The story's commands reached so far run once each, in order, however
+  // fast the page is scrolled past them: `next` is the step (from 0) and the
+  // command in it that runs next.
+  let next = { step: 0, line: 0 }
   // What the prompt is running: a story step's number, or a visitor's line
   // as LIVE and on; 0 before anything has run.
   let stage = 0
@@ -97,23 +103,22 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let waiting: string[] = []
   let story = Infinity
   let entered = 0
-  // A section's commands, typed, then its agent's calls, drawn in `at`.
-  let play = (body: string, at: number) => {
-    let { sh, mcp } = scriptOf(body)
-    return queue(async () => {
+  // One command of a section, drawn in `at` as its `i`th: its comment
+  // printed, then the line typed or the call made.
+  let run = (c: Command, at: number, i: number) =>
+    queue(async () => {
       stage = at
-      for (let [i, said] of sh.entries()) {
-        line = i
-        await type(said)
-      }
-      for (let [i, { tool, args }] of mcp.entries()) {
-        line = sh.length + i
-        await ask(tool, args)
-      }
+      line = i
+      if (c.note) lines.push({ kind: 'note', text: `# ${c.note}` })
+      if (c.kind == 'sh') return await type(c.line)
+      await ask(c)
     })
-  }
   let bands = () => {
-    if (ran >= story) { for (let body of waiting.splice(0)) play(body, BAND) }
+    if (next.step >= story) {
+      for (let body of waiting.splice(0)) {
+        scriptOf(body).forEach((c, i) => run(c, BAND, i))
+      }
+    }
     return chain
   }
   return {
@@ -144,11 +149,22 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       done.add(key)
       return bands()
     },
-    /** Run every step up to `n` (counting from 1) that has not run, typing
-     * each step's commands and making its agent's calls. */
-    reach: (bodies: string[], n: number) => {
+    /** Run every command of the steps before step `n` (counting from 1)
+     * and the first `m` of step `n` (all of them, unless told) that has not
+     * run, typing each and making each of its agent's calls. */
+    reach: (bodies: string[], n: number, m = Infinity) => {
       story = bodies.length
-      while (ran < Math.min(n, bodies.length)) play(bodies[ran], ++ran)
+      while (next.step < Math.min(n, bodies.length)) {
+        let { step, line } = next
+        let commands = scriptOf(bodies[step])
+        if (line >= commands.length) {
+          next = { step: step + 1, line: 0 }
+          continue
+        }
+        if (step == n - 1 && line >= m) break
+        run(commands[line], step + 1, line)
+        next = { step, line: line + 1 }
+      }
       return bands()
     },
     /** Settles once everything queued has run. */

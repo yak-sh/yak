@@ -97,7 +97,10 @@ export let SECTIONS: Section[] = [
     title: 'A task is an entity',
     body: [
       "Say you're starting a business, and agents build the product. An entity is an id and the components it carries. `task new` writes one with `doc{title}` and `task{}`, and the graph gives it a number.",
-      sh("yak task new 'Add the sign-up page'"),
+      sh(
+        '# A task for an agent: the sign-up page',
+        "yak task new 'Add the sign-up page'",
+      ),
     ].join('\n\n'),
   },
   {
@@ -108,8 +111,11 @@ export let SECTIONS: Section[] = [
     body: [
       'Some work only a person can do, such as signing up with a payment processor, so that task is assigned to you. An edge ties one entity to another: this one says the checkout requires it.',
       sh(
+        '# A task only you can do, assigned to you',
         "yak task new 'Sign up for payments' --assignee U-1",
+        '# The checkout, for an agent to build',
         "yak task new 'Build the checkout'",
+        '# An edge: the checkout requires the payments sign-up',
         `yak graph apply --bundles '[{"edge": {"from": "T-4", "to": "T-3"}, "requires": {}}]'`,
       ),
     ].join('\n\n'),
@@ -122,7 +128,9 @@ export let SECTIONS: Section[] = [
     body: [
       'Every `yak` command is also an MCP tool, served at `/mcp` by `yak serve`. An agent finishes the sign-up page and says so, and its writes carry its own id.',
       mcp(
+        '# The agent says what it did, on the task',
         'comment_new {"target": "T-2", "body": "The sign-up page is up at /signup, with tests."}',
+        '# Then marks the task done',
         'task_update {"task": "T-2", "status": "done"}',
       ),
     ].join('\n\n'),
@@ -134,7 +142,10 @@ export let SECTIONS: Section[] = [
     title: 'One query finds them',
     body: [
       "What's left is the payments sign-up only you can do, and the checkout that waits on it. The same query grammar reads the graph in the terminal, over MCP and in the browser.",
-      sh("yak graph query '.task.status=open ?doc'"),
+      sh(
+        '# Every open task, with its doc',
+        "yak graph query '.task.status=open ?doc'",
+      ),
     ].join('\n\n'),
   },
   {
@@ -145,7 +156,9 @@ export let SECTIONS: Section[] = [
     body: [
       'Its sections, its files and each command you type are entities in the graph running in this tab, and the page draws itself from them. Change this section and it redraws. Reloading starts over.',
       sh(
+        "# The page's own files, which are entities too",
         "yak graph query '.file ?file'",
+        '# Retitle this section, and the page redraws it',
         `yak graph apply ${SELF} '.doc.title="This page is a graph you can change"'`,
       ),
     ].join('\n\n'),
@@ -159,6 +172,7 @@ export let SECTIONS: Section[] = [
       "A bundle is one entity's components, and a write is a list of them. Here your agent writes you a letter: one bundle, its `doc` the words, `mail` the task it is about and `deliver` who it goes to.",
       '`apply()` takes the list through the phases below, and the rules and checks of every package the graph loads run inside them. As you scroll past each, it does its work on the letter: the short ids become eids, the alias is given one, a rule fills in the sender, and after the commit an effect hands the letter to a mail service. The phases in the box are one transaction: the batch is stored whole at commit, or not at all.',
       mcp(
+        '# One bundle: a letter to you about T-3',
         'graph_apply {"bundles": [{"entity": {"eid": "$letter"}, "doc": {"title": "Can you sign up for payments?", "body": "The checkout can\'t be built until T-3 is done."}, "mail": {"target": "T-3"}, "deliver": {"to": "U-1"}}]}',
       ),
     ].join('\n\n'),
@@ -463,13 +477,31 @@ export let called = (line: string) => {
   return { tool: line.slice(0, at), args: JSON.parse(line.slice(at + 1)) }
 }
 
-/** The commands a section's body types, and the calls it makes as the agent. */
-export let scriptOf = (body: string) => {
-  let block = (kind: string) =>
-    [...body.matchAll(new RegExp('```' + kind + '\\n([\\s\\S]*?)\\n```', 'g'))]
-      .flatMap((m) => m[1].split('\n')).filter(Boolean)
-  return { sh: block('sh'), mcp: block('mcp').map(called) }
+/** One command a section runs: typed at the prompt (`sh`) or called by the
+ * agent (`mcp`), and the `# ` comment above it saying what it does. */
+export type Command = { kind: 'sh' | 'mcp'; line: string; note?: string }
+
+/** A command as the page prints it: the line typed, or the tool the agent
+ * calls and its arguments. */
+export let shown = (c: Command) => {
+  if (c.kind == 'sh') return c.line
+  let { tool, args } = called(c.line)
+  return `${tool} ${JSON.stringify(args)}`
 }
+
+/** The commands a section's body runs, in order, each with its comment. */
+export let scriptOf = (body: string): Command[] =>
+  [...body.matchAll(/```(sh|mcp)\n([\s\S]*?)\n```/g)].flatMap((m) => {
+    let kind = m[1] as Command['kind']
+    let note: string | undefined
+    return m[2].split('\n').flatMap((line): Command[] => {
+      if (!line.trim()) return []
+      if (line.startsWith('# ')) return (note = line.slice(2), [])
+      let said = { kind, line, ...note ? { note } : {} }
+      note = undefined
+      return [said]
+    })
+  })
 
 /** One turn of a band: its heading, what it says, the rules and effects it
  * shows by name, and the one line it runs: typed in a terminal (`sh`),

@@ -4,7 +4,16 @@ import { equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { yak } from './yak.ts'
 import { LIVE, term } from './term.ts'
-import { FILES, files, HERO, SECTIONS, seed, SELF, SITE } from './site.ts'
+import {
+  FILES,
+  files,
+  HERO,
+  scriptOf,
+  SECTIONS,
+  seed,
+  SELF,
+  SITE,
+} from './site.ts'
 
 let page = async () => {
   let y = await yak()
@@ -55,6 +64,20 @@ test('a step reached twice runs once, and steps reached at once run in order', a
   let { y, t } = await page()
   t.reach(steps, 2)
   t.reach(steps, 1)
+  await t.reach(steps, 2)
+  equal((await y.graph.read('.task')).length, 3)
+})
+
+test("a step's commands run one at a time as each is reached, each under its comment", async () => {
+  let { y, t } = await page()
+  await t.reach(steps, 2, 1)
+  equal((await y.graph.read('.task')).length, 2)
+  let run = [...scriptOf(steps[0]), scriptOf(steps[1])[0]]
+  equal(
+    t.lines().filter((l) => l.kind == 'note' || l.kind == 'in')
+      .map((l) => l.text),
+    run.flatMap((c) => [`# ${c.note}`, c.line]),
+  )
   await t.reach(steps, 2)
   equal((await y.graph.read('.task')).length, 3)
 })

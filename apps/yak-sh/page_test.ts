@@ -216,13 +216,14 @@ test('each thing the story draws leads back to the command whose write made it',
   // The command that made a drawn thing, as its step lists it.
   let madeBy = (key: string) => {
     let at = page.figure.madeBy(key)!
-    let { sh, mcp } = scriptOf(steps[at.stage - 1])
-    return [...sh, ...mcp.map((m) => m.tool)][at.line]
+    return scriptOf(steps[at.stage - 1])[at.line].line
   }
   let titled = (title: string) =>
     page.yak.rows().find((b) => (b.doc as { title?: string })?.title == title)!
       .entity.eid
-  let [account, checkout, edge] = scriptOf(steps[1]).sh
+  let [account, checkout, edge, comment, done] = [1, 2].flatMap((i) =>
+    scriptOf(steps[i]).map((c) => c.line)
+  )
   equal([
     madeBy(titled('Sign up for payments')),
     madeBy(drawn('[data-name="filed.assignee"]')),
@@ -230,7 +231,7 @@ test('each thing the story draws leads back to the command whose write made it',
     madeBy(drawn('[data-name="requires"]')),
     madeBy(drawn('[data-name="comment.target"]')),
     madeBy(drawn('[data-name="completed.by"]')),
-  ], [account, account, checkout, edge, 'comment_new', 'task_update'])
+  ], [account, account, checkout, edge, comment, done])
   page.page.close()
 })
 
