@@ -132,6 +132,14 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
   })
   return h('footer', { class: 'Block', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Block_Sign' }, [
+      h('img', {
+        class: 'Block_Logo',
+        src: 'yak.webp',
+        width: 72,
+        height: 72,
+        alt: '',
+        loading: 'lazy',
+      }),
       h('strong', null, words(text(e, 'doc', 'title'))),
       h('span', null, words(line)),
     ]),

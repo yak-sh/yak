@@ -79,7 +79,13 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
 let Nav = () =>
   h('nav', { class: 'Nav' }, [
     h('a', { class: 'Nav_Mark', href: './' }, [
-      h('span', { class: 'Nav_Dot' }),
+      h('img', {
+        class: 'Nav_Logo',
+        src: 'yak.webp',
+        width: 40,
+        height: 40,
+        alt: '',
+      }),
       'yak.sh',
     ]),
     h('span', { class: 'Nav_Links' }, [

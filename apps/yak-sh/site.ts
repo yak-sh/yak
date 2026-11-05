@@ -20,8 +20,8 @@ export let FILES = [
   'site.ts',
   'package.json',
   'icon.png',
-  'yak.png',
-  'og.png',
+  'yak.webp',
+  'og.jpg',
   'paper.webp',
   'term.ts',
   'parts.ts',
@@ -455,7 +455,7 @@ let rows = (): Bundle[] => [
 
 // An image is not text, so it has no contents to keep, and reading it would
 // only fetch its bytes on every visit.
-let image = (path: string) => /\.(png|webp)$/.test(path)
+let image = (path: string) => /\.(png|jpg|webp)$/.test(path)
 
 /** The files, read with `fetch` from where the page is served: text keeps
  * its contents as `content{body}`, and an image is listed unread. */

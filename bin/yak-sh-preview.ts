@@ -1,13 +1,13 @@
 #!/usr/bin/env -S deno run -A
 // yak.sh's link preview and icon, drawn in this process from its mark and its
-// words: og.png, the 1200 × 630 picture a pasted yak.sh link shows in
+// words: og.jpg, the 1200 × 630 picture a pasted yak.sh link shows in
 // iMessage, Slack or X, and icon.png, the mark on the site's paper, which is
-// also the favicon. The icon is opaque, since iOS fills a transparent one with
-// black (workers/yak/raster/draw.ts). Both are SVG on the site's own paper, its
-// colour and its dots, drawn by resvg with the site's two fonts. The page's
-// grain is left off: at 6% it cannot be seen at the size a preview is shown,
-// and its noise made og.png a megabyte where it is otherwise a quarter of one.
-// Run it after the mark (yak.png) or the page's headline changes:
+// also the favicon and the app icon. The icon is opaque, since iOS fills a
+// transparent one with black (workers/yak/raster/draw.ts). Both are SVG on the
+// site's own paper and washes, drawn by resvg with the site's two fonts. The
+// page's grain is left off: it cannot be seen at the size a preview is shown.
+// The preview is a JPEG because the painted mark makes a PNG of it half a
+// megabyte. Run it after the mark (yak.webp) or the page's headline changes:
 //
 //   deno run -A bin/yak-sh-preview.ts
 //
@@ -19,20 +19,23 @@
 export type Mark = { box: number[]; body: string }
 
 // The site's palette, from apps/yak-sh/style.css.
-let PAPER = '#f5f1e8', INK = '#23301f', SOFT = '#5b6753'
-let MEADOW = '#4c773e', MOSS = '#a7c080', RULE = 'rgba(54,83,45,.22)'
+let PAPER = '#f6f1e7', INK = '#2b2b33', SOFT = '#605a55'
+let MEADOW = '#1a6f7b', RULE = 'rgba(52,71,77,.2)'
 
-// The page's ground: its paper, and a dot in every `gap` square (22 px on the
-// page).
-let ground = (w: number, h: number, gap: number) =>
+// The page's ground: its paper, with the teal and bone washes the top of the
+// page has, teal behind the mark and bone behind the words.
+let ground = (w: number, h: number) =>
   `<defs>
-<pattern id="dots" width="${gap}" height="${gap}" patternUnits="userSpaceOnUse"><circle cx="${
-    gap / 2
-  }" cy="${gap / 2}" r="${gap * .053}" fill="rgba(54,83,45,.13)"/></pattern>
-<filter id="halo" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="6"/></filter>
+<radialGradient id="teal" cx="${w * .74}" cy="${h * .4}" r="${
+    w * .5
+  }" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${MEADOW}" stop-opacity=".12"/><stop offset=".5" stop-color="${MEADOW}" stop-opacity=".05"/><stop offset="1" stop-color="${MEADOW}" stop-opacity="0"/></radialGradient>
+<radialGradient id="bone" cx="${w * .1}" cy="0" r="${
+    w * .55
+  }" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#c4a070" stop-opacity=".2"/><stop offset=".55" stop-color="#c4a070" stop-opacity=".07"/><stop offset="1" stop-color="#c4a070" stop-opacity="0"/></radialGradient>
 </defs>
 <rect width="${w}" height="${h}" fill="${PAPER}"/>
-<rect width="${w}" height="${h}" fill="url(#dots)"/>`
+<rect width="${w}" height="${h}" fill="url(#bone)"/>
+<rect width="${w}" height="${h}" fill="url(#teal)"/>`
 
 let place = (mark: Mark, x: number, y: number, w: number, h: number) =>
   `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="${
@@ -52,15 +55,15 @@ export let wrap = (words: string, width: number) =>
     return lines
   }, [])
 
-/** The 1200 × 630 preview: the site's name with its lit square, the
- * headline, the kicker, and the mark, on the paper in a drawn frame. */
+/** The 1200 × 630 preview: the site's name, the headline, the kicker, and
+ * the mark, on the paper in a drawn frame. */
 export let og = (mark: Mark, headline: string, kicker: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-${ground(1200, 630, 22)}
-<rect x="28.5" y="28.5" width="1143" height="573" fill="none" stroke="${RULE}" stroke-width="1.5"/>
-<rect x="74" y="76" width="16" height="16" fill="${MOSS}" filter="url(#halo)"/>
-<rect x="76" y="78" width="12" height="12" fill="${MEADOW}"/>
-<text x="104" y="92" font-family="Geist Mono" font-weight="500" font-size="28" fill="${INK}">yak.sh</text>
+${ground(1200, 630)}
+<rect x="28.5" y="28.5" width="1143" height="573" rx="18" fill="none" stroke="${RULE}" stroke-width="1.5"/>
+<circle cx="83" cy="84" r="11" fill="${MEADOW}" fill-opacity=".14"/>
+<circle cx="83" cy="84" r="6" fill="${MEADOW}"/>
+<text x="104" y="94" font-family="Geist Mono" font-weight="500" font-size="28" fill="${INK}">yak.sh</text>
 <text font-family="Geist" font-weight="500" font-size="60" letter-spacing="-1.2" fill="${INK}">${
     wrap(headline, 18).map((line, i) =>
       `<tspan x="72" y="${236 + i * 70}">${esc(line)}</tspan>`
@@ -69,14 +72,14 @@ ${ground(1200, 630, 22)}
 <text x="76" y="550" font-family="Geist Mono" font-size="20" fill="${SOFT}">${
     esc(kicker)
   }</text>
-${place(mark, 660, 70, 480, 490)}
+${place(mark, 660, 70, 490, 490)}
 </svg>`
 
 /** The square icon: the mark on the paper, edge to edge. */
 export let icon = (mark: Mark) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-${ground(512, 512, 28)}
-${place(mark, 24, 24, 464, 464)}
+  `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+${ground(192, 192)}
+${place(mark, 6, 6, 180, 180)}
 </svg>`
 
 // The site's fonts as TrueType, which resvg reads: Google Fonts answers a
@@ -95,6 +98,7 @@ let fonts = async () => {
 if (import.meta.main) {
   let { createRequire } = await import('node:module')
   let { initWasm, Resvg } = await import('@resvg/resvg-wasm')
+  let { createCanvas, loadImage } = await import('@napi-rs/canvas')
   let { encodeBase64 } = await import('@std/encoding/base64')
   let { parseHTML } = await import('linkedom')
   let app = new URL('../apps/yak-sh/', import.meta.url)
@@ -107,12 +111,23 @@ if (import.meta.main) {
   let draw = (svg: string) =>
     new Resvg(svg, { font: { fontBuffers, defaultFontFamily: 'Geist' } })
       .render().asPng()
+  // An image re-encoded through a canvas: resvg reads no WebP, and writes
+  // only PNG.
+  let encode = async (
+    bytes: Uint8Array,
+    as: 'png' | 'jpeg',
+  ): Promise<Uint8Array> => {
+    let image = await loadImage(bytes)
+    let canvas = createCanvas(image.width, image.height)
+    canvas.getContext('2d').drawImage(image, 0, 0)
+    return as == 'png' ? canvas.encode('png') : canvas.encode('jpeg', 84)
+  }
   let { document } = parseHTML(
     await Deno.readTextFile(new URL('index.html', app)),
   )
   let text = (selector: string) =>
     document.querySelector(selector)?.textContent?.trim() ?? ''
-  let yak = await Deno.readFile(new URL('yak.png', app))
+  let yak = await encode(await Deno.readFile(new URL('yak.webp', app)), 'png')
   let mark = {
     box: [0, 0, 512, 512],
     body: `<image width="512" height="512" href="data:image/png;base64,${
@@ -120,8 +135,8 @@ if (import.meta.main) {
     }"/>`,
   }
   await Deno.writeFile(
-    new URL('og.png', app),
-    draw(og(mark, text('h1'), text('.Kicker'))),
+    new URL('og.jpg', app),
+    await encode(draw(og(mark, text('h1'), text('.Kicker'))), 'jpeg'),
   )
   await Deno.writeFile(new URL('icon.png', app), draw(icon(mark)))
 }

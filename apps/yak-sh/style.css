@@ -2,19 +2,24 @@
   /* The scrolling each step of the story and of a band takes: what it shows
      plays out over most of it (figure.ts SPAN), then the next step starts. */
   --scroll-step: 62vh;
-  --paper: #f5f1e8;
-  --plate: #fcfaf5;
-  --side: #e6dfcf;
-  --well: #dcd3c0;
-  --ink: #23301f;
-  --soft: #5b6753;
-  --line: #36532d;
-  --rule: rgba(54, 83, 45, .16);
-  --meadow: #4c773e;
-  --moss: #a7c080;
-  --brick: #a8503f;
-  --term: #1f2a1c;
-  --term-ink: #e3ead6;
+  /* The painted yak's colours: cotton paper, Payne's grey ink, slate lines,
+     the teal in its mane for what is lit, burnt sienna for a fault. */
+  --paper: #f6f1e7;
+  --plate: #fcf9f3;
+  --side: #ece3d3;
+  --well: #e0d4bf;
+  --ink: #2b2b33;
+  --soft: #605a55;
+  --line: #34474d;
+  --rule: rgba(52, 71, 77, .16);
+  /* What is lit or done, and its pigment where it sits on a dark ground. */
+  --meadow: #1a6f7b;
+  --moss: #8cc5c3;
+  /* A wash of the lit colour, laid under what it marks. */
+  --wash: rgba(26, 111, 123, .13);
+  --brick: #9a4f30;
+  --term: #272b35;
+  --term-ink: #ece4d4;
   --sans: 'Geist', system-ui, sans-serif;
   --mono: 'Geist Mono', ui-monospace, monospace;
   /* The page's one side margin: the nav, the story, the bands, the parts and
@@ -23,7 +28,7 @@
   --diagram-line: var(--line);
   --diagram-soft: var(--soft);
   --diagram-fill: var(--plate);
-  --diagram-glow: rgba(167, 192, 128, .9);
+  --diagram-glow: var(--meadow);
   --diagram-font: var(--mono);
 }
 
@@ -43,7 +48,7 @@ html::after {
   inset: 0;
   z-index: 2147483647;
   background: url(paper.webp) 0 0 / 256px;
-  opacity: .06;
+  opacity: .08;
   pointer-events: none;
 }
 body {
@@ -51,9 +56,14 @@ body {
   color: var(--ink);
   font: 400 16px/1.6 var(--sans);
   background-color: var(--paper);
-  background-image: radial-gradient(rgba(54, 83, 45, .12) 1px, transparent
-    1.3px);
-  background-size: 22px 22px;
+  /* Two washes at the top of the sheet, teal behind the drawing and bone
+     behind the words, fading out before the story starts. */
+  background-image:
+    radial-gradient(52rem 34rem at 78% 4rem, rgba(26, 111, 123, .09),
+    rgba(26, 111, 123, .04) 45%, transparent 72%),
+    radial-gradient(44rem 30rem at 8% 0, rgba(196, 160, 112, .16),
+    rgba(196, 160, 112, .06) 50%, transparent 75%);
+  background-repeat: no-repeat;
   -webkit-font-smoothing: antialiased;
 }
 a {
@@ -108,15 +118,19 @@ h2 {
 .Nav_Mark {
   display: inline-flex;
   align-items: center;
-  gap: .55rem;
+  gap: .6rem;
   color: var(--ink);
 }
-.Nav_Dot,
+.Nav_Logo {
+  width: 40px;
+  height: 40px;
+}
 .Kicker_Dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: var(--meadow);
-  box-shadow: 0 0 10px var(--moss);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 .Nav_Links {
   display: flex;
@@ -152,7 +166,7 @@ h2 {
   max-width: 40rem;
   margin: 1.4rem 0 .5rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--plate);
   overflow: hidden;
 }
@@ -169,13 +183,13 @@ h2 {
   border: 0;
   padding: 0 1.1rem;
   font: 500 .85rem var(--sans);
-  color: #f6fbef;
+  color: var(--plate);
   background: var(--meadow);
   cursor: pointer;
+  transition: background .2s;
 }
 .Copy button:hover {
-  background: #3f6633;
-  box-shadow: 0 0 18px var(--diagram-glow);
+  background: var(--line);
 }
 
 /* ---------------------------------------------------------------- plot */
@@ -221,12 +235,13 @@ h2 {
   border-radius: 50%;
   background: var(--paper);
   font: 500 .8rem var(--mono);
-  transition: border-color .3s, color .3s, box-shadow .3s;
+  transition: border-color .3s, color .3s, background .3s, box-shadow .3s;
 }
 .Step.is-on .Step_No {
   border-color: var(--meadow);
   color: var(--meadow);
-  box-shadow: 0 0 0 3px rgba(167, 192, 128, .25), 0 0 14px var(--diagram-glow);
+  background: var(--plate);
+  box-shadow: 0 0 0 5px var(--wash);
 }
 .Step h2 {
   font-size: clamp(1.45rem, 2.3vw, 1.85rem);
@@ -268,11 +283,13 @@ h2 {
 }
 /* The command whose write the pen is drawing, where the leader starts. */
 .Step_Lines code {
-  transition: color .3s, text-shadow .3s;
+  border-radius: 3px;
+  transition: color .3s, background .3s, box-shadow .3s;
 }
 .Step_Lines .is-led code {
   color: var(--meadow);
-  text-shadow: 0 0 10px var(--diagram-glow);
+  background: var(--wash);
+  box-shadow: 0 0 0 4px var(--wash);
 }
 
 .Plot_Side {
@@ -295,8 +312,10 @@ h2 {
   flex-direction: column;
   margin: 0;
   border: 1px solid var(--rule);
-  background: rgba(252, 250, 245, .82);
-  --diagram-paper: var(--paper);
+  border-radius: 10px;
+  background: rgba(252, 249, 243, .8);
+  overflow: hidden;
+  --diagram-paper: var(--plate);
 }
 .Figure_Bar {
   display: flex;
@@ -320,7 +339,6 @@ h2 {
   border-radius: 50%;
   vertical-align: .08em;
   background: var(--meadow);
-  box-shadow: 0 0 6px var(--moss);
 }
 .Figure_Sheet {
   flex: 1 1 auto;
@@ -332,6 +350,15 @@ h2 {
 }
 .Figure_Sheet .Diagram_Title {
   font-family: var(--sans);
+}
+/* The drawing's shapes in washes of the painting's colours: what is done in
+   teal, a person or an agent in bone. */
+.Diagram .is-done > .Diagram_Fill {
+  fill: color-mix(in srgb, var(--meadow) 8%, var(--plate));
+}
+.Diagram_Node-round > .Diagram_Fill,
+.Diagram_Node-hex > .Diagram_Fill {
+  fill: color-mix(in srgb, var(--well) 45%, var(--plate));
 }
 .Figure_Hint {
   position: absolute;
@@ -363,6 +390,7 @@ h2 {
   min-width: 0;
   padding: .35rem .55rem;
   border: 1px solid var(--rule);
+  border-radius: 6px;
   background: var(--plate);
   color: var(--ink);
   font: inherit;
@@ -377,7 +405,8 @@ h2 {
 .Figure_Wider button {
   padding: .3rem .55rem;
   border: 1px solid var(--rule);
-  background: rgba(252, 250, 245, .6);
+  border-radius: 999px;
+  background: rgba(252, 249, 243, .6);
   color: var(--soft);
   font: .72rem var(--mono);
   cursor: pointer;
@@ -385,6 +414,7 @@ h2 {
 .Figure_Wider button:hover,
 .Figure_Wider button.is-on {
   border-color: var(--meadow);
+  background: var(--wash);
   color: var(--ink);
 }
 .Figure_Fault {
@@ -414,11 +444,11 @@ h2 {
   stroke: var(--meadow);
   stroke-width: 1.2;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 3px var(--moss));
+  stroke-linecap: round;
+  opacity: .75;
 }
 .Leader_Dot {
   fill: var(--meadow);
-  filter: drop-shadow(0 0 4px var(--moss));
 }
 
 .Prompt {
@@ -426,11 +456,11 @@ h2 {
   display: flex;
   flex-direction: column;
   height: clamp(190px, 30vh, 300px);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--term);
   color: var(--term-ink);
   font: .8rem/1.5 var(--mono);
-  box-shadow: 0 12px 40px rgba(31, 42, 28, .25);
+  box-shadow: 0 10px 28px -14px rgba(39, 43, 53, .55);
   overflow: hidden;
 }
 .Prompt_Bar {
@@ -438,14 +468,14 @@ h2 {
   align-items: center;
   gap: .35rem;
   padding: .45rem .8rem;
-  border-bottom: 1px solid rgba(227, 234, 214, .1);
-  color: #9aa58f;
+  border-bottom: 1px solid rgba(236, 228, 212, .1);
+  color: #a19b90;
 }
 .Prompt_Bar i {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #3a4735;
+  background: #434856;
 }
 .Prompt_Bar span {
   margin-left: .5rem;
@@ -462,17 +492,17 @@ h2 {
 }
 .Prompt_Line.is-in,
 .Prompt_Line.is-agent {
-  color: #fff;
+  color: #faf6ee;
   margin-top: .45rem;
 }
 .Prompt_Line.is-out {
-  color: #bfc9b2;
+  color: #cbc4b6;
 }
 .Prompt_Line.is-fault {
-  color: #e8a796;
+  color: #e5a888;
 }
 .Prompt_Line.is-note {
-  color: #8f9a83;
+  color: #96918a;
   margin-top: .45rem;
 }
 .Prompt_Line.is-note + .Prompt_Line {
@@ -498,7 +528,7 @@ h2 {
   display: flex;
   align-items: center;
   padding: .55rem .9rem;
-  border-top: 1px solid rgba(227, 234, 214, .1);
+  border-top: 1px solid rgba(236, 228, 212, .1);
 }
 .Prompt_Form input {
   flex: 1;
@@ -506,7 +536,7 @@ h2 {
   border: 0;
   outline: 0;
   background: none;
-  color: #fff;
+  color: #faf6ee;
   font: inherit;
 }
 
@@ -560,9 +590,10 @@ h2 {
   width: min(25rem, calc(100vw - 2rem));
   max-height: min(70vh, 40rem);
   overflow: auto;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
   background: var(--plate);
-  box-shadow: 0 10px 30px rgba(35, 48, 31, .18);
+  box-shadow: 0 12px 32px -16px rgba(43, 43, 51, .4);
   font: .8125rem/1.45 var(--mono);
 }
 .Editor_Bar {
@@ -642,7 +673,7 @@ h2 {
 .Editor_Field:focus {
   outline: none;
   border-color: var(--meadow);
-  box-shadow: 0 0 0 2px rgba(167, 192, 128, .45);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 .Editor_Ref,
 .Prompt_Id {
@@ -690,7 +721,7 @@ h2 {
    the last write went. */
 .Stack,
 .Doors {
-  --faint: rgba(54, 83, 45, .08);
+  --faint: rgba(52, 71, 77, .08);
   align-items: start;
 }
 /* The steps fill the band down to the bottom of its drawing, so they are
@@ -774,8 +805,8 @@ h2 {
   position: relative;
   margin: 1.1rem -.7rem 1.1rem calc(-2.1rem - .7rem);
   padding: .45rem .7rem .3rem calc(2.1rem + .7rem);
-  border: 1px solid var(--ink);
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 .Phases .Tx > ol {
   list-style: none;
@@ -817,16 +848,12 @@ h2 {
 }
 /* A phase that has happened: green, with its green dot. */
 .Phases [data-phase].on {
-  background: linear-gradient(
-    90deg,
-    rgba(167, 192, 128, .2),
-    transparent 70%
-  );
+  background: linear-gradient(90deg, var(--wash), transparent 70%);
 }
 .Phases li.on .Dot {
   background: var(--meadow);
   border-color: var(--meadow);
-  box-shadow: 0 0 6px var(--moss);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 .Phases li.on b {
   color: var(--ink);
@@ -850,7 +877,8 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   border: 1px solid var(--rule);
-  background: rgba(252, 250, 245, .55);
+  border-radius: 10px;
+  background: rgba(252, 249, 243, .6);
   padding: clamp(.8rem, 2vw, 1.6rem) 0;
   font: 400 .8125rem/1.5 var(--mono);
 }
@@ -892,7 +920,7 @@ h2 {
   color: var(--soft);
 }
 .Source .s {
-  color: #6b5a2e;
+  color: #7a5634;
 }
 .Source .num {
   color: var(--brick);
@@ -927,16 +955,16 @@ h2 {
   }
   30%,
   60% {
-    background: rgba(167, 192, 128, .4);
+    background: rgba(26, 111, 123, .2);
   }
 }
 .Source.now-normalize .c {
-  background: rgba(252, 250, 245, .8);
+  background: rgba(252, 249, 243, .8);
 }
 /* A line the phase the reader is at changed, its margin saying what it did,
    lit as they scroll past the phase. */
 .Source .is-now > div {
-  background: rgba(167, 192, 128, calc(.4 * var(--p, 1)));
+  background: rgba(26, 111, 123, calc(.16 * var(--p, 1)));
 }
 .Source .is-now .n {
   color: var(--ink);
@@ -945,24 +973,25 @@ h2 {
   font: 500 .75rem/1 var(--mono);
 }
 .Source.now-mutate .body > .c {
-  background: rgba(252, 250, 245, .9);
+  background: rgba(252, 249, 243, .9);
   box-shadow: inset 3px 0 0 var(--meadow);
 }
 .Source .stamp .c {
   color: var(--meadow);
 }
 .Source .brace {
-  transition: color .4s, text-shadow .4s;
+  transition: color .4s;
 }
 .Source.p-commit .brace {
   color: var(--meadow);
-  text-shadow: 0 0 8px var(--diagram-glow);
+  font-weight: 600;
 }
 /* The mail service the letter's effect hands it to: each try it made. */
 .Outbox {
   margin-top: .8rem;
   border: 1px solid var(--rule);
-  background: rgba(252, 250, 245, .55);
+  border-radius: 8px;
+  background: rgba(252, 249, 243, .6);
   font: 400 .75rem/1.5 var(--mono);
 }
 .Outbox_Bar {
@@ -1007,10 +1036,10 @@ h2 {
   gap: .15rem;
   max-width: min(22rem, calc(100vw - 2.4rem));
   padding: .7rem 1rem .75rem 2.4rem;
-  border: 1px solid var(--ink);
-  border-radius: 4px;
-  background: var(--paper);
-  box-shadow: 0 6px 24px rgba(54, 83, 45, .18);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--plate);
+  box-shadow: 0 12px 30px -14px rgba(43, 43, 51, .4);
   font-size: .875rem;
   animation: toast 6s both;
 }
@@ -1023,7 +1052,7 @@ h2 {
   height: 9px;
   border-radius: 50%;
   background: var(--meadow);
-  box-shadow: 0 0 6px var(--moss);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 .Toast b {
   font-weight: 500;
@@ -1130,17 +1159,13 @@ h2 {
   transition: background .3s, border-color .3s, box-shadow .3s;
 }
 .Beats li.on {
-  background: linear-gradient(
-    90deg,
-    rgba(167, 192, 128, .2),
-    transparent 70%
-  )
-    0 0 / 100% 2.6rem no-repeat;
+  background: linear-gradient(90deg, var(--wash), transparent 70%) 0 0 / 100%
+    2.6rem no-repeat;
 }
 .Beats li.on .Dot {
   background: var(--meadow);
   border-color: var(--meadow);
-  box-shadow: 0 0 6px var(--moss);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 .Beats li.on > b {
   color: var(--ink);
@@ -1174,10 +1199,12 @@ h2 {
 .Doors_Drawing .Diagram_Title {
   font-family: var(--sans);
 }
+.Doors_Drawing .is-told > .Diagram_Fill {
+  fill: color-mix(in srgb, var(--meadow) 14%, var(--plate));
+}
 .Doors_Drawing .is-told .Diagram_Stroke {
   stroke: var(--meadow);
   stroke-width: 2;
-  filter: drop-shadow(0 0 4px var(--moss));
 }
 .Doors_Wire {
   overflow: visible;
@@ -1188,7 +1215,8 @@ h2 {
   stroke: var(--meadow);
   stroke-width: 1.4;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 3px var(--moss));
+  stroke-linecap: round;
+  opacity: .8;
   stroke-dasharray: 1;
   stroke-dashoffset: calc(1 - var(--p, 1));
 }
@@ -1215,11 +1243,11 @@ h2 {
   border-radius: 8px;
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(35, 48, 31, .06), 0 6px 18px rgba(35, 48, 31, .1);
+  box-shadow: 0 1px 2px rgba(43, 43, 51, .06), 0 6px 18px rgba(43, 43, 51, .1);
 }
 .Window.is-last {
   border-color: var(--meadow);
-  box-shadow: 0 0 0 1px var(--meadow), 0 8px 22px rgba(35, 48, 31, .16);
+  box-shadow: 0 0 0 1px var(--meadow), 0 8px 22px rgba(43, 43, 51, .16);
 }
 /* The newest window comes in as the reader scrolls past its beat, and goes
    back out as they scroll back (`--p`, told.ts). */
@@ -1245,7 +1273,7 @@ h2 {
   mask-image: linear-gradient(#000 calc(100% - 1.4em), transparent);
 }
 .Window .is-fault {
-  color: var(--fault, #b4543e);
+  color: var(--brick);
 }
 
 /* The terminal: dark glass, the command after its prompt. */
@@ -1257,26 +1285,26 @@ h2 {
 }
 .Term .is-fault,
 .Tui .is-fault {
-  color: #f2b8a8;
+  color: #e5a888;
 }
 .Term_Bar {
   display: flex;
   align-items: center;
   gap: .4em;
   padding: .45em .7em;
-  background: rgba(227, 234, 214, .06);
+  background: rgba(236, 228, 212, .06);
 }
 .Term_Bar i {
   flex: none;
   width: .65em;
   height: .65em;
   border-radius: 50%;
-  background: rgba(227, 234, 214, .28);
+  background: rgba(236, 228, 212, .28);
 }
 .Term_Bar span {
   margin: 0 auto;
   padding-right: 2.6em;
-  color: rgba(227, 234, 214, .6);
+  color: rgba(236, 228, 212, .6);
 }
 .Term_Screen {
   padding: .55em .8em;
@@ -1284,7 +1312,7 @@ h2 {
   word-break: break-word;
 }
 .Term_In {
-  color: #fff;
+  color: #faf6ee;
 }
 .Term_In span {
   color: var(--moss);
@@ -1551,7 +1579,7 @@ h2 {
 .Tui_Screen {
   margin: .45em;
   padding: .3em .6em;
-  border: 1px solid rgba(227, 234, 214, .28);
+  border: 1px solid rgba(236, 228, 212, .28);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1559,8 +1587,8 @@ h2 {
   color: var(--moss);
 }
 .Tui_Foot {
-  background: rgba(227, 234, 214, .1);
-  color: rgba(227, 234, 214, .7);
+  background: rgba(236, 228, 212, .1);
+  color: rgba(236, 228, 212, .7);
 }
 
 /* The rules band: under the drawing, the rule or effect the open turn ran,
@@ -1572,7 +1600,8 @@ h2 {
 }
 .Declared {
   border: 1px solid var(--rule);
-  background: rgba(252, 250, 245, .55);
+  border-radius: 8px;
+  background: rgba(252, 249, 243, .6);
 }
 .Declared_Bar {
   padding: 4px 12px;
@@ -1750,7 +1779,7 @@ h2 {
 .File {
   margin: .8rem 0;
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--plate);
   overflow: hidden;
 }
@@ -1771,14 +1800,27 @@ h2 {
   grid-template-columns: 2.2fr repeat(5, minmax(0, 1fr));
   gap: 1px;
   margin: 3rem var(--gutter) 2.5rem;
-  border: 1px solid var(--line);
-  background: var(--line);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--rule);
+  overflow: hidden;
 }
 .Block > * {
   min-width: 0;
   margin: 0;
   padding: .9rem 1rem;
   background: var(--paper);
+}
+.Block_Sign {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: .9rem;
+  align-items: center;
+}
+.Block_Logo {
+  grid-row: span 2;
+  width: 72px;
+  height: 72px;
 }
 .Block_Sign strong {
   display: block;

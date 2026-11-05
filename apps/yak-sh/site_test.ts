@@ -122,8 +122,8 @@ test('every file the app serves is a file read in the site, text with its conten
   let index = read.find((b) => at(b, 'file.path') == 'index.html')
   equal(at(index, 'file.root'), SITE)
   match(String(at(index, 'content.body')), /<html/)
-  let og = read.find((b) => at(b, 'file.path') == 'og.png')
-  equal([asked.includes('og.png'), at(og, 'content')], [false, undefined])
+  let og = read.find((b) => at(b, 'file.path') == 'og.jpg')
+  equal([asked.includes('og.jpg'), at(og, 'content')], [false, undefined])
 })
 
 test("a pasted link's preview is a file the app serves, on the page's paper", async () => {
