@@ -673,6 +673,18 @@ h2 {
 .pl {
   animation: plate .6s cubic-bezier(.2, .7, .2, 1) calc(var(--i) * 70ms)
     backwards;
+  transition: opacity .35s, transform .35s cubic-bezier(.2, .7, .2, 1);
+}
+.co {
+  transition: opacity .35s;
+}
+/* Not written yet: the reader has not scrolled to the phase that writes it. */
+.pl.is-out,
+.co.is-out {
+  opacity: 0;
+}
+.pl.is-out {
+  transform: translateY(-26px);
 }
 @keyframes plate {
   from {

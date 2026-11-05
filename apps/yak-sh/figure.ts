@@ -43,11 +43,15 @@ const RAMP = 1100
 
 let clamp = (v: number) => Math.max(0, Math.min(1, v))
 
+/** Where the reader reads, as a fraction of the window's height from its
+ * top: what has passed it has been read. */
+export const LINE = .62
+
 /** How far into a step the reader is, 0 to 1, from where the step sits in
  * the window: it starts as the step's top passes the reading line and is
  * done half a screen (or half the step) later. */
 export let into = (top: number, height: number, view: number) =>
-  clamp((view * .62 - top) / Math.max(1, Math.min(height, view) * .5))
+  clamp((view * LINE - top) / Math.max(1, Math.min(height, view) * .5))
 
 export let figure = (yak: Yak) => {
   let query = STORY

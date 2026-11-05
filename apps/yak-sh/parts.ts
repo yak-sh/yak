@@ -8,10 +8,8 @@ import { useState } from 'preact/hooks'
 import { Markdown } from '@yaks/markdown'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
+import { text } from './told.ts'
 import { ANCHORS } from './site.ts'
-
-let text = (b: Bundle, comp: string, prop: string) =>
-  String((b[comp] as Record<string, unknown> | undefined)?.[prop] ?? '')
 
 /** A command with a button that copies it. */
 export let Copy = ({ line }: { line: string }) => {

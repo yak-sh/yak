@@ -1,15 +1,18 @@
 // The two bands below the story, drawn as mockups #12 and #14 drew them and
 // fed from the tab's graph: the stack is the last entity written as plates,
-// one per component, beside the phases apply() ran; the doors are the ways
-// into one graph, with what came in through them drawn on its sheet.
+// one per component, beside the phases apply() ran, each phase happening as
+// the reader scrolls past it and undone as they scroll back; the doors are
+// the ways into one graph, with what came in through them drawn on its sheet.
 import { type FunctionComponent, h } from 'preact'
-import { useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Markdown } from '@yaks/markdown'
 import { human } from '@yaks/id'
 import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
 import type { Bundle } from '@yaks/graph'
 import { proseOf } from './site.ts'
-import { type Ctx, text, useTold } from './views.ts'
+import { LINE } from './figure.ts'
+import type { Ctx } from './views.ts'
+import { text, useTold } from './told.ts'
 
 type Band = FunctionComponent<Ctx & { e: Bundle }>
 
@@ -96,7 +99,14 @@ let iso = (x: number, y: number) =>
 
 /** A component on the stack: its name with its properties, what the
  * vocabulary says it is, and its first value. */
-export type Plate = { key: string; name: string; note: string; value: string }
+export type Plate = {
+  key: string
+  name: string
+  note: string
+  value: string
+  /** A mark, stamped on the entity rather than written into it. */
+  mark: boolean
+}
 
 /** The plates of an entity, bottom up: its id, what it carries, then the
  * marks stamped on it in the order they were made. `updated` repeats the
@@ -117,6 +127,7 @@ export let platesOf = (b: Bundle, vocab: Ctx['yak']['vocab']): Plate[] => {
       .find(([, v]) => v != null && typeof v != 'object')
     return {
       key,
+      mark: mark(key),
       name: `${key}{${props.join(', ')}}`,
       note: cut(vocab.comp(key)?.description, 44),
       value: key == 'entity'
@@ -128,16 +139,32 @@ export let platesOf = (b: Bundle, vocab: Ctx['yak']['vocab']): Plate[] => {
   })
 }
 
-/** How a phase stands after the last write: ran it, passed it by, or not
- * reached (''). audit is passed by whenever the write committed. */
-let standing = (ran: Set<string>) => {
-  let reached = Math.max(-1, ...PHASES.map((p, i) => ran.has(p) ? i : -1))
-  return (p: Phase, i: number) =>
-    ran.has(p) ? 'on' : ran.size && (i <= reached || p == 'audit') ? 'skip' : ''
+/** How the last write stands with the reader `upto` phases into it (the
+ * index of the last phase they have passed): each phase passed ran or was
+ * passed by; a plate is in once the phase that writes it has run (the id at
+ * mint, a mark at stamp, any other component at mutate); and the entity is
+ * stored once commit has. */
+export let standing = (ran: Set<string>, upto: number) => {
+  let past = (p: Phase) => ran.has(p) && PHASES.indexOf(p) <= upto
+  let lit = PHASES.map((p, i) => ran.has(p) && i <= upto ? i : -1)
+  return {
+    phase: (p: Phase, i: number) =>
+      !ran.size || i > upto ? '' : ran.has(p) ? 'on' : 'skip',
+    plate: (key: string, mark: boolean) =>
+      past(key == 'entity' ? 'mint' : mark ? 'stamp' : 'mutate'),
+    stored: past('commit'),
+    /** The last phase passed that ran, or -1. */
+    reached: Math.max(-1, ...lit),
+  }
 }
 
+/** The index of the last of `tops` above `line`: how far down a list the
+ * reader is, -1 before its first. */
+export let passed = (tops: number[], line: number) =>
+  tops.reduce((k, top, i) => top < line ? i : k, -1)
+
 let StackDrawing = (
-  { plates, ran }: { plates: Plate[]; ran: Set<string> },
+  { plates, ran, upto }: { plates: Plate[]; ran: Set<string>; upto: number },
 ) => {
   let gap = (BOTTOM - TOP) / (PHASES.length - 1)
   let y = (i: number) => TOP + i * gap
@@ -146,8 +173,8 @@ let StackDrawing = (
   let top = Math.min(0, cy(slots - 1) - H - 40)
   let inside = INSIDE.map((p) => PHASES.indexOf(p))
   let first = Math.min(...inside), last = Math.max(...inside)
-  let reached = Math.max(-1, ...PHASES.map((p, i) => ran.has(p) ? i : -1))
-  let state = standing(ran)
+  let state = standing(ran, upto)
+  let { reached } = state
   let len = y(PHASES.length - 1) - y(0)
   let ghosts = Array.from({ length: slots }, (_, i) => {
     let { f, l, r } = faces(cy(i))
@@ -160,7 +187,7 @@ let StackDrawing = (
   let drawn = plates.map((p, i) => {
     let { f, l, r } = faces(cy(i))
     return h('g', {
-      class: 'pl',
+      class: state.plate(p.key, p.mark) ? 'pl' : 'pl is-out',
       'data-pl': p.key,
       key: p.key,
       style: `--i:${i}`,
@@ -178,7 +205,11 @@ let StackDrawing = (
   })
   let callouts = plates.map((p, i) => {
     let x = CX + W, at = cy(i)
-    return h('g', { class: 'co', 'data-co': p.key, key: p.key }, [
+    return h('g', {
+      class: state.plate(p.key, p.mark) ? 'co' : 'co is-out',
+      'data-co': p.key,
+      key: p.key,
+    }, [
       h('circle', { cx: x, cy: at, r: 2.2 }),
       h('path', { d: `M${x} ${at}L${x + 20} ${at - 20}H${x + 38}` }),
       h('text', { class: 'nm', x: x + 44, y: at - 16 }, p.name),
@@ -209,7 +240,7 @@ let StackDrawing = (
     }, 'one transaction'),
     ...PHASES.map((p, i) =>
       h('g', {
-        class: `st ${state(p, i)}`.trim(),
+        class: `st ${state.phase(p, i)}`.trim(),
         'data-st': p,
         key: p,
       }, [
@@ -225,7 +256,7 @@ let StackDrawing = (
     }V${BASE}M${CX} ${cy(slots - 1) + H}V${BASE + 60}`,
   })
   return h('svg', {
-    class: `Stack_Draw${ran.has('commit') ? ' stored' : ''}`,
+    class: `Stack_Draw${state.stored ? ' stored' : ''}`,
     viewBox: `0 ${top} 680 ${560 - top}`,
     role: 'img',
     'aria-label':
@@ -240,17 +271,45 @@ export let Stack: Band = ({ e, yak, figure }) => {
   let subject = eid ? yak.row(eid) : undefined
   let plates = subject ? platesOf(subject, yak.vocab) : []
   let ran = new Set<string>(phases)
-  let state = standing(ran)
+  // How far down the phases the reader is, measured each frame they scroll;
+  // where nothing measures, as in a test, the whole write has happened.
+  let list = useRef<HTMLOListElement>(null)
+  let [upto, setUpto] = useState(PHASES.length - 1)
+  useLayoutEffect(() => {
+    let ol = list.current
+    if (!ol || typeof requestAnimationFrame == 'undefined') return
+    let frame = 0
+    let measure = () => {
+      frame = 0
+      let tops = [...ol.querySelectorAll('.Dot')]
+        .map((d) => d.getBoundingClientRect().top + 4)
+      setUpto(passed(tops, innerHeight * LINE))
+    }
+    let soon = () => frame ||= requestAnimationFrame(measure)
+    addEventListener('scroll', soon, { passive: true })
+    addEventListener('resize', soon)
+    measure()
+    return () => {
+      removeEventListener('scroll', soon)
+      removeEventListener('resize', soon)
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+  let state = standing(ran, upto)
   let inside = new Set<string>(INSIDE)
   return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Stack_Text' }, [
       h(Head, { e }),
       h(
         'ol',
-        { class: 'Phases', 'aria-label': 'The phases of apply()' },
+        {
+          class: 'Phases',
+          ref: list,
+          'aria-label': 'The phases of apply()',
+        },
         PHASES.map((p, i) =>
           h('li', {
-            class: state(p, i) || undefined,
+            class: state.phase(p, i) || undefined,
             'data-phase': p,
             'data-tx': inside.has(p) ? '' : undefined,
             'data-tx-first': p == INSIDE[0] ? '' : undefined,
@@ -271,7 +330,7 @@ export let Stack: Band = ({ e, yak, figure }) => {
       ),
     ]),
     h('figure', { class: 'Stack_Figure' }, [
-      h(StackDrawing, { plates, ran }),
+      h(StackDrawing, { plates, ran, upto }),
       h(
         'figcaption',
         null,

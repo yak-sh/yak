@@ -16,6 +16,7 @@ import { type Figure, into, PLACES, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Doors, Stack } from './bands.ts'
+import { text, useTold } from './told.ts'
 
 /** What every view is given beside its bundle. */
 export type Ctx = {
@@ -25,15 +26,6 @@ export type Ctx = {
   /** The drawing's query, and what the last write did. */
   figure: Figure
 }
-
-/** Draw again whenever `listen` tells. */
-export let useTold = (listen: (l: () => void) => () => void) => {
-  let [, tick] = useState(0)
-  useEffect(() => listen(() => tick((n) => n + 1)), [listen])
-}
-
-export let text = (b: Bundle, comp: string, prop: string) =>
-  String((b[comp] as Record<string, unknown> | undefined)?.[prop] ?? '')
 
 // ------------------------------------------------------------------ the page
 
