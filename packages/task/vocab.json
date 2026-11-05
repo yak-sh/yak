@@ -115,7 +115,7 @@
         },
         "body": {
           "type": "string",
-          "description": "Request and detail links, as Markdown.",
+          "description": "Request and detail links, as Markdown: steps a numbered list, several items a bulleted list.",
           "short": "b"
         },
         "project": {
@@ -301,7 +301,7 @@
             "string",
             "null"
           ],
-          "description": "Replacement body."
+          "description": "Replacement body, as Markdown: steps a numbered list, several items a bulleted list."
         },
         "was": {
           "type": [

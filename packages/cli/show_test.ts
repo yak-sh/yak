@@ -59,6 +59,9 @@ test('a tool help is its own schema, read out', () => {
       '  --q      string   required  the query line',
       '  --limit  number             default 50',
       '  --deep   boolean',
+      '',
+      '  A value written @path is read from that file, and - from stdin,',
+      '  so text of several lines (a list, a body) needs no shell quoting.',
     ].join('\n'),
   )
   assertEquals(

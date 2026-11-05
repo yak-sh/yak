@@ -115,6 +115,13 @@ export let toolHelp = (
         `  --clear <field>  Clear ${clearable(t).join(', ')}; repeat for more.`,
       ]
       : []),
+    ...(names.some((n) => typeOf(props[n]) == 'string')
+      ? [
+        '',
+        `  A value written @path is read from that file, and - from stdin,`,
+        `  so text of several lines (a list, a body) needs no shell quoting.`,
+      ]
+      : []),
   ].join('\n')
 }
 
