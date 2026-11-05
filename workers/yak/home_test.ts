@@ -55,6 +55,7 @@ test('one side is the whole menu: your account, then the space you are in', asyn
   let { document, account, space } = sides(page)
   assertEquals(account, [
     { label: 'Profile', href: '/manage/account/profile' },
+    { label: 'Invite', href: '/manage/account/invite' },
     { label: 'Agents', href: '/manage/account/agents' },
     { label: 'Shared with you', href: '/manage/account/shared' },
   ])
@@ -197,7 +198,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   )
   let member = sides(await block({ view: 'operator', member: true }))
   assertEquals(member.space.map((l) => l.label), ['Operator'])
-  assertEquals(member.account.length, 3)
+  assertEquals(member.account.length, 4)
   // On the person's own space it is the Operator too.
   let own = sides(
     await block({

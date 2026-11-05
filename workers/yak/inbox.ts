@@ -261,8 +261,13 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
     )
   }
   let { joined } = await import('./identity.ts')
-  let name = (await parsed(m)).name?.trim()
-  let { person, space } = await joined(env, from, name)
+  let mail = await parsed(m)
+  let { person, space } = await joined(
+    env,
+    from,
+    mail.name?.trim(),
+    `${mail.headers.get('subject') ?? ''}\n${words(mail)}`,
+  )
   return await asked(
     m,
     env,

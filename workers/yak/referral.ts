@@ -6,6 +6,7 @@
 //
 // Not a seat: invite.ts offers a seat in a space to an address, and this
 // offers yaks.app itself to whoever is standing in front of you.
+import { identityEid } from '@yaks/graph/identity'
 import { encode } from 'uqr'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
@@ -136,25 +137,29 @@ export let numberOf = async (env: Env): Promise<string | null> => {
   }
 }
 
-/** What a person's invite page draws: the words, and the links that open
- * them as a text (where there is a number to text) and as a letter. */
+/** What a person's invite page draws: the words, the links that open them
+ * as a text (where there is a number to text) and as a letter, and how many
+ * people signed up through it and how many of them built an app. */
 export type Invitation = {
   said: string
   text: string | null
   mail: string
   address: string
+  joined: number
+  built: number
 }
 
 /** The person's invite, their code minted if they had none. */
 export let invitation = async (
   env: Env,
-  dir: Pick<Directory, 'referralCode' | 'stamp' | 'nameAt'>,
+  dir: Pick<Directory, 'referralCode' | 'stamp' | 'nameAt' | 'referrals'>,
   person: string,
 ): Promise<Invitation> => {
-  let [code, number, name] = await Promise.all([
+  let [code, number, name, referrals] = await Promise.all([
     codeOf(dir, person),
     numberOf(env),
     dir.nameAt(person),
+    dir.referrals(person),
   ])
   let said = words(name ?? '', code)
   let address = signupAddress(env)
@@ -163,5 +168,41 @@ export let invitation = async (
     text: number ? texted(number, said) : null,
     mail: mailed(address, said),
     address,
+    joined: referrals.length,
+    built: referrals.filter((r) => r.rewarded).length,
   }
+}
+
+/** The eid of the referral that brought `invitee` in, derived from them, so
+ * a person is invited once. */
+export let referralEid = (invitee: string) => identityEid('referral', [invitee])
+
+/**
+ * Who invited `invitee`, read from the code in what their first message said:
+ * their referral, written for the month it gives once they build an app.
+ * Nothing is refused, and nothing is written where the words carry no code
+ * anybody holds, the code is their own, an invite already brought them in, or
+ * they had built an app before, which makes this no sign-up of theirs.
+ * Answers the inviter, or null.
+ */
+export let credit = async (
+  dir: Pick<Directory, 'referrer' | 'referral' | 'built' | 'stamp'>,
+  invitee: string,
+  said: string,
+): Promise<string | null> => {
+  let code = codeIn(said)
+  if (!code) return null
+  let [inviter, had, built] = await Promise.all([
+    dir.referrer(code),
+    dir.referral(invitee),
+    dir.built(invitee),
+  ])
+  if (!inviter || inviter == invitee || had || built) return null
+  await dir.stamp({
+    entities: [{
+      entity: { eid: referralEid(invitee) },
+      referral: { inviter, invitee },
+    }],
+  })
+  return inviter
 }

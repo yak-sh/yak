@@ -181,6 +181,7 @@ import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { consentEid } from '@yaks/phone'
+import { credit } from './referral.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -669,14 +670,32 @@ export let settle = async (env: Env, person: string): Promise<Space> => {
   return own
 }
 
+// Whoever's invite the words a person signed up with carry is credited with
+// them (referral.ts `credit`), for the month it gives once they build an app.
+// A failure there is reported, and the sign-up stands.
+let invitedBy = async (env: Env, person: string, said: string) => {
+  try {
+    await credit(dirOf(env), person, said)
+  } catch (e) {
+    caught(e, { request: 'invite credit' })
+  }
+}
+
 /**
  * Signing up by a letter whose domain vouched for its sender (inbox.ts,
  * D-136811): the same sign-up a code gives, for someone who never opened the
  * page. The person behind the address, found or minted and called what the
- * letter called them, else the front of their address; and their own space.
+ * letter called them, else the front of their address; whoever's invite the
+ * letter's words carry, credited; and their own space.
  */
-export let joined = async (env: Env, email: string, name?: string) => {
+export let joined = async (
+  env: Env,
+  email: string,
+  name?: string,
+  said = '',
+) => {
   let person = await personOf(meta(env), email, name || nameOf(null, email))
+  await invitedBy(env, person, said)
   return { person, space: await settle(env, person) }
 }
 
@@ -685,7 +704,8 @@ export let joined = async (env: Env, email: string, name?: string) => {
  * D-136811): the same sign-up, for a number nobody wears. The person is minted
  * wearing it, with the words they sent kept as their consent to be texted
  * back (`sms_consent`, in one write with them, so no person is left with a
- * number and no consent), and given their own space.
+ * number and no consent), whoever's invite those words carry credited, and
+ * given their own space.
  */
 export let textedIn = async (
   env: Env,
@@ -701,6 +721,7 @@ export let textedIn = async (
       sms_consent: { person, consent, at },
     },
   ], KERNEL)
+  await invitedBy(env, person, consent)
   return { person, space: await settle(env, person) }
 }
 

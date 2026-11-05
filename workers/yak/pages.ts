@@ -969,7 +969,7 @@ let profile = (at: DeskPage, env: Host) => {
 // sign-up address; sending is signing up, so what sending agrees to is said
 // beside the code, where the friend reads it (D-136811). The two ways are
 // radios, which switch with no script.
-let invitation = (r: Invitation, env: Host) => {
+let invitation = (r: Invitation, space: string, env: Host) => {
   let terms = `<a href="${url(env, '/terms')}">Terms</a> · <a href="${
     url(env, '/privacy')
   }">Privacy</a>`
@@ -1014,7 +1014,17 @@ ${
 </section></div>`
     ).join('')
   }
-</fieldset>`
+</fieldset>
+<section class="Card">${heading('A free month for each friend')}
+<p>Each friend who signs up and builds their first app gives ${
+    esc(space)
+  } one more free month of the Plus plan.${
+    r.joined
+      ? ` ${r.joined} ${
+        r.joined == 1 ? 'person has' : 'people have'
+      } signed up with your invite so far, and ${r.built} built an app.`
+      : ''
+  }</p></section>`
 }
 
 // A new space (from the selector's + New space): its name and its address,
@@ -1885,7 +1895,10 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let whose = accountView(view) ? 'Your account' : named(picked(at))
   let body = ''
   if (view == 'profile') body = profile(at, env)
-  if (view == 'invite' && at.referral) body = invitation(at.referral, env)
+  if (view == 'invite' && at.referral) {
+    let own = at.spaces?.find((s) => s.own)
+    body = invitation(at.referral, own ? named(own) : 'your space', env)
+  }
   if (view == 'shared') body = sharedWith(at, env)
   if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
@@ -2557,6 +2570,13 @@ let plan = (
     }">Compare plans</a>.</p>`
     : `<p>${host} is on <b>${NAMES[tier]}</b> — ${allowance}.${
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
+    }${
+      y.plan.free
+        ? ` It’s free through ${
+          esc(day(y.plan.free))
+        }: a month for each person you invited who built their first app. ` +
+          'Subscribe now to keep it after that; nothing is charged before then.'
+        : ''
     }</p>`
   // The button names the space it buys for: a plan is a space's, never the
   // person's (D-131886), and someone with two spaces pays for the one named.
@@ -2564,7 +2584,9 @@ let plan = (
   let buy = (want: Want) =>
     billButton(
       'checkout',
-      `Get ${NAMES[want.tier]} for ${space} — ${priced(want)}`,
+      `${y.plan.free && want.tier == 'plus' ? 'Keep' : 'Get'} ${
+        NAMES[want.tier]
+      } for ${space} — ${priced(want)}`,
       target,
       want,
     )
@@ -2572,7 +2594,7 @@ let plan = (
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
   let doors = [
-    ...(tier == 'free'
+    ...(tier == 'free' || y.plan.free
       ? [
         buy({ tier: 'plus', per: 'month' }),
         ...(y.plan.organization ?? []).map((per) =>

@@ -526,6 +526,58 @@ export let referralDoc: VocabDoc = {
       unique: [['code']],
       properties: { code: owned(text) },
     },
+    // One person who signed up through another's invite (referral.ts
+    // `credit`): who invited them. Its eid is derived from the invitee, so a
+    // person is invited once, by whoever's code their first message carried;
+    // its `created` stamp is when.
+    referral: {
+      description:
+        "One person who signed up for yaks.app through another's invite: who invited them.",
+      component: true,
+      type: 'object',
+      kind: true,
+      identity: ['invitee'],
+      properties: {
+        inviter: owned(ref('keep')),
+        invitee: owned(ref('cascade')),
+      },
+    },
+    // The month of the Plus plan a referral gave its inviter once the
+    // invitee built their first app (referral.ts `rewarding`): when, to which
+    // space, the day that space's free time now runs through, and, for a
+    // space already paying, the Stripe subscription whose next charge moved a
+    // month later. A mark, written once.
+    rewarded: {
+      description:
+        "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app.",
+      component: true,
+      type: 'object',
+      properties: {
+        at: owned(time),
+        space: owned(ref('keep')),
+        until: owned(time),
+        subscription: owned(text),
+      },
+    },
+    // The Plus plan given to a space free, through `until`, where Stripe
+    // bills it nothing (directory.ts `tierOf`): each reward adds a month
+    // after the later of now and the free time it already had.
+    comped: {
+      description:
+        'The Plus plan given to a space free, through `until`, outside of Stripe.',
+      component: true,
+      type: 'object',
+      properties: { until: owned(time) },
+    },
+    // An app made in a space whose owner was invited gives their inviter
+    // the month, the first time (facets/directory-effects.ts).
+    reward_referral: {
+      effect: true,
+      created: ['app'],
+      target: '.app !installed',
+      description:
+        "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
+    },
   },
 }
 export let docs: VocabDoc[] = [

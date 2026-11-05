@@ -332,17 +332,47 @@ export type Card = {
   tier: Tier
   ends: string
   known: boolean
+  /** the day the Plus plan given free runs through, while it does */
+  free?: string
   organization?: Want['per'][]
 }
 
-export let planCard = (env: Env, space: Space): Card => ({
-  tier: space.tier ?? 'free',
-  ends: space.plan?.ending ?? '',
-  known: !!space.plan?.customer,
-  organization: (['month', 'year'] as const).filter((per) =>
-    !!env.STRIPE_KEY && !!priceFor(env, { tier: 'organization', per })
-  ),
-})
+/** The day a space's Plus plan given free runs through (`comped`, a month
+ * for each person its owner invited who built an app), while it runs and
+ * Stripe bills the space nothing; null otherwise. */
+export let freeThrough = (
+  space: Pick<Space, 'plan' | 'comped'>,
+  now = Date.now(),
+) =>
+  !paid(space.plan?.tier) && space.comped && Date.parse(space.comped) > now
+    ? space.comped
+    : null
+
+/** The trial a subscription bought while the Plus plan is free starts with,
+ * so the free time is kept and the first charge falls when it ends. Stripe
+ * takes a trial ending no sooner than two days away, so one ending sooner
+ * is two days. */
+export let trialFor = (free: string | null, now = Date.now()) =>
+  free
+    ? {
+      trial_end: Math.floor(
+        Math.max(Date.parse(free), now + 49 * 60 * 60_000) / 1000,
+      ),
+    }
+    : {}
+
+export let planCard = (env: Env, space: Space): Card => {
+  let free = freeThrough(space)
+  return {
+    tier: space.tier ?? 'free',
+    ends: space.plan?.ending ?? '',
+    known: !!space.plan?.customer,
+    ...(free ? { free } : {}),
+    organization: (['month', 'year'] as const).filter((per) =>
+      !!env.STRIPE_KEY && !!priceFor(env, { tier: 'organization', per })
+    ),
+  }
+}
 
 /** Whom a space is billed to: the email and name its Stripe customer holds,
  * which is where the receipts go and what the customer portal changes. */
@@ -402,8 +432,10 @@ export let checkout = async (
     )
   }
   // One subscription per space: a second would charge twice. A change of
-  // plan is the portal's, where Stripe prorates it.
-  if (paid(space.tier)) {
+  // plan is the portal's, where Stripe prorates it. A space on the Plus plan
+  // free subscribes for after it, its trial lasting as long as the free time.
+  let free = freeThrough(space)
+  if (paid(space.tier) && !free) {
     return json(
       409,
       'already_paid',
@@ -437,7 +469,7 @@ export let checkout = async (
         : backTo(false, env),
       client_reference_id: space.eid,
       metadata: metaOf(env, space),
-      subscription_data: { metadata: metaOf(env, space) },
+      subscription_data: { metadata: metaOf(env, space), ...trialFor(free) },
       managed_payments: { enabled: true },
       allow_promotion_codes: true,
     })

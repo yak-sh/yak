@@ -9,6 +9,7 @@ import { rootOf, textSigned } from './operator-channels.ts'
 import { arrived, Refused } from './inbox.ts'
 import { arrived as textArrived, DISCLOSURE } from './operator-texts.ts'
 import { endpoints } from './endpoints.ts'
+import { codeOf } from './referral.ts'
 import type { Env, Inbound } from './env.ts'
 
 // A stranger signs up by sending one letter to the sign-up address
@@ -96,6 +97,18 @@ let letter = (
   }
 }
 
+// Jeff, whose invite's code (referral.ts) every sign-up here carries.
+let jeff = crypto.randomUUID()
+await dir.stamp({
+  entities: [{
+    entity: { eid: jeff },
+    person: {},
+    email: { address: 'jeff@example.com' },
+    doc: { title: 'Jeff' },
+  }],
+})
+await codeOf(dir, jeff, () => 'k7q2')
+
 let request = await arrived(
   letter('Dana Reyes <Dana@Example.com>', { id: 'dana-1' }),
   env,
@@ -133,6 +146,7 @@ for (
   )
 }
 let operators = services.size
+let danaInvited = await dir.referral(person)
 
 test('a letter to the sign-up address makes its sender a person with their own space and its Operator', async () => {
   assertEquals((await dir.known(person))?.name, 'Dana Reyes')
@@ -158,6 +172,10 @@ test('the letter is their first words to the Operator, marked as signing up, and
 
 test('a second letter from them reaches the same space, with no second person', () => {
   assertEquals(again, { person, spaces: 1, letters: 1 })
+})
+
+test('a letter that carries an invite credits whoever invited them', () => {
+  assertEquals(danaInvited?.inviter, jeff)
 })
 
 test('a letter its domain does not vouch for, or from a machine, signs nobody up', () => {
@@ -214,6 +232,7 @@ let ana = (await dir.phoned(ANA))!
 let agreed = await dir.texting(ana)
 let anaSpace = (await dir.seats(ana, 'owner'))[0].space as Space
 let anaAsked = asked.at(-1)!.items.at(-1)
+let anaInvited = await dir.referral(ana)
 let firstText = texts.splice(0)
 await texting(ANA, 'Make me a recipe box')
 let secondText = texts.splice(0)
@@ -225,6 +244,7 @@ test('a stranger who texts is left unread until signing up by text is switched o
 })
 
 test('a text from a number nobody wears makes a person wearing it, their consent in their words, and their own space', () => {
+  assertEquals(anaInvited?.inviter, jeff)
   assertEquals(agreed?.number, ANA)
   assertEquals(agreed?.consent, SAY)
   assertStringIncludes(anaSpace.slug, 'space-')

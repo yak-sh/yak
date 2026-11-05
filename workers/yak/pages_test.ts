@@ -559,6 +559,21 @@ test('paid plan settings describe unlimited apps', async () => {
   }
 })
 
+test('a space on the Plus plan free says through when, and offers to keep it after', async () => {
+  let html = await desk({
+    ...page,
+    view: 'billing',
+    plan: {
+      tier: 'plus',
+      ends: '',
+      known: false,
+      free: '2026-12-05T15:00:00.000Z',
+    },
+  }, env).text()
+  assertStringIncludes(html, 'free through 5 December 2026')
+  assertStringIncludes(html, 'Keep the Plus plan for ada — $9 a month')
+})
+
 test('the plan card offers the Organization plan only where it is on sale', async () => {
   let card = (organization: ('month' | 'year')[]) =>
     desk({

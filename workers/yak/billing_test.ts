@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   elsewhere,
+  freeThrough,
   lost,
   moved,
   periodEnd,
@@ -14,10 +15,11 @@ import {
   priceFor,
   stale,
   type Sub,
+  trialFor,
   wanted,
 } from './billing.ts'
 import type { Env } from './env.ts'
-import type { Plan } from './directory.ts'
+import { type Plan, tierOf } from './directory.ts'
 
 // --- the plan, derived --------------------------------------------------
 
@@ -126,6 +128,33 @@ test('the plan card offers the Organization plan by what is priced', () => {
     ['month'],
   )
   assertEquals(planCard(ENV, space).tier, 'free')
+})
+
+// --- the Plus plan given free ---------------------------------------------
+
+let NOW = Date.parse('2026-11-05T15:00:00.000Z')
+let COMP = '2026-12-05T15:00:00.000Z'
+let paying = planOf(sub(), AT)
+
+test('a space given the Plus plan free is on it through that day, unless Stripe bills it', () => {
+  assertEquals(tierOf('ana', null, COMP, NOW), 'plus')
+  assertEquals(tierOf('ana', 'free', COMP, Date.parse(COMP) + 1), 'free')
+  assertEquals(tierOf('ana', 'organization', COMP, NOW), 'organization')
+  assertEquals(freeThrough({ plan: null, comped: COMP }, NOW), COMP)
+  assertEquals(
+    freeThrough({ plan: null, comped: COMP }, Date.parse(COMP)),
+    null,
+  )
+  assertEquals(freeThrough({ plan: paying, comped: COMP }, NOW), null)
+  assertEquals(freeThrough({ plan: null }, NOW), null)
+})
+
+test('subscribing while free starts with a trial as long as the free time, and two days at least', () => {
+  assertEquals(trialFor(COMP, NOW), { trial_end: Date.parse(COMP) / 1000 })
+  assertEquals(trialFor('2026-11-06T15:00:00.000Z', NOW), {
+    trial_end: (NOW + 49 * 3600_000) / 1000,
+  })
+  assertEquals(trialFor(null, NOW), {})
 })
 
 test('cancelled but paid through says both, in one row', () => {

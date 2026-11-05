@@ -135,8 +135,19 @@ export let COMPED = ['yourname', 'yak']
 
 // Paid features and mail/build allowances: `plus` also applies to comps.
 // Their separate app/data exemption is resolved by meter.ts from COMPED.
-export let tierOf = (slug: string, tier: Tier | null): Tier | null =>
-  COMPED.includes(slug) ? 'plus' : tier
+// A space given the Plus plan free until a day (`comped`, a month for each
+// person its owner invited who built an app, referral.ts) is on it until then.
+export let tierOf = (
+  slug: string,
+  tier: Tier | null,
+  comped: string | null = null,
+  now = Date.now(),
+): Tier | null =>
+  COMPED.includes(slug)
+    ? 'plus'
+    : !paid(tier) && comped && Date.parse(comped) > now
+    ? 'plus'
+    : tier
 
 // What a space pays and what Stripe knows about it (platform.rs `Plan`,
 // billing.ts derives and writes it). The whole row, because the webhook reads
@@ -190,6 +201,9 @@ export type Space = {
   // The same row whole, for the one caller that needs every property of it
   // (billing.ts). Null where no `plan` row has ever been written.
   plan: Plan | null
+  // The day the Plus plan given free runs through (`comped`, reward.ts),
+  // past or to come; absent or null where none was ever given.
+  comped?: string | null
   // What this space sells through (sell.ts, T-34524): the connected Stripe
   // account, and whether Stripe says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
@@ -591,6 +605,14 @@ export type Row = {
   }
   inviting?: { hour?: string | null; sent?: number | null }
   referral_code?: { code: string }
+  referral?: { inviter: Id; invitee: Id }
+  rewarded?: {
+    at: string
+    space: Id
+    until: string
+    subscription?: string | null
+  }
+  comped?: { until: string }
   person?: Record<string, unknown>
   email?: { address: string }
   sender?: { via: string }
@@ -981,6 +1003,7 @@ export let SPACE_PARTS = [
   'operator',
   'sender',
   'phone',
+  'comped',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1007,6 +1030,39 @@ let trashedOf = (r: Row) =>
   r.trashed
     ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
     : null
+
+/** One person who signed up through another's invite (referral.ts): who
+ * invited whom and when, and the month it gave once they built an app. */
+export type Referral = {
+  eid: string
+  inviter: string
+  invitee: string
+  at: string
+  rewarded: {
+    at: string
+    space: string
+    until: string
+    subscription: string | null
+  } | null
+}
+
+let referralOf = (r: Row): Referral[] =>
+  r.referral
+    ? [{
+      eid: r.entity.eid,
+      inviter: idOf(r.referral.inviter),
+      invitee: idOf(r.referral.invitee),
+      at: r.created?.at ?? '',
+      rewarded: r.rewarded
+        ? {
+          at: r.rewarded.at,
+          space: idOf(r.rewarded.space),
+          until: r.rewarded.until,
+          subscription: r.rewarded.subscription || null,
+        }
+        : null,
+    }]
+    : []
 
 // The seller's row, or null where nothing has ever connected. An account with
 // neither word yet — minted a second ago, the webhook not in — reads false on
@@ -1043,8 +1099,9 @@ export let spaceOf = (r: Row): Space => ({
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
     }
     : {}),
-  tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
+  tier: tierOf(r.space!.slug, r.plan?.tier ?? null, r.comped?.until),
   plan: planOf(r),
+  comped: r.comped?.until ?? null,
   stripe: stripeOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
@@ -2194,6 +2251,25 @@ export let directoryRows = (rows: {
     referrer: async (code: string) =>
       (await one(`.referral_code.code=${JSON.stringify(code)}`))?.entity.eid ??
         null,
+    // Who signed up through somebody's invite, and the month each one gave
+    // once they built an app (referral.ts): those `inviter` invited, or
+    // everybody's, newest first.
+    referrals: async (inviter?: string): Promise<Referral[]> =>
+      (await query(
+        `${
+          inviter ? `.referral.inviter=${inviter}` : '.referral'
+        }&?rewarded&?created&.order=-created.at`,
+      )).flatMap(referralOf),
+    // The referral that brought this person in, or null.
+    referral: async (invitee: string): Promise<Referral | null> =>
+      (await query(`.referral.invitee=${invitee}&?rewarded&?created`))
+        .flatMap(referralOf)[0] ?? null,
+    // Whether this person has built an app of their own: one in a space they
+    // own that is not a copy of somebody else's.
+    built: async (person: string) => {
+      let spaces = await self.spaces(person, 'owner')
+      return (await self.apps(spaces)).some((a) => !a.installed)
+    },
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.
