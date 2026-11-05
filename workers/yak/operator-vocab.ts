@@ -26,6 +26,11 @@ export let operatorDoc: VocabDoc = {
             'The phone transport a text arrived on, used for its reply.',
         },
         files: { type: 'array', items: { type: 'object' } },
+        model: {
+          type: 'string',
+          description:
+            "The model that answers it, where not the Operator's own: a call's.",
+        },
         app: {
           type: 'string',
           description: 'The app whose break started the request.',

@@ -972,3 +972,25 @@ test('Pinnacle webhooks reach one Operator conversation and its replies and STOP
   ])
   assertEquals(pinnacleStopped, null)
 })
+
+// A call's turn, as operator-calls.ts `asking` gives it: answered by the
+// model the Operator's calls are set to answer with.
+let voiceAsks = asks.length
+let spoken = await receive(f.store, {
+  space: f.space.eid,
+  person: f.person,
+  channel: 'voice',
+  address: '+12695550142',
+  reply_to: '+18663141594',
+  via: 'telnyx',
+  model: 'claude-haiku-5-5',
+}, 'Can you add a recipe to my recipe box?')
+await drain(f.store)
+
+test("a call's turn reaches the Operator, answered by the call's model", async () => {
+  assertEquals((await f.store.g.get([spoken]))[0].doc, {
+    title: 'Can you add a recipe to my recipe box?',
+    body: 'Can you add a recipe to my recipe box?',
+  })
+  assertEquals(asks.slice(voiceAsks).map((r) => r.model), ['claude-haiku-5-5'])
+})

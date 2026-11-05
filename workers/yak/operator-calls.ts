@@ -33,7 +33,7 @@ import {
 } from '@yaks/speech'
 import { directoryOf, META, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { bound, caught } from './defects.ts'
+import { bound, defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
@@ -223,7 +223,9 @@ let GOODBYE = 'I have to go now. Call me back any time.'
 
 let CALL = { request: 'operator call' }
 
-let reporter = (o: Around) => o.report ?? ((e: unknown) => caught(e, CALL))
+// Nothing on a call is refused to the caller: a refusal there is a write of
+// ours the platform would not take, and is reported like any failure.
+let reporter = (o: Around) => o.report ?? ((e: unknown) => defect(e, CALL))
 
 // A socket's events come from the runtime after the call's request was
 // answered: each listener runs, and reports, in the call's invocation.
@@ -675,7 +677,7 @@ export let answering = (
             call: ticket.call,
             said,
           })
-        ).catch((e) => caught(e, { request: 'operator call' }))
+        ).catch((e) => defect(e, CALL))
       },
       talk: (told) =>
         talk({
