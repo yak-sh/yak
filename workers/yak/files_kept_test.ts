@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { keptAt } from './cache.ts'
 import { fetch, keptBytes, PREFIX } from './files.ts'
-import { declarationOf } from './declaration.ts'
+import { declarationOf, keepDeclaration } from './declaration.ts'
 import { platform } from './serving-probe.ts'
 import type { App, Space } from './directory.ts'
 import { type Tally, tallying } from './lib/hops.ts'
@@ -60,4 +60,19 @@ test('a declaration another isolate kept is read through Files, once', async () 
   assertEquals(await read(), value)
   assertEquals(await read(), value)
   assertEquals(tally.get('files'), 1)
+})
+
+test('a declaration is read through Files behind its write, so the cache holds it', async () => {
+  let space = { slug: 'ada', store: 'ada' } as Space
+  let app = { eid, slug: 'notes', source: 'ada/notes/.releases/v4' } as App
+  let before = calls.length
+  let asked = new Promise<Request>((done) => {
+    let { fetch: was } = env.FILES!
+    env.FILES = {
+      fetch: (req) => (done(req), env.FILES = { fetch: was }, was(req)),
+    }
+  })
+  await keepDeclaration(env, space, app, 'r5', { vocab: {}, tools: {} })
+  assertEquals((await asked).url, keptAt(eid, 'v4/r5.json'))
+  assertEquals(calls.length, before + 1)
 })

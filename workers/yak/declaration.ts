@@ -8,6 +8,7 @@ import { type App, releaseOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { keptBytes } from './files.ts'
+import { background, caught } from './defects.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
 // Where an app's declarations are kept, and each one's name there.
@@ -50,6 +51,18 @@ export let keepDeclaration = async (
   let text = JSON.stringify(value)
   await r2RawObjects(env.BLOBS).put(at, new TextEncoder().encode(text))
   hold(at, Promise.resolve(text))
+  // Read once through Files, behind the write, so the first isolate to want
+  // it finds it in the cache: a miss there goes both tiers, the entrypoint and
+  // the bucket, and cost an Operator's first turn about 850 ms a declaration
+  // where the bucket alone was 340 (T-140960). Only where the cache is.
+  if (env.FILES) {
+    background(
+      keptBytes(env, app, prefix(space, app), name(app, release)).then(
+        () => {},
+        (e) => caught(e, { request: 'declaration warm', space: space.slug }),
+      ),
+    )
+  }
 }
 
 export let declarationOf = (
