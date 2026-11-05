@@ -2,7 +2,8 @@
 // load, diagnostics and cleanup run in process without a local browser.
 import { type Clock, sleep, system } from '@yaks/fp'
 import type { Env } from './env.ts'
-import { type Audit, audit } from './accessibility.ts'
+import { audit, type Checked } from './accessibility.ts'
+import { caught } from './defects.ts'
 
 export type View = { width: number; height: number; wait: number }
 export type Message = { type(): string; text(): string }
@@ -62,7 +63,8 @@ let isolated = async (page: Page) => {
   }
 }
 
-let bounded = async <T>(work: () => Promise<T>, time: Clock): Promise<T> => {
+// One deadline bounds the whole preview, its accessibility check included.
+let deadline = (time: Clock) => {
   let cancel = () => {}
   let timeout = new Promise<never>((_, reject) => {
     cancel = time.after(
@@ -70,10 +72,24 @@ let bounded = async <T>(work: () => Promise<T>, time: Clock): Promise<T> => {
       () => reject(new Error('Browser preview timed out')),
     )
   })
+  timeout.catch(() => {})
+  return {
+    bounded: <T>(work: Promise<T>) => Promise.race([work, timeout]),
+    cancel,
+  }
+}
+
+// A check that fails is its own result: the preview keeps its screenshot,
+// console and errors, and the failure is ours, so the tracker hears of it.
+let checked = async (
+  page: Page,
+  bounded: <T>(work: Promise<T>) => Promise<T>,
+): Promise<Checked> => {
   try {
-    return await Promise.race([work(), timeout])
-  } finally {
-    cancel()
+    return await bounded(isolated(page).then(audit))
+  } catch (e) {
+    caught(e, { request: 'app_preview accessibility' })
+    return { failed: message(e) }
   }
 }
 
@@ -87,15 +103,16 @@ export let capture = async (
   let start = time.now()
   let browser = await open()
   let duration = 0
+  let { bounded, cancel } = deadline(time)
   let result: {
     image: string
     console: { type: string; text: string }[]
     errors: string[]
     status: number
-    accessibility: Audit
+    accessibility: Checked
   }
   try {
-    result = await bounded(async () => {
+    let loaded = await bounded((async () => {
       let page = await browser.newPage()
       let console: { type: string; text: string }[] = []
       let errors: string[] = []
@@ -121,10 +138,12 @@ export let capture = async (
       }
       if (view.wait) await sleep(view.wait, undefined, time)
       let image = await page.screenshot({ type: 'png', encoding: 'base64' })
-      let accessibility = await audit(await isolated(page))
-      return { image, console, errors, status, accessibility }
-    }, time)
+      return { page, image, console, errors, status }
+    })())
+    let { page, ...rest } = loaded
+    result = { ...rest, accessibility: await checked(page, bounded) }
   } finally {
+    cancel()
     try {
       await browser.close()
     } finally {

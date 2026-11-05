@@ -7,6 +7,9 @@ import {
   type Page,
   type Session,
 } from './browser.ts'
+import { type Audit, report } from './accessibility.ts'
+import { within } from './defects.ts'
+import type { Bundle } from '@yaks/graph'
 
 let view = { width: 390, height: 844, wait: 0 }
 
@@ -111,7 +114,7 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   )
   assertEquals(p.viewport(), { width: 390, height: 844 })
   assertEquals(result.image, 'png-bytes')
-  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
   assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
   assertStringIncludes(result.errors[0], 'page exception')
   assertEquals(result.status, 200)
@@ -132,25 +135,48 @@ test('a page that extends Object.prototype still gets its accessibility audit', 
     view,
   )
   assertEquals(result.image, 'png-bytes')
-  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
 })
 
-test('an audit that throws in its own world rejects with what it threw', async () => {
+test('a check that throws keeps the preview and reports its failure', async () => {
   let p = page({
     world: () => {
       throw new RangeError('axe gave up')
     },
   })
-  await assertRejects(
-    () =>
-      capture(
-        () => Promise.resolve(p.browser),
-        'https://private.invalid/',
-        view,
-      ),
-    Error,
-    'RangeError: axe gave up',
+  let reports: Bundle[] = []
+  let result = await within(
+    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
+    { request: 'app_preview' },
+    () => capture(() => Promise.resolve(p.browser), 'https://x.invalid/', view),
   )
+  assertEquals(result.image, 'png-bytes')
+  assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
+  assertStringIncludes(result.errors[0], 'page exception')
+  assertStringIncludes(report(result.accessibility), 'RangeError: axe gave up')
+  assertStringIncludes(JSON.stringify(reports), 'axe gave up')
+  assertEquals(p.closed(), true)
+})
+
+test('a check that stalls keeps the preview and fails at the deadline', async () => {
+  let p = page()
+  let time = clock()
+  p.p.createCDPSession = () => new Promise(() => {})
+  let running = capture(
+    () => Promise.resolve(p.browser),
+    'https://x.invalid/',
+    view,
+    undefined,
+    time,
+  )
+  await time.advance(15_000)
+  let result = await running
+  assertEquals(result.image, 'png-bytes')
+  assertStringIncludes(
+    report(result.accessibility),
+    'Browser preview timed out',
+  )
+  assertEquals(time.pending(), 0)
 })
 
 test('a failed page load still returns the screenshot and its error', async () => {
@@ -161,7 +187,7 @@ test('a failed page load still returns the screenshot and its error', async () =
     view,
   )
   assertEquals(result.image, 'png-bytes')
-  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
   assertEquals(result.status, 0)
   assertStringIncludes(result.errors[1], 'net::ERR_NAME_NOT_RESOLVED')
   assertEquals(p.closed(), true)

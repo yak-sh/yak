@@ -15,6 +15,8 @@ export type Audit = {
   problems: Finding[]
   review: Finding[]
 }
+/** An audit, or why the check could not run. */
+export type Checked = Audit | { failed: string }
 type Result = {
   violations: Violation[]
   incomplete: Violation[]
@@ -58,8 +60,12 @@ let line = (finding: Finding) =>
     finding.element.replace(/\s+/g, ' ').slice(0, 180)
   } — ${finding.fix}`
 
-export let report = ({ problems, review }: Audit) =>
-  [
+export let report = (checked: Checked) => {
+  if ('failed' in checked) {
+    return `Accessibility (WCAG 2.1 AA): the check failed, so this preview has no accessibility report. ${checked.failed}`
+  }
+  let { problems, review } = checked
+  return [
     `Accessibility (WCAG 2.1 AA): ${problems.length} problems; ${review.length} elements need manual review. Automated checks do not prove conformance.`,
     ...problems.slice(0, 30).map(line),
     ...(problems.length > 30
@@ -70,3 +76,4 @@ export let report = ({ problems, review }: Audit) =>
       ? [`${review.length - 5} more elements in accessibility.review.`]
       : []),
   ].join('\n')
+}
