@@ -539,13 +539,15 @@ h2 {
     grid-row: 2;
     top: 0;
     z-index: 6;
+    gap: .5rem;
     height: auto;
     margin: 0 calc(6px - var(--gutter));
     background: var(--paper);
   }
+  /* On a phone the drawing and the terminal stay at the top in well under
+     half the screen, so the step and its commands have the rest. */
   .Figure {
-    height: 42svh;
-    min-height: 250px;
+    height: clamp(150px, 26svh, 240px);
     flex: none;
   }
   .Figure_Query,
@@ -553,7 +555,7 @@ h2 {
     display: none;
   }
   .Prompt {
-    height: 9.5rem;
+    height: 5.75rem;
   }
   .Steps {
     grid-row: 3;
@@ -1873,6 +1875,7 @@ h2 {
     position: relative;
     width: 100%;
     aspect-ratio: var(--drawing, 560 / 620);
+    max-height: 50svh;
   }
   .Doors_Wire {
     display: none;
@@ -1886,7 +1889,7 @@ h2 {
   }
   .Window {
     grid-row: auto;
-    max-height: 16rem;
+    max-height: 11rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
