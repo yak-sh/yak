@@ -10,7 +10,8 @@ let ROOT = '90e19de2-e19c-4490-81cf-561edd349718'
 
 /** Every file the app serves, as `file{path, root}` read in the site.
  * package.json is not one: yaks.app keeps an app's manifest off the web
- * (workers/yak/files.ts `inside`). */
+ * (workers/yak/files.ts `inside`), and neither is worker.ts, the app's
+ * server source. */
 export let FILES = [
   'index.html',
   'gouache.css',
@@ -37,6 +38,7 @@ export let FILES = [
   'prose.ts',
   'shop.ts',
   'outbox.ts',
+  'docs.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
@@ -320,13 +322,22 @@ export let SECTIONS: Section[] = [
       sh("yak task new 'Add the sign-up page'", 'yak task list'),
       '### Open it in a browser',
       sh('yak serve'),
-      'Serves the web canvas, `/mcp` for agents and `/query` for programs at `http://127.0.0.1:8787`, on this machine only.',
+      'Serves the web canvas, `/mcp` for agents and `/query` for programs at `http://127.0.0.1:8787`, on this machine only, until you stop it.',
       '### Bring your agents',
       sh('yak hooks install'),
       "Each Claude Code session becomes a session entity in the graph. Any MCP client can call the graph's tools at `http://127.0.0.1:8787/mcp`.",
       '### Reach yaks.app',
       sh('yak auth yaks.app'),
-      'Signs you in, so the same `yak` calls your yaks.app account.',
+      'Prints an address to open in a browser. Sign in there with your email, then paste back the address the browser lands on, and the same `yak` calls your yaks.app account.',
+      '### Connect Claude or ChatGPT',
+      'Add yaks.app to your assistant as a connector at `https://yaks.app/mcp`, and sign in with your email. [Its setup page](https://yaks.app/agent) has the steps for each assistant, written so the assistant can follow them.',
+      '### Put an app online',
+      sh(
+        'yak app_new --slug notes --title Notes',
+        'yak app_files --app notes --path index.html --content @index.html',
+        'yak app_deploy --app notes',
+      ),
+      'With an `index.html` in this folder, these make the app, write that file as its page, and put it online at `yourname.yaks.app/notes`. Or ask Claude or ChatGPT for the app you want, and it calls the same tools.',
     ),
   },
   {
@@ -444,6 +455,7 @@ export let SECTIONS: Section[] = [
       '- license: Apache-2.0',
       '- source: [github.com/yak-sh/yak](https://github.com/yak-sh/yak)',
       '- packages: [jsr.io/@yaks](https://jsr.io/@yaks)',
+      '- for agents: [llms.txt](llms.txt), [setup.md](setup.md) and [this page as Markdown](index.md)',
     ].join('\n'),
   },
 ]

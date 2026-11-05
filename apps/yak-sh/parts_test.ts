@@ -47,7 +47,7 @@ test('the page draws its parts from the graph: numbered steps, package tables, t
     all('#yaks-app h2')[0].textContent,
     'yaks.app hosts web apps on the same packages',
   )
-  equal(all('#install .Part_List > li h3').length, 6)
+  equal(all('#install .Part_List > li h3').length, 8)
   equal(
     all('#install .Copy code')[0].textContent?.includes('jsr:@yaks/cli'),
     true,
