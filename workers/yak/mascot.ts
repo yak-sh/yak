@@ -6,7 +6,8 @@
 //
 // The files are public/mascot/<pose>.webp and <pose>-still.webp, each at 40,
 // 80 and 120 px (`-1x`, none, `-3x`), so a screen of any density gets one it
-// shows pixel for pixel. A new round of drawings replaces them in place.
+// shows pixel for pixel. The greeting's still is also made at 64, 128 and 192
+// px (<pose>-still-64). A new round of drawings replaces them in place.
 
 /** What the yak can be seen doing. */
 export type Pose =
@@ -31,11 +32,14 @@ export let yak = (pose: Pose, base = '') =>
     srcset(pose, base)
   }" width="40" height="40" alt=""></picture>`
 
-/** The yak still, at rest in `pose`, with `className`. */
-export let still = (pose: Pose, className: string, base = '') =>
-  `<img class="${className}" src="${base}/mascot/${pose}-still.webp" srcset="${
-    srcset(`${pose}-still`, base)
-  }" width="40" height="40" alt="">`
+/** The yak still, at rest in `pose`, with `className`, `size` px across (40,
+ * or 64 for the thinking still a new chat greets with). */
+export let still = (pose: Pose, className: string, base = '', size = 40) => {
+  let name = size == 40 ? `${pose}-still` : `${pose}-still-${size}`
+  return `<img class="${className}" src="${base}/mascot/${name}.webp" srcset="${
+    srcset(name, base)
+  }" width="${size}" height="${size}" alt="">`
+}
 
 // What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking
 // cookbook for errors…"). Any other work is the yak at its keyboard.

@@ -6,6 +6,7 @@ import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
 import { desk } from './pages.ts'
+import { still } from './mascot.ts'
 
 let env = { APEX: 'yaks.fyi' }
 let entry = (eid: string, seq: number, comps: Record<string, unknown>) =>
@@ -82,5 +83,14 @@ test('the builder waits with the yak at its keyboard', async () => {
   for (let f of shown.files) {
     assert(f.startsWith('https://yaks.fyi/mascot/'), f)
     await served(f)
+  }
+})
+
+test('a still is drawn at the size it shows, at every density', async () => {
+  for (let size of [40, 64]) {
+    let { document } = parseHTML(still('thinking', 'Talk_Yak', '', size))
+    let img = document.querySelector('img')!
+    assertEquals(img.getAttribute('width'), `${size}`)
+    for (let f of [img.getAttribute('src')!, ...srcset(img)]) await served(f)
   }
 })

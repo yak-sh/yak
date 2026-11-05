@@ -792,7 +792,7 @@ export let chatPage = async (
       esc(app.title || app.slug)
     }?</h2><p>Tell ${operator}, and watch it change beside this chat.</p></div>`
     : `<div class="Talk_Hello">${
-      still('thinking', 'Talk_Yak', url(env))
+      still('thinking', 'Talk_Yak', url(env), 64)
     }<h2>What can I do for you${
       first ? `, ${esc(first)}` : ''
     }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
