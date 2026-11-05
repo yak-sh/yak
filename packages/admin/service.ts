@@ -522,9 +522,11 @@ export let analytics = (options: Options): Usage =>
 export let SETTLE = 10 * 60_000
 
 /** How long Cloudflare's analytics may go unanswered before the usage watch
- * reports it: one look after the first that failed, each riding out about
- * eight seconds of resends (workers/yak/workers_api.ts `resent`). */
-export let OUTAGE = 5 * EVERY
+ * reports it: two looks after the first that failed, each riding out about
+ * eight seconds of resends (workers/yak/workers_api.ts `resent`). A token
+ * over Cloudflare's API limit is refused (429) for the next five minutes,
+ * which the look after the first can land inside. */
+export let OUTAGE = 10 * EVERY
 
 /** One look at an hour's usage: every jump it finds, reported, or none
  * without a token to look with. */

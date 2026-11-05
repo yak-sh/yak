@@ -21,7 +21,8 @@ let PAUSES = [500, 2_000, 6_000]
 let IDEMPOTENT = ['GET', 'HEAD', 'PUT', 'DELETE']
 
 /** Whether an answer is Cloudflare's own failure rather than a refusal of the
- * call: its servers erred, or it asked for a slower pace. A 401 or 403
+ * call: its servers erred, or it asked for a slower pace (429, which
+ * {@link resent} sends again only after the wait it names). A 401 or 403
  * refuses the token, which fails every time and is answered at once
  * (bindings.ts names the scope it lacks).
  *
@@ -53,10 +54,21 @@ export class Unavailable extends Error {
 export let failure = (status: number, message: string): Error =>
   passing(status) ? new Unavailable(message) : new Error(message)
 
+/** The wait a 429 names in Retry-After (seconds), if it is one a resend
+ * rides out: none past the longest pause. */
+let paced = (r: Response) => {
+  let after = Number(r.headers.get('retry-after') || NaN) * 1000
+  return after >= 0 && after <= PAUSES.at(-1)! ? after : undefined
+}
+
 /** `fetch`, where an idempotent call that Cloudflare fails on its own side
  * (a passing status, or a connection that dropped) is sent again after each
  * pause. A POST its caller says only reads (an analytics
- * query) is `idempotent` too. The last answer is the caller's; a connection
+ * query) is `idempotent` too. A 429 asks for a slower pace: it is sent again
+ * only after the Retry-After it names, and only when that is no longer than
+ * the longest pause; Cloudflare's API blocks a token that went over its limit
+ * for five minutes and names no wait on GraphQL, and a resend inside the
+ * block only spends more of the limit. The last answer is the caller's; a connection
  * still dropping after the last pause is thrown as {@link Unavailable}, and
  * a call sent once throws what its fetch threw. */
 export let resent = async (
@@ -71,6 +83,7 @@ export let resent = async (
     let pause = again ? PAUSES[sent] : undefined
     try {
       let r = await fetch(url, init)
+      if (r.status == 429 && pause != null) pause = paced(r)
       if (pause == null || !passing(r.status)) return r
       await r.body?.cancel()
     } catch (e) {
