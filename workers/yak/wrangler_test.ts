@@ -1495,7 +1495,6 @@ let checkSiblingPreparation = async () => {
 
 // Prepare the disposable kernel artifact once, then check what its upload sees.
 let kernelRoot = Deno.makeTempDirSync()
-Deno.mkdirSync(join(kernelRoot, '.wrangler'))
 Deno.mkdirSync(join(kernelRoot, 'public'))
 for (let sheet of ['style.css', 'pages.css']) {
   Deno.writeTextFileSync(join(kernelRoot, 'public', sheet), 'a{}')

@@ -786,6 +786,7 @@ export let bundled = async (
   ) {
     return { args, remove: () => {} }
   }
+  io.mkdirSync(join(root, '.wrangler'), { recursive: true })
   let output = io.makeTempDirSync({
     dir: join(root, '.wrangler'),
     prefix: 'kernel-',
