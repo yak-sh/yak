@@ -10,7 +10,7 @@ let html = await Deno.readTextFile(at('./public/index.html'))
 let code = await Deno.readTextFile(at('./public/wander.js'))
 
 let page = async (column = 144) => {
-  let { document, window } = parseHTML(html)
+  let { document, window, Event, CustomEvent } = parseHTML(html)
   let env = {
     scrollY: 0,
     innerWidth: 1440,
@@ -31,6 +31,9 @@ let page = async (column = 144) => {
   window.HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 0 }) as DOMRect
   window.HTMLImageElement.prototype.decode = () => Promise.resolve()
+  Object.defineProperty(document, 'currentScript', {
+    value: { src: 'https://yaks.app/wander.js' },
+  })
   Object.assign(document, {
     fonts: { ready: Promise.resolve() },
     createRange: () => ({
@@ -51,6 +54,7 @@ let page = async (column = 144) => {
   })
   let scope = {
     document,
+    CustomEvent,
     window,
     NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
     matchMedia: () => ({ matches: false }),
@@ -94,13 +98,19 @@ let page = async (column = 144) => {
       : `${yak().style.transform} ${showing}`
   }
   await step(64)
-  return { step, scroll, where }
+  let asked: string[] = []
+  slot.querySelector('img[data-idle]')!.addEventListener(
+    'idle',
+    (e) => asked.push((e as CustomEvent).detail),
+  )
+  let click = () => yak().dispatchEvent(new Event('click'))
+  return { step, scroll, where, click, asked }
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
   let { document } = parseHTML(html)
   let logo = document.querySelector('.Hello [data-wander] img[data-idle]')!
-  assert(logo.getAttribute('srcset')!.includes('/mascot/idle-rest-128-3x.webp'))
+  assert(logo.getAttribute('srcset')!.includes('mascot/idle-rest-128-3x.webp'))
   for (let script of ['idle.js', 'wander.js']) {
     assert(document.querySelector(`script[src="${script}"]`))
   }
@@ -158,4 +168,10 @@ test('with no margin to walk in, he stays the logo', async () => {
   await p.scroll(1500)
   await p.step(3000)
   assertEquals(p.where(), 'home sitting')
+})
+
+test('a click while he sits asks for his nose lick', async () => {
+  let p = await page()
+  p.click()
+  assertEquals(p.asked, ['lick'])
 })

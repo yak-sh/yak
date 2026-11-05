@@ -102,9 +102,13 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
 
 // public/idle.js run over the waiting yak, its timers stepped by hand.
 let waiting = (still = false) => {
-  let { document, Event } = parseHTML(`<main>${idle('Talk_Yak')}</main>`)
+  let { document, Event, CustomEvent } = parseHTML(
+    `<main>${idle('Talk_Yak')}</main>`,
+  )
   let img = document.querySelector('img')!
-  let timers: [() => void, number][] = []
+  // each timer by its id; a cleared one is dropped
+  let timers = new Map<number, [() => void, number]>()
+  let ids = 0
   let fetched: string[] = []
   new Function(
     'document',
@@ -113,6 +117,7 @@ let waiting = (still = false) => {
     'URL',
     'Image',
     'setTimeout',
+    'clearTimeout',
     code,
   )(
     document,
@@ -128,17 +133,21 @@ let waiting = (still = false) => {
     class {
       decode = () => Promise.resolve()
     },
-    (fn: () => void, ms: number) => timers.push([fn, ms]),
+    (fn: () => void, ms: number) => (timers.set(++ids, [fn, ms]), ids),
+    (id: number) => timers.delete(id),
   )
   img.dispatchEvent(new Event('load'))
   let step = async () => {
-    let [fn, ms] = timers.shift()!
+    let [id, [fn, ms]] = timers.entries().next().value!
+    timers.delete(id)
     fn()
     await new Promise((r) => setTimeout(r, 0))
     return ms
   }
   let shown = () => [img.getAttribute('src'), img.getAttribute('srcset')]
-  return { step, shown, fetched, rest: shown() }
+  let ask = (loop: string) =>
+    img.dispatchEvent(new CustomEvent('idle', { detail: loop }))
+  return { step, shown, fetched, ask, rest: shown() }
 }
 
 let code = await Deno.readTextFile(new URL('./public/idle.js', import.meta.url))
@@ -159,6 +168,18 @@ test('he sits, then plays each of his loops once before any comes again', async 
   let all = Object.keys(IDLE).sort()
   assertEquals([played.slice(0, 6).sort(), played.slice(6).sort()], [all, all])
   for (let f of yak.fetched) await served(f)
+})
+
+test('asked for a loop, he plays it at once, then waits again', async () => {
+  let yak = waiting()
+  yak.ask('lick')
+  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(yak.shown(), ['blob:/mascot/idle-lick-128.webp', null])
+  yak.ask('doze')
+  assertEquals(await yak.step(), IDLE.lick, 'one loop at a time')
+  assertEquals(yak.shown(), yak.rest)
+  let rested = await yak.step()
+  assert(rested >= 5000 && rested <= 9000, `${rested}`)
 })
 
 test('with less motion asked for, he stays at rest', async () => {

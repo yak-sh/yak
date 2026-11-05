@@ -11,12 +11,15 @@
 // strip is too narrow for him (a phone, a small window) he stays the logo,
 // and so he does for anyone who asks their system for less motion.
 //
+// A click on him while he sits plays his nose lick.
+//
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
 {
   let slot = document.querySelector('[data-wander]')
   let still = slot?.querySelector('img')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
+  let base = document.currentScript.src
   const STRIPS = ['down', 'up', 'plop'] // mascot/wander-<strip>-128.webp, six frames across
   const FRAMES = 6
   const MIN = 72, PAD = 12 // his smallest size in the margin, and his room from the words, in css px
@@ -84,7 +87,7 @@
       let span = document.createElement('span')
       span.className = 'Wander_Strip'
       let img = document.createElement('img')
-      let file = (d) => `/mascot/wander-${name}-128${d}.webp`
+      let file = (d) => new URL(`mascot/wander-${name}-128${d}.webp`, base).href
       img.src = file('')
       img.srcset = `${file('-1x')} 1x, ${file('')} 2x, ${file('-3x')} 3x`
       img.alt = ''
@@ -118,6 +121,12 @@
       }
       if (layer != still) layer.firstChild.style.marginLeft = `${-100 * i}%`
     }
+    // a click on him while he sits plays his nose lick (idle.js)
+    yak.addEventListener('click', () => {
+      if (shown == still) {
+        still.dispatchEvent(new CustomEvent('idle', { detail: 'lick' }))
+      }
+    })
 
     // where: 'home' (in the hero) or 'out' (in the margin)
     // act: 'sit', 'rise', 'walk', 'step' (into his place), 'plop'

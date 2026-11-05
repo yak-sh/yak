@@ -53,23 +53,26 @@
       }
       return blobs.get(name)
     }
-    let coming = next()
+    let coming = next(), timer, playing = false
     let wait = () => {
-      setTimeout(play, 5000 + Math.random() * 4000)
+      timer = setTimeout(play, 5000 + Math.random() * 4000)
       let name = coming
       // fetched ahead; a failure is fetched and reported again when it plays
       if (!still.matches) fetched(name).catch(() => blobs.delete(name))
     }
-    let play = async () => {
+    // `asked` is a loop someone asked for now (an `idle` event's detail);
+    // else the next in the order
+    let play = async (asked) => {
       if (!img.isConnected) return
-      let name = coming
-      coming = next()
+      let name = asked ?? coming
+      if (!asked) coming = next()
       // with less motion asked for, or while he is out of sight (wander.js
       // hides him while he walks), he waits at rest
       if (
         still.matches ||
         img.checkVisibility?.({ visibilityProperty: true }) === false
       ) return wait()
+      playing = true
       let url
       try {
         url = URL.createObjectURL(await fetched(name))
@@ -78,6 +81,7 @@
         await shown.decode()
       } catch (e) {
         blobs.delete(name)
+        playing = false
         wait()
         throw e
       }
@@ -87,9 +91,16 @@
         img.src = rest.src
         img.srcset = rest.srcset
         URL.revokeObjectURL(url)
+        playing = false
         wait()
       }, +loops.get(name))
     }
+    // a page asks for one of his loops now, as wander.js does on a click
+    img.addEventListener('idle', (e) => {
+      if (playing || !loops.has(e.detail)) return
+      clearTimeout(timer)
+      play(e.detail)
+    })
     // once the rest frame is in, so the loops are fetched at its density
     if (img.complete) wait()
     else img.addEventListener('load', wait, { once: true })
