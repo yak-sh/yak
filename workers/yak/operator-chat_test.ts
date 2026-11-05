@@ -222,17 +222,17 @@ test('the side holds the space, New chat, Updates, a few apps, the chats and Man
     CONVERSATION,
     'Manage',
   ])
-  // Each app opens a chat about it, with the app beside it.
+  // Each app opens beside the conversation on screen.
   assertEquals(owner.to, {
     'yaks.app': chatPath('clerk'),
     Township: null,
     'New chat': chatPath('clerk'),
     [`Updates from ${op}`]: managePath('updates', 'clerk'),
     'Your apps': null,
-    'Recipe box': aboutPath('clerk', 'app0'),
-    Holdfast: aboutPath('clerk', 'app1'),
-    'Book club': aboutPath('clerk', 'app2'),
-    Chores: aboutPath('clerk', 'app3'),
+    'Recipe box': aboutPath('clerk', 'app0', task),
+    Holdfast: aboutPath('clerk', 'app1', task),
+    'Book club': aboutPath('clerk', 'app2', task),
+    Chores: aboutPath('clerk', 'app3', task),
     'All 6 apps': managePath('apps', 'clerk'),
     Chats: null,
     [CONVERSATION]: null,
@@ -321,6 +321,32 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     let { document } = await sided('owner', 'new', other)
     assertEquals(document.querySelector('.Talk_App, #ask [name=app]'), null)
   }
+})
+
+test("an app opens beside the person's one conversation, its words on screen from the first frame", async () => {
+  let words = 'Post a special meeting Thursday at 7 about the road millage.'
+  let { document } = await sided('owner', task, 'app1')
+  assertEquals(
+    document.querySelector('.Talk_App')?.getAttribute('data-app'),
+    'app1',
+  )
+  assertEquals(document.querySelector('.Talk_You')?.textContent?.trim(), words)
+  assertEquals(document.querySelector('.Talk_Hello'), null)
+  assertEquals(
+    document.querySelector('#ask [name=app]')?.getAttribute('value'),
+    'app1',
+  )
+  // From a new chat, or Updates, an app opens beside that conversation too.
+  let fresh = await sided('owner', 'new')
+  assertEquals(fresh.to.Holdfast, aboutPath('clerk', 'app1', task))
+  let updates = parseHTML(
+    await (await updatesPage(p.env, space, who, beside)).text(),
+  ).document
+  assertEquals(
+    [...updates.querySelectorAll('.Talk_Places a')]
+      .find((a) => a.textContent == 'Holdfast')?.getAttribute('href'),
+    aboutPath('clerk', 'app1', task),
+  )
 })
 
 test('Updates from the Operator opens beside the same side', async () => {

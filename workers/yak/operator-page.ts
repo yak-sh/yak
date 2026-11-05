@@ -600,8 +600,9 @@ let APPS = 4
 // the foot Manage, the settings behind the product (today's dashboard pages:
 // its Apps for the space's owner, the Operator's settings for a member, the
 // only one of them they may open). `current` holds the chats this page shows,
-// or `updates`, and `app` the app open beside them. Each app opens a chat
-// about it, with the app beside it (T-140509). On a phone the bar's Menu
+// or `updates`, and `app` the app open beside them. Each app opens beside
+// the conversation on screen, or else the person's one conversation, so
+// their words stay where they were (T-140509, T-141273). On a phone the bar's Menu
 // opens the side over the page (`:target`, no script).
 let side = (
   env: Env,
@@ -623,6 +624,9 @@ let side = (
   let apps = beside.apps ?? []
   let host = `https://${spaceHost(env, space.slug)}`
   let operator = esc(space.operator)
+  let listed = (open: string) => at.items.some((w) => w.open == open)
+  let root = rootOf(space.eid, who.person ?? '')
+  let open = at.current.find(listed) ?? (listed(root) ? root : 'new')
   return `<aside class="Talk_Side" id="menu" aria-label="Menu">
 <div class="Talk_Top"><a class="Talk_Brand" href="${
     chatPath(space.slug)
@@ -653,7 +657,7 @@ ${
     apps.length
       ? `<nav class="Talk_Places" aria-labelledby="side-apps">${
         apps.slice(0, APPS).map((a) =>
-          `<a href="${esc(aboutPath(space.slug, a.slug))}"${
+          `<a href="${esc(aboutPath(space.slug, a.slug, open))}"${
             a.slug == at.app ? ' aria-current="page"' : ''
           }><img class="Talk_Icon" src="${host}/${
             esc(a.slug)
@@ -680,9 +684,9 @@ ${
 </aside>`
 }
 
-/** A new chat about one of the space's apps, with the app beside it. */
-export let aboutPath = (space: string, app: string) =>
-  `${chatPath(space)}?app=${encodeURIComponent(app)}`
+/** A conversation, or a new chat, with one of the space's apps beside it. */
+export let aboutPath = (space: string, app: string, open = 'new') =>
+  `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
 
 /** An app as the chat shows it. */
 type Shown = { slug: string; title: string }
