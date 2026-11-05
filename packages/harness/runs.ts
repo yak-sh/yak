@@ -267,6 +267,16 @@ export let runs = (host?: Host): Runs => ({
     let s = String(args.session)
     let prior = usingBefore(await transcript(graph, s)) ??
       await selectedUsing(graph, s)
+    // A knock needs no model: the run going on chose its own.
+    let actor = who(call)
+    if (await outside(graph, s, prior)) {
+      return await graph.apply([{
+        entity: { eid: crypto.randomUUID() },
+        doc: { body: String(args.text) },
+        knock: { target: s },
+        ...actor ? { $actor: actor } : {},
+      }])
+    }
     let provider = word(args, 'provider')
     let model = word(args, 'model')
     let using = prior
@@ -284,15 +294,6 @@ export let runs = (host?: Host): Runs => ({
           model ?? nameOf(m, MODEL),
         ),
       }
-    }
-    let actor = who(call)
-    if (await outside(graph, s, using)) {
-      return await graph.apply([{
-        entity: { eid: crypto.randomUUID() },
-        doc: { body: String(args.text) },
-        knock: { target: s },
-        ...actor ? { $actor: actor } : {},
-      }])
     }
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },

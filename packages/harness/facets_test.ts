@@ -1,5 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { identityEid } from '@yaks/graph/identity'
+import { PROVIDER } from '@yaks/model'
 import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
 import { close as closeCli, opened } from '../cli/local.ts'
@@ -201,12 +203,18 @@ test('session new opens an empty TUI session and requires input otherwise', asyn
 test('a send to a session running outside the graph knocks and returns at once', async () => {
   let h = await harness()
   let s = mint()
+  let claude = identityEid(PROVIDER, ['claude'])
   try {
-    await h.g.apply([{
-      entity: { eid: s },
-      session: { id: s },
-      process: { pid: 1, command: 'claude' },
-    }])
+    // Spawned on a provider with no model chosen: a knock asks for none.
+    await h.g.apply([
+      { entity: { eid: claude }, provider: { name: 'claude' } },
+      {
+        entity: { eid: s },
+        session: { id: s },
+        using: { provider: claude },
+        process: { pid: 1, command: 'claude' },
+      },
+    ], { trusted: true })
     let [knock] = await runs().session_send!({
       entity: { eid: mint() },
       call: { args: { session: s, text: 'cache the scripts too' } },
