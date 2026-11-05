@@ -523,6 +523,46 @@ test('a renamed Operator goes by its new name in its chat app, its settings and 
   assertStringIncludes(told, 'You are Marlowe Quince, the Operator of clerk')
 })
 
+// A Voice card saved through its door, then the settings drawn again.
+let voiced = async (voice: string, voice_model: string) => {
+  let saved = await answer(`${at}?voice=1`, {
+    method: 'POST',
+    body: new URLSearchParams({ voice, voice_model }),
+  })
+  let { document } = parseHTML(
+    await operatorBody(
+      { ...p.env, DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' } as never,
+      (await dir.at(eid))!,
+      who,
+    ),
+  )
+  return {
+    status: saved!.status,
+    voice: document.querySelector('#voice [name=voice]:checked')
+      ?.getAttribute('value'),
+    model: document.querySelector('#voice option[selected]')
+      ?.getAttribute('value'),
+  }
+}
+test('the Voice card shows back the voice and model each save picked', async () => {
+  for (
+    let [voice, model] of [
+      ['aura-2-pandora-en', 'claude-haiku-5-5'],
+      ['fable', 'claude-sonnet-5-5'],
+      ['cedar', 'claude-haiku-5-5'],
+      ['marin', 'gpt-realtime-2.1'],
+    ]
+  ) {
+    assertEquals(await voiced(voice, model), { status: 200, voice, model })
+  }
+  // A voice the talking model cannot speak is refused, and the last save stays.
+  assertEquals(await voiced('fable', 'gpt-realtime-2.1'), {
+    status: 400,
+    voice: 'marin',
+    model: 'gpt-realtime-2.1',
+  })
+})
+
 // Last, since it adds to the conversation every test above reads.
 test('a chat in which the Operator changed an app shows that app beside it', async () => {
   let call = crypto.randomUUID()

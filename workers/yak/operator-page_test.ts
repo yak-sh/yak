@@ -54,5 +54,10 @@ test('a talking model is picked only with one of its own voices', () => {
     Error,
     'only in its own voices',
   )
+  assertThrows(
+    () => modelOf('gpt-realtime-2.1', 'fable'),
+    Error,
+    'only in its own voices',
+  )
   assertThrows(() => modelOf('gpt-9', 'cedar'), Error, 'models listed')
 })

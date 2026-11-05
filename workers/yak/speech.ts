@@ -93,10 +93,14 @@ export let talks = (provider: Provider, model: string) =>
   provider.talk?.models.includes(model) ?? false
 
 /** The model named `id` for a call in `voice`, refused when it neither
- * answers calls here nor talks in that voice's provider. */
+ * answers calls here nor talks in that voice: a provider may speak voices
+ * its talking model does not (OpenAI's Fable, Nova and Onyx). */
 export let modelOf = (id: string, voice: string) => {
   let { provider } = voiceOf(voice)
-  if (CALL_MODELS.includes(id) || talks(provider, id)) return id
+  if (CALL_MODELS.includes(id)) return id
+  if (
+    talks(provider, id) && provider.talk!.voices.some((v) => v.id == voice)
+  ) return id
   throw new CallError(
     'arguments',
     VOICES.some((v) => talks(v.provider, id))
