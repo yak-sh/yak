@@ -54,11 +54,12 @@ decides how much of the graph is on the sheet.
 
 `layout(bundles, { was })` keeps every entity of `was` where it was, with its
 `order`. A new entity `at` gives a place (fractions of the sheet's width and
-height, by eid or label) goes there. Each other new entity, in the order given,
-takes the cheapest free spot: one that overlaps no shape, crosses few lines,
-sits a short reach from the entities it names, and is not far from the sheet's
-middle. When no spot is free the sheet grows downward, so `height` can come back
-larger than asked. An entity that leaves the selection gives up its place.
+height, by its eid, label or bundle) goes there. Each other new entity, in the
+order given, takes the cheapest free spot: one that overlaps no shape, crosses
+few lines, sits a short reach from the entities it names, and is not far from
+the sheet's middle. When no spot is free the sheet grows downward, so `height`
+can come back larger than asked. An entity that leaves the selection gives up
+its place.
 
 Every node and link carries `fresh`, true when it joined in this layout, and
 `stage`, the `options.stage` it joined in (default 0).

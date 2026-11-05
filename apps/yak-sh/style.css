@@ -1203,6 +1203,47 @@ h2 {
 }
 .Window_Line.is-in {
   color: #fff;
+  /* A long call shows its start; the beat beside it has the whole line. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+/* The rules band: under the drawing, the rule or effect the open turn ran,
+   as the vocabulary that declares it writes it. */
+.Declares {
+  display: grid;
+  gap: .6rem;
+  margin-top: .8rem;
+}
+.Declared {
+  border: 1px solid var(--rule);
+  background: rgba(252, 250, 245, .55);
+  animation: pop .35s ease-out;
+}
+.Declared_Bar {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--rule);
+  font: 400 .75rem/1.5 var(--mono);
+  color: var(--soft);
+}
+.Declared_Bar b {
+  font-weight: 500;
+  color: var(--ink);
+}
+.Declared pre {
+  margin: 0;
+  padding: 8px 12px;
+  font: 400 .75rem/1.55 var(--mono);
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.Declared p {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: .8125rem;
+  color: var(--soft);
 }
 .Window_Line.is-fault {
   color: #f2b8a8;
@@ -1447,6 +1488,7 @@ h2 {
   }
   .Source .comp > div,
   .Outbox li,
+  .Declared,
   .Window.is-open,
   .Doors_Wire path,
   .Caret {

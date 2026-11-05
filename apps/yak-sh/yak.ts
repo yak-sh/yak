@@ -5,7 +5,7 @@ import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
 import { loadTools, tier } from '@yaks/graph/tools'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import { ram } from '@yaks/ram'
-import { loadVocab, type Vocab } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { answerOf, faulted, runner, toolEid } from '@yaks/tools'
 import {
   argsFor,
@@ -100,6 +100,8 @@ export let OFFERED = new Set([
   'task_new',
   'task_list',
   'task_update',
+  'decision_new',
+  'decision_answer',
 ])
 
 /** One line typed, and what it printed. */
@@ -377,5 +379,15 @@ export let yak = async ({ retry = 1500 } = {}) => {
     },
     /** The outbox the mail effect delivers to. */
     outbox: box,
+    /** A rule or effect by name, as the vocabulary that declares it writes
+     * it, and the package that declares it (`shop`: the page's own). */
+    declared: (name: string) =>
+      [...PACKAGES, { name: 'shop', vocab: { docs: [shopDoc] } }]
+        .flatMap((p) =>
+          (p.vocab.docs as VocabDoc[] ?? []).map((d) => ({
+            from: p.name,
+            def: d.$defs?.[name] as Record<string, unknown> | undefined,
+          }))
+        ).find((d) => d.def),
   }
 }

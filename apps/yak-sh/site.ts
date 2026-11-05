@@ -48,6 +48,12 @@ type Section = {
 let sh = (...lines: string[]) => '```sh\n' + lines.join('\n') + '\n```'
 let mcp = (...lines: string[]) => '```mcp\n' + lines.join('\n') + '\n```'
 let web = (...lines: string[]) => '```web\n' + lines.join('\n') + '\n```'
+/** The rules and effects a beat shows, by name. */
+let declared = (...names: string[]) =>
+  '```declared\n' + names.join('\n') + '\n```'
+/** A beat that writes nothing: its window is the outbox, showing what was
+ * tried with the letter of this subject. */
+let outbox = (subject: string) => '```outbox\n' + subject + '\n```'
 
 export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
 
@@ -170,6 +176,29 @@ export let SECTIONS: Section[] = [
       '### In a terminal',
       'The tests fail on main, so you file the fix and give it to your agent.',
       sh("yak task new 'Fix the failing build' --assignee N-5"),
+    ].join('\n\n'),
+  },
+  {
+    eid: '196d0ca4-ea4c-4126-861c-d7a93d646aed',
+    pane: '30236dd0-a5d0-4615-9fbf-c0e24b224a5f',
+    view: 'Rules',
+    title: 'Rules change a write as it is made, and effects do what it leaves',
+    body: [
+      "You don't write code that watches the graph. A **rule** is a query a vocabulary declares, and the graph runs it inside every write, whichever door the write came through: what it matches, it changes before the write is stored, so nothing ever reads the graph without it. An **effect** is work a write leaves behind. The commit records it in the same transaction, so it can't be lost, and after the commit it runs on its own, tried again until it succeeds.",
+      '### A rule turns a question into a letter',
+      "Fixing the build, your agent needs an answer only you can give, and asks. The shop's rule matches a question for someone with an address, and writes them a letter in the same write; `letter_from` then gives the letter its sender.",
+      declared('question_mail', 'letter_from'),
+      mcp(
+        'decision_new {"question": "Which payments key should the build use?", "choices": [{"label": "The test key", "description": "The build never charges a card."}, {"label": "The live key", "description": "The build checks the live account."}], "recommended": "The test key", "assignee": "U-1"}',
+      ),
+      '### An effect sends it',
+      '`@yaks/mail` declares an effect for every letter written: hand it to the mail service, and record what happened. The commit owed it, and it runs after. The outbox turns the letter away once, so the effect waits and tries again.',
+      declared('mail_post'),
+      outbox('Which payments key should the build use?'),
+      '### A rule closes the question',
+      "You pick an answer in the browser. `@yaks/task`'s rule finishes a question once it is answered, in the same write.",
+      declared('decision_answered'),
+      web('decision_answer {"decision": "T-8", "choice": "The test key"}'),
     ].join('\n\n'),
   },
   {
@@ -412,27 +441,40 @@ export let scriptOf = (body: string) => {
   return { sh: block('sh'), mcp: block('mcp').map(called) }
 }
 
-/** One interface's turn in the doors band: its heading, what it does, and the
- * one line it runs, typed in a terminal (`sh`), called by the agent over MCP
- * (`mcp`) or called by a page in the browser (`web`). */
-export type Beat = { title: string; prose: string; kind: string; line: string }
+/** One turn of a band: its heading, what it says, the rules and effects it
+ * shows by name, and the one line it runs: typed in a terminal (`sh`),
+ * called by the agent over MCP (`mcp`) or by a page in the browser (`web`).
+ * An `outbox` beat runs nothing; its line is the subject of the letter whose
+ * tries it shows. */
+export type Beat = {
+  title: string
+  prose: string
+  kind: string
+  line: string
+  shows: string[]
+}
 
-/** The doors band's body: what it says first, then each `###` beat. */
+// The blocks a section's body holds that the page acts on, not prints.
+const BLOCK = /```(sh|mcp|web|outbox|declared)\n([\s\S]*?)\n```/g
+
+/** A band's body: what it says first, then each `###` beat. */
 export let beatsOf = (body: string) => {
   let [head, ...rest] = body.split(/^### /m)
   let beats = rest.map((chunk): Beat => {
-    let block = chunk.match(/```(\w+)\n([\s\S]*?)\n```/)
-    let [title, ...words] = chunk.replace(block?.[0] ?? '', '').split('\n')
+    let blocks = [...chunk.matchAll(BLOCK)]
+    let run = blocks.find((m) => m[1] != 'declared')
+    let [title, ...words] = chunk.replace(BLOCK, '').split('\n')
     return {
       title: title.trim(),
       prose: words.join('\n').trim(),
-      kind: block?.[1] ?? 'sh',
-      line: block?.[2] ?? '',
+      kind: run?.[1] ?? 'sh',
+      line: run?.[2] ?? '',
+      shows: blocks.filter((m) => m[1] == 'declared')
+        .flatMap((m) => m[2].split('\n')),
     }
   })
   return { head: head.trim(), beats }
 }
 
-/** A section's prose: its body without the blocks it runs. */
-export let proseOf = (body: string) =>
-  body.replace(/```(sh|mcp|web)\n[\s\S]*?\n```/g, '').trim()
+/** A section's prose: its body without the blocks the page acts on. */
+export let proseOf = (body: string) => body.replace(BLOCK, '').trim()

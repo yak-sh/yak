@@ -16,5 +16,17 @@ export let shopDoc = {
       description:
         "A letter that names no sender goes from the shop's address.",
     },
+    mailed: {
+      component: true,
+      type: 'object',
+      description: 'A letter about this went to the one it asks.',
+    },
+    question_mail: {
+      rule: true,
+      match:
+        '$q .decision !decided +!mailed, filed.assignee=$p, doc.title=$t; $p .email; +doc.title=$t, +doc.body="Answer it on the task.", +mail.target=$q, +deliver.to=$p',
+      description:
+        'A question for someone with an address is also a letter to them, once.',
+    },
   },
 } as unknown as VocabDoc

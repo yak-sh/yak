@@ -8,6 +8,7 @@ import { beatsOf, scriptOf, SECTIONS, SELF, SITE } from './site.ts'
 import { text } from './told.ts'
 import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
+import { SHOP, YOURS } from './shop.ts'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
 
 let dir = new URL('./', import.meta.url)
@@ -89,8 +90,8 @@ test('the story types into the prompt and the drawing draws what it made', async
 test('each interface in the doors band makes its own change to the one graph, drawn as the top draws it', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, steps.length)
-  let { beats } = beatsOf(SECTIONS.find((s) => s.view == 'Doors')!.body)
-  await page.turns.reach(beats, beats.length)
+  let band = SECTIONS.find((s) => s.view == 'Doors')!
+  await page.turns.reach(band.eid, beatsOf(band.body).beats.length)
   await settle()
   let { you, agent } = page.yak
   let task = async (title: string) =>
@@ -103,7 +104,7 @@ test('each interface in the doors band makes its own change to the one graph, dr
     [text(checkout, 'task', 'status'), text(checkout, 'completed', 'by')],
     [text(fix, 'task', 'status'), text(fix, 'filed', 'assignee')],
   ], [['done', you], ['done', agent], ['open', agent]])
-  let doors = root.querySelector('.Doors')!
+  let doors = root.querySelector(`[data-eid="${band.eid}"]`)!
   equal(
     [...doors.querySelectorAll('.Window')].map((w) =>
       w.getAttribute('data-door')
@@ -113,10 +114,10 @@ test('each interface in the doors band makes its own change to the one graph, dr
   let shown = doors.querySelector('.Window.is-open')!
   match(shown.textContent!, /T-7 Fix the failing build open/)
   // The band draws what the top draws, and marks what the open window wrote.
-  let drawn = (sel: string) =>
-    [...root.querySelectorAll(`${sel} .Diagram_Node`)]
+  let drawn = (in_: Element, sel: string) =>
+    [...in_.querySelectorAll(`${sel} .Diagram_Node`)]
       .map((n) => n.getAttribute('transform'))
-  equal(drawn('.Doors_Drawing'), drawn('.Figure_Sheet'))
+  equal(drawn(doors, '.Doors_Drawing'), drawn(root, '.Figure_Sheet'))
   equal(
     doors.querySelector('.Doors_Drawing .is-told')?.getAttribute('data-key'),
     fix.entity.eid,
@@ -125,6 +126,55 @@ test('each interface in the doors band makes its own change to the one graph, dr
   fire(doors.querySelector('.Window[data-door="mcp"]')!, 'click')
   await settle()
   equal(root.querySelector('.Editor .Editor_Bar b')?.textContent, 'N-5')
+  page.page.close()
+})
+
+test('in the rules band a rule makes a question a letter, an effect sends it, and a rule closes the question once answered', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, steps.length)
+  let band = SECTIONS.find((s) => s.view == 'Rules')!
+  let rules = root.querySelector(`[data-eid="${band.eid}"]`)!
+  let reach = async (n: number) => {
+    await page.turns.reach(band.eid, n)
+    await settle()
+    let open = rules.querySelector('.Window.is-open')!
+    return {
+      door: open.getAttribute('data-door'),
+      said: open.textContent!,
+      declared: [...rules.querySelectorAll('.Declared')]
+        .map((d) => d.getAttribute('data-declared')),
+      told: rules.querySelector('.is-told')?.getAttribute('data-key'),
+      toast: rules.querySelector('.Toast')?.textContent,
+    }
+  }
+  let asked = await reach(1)
+  // The bands above ran first, so the build's fix is T-7 and this is T-8.
+  match(asked.said, /T-8 Which payments key should the build use\? open/)
+  equal(asked.declared, ['question_mail', 'letter_from'])
+  let [letter] = await page.yak.graph.read('.mail.target.decision *')
+  equal(
+    [text(letter, 'mail', 'from'), text(letter, 'mail', 'to')],
+    [SHOP, YOURS],
+  )
+  let sent = await reach(2)
+  equal([sent.door, sent.declared, sent.told], [
+    'outbox',
+    ['mail_post'],
+    letter.entity.eid,
+  ])
+  match(sent.said, /turned away: .*taken as outbox-\d/)
+  equal(sent.toast, `Email sent to ${YOURS}${text(letter, 'doc', 'title')}`)
+  let closed = await reach(3)
+  equal([closed.door, closed.declared, closed.toast], [
+    'web',
+    ['decision_answered'],
+    undefined,
+  ])
+  let [question] = await page.yak.graph.read('.decision *')
+  equal(
+    [text(question, 'task', 'status'), text(question, 'decided', 'choice')],
+    ['done', 'The test key'],
+  )
   page.page.close()
 })
 

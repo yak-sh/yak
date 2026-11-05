@@ -35,8 +35,17 @@ export const PLACES: Record<string, [number, number]> = {
   'T-2': [.68, .56],
   'N-5': [.18, .78],
   'T-7': [.68, .8],
+  'T-8': [.42, .24],
   'C-6': [.36, .93],
 }
+
+/** Where a letter sits, which has no number: under you, beside the question
+ * it asks, above where the windows dock. */
+const LETTER: [number, number] = [.14, .33]
+
+/** Where an entity the story makes sits: by its number, or a letter's. */
+export let placeOf = ({ label, bundle }: { label: string; bundle: Bundle }) =>
+  PLACES[label] ?? (bundle.mail ? LETTER : undefined)
 
 /** The first stage what a wider query adds is drawn in; a visitor's lines
  * are drawn from LIVE up to it. */

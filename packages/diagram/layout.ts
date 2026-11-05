@@ -67,7 +67,9 @@ export type Options = {
   shapes?: Record<string, Shape>
   /** Where a newcomer goes, as fractions of the sheet's width and height,
    * when its place is known beforehand; any other takes the cheapest spot. */
-  at?: (node: { eid: string; label: string }) => [number, number] | undefined
+  at?: (
+    node: { eid: string; label: string; bundle: Bundle },
+  ) => [number, number] | undefined
   /** The stage what joins now is stamped with (default 0), so a page can draw
    * each stage in as its reader reaches it. */
   stage?: number
@@ -331,7 +333,7 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
   for (let { b, size } of drawn) {
     let eid = b.entity.eid
     if (spot.has(eid)) continue
-    let pin = opts.at?.({ eid, label: label(b) })
+    let pin = opts.at?.({ eid, label: label(b), bundle: b })
     if (pin) put(eid, [pin[0] * width, pin[1] * height], size)
   }
   let ends = (l: Line) => [spot.get(l.from), spot.get(l.to)]

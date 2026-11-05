@@ -12,11 +12,11 @@ import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import { type Figure, into, PLACES, SHEET, WIDER } from './figure.ts'
+import { type Figure, into, placeOf, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
-import { Doors } from './doors.ts'
+import { Doors, Rules } from './doors.ts'
 import type { Turns } from './turns.ts'
 import { text, useHeard, useTold } from './told.ts'
 import { clicked, Editor, opener } from './editor.ts'
@@ -395,7 +395,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       query: figure.query(),
       ...SHEET,
       stage: term.stage,
-      at: ({ label }) => PLACES[label],
+      at: placeOf,
       title: 'The graph in this tab',
       drawn: (layout) => {
         figure.saw(layout, performance.now())
@@ -478,5 +478,6 @@ export let views = define([
   { view: 'Step', match: doc, Render: Step },
   { view: 'Stack', match: doc, Render: Stack },
   { view: 'Doors', match: doc, Render: Doors },
+  { view: 'Rules', match: doc, Render: Rules },
   ...parts.map((p) => ({ ...p, match: doc })),
 ] as never)
