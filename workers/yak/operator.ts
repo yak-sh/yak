@@ -1,4 +1,11 @@
-import { type Bundle, type Comp, identityEid, namedTool } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Graph,
+  identityEid,
+  type NamedTool,
+  namedTool,
+} from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
 import {
   kindOf,
@@ -18,7 +25,9 @@ import { workersAi } from '@yaks/workers-ai'
 import { claude, providerOf, readsOf } from './claude.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
-import { loadTools } from '@yaks/graph/tools'
+import { loadTools, textSearch } from '@yaks/graph/tools'
+import { memoryDoc } from '@yaks/memory/vocab'
+import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
@@ -28,7 +37,7 @@ import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
 import { inReach } from './declared.ts'
-import { reaching } from './agent.ts'
+import { reaching, searching } from './agent.ts'
 import { ledger } from './ledger.ts'
 import { type Args, type Ctx, refuse } from './tool.ts'
 import { bound, type Env } from './env.ts'
@@ -98,6 +107,9 @@ let CONVERSATION =
   ' You talk with this person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives here, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool. When you were started for a piece of work (a fork, or a helper), do the work with your tools, then end with a short report for the conversation to pass on.'
 let TASKED =
   " Carry out this task using the space's existing apps and rows, then explain what changed and the next step. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work."
+// Where the Operator finds what it no longer holds in front of it (`SELF`).
+let REMEMBERS =
+  ' Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -119,6 +131,7 @@ let workbench = new Set([
   'graph_query',
   'graph_show',
   'graph_apply',
+  'search',
   'app_list',
   'app_new',
   'app_files',
@@ -140,74 +153,120 @@ let workbench = new Set([
   'sandbox_write',
   'sandbox_stop',
   'sandbox_ship',
-  'task_update',
 ])
 
+// What the Operator reads of itself: its own store, where each conversation
+// and every entry in it, its forks and helpers, its memories, its persona and
+// its tasks and requests are kept. The generic reads take `self` to read it
+// instead of the apps, and the memory loop works on it alone (@yaks/memory).
+let SELF = {
+  type: 'boolean',
+  description:
+    'Read your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, and your tasks and requests.',
+}
+let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
+
 // Discovery is refreshed before every ask: a deploy may add words and tools.
-export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
+export let operatorRoster = async (
+  ctx: Ctx,
+  work: Store,
+  tasked = false,
+): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
-  let g = await reaching(ctx, await inReach(ctx))
+  let reach = await inReach(ctx)
+  let g = await reaching(ctx, reach)
   // A tool's answer in words is the call's own, as at the connector's door:
   // only what it wrote for an app goes on to the app (ledger.ts).
   let landing = ledger(g)
-  let privateTools = work
-    ? loadTools([taskDoc], taskRuns()).filter((t) => t.name == 'task_update')
-    : []
-  return [...listing({ graph: g }), ...privateTools].map(namedTool)
-    .filter((t) => workbench.has(t.name))
-    .map((t) => ({
-      name: t.name,
-      ...t.title ? { title: t.title } : {},
-      ...t.step ? { step: t.step } : {},
-      description: t.description,
-      parameters: inputSchemaOf(t),
-      readOnly: t.readOnly,
-      run: async (args, context) => {
-        let call = context!.call
-        let [host, target] = t.name == 'task_update'
-          ? [work!.g, work!.g]
-          : [g, landing]
-        let fault: unknown
-        let out = await invoke(
-          {
-            ...call,
-            call: {
-              ...comp(call, 'call'),
-              args,
-              actor: { by: ctx.who!.actor!, via: context!.session },
-            },
-            $actor: {
-              by: ctx.who!.actor!,
-              via: context!.session,
-            },
+  let own = new Map(
+    [
+      ...listing({
+        graph: work.g,
+        search: textSearch(work.g),
+        readOnly: true,
+      }),
+      ...loadTools([memoryDoc], memoryRuns()),
+      ...tasked ? loadTools([taskDoc], taskRuns()) : [],
+    ].map(namedTool).map((t) => [t.name, t]),
+  )
+  let run =
+    (t: NamedTool, host: Graph, target: Graph): Tool['run'] =>
+    async (args, context) => {
+      let call = context!.call
+      let fault: unknown
+      let out = await invoke(
+        {
+          ...call,
+          call: {
+            ...comp(call, 'call'),
+            args,
+            actor: { by: ctx.who!.actor!, via: context!.session },
           },
-          t,
-          target,
-          {
-            host,
-            report: (e) => {
-              fault = e
-              caught(e, { request: 'operator tool', tool: t.name })
-            },
+          $actor: {
+            by: ctx.who!.actor!,
+            via: context!.session,
           },
-          (answer, state, keeps) =>
-            !t.readOnly && !t.applied && state == 'done' && keeps !== false
-              ? target.apply(answer)
-              : answer,
+        },
+        t,
+        target,
+        {
+          host,
+          report: (e) => {
+            fault = e
+            caught(e, { request: 'operator tool', tool: t.name })
+          },
+        },
+        (answer, state, keeps) =>
+          !t.readOnly && !t.applied && state == 'done' && keeps !== false
+            ? target.apply(answer)
+            : answer,
+      )
+      let refusal = out.find((b) => b.refusal)
+      if (refusal) {
+        throw new CallError(
+          String(comp(refusal, 'refusal')?.code),
+          String(comp(refusal, 'content')?.body),
         )
-        let refusal = out.find((b) => b.refusal)
-        if (refusal) {
-          throw new CallError(
-            String(comp(refusal, 'refusal')?.code),
-            String(comp(refusal, 'content')?.body),
-          )
-        }
-        if (fault) throw fault
-        // Applied tools already wrote through their own store; generic writes
-        // return patches and use the same graph application as the connector.
-        return worded(out) || JSON.stringify(out)
-      },
-    }))
+      }
+      if (fault) throw fault
+      // Applied tools already wrote through their own store; generic writes
+      // return patches and use the same graph application as the connector.
+      return worded(out) || JSON.stringify(out)
+    }
+  let shaped = (t: NamedTool) => ({
+    name: t.name,
+    ...t.title ? { title: t.title } : {},
+    ...t.step ? { step: t.step } : {},
+    description: t.description,
+    parameters: inputSchemaOf(t),
+    readOnly: t.readOnly,
+  })
+  let apps = listing({ graph: g, search: searching(ctx, reach) })
+    .map(namedTool).filter((t) => workbench.has(t.name))
+  return [
+    ...apps.map((t): Tool => {
+      let self = own.get(t.name)
+      let there = run(t, g, landing)
+      if (!self) return { ...shaped(t), run: there }
+      let here = run(self, work.g, work.g)
+      let tool = shaped(t)
+      return {
+        ...tool,
+        parameters: {
+          ...tool.parameters,
+          properties: {
+            ...tool.parameters.properties as Record<string, unknown>,
+            self: SELF,
+          },
+        },
+        run: ({ self: reads, ...args }, context) =>
+          (reads ? here : there)(args, context),
+      }
+    }),
+    ...[...own.values()]
+      .filter((t) => mine.has(t.name) || t.name == 'task_update')
+      .map((t) => ({ ...shaped(t), run: run(t, work.g, work.g) })),
+  ]
 }
 
 // What the Operator does when yaks.app, not the app, is at fault: it tells
@@ -655,7 +714,7 @@ export let operating = (
         let { space, ctx, files } = await working(env, store, session)
         let tasked = !!await taskOf(store, session)
         return [
-          ...await operatorRoster(ctx, tasked ? store : undefined),
+          ...await operatorRoster(ctx, store, tasked),
           platformBug(space),
           textSend(env, ctx, space),
           ...options.tools?.(ctx, files) ?? [],
@@ -674,7 +733,7 @@ export let operating = (
           introduced(space)
         } You work for the owner of ${space.slug}.${
           tasked ? TASKED : CONVERSATION
-        } Read the app's schema and rows before changing data. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent.${
+        }${REMEMBERS} Read the app's schema and rows before changing data. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent.${
           asks
             ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
             : ''
@@ -750,7 +809,7 @@ export let operating = (
     await g.apply([
       {
         entity: { eid: space.eid },
-        doc: { title: `${space.slug}'s operator` },
+        doc: { title: `${space.operator}, the Operator of ${space.slug}` },
         project: {},
         persona: {},
       },

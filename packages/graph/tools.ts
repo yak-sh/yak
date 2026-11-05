@@ -130,6 +130,40 @@ export type Seams = {
  * best, as the `search` tool's are. */
 export let BEST = 20
 
+/**
+ * The search a graph's own reads answer: every word a text clause, so a row
+ * matches when it holds them all, best first where the storage ranks words
+ * (@yaks/fts), each row wearing its `hit`. For a graph whose storage indexes
+ * its text and that has no ranking of its own to offer.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { graph } from '@yaks/graph'
+ * import { textSearch } from '@yaks/graph/tools'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * let body = { type: 'string', search: true }
+ * let vocab = loadVocab([{ $defs: { note: { component: true, properties: { body } } } }])
+ * let g = graph({ storage: ram(vocab), vocab })
+ * await g.apply([
+ *   { entity: { eid: 'n1' }, note: { body: 'The dentist moved to Wednesday' } },
+ *   { entity: { eid: 'n2' }, note: { body: 'Lunch on Wednesday' } },
+ * ])
+ * let found = await textSearch(g)('dentist wednesday')
+ * equal(found.map((b) => b.entity.eid), ['n1'])
+ * ```
+ */
+export let textSearch =
+  (graph: Pick<Graph, 'read' | 'vocab'>): Search => async (said, opts) => {
+    let terms = said.replaceAll('"', ' ').split(/\s+/).filter(Boolean)
+    if (!terms.length) return []
+    let line = hit(graph.vocab, terms)
+    let rows = await graph.read(
+      conjoin(...terms.map((t) => `"${t}"`), `.limit=${opts?.limit ?? BEST}`),
+    )
+    return rows.map((b) => ({ ...b, hit: line(b) }))
+  }
+
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined

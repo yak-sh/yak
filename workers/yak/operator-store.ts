@@ -27,6 +27,8 @@ import { plugins as blobs } from '@yaks/blob/graph'
 import { mailDoc } from '@yaks/mail/vocab'
 import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
+import { memoryDoc } from '@yaks/memory/vocab'
+import { adopt, fields, search } from '@yaks/fts'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -46,6 +48,7 @@ export let operatorVocab = loadVocab([
   mailDoc,
   operatorDoc,
   draftDoc,
+  memoryDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
 export let operatorStore = (
@@ -55,11 +58,14 @@ export let operatorStore = (
   let vocab = operatorVocab
   let sql = driver(durable)
   let kept = sqliteBlobs(sql)
-  let store = storage(durable, vocab, {
-    derived: { ...blobRead(vocab), ...sessionDerived(vocab) },
-  })
+  let derived = { ...blobRead(vocab), ...sessionDerived(vocab) }
+  // The Operator finds what was said in its own work by its words: an
+  // entry's text, a doc's title and body, a memory (@yaks/fts).
+  let text = fields(vocab)
+  let store = storage(durable, vocab, { derived, extend: [search(text, sql)] })
   for (let stmt of blobSchema()) sql.query(stmt)
   store.install()
+  adopt(sql, text, derived, { heal: false })
   return operatorGraph(store, blobs({ vocab, blobs: kept }), options)
 }
 
