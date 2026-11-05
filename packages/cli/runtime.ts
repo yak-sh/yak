@@ -32,16 +32,17 @@ export let readinessPid = (): number => launcherPid ?? system.pid
 export let runtimeRoot = (): boolean =>
   system.env.get('YAK_RUNTIME_ROOT') == ROOT.href.replace(/\/$/, '')
 
-let git = async (root: string, ...args: string[]) => {
-  let result = await launchCommand('git', {
+let run = async (command: string, args: string[], cwd?: string) => {
+  let result = await launchCommand(command, {
     args,
-    cwd: root,
+    cwd,
     stdout: 'piped',
     stderr: 'piped',
   }).output()
   if (!result.success) throw new Error(decode(result.stderr).trim())
   return result.stdout
 }
+let git = (root: string, ...args: string[]) => run('git', args, root)
 let feed = async (
   command: string,
   args: string[],
@@ -204,8 +205,9 @@ export let snapshot = async (
   }
 }
 
-/** Write a slot from scratch. Its `.hash` comes last, so a slot cut short
- * while building is never matched and is rewritten by the next launch. */
+/** Write a slot from scratch, npm workspace included. Its `.hash` comes last,
+ * so a slot cut short while building is never matched and is rewritten by the
+ * next launch. */
 let build = async ({ root, commit, patch, files, target, hash }: {
   root: string
   commit: string
@@ -233,6 +235,15 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     [new URL(`file://${root}/`).href]: new URL(`file://${target}/`).href,
   }
   await disk.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
+  // The tree's own install, as a checkout's hooks and the yak wrapper run it.
+  await run(system.execPath(), [
+    'run',
+    '-q',
+    '-A',
+    '--config',
+    `${target}/deno.json`,
+    `${target}/workers/yak/dependencies.ts`,
+  ])
   await disk.writeTextFile(`${target}/.hash`, hash)
 }
 
