@@ -1,6 +1,7 @@
 // A space's allowances, counted spends and metered model/mail providers.
 // facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
+import { reached } from './lib/hops.ts'
 import { type ByDay, kept } from '@yaks/ui/chart'
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
@@ -1101,7 +1102,10 @@ export let accounted = (
         )
       }
       let info = music(req.model) ? undefined : await model.info?.(req.model)
-      let tariff = info?.price ?? await price?.(req.model)
+      let tariff = reached(
+        'priced',
+        info?.price ?? await price?.(req.model),
+      )
       let call = req.call ?? mint()
       let hold = await reserved({ STORE: ns }, space, (remaining) => {
         if (music(req.model)) {
@@ -1118,6 +1122,7 @@ export let accounted = (
           : null
         return req.questions && quote?.tokens != output ? null : quote
       }, call)
+      reached('reserved', hold)
       let submitted = false
       let reply: Awaited<ReturnType<Model>>
       try {

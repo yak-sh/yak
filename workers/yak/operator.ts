@@ -54,7 +54,14 @@ import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted } from './meter.ts'
 import { caught, defect } from './defects.ts'
-import { ambient, counts, type Tally, tallying } from './lib/hops.ts'
+import {
+  ambient,
+  counts,
+  reached,
+  since,
+  type Tally,
+  tallying,
+} from './lib/hops.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import {
   asIs,
@@ -474,43 +481,31 @@ let ENDED = ['settled', 'failed', 'stopped']
 // is (lib/hops.ts): what it reads of the directory is asked once, until it
 // writes there, and its tool roster, instructions and payer share the
 // answers.
-let begun = new WeakMap<Tally, number>()
+let steps = new WeakSet<Tally>()
 let stepwise = (handlers: Handlers): Handlers =>
   Object.fromEntries(
     Object.entries(handlers).map(([name, handler]) => [
       name,
       (...args: Parameters<typeof handler>) => {
         let tally: Tally = new Map()
-        begun.set(tally, Date.now())
+        steps.add(tally)
         return tallying(tally, () => handler(...args))
       },
     ]),
   )
-
-// When a step first finished each stage on its way to the model, in ms from
-// its start, logged beside its count (`asked`): which stage a slow ask waited
-// on, since the waits a tally sums overlap.
-let reached = <T>(stage: string, value: T): T => {
-  let tally = ambient()
-  let at = tally && begun.get(tally)
-  if (tally && at != null && !tally.has(`at_${stage}`)) {
-    tally.set(`at_${stage}`, Date.now() - at)
-  }
-  return value
-}
 
 // How long a step took to ask its model, and the round trips it made on the
 // way, in the Worker's logs: store hops, bucket reads, and trips to the cached
 // Files door (files.ts `door`).
 let asked = (session?: string) => {
   let tally = ambient()
-  let at = tally && begun.get(tally)
-  if (!tally || at == null) return
+  let ms = tally && steps.has(tally) && since(tally)
+  if (!tally || ms == null || ms === false) return
   console.log(
     'yak operator ask',
     JSON.stringify({
       session,
-      ms: Date.now() - at,
+      ms,
       ...counts(tally),
       files: tally.get('files') ?? 0,
       ...Object.fromEntries(

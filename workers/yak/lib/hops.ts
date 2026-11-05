@@ -35,9 +35,13 @@ let here = new AsyncLocalStorage<Tally>()
 type Held = { fresh: boolean; answer: Promise<unknown> }
 let reads = new WeakMap<Tally, Map<string, Held>>()
 
+// When each tally began counting, for the stages it reaches (`reached`).
+let begun = new WeakMap<Tally, number>()
+
 /** Run `work` with `tally` as the ambient count for everything it awaits. */
 export let tallying = <T>(tally: Tally, work: () => T): T =>
   here.run(tally, () => {
+    if (!begun.has(tally)) begun.set(tally, Date.now())
     let held = new Map<string, Held>()
     reads.set(tally, held)
     let close = () => reads.get(tally) == held && reads.delete(tally)
@@ -45,6 +49,24 @@ export let tallying = <T>(tally: Tally, work: () => T): T =>
     if (!(out instanceof Promise)) return close(), out
     return out.finally(close) as T
   })
+
+/** How long ago `tally` began counting, if it has. */
+export let since = (tally: Tally): number | undefined => {
+  let at = begun.get(tally)
+  return at == null ? undefined : Date.now() - at
+}
+
+/** `value`, noting on this request's tally when it first reached `stage`, in
+ * ms from its start (`at_<stage>`): the waits a tally sums overlap, so these
+ * say which stage a slow request waited on. */
+export let reached = <T>(stage: string, value: T): T => {
+  let tally = here.getStore()
+  let ms = tally && since(tally)
+  if (tally && ms != null && !tally.has(`at_${stage}`)) {
+    tally.set(`at_${stage}`, ms)
+  }
+  return value
+}
 
 /** The tally the work running now counts on, if any. */
 export let ambient = (): Tally | undefined => here.getStore()
