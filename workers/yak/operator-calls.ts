@@ -54,6 +54,13 @@ import { SPACE } from './build.ts'
 /** The longest a call lasts, in minutes. */
 export let MINUTES = 10
 
+// A stream opened this long after the ring is the call's own, opened again
+// when its object restarted mid-call.
+let RESUMED = 15_000
+
+/** What the Operator says when a call's stream comes back mid-call. */
+export let BACK = "Sorry, I lost you for a moment. I'm back."
+
 /** What a call's ticket carries from the ring to the space's object. */
 export type Ticket = {
   space: string
@@ -103,6 +110,34 @@ export let greeting = (operator: string, first?: string) =>
   `Hi${first ? ` ${first}` : ''}, ${operator} here. How can I help?`
 
 /**
+ * One opening of a call's stream at `now`: what is said as it opens, the
+ * minutes the call has left of the MINUTES it lasts from its ring, and the
+ * name of its `n`th turn. The provider opens the stream again when the
+ * object carrying it restarts, as a deploy restarts it: that stream says it
+ * is back rather than hello, and its turns are named anew.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { BACK, opening } from './operator-calls.ts'
+ * let ticket = { call: 'v3:c', via: 'telnyx', at: 0, first: 'Jeff' }
+ * let first = opening(ticket, 'Elihu', 1000)
+ * equal(first.hello, 'Hi Jeff, Elihu here. How can I help?')
+ * let again = opening(ticket, 'Elihu', 120_000)
+ * equal([again.hello, again.minutes], [BACK, 8])
+ * equal(again.turn(1) == first.turn(1), false)
+ * ```
+ */
+export let opening = (
+  ticket: Pick<Ticket, 'call' | 'via' | 'at' | 'first'>,
+  operator: string,
+  now = Date.now(),
+) => ({
+  hello: now - ticket.at > RESUMED ? BACK : greeting(operator, ticket.first),
+  minutes: MINUTES - (now - ticket.at) / 60_000,
+  turn: (n: number) => `${ticket.via}:${ticket.call}:${now}:${n}`,
+})
+
+/**
  * A call rang on `via`'s webhook. One to the platform's number from someone
  * it reaches is answered with its audio streamed to `/<via>/stream`; one from
  * anybody else is rejected. A call to any other number is not the
@@ -136,7 +171,9 @@ export let rang = async (env: Env, via: string, ring: Ring) => {
 /**
  * `GET /<via>/stream`: the provider's WebSocket for a call it was told to
  * stream, carried to the space's object with the ticket the answer sealed.
- * A ticket more than a minute old, or not sealed here, opens nothing.
+ * The provider opens it again when the object restarts under it, as a deploy
+ * restarts it, for as long as the call may last; a ticket older than that,
+ * or not sealed here, opens nothing.
  */
 export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   if ((req.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
@@ -144,7 +181,7 @@ export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   }
   let sealed = new URL(req.url).searchParams.get('call') ?? ''
   let ticket = await opened<Ticket>('call', sealed, secretOf(env))
-  if (!ticket || now - ticket.at > 60_000) {
+  if (!ticket || now - ticket.at > (MINUTES + 1) * 60_000) {
     return new Response(null, { status: 404 })
   }
   let { builderOf } = await import('./build-door.ts')
@@ -651,6 +688,7 @@ export let answering = (
   passed(ticket.at, setup.provider)
   let pair = new WebSocketPair()
   pair[1].accept()
+  let opens = opening(ticket, space.operator ?? 'your Operator')
   let turn = 0
   let key = keyOf(space.eid, ticket.person)
   // The caller's words, to their conversation, answered by `model`.
@@ -667,14 +705,15 @@ export let answering = (
         model,
       },
       text,
-      { id: requestId(space.eid, `${ticket.via}:${ticket.call}:${++turn}`) },
+      { id: requestId(space.eid, opens.turn(++turn)) },
     )
     await armed()
   }
   let around = {
     wire: pair[1],
     line,
-    hello: greeting(space.operator ?? 'your Operator', ticket.first),
+    hello: opens.hello,
+    minutes: opens.minutes,
     done: async ({ seconds, heard, turns }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers and models.

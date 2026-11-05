@@ -535,6 +535,12 @@ let taskOf = async (store: Store, session: string) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
+// The way a request is answered: its channel, and whom it reaches by it.
+let routeOf = (request?: Comp) =>
+  JSON.stringify(
+    ['channel', 'address', 'reply_to', 'via'].map((k) => request?.[k] ?? ''),
+  )
+
 // The inputs a turn ending at `end` answers: each line given since the reply
 // before it. A helper's result stands for the inputs of the turn that started
 // it, so its answer goes where they came from.
@@ -880,21 +886,30 @@ export let operating = (
     )
     let end = said > entries.indexOf(mark) ? said : entries.length
     let given = new Set(origins(entries, end, calls).map((b) => b.entity.eid))
-    let requests = (await g.read(`.operator_request.session=${session}`))
-      .filter((r) => given.has(derivedEid('operator-input|' + r.entity.eid)))
+    let requests = (await g.read(
+      `.operator_request.session=${session} .order=created.at`,
+    )).filter((r) => given.has(derivedEid('operator-input|' + r.entity.eid)))
     let comment = task
       ? derivedEid('operator-answer|' + mark.entity.eid)
       : undefined
-    let answers = requests.map((r) => ({
-      entity: {
-        eid: derivedEid(`operator-answer|${r.entity.eid}|${mark.entity.eid}`),
-      },
-      operator_answer: {
-        request: r.entity.eid,
-        text: reply.text,
-        ...task ? { task } : {},
-      },
-    }))
+    // The turn answers each request, and says so once each way it was asked
+    // by: two calls' turns, or two texts, answered together hear it once.
+    let carriers = new Map<string, string>()
+    let answers = requests.map((r) => {
+      let eid = derivedEid(`operator-answer|${r.entity.eid}|${mark.entity.eid}`)
+      let route = routeOf(comp(r, 'operator_request'))
+      let carrier = carriers.get(route)
+      if (!carrier) carriers.set(route, eid)
+      return {
+        entity: { eid },
+        operator_answer: {
+          request: r.entity.eid,
+          text: reply.text,
+          ...task ? { task } : {},
+          ...carrier ? { with: carrier } : {},
+        },
+      }
+    })
     let ids = [...comment ? [comment] : [], ...answers.map((b) => b.entity.eid)]
     let kept = (await g.get(ids)).some(Boolean)
     // A conversation that could not finish reaches the tracker once, when

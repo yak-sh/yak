@@ -179,14 +179,33 @@ let REQUESTS = '.operator_request ?doc ?failed .order=-created.at .limit=100'
 
 /** Requests with the newest answer each was given, and whether that answer
  * reached them, as one row each: an answer is its own row
- * (`operator_answer{request}`), or, from before, kept on its request. */
+ * (`operator_answer{request}`), or, from before, kept on its request. One
+ * carried by another (`with`) reached them as that one did. */
 export let answering = async (store: Store, requests: Bundle[]) => {
   if (!requests.length) return requests
-  let answers = await store.g.read(
+  let read = await store.g.read(
     `.operator_answer.request=${
       requests.map((r) => r.entity.eid).join(',')
     } ?delivered ?bounced .order=created.at`,
   )
+  let carriers = new Map(
+    (await store.g.get([
+      ...new Set(read.flatMap((a) => {
+        let w = comp(a, 'operator_answer')!.with
+        return w ? [String(w)] : []
+      })),
+    ])).filter(Boolean).map((b) => [b.entity.eid, b]),
+  )
+  let answers = read.map((a) => {
+    let c = carriers.get(String(comp(a, 'operator_answer')!.with))
+    return c
+      ? {
+        ...a,
+        ...c.delivered ? { delivered: c.delivered } : {},
+        ...c.bounced ? { bounced: c.bounced } : {},
+      }
+      : a
+  })
   let newest = new Map(
     answers.map((a) => [String(comp(a, 'operator_answer')!.request), a]),
   )

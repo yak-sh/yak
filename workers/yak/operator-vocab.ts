@@ -153,6 +153,13 @@ export let operatorDoc: VocabDoc = {
         task: { type: 'string', ref: 'task', death: 'keep' },
         text: { type: 'string' },
         message_id: { type: 'string' },
+        with: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description:
+            'The answer that carries this one: a turn that answered several requests sent by the same way says it once, on the first.',
+        },
       },
     },
     // The opt-in as this store kept it before the number moved onto the

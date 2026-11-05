@@ -73,6 +73,7 @@ type Answer = {
   task?: string
   text: string
   message_id?: string
+  with?: string
 }
 export type Channel = (
   request: Request,
@@ -617,12 +618,14 @@ export let handleChannels = (
         }], { trusted: true })
       }
     },
-    // An answer goes out on its request's channel. One kept on the request
-    // itself is from before a request could be answered twice.
+    // An answer goes out on its request's channel, unless another answer of
+    // its turn carries it (`with`). One kept on the request itself is from
+    // before a request could be answered twice.
     operator_deliver: async (event) => {
       let [row] = await g.get([event.entity.eid])
       if (row.delivered) return
       let answer = part<Answer>(row, 'operator_answer')
+      if (answer.with) return
       let [asked] = answer.request ? await g.get([answer.request]) : [row]
       let request = part<Request>(asked, 'operator_request')
       let adapter = adapters[request.channel]

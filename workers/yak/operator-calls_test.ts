@@ -16,6 +16,7 @@ import {
   type Around,
   converse,
   greeting,
+  MINUTES,
   streamDoor,
   talking,
   type Ticket,
@@ -26,8 +27,13 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { rootOf } from './operator-channels.ts'
-import { conversationOf, workOf } from './operator-host.ts'
+import {
+  handleChannels,
+  receive,
+  requestId,
+  rootOf,
+} from './operator-channels.ts'
+import { answering, conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 
 let HI = greeting('Ada', 'Jeff')
@@ -163,7 +169,7 @@ test('with calls on, everyone the platform knows by number is answered', async (
   equal(await ring('+12695550199'), ['reject'])
 })
 
-test('the stream door opens nothing without a fresh ticket sealed here', async () => {
+test('the stream door opens nothing without a ticket sealed here for a call that may still be on', async () => {
   let { p, own, ana } = await fixture()
   let at = (call: string, upgrade = true) =>
     streamDoor(
@@ -179,7 +185,7 @@ test('the stream door opens nothing without a fresh ticket sealed here', async (
     from: ANA,
     to: NUMBER,
     via: 'telnyx',
-    at: Date.now() - 61_000,
+    at: Date.now() - (MINUTES + 1) * 60_000 - 1000,
   }
   equal(await at('x', false), 426)
   equal(await at('forged'), 404)
@@ -566,4 +572,84 @@ test("what a call said without asking is the caller's conversation: listed, draw
     ),
     [true, true, true],
   )
+})
+
+test("a call's turns answered together, and the helper they start, are each said once", async () => {
+  let { env } = platform('call-helper')
+  let person = crypto.randomUUID()
+  let dir = directoryOf(env.STORE)
+  let space = (await dir.at(
+    await dir.mint(person, 'home', 'Home', {
+      'x-yak-person': person,
+      'x-yak-role': 'owner',
+    }),
+  ))!
+  let store = operatorMemory()
+  let forked = (r: Request) => JSON.stringify(r.items).includes('fork of the')
+  let reply = (text: string) => [{ kind: 'assistant' as const, text }]
+  let operator = operating(
+    store,
+    env,
+    operatorModel((req) => {
+      let last = req.items.at(-1)
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        cost: 0,
+        items: forked(req)
+          ? reply('Added Garlic Butter Chicken.')
+          : last?.kind == 'user' && /Added Garlic/.test(last.text)
+          ? reply('Done: Garlic Butter Chicken is in your recipe box.')
+          : last?.kind == 'result'
+          ? reply('Adding a recipe now.')
+          : [{
+            kind: 'call' as const,
+            id: crypto.randomUUID(),
+            name: 'fork',
+            args: JSON.stringify({ prompt: 'Add a random recipe' }),
+          }],
+      })
+    }),
+  )
+  // As on Jeff's call of 2026-11-05: a request, and a fragment of the next
+  // heard before the Operator took the first, so one turn answers both.
+  let turn = 0
+  let c = calling(undefined, {
+    ask: (text) =>
+      receive(
+        store,
+        {
+          space: space.eid,
+          person,
+          channel: 'voice',
+          address: JEFF,
+          reply_to: NUMBER,
+          via: 'telnyx',
+        },
+        text,
+        { id: requestId(space.eid, `telnyx:c1:${++turn}`) },
+      )
+        .then(() => {}),
+  })
+  handleChannels(operator, env, {
+    voice: (_, answer) => {
+      c.call.answered(answer.text)
+      return Promise.resolve({})
+    },
+  })
+  c.told().end('Can you add a random recipe to my recipe box?')
+  c.told().end('I.')
+  await drain(store)
+  await until(() => c.said.length == 3)
+  await new Promise((ok) => setTimeout(ok, 20))
+  equal(c.said, [
+    HI,
+    'Adding a recipe now.',
+    'Done: Garlic Butter Chicken is in your recipe box.',
+  ])
+  // Each request has its answers, and each reached the caller.
+  let requests = await answering(store, await store.g.read('.operator_request'))
+  equal(requests.map((r) => !!r.delivered), [true, true])
+  c.frame({ event: 'stop' })
+  await c.call.ended
 })
