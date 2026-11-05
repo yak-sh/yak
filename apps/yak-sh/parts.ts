@@ -9,7 +9,8 @@ import { Prose, words } from './prose.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
 import { text } from './told.ts'
-import { ANCHORS, LOGO } from './site.ts'
+import { ANCHORS } from './site.ts'
+import { Logo } from './idle.ts'
 
 /** A command with a button that copies it. */
 export let Copy = ({ line }: { line: string }) => {
@@ -132,14 +133,11 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
   })
   return h('footer', { class: 'Block', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Block_Sign' }, [
-      h('img', {
+      h(Logo, {
         class: 'Block_Logo',
-        src: 'yak.webp',
-        srcset: LOGO,
         sizes: '(max-width: 760px) 60vw, 30vw',
         width: 440,
         height: 440,
-        alt: '',
         loading: 'lazy',
       }),
       h('strong', null, words(text(e, 'doc', 'title'))),

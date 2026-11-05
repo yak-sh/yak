@@ -13,7 +13,8 @@ import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
 import { type Figure, SHEET, WIDER } from './figure.ts'
-import { INSTALL, LOGO, proseOf, scriptOf, shown } from './site.ts'
+import { INSTALL, proseOf, scriptOf, shown } from './site.ts'
+import { Logo } from './idle.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
 import { Doors, Memory, Rules } from './doors.ts'
@@ -79,14 +80,11 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
 let Nav = () =>
   h('nav', { class: 'Nav' }, [
     h('a', { class: 'Nav_Mark', href: './' }, [
-      h('img', {
+      h(Logo, {
         class: 'Nav_Logo',
-        src: 'yak.webp',
-        srcset: LOGO,
         sizes: '(max-width: 480px) 72px, 15vw',
         width: 200,
         height: 200,
-        alt: '',
       }),
       'yak.sh',
     ]),

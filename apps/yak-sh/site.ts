@@ -8,6 +8,29 @@ import { fileOf } from '@yaks/file'
 export let SITE = '2caade2e-aa23-4fc5-bba3-af9eff4f64a1'
 let ROOT = '90e19de2-e19c-4490-81cf-561edd349718'
 
+/** The painted yak's widths: a phone's nav, the nav on a 2x screen, and the
+ * footer's 30vw on a 2x screen. */
+let WIDTHS = [320, 480, 880]
+
+/** The painting's file at `width`, or one of its idle loops there: yak.webp,
+ * yak-480.webp, yak-lick-880.webp. */
+export let painted = (width = WIDTHS[0], loop?: string) =>
+  `yak${loop ? `-${loop}` : ''}${width == WIDTHS[0] ? '' : `-${width}`}.webp`
+
+/** The logo's drawn idle loops (idle.ts) and how long each plays, in ms. Each
+ * starts and ends on the painting. */
+export let IDLE: Record<string, number> = {
+  blink: 1040,
+  glance: 2870,
+  ears: 1350,
+  lick: 1550,
+  snort: 1700,
+  gust: 1850,
+}
+
+/** The painted yak's files, for an img's srcset. */
+export let LOGO = WIDTHS.map((w) => `${painted(w)} ${w}w`).join(', ')
+
 /** Every file the app serves, as `file{path, root}` read in the site.
  * package.json is not one: yaks.app keeps an app's manifest off the web
  * (workers/yak/files.ts `inside`), and neither is worker.ts, the app's
@@ -24,8 +47,9 @@ export let FILES = [
   'yak.ts',
   'site.ts',
   'icon.png',
-  'yak.webp',
-  'yak-880.webp',
+  ...[undefined, ...Object.keys(IDLE)].flatMap((loop) =>
+    WIDTHS.map((w) => painted(w, loop))
+  ),
   'og.jpg',
   'term.ts',
   'parts.ts',
@@ -39,6 +63,7 @@ export let FILES = [
   'shop.ts',
   'outbox.ts',
   'docs.ts',
+  'idle.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
@@ -461,10 +486,6 @@ export let SECTIONS: Section[] = [
 ]
 
 /** Where each part of the page is linked from: `#install` and the rest. */
-/** The painted yak's files, for an img's srcset: small for a phone's nav, large
- * for the home page's nav and the footer's 30vw on a 2x screen. */
-export let LOGO = 'yak.webp 320w, yak-880.webp 880w'
-
 export let ANCHORS: Record<string, string> = {
   '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19': 'yak',
   [YAKS_APP]: 'yaks-app',
