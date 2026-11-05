@@ -11,7 +11,7 @@ transaction.
 ```sh
 deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
 
-yak init Ada                    # Start this machine's own graph, as Ada.
+yak init                        # Start this machine's own graph, worked at by you.
 yak task new 'Buy the cake'     # Open that graph, run a tool, and exit.
 yak task list
 yak serve                       # Run the graph's serve tool: HTTP.
@@ -116,10 +116,13 @@ implementations, as do `help`, `init`, and `apply`.
 
 ## The config
 
-`yak init <your name>` starts a machine's own graph: it writes `~/.yak/yak.json`
-(or the path `--config` names) with the plugins a graph, its tasks, sessions,
+`yak init` starts a machine's own graph: it writes `~/.yak/yak.json` (or the
+path `--config` names) with the plugins a graph, its tasks, sessions,
 connections, `/mcp` and the web canvas need, and makes you the graph's `person`.
-It never replaces a config that is already there. Its connections are where
+It asks for no name: it names you from git's `user.name`, or else your login,
+and the graph's first task, T-1, filed to you, is confirming it, which any agent
+that connects finds and asks you about. `yak name <your name>` renames you. It
+never replaces a config that is already there. Its connections are where
 `yak auth yaks.app` keeps your sign-in.
 
 A config is plain JSON, so a plugin is one more line. Pass another with
@@ -173,10 +176,10 @@ config file.
 The CLI never allocates new numbers to people, sessions, letters, knocks or
 internal records (including archetype descriptors), even in an existing config
 using `numbers: true`; a person is called by name, so the person `yak init`
-makes leaves a new graph's first task T-1. `except` adds to these exclusions.
-Existing numbers stay valid addresses; new unnumbered entities use @yaks/id's
-short handles (`#` plus ten eid characters), accepted by `graph show`,
-`session peek` and the web view.
+makes leaves its first task, confirming their name, T-1. `except` adds to these
+exclusions. Existing numbers stay valid addresses; new unnumbered entities use
+@yaks/id's short handles (`#` plus ten eid characters), accepted by
+`graph show`, `session peek` and the web view.
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.

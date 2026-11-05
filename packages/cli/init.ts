@@ -110,3 +110,39 @@ export let starter = (person: string): Config => ({
   numbers: { except: [...UNNUMBERED] },
   person,
 })
+
+/** The person `yak init` makes, under the name it found for them, or none. */
+export let personOf = (eid: string, name?: string) => ({
+  entity: { eid },
+  person: {},
+  ...(name ? { doc: { title: name } } : {}),
+})
+
+/** The graph's first task: confirming the name `yak init` gave the person it
+ * made, found rather than asked for, so the first command asks for nothing.
+ * It is filed to them, so any agent that connects finds it with the rest of
+ * their work and asks them whether the name is right, or what it is where
+ * none was found.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(naming('p').filed, { assignee: 'p' })
+ * ```
+ */
+export let naming = (person: string, name?: string) => ({
+  entity: { eid: crypto.randomUUID() },
+  task: {},
+  filed: { assignee: person },
+  doc: {
+    title: name
+      ? `Confirm that ${name} is the name of the person this graph is worked at by`
+      : 'Name the person this graph is worked at by',
+    body: 'The person this task is filed to is who everything typed here is ' +
+      'signed by. ' +
+      (name
+        ? `\`yak init\` named them ${name}, from git's \`user.name\` or the ` +
+          'login user. Ask them whether that is right; '
+        : '`yak init` found no name for them. Ask them for it; ') +
+      '`yak name <their name>` writes it. Then complete this task.',
+  },
+})

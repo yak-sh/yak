@@ -76,8 +76,9 @@ test('a dry run is the tool’s check, and nothing else moves', async () => {
 })
 
 // `init` starts a graph where there was none: a config that opens, naming a
-// person the graph holds under the name given, where the first task is T-1. A
-// second `init` on the same path is refused and leaves the first alone.
+// person the graph holds, whose name is the first task, T-1, filed to them to
+// confirm, and `name` renames. A second `init` on the same path is refused and
+// leaves the first alone.
 test('init writes a config whose graph knows its person', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/yak.json`
@@ -91,20 +92,17 @@ test('init writes a config whose graph knows its person', async () => {
       note: () => {},
     })
   try {
-    assertEquals(await line(['init', 'Ada']), 0)
+    assertEquals(await line(['init']), 0)
     let first = Deno.readTextFileSync(path)
     let { person } = JSON.parse(first)
     let host = await opened(path, ['graph'], false)
+    let [task] = await host.graph.read(`.task&.filed.assignee=${person}`)
+    assertEquals(human(host.vocab)(task), 'T-1')
+    assertEquals(await line(['name', 'Ada']), 0)
     let [me] = await host.graph.read(`.entity.eid=${person}&.person&.doc`)
     assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')
-    let cake = crypto.randomUUID()
-    await host.graph.apply([
-      { entity: { eid: cake }, task: {}, doc: { title: 'Buy the cake' } },
-    ])
-    let [task] = await host.graph.read(`.entity.eid=${cake}`)
-    assertEquals(human(host.vocab)(task), 'T-1')
     await close(0)
-    assertEquals(await line(['init', 'Bob']), 1)
+    assertEquals(await line(['init']), 1)
     assertEquals(Deno.readTextFileSync(path), first)
   } finally {
     Deno.removeSync(dir, { recursive: true })

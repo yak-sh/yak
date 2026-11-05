@@ -463,7 +463,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
       <pre><code>yak [--config <i>path</i> | --host <i>host</i>] [--json] [--tui]
     [--no-duties] <i>noun verb</i> [<i>args</i>]
 yak help [<i>word</i> ...]
-yak init <i>your name</i></code></pre>
+yak init</code></pre>
 
       <h2>Description</h2>
       <p>
@@ -517,7 +517,7 @@ yak task list --json</code></pre>
 
       <h2>The config</h2>
       <p>
-        <code>yak init <i>your name</i></code> writes <code>~/.yak/yak.json</code>
+        <code>yak init</code> writes <code>~/.yak/yak.json</code>
         with the plugins a graph, its tasks, sessions, <code>/mcp</code> and
         the web canvas need. A config is plain JSON, so a plugin is one more
         line:
@@ -776,7 +776,7 @@ yak graph query .imported</code></pre>
 
       <h2>A box</h2>
       <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
-yak init Ada
+yak init
 yak serve</code></pre>
       <p>
         <code>yak serve</code> answers HTTP, WebSocket subscriptions and, when

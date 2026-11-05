@@ -35,4 +35,4 @@ case ":$PATH:" in
 *":$bin:"*) ;;
 *) echo "put it on your PATH: echo 'export PATH=\"$bin:\$PATH\"' >> ~/.zshrc, then open a new terminal" ;;
 esac
-[ -e "${YAK_CONFIG:-$HOME/.yak/yak.json}" ] || echo 'next: yak init <your name>'
+[ -e "${YAK_CONFIG:-$HOME/.yak/yak.json}" ] || echo 'next: yak init'

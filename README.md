@@ -18,7 +18,7 @@ jsr.io and two more.
 
 ```sh
 deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
-yak init Ada        # ~/.yak/yak.json and its graph, worked at by you, Ada
+yak init            # ~/.yak/yak.json and its graph, worked at by you
 yak task new 'Buy the cake'
 yak task list
 yak serve           # the canvas, /mcp and /query on http://127.0.0.1:8787
@@ -33,9 +33,11 @@ install a release published today, which Deno otherwise waits a day for. Deno
 remembers which release it last found, so to update, run it with
 `--reload=jsr:@yaks/cli` too, which asks jsr.io again. From a checkout,
 `deno task install` runs the checkout itself. `yak init` writes the config
-(`db`, the plugins, and who you are) and never replaces one. `yak serve` listens
-on this machine alone; a config's `hostname` offers it to a network, and it has
-no authentication of its own.
+(`db`, the plugins, and who you are) and never replaces one. It asks for no
+name: it takes git's `user.name`, or else your login, and the graph's first
+task, filed to you, is for an agent to ask you whether that is right. `yak name`
+renames you. `yak serve` listens on this machine alone; a config's `hostname`
+offers it to a network, and it has no authentication of its own.
 
 Agents join the same graph:
 

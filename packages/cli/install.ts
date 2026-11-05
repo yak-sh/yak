@@ -71,7 +71,7 @@ export let run = (
  * fetch and compile them is part of installing, and a person's first command
  * finds them. */
 export let warming = (dir: string): string[][] => [
-  ['--config', `${dir}/warm/yak.json`, 'init', 'Warm'],
+  ['--config', `${dir}/warm/yak.json`, 'init'],
   ['--config', `${dir}/warm/yak.json`, 'task', 'list'],
 ]
 
@@ -169,7 +169,7 @@ if (system.main(import.meta.url)) {
         }
       }
       console.log(
-        `yak ${cli.version} is installed. Next: yak init <your name>, ` +
+        `yak ${cli.version} is installed. Next: yak init, ` +
           'which starts a graph on this machine',
       )
     }

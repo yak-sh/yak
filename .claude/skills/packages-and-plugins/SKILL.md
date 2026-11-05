@@ -132,7 +132,7 @@ the graph to write with the plugin in its config adds them
 command composes from yak.json, so an entry that fails to compose takes all of
 them down together, and that has happened. Treat the edit like work on a running
 patient: prove it composes first, with no server, by copying the edited file
-beside a scratch graph (`yak init Probe --config <dir>/yak.json` makes one; keep
+beside a scratch graph (`yak init --config <dir>/yak.json` makes one; keep
 its `"db"`) and running any command over it, `yak --config
 
 <dir>/yak.json graph schema`. Keep a copy of the old file and a `.backup` of

@@ -43,7 +43,8 @@ import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { closeAccounts, personal } from './accounts.ts'
 import { configPath, names, ownConfig, read } from './config.ts'
-import { starter } from './init.ts'
+import { naming, personOf, starter } from './init.ts'
+import { command as launchCommand } from '@yaks/process/command'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
 import { restorable } from './restore.ts'
@@ -151,7 +152,7 @@ export let YAK: Opts = {
     'help',
   ],
   host: HOST,
-  nowhere: 'no graph on this machine yet: `yak init <your name>` starts one, ' +
+  nowhere: 'no graph on this machine yet: `yak init` starts one, ' +
     'and `yak auth yaks.app` signs in to your yaks.app apps',
   more: table,
   stray: appStray,
@@ -160,15 +161,17 @@ export let YAK: Opts = {
 // `init` is the one command that runs before there is a graph: it writes the
 // config a machine's own graph starts from (./init.ts) and makes the person
 // who works there, so what they type is signed as them from the first command.
-// It never replaces a config: one already there is somebody's graph.
-let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
+// It asks for nothing: the person is named from git's `user.name`, or else the
+// login user, and confirming that name is the graph's first task, filed to
+// them, which any agent that connects finds and asks them about. It never
+// replaces a config: one already there is somebody's graph.
+let init = async (_: Record<string, unknown>, c: Ctx): Promise<number> => {
   let path = c.config ?? system.env.get('YAK_CONFIG') ?? ownConfig()
   if (!path) {
     throw new Usage('no $HOME to keep a config in — name one with --config')
   }
-  let name = String(args.name).trim()
-  if (!name) throw new Usage('yak init <your name>')
   let person = crypto.randomUUID()
+  let name = await whose()
   let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
   disk.mkdirSync(dir, { recursive: true })
   try {
@@ -186,7 +189,8 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
     let { opened } = await local()
     let host = await opened(path, ['graph'], false)
     await host.graph.apply([
-      { entity: { eid: person }, person: {}, doc: { title: name } },
+      personOf(person, name),
+      naming(person, name),
     ])
   } catch (error) {
     // A config naming a person its graph never made is worse than none: the
@@ -194,8 +198,48 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
     disk.removeSync(path)
     throw error
   }
-  c.out(`wrote ${path}, a graph worked at by ${name}`)
-  c.out('next: yak task new "a first task", then yak serve')
+  c.out(`wrote ${path}, a graph worked at by ${name ?? 'you'}`)
+  c.out(
+    name
+      ? `not ${name}? yak name "Your Name"`
+      : 'no name found for you: yak name "Your Name"',
+  )
+  c.out('next: yak task list, then yak serve')
+  return 0
+}
+
+// The name the person at this machine already goes by: git's `user.name`,
+// else the login user, else none.
+let whose = async (): Promise<string | undefined> => {
+  try {
+    let { code, stdout } = await launchCommand('git', {
+      args: ['config', '--get', 'user.name'],
+      stdout: 'piped',
+      stderr: 'null',
+    }).output()
+    let name = new TextDecoder().decode(stdout).trim()
+    if (code == 0 && name) return name
+  } catch {
+    // no git on this machine
+  }
+  return system.env.get('USER') || system.env.get('USERNAME') || undefined
+}
+
+// `name` renames the person this machine's graph is worked at by: their
+// `doc.title`, which is how what they type is signed.
+let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
+  let path = configPath(c.config)
+  if (!path) {
+    throw new Usage('no graph on this machine yet: `yak init` starts one')
+  }
+  let name = String(args.name ?? '').trim()
+  if (!name) throw new Usage('yak name <your name>')
+  let eid = read(path).person
+  if (!eid) throw new Usage(`${path} names no person`)
+  let { opened } = await local()
+  let host = await opened(path, ['graph'], false)
+  await host.graph.apply([{ entity: { eid }, doc: { title: name } }])
+  c.out(`you are ${name}`)
   return 0
 }
 
@@ -298,6 +342,14 @@ export let own: Command[] = [
     description:
       "start this machine's own graph: write its config and make you its person",
     offered: (c) => !c.config,
+    inputSchema: { type: 'object', additionalProperties: false },
+    run: init,
+  },
+  {
+    name: 'name',
+    description:
+      "rename yourself, the person this machine's graph is worked at by",
+    offered: (c) => !!configPath(c.config),
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -305,12 +357,12 @@ export let own: Command[] = [
       properties: {
         name: {
           type: 'string',
-          description: 'your name, as the graph will know you',
+          description: 'your name, as the graph knows you',
         },
       },
     },
     positional: ['name'],
-    run: init,
+    run: rename,
   },
 
   {

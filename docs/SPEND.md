@@ -26,7 +26,7 @@ the flag asks jsr.io again.
 ## See your spend
 
 ```sh
-yak init "Your Name"
+yak init
 yak serve
 ```
 
