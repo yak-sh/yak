@@ -83,6 +83,8 @@ test('Messages texts a list from the church, keeps the replies, and answers STOP
   let k = await fresh({
     TELNYX_API: telnyx.url,
     TELNYX_API_KEY: 'a-key',
+    // The number texts go out from, as the deploy names its own.
+    PHONE_SENDER: { via: 'telnyx', number: FREE },
     TELNYX_PUBLIC_KEY: b64(
       await crypto.subtle.exportKey('raw', signer.publicKey),
     ),
