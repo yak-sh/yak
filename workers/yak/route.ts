@@ -24,13 +24,15 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 // The dashboard: a person's account and the spaces they work in, at the apex
 // rather than on any space's hostname, so no app sharing a space's origin can
-// reach them (T-39354). A space's pages are `/manage/<space>/<page>`; the
+// reach them (T-39354). A space's home, where a person lands in it, is
+// `/manage/<space>` (T-140050), and its other pages `/manage/<space>/<page>`; the
 // person's own, wherever they are, are `/manage/account/<page>` (T-136122),
 // which no space can be named (`RESERVED` holds `account`).
 export let MANAGE = '/manage'
 export let ACCOUNT = 'account'
 /** A page of one space's. */
 export type SpaceView =
+  | 'home'
   | 'apps'
   | 'new'
   | 'operator'
@@ -74,13 +76,13 @@ let LEGACY: Record<string, ManageView> = {
 }
 /** A dashboard page's path. A space's page without a space names the one the
  * person opens first, whichever that is when they follow it. */
-export let managePath = (view: ManageView = 'apps', space?: string) =>
+export let managePath = (view: ManageView = 'home', space?: string) =>
   accountView(view)
     ? `${MANAGE}/${ACCOUNT}/${view}`
+    : view == 'home'
+    ? space ? `${MANAGE}/${encodeURIComponent(space)}` : MANAGE
     : space
     ? `${MANAGE}/${encodeURIComponent(space)}/${view}`
-    : view == 'apps'
-    ? MANAGE
     : `${MANAGE}/${view}`
 // What a conversation opens by: a task's or a request's eid, or `new`.
 let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
@@ -88,12 +90,12 @@ let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
  * `chatPage`): one opened by its task or request, or a new one. */
 export let chatPath = (space: string, open = 'new') =>
   `${managePath('operator', space)}/${open}`
-/** What a dashboard path asks for: an account page, a space's page, a space
- * with no page named, or an address from before T-136122 (`legacy`), to be
+/** What a dashboard path asks for: an account page, a space's page (its home
+ * when none is named), or an address from before T-136122 (`legacy`), to be
  * sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
-  | { space: string; view: SpaceView | null; open?: string }
+  | { space: string; view: SpaceView; open?: string }
   | { legacy: ManageView }
   | { first: true }
 export let managed = (path: string): Managed | null => {
@@ -119,7 +121,7 @@ export let managed = (path: string): Managed | null => {
     return Object.hasOwn(LEGACY, one)
       ? { legacy: LEGACY[one] }
       : SLUG.test(one)
-      ? { space: one, view: null }
+      ? { space: one, view: 'home' }
       : null
   }
   return SLUG.test(one) && (SPACE_VIEWS as string[]).includes(two)
@@ -130,13 +132,13 @@ export let managed = (path: string): Managed | null => {
  * stands for (`/_yaks/<page>`, `/manage/<page>`), or null. */
 export let manageView = (path: string): ManageView | null => {
   let at = managed(path)
-  return !at ? null : 'first' in at ? 'apps' : 'legacy' in at ? at.legacy : null
+  return !at ? null : 'first' in at ? 'home' : 'legacy' in at ? at.legacy : null
 }
 /** One space's dashboard page, as an address to put in a letter or an
  * answer. */
 export let manageAt = (
   space: string,
-  view: ManageView = 'apps',
+  view: ManageView = 'home',
   env: Host = {},
 ) => url(env, managePath(view, space))
 /** A connections page's address, still naming the testing integrations it

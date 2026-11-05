@@ -99,9 +99,14 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       '<h1>My manage app</h1>',
     )
     let apps = managePath('apps', slug)
+    let home = managePath('home', slug)
     let first = await get(MANAGE)
     assertEquals(first.status, 302)
-    assertEquals(first.headers.get('location'), `https://yaks.app${apps}`)
+    assertEquals(first.headers.get('location'), `https://yaks.app${home}`)
+    // The space's home leads with its Operator and links to the apps list.
+    let landed = await (await get(home)).text()
+    assertStringIncludes(landed, `href="${chatPath(slug)}"`)
+    assertStringIncludes(landed, `href="${apps}"`)
     assertStringIncludes(
       await (await get(apps)).text(),
       `href="https://${host}/private-notes/"`,
@@ -122,13 +127,12 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     let billing = `/manage/${slug}/billing?paid=1`
     for (
       let [from, was, now, method] of [
-        [host, '/_yaks', apps],
-        [host, '/_yaks/', apps],
+        [host, '/_yaks', home],
+        [host, '/_yaks/', home],
         [host, '/_yaks/billing?paid=1', billing],
         ['yaks.app', `/manage/billing?space=${slug}&paid=1`, billing],
         ['yaks.app', '/manage/settings', `/manage/${slug}/settings`],
         ['yaks.app', '/manage/connect', managePath('agents')],
-        ['yaks.app', `/manage/${slug}`, apps],
         [
           'yaks.app',
           `/manage/people?space=${slug}`,
@@ -224,7 +228,7 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     let theirs = (await get(MANAGE, other.cookie)).headers.get('location')!
     assertEquals(
       theirs,
-      to(managePath('apps', other.email.split('@')[0])),
+      to(managePath('home', other.email.split('@')[0])),
     )
     // Nobody but its owner moves the space, and no other page names them.
     let away = { space: `away-${crypto.randomUUID().slice(0, 6)}` }
@@ -273,7 +277,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
       }))
         .headers.get('location')
     let own = ada.email.split('@')[0]
-    let mine = `https://yaks.app${managePath('apps', own)}`
+    let mine = `https://yaks.app${managePath('home', own)}`
     assertEquals(await opens(), mine)
     // Her one free space on the Plus plan makes room for another.
     let [first] = await meta(k).query(`.space.slug=${own}`)
@@ -281,7 +285,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
 
     let made = await post(managePath('space'), { title: 'Books', slug: fresh })
     assertEquals(made.status, 303)
-    let theirs = `https://yaks.app${managePath('apps', fresh)}`
+    let theirs = `https://yaks.app${managePath('home', fresh)}`
     assertEquals(made.headers.get('location'), theirs)
     assertEquals(await opens(), mine)
 

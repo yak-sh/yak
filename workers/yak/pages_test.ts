@@ -14,6 +14,8 @@ import {
   spaceIndex,
 } from './pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
+import type { Plain } from './unseen.ts'
+import type { Space } from './directory.ts'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -655,5 +657,57 @@ test('billing shows each allowance and whom it bills', async () => {
   assertStringIncludes(
     await billing({ payer: undefined }, true),
     'Billed through Stripe.',
+  )
+})
+
+test('pages: the space home leads with its Operator and a link to each page that holds all of something', async () => {
+  let talk = (n: number) => ({
+    open: `${n}`.repeat(8) + '-1111-1111-1111-111111111111',
+    title: `Ask ${n}`,
+    state: 'Done',
+    at: '2026-11-05T00:00:00Z',
+    busy: false,
+  })
+  let apps = Array.from({ length: 7 }, (_, i) => ({
+    eid: `a${i}`,
+    slug: `app-${i}`,
+    title: `App ${i}`,
+    errors: i == 1 ? [{ said: 'Broke' } as Plain] : undefined,
+  }))
+  let { document } = parseHTML(
+    await desk({
+      ...page,
+      view: 'home',
+      operatorName: 'Pip',
+      talks: [1, 2, 3, 4].map(talk),
+      apps,
+      people: { space: {} as Space, members: [], invited: [], apps: [] },
+      bill: { limits: {}, budget: { spent: 1, limit: 4 }, read: null },
+    }, env).text(),
+  )
+  let cards = [
+    ...document.querySelectorAll('#content > .Card, .Desk_Options > .Card'),
+  ]
+  let links = (i: number) =>
+    [...cards[i].querySelectorAll('a')].map((a) => a.getAttribute('href'))
+  assertEquals(document.querySelector('h1')?.textContent, 'Dashboard')
+  assertEquals(
+    cards.map((c) => c.querySelector('.Card_Title')?.textContent),
+    ['Pip', 'Apps', 'People', 'This month'],
+  )
+  assertEquals(links(0), [
+    '/manage/ada/operator/new',
+    ...[1, 2, 3].map((n) => `/manage/ada/operator/${talk(n).open}`),
+    '/manage/ada/operator/new',
+    '/manage/ada/operator',
+  ])
+  assertEquals(cards[1].querySelectorAll('.Apps > *').length, 6)
+  assertStringIncludes(cards[1].textContent!, '1 needs fixing')
+  assertEquals(links(1).slice(0, 2), ['/manage/ada/apps', '/manage/ada/new'])
+  assertEquals(
+    [...document.querySelectorAll('.SideNav a')].slice(4, 7).map((a) =>
+      a.getAttribute('href')
+    ),
+    ['/manage/ada', '/manage/ada/operator/new', '/manage/ada/apps'],
   )
 })

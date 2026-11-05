@@ -2466,7 +2466,7 @@ let index = async (
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url, env),
-    manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
+    manage: owner ? manageAt(space.slug, 'home', env) : undefined,
   }, env)
 }
 
@@ -2494,7 +2494,7 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   // before the space was in the path (`?space=`, or none for their own) is
   // sent on to where its page is now, so links in letters keep working.
   if ('first' in at || 'legacy' in at) {
-    let view = 'first' in at ? 'apps' : at.legacy
+    let view = 'first' in at ? 'home' : at.legacy
     let slug = accountView(view) ? undefined : asked ?? (await dir.own(person))
       .slug
     let to = new URL(managePath(view, slug), hostUrl(env))
@@ -2505,9 +2505,6 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   }
   if ('account' in at) {
     return mine(req, env, dir, { person, role: null, until }, at.account)
-  }
-  if (!at.view) {
-    return moved(req, hostUrl(env, managePath('apps', at.space)) + url.search)
   }
   let view = at.view
   if (req.method == 'GET' || req.method == 'HEAD') foresee(dir, person, view)
@@ -2686,7 +2683,9 @@ let desk = async (
   let q = new URL(req.url).searchParams
   // Everything a page shows, asked at once: nothing here waits on anything but
   // the apps it says something about.
-  if (view == 'apps') void trackedIn(env, space, who, true).catch(() => {})
+  if (view == 'apps' || view == 'home') {
+    void trackedIn(env, space, who, true).catch(() => {})
+  }
   let shelved = shelf(dir, space, who)
   let [
     { here, all },
@@ -2698,13 +2697,14 @@ let desk = async (
     connections,
     picks,
     operator,
+    talks,
     billed,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
     // page that lists them: one read of the space's tracker, no app's store
     // woken. A read that fails is reported and the apps are drawn without it.
-    view == 'apps'
+    view == 'apps' || view == 'home'
       ? shelved.then(({ all }) =>
         all.length
           ? brokenIn(env, space, who, all).catch((e) => {
@@ -2728,7 +2728,7 @@ let desk = async (
       : undefined,
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
-    view == 'people'
+    view == 'people' || view == 'home'
       ? Promise.all([
         shelved.then(({ all }) => peopleIn(dir, [space], all)),
         dir.admits(space.eid),
@@ -2755,6 +2755,12 @@ let desk = async (
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who)
+      )
+      : undefined,
+    // The Operator's latest conversations, which the home page leads with.
+    view == 'home'
+      ? import('./operator-page.ts').then((part) =>
+        part.workOf(env, space, who)
       )
       : undefined,
     // Whom Stripe bills, for the Billing page (T-131895). A read that fails
@@ -2796,7 +2802,7 @@ let desk = async (
     paid: q.get('paid') == '1',
     // The space's month against its allowances (meter.ts), as the
     // directory's row holds it.
-    bill: view == 'billing'
+    bill: view == 'billing' || view == 'home'
       ? {
         limits: gauges(space, all.length),
         budget: budget(space),
@@ -2824,6 +2830,8 @@ let desk = async (
       ...picks,
     ],
     operator,
+    operatorName: space.operator,
+    talks,
     member: who.role != 'owner',
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
@@ -2906,7 +2914,7 @@ let account = async (
     })
     if (said) return mine(req, env, dir, who, view, said, { made })
     return keptIn(
-      redirect(hostUrl(env, managePath('apps', made.slug)), 303),
+      redirect(hostUrl(env, managePath('home', made.slug)), 303),
       made.slug,
     )
   }
@@ -2980,7 +2988,7 @@ let closed = async (
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
   }
-  return redirect(manageAt(space.slug, 'apps', env), 303)
+  return redirect(manageAt(space.slug, 'home', env), 303)
 }
 
 // Another letter for an invitation to this space or one of its apps, from the

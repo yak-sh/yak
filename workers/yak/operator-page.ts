@@ -359,8 +359,8 @@ let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
     return out
   })
 
-// The Operator's work, newest first.
-let workOf = async (env: Env, space: Space, who: Who) =>
+/** The Operator's work, newest first. */
+export let workOf = async (env: Env, space: Space, who: Who) =>
   await operatorDoor(env, space, who, 'work', {}) as Worked[]
 
 // One conversation, opened by its task or a request: its sessions as they
@@ -432,7 +432,7 @@ export let elsewhere = (beyond: Reach[], pa: boolean) => {
   let named = (rs: Reach[]) =>
     LIST.format(
       rs.map((r) =>
-        `<a href="${managePath('apps', r.space.slug)}">${
+        `<a href="${managePath('home', r.space.slug)}">${
           esc(r.space.title || r.space.slug)
         }</a>`
       ),
@@ -511,7 +511,7 @@ export let chatPage = async (
 <div class="Talk">
 <aside class="Talk_Side" id="menu" aria-label="Conversations">
 <div class="Talk_Top"><a class="Talk_Brand" href="${
-      url(env, '/manage')
+      url(env, managePath('home', space.slug))
     }"><img src="${
       url(env, '/yak.webp')
     }" width="28" height="28" alt="">Operator</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
@@ -530,7 +530,9 @@ export let chatPage = async (
 <nav class="Talk_Nav" aria-label="Your conversations" data-side>${
       sidebar(items, space.slug, [open, talked.task])
     }</nav>
-<div class="Talk_Foot"><a href="${at}">Operator settings</a></div>
+<div class="Talk_Foot"><a href="${
+      managePath('home', space.slug)
+    }">Dashboard</a><a href="${at}">Operator settings</a></div>
 </aside>
 <div class="Talk_Main">
 <header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Conversations">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${

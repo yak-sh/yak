@@ -773,6 +773,12 @@
     font-size: var(--fine);
     overflow-wrap: anywhere;
   }
+  .Desk_More {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem 1rem;
+    margin: 0;
+  }
   .Desk_Options {
     display: grid;
     gap: var(--gap);

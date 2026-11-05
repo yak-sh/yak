@@ -23,6 +23,8 @@ import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Globe from 'lucide/dist/esm/icons/globe.mjs'
 // @ts-types="@yaks/ui/lucide"
+import House from 'lucide/dist/esm/icons/house.mjs'
+// @ts-types="@yaks/ui/lucide"
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
@@ -44,6 +46,7 @@ import User from 'lucide/dist/esm/icons/user.mjs'
 import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
+  house: House,
   'layout-grid': LayoutGrid,
   globe: Globe,
   bot: Bot,
