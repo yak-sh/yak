@@ -7,6 +7,7 @@ import { start } from './page.ts'
 import { SECTIONS, SELF, SITE } from './site.ts'
 import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
+import { INSIDE, PHASES } from '@yaks/graph/plugin'
 
 let dir = new URL('./', import.meta.url)
 let open = async () => {
@@ -226,5 +227,9 @@ test('the apply() band writes the last entity as the source of its bundle, besid
     true,
   )
   equal(phases('skip'), ['audit'])
+  let named = (sel: string) =>
+    [...root.querySelectorAll(sel)].map((p) => p.getAttribute('data-phase'))
+  equal(named('.Phases [data-phase]'), PHASES)
+  equal(named('.Phases .Tx [data-phase]'), INSIDE)
   page.page.close()
 })

@@ -298,45 +298,51 @@ export let Stack: Band = (ctx) => {
     if (row && eid) opener(ctx)(eid)
   })
   let state = standing(ran, upto)
-  let inside = new Set<string>(INSIDE)
+  // A phase turns green once the reader has passed it and it ran.
+  let phase = (p: Phase) =>
+    h('li', {
+      class: state.phase(p, PHASES.indexOf(p)) || undefined,
+      // A phase clicked comes to the reading line, so the write runs to it.
+      onClick: (ev: Event) =>
+        (ev.currentTarget as Element).scrollIntoView?.({
+          block: 'center',
+          behavior: 'smooth',
+        }),
+      'data-phase': p,
+      key: p,
+    }, [
+      h('span', { class: 'Dot' }),
+      h('b', null, p),
+      h(Markdown, { source: DOES[p] }),
+      h(
+        'span',
+        { class: 'Skip' },
+        p == 'audit'
+          ? "This write committed, so audit didn't run."
+          : "This write didn't run this phase.",
+      ),
+    ])
+  // The phases inside the transaction are one box, whatever has run.
+  let open = PHASES.indexOf(INSIDE[0])
+  let shut = open + INSIDE.length
   return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Stack_Text' }, [
       h(Head, { e }),
-      h(
-        'ol',
-        {
-          class: 'Phases',
-          ref: list,
-          'aria-label': 'The phases of apply()',
-        },
-        PHASES.map((p, i) =>
-          h('li', {
-            class: state.phase(p, i) || undefined,
-            // A phase clicked comes to the reading line, so the write runs
-            // to it.
-            onClick: (ev: Event) =>
-              (ev.currentTarget as Element).scrollIntoView?.({
-                block: 'center',
-                behavior: 'smooth',
-              }),
-            'data-phase': p,
-            'data-tx': inside.has(p) ? '' : undefined,
-            'data-tx-first': p == INSIDE[0] ? '' : undefined,
-            key: p,
-          }, [
-            h('span', { class: 'Dot' }),
-            h('b', null, p),
-            h(Markdown, { source: DOES[p] }),
-            h(
-              'span',
-              { class: 'Skip' },
-              p == 'audit'
-                ? "This write committed, so audit didn't run."
-                : "This write didn't run this phase.",
-            ),
-          ])
-        ),
-      ),
+      h('ol', {
+        class: 'Phases',
+        ref: list,
+        'aria-label': 'The phases of apply()',
+      }, [
+        ...PHASES.slice(0, open).map(phase),
+        h('li', { class: 'Tx', key: 'tx' }, [
+          h('span', { class: 'Tx_Name' }, 'one transaction'),
+          h('ol', {
+            'aria-label':
+              'Inside one transaction: all of these are stored, or none',
+          }, PHASES.slice(open, shut).map(phase)),
+        ]),
+        ...PHASES.slice(shut).map(phase),
+      ]),
     ]),
     h('figure', { class: 'Stack_Figure', ref: drawing }, [
       subject ? h(Source, { rows, made, state }) : null,

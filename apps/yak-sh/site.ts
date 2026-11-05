@@ -138,7 +138,7 @@ export let SECTIONS: Section[] = [
     view: 'Stack',
     title: 'A write is a list of bundles, applied in one transaction',
     body:
-      "A bundle is one entity's components. `apply()` takes a list of them through the phases below, and the rules and checks of every package the graph loads run inside them. The lit phases are the ones your last command ran.",
+      "A bundle is one entity's components. `apply()` takes a list of them through the phases below, and the rules and checks of every package the graph loads run inside them. As you scroll, each phase your last command ran turns green when it happens. The phases in the box are one transaction: the batch is stored whole at commit, or not at all.",
   },
   {
     eid: 'daf368d7-bfd4-4fe4-ae77-3545d58f4cd7',

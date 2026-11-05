@@ -641,7 +641,7 @@ h2 {
 }
 .Doors_Draw .N,
 .Doors_Draw .Door,
-.Phases li {
+.Phases [data-phase] {
   cursor: pointer;
 }
 
@@ -705,12 +705,13 @@ h2 {
   margin: 1.2rem 0 0 2.1rem;
   padding: 0;
 }
-.Phases li {
+.Phases [data-phase] {
   position: relative;
   padding: .55rem 0 .75rem;
   border-top: 1px solid var(--faint);
+  transition: background .3s;
 }
-.Phases li:last-child {
+.Phases > :last-child {
   border-bottom: 1px solid var(--faint);
 }
 .Phases .Dot {
@@ -730,32 +731,49 @@ h2 {
   color: var(--soft);
   transition: color .3s;
 }
-.Phases li > :not(.Dot, b, .Skip) {
+.Phases [data-phase] > :not(.Dot, b, .Skip) {
   color: var(--soft);
   font-size: .90625rem;
   line-height: 1.5;
   margin-top: .2rem;
 }
-.Phases li > :not(.Dot, b, .Skip) p {
+.Phases [data-phase] > :not(.Dot, b, .Skip) p {
   margin: 0;
 }
-.Phases li[data-tx] {
+/* The phases inside the transaction: one box in ink around them, whatever
+   has run, and none of the green that a phase turns once it has happened.
+   The box reaches out past the dots so they keep one column. */
+.Phases .Tx {
+  position: relative;
+  margin: 1.1rem -.7rem 1.1rem calc(-2.1rem - .7rem);
+  padding: .45rem .7rem .3rem calc(2.1rem + .7rem);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+}
+.Phases .Tx > ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.Phases .Tx [data-phase]:first-child {
+  border-top: 0;
+}
+.Tx_Name {
+  position: absolute;
+  top: -.45rem;
+  left: .5rem;
+  padding: 0 .4rem;
+  background: var(--paper);
+  font: 500 .6875rem/1 var(--mono);
+  color: var(--ink);
+}
+/* A phase that has happened: green, with its green dot. */
+.Phases [data-phase].on {
   background: linear-gradient(
     90deg,
-    rgba(167, 192, 128, .14),
+    rgba(167, 192, 128, .2),
     transparent 70%
   );
-}
-.Phases li[data-tx-first]::after {
-  content: 'inside one transaction';
-  position: absolute;
-  right: 0;
-  top: .55rem;
-  font: 400 .6875rem/1 var(--mono);
-  color: var(--meadow);
-  border: 1px solid var(--meadow);
-  padding: 3px 5px;
-  background: var(--paper);
 }
 .Phases li.on .Dot {
   background: var(--meadow);
@@ -774,7 +792,7 @@ h2 {
 .Phases li.skip .Skip {
   display: block;
   font: 400 .75rem/1.5 var(--mono);
-  color: var(--meadow);
+  color: var(--soft);
 }
 
 /* The bundle as its source, annotated (bundle mockup 8): the code on the
@@ -1296,11 +1314,6 @@ h2 {
   .Stack_Figure,
   .Doors_Figure {
     position: static;
-  }
-  .Phases li[data-tx-first]::after {
-    position: static;
-    display: inline-block;
-    margin-top: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
