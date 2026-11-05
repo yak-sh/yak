@@ -172,9 +172,10 @@ test('TypeScript and npm imports compile at deploy, and serve as JavaScript', as
     'text/javascript; charset=utf-8',
   )
   assertEquals(await part.text(), '/* m')
-  let video = await s.response('clip.ts', { method: 'HEAD' })
-  assertEquals(video.headers.get('content-type'), 'video/mp2t')
-  assertEquals(video.headers.get('content-length'), '8')
+  // A .ts no page loads is TypeScript source, served as text a browser shows.
+  let source = await s.response('clip.ts', { method: 'HEAD' })
+  assertEquals(source.headers.get('content-type'), 'text/plain; charset=utf-8')
+  assertEquals(source.headers.get('content-length'), '8')
   assert((await s.tool('app_files', { op: 'read', path: 'main.ts' }))
     .includes('let n: number'))
   // The lock the compile left is an app file, so the version pins it.

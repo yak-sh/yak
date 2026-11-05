@@ -377,7 +377,6 @@ test('an app serves audio and video with byte ranges', async () => {
       ['song.mp3', 'audio/mpeg'],
       ['song.m4a', 'audio/mp4'],
       ['stream.m3u8', 'application/vnd.apple.mpegurl'],
-      ['segment.ts', 'video/mp2t'],
     ]
   ) {
     files.held.set(`ada/cookbook/${name}`, bytes)

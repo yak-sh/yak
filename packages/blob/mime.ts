@@ -24,6 +24,11 @@ let MIME: Record<string, string> = {
   avif: 'image/avif',
   ico: 'image/x-icon',
   txt: 'text/plain; charset=utf-8',
+  // TypeScript source, which every browser shows as text; the extension is
+  // also MPEG-TS's, but an app's .ts is far more often its source.
+  ts: 'text/plain; charset=utf-8',
+  mts: 'text/plain; charset=utf-8',
+  cts: 'text/plain; charset=utf-8',
   md: 'text/markdown; charset=utf-8',
   csv: 'text/csv; charset=utf-8',
   vtt: 'text/vtt; charset=utf-8',
@@ -51,7 +56,6 @@ let MIME: Record<string, string> = {
   opus: 'audio/ogg',
   flac: 'audio/flac',
   m3u8: 'application/vnd.apple.mpegurl',
-  ts: 'video/mp2t',
   mpd: 'application/dash+xml',
 }
 
@@ -59,6 +63,7 @@ let MIME: Record<string, string> = {
 /// mimeOf('dist/_astro/hero.avif') -> 'image/avif'
 /// mimeOf('feed.xml') -> 'application/xml'
 /// mimeOf('fonts/Inter.ttf') -> 'font/ttf'
+/// mimeOf('src/setup.ts') -> 'text/plain; charset=utf-8'
 /// mimeOf('LICENSE') -> 'application/octet-stream'
 export let mimeOf = (name: string): string => {
   let base = name.split('/').pop() ?? ''
