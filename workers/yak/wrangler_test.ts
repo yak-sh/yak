@@ -1238,7 +1238,6 @@ let checkSiblingPreparation = async () => {
     stderr: encoder.encode(''),
   })
   try {
-    Deno.mkdirSync(join(root, '.wrangler'))
     Deno.mkdirSync(join(root, 'outbound'))
     Deno.writeTextFileSync(
       join(root, 'outbound/wrangler.toml'),

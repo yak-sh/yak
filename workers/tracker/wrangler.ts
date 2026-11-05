@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// The independent build door reuses the workspace's import-map and pinned
+// The independent build door reuses the workspace's dependencies and pinned
 // Wrangler, but never deploys yak or its sibling Workers.
 import { WRANGLER } from '../yak/wrangler.ts'
 import { fileURLToPath } from 'node:url'

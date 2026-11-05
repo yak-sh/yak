@@ -773,6 +773,12 @@ let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
   }
 }
 
+let scratch = (root: string, prefix: string): string => {
+  let dir = join(root, '.wrangler')
+  io.mkdirSync(dir, { recursive: true })
+  return io.makeTempDirSync({ dir, prefix })
+}
+
 /** Build the kernel before uploads finish, then hand Wrangler the same
  * modules and source maps through the original config's bindings. */
 export let bundled = async (
@@ -786,11 +792,7 @@ export let bundled = async (
   ) {
     return { args, remove: () => {} }
   }
-  io.mkdirSync(join(root, '.wrangler'), { recursive: true })
-  let output = io.makeTempDirSync({
-    dir: join(root, '.wrangler'),
-    prefix: 'kernel-',
-  })
+  let output = scratch(root, 'kernel-')
   let config: string | undefined
   let remove = () => {
     if (config) io.removeSync(config)
@@ -856,10 +858,7 @@ export let prepareSibling = async (
   if (args.includes('--dry-run')) {
     return { args, config, root, started, remove: () => {} }
   }
-  let output = io.makeTempDirSync({
-    dir: join(root, '.wrangler'),
-    prefix: 'sibling-',
-  })
+  let output = scratch(root, 'sibling-')
   let remove = () => io.removeSync(output, { recursive: true })
   let meta = join(output, 'metafile.json')
   try {
