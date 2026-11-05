@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/speech",
+  "version": "0.2.17",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Speech to text and text to speech, with the provider given as data: Deepgram's endpoints, models, voices and prices.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

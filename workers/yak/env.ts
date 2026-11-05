@@ -238,6 +238,13 @@ export type Env = {
   TELNYX_API_KEY?: string
   TELNYX_PUBLIC_KEY?: string
   TELNYX_API?: string
+  // Speech (speech.ts, T-140123): DEEPGRAM_API_KEY is the secret yaks.app
+  // hears and speaks with; unset, speech is off. SPEECH_FLOOR, a `[vars]`
+  // line, is the credit left on Deepgram's account below which speech is
+  // refused while it is a pilot. SPEECH_API aims it elsewhere, for a test.
+  DEEPGRAM_API_KEY?: string
+  SPEECH_FLOOR?: string
+  SPEECH_API?: string
   // `on` signs up a stranger who texts the platform's number
   // (operator-texts.ts `signedUp`); anything else leaves their text unread.
   // Off until the toll-free verification covers it (T-138775). Read per text,

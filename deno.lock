@@ -4351,6 +4351,14 @@
           ]
         }
       },
+      "packages/speech": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/testing@0.2.17"
+          ]
+        }
+      },
       "packages/spend": {
         "packageJson": {
           "dependencies": [
@@ -4958,6 +4966,7 @@
             "npm:@yaks/secrets@0.2.17",
             "npm:@yaks/session@0.2.17",
             "npm:@yaks/spawn@0.2.17",
+            "npm:@yaks/speech@0.2.17",
             "npm:@yaks/spend@0.2.17",
             "npm:@yaks/sql@0.2.17",
             "npm:@yaks/sqlite@0.2.17",
