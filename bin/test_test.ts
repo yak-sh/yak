@@ -2,7 +2,7 @@ import { equal, test, throws } from '@yaks/testing'
 import { affected } from '@yaks/testing/choose'
 import { survey } from '@yaks/testing/deps'
 import { changes } from './test-changes.ts'
-import { prepare, READIES, RUNS } from './test.ts'
+import { prepare, READIES, ROOTS, RUNS } from './test.ts'
 
 // A module graph with a runner consumer and an unrelated example page.
 let helpers = [
@@ -109,6 +109,52 @@ test('dependency bookkeeping changes select their consumers without selecting un
     affected(graph, ['packages/fp/mod.ts'], RUNS, ['bin/test-runtime.ts']),
     true,
   )
+})
+
+// What a run given `args` looks among, and what it selects by.
+let named = async (args: string[]) => {
+  let found: string[][] = []
+  let by: { files: string[]; changed?: string[] }[] = []
+  await prepare(args, '/sqlite.so', {
+    changes: () => Promise.resolve(['c.ts']),
+    format: (paths) => Promise.resolve(paths),
+    find: (paths) => {
+      found.push(paths)
+      let tests = paths == ROOTS ? ['a_test.ts', 'b_test.ts'] : paths
+      return Promise.resolve({ tests, pages: [] })
+    },
+    chosen: (files, _all, _also, changed) => {
+      by.push({ files, changed })
+      return Promise.resolve({
+        keys: new Map(),
+        run: files,
+        affected: files,
+        sources: [],
+        beyond: 0,
+        reaches: () => false,
+        read: () => undefined,
+      })
+    },
+    check: () => Promise.resolve(true),
+    ready: () => Promise.resolve(),
+  })
+  return { found, by }
+}
+
+test('a source file named selects, among every file, the tests depending on it', async () => {
+  let all = ['a_test.ts', 'b_test.ts']
+  equal(await named(['a.ts']), {
+    found: [ROOTS],
+    by: [{ files: all, changed: ['a.ts'] }],
+  })
+  equal(await named(['a.ts', 'z_test.ts']), {
+    found: [['z_test.ts'], ROOTS],
+    by: [{ files: all, changed: ['a.ts', 'z_test.ts'] }],
+  })
+  equal(await named(['z_test.ts']), {
+    found: [['z_test.ts']],
+    by: [{ files: ['z_test.ts'], changed: undefined }],
+  })
 })
 
 let readied = async (

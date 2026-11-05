@@ -385,6 +385,15 @@ export let chosen = async (
     parsed,
   })
 
+/// source('workers/yak/operator-line.ts') -> true
+/// source('workers/yak/operator-line_test.ts') -> false
+/// source('packages/graph') -> false
+/// source('packages/graph/README.md') -> false
+/** Whether a path a run is given names a source module: it stands for a
+ * change to that module, and the run selects the tests depending on it. */
+export let source = (path: string) =>
+  /\.[mc]?[jt]sx?$/.test(path) && !tested(path)
+
 /** Plan a run before starting runtimes, and start checking its sources: `ok`
  * settles beside the tests, the types of what the change reaches taking
  * seconds of one core. A whole run needs no git history or source checks: the
@@ -448,15 +457,28 @@ export let prepare = async (
     : effects.check(changedFiles, imports.promise, snapshot.promise)
       .catch((e) => (console.error(e), false))
   try {
+    // Source files named are selected from as a change is, among every file;
+    // the tests and pages named beside them are their own change, so each
+    // reaches itself.
+    let modules = paths.filter(source)
+    let rest = paths.filter((p) => !source(p))
+    let given = modules.length && rest.length
+      ? await effects.find(rest)
+      : undefined
     let { tests, pages, parsed } = await effects.find(
-      paths.length ? paths : ROOTS,
+      paths.length && !modules.length ? paths : ROOTS,
     )
-    let files = [
-      ...tests.filter((f) => on(platform(f))),
-      ...on('deno') ? pages : [],
+    let only = (found: { tests: string[]; pages: string[] }) => [
+      ...found.tests.filter((f) => on(platform(f))),
+      ...on('deno') ? found.pages : [],
     ]
+    let files = only({ tests, pages })
     // Choose files before starting runtimes; hand each its dependency keys.
-    let changed = !paths.length && !all ? changedPaths : undefined
+    let changed = modules.length
+      ? [...modules, ...given ? only(given) : []]
+      : !paths.length && !all
+      ? changedPaths
+      : undefined
     let { keys, run, beyond, reaches, read } = await effects.chosen(
       files,
       all,

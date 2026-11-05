@@ -138,15 +138,23 @@ examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.
 Cached passing dependencies can narrow execution further.
 
-While iterating, name paths to focus a run:
+While iterating, name a source file to run its tests and every test depending
+on it, selected as a no-path run selects from a change to it:
+
+```sh
+deno task test workers/yak/<file>.ts
+```
+
+A test file or a directory named runs just that:
 
 ```sh
 deno task test packages/<name>
 deno task test workers/yak/<file>_test.ts
 ```
 
-A path or `--tag=<tag>` deliberately narrows coverage; it is useful for debugging,
-but does not establish that consumers elsewhere passed. Finish with the no-path
+A test file, a directory or `--tag=<tag>` deliberately narrows coverage; it is
+useful for debugging, but does not establish that consumers elsewhere passed.
+Finish with the no-path
 command so dependency selection covers the change. There is no separate landing
 run or gate. When landing rebases onto new work, rerun it on that combination.
 
