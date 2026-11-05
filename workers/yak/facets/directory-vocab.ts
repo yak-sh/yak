@@ -399,6 +399,17 @@ export let directoryDoc: VocabDoc = {
         via: owned({ type: 'string', enum: ['code', 'link'] }),
       },
     },
+    // A build of yaks.app the kernel asked main's deploy hook for, and the
+    // commit it asked for: the build's own record names none (builds.ts).
+    built: {
+      description:
+        "A Workers Build the kernel started through main's deploy hook, and the commit it rebuilds.",
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      properties: { commit: owned(text) },
+    },
   },
 }
 export let useDoc: VocabDoc = {

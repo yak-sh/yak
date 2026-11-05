@@ -27,15 +27,19 @@
 // from a push, and a build that names no commit is never built again: a retry
 // that retried its own failure would never stop. A failure that earns no
 // rebuild is filed at once: no `BUILD_HOOK`, a hook that refused or could not
-// be reached, a build with no commit, a commit's second build. A rebuild that
+// be reached, a commit's second build. A rebuild that
 // never reports back leaves its commit not live, which the box's deploy
 // catch-up reports (NotLive, packages/admin/catchup.ts).
 //
 // A failed commit is one tracker bug, however many builds fail or whether
-// their logs can be read. The build record names its commit when the event
-// omits it; hook builds can leave both empty, so their checked-out commit is
-// read from the log. A build with neither keeps its own identity. A build
-// that fails after its bug was resolved brings the bug back.
+// their logs can be read. A push's build names its commit in its event. A
+// deploy hook's build names none, in its event or its own record, so the
+// commit comes from whoever asked for it: the kernel notes the commit it
+// rebuilds on the build the hook started (`built{commit}`), and the log's
+// checked-out commit stands in when it can be read. A hook build with neither
+// is the deploy catch-up's, which builds main's head and reports that head
+// when it still is not live (catchup.ts `stuck`), so here it is a log line. A
+// build that fails after its bug was resolved brings the bug back.
 //
 // The meta store holds the receipts that make each decision once (unseen.ts
 // `metaBreaks`): a failed build is noted as its own entity, and a commit's
@@ -47,6 +51,7 @@ import { Stale } from '@yaks/graph/errors'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
 import { type Hooked, hooked, PENDING } from './hook.ts'
+import { meta } from './meta.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'
 import { accountUrl, resent } from './workers_api.ts'
 
@@ -106,30 +111,28 @@ export let buildUrl = (env: Env, b: Broke) =>
 
 let buildToken = (env: Env) => env.BUILD_LOG_TOKEN || env.CF_WORKERS_TOKEN
 
-/** The build's source commit, independent of access to its log. Hook builds
- * can leave it empty; their checked-out commit is printed in the log. */
-export let commitOf = async (env: Env, uuid?: string) => {
-  if (!uuid || !env.CF_ACCOUNT || !buildToken(env)) return undefined
-  try {
-    let res = await resent(
-      accountUrl(env, `/builds/builds/${encodeURIComponent(uuid)}`),
-      {
-        headers: { authorization: `Bearer ${buildToken(env)}` },
-        signal: AbortSignal.timeout(20_000),
-      },
-    )
-    if (!res.ok) return undefined
-    let page = await res.json() as {
-      success?: boolean
-      result?: { build_trigger_metadata?: { commit_hash?: string } }
-    }
-    return page.success
-      ? page.result?.build_trigger_metadata?.commit_hash || undefined
-      : undefined
-  } catch (error) {
-    caught(error, { request: 'read build record', build: uuid })
-    return undefined
-  }
+/** The failure as the build of `commit`. */
+let named = (b: Broke, commit: string): Broke => ({
+  ...b,
+  commit,
+  request: `BUILD ${b.tags.worker} ${commit.slice(0, 8)}`,
+  tags: { ...b.tags, commit },
+  error: new BuildFailed(
+    b.error.message.replace('at unknown', `at ${commit.slice(0, 8)}`),
+  ),
+})
+
+/** The failure as the build of the commit the kernel asked the deploy hook to
+ * build, when it names none and the kernel started it. */
+export let asked = async (env: Env, b: Broke): Promise<Broke> => {
+  if (b.commit || !b.uuid) return b
+  let [row] = await meta(env).query(`.entity.eid=${b.uuid}&.built`)
+    .catch((error) => {
+      caught(error, { request: 'read built', build: b.uuid })
+      return []
+    })
+  let commit = (row?.built as { commit?: string } | undefined)?.commit
+  return commit ? named(b, commit) : b
 }
 
 type Logs = {
@@ -315,29 +318,15 @@ export let logsOf = async (env: Env, uuid?: string) => {
 }
 
 /** Enrich one failure at the reporting boundary, leaving raw logs behind.
- * Its `cause` is the commit it built, independent of log access, falling back
- * to the build only when no source names its commit. */
+ * Its `cause` is the commit it built, from its event, the kernel's note or its
+ * log, falling back to the build only when none names its commit. */
 export let diagnosed = async (
   env: Env,
   b: Broke,
 ): Promise<Broke & { cause: string }> => {
-  let [record, detail] = await Promise.all([
-    b.commit ? undefined : commitOf(env, b.uuid),
-    logsOf(env, b.uuid),
-  ])
-  let commit = record ?? b.commit ??
-    (typeof detail == 'string' ? undefined : detail.commit)
-  if (commit && !b.commit) {
-    b = {
-      ...b,
-      commit,
-      request: `BUILD ${b.tags.worker} ${commit.slice(0, 8)}`,
-      tags: { ...b.tags, commit },
-      error: new BuildFailed(
-        b.error.message.replace('at unknown', `at ${commit.slice(0, 8)}`),
-      ),
-    }
-  }
+  let detail = await logsOf(env, b.uuid)
+  let logged = typeof detail == 'string' ? undefined : detail.commit
+  if (!b.commit && logged) b = named(b, logged)
   let summary = typeof detail == 'string'
     ? `Details unavailable: ${detail}`
     : `Step: ${detail.step}; error: ${detail.reason}; ${deployed(detail.step)}`
@@ -393,10 +382,11 @@ type Batch = { messages: readonly { body: Built; ack(): void }[] }
 
 /** The queue handler: decide each failed build once, however often it is
  * delivered, and acknowledge every message. A commit's first failure is built
- * again, and is a log line once that build started; any other failure goes to
- * the tracker with what its retry came to. A note that fails is telemetry: the
- * build is decided as new, and earns no retry, since a retry nobody recorded
- * is how the loop starts. */
+ * again, noting the commit on the build the hook started, and is a log line
+ * once that build started; a build that names no commit is the catch-up's
+ * and a log line too; any other failure goes to the tracker with what its
+ * retry came to. A note that fails is telemetry: the build is decided as new,
+ * and earns no retry, since a retry nobody recorded is how the loop starts. */
 export let builds = async (batch: Batch, env: Env) => {
   let breaks = metaBreaks(env)
   let noted = (b: Broke, eid: string | undefined, otherwise: boolean) =>
@@ -409,11 +399,23 @@ export let builds = async (batch: Batch, env: Env) => {
   for (let m of batch.messages) {
     let event = broke(m.body)
     if (event && await noted(event, event.uuid, true)) {
+      event = await asked(env, event)
       let detail = diagnosed(env, event)
       let once = await noted(event, event.commit, false)
       let retry = once ? await rebuild(env) : undefined
+      if (retry?.build) {
+        await breaks([{
+          entity: { eid: retry.build },
+          built: { commit: event.commit },
+        }]).catch((why) => caught(why, { request: `note ${event!.request}` }))
+      }
       let b = await detail
-      if (retry?.started) {
+      if (!b.commit) {
+        console.log(
+          `yak-builds: ${b.error.message}. The deploy catch-up asked for ` +
+            `this build and reports main's head if it stays not live.`,
+        )
+      } else if (retry?.started) {
         console.log(`yak-builds: ${b.error.message}. Building it again.`)
       } else if (retry?.said == PENDING) {
         console.log(`yak-builds: ${b.error.message}. ${PENDING}.`)

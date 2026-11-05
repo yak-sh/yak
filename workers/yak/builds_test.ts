@@ -217,18 +217,22 @@ test('builds: a failed build of a branch that deploys nothing is not filed', () 
 })
 
 // The meta store's receipts, as its conditional write answers them (meta.ts
-// `written`): an entity's second note finds its first and is Stale.
+// `written`): an entity's second receipt finds its first and is Stale. A
+// `built` note is read back by its build.
 let receipts = (): Meta => {
-  let held = new Set<string>()
+  let held = new Map<string, Bundle>()
   return {
-    query: () => Promise.resolve([]),
+    query: (line) => {
+      let row = held.get(line.match(/eid=([^&]+)/)?.[1] ?? '')
+      return Promise.resolve(row?.built ? [row] : [])
+    },
     apply: (bundles) => {
-      for (let { entity } of bundles) {
-        let eid = String(entity?.eid)
-        if (held.has(eid)) {
+      for (let bundle of bundles) {
+        let eid = String(bundle.entity?.eid)
+        if (bundle.$was && held.get(eid)?.failed) {
           return Promise.reject(new Stale(eid, 'failed', 'at', 'noted'))
         }
-        held.add(eid)
+        held.set(eid, { ...held.get(eid), ...bundle })
       }
       return Promise.resolve(bundles)
     },
@@ -314,7 +318,7 @@ test('builds: a hook that answers 200 without success started nothing', async ()
   )
 })
 
-test("builds: the rebuild's failure is filed", async () => {
+test("builds: the rebuild's failure is filed under the commit it rebuilt", async () => {
   assertEquals(
     await consumed([[event('failed')], [hooked()]]),
     { asked: 1, filed: 1, logged: 1 },
@@ -334,12 +338,12 @@ test('builds: a failure that earns no rebuild is filed', async () => {
   )
 })
 
-test('builds: a build with no commit is never built again', async () => {
+test("builds: a hook build the kernel did not start is the catch-up's", async () => {
   assertEquals(broke(hooked())!.commit, undefined)
   assertEquals(broke(hooked())!.request, 'BUILD yak unknown')
   assertEquals(
     await consumed([[hooked()], [hooked()]]),
-    { asked: 0, filed: 1, logged: 0 },
+    { asked: 0, filed: 0, logged: 1 },
   )
 })
 
@@ -445,15 +449,17 @@ test('builds: unreadable causes keep unrelated commits and hook builds apart', a
   }
 })
 
-// Exercise the queue's report boundary without sending anything to the tracker.
-let reported = async (readable: boolean, recordStatus = 200) => {
+// A push of one commit whose build fails, the kernel's rebuild of it
+// (`build-2`) failing too, and the catch-up's build of main (`build-3`)
+// failing after: what reaches the tracker, with the logs readable or not.
+let reported = async (readable: boolean) => {
   let commit = '0b5802113' + '1'.repeat(31)
   let rows: Bundle[] = []
-  let requests: string[] = []
   let env = {
     CF_ACCOUNT: 'account',
     CF_WORKERS_TOKEN: 'worker-token',
     WORKERS_API: 'https://cloudflare.test',
+    BUILD_HOOK: 'https://hook.test/main',
     META: receipts(),
     ERRORS: {
       send: (sent: Bundle[]) => {
@@ -462,86 +468,61 @@ let reported = async (readable: boolean, recordStatus = 200) => {
       },
     },
   } as Env
-  let was = globalThis.fetch
-  globalThis.fetch = (input, init) => {
-    let url = String(input)
-    requests.push(url)
-    assertEquals(
-      new Headers(init?.headers).get('authorization'),
-      'Bearer worker-token',
-    )
-    if (!url.endsWith('/logs')) {
-      return Promise.resolve(Response.json({
-        success: recordStatus == 200,
-        result: { build_trigger_metadata: { commit_hash: commit } },
-      }, { status: recordStatus }))
-    }
-    return Promise.resolve(
-      readable
+  let [fetch, log] = [globalThis.fetch, console.log]
+  globalThis.fetch = (input) =>
+    Promise.resolve(
+      String(input).startsWith('https://hook.test')
+        ? Response.json({ success: true, result: { build_uuid: 'build-2' } })
+        : readable
         ? Response.json({
           success: true,
           result: { lines: [[1, 'error: missing module']] },
         })
-        : new Response('', { status: 403 }),
+        : new Response('', { status: 401 }),
     )
-  }
+  console.log = () => {}
+  let push = event('failed')
+  push.payload!.buildTriggerMetadata!.commitHash = commit
+  let catchup = hooked()
+  catchup.payload!.buildUuid = 'build-3'
   let time = clock()
   try {
     await within(env, {}, async () => {
-      for (let uuid of ['build-2', 'build-3']) {
-        let body = hooked()
-        body.payload!.buildUuid = uuid
+      for (let body of [push, hooked(), catchup]) {
         await builds({ messages: [{ body, ack() {} }] }, env)
       }
     }, time)
     await time.advance(10_000)
     return {
-      rows: rows.map((row) => ({
-        error: row.error as Comp,
-        exception: row.exception as Comp,
+      rows: rows.filter((row) => row.error).map((row) => ({
+        error: row.error as {
+          fault: string
+          commit: string
+          tags: { commit: string }
+        },
+        message: String((row.exception as Comp).value),
       })),
-      requests,
       commit,
     }
   } finally {
-    globalThis.fetch = was
+    globalThis.fetch = fetch
+    console.log = log
   }
 }
 
-test('builds: record commit groups repeated failures with unreadable logs', async () => {
-  let { rows, requests, commit } = await reported(false)
-  assertStringIncludes(requests[0], '/builds/builds/build-2')
-  assertEquals(rows.length, 2)
-  for (let row of rows) {
-    let error = row.error as {
-      fault: string
-      commit: string
-      tags: { commit: string }
-    }
-    assertEquals(error.fault, `build failed:yak:${commit}`)
-    assertEquals(error.commit, commit)
-    assertEquals(error.tags.commit, commit)
-    assertStringIncludes(String(row.exception?.value), 'at 0b580211')
-    assertStringIncludes(
-      String(row.exception?.value),
-      'build logs returned HTTP 403',
-    )
-  }
+test('builds: a rebuild with an unreadable log is filed under its commit', async () => {
+  let { rows, commit } = await reported(false)
+  assertEquals(rows.length, 1)
+  let [{ error, message }] = rows
+  assertEquals(error.fault, `build failed:yak:${commit}`)
+  assertEquals(error.commit, commit)
+  assertEquals(error.tags.commit, commit)
+  assertStringIncludes(message, 'at 0b580211')
+  assertStringIncludes(message, 'build logs returned HTTP 401')
 })
 
-test('builds: readable logs quote the error under the same commit key', async () => {
+test('builds: a readable log is quoted under the same commit key', async () => {
   let { rows, commit } = await reported(true)
-  assertEquals(rows.length, 2)
-  for (let row of rows) {
-    assertEquals(row.error?.fault, `build failed:yak:${commit}`)
-    assertStringIncludes(String(row.exception?.value), 'error: missing module')
-  }
-})
-
-test('builds: an unreadable record and log retain separate build identities', async () => {
-  let { rows } = await reported(false, 403)
-  assertEquals(rows.map((row) => row.error?.fault), [
-    'build failed:yak:build-2',
-    'build failed:yak:build-3',
-  ])
+  assertEquals(rows.map((r) => r.error.fault), [`build failed:yak:${commit}`])
+  assertStringIncludes(rows[0].message, 'error: missing module')
 })

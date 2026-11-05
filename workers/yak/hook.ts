@@ -15,10 +15,11 @@ type Answer = {
  * running: the head's build exists and is only slow. */
 export let PENDING = 'a pending build of main already exists'
 
-/** What a deploy hook answered: whether it started a build, and in words. */
-export type Hooked = { started: boolean; said: string }
+/** What a deploy hook answered: whether it started a build, the build it
+ * started, and in words. */
+export type Hooked = { started: boolean; said: string; build?: string }
 
-/// hooked(200, { success: true, result: { build_uuid: 'aa194fb5-5e63', status: 'queued' } }) -> { started: true, said: 'build aa194fb5 queued' }
+/// hooked(200, { success: true, result: { build_uuid: 'aa194fb5-5e63', status: 'queued' } }) -> { started: true, said: 'build aa194fb5 queued', build: 'aa194fb5-5e63' }
 /// hooked(200, { success: true, result: { already_exists: true } }) -> { started: false, said: PENDING }
 /// hooked(404, { success: false, errors: [{ message: 'Not found' }] }) -> { started: false, said: 'refused 404: Not found' }
 /// hooked(200, null) -> { started: false, said: 'refused 200' }
@@ -35,5 +36,6 @@ export let hooked = (status: number, body: unknown): Hooked => {
       said: `build ${a.result?.build_uuid?.slice(0, 8) ?? '(no id)'} ${
         a.result?.status ?? 'started'
       }`,
+      build: a.result?.build_uuid,
     }
 }
