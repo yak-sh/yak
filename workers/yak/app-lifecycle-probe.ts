@@ -1,3 +1,4 @@
+import { kvStorage } from './binding-probe.ts'
 import { servingAuthority } from './app-serving-authority.ts'
 import { copyOf, servingDirectory } from './directory-copy.ts'
 import { fetch as directoryFetch } from './directory.ts'
@@ -74,7 +75,9 @@ export let lifecycleStores = (
   let store = (name: string, restored?: Physical) => {
     let slots = new Map<string, string>()
     let unselectable = new Set<string>()
+    let memory = kvStorage()
     let physical: Physical | undefined
+    let persistence = () => physical ?? memory
     let sql: (Driver & Disposable) | undefined
     let backend: Backend = storage || restored
       ? sqliteApp(
@@ -247,14 +250,39 @@ export let lifecycleStores = (
       broadcast(pages.get(name)!, packet, (error) => {
         throw error
       })
+    let erase = async () => {
+      if (!wire) bind()
+      return await eraseStore(name, {
+        pages: pages.get(name)!,
+        close: () => wire.subs.stop(),
+        clear: async () => {
+          await physical?.deleteAll()
+          memory.map.clear()
+        },
+        plant: () => {
+          wire.subs.stop()
+          slots.clear()
+          slotCache.clear()
+          raw = undefined
+          hydrated = false
+          unselectable.clear()
+          deployed = false
+          bind(true)
+          return json({ ok: true })
+        },
+      })
+    }
     let fetch = async (request: Request): Promise<Response> => {
       try {
         let path = new URL(request.url).pathname
         let kernel = request.headers.get('x-yak-kernel') == '1'
-        if (physical && await physical.get<boolean>('dormant')) {
+        if (await persistence().get<boolean>('dormant')) {
           if (kernel && path == '/' && request.method == 'DELETE') {
-            await physical.deleteAll()
-            return json({ ok: true })
+            if (physical) {
+              await physical.deleteAll()
+              return json({ ok: true })
+            }
+            return await erase()
           }
           if (
             !(kernel && ['/dormant', '/revive'].includes(path) &&
@@ -268,20 +296,20 @@ export let lifecycleStores = (
         }
         if (kernel && request.method == 'POST' && path == '/dormant') {
           if (!wire) bind()
-          if (!physical) throw new Error('dormancy needs a storage boundary')
-          await suspendStore(physical, pages.get(name)!)
+          await suspendStore(persistence(), pages.get(name)!)
           return json({ ok: true })
         }
         if (kernel && request.method == 'POST' && path == '/revive') {
-          if (!physical && !wire) bind()
-          if (!physical) throw new Error('revival needs a storage boundary')
-          return await reviveStore(physical, {
+          if (!wire) bind()
+          return await reviveStore(persistence(), {
             activate: () => {},
             start: () => {
               if (!wire) bind()
               return undefined
             },
-            arm: () => physical!.setAlarm(Date.now()),
+            arm: async () => {
+              await physical?.setAlarm(Date.now())
+            },
           })
         }
         if (env.SERVING_COPY) {
@@ -335,23 +363,7 @@ export let lifecycleStores = (
           if (request.headers.get('x-yak-kernel') != '1') {
             return json({ error: 'NotFound', message: 'no route' }, 404)
           }
-          if (!physical) throw new Error('erasure needs a storage boundary')
-          return await eraseStore(name, {
-            pages: pages.get(name)!,
-            close: () => wire.subs.stop(),
-            clear: () => physical!.deleteAll(),
-            plant: () => {
-              wire.subs.stop()
-              slots.clear()
-              slotCache.clear()
-              raw = undefined
-              hydrated = false
-              unselectable.clear()
-              deployed = false
-              bind(true)
-              return json({ ok: true })
-            },
-          })
+          return await erase()
         }
         if (path == '/drafted') return drafted(request, send)
         if (path == '/released') return released(request, send)

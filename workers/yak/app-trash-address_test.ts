@@ -1,5 +1,5 @@
 // Trash retains an app's resources while its address belongs to the next app.
-// Address decisions use RAM directory rows; dormant app rows stay in SQLite.
+// Address and dormancy decisions use independent rows and marks in memory.
 // Each case is a space of its own.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -9,7 +9,6 @@ import { declared } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { operators } from './operator-service-probe.ts'
-import { durable } from '../../packages/durable-object/testing.ts'
 import { platform as isolated } from './deploy-probe.ts'
 import { r2Objects } from './lib/objects.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -22,7 +21,7 @@ let backed = platform('trash-address-backed', { BUILDER: operators }, {
   handlers: (env, graph) =>
     effects(undefined, { store: { meta: true, env, graph } as Stored }),
 })
-lifecycleStores(backed.env, (_name, from) => durable(from))
+lifecycleStores(backed.env)
 let addresses = isolated('trash-address')
 let NOTE = {
   $defs: {

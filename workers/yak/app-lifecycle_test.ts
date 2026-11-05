@@ -84,3 +84,38 @@ test('candidate declarations and seed trials leave the serving graph alone until
   )
   equal(await (await request('/query?q=.note', '3')).json(), [])
 })
+
+test('dormancy keeps RAM rows, revival serves them, and erasure plants an empty graph', async () => {
+  let { env } = platform(SECRET)
+  lifecycleStores(env)
+  let store = env.STORE.get(env.STORE.idFromName('dormant'))
+  let request = (path: string, method = 'GET', body?: unknown) =>
+    store.fetch(
+      new Request(`https://store${path}`, {
+        method,
+        headers: { 'x-yak-kernel': '1' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    )
+  equal(
+    (await request('/apply', 'POST', [{
+      entity: { eid: '$kept' },
+      doc: { title: 'kept' },
+    }])).status,
+    200,
+  )
+  equal((await request('/dormant', 'POST')).status, 200)
+  equal((await request('/query?q=.doc')).status, 404)
+  equal((await request('/revive', 'POST')).status, 200)
+  equal((await (await request('/query?q=.doc')).json())[0].doc.title, 'kept')
+  equal((await request('/', 'DELETE')).status, 200)
+  equal(await (await request('/query?q=.doc')).json(), [])
+  equal(
+    (await request('/apply', 'POST', [{
+      entity: { eid: '$fresh' },
+      doc: { title: 'fresh' },
+    }])).status,
+    200,
+  )
+  equal((await (await request('/query?q=.doc')).json())[0].doc.title, 'fresh')
+})

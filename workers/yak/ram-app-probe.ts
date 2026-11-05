@@ -9,9 +9,14 @@ import type { Vocab } from '@yaks/vocab'
 
 export let ramApp = () => {
   let stores = new WeakMap<Graph, Store>()
-  let make = (vocab: Vocab, previous?: Graph) => {
+  let make = (
+    vocab: Vocab,
+    previous?: Graph,
+    _prepare?: unknown,
+    reset = false,
+  ) => {
     let rows = ram(vocab)
-    let held = previous && stores.get(previous)
+    let held = !reset && previous && stores.get(previous)
     if (held) {
       let saved = held.read('.entity&*', { graves: true })
       rows.tx((tx) => tx.patch(saved))
