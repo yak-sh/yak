@@ -86,11 +86,12 @@ export let canon = (typed: string) => {
  * by text. */
 export let texted = (address: string) => /^\+1\d{10}$/.test(address)
 
-/** What giving a number on the sign-in card agrees to: said beside the box
- * (pages.ts `askEmail`), and kept as the consent of a person who signs up
- * with it (identity.ts `agreed`). */
-export let SIGNIN_CONSENT =
-  "Using a mobile number agrees to texts from yaks.app: sign-in codes, your Operator's answers, and alerts about your account, your space and the apps you build. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. US numbers only."
+/** What giving a number on the sign-in card agrees to, said beside the box
+ * (pages.ts `askEmail`) word for word as the toll-free verification was filed
+ * (T-138775), Terms and Privacy after it: the code alone. Texts from the
+ * Operator wait for the consent its own page or a sign-up text gives. */
+export let CODE_NOTE =
+  "We'll text a sign-in code to this number. Msg & data rates may apply. Reply STOP to opt out, HELP for help."
 
 /** The text a code goes out in, word for word the sample the toll-free
  * verification was filed with (T-138775). iOS offers a texted code on the

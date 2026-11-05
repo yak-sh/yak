@@ -29,7 +29,7 @@ import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
 import { type Invitation, qr } from './referral.ts'
 import { shown } from '@yaks/phone'
-import { SIGNIN_CONSENT, texted } from './signin.ts'
+import { CODE_NOTE, texted } from './signin.ts'
 export { esc } from './html.ts'
 import {
   accountView,
@@ -2166,9 +2166,11 @@ export let askEmail = (at: {
 ${
       at.texts
         ? `<input class="Field" name="address" type="text" required autofocus autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com or 269-555-0142" aria-label="Your email or mobile number" aria-describedby="by-text">
-<p class="Note" id="by-text">${TEXTED} <a href="${
+<p class="Note" id="by-text">${TEXTED} Terms: <a href="${
           url(env, '/terms')
-        }">Terms</a> · <a href="${url(env, '/privacy')}">Privacy</a></p>
+        }">yaks.app/terms</a> Privacy: <a href="${
+          url(env, '/privacy')
+        }">yaks.app/privacy</a></p>
 <script>{let n=document.currentScript.previousElementSibling,f=n.previousElementSibling,s=()=>n.hidden=f.value.includes('@');f.addEventListener('input',s);s()}</script>`
         : '<input class="Field" name="address" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">'
     }
@@ -2176,7 +2178,7 @@ ${
 </form>${home(env)}`,
   )
 
-let TEXTED = esc(SIGNIN_CONSENT)
+let TEXTED = esc(CODE_NOTE)
 
 // Ask for the code just sent, and nothing else (T-34236). Signing up is two
 // steps and both are the address: give it, then prove it. What a person is

@@ -180,7 +180,6 @@ import {
   mint,
   nameOf,
   personOf,
-  SIGNIN_CONSENT,
   spend,
   texted,
   visitor,
@@ -830,28 +829,6 @@ let phoneAt = async (env: Env, person: string) => {
 let signCard = (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
   askEmail({ ...at, texts: textable(env) }, env)
 
-// A person signing up with a number agreed, on the card, to what it says
-// beside the box (signin.ts SIGNIN_CONSENT): those words are kept as their
-// consent to be texted, as a text that signs someone up is (`textedIn`). Only
-// the first sign-in is signing up: a person who has signed in before and
-// since said STOP is not subscribed again by signing in.
-let agreed = async (env: Env, person: string) => {
-  let store = meta(env)
-  let [[them], [consent]] = await Promise.all([
-    store.query(`.entity.eid=${person} ?signed_in`),
-    store.query(`.sms_consent.person=${person}`),
-  ])
-  if (them?.signed_in || consent) return
-  await store.apply([{
-    entity: { eid: consentEid(person) },
-    sms_consent: {
-      person,
-      consent: SIGNIN_CONSENT,
-      at: new Date().toISOString(),
-    },
-  }], KERNEL)
-}
-
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and
 // costs a try on every code standing for the address exactly as a mistyped one
@@ -1242,7 +1219,6 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // (T-32733). It is theirs to change on their own space page. A number is
     // no name, and a person found by one is the one wearing it.
     let person = await personOf(meta(env), address, called(address))
-    if (texted(address)) await agreed(env, person)
     return landed(req, env, person, q, back, 'code')
   }
 

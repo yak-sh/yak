@@ -1,15 +1,15 @@
 // Signing in with a number (T-136826), through the whole kernel: once the
 // platform texts strangers (TEXT_SIGNUP), the sign-in card takes a US mobile
 // number beside an email address, the code goes by text from the platform's
-// number, and spending it lands a new person, wearing the number and the
-// words they agreed to, on their own space. Before that, the card is the
+// number, and spending it lands a new person, wearing the number, on their
+// own space. Before that, the card is the
 // email card it always was.
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test, until } from '@yaks/testing'
 import { fresh } from './probe.ts'
 import { endpoints } from './endpoints.ts'
-import { codeText, SIGNIN_CONSENT, VISITS } from './signin.ts'
+import { CODE_NOTE, codeText, VISITS } from './signin.ts'
 import { NOT_EMAIL } from './identity.ts'
 import type { Env } from './env.ts'
 
@@ -75,7 +75,7 @@ test('then one box takes an email or a mobile number, with what a number agrees 
   let box = card.querySelector('input[name="address"]')!
   assertEquals(box.getAttribute('type'), 'text')
   assertEquals(box.getAttribute('aria-describedby'), 'by-text')
-  assert(card.querySelector('#by-text')!.textContent!.includes(SIGNIN_CONSENT))
+  assert(card.querySelector('#by-text')!.textContent!.includes(CODE_NOTE))
 })
 
 test('a number is texted its code from the platform number, and the card says where it went', () => {
@@ -94,11 +94,11 @@ test('a number is texted its code from the platform number, and the card says wh
   )
 })
 
-test('the code lands a new person wearing the number, their consent kept, on their own space', () => {
+test('the code lands a new person wearing the number, on their own space, not yet subscribed to Operator texts', () => {
   assertEquals(inn.status, 303)
   assert(inn.headers.get('set-cookie'))
   assertEquals(known, null, 'no address')
-  assertEquals([agreed?.number, agreed?.consent], [NUMBER, SIGNIN_CONSENT])
+  assertEquals(agreed, null, 'the code card agreed to codes alone')
   assertEquals(spaces.length, 1)
 })
 
