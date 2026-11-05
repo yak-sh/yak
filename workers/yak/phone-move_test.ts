@@ -42,11 +42,26 @@ test('legacy voip.ms texts keep their words, identity, delivery and conversation
   assertEquals(once.length, 1)
 })
 
-test('existing app receipts gain their Telnyx provenance without changing their identity or content', () => {
-  assertEquals(
-    phoneRule.move({ entity: { eid: sent }, text: { message_id: 'legacy' } }),
-    [
-      { entity: { eid: sent }, text: { via: 'telnyx' } },
-    ],
-  )
+let old = crypto.randomUUID()
+await store.g.apply([{
+  entity: { eid: old },
+  doc: { body: 'An earlier text.' },
+  text: { from: '+12695550100', to: '+12695550142', message_id: 'legacy' },
+}])
+let before = (await store.g.read(phoneRule.find)).length
+await store.g.apply(
+  (await store.g.read(phoneRule.find)).flatMap((row) => phoneRule.move(row)),
+)
+let after = (await store.g.read(phoneRule.find)).length
+let [receipt] = await store.g.get([old])
+
+test('the app migration preserves the message and receipt, leaves one transport shape and drains its query', () => {
+  assertEquals([before, after], [1, 0])
+  assertEquals(receipt.doc, { body: 'An earlier text.' })
+  assertEquals(receipt.text, {
+    from: '+12695550100',
+    to: '+12695550142',
+    message_id: 'legacy',
+    via: 'telnyx',
+  })
 })
