@@ -180,6 +180,19 @@ test('what a mount drew comes back from another query with its stage, place and 
   drawing.stop()
 })
 
+test('a selection too big for its sheet fills a larger one of the same shape, not a column', () => {
+  let small = layout([doc(1), doc(2)], { width: 560, height: 620 })
+  assertEquals([small.width, small.height], [560, 620])
+  let big = layout(Array.from({ length: 80 }, (_, i) => doc(i)), {
+    width: 560,
+    height: 620,
+  })
+  let shape = (big.width / big.height) / (560 / 620)
+  assert(big.width > 560 && shape > .85, `${big.width} by ${big.height}`)
+  let xs = big.nodes.map((n) => n.x)
+  assert(Math.max(...xs) - Math.min(...xs) > big.width * .7)
+})
+
 test('a pinned entity sits where it is pinned, and the rest spread from the middle', () => {
   let pins: Record<string, [number, number]> = { 'D-1': [.2, .1] }
   let drawn = layout([doc(1), doc(2)], {

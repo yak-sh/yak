@@ -274,9 +274,21 @@ let place = (s: Sheet): Spot => {
   }
 }
 
+// The sheet a selection is laid out on: the one asked for, or, when the
+// shapes and the room around them would not fit it, one as many times larger
+// across as down, so a big graph fills a drawing of the same shape instead of
+// running down a column of it.
+const ROOM = 2.4
+let fitted = (width: number, height: number, sizes: [number, number][]) => {
+  let need = sizes.reduce((a, [w, h]) => a + (2 * w + GAP) * (2 * h + GAP), 0)
+  let grow = Math.max(1, Math.sqrt(need * ROOM / (width * height)))
+  return [width * grow, height * grow]
+}
+
 /**
  * Lay out a selection. Entities in `was` keep their places and order; each new
- * one, in the order given, takes the cheapest free spot. The sheet grows
+ * one, in the order given, takes the cheapest free spot. A selection too big
+ * for the sheet gets a larger one of the same shape, and the sheet grows
  * downward when nothing on it is free.
  *
  * ```ts
@@ -293,8 +305,6 @@ let place = (s: Sheet): Spot => {
 export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
   let { was, label = (b) => handle(b.entity.eid), quiet = QUIET } = opts
   let { shapes = SHAPES, stage = 0 } = opts
-  let width = opts.width ?? was?.width ?? 640
-  let height = opts.height ?? was?.height ?? 480
   let old = new Map(was?.nodes.map((n) => [n.eid, n]))
   let oldLinks = new Map(was?.links.map((l) => [l.key, l]))
   let drawn = bundles.filter((b) => !isEdge(b)).map((b) => {
@@ -303,6 +313,11 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
     let shape = comps.map((c) => shapes[c]).find(Boolean) ?? 'box'
     return { b, comps, state, shape, size: half(shape, !!state) }
   })
+  let [width, height] = fitted(
+    opts.width ?? was?.width ?? 640,
+    opts.height ?? was?.height ?? 480,
+    drawn.map((d) => d.size),
+  )
   let lines = links(bundles)
   let spot = new Map<string, Spot>()
   let boxes = bands()
