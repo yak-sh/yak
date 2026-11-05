@@ -31,11 +31,13 @@ code that isn't served.
 ## Who it's for
 
 People with a specific problem, at work, at home or in something they run on
-the side, that no off-the-shelf app fits, and who already ask an assistant for
-help. The moment they need an app comes inside that chat; yaks.app gives it
-what a chat can't: an address, data that stays, sign-in, the people it's for,
-on any phone (M-37845). The people we want already pay for that assistant: "if
-they aren't paying for claude, they probably just don't need our product."
+the side, that no off-the-shelf app fits. yaks.app is its own agent product,
+designed for non-technical people with little jargon (M-140239): its pages
+are where they reach their apps, talk with their operators and read logs and
+sessions, and the old web UI is now its settings. Connecting Claude or ChatGPT
+stays for people who already know their assistant well, and is no longer the
+center. What the product gives an app that a chat can't: an address, data that
+stays, sign-in, the people it's for, on any phone (M-37845).
 
 The first personas are literal people who use yaks.app, and D-131886 has each
 in full:
@@ -88,12 +90,12 @@ Jill may never hit a limit, so the Plus plan carries what a maker wants next,
 and yaks.app helps them get there: "let's get your recipe site set up with your
 custom domain and here are some features i tihnk we could work on." That's the
 operator in D-131886, an agent that works for the maker, often through their
-own assistant. "i'm not talking a salesman."
+own assistant or through yaks.app itself. "i'm not talking a salesman."
 
 ## The cycle, and the maker's path
 
-Someone asks their assistant for an app, and it's live at their address within
-minutes. They invite the people it's for. Some of those people have problems of
+Someone asks for an app, in yaks.app or through their own assistant, and it's
+live at their address within minutes. They invite the people it's for. Some of those people have problems of
 their own and start a space. The spaces people rely on outgrow free and pay.
 The money makes the product better, and the first minute gets more magical.
 
@@ -150,9 +152,8 @@ invited, read-only, with `yak admin query`, as D-131886 did. Read what they
 sent through the connector's `feedback` tool. Count invitations accepted,
 copies installed and spaces upgraded, with what tipped each one.
 
-People realize they need an app while they're talking to their assistant, so
-that's where yaks.app should be found: the assistants' connector directories,
-and an app someone shared with them.
+People find yaks.app through an app someone shared with them, and through the
+assistants' connector directories for those who already use one.
 
 ## Where it lives
 
