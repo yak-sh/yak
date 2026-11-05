@@ -129,7 +129,7 @@ test('a visitor types into the same prompt: help, a refusal, a write the page se
 test('every file the app serves is a file read in the site, text with its contents', async () => {
   let dir = new URL('./', import.meta.url)
   let served = [...Deno.readDirSync(dir)].map((e) => e.name)
-    .filter((n) => !n.endsWith('_test.ts')).sort()
+    .filter((n) => !n.endsWith('_test.ts') && n != 'package.json').sort()
   equal([...FILES].sort(), served)
   let asked: string[] = []
   let read = await files((path) => {

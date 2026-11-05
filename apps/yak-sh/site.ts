@@ -8,7 +8,9 @@ import { fileOf } from '@yaks/file'
 export let SITE = '2caade2e-aa23-4fc5-bba3-af9eff4f64a1'
 let ROOT = '90e19de2-e19c-4490-81cf-561edd349718'
 
-/** Every file the app serves, as `file{path, root}` read in the site. */
+/** Every file the app serves, as `file{path, root}` read in the site.
+ * package.json is not one: yaks.app keeps an app's manifest off the web
+ * (workers/yak/files.ts `inside`). */
 export let FILES = [
   'index.html',
   'style.css',
@@ -18,7 +20,6 @@ export let FILES = [
   'figure.ts',
   'yak.ts',
   'site.ts',
-  'package.json',
   'icon.png',
   'yak.webp',
   'yak-880.webp',
