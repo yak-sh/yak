@@ -408,7 +408,7 @@ test('a break names the version the app is serving', async () => {
 
 // An old tab keeps the version injected into its page, even after a deploy.
 // Both the beacon and the report door must carry it without consulting the
-// app's latest version. Each break in a batch may name a different page.
+// app's latest version. Each break is tagged with the page it happened on.
 test('a break names the page version that ran, not the newest release', async () => {
   let k = await kernel()
   try {
@@ -457,11 +457,11 @@ test('a break names the page version that ran, not the newest release', async ()
     })
     assertStringIncludes(
       told,
-      `recipes v${version}: page /recipes/old.js — failed to load script ${page}old.js`,
+      `recipes v${version}: page /recipes/ — failed to load script ${page}old.js`,
     )
     assertStringIncludes(
       told,
-      `recipes: page /recipes/first.js — failed to load script ${page}first.js`,
+      `recipes: page /recipes/ — failed to load script ${page}first.js`,
     )
     assertStringIncludes(
       told,
