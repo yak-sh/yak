@@ -724,6 +724,34 @@
   .More_Body > .Markdown > :last-child {
     margin: 0;
   }
+  .More_Body > .Markdown {
+    display: grid;
+    gap: .625rem;
+  }
+  .More_Body > .Markdown :is(p, ol, ul, pre) {
+    margin: 0;
+  }
+  .More_Body > .Markdown :is(ol, ul) {
+    display: grid;
+    gap: .375rem;
+    padding-inline-start: 1.4rem;
+  }
+  .More_Body > .Markdown li {
+    display: grid;
+    gap: .375rem;
+  }
+  .More_Body > .Markdown ol {
+    list-style: decimal;
+  }
+  .More_Body > .Markdown ul {
+    list-style: disc;
+  }
+  .More_Body > .Markdown pre {
+    padding: .6rem .8rem;
+    background: var(--paper);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 
   /* A line the page says back: what a press did, or why it did not. */
   .Say {
