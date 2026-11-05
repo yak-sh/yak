@@ -4,7 +4,8 @@
 import { equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
-import { scriptOf, SECTIONS, SELF, SITE } from './site.ts'
+import { beatsOf, scriptOf, SECTIONS, SELF, SITE } from './site.ts'
+import { text } from './told.ts'
 import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
@@ -81,12 +82,48 @@ test('the story types into the prompt and the drawing draws what it made', async
   match(sheet, /data-name="requires"/)
   match(sheet, /data-name="filed.assignee"/)
   match(sheet, /data-name="completed.by"/)
-  let doors = root.querySelector('.Doors_Draw')!
-  equal(doors.getAttribute('data-door'), 'agent')
+  page.page.close()
+})
+
+test('each interface in the doors band makes its own change to the one graph, drawn as the top draws it', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, steps.length)
+  let { beats } = beatsOf(SECTIONS.find((s) => s.view == 'Doors')!.body)
+  await page.turns.reach(beats, beats.length)
+  await settle()
+  let { you, agent } = page.yak
+  let task = async (title: string) =>
+    (await page.yak.graph.read(`.doc.title="${title}" *`))[0]
+  let paid = await task('Sign up for payments')
+  let checkout = await task('Build the checkout')
+  let fix = await task('Fix the failing build')
+  equal([
+    [text(paid, 'task', 'status'), text(paid, 'completed', 'by')],
+    [text(checkout, 'task', 'status'), text(checkout, 'completed', 'by')],
+    [text(fix, 'task', 'status'), text(fix, 'filed', 'assignee')],
+  ], [['done', you], ['done', agent], ['open', agent]])
+  let doors = root.querySelector('.Doors')!
   equal(
-    [...doors.querySelectorAll('.N .id')].map((t) => t.textContent),
-    ['U-1', 'T-2 done', 'T-3 open', 'T-4 open', 'C-6'],
+    [...doors.querySelectorAll('.Window')].map((w) =>
+      w.getAttribute('data-door')
+    ),
+    ['web', 'mcp', 'sh'],
   )
+  let shown = doors.querySelector('.Window.is-open')!
+  match(shown.textContent!, /T-7 Fix the failing build open/)
+  // The band draws what the top draws, and marks what the open window wrote.
+  let drawn = (sel: string) =>
+    [...root.querySelectorAll(`${sel} .Diagram_Node`)]
+      .map((n) => n.getAttribute('transform'))
+  equal(drawn('.Doors_Drawing'), drawn('.Figure_Sheet'))
+  equal(
+    doors.querySelector('.Doors_Drawing .is-told')?.getAttribute('data-key'),
+    fix.entity.eid,
+  )
+  equal(!!doors.querySelector('.Doors_Wire path'), true)
+  fire(doors.querySelector('.Window[data-door="mcp"]')!, 'click')
+  await settle()
+  equal(root.querySelector('.Editor .Editor_Bar b')?.textContent, 'N-5')
   page.page.close()
 })
 
@@ -214,8 +251,10 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
     await settle()
     return editor().querySelector('.Editor_Bar b')?.textContent
   }
-  equal(await opened(root.querySelector('#door-agent')!), 'N-5')
-  equal(await opened(root.querySelector('.Doors_Draw .N-task')!), 'T-2')
+  equal(
+    await opened(root.querySelector('.Doors_Drawing .Diagram_Node text')!),
+    'U-1',
+  )
   equal(await opened(root.querySelector('.Source .R[data-row] .c')!), 'T-3')
   page.page.close()
 })

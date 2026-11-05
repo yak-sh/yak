@@ -224,6 +224,17 @@ export let yak = async () => {
     return { code: faulted(landed, id) ? 1 : 0, out }
   }
 
+  /** A tool called as `by`, its answer printed the way `yak` prints it. */
+  let calling = async (
+    name: string,
+    args: Record<string, unknown>,
+    by: string,
+  ): Promise<Said> => {
+    let out: string[] = []
+    let say = (text: string) => out.push(...String(text).split('\n'))
+    return await said(invoke(name, args, by), say, out)
+  }
+
   /** One line typed at the prompt, printed the way `yak` prints it. */
   let run = async (line: string): Promise<Said> => {
     let out: string[] = []
@@ -264,10 +275,12 @@ export let yak = async () => {
     /** A call the agent makes over MCP: the same tool, its own name. */
     ask: async (name: string, args: Record<string, unknown>): Promise<Said> => {
       await meet()
-      let out: string[] = []
-      let say = (text: string) => out.push(...String(text).split('\n'))
-      return await said(invoke(name, args, agent), say, out)
+      return await calling(name, args, agent)
     },
+    /** A call the person makes from a page in the browser: the same tool,
+     * their own name. */
+    call: (name: string, args: Record<string, unknown>): Promise<Said> =>
+      calling(name, args, you),
     /** Hear every change the graph commits. */
     listen: (each: (change: Change) => void) => {
       listeners.add(each)

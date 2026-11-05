@@ -15,7 +15,9 @@ import type { Line, Term } from './term.ts'
 import { type Figure, into, PLACES, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
 import { Copy, parts } from './parts.ts'
-import { Doors, Stack } from './bands.ts'
+import { Stack } from './bands.ts'
+import { Doors } from './doors.ts'
+import type { Turns } from './turns.ts'
 import { text, useHeard, useTold } from './told.ts'
 import { clicked, Editor, opener } from './editor.ts'
 import { human } from '@yaks/id'
@@ -27,6 +29,8 @@ export type Ctx = {
   Entity: FunctionComponent<EntityProps>
   /** The drawing's query, and what the last write did. */
   figure: Figure
+  /** Each interface's turn in the doors band. */
+  turns: Turns
 }
 
 // ------------------------------------------------------------------ the page

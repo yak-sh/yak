@@ -8,6 +8,7 @@ import { files, seed, SITE } from './site.ts'
 import { fileOf } from '@yaks/file'
 import { css } from '@yaks/diagram'
 import { figure } from './figure.ts'
+import { turns } from './turns.ts'
 
 /** Start the page in `root`: its graph, its prompt and its drawing. */
 export let start = async (
@@ -26,6 +27,7 @@ export let start = async (
   await y.settled()
   let t = term(y, opts.pace ?? { key: 28, pause: 380 })
   let f = figure(y, t)
+  let d = turns(y, t, f)
   let style = root.ownerDocument.createElement('style')
   style.textContent = css
   root.ownerDocument.head.append(style)
@@ -44,10 +46,11 @@ export let start = async (
         yak: y,
         term: t,
         figure: f,
+        turns: d,
         Entity,
       }),
   })
-  return { yak: y, term: t, figure: f, page }
+  return { yak: y, term: t, figure: f, turns: d, page }
 }
 
 /** The page wears the style.css its graph holds: a change to that file's

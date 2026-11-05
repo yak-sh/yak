@@ -3,7 +3,8 @@
 // reader passes stamp.
 import { equal, test } from '@yaks/testing'
 import { PHASES } from '@yaks/graph/plugin'
-import { passed, standing } from './bands.ts'
+import { standing } from './bands.ts'
+import { passed } from './told.ts'
 
 let ran = new Set(PHASES.filter((p) => p != 'audit' && p != 'journal'))
 let at = (upto: number) => {

@@ -26,10 +26,13 @@ export let FILES = [
   'bands.ts',
   'told.ts',
   'editor.ts',
+  'doors.ts',
+  'turns.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
- * is what it types into the prompt, and its `mcp` block what an agent calls. */
+ * is what it types into the prompt, its `mcp` block what an agent calls, and
+ * a `web` block what a page in the browser calls. */
 type Section = {
   eid: string
   pane: string
@@ -40,6 +43,7 @@ type Section = {
 
 let sh = (...lines: string[]) => '```sh\n' + lines.join('\n') + '\n```'
 let mcp = (...lines: string[]) => '```mcp\n' + lines.join('\n') + '\n```'
+let web = (...lines: string[]) => '```web\n' + lines.join('\n') + '\n```'
 
 export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
 
@@ -146,8 +150,18 @@ export let SECTIONS: Section[] = [
     pane: 'e3705147-f576-424a-8ef2-6e0718ee0875',
     view: 'Doors',
     title: 'Every interface reaches the same graph',
-    body:
-      'The terminal, your agents over MCP, a page in the browser and yaks.app call the same tools on one graph. `--host` points the same commands at another machine, or at yaks.app once you run `yak auth yaks.app`.',
+    body: [
+      'The terminal, your agents over MCP and a page in the browser call the same tools on one graph. Scroll, and each makes its own change to the graph drawn above. `--host` points the same commands at another machine, or at yaks.app once you run `yak auth yaks.app`.',
+      '### In the browser',
+      'You opened the payment account today, and tick it off on the web canvas `yak serve` draws at `/`.',
+      web('task_update {"task": "T-3", "status": "done"}'),
+      '### Over MCP',
+      'The checkout no longer waits on anything, so your agent finishes it.',
+      mcp('task_update {"task": "T-4", "status": "done"}'),
+      '### In a terminal',
+      'The tests fail on main, so you file the fix and give it to your agent.',
+      sh("yak task new 'Fix the failing build' --assignee N-5"),
+    ].join('\n\n'),
   },
   {
     eid: '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19',
@@ -370,20 +384,41 @@ export let files = async (
     return { ...file, content: { body: await res.text() } }
   }))
 
+/** A call as a block writes it: the tool's name, then its arguments as JSON. */
+export let called = (line: string) => {
+  let at = line.indexOf(' ')
+  return { tool: line.slice(0, at), args: JSON.parse(line.slice(at + 1)) }
+}
+
 /** The commands a section's body types, and the calls it makes as the agent. */
 export let scriptOf = (body: string) => {
   let block = (kind: string) =>
     [...body.matchAll(new RegExp('```' + kind + '\\n([\\s\\S]*?)\\n```', 'g'))]
       .flatMap((m) => m[1].split('\n')).filter(Boolean)
-  return {
-    sh: block('sh'),
-    mcp: block('mcp').map((line) => {
-      let at = line.indexOf(' ')
-      return { tool: line.slice(0, at), args: JSON.parse(line.slice(at + 1)) }
-    }),
-  }
+  return { sh: block('sh'), mcp: block('mcp').map(called) }
+}
+
+/** One interface's turn in the doors band: its heading, what it does, and the
+ * one line it runs, typed in a terminal (`sh`), called by the agent over MCP
+ * (`mcp`) or called by a page in the browser (`web`). */
+export type Beat = { title: string; prose: string; kind: string; line: string }
+
+/** The doors band's body: what it says first, then each `###` beat. */
+export let beatsOf = (body: string) => {
+  let [head, ...rest] = body.split(/^### /m)
+  let beats = rest.map((chunk): Beat => {
+    let block = chunk.match(/```(\w+)\n([\s\S]*?)\n```/)
+    let [title, ...words] = chunk.replace(block?.[0] ?? '', '').split('\n')
+    return {
+      title: title.trim(),
+      prose: words.join('\n').trim(),
+      kind: block?.[1] ?? 'sh',
+      line: block?.[2] ?? '',
+    }
+  })
+  return { head: head.trim(), beats }
 }
 
 /** A section's prose: its body without the blocks it runs. */
 export let proseOf = (body: string) =>
-  body.replace(/```(sh|mcp)\n[\s\S]*?\n```/g, '').trim()
+  body.replace(/```(sh|mcp|web)\n[\s\S]*?\n```/g, '').trim()

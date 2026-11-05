@@ -647,8 +647,8 @@ h2 {
 .Editor_Ref:hover {
   color: var(--meadow);
 }
-.Doors_Draw .N,
-.Doors_Draw .Door,
+.Doors_Drawing [data-eid],
+.Window,
 .Phases [data-phase] {
   cursor: pointer;
 }
@@ -693,21 +693,6 @@ h2 {
   color: var(--ink);
   margin-right: .5rem;
 }
-.Doors_Draw {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.Hatch_Ground {
-  fill: var(--paper);
-}
-.Hatch_Line {
-  stroke: var(--line);
-  stroke-width: .5;
-  opacity: .35;
-}
-
 .Phases {
   list-style: none;
   margin: 1.2rem 0 0 2.1rem;
@@ -947,151 +932,185 @@ h2 {
   }
 }
 
-.Doors_Bar {
-  display: flex;
-  align-items: baseline;
-  gap: .6rem;
-  font: 400 .75rem/1.4 var(--mono);
+/* The doors (#14): the top's drawing again, each interface a small window
+   over a part of it the story leaves empty (doors.ts DOCK), sized with the
+   drawing so a wire from a window meets what it changed. */
+.Beats {
+  list-style: none;
+  margin: 1.6rem 0 0 2.1rem;
+  padding: 0;
+}
+/* Each beat takes a stretch of scrolling, so the windows open one at a time
+   while the drawing stays in view. */
+.Beats li {
+  position: relative;
+  min-height: 30vh;
+  padding: .7rem 0 1.4rem;
+  border-top: 1px solid var(--faint);
+  transition: background .3s;
+}
+.Beats li > b {
+  display: block;
+  font: 500 .875rem/1.3 var(--mono);
   color: var(--soft);
-  padding-bottom: .5rem;
-  margin-bottom: .6rem;
-  border-bottom: 1px solid var(--rule);
+  transition: color .3s;
 }
-.Doors_Draw .sheet {
-  fill: rgba(252, 250, 245, .7);
-  stroke: var(--line);
-  stroke-width: 1;
+.Beats li > :not(.Dot, b, code) {
+  color: var(--soft);
+  font-size: .90625rem;
+  line-height: 1.5;
+  margin-top: .2rem;
 }
-.sheet-ticks {
-  stroke: var(--rule);
-  stroke-width: 1;
+.Beats li > :not(.Dot, b, code) p {
+  margin: 0;
 }
-.cap {
-  font: 500 11px var(--mono);
-  fill: var(--ink);
+.Beats li > code {
+  display: block;
+  margin-top: .45rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--line);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
-.cap2 {
-  font: 400 10px var(--mono);
-  fill: var(--soft);
+.Beats .Dot {
+  position: absolute;
+  left: -2.1rem;
+  top: 1.1rem;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  transition: background .3s, border-color .3s, box-shadow .3s;
 }
-.Door .box {
-  fill: rgba(252, 250, 245, .95);
-  stroke: var(--line);
-  stroke-width: 1;
-  transition: stroke .3s;
+.Beats li.on {
+  background: linear-gradient(
+    90deg,
+    rgba(167, 192, 128, .2),
+    transparent 70%
+  )
+    0 0 / 100% 2.6rem no-repeat;
 }
-.Door .ico {
+.Beats li.on .Dot {
+  background: var(--meadow);
+  border-color: var(--meadow);
+  box-shadow: 0 0 6px var(--moss);
+}
+.Beats li.on > b {
+  color: var(--ink);
+}
+.Doors_Sheet {
+  position: relative;
+  aspect-ratio: 560 / 620;
+  container-type: size;
+}
+.Doors_Drawing,
+.Doors_Drawing svg,
+.Doors_Wire {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.Doors_Drawing .Diagram_Title {
+  font-family: var(--sans);
+}
+.Doors_Drawing .is-told .Diagram_Stroke {
+  stroke: var(--meadow);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--moss));
+}
+.Doors_Wire {
+  overflow: visible;
+  pointer-events: none;
+}
+.Doors_Wire path {
   fill: none;
-  stroke: var(--line);
-  stroke-width: 1;
-  stroke-linecap: round;
+  stroke: var(--meadow);
+  stroke-width: 1.4;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px var(--moss));
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: wire .6s .15s ease-out forwards;
 }
-.Door .glyph {
-  font: 500 10px var(--mono);
-  fill: var(--ink);
-}
-.Wire {
-  fill: none;
-  stroke: var(--rule);
-  stroke-width: 1.2;
-  transition: stroke .3s;
-}
-[data-door='terminal'] #door-terminal .box,
-[data-door='agent'] #door-agent .box,
-[data-door='browser'] #door-browser .box,
-[data-door='terminal'] #wire-terminal,
-[data-door='agent'] #wire-agent,
-[data-door='browser'] #wire-browser {
-  stroke: var(--meadow);
-  filter: url(#band-glow);
-}
-.Remote {
-  opacity: .32;
-}
-.Remote .sheet {
-  fill: url(#band-hatch);
-  stroke-dasharray: 3 3;
-}
-.Reach {
-  fill: none;
-  stroke: var(--rule);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 4;
-  opacity: .45;
-}
-.L {
-  stroke: var(--line);
-  stroke-width: .9;
-  opacity: .75;
-}
-.L.stamp {
-  stroke-dasharray: 1.5 3.5;
-  opacity: .5;
-}
-.L.held {
-  stroke: var(--meadow);
-  stroke-dasharray: 4 3;
-  opacity: 1;
-  filter: url(#band-glow);
-}
-.L_Label {
-  font: 400 9px var(--mono);
-  fill: var(--soft);
-  paint-order: stroke;
-  stroke: var(--paper);
-  stroke-width: 3px;
-}
-.L_Label.stamp {
-  display: none;
-}
-.N .g {
-  fill: rgba(252, 250, 245, .96);
-  stroke: var(--line);
-  stroke-width: 1;
-  transition: fill .4s;
-}
-.N.is-done .g {
-  fill: rgba(167, 192, 128, .45);
-}
-.N.is-new .g {
-  stroke: var(--meadow);
-  stroke-width: 1.6;
-  filter: url(#band-glow);
-}
-.N .id {
-  font: 500 10.5px var(--mono);
-  fill: var(--ink);
-  text-anchor: middle;
-  paint-order: stroke;
-  stroke: var(--paper);
-  stroke-width: 3px;
-}
-.N .nm {
-  font: 400 9.5px var(--sans);
-  fill: var(--soft);
-  text-anchor: middle;
-  paint-order: stroke;
-  stroke: var(--paper);
-  stroke-width: 3px;
-}
-.Pulse {
-  fill: #fff;
-  stroke: var(--meadow);
-  stroke-width: 1.5;
-  filter: url(#band-glow);
-  opacity: 0;
-  animation: pulse .62s ease-in;
-}
-@keyframes pulse {
-  from {
-    opacity: 1;
-    transform: translate(var(--x0), var(--y0));
-  }
+@keyframes wire {
   to {
-    opacity: 1;
-    transform: translate(var(--x1), var(--y1));
+    stroke-dashoffset: 0;
   }
+}
+.Windows {
+  position: absolute;
+  left: 2%;
+  top: 38%;
+  width: 32%;
+  display: flex;
+  flex-direction: column;
+  font: 400 clamp(8px, 1.9cqw, 12px)/1.45 var(--mono);
+}
+.Window {
+  border-radius: 6px;
+  background: var(--term);
+  color: var(--term-ink);
+  box-shadow: 0 8px 22px rgba(35, 48, 31, .22);
+  overflow: hidden;
+}
+.Window_Bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 4.5cqh;
+  padding: 0 .6em;
+  background: rgba(227, 234, 214, .08);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.Window_Bar i {
+  flex: none;
+  width: .6em;
+  height: .6em;
+  border-radius: 50%;
+  background: rgba(227, 234, 214, .3);
+}
+.Window_Bar span {
+  margin-left: .4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(227, 234, 214, .75);
+}
+.Window_Screen {
+  display: none;
+  padding: .5em .7em .6em;
+}
+.Window.is-open {
+  animation: pop .35s ease-out;
+}
+.Window.is-open .Window_Screen {
+  display: block;
+}
+.Window.is-open .Window_Bar span {
+  color: var(--term-ink);
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(.96);
+  }
+}
+.Window_Line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.Window_Line.is-in {
+  color: #fff;
+}
+.Window_Line.is-fault {
+  color: #f2b8a8;
+}
+.Window .Prompt_Sign {
+  color: var(--moss);
 }
 
 /* ---------------------------------------------------------------- parts
@@ -1326,7 +1345,8 @@ h2 {
 }
 @media (prefers-reduced-motion: reduce) {
   .Source .comp > div,
-  .Pulse,
+  .Window.is-open,
+  .Doors_Wire path,
   .Caret {
     animation: none;
   }

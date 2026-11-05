@@ -1,9 +1,10 @@
 // What the page's views share: a property of a bundle as text, drawing
-// again whenever something they watch tells them to, and hearing what is
-// clicked inside a drawing.
+// again whenever something they watch tells them to, hearing what is clicked
+// inside a drawing, and how far down a list the reader has scrolled.
 import { type RefObject } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
+import { LINE } from './figure.ts'
 
 /** Draw again whenever `listen` tells. */
 export let useTold = (listen: (l: () => void) => () => void) => {
@@ -33,4 +34,45 @@ export let useHeard = (
       for (let t of types) el.removeEventListener(t, on)
     }
   }, [])
+}
+
+/** The index of the last of `tops` above `line`: how far down a list the
+ * reader is, -1 before its first. */
+export let passed = (tops: number[], line: number) =>
+  tops.reduce((k, top, i) => top < line ? i : k, -1)
+
+/** How far down the list `ref` holds the reader is: the index of the last of
+ * its `.Dot`s above the reading line, measured each frame they scroll and
+ * told to `each`; `fallback` where nothing measures, as in a test. */
+export let useReached = (
+  ref: RefObject<Element>,
+  fallback: number,
+  each?: (k: number) => void,
+) => {
+  let [upto, set] = useState(fallback)
+  let latest = useRef(each)
+  latest.current = each
+  useLayoutEffect(() => {
+    let list = ref.current
+    if (!list || typeof requestAnimationFrame == 'undefined') return
+    let frame = 0
+    let measure = () => {
+      frame = 0
+      let tops = [...list.querySelectorAll('.Dot')]
+        .map((d) => d.getBoundingClientRect().top + 4)
+      let k = passed(tops, innerHeight * LINE)
+      set(k)
+      latest.current?.(k)
+    }
+    let soon = () => frame ||= requestAnimationFrame(measure)
+    addEventListener('scroll', soon, { passive: true })
+    addEventListener('resize', soon)
+    measure()
+    return () => {
+      removeEventListener('scroll', soon)
+      removeEventListener('resize', soon)
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+  return upto
 }
