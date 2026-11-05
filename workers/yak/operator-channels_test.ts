@@ -51,7 +51,6 @@ import {
 } from './operator-page.ts'
 import { operatorDoor } from './build-door.ts'
 import { arrived, Refused } from './inbox.ts'
-import { chatPath } from './route.ts'
 import type { Inbound } from './env.ts'
 import { endpoints } from './endpoints.ts'
 import { REPLIES, telnyxDoor, textSend } from './operator-texts.ts'
@@ -299,9 +298,9 @@ test('the operator page says once where else it works and what it may do there',
     'It can also change things in S0 and S2, and look at S1 without changing anything.',
   )
 })
-test('the operator page names its email address, opens a new conversation and draws kept answers', () => {
+test('the operator page names its email address, lists its conversations and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
-  assertStringIncludes(html, `href="${chatPath('clerk')}"`)
+  assertStringIncludes(html, 'Your conversations appear here.')
   assertStringIncludes(
     conversation([result]),
     'The road millage notice is posted.',
