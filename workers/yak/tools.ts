@@ -1069,6 +1069,7 @@ let published = async (
         files.manifest,
         preserve,
         readServing,
+        recompile ? 'platform' : 'space',
       ),
   )
   // The release's index is complete once the compile has written into it, and

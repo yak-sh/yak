@@ -15,7 +15,9 @@
 // - package-lock.json is written among the app's files when the build moved
 //   it, so a version pins it and a rollback compiles the same code;
 // - the seconds the compile took are counted on the space's meter beside the
-//   sandbox's (meter.ts `countedSpend`), and refused at the same allowance.
+//   sandbox's (meter.ts `countedSpend`), and refused at the same allowance,
+//   unless yaks.app pays for it: a release made again only to carry a
+//   platform fix (tools.ts `recompileRelease`) is ours, not the space's.
 //
 // A compile that fails refuses the deploy with the compiler's own lines, and
 // nothing here has moved: the last release's worker and pages still serve.
@@ -37,6 +39,10 @@ import { fillable, noted, valid as sharedPath } from './shared.ts'
 import { RECORD, used } from './toolkit.ts'
 
 export let LOCK = 'package-lock.json'
+
+/** Who a compile's seconds are spent from: the space, for its own deploy, or
+ * yaks.app, for a release it makes again to carry a fix of its own. */
+export type Payer = 'space' | 'platform'
 let CACHE = `${BUILT}.compile.json`
 let MODULE = `${BUILT}.worker.js`
 // Every compile sees the toolkit of the kernel accepting that deploy. Package
@@ -297,6 +303,7 @@ export let compiled = async (
   manifest: () => Files | null = () => null,
   retained = false,
   meanwhile: () => void = () => {},
+  payer: Payer = 'space',
 ): Promise<Compiled> => {
   let blobs = files
   let prefix = `${prefixOf(space, app)}/`
@@ -394,7 +401,8 @@ export let compiled = async (
           'release still serves',
       )
     }
-    let no = refusedSpend(space, 'seconds', ctx.env)
+    let paying = payer == 'space'
+    let no = paying && refusedSpend(space, 'seconds', ctx.env)
     if (no) throw refuse('limit', no)
     meanwhile()
     let began = Date.now()
@@ -402,7 +410,9 @@ export let compiled = async (
       answer = await asked(ctx.env, pending, app, ctx.clock)
     } finally {
       took = (Date.now() - began) / 1000
-      await countedSpend(ctx.env, space, 0, Math.max(1, Math.ceil(took)))
+      if (paying) {
+        await countedSpend(ctx.env, space, 0, Math.max(1, Math.ceil(took)))
+      }
     }
   }
   if (answer.errors.length) {

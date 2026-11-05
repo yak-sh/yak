@@ -332,6 +332,7 @@ let remakes = await (async () => {
   s.env.ASSETS = { fetch: (req) => assets.fetch(req) } as typeof assets
   s.env.CF_VERSION_METADATA = { id: 'a later kernel' }
   let asked: Remake[] = []
+  let spent = await s.seconds()
   try {
     await page()
     // What the page asked for, done as the directory's alarm does it.
@@ -343,6 +344,7 @@ let remakes = await (async () => {
   }
   return {
     same,
+    charged: await s.seconds() - spent,
     asked,
     asks: s.asks.slice(1),
     release: await s.release(),
@@ -353,8 +355,9 @@ let remakes = await (async () => {
 })()
 
 test('a release compiled by an older toolkit is made again as itself', () => {
-  let { same, asked, asks, release, version, served, draft } = remakes
+  let { same, charged, asked, asks, release, version, served, draft } = remakes
   assertEquals(same.asks, 1)
+  assertEquals(charged, 0)
   assertEquals(asked.map((job) => job.source.split('/').pop()), [same.release])
   assertEquals(asks.map((ask) => ask.pages), [['main.ts']])
   assertEquals(asks[0].files['main.ts'], 'let n: number = 1')

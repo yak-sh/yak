@@ -6,8 +6,9 @@
 // row of the directory's, one per release, named for it, which the remake
 // sweep does when its alarm fires it (facets/remake-graph.ts).
 //
-// A deploy getting there first, or a space out of build seconds, is the
-// remake not needed or not this one's to do. Anything else is a failure of
+// Its compile is yaks.app's to pay for, never the space's (esbuild.ts
+// `Payer`): the person did not ask for it and gains only our fix. A deploy
+// getting there first is the remake not needed. Anything else is a failure of
 // ours, which the sweep reports (wake.ts `reporting`).
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
@@ -21,7 +22,7 @@ import { recompileRelease } from './tools.ts'
 /** What a remake remakes: an app, and the release of it to make again. */
 export type Remake = { app: string; source: string }
 
-let EXPECTED = ['stale', 'conflict', 'limit']
+let EXPECTED = ['stale', 'conflict']
 
 /** Ask for the release at `source` to be made again, once: the row is named
  * for the release, and a release already asked for is left as it stands. */
