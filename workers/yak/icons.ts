@@ -13,6 +13,8 @@ import Check from 'lucide/dist/esm/icons/check.mjs'
 // @ts-types="@yaks/ui/lucide"
 import ChevronRight from 'lucide/dist/esm/icons/chevron-right.mjs'
 // @ts-types="@yaks/ui/lucide"
+import ChevronsUpDown from 'lucide/dist/esm/icons/chevrons-up-down.mjs'
+// @ts-types="@yaks/ui/lucide"
 import CreditCard from 'lucide/dist/esm/icons/credit-card.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Download from 'lucide/dist/esm/icons/download.mjs'
@@ -60,6 +62,7 @@ export let icons = {
   check: Check,
   download: Download,
   'chevron-right': ChevronRight,
+  'chevrons-up-down': ChevronsUpDown,
 }
 export type IconName = keyof typeof icons
 

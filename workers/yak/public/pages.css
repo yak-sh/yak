@@ -379,23 +379,69 @@
     font-size: var(--fine);
     font-weight: 700;
   }
-  /* The space selector (pages.ts `chooser`): a box drawn like a button,
-     naming the space, whose Change opens the list over the page, wider than
-     the side, drawn in pencil on a hatch the way a button sits on its. */
+  /* The space and its pages on one sheet (pages.ts `navigation`), a shade
+     behind the paper, running into the edge so the current tab still opens
+     into the body. */
+  .Desk_Here {
+    display: grid;
+    gap: .6rem;
+    margin-right: -1.25rem;
+    padding: .6rem 0 .6rem .5rem;
+    border-radius: var(--corner) 0 0 var(--corner);
+    background: var(--behind);
+  }
+  .Desk_Here > .Desk_Space,
+  .Desk_Here > .Desk_Pick,
+  .Desk_Here > .Desk_New {
+    margin-right: 1.75rem;
+  }
+  /* The space selector (pages.ts `chooser`): the space's name, and with
+     another to go to, a button on its hatch, so it reads as something to
+     press and not as the page you are on. Change opens the list over the
+     page, wider than the side, drawn in pencil on a hatch the way a button
+     sits on its. */
   .Desk_Space {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr) auto;
     align-items: center;
     gap: .6rem;
     padding: .55rem .7rem;
-    border: var(--stroke) solid var(--graphite);
-    border-radius: var(--corner);
-    background: var(--paper);
     list-style: none;
-    filter: url(pencil.svg#line);
   }
   .Desk_Pick > summary {
+    position: relative;
+    border-radius: var(--corner);
+    background: var(--paper);
     cursor: pointer;
+  }
+  .Desk_Pick > summary::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
+      calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+    border-radius: var(--corner);
+    background: var(--hatch);
+    clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+      0 calc(100% - var(--lift)), calc(100% - var(--lift))
+      calc(100% - var(--lift)));
+    pointer-events: none;
+  }
+  .Desk_Pick > summary::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--corner);
+    filter: url(pencil.svg#line);
+    pointer-events: none;
+  }
+  .Desk_Pick > summary:hover {
+    --lift: 5px;
+    transform: translate(-1px, -1px);
+  }
+  .Desk_Pick[open] > summary {
+    --lift: 1.5px;
+    transform: translate(2.5px, 2.5px);
   }
   .Desk_Pick > summary::-webkit-details-marker {
     display: none;
@@ -423,6 +469,9 @@
     font-size: var(--fine);
   }
   .Desk_Change {
+    display: inline-flex;
+    align-items: center;
+    gap: .15rem;
     color: var(--accent);
     font-size: var(--fine);
     font-weight: 700;
@@ -558,6 +607,9 @@
   /* The links you are not on sit close; the current one keeps its room. */
   .Desk .SideNav a:not([aria-current='page']) {
     padding-block: .4rem;
+  }
+  .Desk .Desk_Here .SideNav {
+    margin-right: 0;
   }
   /* The body keeps what it raises (a selected tab, a chart) to itself, so
      the side, and a menu opened from it over the body, lies above it all. */
@@ -813,6 +865,16 @@
     }
     .Desk .SideNav a:not([aria-current='page']) {
       padding-block: .6rem;
+    }
+    .Desk_Here {
+      margin-right: 0;
+      padding: .6rem .5rem;
+      border-radius: var(--corner);
+    }
+    .Desk_Here > .Desk_Space,
+    .Desk_Here > .Desk_Pick,
+    .Desk_Here > .Desk_New {
+      margin-right: var(--lift);
     }
     .Desk_Body {
       min-height: 0;

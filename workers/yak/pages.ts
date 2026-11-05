@@ -704,7 +704,7 @@ let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
 // The whole menu, one side (T-136122): what is the person's own wherever they
 // are, then the space they are working in, chosen in place, and under it that
-// space's pages. On a phone the same side opens full screen from the top
+// space's pages, held with the selector on one sheet (T-140072). On a phone the same side opens full screen from the top
 // bar's Menu (`:target`, no script).
 let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let link = (key: keyof typeof navIcons, label: string) =>
@@ -728,9 +728,8 @@ ${icon(navIcons[key])}${label}${
 ${link('profile', 'Profile')}${link('invite', 'Invite')}${
     link('agents', 'Agents')
   }${link('shared', 'Shared with you')}</nav></div>
-<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">This space</h2>${
-    chooser(at, view)
-  }
+<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">This space</h2>
+<div class="Desk_Here">${chooser(at, view)}
 <nav class="SideNav" aria-label="This space">
 ${
     at.member
@@ -743,7 +742,7 @@ ${
         link('trash', 'Trash')
       }`
   }
-</nav></div>
+</nav></div></div>
 <div class="Desk_Foot"><a href="https://${
     esc(spaceHost(env, at.space))
   }/" target="_blank" rel="noopener">Open ${esc(spaceHost(env, at.space))} ${
@@ -799,9 +798,9 @@ export let spaceChoice = (
     return `<div class="Desk_Space">${box(here)}</div>${make}`
   }
   return `<details class="Desk_Pick" data-menu>
-<summary class="Desk_Space">${
-    box(here)
-  }<span class="Desk_Change">Change</span></summary>
+<summary class="Desk_Space">${box(here)}<span class="Desk_Change">Change${
+    icon('chevrons-up-down')
+  }</span></summary>
 <div class="Desk_Menu"><div class="Desk_List"><p class="Desk_Ask">Which space do you want to work in?</p>${
     all.map((s) =>
       `<a class="Desk_Row" href="${to(s)}"${
