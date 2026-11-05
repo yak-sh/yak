@@ -259,9 +259,10 @@ export type Around = {
   /** what the call used since it was last charged: seconds of the line and
    * the dollars of what it heard, every CHARGED and as it ends */
   charge: (used: { seconds: number; heard: number }) => Promise<void>
-  /** what the call used in all, and how its turns were timed, once it ends */
+  /** what the call used in all, how its turns were timed, and what ended
+   * it (`stop`, `close 1000`, `error` or `us`), once it ends */
   done: (
-    call: { seconds: number; heard: number; turns: Timed[] },
+    call: { seconds: number; heard: number; turns: Timed[]; ended: string },
   ) => Promise<void>
   hangup: () => Promise<void>
   minutes?: number
@@ -295,6 +296,9 @@ let GOODBYE = 'I have to go now. Call me back any time.'
 
 let CALL = { request: 'operator call' }
 
+// The codes a socket closes with on purpose: done, going away, or none given.
+let CLEAN = [1000, 1001, 1005]
+
 // What a caller hears when their request fails on our side, a different
 // line each time it fails again, never the error's own words.
 let SORRY = [
@@ -324,8 +328,10 @@ let held = (socket: Socket): Socket => ({
 // What every call shares: the caller's audio taken off the wire (`hear`),
 // audio played to them, each turn timed from their last word, the time
 // limit, what it used charged as it goes (`heard` answers what hearing has
-// cost so far), and the call ended once (`close`). A line that closes or
-// fails before the provider says the call stopped is a stream the call lost.
+// cost so far), and the call ended once (`close`). The provider says a call
+// stopped when it ends, but not that it says so before it closes the line,
+// so a line closed cleanly ends the call quietly; one that fails, or closes
+// any other way before the call ended, is a stream the call lost.
 let carry = (
   o: Around,
   hear: (audio: Uint8Array) => void,
@@ -356,7 +362,7 @@ let carry = (
       charging()
     })
   charging()
-  let finish = () => {
+  let finish = (ended = 'us') => {
     if (over) return
     over = true
     for (let t of timers) clearTimeout(t)
@@ -366,20 +372,24 @@ let carry = (
     } catch {
       // Already closed by the other side.
     }
-    Promise.all([charge(), o.done({ ...used, turns }).catch(report)])
+    Promise.all([charge(), o.done({ ...used, turns, ended }).catch(report)])
       .finally(finished)
-  }
-  let lost = (why: string) => () => {
-    if (!over) report(new Error(`A call's line ${why} before the call ended`))
-    finish()
   }
   wire.addEventListener('message', (event) => {
     let frame: Frame = o.line.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
-    if (frame.stop) finish()
+    if (frame.stop) finish('stop')
   })
-  wire.addEventListener('close', lost('closed'))
-  wire.addEventListener('error', lost('failed'))
+  wire.addEventListener('close', ({ code }) => {
+    if (!over && !CLEAN.includes(code ?? 1005)) {
+      report(new Error(`A call's line closed with ${code} before it ended`))
+    }
+    finish(`close ${code ?? 1005}`)
+  })
+  wire.addEventListener('error', () => {
+    if (!over) report(new Error(`A call's line failed before it ended`))
+    finish('error')
+  })
   return {
     report,
     ended,
@@ -767,7 +777,7 @@ export let answering = (
     minutes: opens.minutes,
     charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
       countedSpend(env, space, heard + seconds / 60 * line.perMinute, 0),
-    done: ({ seconds, turns }: Parameters<Around['done']>[0]) => {
+    done: ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers and models.
       console.log(JSON.stringify({
@@ -777,6 +787,7 @@ export let answering = (
         voice: setup.voice,
         speed: setup.speed,
         seconds: Math.round(seconds),
+        ended,
         turns,
       }))
       return Promise.resolve()

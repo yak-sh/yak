@@ -341,7 +341,7 @@ export type Socket = {
   close: (code?: number, reason?: string) => void
   addEventListener: (
     type: 'open' | 'message' | 'close' | 'error',
-    listener: (event: { data?: unknown }) => void,
+    listener: (event: { data?: unknown; code?: number }) => void,
   ) => void
 }
 

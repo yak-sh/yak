@@ -258,11 +258,11 @@ test('a call charges what it used as it goes, so the object restarted under it a
   // Charged before anything ended it.
   await until(() => sum() == 0.03)
   first.frame(audio)
-  // The object restarts: the line it carried is gone before the call ended.
-  first.wire.close()
+  // The object restarts: the line it carried drops before the call ended.
+  first.hangup(1006)
   await first.call.ended
   equal(lost.map((e) => (e as Error).message), [
-    "A call's line closed before the call ended",
+    "A call's line closed with 1006 before it ended",
   ])
   let again = opening()
   for (let i = 0; i < 2; i++) again.frame(audio)
@@ -270,6 +270,20 @@ test('a call charges what it used as it goes, so the object restarted under it a
   await again.call.ended
   equal(sum().toFixed(2), '0.06')
   equal(lost.length, 1)
+})
+
+test('a line closed cleanly ends the call quietly, with or without the provider saying it stopped', async () => {
+  for (let code of [1000, 1001, undefined]) {
+    let c = calling()
+    c.hangup(code)
+    await c.call.ended
+    equal(c.done[0].ended, `close ${code ?? 1005}`)
+  }
+  let c = calling()
+  c.frame({ event: 'stop' })
+  c.hangup(1000)
+  await c.call.ended
+  equal(c.done.map((d) => d.ended), ['stop'])
 })
 
 test('an answer is texted once the call is over, to a caller who agreed to texts', async () => {
@@ -295,7 +309,8 @@ let calling = (
   ack?: string,
   more: Partial<Parameters<typeof converse>[0]> = {},
 ) => {
-  let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
+  let on: Record<string, ((e: { data?: unknown; code?: number }) => void)[]> =
+    {}
   let sent: string[] = []
   let wire: Socket = {
     send: (data) => void sent.push(String(data)),
@@ -351,8 +366,8 @@ let calling = (
     sent,
     frame,
     played,
-    /** the provider's side of the line */
-    wire: { close: () => on.close.forEach((h) => h({})) },
+    /** the provider's side of the line, closed with `code` */
+    hangup: (code?: number) => on.close.forEach((h) => h({ code })),
   }
 }
 
