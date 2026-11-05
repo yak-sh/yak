@@ -5,7 +5,9 @@
 //
 // `session_new` and `session_send` write a line that asks a transcript for a
 // turn, and wait for the reply: the entry the transcript settles on. Neither
-// runs the transcript. The runner does, wherever the host's effects are
+// runs the transcript. A session whose run goes on outside the graph gives no
+// reply until that run ends, so a send to it knocks instead, and it hears the
+// knock at its next tool call (@yaks/session's bus). The runner does, wherever the host's effects are
 // worked (./effects.ts): a box's `yak serve`, or another process explicitly
 // serving the effects role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
@@ -97,6 +99,32 @@ let settled = async (
     }
   }
   throw new Error('wait ended without a final read')
+}
+
+// A transcript's statuses once its run is over.
+let OVER = ['stopped', 'failed']
+
+// Whether a session's run goes on outside the graph: a command its provider
+// runs (@yaks/spawn), started or about to be, or a harness that reads its own
+// file. One that has ended is asked for its next run instead.
+let outside = async (
+  graph: Graph,
+  s: Eid,
+  using?: Comp,
+): Promise<boolean> => {
+  if (!graph.vocab.comp('knock')) return false
+  let comps = ['native', 'process', 'exit', 'session']
+  let [row] = await graph.get([s], comps.filter((c) => graph.vocab.comp(c)))
+  let self = row?.session as Comp | undefined
+  if (
+    !row || row.native || row.exit || self?.ended == true ||
+    OVER.includes(String(self?.status))
+  ) return false
+  let [provider] = using?.provider
+    ? await graph.get([String(using.provider)], [PROVIDER])
+    : []
+  return !!row.process || !!self?.transcript ||
+    (provider?.[PROVIDER] as Comp | undefined)?.transport == 'process'
 }
 
 // Who called: what they asked a session is theirs (@yaks/tools signs the call
@@ -256,6 +284,15 @@ export let runs = (host?: Host): Runs => ({
           model ?? nameOf(m, MODEL),
         ),
       }
+    }
+    let actor = who(call)
+    if (await outside(graph, s, using)) {
+      return await graph.apply([{
+        entity: { eid: crypto.randomUUID() },
+        doc: { body: String(args.text) },
+        knock: { target: s },
+        ...actor ? { $actor: actor } : {},
+      }])
     }
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },

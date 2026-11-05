@@ -198,6 +198,28 @@ test('session new opens an empty TUI session and requires input otherwise', asyn
   }
 })
 
+test('a send to a session running outside the graph knocks and returns at once', async () => {
+  let h = await harness()
+  let s = mint()
+  try {
+    await h.g.apply([{
+      entity: { eid: s },
+      session: { id: s },
+      process: { pid: 1, command: 'claude' },
+    }])
+    let [knock] = await runs().session_send!({
+      entity: { eid: mint() },
+      call: { args: { session: s, text: 'cache the scripts too' } },
+    }, h.g)
+    assertEquals(knock.knock, { target: s })
+    assertEquals((knock.doc as { body?: string }).body, 'cache the scripts too')
+    // No request: the run going is not asked for another.
+    assertEquals(await h.g.read(`.entry.session=${s}&.using`), [])
+  } finally {
+    await h.close()
+  }
+})
+
 test('session new keeps an agent instrument when its caller speaks for a person', async () => {
   let h = await harness()
   try {

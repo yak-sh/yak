@@ -111,7 +111,7 @@
       "verb": "send",
       "applied": true,
       "title": "Say more to a session here",
-      "description": "Send a native session more input. Set wait:false to return immediately.",
+      "description": "Send a session more input. A session running outside the graph (a spawned agent, a Claude Code session) hears it at its next tool call, and the call returns at once with the knock that carries it; for any other, waits for the reply unless wait:false.",
       "input": {
         "wait": {
           "type": "boolean",

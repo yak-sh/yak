@@ -14,7 +14,8 @@ import { HARNESS } from './default.ts'
 /** The packages a harness graph is made of in these tests: what a transcript
  * is (@yaks/session), what it asks for and what answers (@yaks/tools,
  * @yaks/context, @yaks/model and its providers), what a reply carries
- * (@yaks/blob), the programs it starts (@yaks/process), the sign-ins it keeps
+ * (@yaks/blob), the programs it starts (@yaks/process), the knocks a session
+ * running outside the graph hears (@yaks/notify), the sign-ins it keeps
  * (@yaks/secrets, @yaks/connections), the runs its commits owe (@yaks/effects),
  * the work it is doing, and the harness's own words; and which tables each
  * entity is in (@yaks/archetype), so a read asks those tables alone, as the
@@ -42,6 +43,7 @@ export let PLUGINS: string[] = [
   '@yaks/openrouter',
   '@yaks/claude',
   '@yaks/process',
+  '@yaks/notify',
   '@yaks/machine',
   '@yaks/context',
   '@yaks/connections',
