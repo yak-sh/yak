@@ -7,6 +7,7 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
+import { personaFor } from './operator-persona.ts'
 import {
   handleChannels,
   receive,
@@ -185,7 +186,7 @@ test('what it was told is kept as a memory on the entry it was said in, and reca
 })
 
 test('its persona carries its name', async () => {
-  let [persona] = await store.g.get([space.eid])
+  let [persona] = await store.g.get([personaFor(space.eid)])
   assertEquals(
     (persona.doc as Comp).title,
     `${space.operator}, the Operator of home`,

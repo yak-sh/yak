@@ -9,7 +9,9 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { BASE } from './operator-persona.ts'
+import { BASE, personaFor } from './operator-persona.ts'
+import { spaced } from './operator-persona.ts'
+import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
 
 let owner = crypto.randomUUID()
@@ -47,7 +49,7 @@ await meta(env).apply([{
   doc: { body: 'Speak plainly, and keep every answer short.' },
 }], KERNEL)
 let second = await said('Again')
-let [persona] = await store.g.get([space.eid])
+let [persona] = await store.g.get([personaFor(space.eid)])
 let tasked = await said('Fix the chores app', crypto.randomUUID())
 
 // Each part's heading, in the order it is said.
@@ -84,4 +86,38 @@ test("a tool's guidance is where the tool is given", () => {
   assert(!first.tools.some((t) => t.name == 'task_update'))
   let close = tasked.tools.find((t) => t.name == 'task_update')!
   assertStringIncludes(close.description, 'carries on that task')
+})
+
+let legacy = operatorMemory()
+let session = crypto.randomUUID(), note = crypto.randomUUID()
+await legacy.g.apply([
+  {
+    entity: { eid: space.eid },
+    persona: { base: BASE },
+    doc: { title: 'Old Operator', body: 'Keep my editable instructions.' },
+  },
+  { entity: { eid: note }, doc: { body: 'An authored memory.' } },
+  link(space.eid, 'contains', note, 3),
+  { entity: { eid: session }, session: { persona: space.eid } },
+])
+await legacy.g.apply(await spaced(legacy.g.storage, space))
+let moved = await legacy.g.get([space.eid, personaFor(space.eid), session])
+let holdings = await legacy.g.read(
+  `.contains .edge.from=${personaFor(space.eid)}`,
+)
+let again = await spaced(legacy.g.storage, space)
+
+test('separating a space topic from its Operator persona preserves authored text, holdings and sessions once', async () => {
+  assertEquals(moved[0].persona, undefined)
+  assertEquals(moved[1].doc, {
+    title: `${space.operator}, the Operator of home`,
+    body: 'Keep my editable instructions.',
+  })
+  assertEquals(
+    (moved[2].session as { persona: string }).persona,
+    personaFor(space.eid),
+  )
+  assert(holdings.some((b) => (b.edge as { to: string }).to == note))
+  assertEquals(await legacy.g.read(`.contains .edge.from=${space.eid}`), [])
+  assertEquals(again, [])
 })

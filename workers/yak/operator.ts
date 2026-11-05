@@ -27,6 +27,7 @@ import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { memoryDoc } from '@yaks/memory/vocab'
+import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
@@ -45,8 +46,6 @@ import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted } from './meter.ts'
 import { caught, defect } from './defects.ts'
-import { instructions } from './guide.ts'
-import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import {
   asIs,
@@ -57,7 +56,20 @@ import {
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
-import { bases, declare, type Declared, spaced } from './operator-persona.ts'
+import {
+  bases,
+  declare,
+  type Declared,
+  personaFor,
+  spaced,
+} from './operator-persona.ts'
+import {
+  oracleContext,
+  oracleMap,
+  oracular,
+  TOPIC,
+  topicOf,
+} from './operator-oracles.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
@@ -144,7 +156,7 @@ let told = (
 let SELF = {
   type: 'boolean',
   description:
-    'Read your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, and your tasks and requests.',
+    'Use your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, your app and space topics, and your tasks and requests.',
 }
 let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
 // The connector's tools the Operator holds as its own: memory_save and
@@ -181,7 +193,6 @@ export let operatorRoster = async (
       ...listing({
         graph: work.g,
         search: textSearch(work.g),
-        readOnly: true,
       }),
       ...loadTools([memoryDoc], memoryRuns()),
       ...tasked ? loadTools([taskDoc], taskRuns()) : [],
@@ -522,14 +533,16 @@ export let operating = (
   let delegate = provider == 'anthropic'
     ? env.OPERATOR_DELEGATE ?? OPUS
     : undefined
-  let spawn = sessionTools(g).find((t) => t.name == 'spawn')!
-  let delegated: Tool | undefined = delegate
-    ? {
-      ...spawn,
-      description:
-        `${spawn.description} For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`,
-    }
-    : undefined
+  let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
+    .find((t) => t.name == 'spawn')!
+  let delegated: Tool = {
+    ...spawn,
+    description:
+      `${spawn.description} To consult an app or space oracle, supply topic from the Oracles map and the question as prompt. Its answer comes back automatically.` +
+      (delegate
+        ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
+        : ''),
+  }
   let using = {
     provider: identityEid('provider', [provider]),
     model: identityEid('model', [name]),
@@ -618,7 +631,7 @@ export let operating = (
   let based: Promise<void> | undefined
   let basing = () =>
     based ??= declare(env, [
-      { key: 'platform', title: 'yaks.app', body: instructions(env) },
+      oracular,
       conversation,
       remembering,
     ]).catch((e) => {
@@ -738,18 +751,28 @@ export let operating = (
       wear: { bases: bases(env) },
       // A child works for the same space and person as the session that
       // started it, and is charged to that space.
-      prepareChild: async ({ parent }) => {
+      prepareChild: async ({ parent, args }) => {
         let o = await workingOf(store, parent)
-        return o ? { operator_session: o } : {}
+        if (!o) return {}
+        if (!args.topic) return { operator_session: o }
+        let { ctx } = await working(env, store, parent)
+        let topic = String(args.topic)
+        await oracleContext(ctx, g, topic)
+        return {
+          operator_session: o,
+          session: { persona: ORACLE, topic },
+        }
       },
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
+        let persona = await spaced(g.storage, space)
+        if (persona.length) await g.apply(persona, { trusted: true })
         let tasked = !!await taskOf(store, session)
         let [row] = await g.get([session])
         return [
           // A conversation and its forks hand coding and careful reasoning
           // to the stronger model in a fresh helper, which starts no other.
-          ...delegated && !(row?.spawned && !row.fork) ? [delegated] : [],
+          ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
           ...await operatorRoster(ctx, store, tasked),
           platformBug(space),
           textSend(env, ctx, space),
@@ -758,13 +781,16 @@ export let operating = (
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
-      // Where it is, after the persona: the apps in reach with what each
-      // keeps of itself, what the person has said, and the spaces it
-      // reaches. A conversation and every fork of it are told the same, so
-      // a fork's request begins with the conversation's cached prefix.
+      // The conversation and its work forks share a short topic map. Only a
+      // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
         let { space, ctx } = await working(env, store, session)
-        return [await standing(ctx).notes(), told(ctx, space)]
+        let [row] = await g.get([session])
+        let topic = topicOf(row)
+        return [
+          topic ? await oracleContext(ctx, g, topic) : await oracleMap(ctx, g),
+          told(ctx, space),
+        ]
           .filter(Boolean).join('\n\n')
       },
       each: async (step, session) => {
@@ -819,7 +845,7 @@ export let operating = (
   let started = (session: string, by: string, space: Space) =>
     begin(g, undefined, {
       eid: session,
-      persona: space.eid,
+      persona: personaFor(space.eid),
       by,
       project: space.eid,
       using,

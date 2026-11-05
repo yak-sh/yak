@@ -28,6 +28,7 @@ import { mailDoc } from '@yaks/mail/vocab'
 import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
+import { topicDoc } from '@yaks/topic'
 import { adopt, fields, search } from '@yaks/fts'
 
 export let operatorVocab = loadVocab([
@@ -49,6 +50,7 @@ export let operatorVocab = loadVocab([
   operatorDoc,
   draftDoc,
   memoryDoc,
+  topicDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
 export let operatorStore = (

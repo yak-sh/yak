@@ -26,6 +26,11 @@ import { KERNEL, meta } from './meta.ts'
 /** The persona every Operator is worn on, kept in the directory. */
 export let BASE = derivedEid('operator-persona|base')
 
+/** The Operator is a persona; the space it works for is a topic. Their
+ * contains edges serve different purposes. */
+export let personaFor = (space: Eid) =>
+  derivedEid('operator-persona|space|' + space)
+
 /** A doc the code declares: what the Operator knows because of that code. */
 export type Declared = { key: string; title: string; body: string }
 
@@ -45,7 +50,7 @@ export let bases = (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>): Reads => ({
 
 // The bundles of `wanted` that say something `held` does not: a component
 // missing, or a property with another value.
-let moved = (held: Bundle[], wanted: Bundle[]): Bundle[] => {
+export let moved = (held: Bundle[], wanted: Bundle[]): Bundle[] => {
   let by = new Map(held.map((b) => [b.entity.eid, b]))
   return wanted.filter((w) => {
     let was = by.get(w.entity.eid)
@@ -101,18 +106,53 @@ export let introduced = (space: Space) =>
  * space's to write, so only its title is set.
  */
 export let spaced = async (g: Reads, space: Space): Promise<Bundle[]> => {
+  let eid = personaFor(space.eid)
+  let [old] = await g.get([space.eid])
+  let moving = !!old?.persona
+  // Earlier Operators wore the space itself as their persona. Move that
+  // persona's editable text and holdings together, with its sessions, before
+  // discovery gives the space any topic holdings. Repeating this moves none.
+  let links = moving ? await g.read(`.contains .edge.from=${space.eid}`) : []
+  let sessions = moving ? await g.read(`.session.persona=${space.eid}`) : []
   let wanted = [
     {
-      entity: { eid: space.eid },
-      doc: { title: `${space.operator}, the Operator of ${space.slug}` },
-      project: {},
+      entity: { eid },
+      doc: {
+        ...moving ? old.doc as Comp : {},
+        title: `${space.operator}, the Operator of ${space.slug}`,
+      },
       persona: { base: BASE },
     },
-    ...docs(space.eid, [{
+    { entity: { eid: space.eid }, project: {} },
+    ...docs(eid, [{
       key: 'who',
       title: 'Who you are',
       body: introduced(space),
     }], (k) => derivedEid(`operator-persona|${k}|${space.eid}`)),
   ]
-  return moved(await g.get(wanted.map((b) => b.entity.eid)), wanted)
+  return [
+    ...moving
+      ? [
+        {
+          entity: { eid: space.eid },
+          persona: null,
+          doc: { title: space.title, body: null },
+        },
+        ...links.flatMap((b) => [
+          link(
+            eid,
+            'contains',
+            String((b.edge as Comp).to),
+            Number((b.edge as Comp).ord ?? 0),
+          ),
+          { entity: b.entity, $delete: true },
+        ]),
+        ...sessions.map((b) => ({
+          entity: b.entity,
+          session: { persona: eid },
+        })),
+      ]
+      : [],
+    ...moved(await g.get(wanted.map((b) => b.entity.eid)), wanted),
+  ]
 }
