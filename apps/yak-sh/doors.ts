@@ -1,8 +1,9 @@
 // The bands of turns below the story: the drawing at the top of the page
-// again, over the same graph, with a small window over it for each beat. As
-// the reader scrolls past each, its interface makes its own change to the
-// graph (the browser, an agent over MCP, a terminal) and the drawing shows it,
-// a wire running from the window to what it changed. The doors band gives
+// again, over the same graph, with a window beside it for each beat, drawn as
+// its interface (windows.ts). As the reader scrolls past each, its interface
+// makes its own change to the graph (the browser, an agent over MCP, a
+// terminal) and its window opens in its slot and stays, the drawing showing
+// what it changed, a wire running from the latest window to it. The doors band gives
 // each interface one change; the rules band shows what rules and effects make
 // of a write, the declarations that did it beside each beat, and the outbox
 // an effect handed a letter to.
@@ -17,38 +18,34 @@ import type { Ctx } from './views.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
 import { clicked, opener } from './editor.ts'
 import { beatsOf, SITE } from './site.ts'
+import { Look, SIGNS } from './windows.ts'
 import { fate, since, Toast } from './bands.ts'
-
-/** Each door's window: what its title bar says and the sign its line wears.
- * The outbox is where the mail effect hands a letter, standing in for a mail
- * service. */
-export const WINDOWS: Record<string, { name: string; sign: string }> = {
-  web: { name: 'browser · 127.0.0.1:8787', sign: '▸ ' },
-  mcp: { name: 'agent · /mcp', sign: 'agent ▸ ' },
-  sh: { name: 'terminal', sign: '$ ' },
-  outbox: { name: 'outbox · mail in this tab, sent nowhere', sign: '✉ ' },
-  session: { name: 'a new agent session', sign: 'wears ' },
-}
 
 /** What the rules band draws: the story, and the letters its questions sent. */
 export const MAILED =
   '.task|.comment|.edge|.person|.persona|.mail.target.decision *'
 
-/** Where the windows sit on the drawing, as fractions of it: a part of the
- * sheet the story leaves empty, the open window under the bars of the ones
- * before it. */
-const DOCK = { x: .02, y: .38, width: .32, bar: .045 }
+/** The desk the windows sit on, in the drawing's own units: a column of
+ * them left of the drawing, one slot for each beat of the band, with a space
+ * between for the wire. */
+export const DESK = { column: 380, space: 40, gap: 16 }
 
-/** Where a window's wire leaves it and where it meets what the write
- * changed: a shape's near side, in the drawing's own units. */
-export let wire = (layout: Layout, stacked: number, eid: string) => {
+/** Where slot `i` of `n` sits on the desk's height, as `[top, height]`. */
+let slot = (height: number, n: number, i: number) => {
+  let tall = (height - DESK.gap * (n - 1)) / n
+  return [i * (tall + DESK.gap), tall]
+}
+
+/** Where a window's wire leaves its slot and where it meets what the write
+ * changed: a shape's near side, in the desk's units. */
+export let wire = (layout: Layout, n: number, i: number, eid: string) => {
   let node = layout.nodes.find((n) => n.eid == eid)
   if (!node) return
   let [w] = half(node.shape, !!node.state)
-  let x0 = layout.width * (DOCK.x + DOCK.width)
-  let y0 = layout.height * (DOCK.y + DOCK.bar * (stacked + .5))
-  let x1 = node.x - w, y1 = node.y
-  let mid = (x0 + x1) / 2
+  let [top, tall] = slot(layout.height, n, i)
+  let x0 = DESK.column, y0 = top + tall / 2
+  let x1 = DESK.column + DESK.space + node.x - w, y1 = node.y
+  let mid = DESK.column + DESK.space / 2
   return `M${x0.toFixed(1)},${y0.toFixed(1)}H${mid.toFixed(1)}V${
     y1.toFixed(1)
   }H${x1.toFixed(1)}`
@@ -126,6 +123,11 @@ let band = (
   let id = human(yak.vocab)
   let numbered = (short: string) =>
     yak.rows().find((r) => id(r) == short)?.entity.eid
+  let find = (eid: string) => yak.rows().find((r) => r.entity.eid == eid)
+  let short = (eid: string) => {
+    let r = find(eid)
+    return r ? id(r) : eid
+  }
   let open = beats.flatMap((b, i) => {
     let d = turns.done(key, i)
     if (!d || i > upto) return []
@@ -141,7 +143,8 @@ let band = (
     let out = b.kind == 'outbox'
       ? tries.map((t) => `${since(t, tries[0])}  ${fate(t)}`)
       : d.out
-    return [{ b, d, i, eid, out }]
+    let row = eid ? find(eid) : undefined
+    return [{ b, d, i, eid, out, row }]
   })
   let last = open.at(-1)
   // What the open window changed is marked in the drawing, as each render
@@ -173,8 +176,12 @@ let band = (
     input?.focus({ preventScroll: true })
   })
   let path = layout && last?.eid
-    ? wire(layout, open.length - 1, last.eid)
+    ? wire(layout, beats.length, last.i, last.eid)
     : undefined
+  let desk = layout && {
+    width: DESK.column + DESK.space + layout.width,
+    height: layout.height,
+  }
   // The letter the open outbox window follows, once it was sent.
   let sent = last?.b.kind == 'outbox' ? letter(last.b.line) : undefined
   let declared = (last?.b.shows ?? []).flatMap((name) => {
@@ -201,55 +208,50 @@ let band = (
             h(Prose, { source: b.prose }),
             b.kind == 'outbox'
               ? null
-              : h('code', null, WINDOWS[b.kind]?.sign + b.line),
+              : h('code', null, (SIGNS[b.kind] ?? '') + b.line),
           ])
         ),
       ),
     ]),
     h('figure', { class: 'Doors_Figure', ref: figure }, [
       h('div', {
-        class: 'Doors_Sheet',
-        style: layout
-          ? `aspect-ratio: ${layout.width} / ${layout.height}`
+        class: 'Doors_Desk',
+        style: desk
+          ? `--desk: ${desk.width} / ${desk.height}; --drawing: ${
+            layout!.width
+          } / ${layout!.height}; --column: ${
+            DESK.column / desk.width * 100
+          }%; --sheet: ${
+            layout!.width / desk.width * 100
+          }%; --slots: ${beats.length}; --gap: ${DESK.gap / desk.height * 100}%`
           : undefined,
       }, [
-        h('div', { class: 'Doors_Drawing', ref: sheet }),
+        h('div', { class: 'Doors_Sheet' }, [
+          h('div', { class: 'Doors_Drawing', ref: sheet }),
+        ]),
         path
           ? h('svg', {
             class: 'Doors_Wire',
-            viewBox: `0 0 ${layout!.width} ${layout!.height}`,
+            viewBox: `0 0 ${desk!.width} ${desk!.height}`,
             'aria-hidden': 'true',
           }, h('path', { d: path, key: path, pathLength: 1 }))
           : null,
         h(
           'div',
           { class: 'Windows' },
-          open.map(({ b, d, i, out }) =>
-            h('div', {
-              class: `Window${i == last?.i ? ' is-open' : ''}`,
-              'data-door': b.kind,
+          open.map(({ b, d, i, out, row }) =>
+            h(Look, {
+              kind: b.kind,
+              line: b.line,
+              out,
+              fault: d.fault,
+              row,
+              find,
+              id: short,
+              class: i == last?.i ? 'is-last' : undefined,
+              style: `--slot: ${i + 1}`,
               key: i,
-            }, [
-              h('div', { class: 'Window_Bar' }, [
-                h('i', null),
-                h('i', null),
-                h('i', null),
-                h('span', null, WINDOWS[b.kind]?.name ?? b.kind),
-              ]),
-              h('div', { class: 'Window_Screen' }, [
-                h('div', { class: 'Window_Line is-in' }, [
-                  h('span', { class: 'Prompt_Sign' }, WINDOWS[b.kind]?.sign),
-                  b.line,
-                ]),
-                ...out.map((line) =>
-                  h(
-                    'div',
-                    { class: `Window_Line${d.fault ? ' is-fault' : ''}` },
-                    line,
-                  )
-                ),
-              ]),
-            ])
+            })
           ),
         ),
       ]),

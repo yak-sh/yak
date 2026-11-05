@@ -75,7 +75,7 @@ test('the story types into the prompt and the drawing draws what it made', async
   await settle()
   let screen = root.querySelector('.Prompt_Screen')!.textContent!
   match(screen, /\$ yak task new 'Add the sign-up page'/)
-  match(screen, /agent ▸ task_update/)
+  match(screen, /agent → task_update/)
   let sheet = root.querySelector('.Figure_Sheet')!.innerHTML
   for (let id of ['U-1', 'T-2', 'T-3', 'T-4', 'N-5', 'C-6']) {
     match(sheet, new RegExp(`>${id}<`))
@@ -111,7 +111,7 @@ test('each interface in the doors band makes its own change to the one graph, dr
     ),
     ['web', 'mcp', 'sh'],
   )
-  let shown = doors.querySelector('.Window.is-open')!
+  let shown = doors.querySelector('.Window.is-last')!
   match(shown.textContent!, /T-7 Fix the failing build open/)
   // The band draws what the top draws, and marks what the open window wrote.
   let drawn = (in_: Element, sel: string) =>
@@ -199,7 +199,7 @@ test('in the rules band a rule makes a question a letter, an effect sends it, an
   let reach = async (n: number) => {
     await page.turns.reach(band.eid, n)
     await settle()
-    let open = rules.querySelector('.Window.is-open')!
+    let open = rules.querySelector('.Window.is-last')!
     return {
       door: open.getAttribute('data-door'),
       said: open.textContent!,
@@ -259,7 +259,7 @@ test("in the memory band your words become a memory your agent's persona carries
     ),
     ['web', 'mcp', 'mcp', 'session'],
   )
-  let started = memory.querySelector('.Window.is-open')!
+  let started = memory.querySelector('.Window.is-last')!
   match(started.textContent!, /wears N-5# N-5 Your agent.*# C-9/)
   match(started.textContent!, new RegExp(said))
   equal(
@@ -433,7 +433,7 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   match(source, /title: "Can you sign up for payments\?"/)
   match(source, /from: "hello@example.com"/)
   match(source, /message_id: "outbox-1"/)
-  match(stack.querySelector('.Call')!.textContent!, /agent ▸ graph_apply/)
+  match(stack.querySelector('.Call')!.textContent!, /agent → graph_apply/)
   equal(
     [...stack.querySelectorAll('.Outbox li')].map((l) => l.className),
     ['is-refused', 'is-taken'],

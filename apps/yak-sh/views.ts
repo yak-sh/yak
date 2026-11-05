@@ -209,7 +209,7 @@ let Step: FunctionComponent<
 
 let sign: Record<Line['kind'], string> = {
   in: '$ ',
-  agent: 'agent ▸ ',
+  agent: 'agent → ',
   out: '',
   fault: '',
   note: '',

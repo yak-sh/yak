@@ -412,7 +412,7 @@ export let Stack: Band = (ctx) => {
             h('span', { class: 'Dot' }),
             h('b', null, 'the write'),
             h('code', null, [
-              call.kind == 'agent' ? 'agent ▸ ' : '$ ',
+              call.kind == 'agent' ? 'agent → ' : '$ ',
               call.text,
             ]),
           ],

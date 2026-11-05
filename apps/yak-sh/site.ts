@@ -29,6 +29,7 @@ export let FILES = [
   'told.ts',
   'editor.ts',
   'doors.ts',
+  'windows.ts',
   'turns.ts',
   'prose.ts',
   'shop.ts',

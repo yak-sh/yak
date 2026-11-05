@@ -261,7 +261,7 @@ h2 {
   color: var(--meadow);
 }
 .Step_Lines .is-agent code::before {
-  content: 'agent ▸ ';
+  content: 'agent → ';
 }
 /* The command whose write the pen is drawing, where the leader starts. */
 .Step_Lines code {
@@ -1131,10 +1131,23 @@ h2 {
 .Beats li.on > b {
   color: var(--ink);
 }
-.Doors_Sheet {
+/* The doors' desk: a column of windows left of the drawing, one slot for
+   each beat (doors.ts DESK), every window that has run open in its slot. */
+.Doors {
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.5fr);
+  --card: color-mix(in srgb, var(--paper), #fff 60%);
+}
+.Doors_Desk {
   position: relative;
-  aspect-ratio: 560 / 620;
-  container-type: size;
+  aspect-ratio: var(--desk, 980 / 620);
+  container-type: inline-size;
+}
+.Doors_Sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--sheet, 57%);
 }
 .Doors_Drawing,
 .Doors_Drawing svg,
@@ -1173,74 +1186,369 @@ h2 {
 }
 .Windows {
   position: absolute;
-  left: 2%;
-  top: 38%;
-  width: 32%;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--column, 39%);
+  display: grid;
+  grid-template-rows: repeat(var(--slots, 3), minmax(0, 1fr));
+  row-gap: var(--gap, 2.6%);
+  font: 400 clamp(9px, 1.25cqw, 13px)/1.45 var(--mono);
+}
+/* A window is its slot's height, and what it holds past that is cut off
+   under a fade. */
+.Window {
+  grid-row: var(--slot, auto);
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  font: 400 clamp(8px, 1.9cqw, 12px)/1.45 var(--mono);
-}
-.Window {
-  border-radius: 6px;
-  background: var(--term);
-  color: var(--term-ink);
-  box-shadow: 0 8px 22px rgba(35, 48, 31, .22);
   overflow: hidden;
-}
-.Window_Bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 4.5cqh;
-  padding: 0 .6em;
-  background: rgba(227, 234, 214, .08);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.Window_Bar i {
-  flex: none;
-  width: .6em;
-  height: .6em;
-  border-radius: 50%;
-  background: rgba(227, 234, 214, .3);
-}
-.Window_Bar span {
-  margin-left: .4em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgba(227, 234, 214, .75);
-}
-.Window_Screen {
-  display: none;
-  padding: .5em .7em .6em;
-}
-.Window.is-open {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(35, 48, 31, .06), 0 6px 18px rgba(35, 48, 31, .1);
   animation: pop .35s ease-out;
 }
-.Window.is-open .Window_Screen {
-  display: block;
-}
-.Window.is-open .Window_Bar span {
-  color: var(--term-ink);
+.Window.is-last {
+  border-color: var(--meadow);
+  box-shadow: 0 0 0 1px var(--meadow), 0 8px 22px rgba(35, 48, 31, .16);
 }
 @keyframes pop {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(.96);
+    transform: translateY(6px) scale(.97);
   }
 }
-.Window_Line {
+.Term_Screen,
+.Chat_Call,
+.Page_Body,
+.Tui_Screen {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 1.4em), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 1.4em), transparent);
+}
+.Window .is-fault {
+  color: var(--fault, #b4543e);
+}
+
+/* The terminal: dark glass, the command after its prompt. */
+.Term,
+.Tui {
+  border-color: transparent;
+  background: var(--term);
+  color: var(--term-ink);
+}
+.Term .is-fault,
+.Tui .is-fault {
+  color: #f2b8a8;
+}
+.Term_Bar {
+  display: flex;
+  align-items: center;
+  gap: .4em;
+  padding: .45em .7em;
+  background: rgba(227, 234, 214, .06);
+}
+.Term_Bar i {
+  flex: none;
+  width: .65em;
+  height: .65em;
+  border-radius: 50%;
+  background: rgba(227, 234, 214, .28);
+}
+.Term_Bar span {
+  margin: 0 auto;
+  padding-right: 2.6em;
+  color: rgba(227, 234, 214, .6);
+}
+.Term_Screen {
+  padding: .55em .8em;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.Window_Line.is-in {
+.Term_In {
   color: #fff;
-  /* A long call shows its start; the beat beside it has the whole line. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  overflow: hidden;
 }
+.Term_In span {
+  color: var(--moss);
+}
+
+/* Your agent's chat: the tool it called as a card, its arguments and what
+   came back, and the box you'd reply in. */
+.Chat {
+  font-family: var(--sans);
+}
+.Chat_Head {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  padding: .5em .8em;
+  border-bottom: 1px solid var(--rule);
+}
+.Chat_Face {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--moss), var(--meadow));
+}
+.Chat_Head b {
+  font-weight: 500;
+}
+.Chat_Head span:last-child {
+  color: var(--soft);
+}
+.Chat_Call {
+  margin: .6em .8em;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  font-family: var(--mono);
+}
+.Chat_Tool {
+  display: flex;
+  align-items: center;
+  gap: .45em;
+  padding: .35em .6em;
+  border-bottom: 1px solid var(--rule);
+}
+.Chat_Tool svg {
+  flex: none;
+  width: 1.05em;
+  height: 1.05em;
+  fill: none;
+  stroke: var(--meadow);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.Chat_Tool code {
+  font: 500 1em var(--mono);
+  color: var(--ink);
+}
+.Chat_Call dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 .8em;
+  margin: 0;
+  padding: .35em .6em;
+}
+.Chat_Call dt {
+  color: var(--soft);
+}
+.Chat_Call dd {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Chat_Result {
+  padding: .35em .6em .45em;
+  border-top: 1px dashed var(--rule);
+  color: var(--soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.Chat_Say {
+  flex: none;
+  margin: 0 .8em .6em;
+  padding: .35em .8em;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--soft);
+  opacity: .75;
+}
+
+/* The web canvas in a browser: the address bar, the entity the call changed
+   as the canvas draws it, and the call in the status line. */
+.Page {
+  font-family: var(--sans);
+}
+.Page_Bar {
+  display: flex;
+  align-items: center;
+  gap: .7em;
+  padding: .4em .7em;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--paper), var(--line) 5%);
+}
+.Page_Nav {
+  color: var(--soft);
+}
+.Page_Address {
+  flex: 1;
+  padding: .1em .8em;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--card);
+  font-family: var(--mono);
+  color: var(--soft);
+}
+.Page_Body {
+  padding: .8em 1em;
+}
+.Page_Title {
+  display: flex;
+  align-items: baseline;
+  gap: .55em;
+}
+.Page_Title b {
+  font-weight: 500;
+  font-size: 1.12em;
+}
+.Page_Id {
+  flex: none;
+  font-family: var(--mono);
+  color: var(--soft);
+}
+.Page_Box {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 1.05em;
+  height: 1.05em;
+  border: 1.5px solid var(--line);
+  border-radius: 3px;
+}
+.Page_Box.is-on {
+  border-color: var(--meadow);
+  background: var(--meadow);
+}
+.Page_Box.is-on::after {
+  content: '';
+  position: absolute;
+  left: 30%;
+  top: 6%;
+  width: 28%;
+  height: 58%;
+  border: solid var(--paper);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.Page_State {
+  margin-top: .4em;
+  color: var(--soft);
+}
+.Page_Choices {
+  display: grid;
+  gap: .35em;
+  margin: .6em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.Page_Choices li {
+  padding: .3em .7em;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--soft);
+}
+.Page_Choices li.is-on {
+  border-color: var(--meadow);
+  background: color-mix(in srgb, var(--moss), transparent 80%);
+  color: var(--ink);
+}
+.Page_Comment {
+  margin-top: .6em;
+  padding: .45em .7em;
+  border-left: 2px solid var(--moss);
+  background: color-mix(in srgb, var(--moss), transparent 88%);
+}
+.Page_Comment span {
+  color: var(--soft);
+  font-family: var(--mono);
+}
+.Page_Comment p {
+  margin: .15em 0 0;
+}
+.Page_Status {
+  flex: none;
+  padding: .25em .8em;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  color: var(--soft);
+}
+
+/* The letter: who it is from and to under a stamp, what it says, and each
+   time the effect handed it to the outbox, as postmarks along its foot. */
+.Letter {
+  position: relative;
+  padding: .8em 1em .7em;
+  border-radius: 2px;
+  font-family: var(--sans);
+}
+.Letter_Stamp {
+  position: absolute;
+  top: .7em;
+  right: .8em;
+  width: 2.2em;
+  height: 2.6em;
+  border: 2px dotted var(--card);
+  outline: 1px solid var(--moss);
+  background: color-mix(in srgb, var(--moss), transparent 55%);
+}
+.Letter_Head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .05em .7em;
+  margin: 0 3.4em .5em 0;
+  padding-bottom: .5em;
+  border-bottom: 1px solid var(--rule);
+}
+.Letter_Head dt {
+  color: var(--soft);
+}
+.Letter_Head dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Letter_Body {
+  margin: 0 0 .6em;
+}
+.Letter_Tries {
+  margin: auto 0 0;
+  padding: .4em 0 0;
+  border-top: 1px dashed var(--rule);
+  list-style: none;
+  font-family: var(--mono);
+  color: var(--soft);
+}
+
+/* A new session's terminal UI: inverse bars above and below, and the
+   context it was given in a ruled box. */
+.Tui_Bar,
+.Tui_Foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  padding: .15em .7em;
+}
+.Tui_Bar {
+  background: var(--moss);
+  color: var(--term);
+}
+.Tui_Bar b {
+  font-weight: 500;
+}
+.Tui_Screen {
+  margin: .45em;
+  padding: .3em .6em;
+  border: 1px solid rgba(227, 234, 214, .28);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.Tui_Screen .is-head {
+  color: var(--moss);
+}
+.Tui_Foot {
+  background: rgba(227, 234, 214, .1);
+  color: rgba(227, 234, 214, .7);
+}
+
 /* The rules band: under the drawing, the rule or effect the open turn ran,
    as the vocabulary that declares it writes it. */
 .Declares {
@@ -1277,13 +1585,6 @@ h2 {
   font-size: .8125rem;
   color: var(--soft);
 }
-.Window_Line.is-fault {
-  color: #f2b8a8;
-}
-.Window .Prompt_Sign {
-  color: var(--moss);
-}
-
 /* ---------------------------------------------------------------- parts
    Below the bands: a numbered heading on the left, what the part holds on
    the right, a rule across the top; then the title block. */
@@ -1513,6 +1814,32 @@ h2 {
   .Doors_Figure {
     position: static;
   }
+  /* The windows under the drawing, each as tall as what it holds. */
+  .Doors_Desk {
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+    aspect-ratio: auto;
+  }
+  .Doors_Sheet {
+    position: relative;
+    width: 100%;
+    aspect-ratio: var(--drawing, 560 / 620);
+  }
+  .Doors_Wire {
+    display: none;
+  }
+  .Windows {
+    position: static;
+    width: auto;
+    grid-template-rows: none;
+    gap: .7rem;
+    font-size: 12px;
+  }
+  .Window {
+    grid-row: auto;
+    max-height: 16rem;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .Toast {
@@ -1521,7 +1848,7 @@ h2 {
   .Source .comp > div,
   .Outbox li,
   .Declared,
-  .Window.is-open,
+  .Window,
   .Doors_Wire path,
   .Caret {
     animation: none;
