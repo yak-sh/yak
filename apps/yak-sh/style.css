@@ -641,8 +641,6 @@ h2 {
 }
 .Doors_Draw .N,
 .Doors_Draw .Door,
-.Stack_Draw .pl,
-.Stack_Draw .co,
 .Phases li {
   cursor: pointer;
 }
@@ -661,8 +659,8 @@ h2 {
   max-width: 34rem;
 }
 
-/* The stack (#12) and the doors (#14): drawings in the sheet's own pen, lit
-   in meadow green where the last write went. */
+/* The bundle's source (#12) and the doors (#14), lit in meadow green where
+   the last write went. */
 .Stack,
 .Doors {
   --faint: rgba(54, 83, 45, .08);
@@ -687,7 +685,6 @@ h2 {
   color: var(--ink);
   margin-right: .5rem;
 }
-.Stack_Draw,
 .Doors_Draw {
   display: block;
   width: 100%;
@@ -780,128 +777,148 @@ h2 {
   color: var(--meadow);
 }
 
-.gh path {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: .75;
-  stroke-dasharray: 3 3;
-  opacity: .28;
+/* The bundle as its source, annotated (bundle mockup 8): the code on the
+   left, what each line is on the right, changed as the reader scrolls
+   through apply()'s phases. */
+.Source {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  border: 1px solid var(--rule);
+  background: rgba(252, 250, 245, .55);
+  padding: clamp(.8rem, 2vw, 1.6rem) 0;
+  font: 400 .8125rem/1.5 var(--mono);
 }
-.axis {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: .75;
-  stroke-dasharray: 3 4;
-  opacity: .4;
+.Source .R {
+  display: contents;
+  cursor: pointer;
 }
-.pl {
-  animation: plate .6s cubic-bezier(.2, .7, .2, 1) calc(var(--i) * 70ms)
-    backwards;
-  transition: opacity .35s, transform .35s cubic-bezier(.2, .7, .2, 1);
+.Source .R > div {
+  padding: 3px 12px;
+  transition: background .4s, max-height .6s, opacity .5s, padding .6s;
 }
-.co {
-  transition: opacity .35s;
+.Source .c {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--rule);
 }
-/* Not written yet: the reader has not scrolled to the phase that writes it. */
-.pl.is-out,
-.co.is-out {
+.Source .n {
+  position: relative;
+  padding-left: 26px !important;
+  font: 400 .8125rem/1.5 var(--sans);
+  color: var(--soft);
+}
+.Source .n:not(:empty)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 13px;
+  width: 18px;
+  height: 1px;
+  background: var(--line);
+}
+.Source .n code {
+  font-size: .75rem;
+  color: var(--ink);
+}
+.Source .k,
+.Source .pn {
+  color: var(--soft);
+}
+.Source .s {
+  color: #6b5a2e;
+}
+.Source .num {
+  color: var(--brick);
+}
+.Source .ok {
+  color: var(--meadow);
   opacity: 0;
+  transition: opacity .4s;
 }
-.pl.is-out {
-  transform: translateY(-26px);
+.Source.p-admit .ok {
+  opacity: 1;
 }
-@keyframes plate {
-  from {
-    opacity: 0;
-    transform: translateY(-26px);
+.Source.now-admit .comp > div {
+  animation: scan 1.6s both;
+}
+.Source.now-admit .d2 > div {
+  animation-delay: .35s;
+}
+.Source.now-admit .d3 > div {
+  animation-delay: .7s;
+}
+.Source.now-admit .d4 > div {
+  animation-delay: 1.05s;
+}
+@keyframes scan {
+  0%,
+  100% {
+    background: transparent;
+  }
+  30%,
+  60% {
+    background: rgba(167, 192, 128, .4);
   }
 }
-.pl path {
-  stroke: var(--line);
-  stroke-width: 1;
-  stroke-linejoin: round;
+.Source.now-normalize .c {
+  background: rgba(252, 250, 245, .8);
 }
-.pl .f {
-  fill: var(--plate);
+.Source .alias i {
+  display: none;
+  font-style: normal;
+  color: var(--meadow);
 }
-.pl .l {
-  fill: var(--side);
+.Source .alias s {
+  text-decoration: none;
 }
-.pl .r {
-  fill: color-mix(in srgb, var(--side) 55%, var(--plate));
+.Source.p-mint .alias i {
+  display: inline;
 }
-.stored .pl[data-pl='entity'] .l,
-.stored .pl[data-pl='entity'] .r {
-  fill: url(#band-hatch);
+.Source.p-mint .alias s {
+  display: none;
 }
-.face {
-  font: 500 14px var(--mono);
-  fill: var(--ink);
+.Source.now-mint .ent > div,
+.Source.now-stamp .stamp > div {
+  background: rgba(167, 192, 128, .4);
 }
-.co path {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: .75;
+.Source.now-mutate .body > .c {
+  background: rgba(252, 250, 245, .9);
+  box-shadow: inset 3px 0 0 var(--meadow);
 }
-.co circle {
-  fill: var(--line);
+.Source .stamp .c {
+  color: var(--meadow);
 }
-.nm {
-  font: 500 13px var(--mono);
-  fill: var(--ink);
+/* Not written yet: apply() stamps it when the reader reaches stamp. */
+.Source .is-out > div {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
-.nt {
-  font: 400 11.5px var(--sans);
-  fill: var(--soft);
+.Source .stamp > div {
+  max-height: 60px;
 }
-.vl {
-  font: 400 10.5px var(--mono);
-  fill: var(--soft);
+.Source .brace {
+  transition: color .4s, text-shadow .4s;
 }
-.rail-base {
-  stroke: var(--rule);
-  stroke-width: 1.5;
-  fill: none;
+.Source.p-commit .brace {
+  color: var(--meadow);
+  text-shadow: 0 0 8px var(--diagram-glow);
 }
-.rail-lit {
-  stroke: var(--meadow);
-  stroke-width: 1.5;
-  fill: none;
-  filter: url(#band-glow);
-  transition: stroke-dashoffset .35s;
-}
-.st circle {
-  fill: var(--paper);
-  stroke: var(--line);
-  stroke-width: 1;
-  transition: fill .3s, stroke .3s;
-}
-.st text {
-  font: 400 12px var(--mono);
-  fill: var(--soft);
-}
-.st.on circle {
-  fill: var(--meadow);
-  stroke: var(--meadow);
-}
-.st.on text {
-  fill: var(--ink);
-}
-.st.skip circle {
-  stroke-dasharray: 2 2;
-}
-.rail-title {
-  font: 500 12.5px var(--mono);
-  fill: var(--ink);
-}
-.bracket {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: .75;
-}
-.bracket-label {
-  font: 400 11px var(--sans);
-  fill: var(--soft);
+@media (max-width: 760px) {
+  .Source {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .Source .c {
+    border-right: 0;
+  }
+  .Source .n:empty {
+    display: none;
+  }
+  .Source .n {
+    padding: 0 12px 8px 26px;
+  }
 }
 
 .Doors_Bar {
@@ -1287,7 +1304,7 @@ h2 {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pl,
+  .Source .comp > div,
   .Pulse,
   .Caret {
     animation: none;

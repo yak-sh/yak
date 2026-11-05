@@ -1,8 +1,8 @@
-// The two bands below the story, drawn as mockups #12 and #14 drew them and
-// fed from the tab's graph: the stack is the last entity written as plates,
-// one per component, beside the phases apply() ran, each phase happening as
-// the reader scrolls past it and undone as they scroll back; the doors are
-// the ways into one graph, with what came in through them drawn on its sheet.
+// The two bands below the story, fed from the tab's graph: the last entity
+// written as the source of its bundle, annotated, beside the phases apply()
+// ran, each phase happening as the reader scrolls past it and undone as they
+// scroll back (#12, drawn as bundle mockup 8); and the doors, the ways into
+// one graph, with what came in through them drawn on its sheet (#14).
 import { type FunctionComponent, h } from 'preact'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Markdown } from '@yaks/markdown'
@@ -81,38 +81,24 @@ export let DOES: Record<Phase, string> = {
     'Runs after a rollback instead, from a refusal or a dry run, to see what was refused.',
 }
 
-// The drawing's measures, #12's own: a plate is a rhombus W wide and H tall
-// with sides T thick, stacked a STEP apart; the rail stands at RX.
-const CX = 128, W = 104, H = 52, T = 8, STEP = 78, BASE = 470
-const RX = 532, TOP = 44, BOTTOM = 440
-
-let faces = (cy: number) => ({
-  f: `M${CX},${cy - H}L${CX + W},${cy}L${CX},${cy + H}L${CX - W},${cy}Z`,
-  l: `M${CX - W},${cy}L${CX},${cy + H}L${CX},${cy + H + T}L${CX - W},${
-    cy + T
-  }Z`,
-  r: `M${CX},${cy + H}L${CX + W},${cy}L${CX + W},${cy + T}L${CX},${
-    cy + H + T
-  }Z`,
-})
-let iso = (x: number, y: number) =>
-  `translate(${x} ${y}) matrix(.894 .447 -.894 .447 0 0)`
-
-/** A component on the stack: its name with its properties, what the
- * vocabulary says it is, and its first value. */
-export type Plate = {
+/** A line of the source: a component's key and its properties as the bundle
+ * writes them, what the margin says it is, and whether apply() stamps it
+ * rather than the writer writing it. */
+export type Row = {
   key: string
   name: string
   note: string
-  value: string
-  /** A mark, stamped on the entity rather than written into it. */
-  mark: boolean
+  props: [string, unknown][]
+  stamped: boolean
 }
 
-/** The plates of an entity, bottom up: its id, what it carries, then the
- * marks stamped on it in the order they were made. `updated` repeats the
- * marks and is left off, as #12 leaves it. */
-export let platesOf = (b: Bundle, vocab: Ctx['yak']['vocab']): Plate[] => {
+// What apply() itself adds to the bundle it was given (DOES.stamp).
+const STAMPED = new Set(['created', 'updated'])
+
+/** An entity as the source of the bundle that wrote it: its id, what it
+ * carries, then the marks on it in the order they were made. `updated`
+ * repeats the marks and is left off, as the mockup leaves it. */
+export let rowsOf = (b: Bundle, vocab: Ctx['yak']['vocab']): Row[] => {
   let comps = Object.keys(b).filter((k) =>
     !k.startsWith('$') && k != 'updated' && b[k] && typeof b[k] == 'object'
   )
@@ -123,39 +109,37 @@ export let platesOf = (b: Bundle, vocab: Ctx['yak']['vocab']): Plate[] => {
     rank(a) - rank(z) || at(a).localeCompare(at(z)) || a.localeCompare(z)
   return comps.sort(order).map((key) => {
     let value = b[key] as Record<string, unknown>
-    let props = key == 'entity' ? ['eid'] : vocab.props(key)
-    let shown = mark(key) ? ['at', value.at] : Object.entries(value)
-      .find(([, v]) => v != null && typeof v != 'object')
+    let stored = (p: string) => !vocab.prop(key, p)?.computed
+    let props = key == 'entity' ? ['eid'] : vocab.props(key).filter(stored)
     return {
       key,
-      mark: mark(key),
       name: `${key}{${props.join(', ')}}`,
-      note: cut(vocab.comp(key)?.description, 44),
-      value: key == 'entity'
-        ? String(value.eid)
-        : shown
-        ? cut(`${shown[0]}: ${JSON.stringify(shown[1])}`, 40)
-        : '',
+      note: String(vocab.comp(key)?.description ?? ''),
+      // What a write wrote: a property read back but never stored, such as
+      // a task's status, is left off.
+      props: key == 'entity'
+        ? [['eid', value.eid]]
+        : Object.entries(value).filter(([p, v]) =>
+          v !== undefined && stored(p)
+        ),
+      stamped: STAMPED.has(key),
     }
   })
 }
 
 /** How the last write stands with the reader `upto` phases into it (the
  * index of the last phase they have passed): each phase passed ran or was
- * passed by; a plate is in once the phase that writes it has run (the id at
- * mint, a mark at stamp, any other component at mutate); and the entity is
- * stored once commit has. */
+ * passed by, the phase the reader is at, which have been passed, and
+ * whether a line apply() stamps is written yet. */
 export let standing = (ran: Set<string>, upto: number) => {
   let past = (p: Phase) => ran.has(p) && PHASES.indexOf(p) <= upto
-  let lit = PHASES.map((p, i) => ran.has(p) && i <= upto ? i : -1)
   return {
     phase: (p: Phase, i: number) =>
       !ran.size || i > upto ? '' : ran.has(p) ? 'on' : 'skip',
-    plate: (key: string, mark: boolean) =>
-      past(key == 'entity' ? 'mint' : mark ? 'stamp' : 'mutate'),
-    stored: past('commit'),
-    /** The last phase passed that ran, or -1. */
-    reached: Math.max(-1, ...lit),
+    /** The phases passed, and the one the reader is at. */
+    passed: ran.size ? PHASES.slice(0, upto + 1) : [],
+    now: ran.size ? PHASES[upto] : undefined,
+    row: (r: Row) => !r.stamped || past('stamp'),
   }
 }
 
@@ -164,105 +148,112 @@ export let standing = (ran: Set<string>, upto: number) => {
 export let passed = (tops: number[], line: number) =>
   tops.reduce((k, top, i) => top < line ? i : k, -1)
 
-let StackDrawing = (
-  { plates, ran, upto }: { plates: Plate[]; ran: Set<string>; upto: number },
+let shortly = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s
+
+// A value as the source writes it, cut to the line: a string in quotes, a
+// number or anything else as JSON.
+let valued = (v: unknown) =>
+  typeof v == 'string'
+    ? h('span', { class: 's' }, JSON.stringify(shortly(v, 34)))
+    : typeof v == 'number'
+    ? h('span', { class: 'num' }, String(v))
+    : h('span', null, shortly(JSON.stringify(v) ?? '', 34))
+
+/** The bundle as its source, mockup 8's: each key a component's name and
+ * its object the component's properties, the margin saying what each is.
+ * As the reader passes each phase the text changes as apply() changes it:
+ * a new entity's alias becomes its eid at mint, `created` appears at
+ * stamp, and the braces light at commit. */
+let Source = (
+  { rows, made, state }: {
+    rows: Row[]
+    made: boolean
+    state: ReturnType<typeof standing>
+  },
 ) => {
-  let gap = (BOTTOM - TOP) / (PHASES.length - 1)
-  let y = (i: number) => TOP + i * gap
-  let slots = Math.max(5, plates.length)
-  let cy = (i: number) => BASE - i * STEP
-  let top = Math.min(0, cy(slots - 1) - H - 40)
-  let inside = INSIDE.map((p) => PHASES.indexOf(p))
-  let first = Math.min(...inside), last = Math.max(...inside)
-  let state = standing(ran, upto)
-  let { reached } = state
-  let len = y(PHASES.length - 1) - y(0)
-  let ghosts = Array.from({ length: slots }, (_, i) => {
-    let { f, l, r } = faces(cy(i))
-    return h('g', { class: 'gh', key: i }, [
-      h('path', { d: f }),
-      h('path', { d: l }),
-      h('path', { d: r }),
-    ])
-  })
-  let drawn = plates.map((p, i) => {
-    let { f, l, r } = faces(cy(i))
-    return h('g', {
-      class: state.plate(p.key, p.mark) ? 'pl' : 'pl is-out',
-      'data-pl': p.key,
-      key: p.key,
-      style: `--i:${i}`,
+  let wide = Math.max(0, ...rows.map((r) => r.key.length))
+  // A line of the source; the first of a component's lines names it.
+  let line = (cls: string, code: unknown[], note: unknown[] = [], key = '') =>
+    h('div', {
+      class: `R ${cls}`.trim(),
+      key,
+      'data-row': key && !key.includes('.') ? key : undefined,
     }, [
-      h('path', { class: 'l', d: l }),
-      h('path', { class: 'r', d: r }),
-      h('path', { class: 'f', d: f }),
-      h('text', {
-        class: 'face',
-        transform: iso(CX, cy(i)),
-        'text-anchor': 'middle',
-        dy: 5,
-      }, p.key),
+      h('div', { class: 'c' }, code as never),
+      h('div', { class: 'n' }, note as never),
     ])
-  })
-  let callouts = plates.map((p, i) => {
-    let x = CX + W, at = cy(i)
-    return h('g', {
-      class: state.plate(p.key, p.mark) ? 'co' : 'co is-out',
-      'data-co': p.key,
-      key: p.key,
-    }, [
-      h('circle', { cx: x, cy: at, r: 2.2 }),
-      h('path', { d: `M${x} ${at}L${x + 20} ${at - 20}H${x + 38}` }),
-      h('text', { class: 'nm', x: x + 44, y: at - 16 }, p.name),
-      h('text', { class: 'nt', x: x + 44, y: at }, p.note),
-      h('text', { class: 'vl', x: x + 44, y: at + 15 }, p.value),
+  let ok = h('span', { class: 'ok' }, ' ✓')
+  let lines = rows.flatMap((r, ri) => {
+    let pad = ' '.repeat(wide - r.key.length)
+    let props = r.props.map(([p, v], i) => [
+      h('span', { class: 'pn' }, p),
+      ': ',
+      r.key == 'entity' && made
+        ? h('span', { class: 'alias' }, [
+          h('s', { class: 's' }, '"$new"'),
+          h('i', null, JSON.stringify(shortly(String(v), 16))),
+        ])
+        : valued(v),
+      i < r.props.length - 1 ? ',' : '',
     ])
+    let head = `    ${r.key}: ${pad}`
+    let cls = [
+      'comp',
+      r.key == 'entity' ? 'ent' : r.stamped ? 'stamp' : 'body',
+      `d${Math.min(4, ri + 1)}`,
+      state.row(r) ? '' : 'is-out',
+    ].join(' ')
+    let note = [
+      h('code', null, r.name),
+      r.stamped
+        ? ': written by apply() at stamp, not by you'
+        : r.key == 'entity'
+        ? made
+          ? ': the entity itself. $new is an alias until mint names it'
+          : ': the entity this write changed'
+        : r.note
+        ? `: ${r.note}`
+        : '',
+      r.stamped ? '' : ok,
+    ]
+    // One property beside its key; more, one to a line under the first.
+    if (!props.length) return [line(cls, [head, '{},'], note, r.key)]
+    if (props.length == 1) {
+      return [line(cls, [head, '{ ', ...props[0], ' },'], note, r.key)]
+    }
+    let indent = ' '.repeat(head.length + 2)
+    return props.map((p, i) =>
+      line(
+        cls,
+        i == 0
+          ? [head, '{ ', ...p]
+          : [indent, ...p, i == props.length - 1 ? ' },' : ''],
+        i == 0 ? note : [],
+        i == 0 ? r.key : `${r.key}.${i}`,
+      )
+    )
   })
-  let rail = h('g', { class: 'Rail' }, [
-    h('text', { class: 'rail-title', x: RX - 8, y: TOP - 22 }, 'apply()'),
-    h('path', {
-      class: 'rail-base',
-      d: `M${RX} ${y(0)}V${y(PHASES.length - 1)}`,
-    }),
-    h('path', {
-      class: 'rail-lit',
-      d: `M${RX} ${y(0)}V${y(PHASES.length - 1)}`,
-      'stroke-dasharray': len,
-      'stroke-dashoffset': reached < 0 ? len : len - reached * gap,
-    }),
-    h('path', {
-      class: 'bracket',
-      d: `M640 ${y(first) - 12}H648V${y(last) + 12}H640`,
-    }),
-    h('text', {
-      class: 'bracket-label',
-      transform: `translate(664 ${(y(first) + y(last)) / 2}) rotate(-90)`,
-      'text-anchor': 'middle',
-    }, 'one transaction'),
-    ...PHASES.map((p, i) =>
-      h('g', {
-        class: `st ${state.phase(p, i)}`.trim(),
-        'data-st': p,
-        key: p,
-      }, [
-        h('circle', { cx: RX, cy: y(i), r: 5 }),
-        h('text', { x: RX + 16, y: y(i) + 4 }, p),
-      ])
-    ),
-  ])
-  let axes = h('path', {
-    class: 'axis',
-    d: `M${CX - W} ${cy(slots - 1)}V${BASE}M${CX + W} ${
-      cy(slots - 1)
-    }V${BASE}M${CX} ${cy(slots - 1) + H}V${BASE + 60}`,
-  })
-  return h('svg', {
-    class: `Stack_Draw${state.stored ? ' stored' : ''}`,
-    viewBox: `0 ${top} 680 ${560 - top}`,
+  let brace = (c: string) => h('span', { class: 'brace' }, c)
+  return h('div', {
+    class: [
+      'Source',
+      ...state.passed.map((p) => `p-${p}`),
+      state.now ? `now-${state.now}` : '',
+    ].join(' ').trim(),
     role: 'img',
     'aria-label':
-      'The last entity written, drawn as stacked plates, one for each component, beside the phases of apply()',
-  }, [defs(), axes, ...ghosts, ...drawn, ...callouts, rail])
+      'The last entity written, as the source of the bundle apply() wrote, each component with a note on what it is',
+  }, [
+    line('', ['apply(['], [
+      'a list: one or many bundles, written in one transaction',
+    ]),
+    line('', ['  ', brace('{')], [
+      'one bundle is one entity, and what its components are is what it is',
+    ]),
+    ...lines,
+    line('', ['  ', brace('}')]),
+    line('', ['])']),
+  ])
 }
 
 export let Stack: Band = (ctx) => {
@@ -271,7 +262,10 @@ export let Stack: Band = (ctx) => {
   useTold((l) => yak.watch('*', l))
   let { eid, phases } = figure.last()
   let subject = eid ? yak.row(eid) : undefined
-  let plates = subject ? platesOf(subject, yak.vocab) : []
+  // apply() stamps `created` on what it makes and `updated` on what it
+  // changes, so an entity with no `updated` was made by its last write.
+  let made = !!subject?.created && !subject.updated
+  let rows = subject ? rowsOf(subject, yak.vocab) : []
   let ran = new Set<string>(phases)
   // How far down the phases the reader is, measured each frame they scroll;
   // where nothing measures, as in a test, the whole write has happened.
@@ -297,11 +291,11 @@ export let Stack: Band = (ctx) => {
       cancelAnimationFrame(frame)
     }
   }, [])
-  // A plate clicked opens the entity they are.
+  // A line of the source clicked opens the entity it writes.
   let drawing = useRef<HTMLElement>(null)
   useHeard(drawing, ['click'], (ev) => {
-    let plate = (ev.target as Element | null)?.closest?.('.pl, .co')
-    if (plate && eid) opener(ctx)(eid)
+    let row = (ev.target as Element | null)?.closest?.('.Source .R')
+    if (row && eid) opener(ctx)(eid)
   })
   let state = standing(ran, upto)
   let inside = new Set<string>(INSIDE)
@@ -345,7 +339,7 @@ export let Stack: Band = (ctx) => {
       ),
     ]),
     h('figure', { class: 'Stack_Figure', ref: drawing }, [
-      h(StackDrawing, { plates, ran, upto }),
+      subject ? h(Source, { rows, made, state }) : null,
       h(
         'figcaption',
         null,
@@ -354,7 +348,7 @@ export let Stack: Band = (ctx) => {
             h('span', { class: 'No' }, 'Fig. 2'),
             `${
               human(yak.vocab)(subject)
-            } as the graph in this tab holds it, and the phases its write ran.`,
+            } as the graph in this tab holds it, written as the bundle that wrote it.`,
           ]
           : [
             h('span', { class: 'No' }, 'Fig. 2'),

@@ -124,7 +124,9 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
           Object.entries(value).map(([prop, v]) => {
             // A property the vocabulary declares, not one computed on read
             // such as a task's status, and not a stamped mark.
+            let declared = yak.vocab.prop(comp, prop)
             let open = !fixed && props.includes(prop) &&
+              !declared?.computed && !declared?.stamped &&
               (typeof v == 'string' || typeof v == 'number')
             let other = typeof v == 'string' && yak.row(v)
             return h('div', { class: 'Editor_Prop', key: prop }, [

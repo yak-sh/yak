@@ -185,7 +185,7 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
   }
   equal(await opened(root.querySelector('#door-agent')!), 'N-4')
   equal(await opened(root.querySelector('.Doors_Draw .N-task')!), 'T-2')
-  equal(await opened(root.querySelector('.Stack_Draw .pl')!), 'T-3')
+  equal(await opened(root.querySelector('.Source .R[data-row] .c')!), 'T-3')
   page.page.close()
 })
 
@@ -205,14 +205,18 @@ test("a change to the graph's style.css restyles the page", async () => {
   page.page.close()
 })
 
-test('the stack shows the last entity written and the phases apply() ran', async () => {
+test('the apply() band writes the last entity as the source of its bundle, beside the phases it ran', async () => {
   let { root, page, settle } = await open()
   await page.term.enter("task new 'Water the plants'")
   await settle()
-  let plates = [...root.querySelectorAll('.pl')].map((p) =>
-    p.getAttribute('data-pl')
+  let rows = [...root.querySelectorAll('.Source [data-row]')].map((p) =>
+    p.getAttribute('data-row')
   )
-  equal(plates, ['entity', 'doc', 'task', 'created'])
+  equal(rows, ['entity', 'doc', 'task', 'created'])
+  let source = root.querySelector('.Source')!.textContent!
+  match(source, /doc: +\{ title: "Water the plants" \},/)
+  match(source, /doc\{title, body\}/)
+  match(source, /\$new is an alias until mint names it/)
   let phases = (state: string) =>
     [...root.querySelectorAll(`.Phases li.${state}`)].map((p) =>
       p.getAttribute('data-phase')
