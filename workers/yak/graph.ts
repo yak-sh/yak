@@ -328,7 +328,7 @@ import {
   USES,
 } from './door.ts'
 import { borrows } from './reach.ts'
-import { behind, ran } from './running.ts'
+import { behind, ran, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -3393,8 +3393,30 @@ export class Store {
         observe: request.headers.get('x-yak-observe') == '1',
       },
       () =>
-        this.#traced(routeKind(request), () => this.#fetch(request), request),
+        this.#traced(
+          routeKind(request),
+          async () => this.#unskewed(request, await this.#fetch(request)),
+          request,
+        ),
     )
+  }
+
+  /** The answer, unless it refuses a caller on a later deploy than this
+   * object runs (running.ts `skewed`): then a failure the caller's door sends
+   * again, and the tracker hears of it. */
+  async #unskewed(request: Request, answer: Response): Promise<Response> {
+    let e = await skewed(
+      request.headers,
+      this.#bind.CF_VERSION_METADATA,
+      answer,
+    )
+    if (!e) return answer
+    let path = new URL(request.url).pathname
+    defect(e, { request: `store ${path}`, store: this.#name() }, {
+      fault: `skew:${path}`,
+    })
+    let { name, message, retryable, running, caller } = e
+    return json({ error: name, message, retryable, running, caller }, 503)
   }
 
   // The object's move to a new address (relocate.ts). Answers before anything

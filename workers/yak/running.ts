@@ -8,7 +8,11 @@
 // `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
 // that a newer caller reaches restarts itself on the spot (`behind`); the
 // caller's retry of an evicted request (@yaks/durable-object `evicted`) then
-// meets the new code.
+// meets the new code. That holds while the Worker's objects take up a deploy
+// at once (wrangler.toml `code_update_strategy`): one Cloudflare is still
+// deferring starts again on the code it had. A store still behind its caller
+// after its restart answers a refusal as a failure the caller sends again,
+// and reports it (`skewed`, T-140262).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -139,7 +143,8 @@ export let ran = async (
  * restarted for. Restarts only move forward, so callers on two new deploys
  * never take turns restarting it: an object the runtime starts again on older
  * code is where the runtime means it to be, and it serves every caller no
- * newer than the deploy it last restarted for.
+ * newer than the deploy it last restarted for, refusing a newer one nothing
+ * (`skewed`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -181,4 +186,56 @@ export let behind = async (
   await s.sync?.()
   retiring.add(ctx)
   ctx.abort(`${BEHIND} ${theirs.id}`)
+}
+
+// The words a store that runs an older deploy than its caller answers a
+// refusal in. The caller's door sends a `retryable` answer again (door.ts
+// `thrown`), so its retries wait for the runtime to start the store on the
+// caller's deploy.
+let SKEWED =
+  'Durable Object on an older deploy refused a caller on a newer one:'
+
+/**
+ * The failure a refusal is, when the object that answered it runs an older
+ * deploy than its caller: the runtime started it again on that older code
+ * after it restarted for the caller (`behind`), so what it refused may be
+ * only what its code does not know yet, a row or a door the caller's deploy
+ * added. That is no mistake of the caller's: it is a failure, retryable, and
+ * the store reports it. Any other answer is null.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
+ * let newer = new Headers({ [WORKER_VERSION]: 'b', [WORKER_VERSION_AT]: '2026-10-12T16:30:00Z' })
+ * let no = Response.json({ error: 'Refused', message: 'unknown component release_remake' }, { status: 400 })
+ * let e = await skewed(newer, mine, no)
+ * assertEquals(
+ *   e?.message,
+ *   'Durable Object on an older deploy refused a caller on a newer one: ' +
+ *     'unknown component release_remake',
+ * )
+ * assertEquals(e?.retryable, true)
+ * assertEquals(await skewed(new Headers(), mine, no), null)
+ * assertEquals(await skewed(newer, mine, new Response('ok')), null)
+ * ```
+ */
+export let skewed = async (
+  headers: Headers,
+  mine: Meta | null | undefined,
+  answer: Response,
+): Promise<
+  (Error & { retryable: true; running: string; caller: string }) | null
+> => {
+  let theirs = caller(headers), here = versionOf(mine)
+  if (answer.status < 400 || answer.status >= 500) return null
+  if (!theirs || !here || !newer(theirs, here)) return null
+  let said: { message?: unknown } | null = await answer.clone().json()
+    .catch(() => null)
+  let why = typeof said?.message == 'string' ? said.message : answer.status
+  return Object.assign(new Error(`${SKEWED} ${why}`), {
+    name: 'Skewed',
+    retryable: true as const,
+    running: here.id,
+    caller: theirs.id,
+  })
 }

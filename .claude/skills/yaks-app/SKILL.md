@@ -132,8 +132,13 @@ Staging (yaks.fyi) deploys after production from the same build, so it is a
 sandbox for billing, not a canary.
 
 "Live at 100%" is the Worker. Each Durable Object (a store, the directory) moves
-to the new version on its own, seconds to minutes later; Cloudflare releases
-them eventually consistently. So a call from the new Worker can reach a store
+to the new version on its own, seconds later; Cloudflare releases them
+eventually consistently. They take up a deploy at once (wrangler.toml
+`code_update_strategy`, immediate): Cloudflare's default since 2026-10-30
+defers an active object's update up to 300 s and restarts it on the code it
+had, which kept the directory, never idle, on the previous deploy for four
+minutes (T-140262). A store still behind its caller answers a refusal as a
+failure the caller's door retries, and reports it (running.ts `skewed`). So a call from the new Worker can reach a store
 still on the previous code: a new store route or RPC answers as missing for a
 while, and a probe right after a deploy can see the old behavior. A bug's
 occurrence carries the version it ran (`commit`); one from the previous version

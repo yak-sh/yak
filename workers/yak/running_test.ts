@@ -5,7 +5,7 @@
 // with the reason as the message. The decision is `behind`, tested on a bare
 // object; each kind of object is checked once to ask it at its door.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
 import { evicted } from '@yaks/durable-object'
 import { Store } from './graph.ts'
@@ -20,6 +20,7 @@ import {
   WORKER_VERSION_AT,
 } from './running.ts'
 import { kvStorage, state } from './testing.ts'
+import { within } from './defects.ts'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
 let B = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
@@ -182,4 +183,49 @@ test('an idle Builder restarts for a newer caller', async () => {
   learn(B)
   assertEquals((await through(idle.instance)(ask)).status, 404)
   assertEquals(idle.restarts.length, 1)
+})
+
+// A Worker on a newer deploy than its Store (T-140262): the store restarted
+// for that deploy and the runtime started it again on its older code, as
+// Cloudflare's deferred code updates do. A write naming a word the older code
+// does not know is no mistake of the caller's: the store reports it and
+// answers a failure the caller's door sends again, which the newer code then
+// takes.
+test('a store behind its caller answers a refusal as a failure its door sends again, and reports it', async () => {
+  learn(B)
+  let reports: unknown[] = []
+  let o = object()
+  let ctx = Object.assign(state(), { abort: o.abort })
+  await ctx.storage.put('restarted for', { id: B.id, at: B.timestamp })
+  let old = new Store(ctx as never, { CF_VERSION_METADATA: A })
+  let next = { fetch: () => Promise.resolve(Response.json({ ok: true })) }
+  let reached = 0
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => reached++ ? next : old,
+  }
+  let answer = await within(
+    {
+      ERRORS: {
+        send: (rows: unknown[]) => (reports.push(...rows), Promise.resolve()),
+      },
+    } as never,
+    {},
+    () =>
+      storeOf(ns, 'ada/cookbook', undefined, unpaused)('/apply', {
+        method: 'POST',
+        headers: { 'x-yak-kernel': '1' },
+        body: JSON.stringify([{
+          entity: { eid: crypto.randomUUID() },
+          release_remake: { app: 'a', source: 's' },
+        }]),
+      }),
+  )
+  assertEquals(answer.status, 200)
+  assertEquals(reached, 2)
+  assertEquals(o.restarts, [])
+  assertMatch(
+    JSON.stringify(reports),
+    /older deploy refused a caller on a newer one/,
+  )
 })

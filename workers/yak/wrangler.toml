@@ -237,6 +237,24 @@ class_name = "Workspaces"
 name = "PURGER"
 class_name = "Purger"
 
+# Every object takes up a deploy at once (T-140262). Since 2026-10-30
+# Cloudflare defers a Durable Object's code update until it hibernates, or
+# for at most 300 s, and an object restarted in that time starts again on the
+# code it had. The directory never hibernates, so after 7a5b86f8e it ran the
+# deploy before for four minutes, restarted for the new one (running.ts
+# `behind`) only to come back on the old, and refused the new Worker's writes.
+# Immediate is how every deploy reached the objects before then, and what a
+# Worker-to-store call, its restart and its retry are built on (door.ts
+# `storeOf`). A store still behind its caller answers a refusal as a failure
+# its caller retries (running.ts `skewed`).
+#
+# The pinned wrangler (4.111.0) predates `[durable_objects]
+# code_update_strategy` (4.150.0). With containers it uploads through the
+# script PUT, which takes `unsafe.metadata` as upload metadata, the field
+# 4.150.0 writes there itself; move it there once the pin passes 4.150.0.
+[unsafe.metadata.code_update_strategy]
+mode = "immediate"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -636,6 +654,10 @@ class_name = "Workspaces"
 [[env.staging.durable_objects.bindings]]
 name = "PURGER"
 class_name = "Purger"
+
+# As above: every object takes up a deploy at once.
+[env.staging.unsafe.metadata.code_update_strategy]
+mode = "immediate"
 
 [[env.staging.migrations]]
 tag = "v1"
