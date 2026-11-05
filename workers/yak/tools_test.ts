@@ -93,7 +93,7 @@ let platform = (secret: string, vars: Partial<Env> = {}) => {
 }
 
 test('staging tool URLs and app mail use the same configured host', async () => {
-  let delivered: { to: string; from: Address }[] = []
+  let delivered: { to: string | string[]; from: Address }[] = []
   let pools = new WeakMap<Graph, Effects>()
   let { env } = rows('staging-tool-secret', {
     APEX: 'yaks.fyi',

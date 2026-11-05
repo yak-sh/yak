@@ -13,6 +13,7 @@
 // repo type-checks against the web platform.
 
 import type { Head, Received } from './inbound.ts'
+import type { Binding } from './binding.ts'
 import type { Fetch } from './cloudflare.ts'
 import { author, cloudflare, inbound, messageId } from './mod.ts'
 
@@ -39,3 +40,5 @@ let _send: (m: {
   text: string
   html: string
 }) => Promise<{ id?: string }> = _sender.send
+
+let _binding: Binding = null as unknown as SendEmail

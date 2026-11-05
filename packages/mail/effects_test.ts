@@ -408,3 +408,35 @@ test('concurrent delivery handlers hand one letter to the sender once', () => {
   assert(contestedLetter.delivered)
   assertEquals(contestedLetter.bounced, undefined)
 })
+
+// A transport switch consumes the same durable request. It neither regenerates
+// letters nor resets attempted or completed handovers from the old transport.
+test('switching a sender sends pending letters once and leaves prior outcomes alone', async () => {
+  let selected = {
+    sender: { via: 'resend', token: undefined as string | undefined },
+  }
+  let deliveries: string[] = []
+  let code = effects(null, selected)
+  let pending = await handOver(code, 'resend-pending').catch(async () =>
+    (await lent.tx.get(['resend-pending']))[0]
+  )
+  assert((pending.deliver as Comp).waiting)
+  assertEquals((pending.deliver as Comp).tried, undefined)
+  selected.sender.token = 'sending-only'
+  Object.assign(selected.sender, {
+    fetch: (_url: string, init: RequestInit) => {
+      deliveries.push(JSON.parse(String(init.body)).subject)
+      return Promise.resolve(Response.json({ id: 'provider-id' }))
+    },
+  })
+  let sent = await handOver(code, 'resend-pending')
+  assert(sent.delivered)
+  assertEquals((sent.mail as Comp).message_id, undefined)
+  await handOver(code, 'resend-pending')
+  lent.tx.patch([letter('old-attempt', {
+    entity: { eid: 'old-attempt' },
+    deliver: { tried: noon() },
+  })])
+  await handOver(code, 'old-attempt')
+  assertEquals(deliveries, ['Potluck Friday'])
+})

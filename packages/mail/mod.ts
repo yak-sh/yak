@@ -39,9 +39,9 @@
  * `delivered{at}` or `bounced{at, reason}`. So the write cannot fail
  * because a mail server is down, and "what became of that letter?" is a query.
  *
- * Two senders ship: {@link cloudflare} (Cloudflare Email Sending, credentials
- * passed in, never held here) and {@link stash} (keeps them in an array — what
- * a test and a development environment want).
+ * Senders include {@link cloudflare}, {@link resend}, {@link bound} for a
+ * Workers binding, and {@link stash} for tests and development. {@link post}
+ * selects a host capability or built-in sender by name.
  *
  * ## Receiving is a pure function {@link inbound} turns a message as an Email
  * Worker receives it into the bundles that record it. It queries the graph for
@@ -99,6 +99,9 @@ export * from './md.ts'
 export * from './send.ts'
 export * from './stash.ts'
 export * from './cloudflare.ts'
+export * from './binding.ts'
+export * from './resend.ts'
+export * from './transport.ts'
 export * from './inbound.ts'
 export * from './arrive.ts'
 export * from './invite.ts'

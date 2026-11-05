@@ -582,7 +582,7 @@ test('attachment contents reach the model and the original is retained for publi
 })
 
 let letters: {
-  to: string
+  to: string | string[]
   subject: string
   text?: string
   headers?: Record<string, string>

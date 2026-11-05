@@ -113,6 +113,11 @@ export type Env = {
   MAIL_DEV?: string
   // Staging keeps every outbound letter in the owner's inbox.
   MAIL_SINK?: string
+  // Provider selection changes only after the configured addresses pass pilots.
+  MAIL_VIA?: string
+  RESEND_TOKEN?: string
+  RESEND_API?: string
+  MAIL_FETCH?: import('@yaks/mail').Fetch
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string

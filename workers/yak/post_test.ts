@@ -1,8 +1,8 @@
-import { test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
-import { type Binding, posting } from './post.ts'
+import { type Binding, outgoing, posting } from './post.ts'
 
 test('the app mail transport sinks recipients and keeps threading intact', async () => {
   let sent: Parameters<Binding['send']>[0][] = []
@@ -91,4 +91,55 @@ test('a rate-limited app letter is unsent, any other refusal is not', async () =
     posting(refusing(code)).send(letter).then(() => '', (e: Error) => e.name)
   assertEquals(await named('E_RATE_LIMIT_EXCEEDED'), 'Unsent')
   assertEquals(await named('E_DELIVERY_FAILED'), 'Error')
+})
+
+let message = {
+  from: 'ada@yaks.app',
+  name: 'Assistant',
+  to: 'clerk@example.com',
+  cc: 'ada@example.com',
+  subject: 'A meeting',
+  text: 'Thursday?',
+  html: '<p>Thursday?</p>',
+  replyTo: 'prior@example.com',
+}
+
+test('the host Resend capability sends app and Operator mail through the staging sink', async () => {
+  let requests: Record<string, unknown>[] = []
+  let sender = outgoing({
+    MAIL_VIA: 'resend',
+    RESEND_TOKEN: 'sending-only',
+    MAIL_SINK: 'sink@example.com',
+    MAIL: {
+      send: () => {
+        throw new Error('Cloudflare must not send')
+      },
+    },
+    MAIL_FETCH: (_url, init) => {
+      requests.push(JSON.parse(String(init.body)))
+      return Promise.resolve(Response.json({ id: 'provider-id' }))
+    },
+  })
+  await sender.send(message)
+  equal(requests.length, 1)
+  equal(requests[0].from, 'Assistant <ada@yaks.app>')
+  equal(requests[0].to, ['sink@example.com'])
+  equal(requests[0].cc, undefined)
+  equal(requests[0].subject, '[to: clerk@example.com] A meeting')
+  equal(requests[0].headers, {
+    'In-Reply-To': '<prior@example.com>',
+    References: '<prior@example.com>',
+  })
+})
+
+test('an unconfigured selected sender never falls back to the host binding', async () => {
+  let sender = outgoing({
+    MAIL_VIA: 'resend',
+    MAIL: {
+      send: () => {
+        throw new Error('Cloudflare must not send')
+      },
+    },
+  })
+  await throws(() => sender.send(message), 'a resend sender needs `token`')
 })

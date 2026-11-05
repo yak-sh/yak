@@ -8,7 +8,7 @@ export type Message = {
   /** the name it is from, as the reader's mail shows it beside the address */
   name?: string
   /** the address it is going to */
-  to: string
+  to: string | string[]
   /** the address copied on it, who sees it and its replies */
   cc?: string
   /** the subject line */
@@ -19,6 +19,8 @@ export type Message = {
   html: string
   /** the Message-ID it answers, unbracketed, when it answers one */
   replyTo?: string
+  /** the address replies go to, when different from the sender */
+  replyAddress?: string
 }
 
 /** What a sender reports about a message it accepted. */

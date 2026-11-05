@@ -48,9 +48,9 @@ export type Payload = {
  */
 export let payload = (m: Message): Payload => ({
   from: { address: m.from, name: m.name ?? m.from.split('@')[0] },
-  to: [m.to],
+  to: [m.to].flat(),
   ...(m.cc ? { cc: [m.cc] } : {}),
-  reply_to: m.from,
+  reply_to: m.replyAddress ?? m.from,
   subject: m.subject,
   text: m.text,
   // The builder requires nonempty text or HTML. A subject-only letter has

@@ -18,15 +18,17 @@
 // same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
 import {
-  type Message,
+  type Binding,
+  bound,
   parts,
-  type Receipt,
+  post,
   type Sender,
   Unsent,
 } from '@yaks/mail'
 import { SLUG } from './route.ts'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
+import { resent } from './workers_api.ts'
 
 // Apply at the transport so app effects and platform letters obey one rule.
 export let sink = <T extends string | string[]>(
@@ -80,80 +82,54 @@ export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
   return { space, app: app ?? null }
 }
 
-/**
- * The slice of the Email Sending binding one letter needs (wrangler.toml
- * `[[send_email]]`, env.ts `MAIL`). No token rides with it — the deploy is the
- * authorization — and what a binding may send from is the set of domains
- * onboarded to Email Sending on the zone, which is the check that matters.
- *
- * This is the builder overload of the runtime's own `SendEmail.send`
- * (conform.ts holds it there): Email Sending's Workers API takes the letter as
- * an object and answers `{messageId}`. `send(EmailMessage)` — Email Routing's
- * older shape, a raw RFC 5322 message — is the other overload, and the one a
- * miniflare below the pin in wrangler.ts knows alone (T-34179).
- * @see https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
- */
-/** A sender or recipient, named or bare — the runtime's `EmailAddress`. */
-export type Address = string | { name: string; email: string }
+export type { Address, Binding } from '@yaks/mail'
 
-export type Binding = {
-  send(letter: {
-    from: Address
-    to: string
-    cc?: string
-    subject: string
-    text?: string
-    html?: string
-    headers?: Record<string, string>
-  }): Promise<{ messageId?: string }>
-}
-
-// Email Sending's Workers API names a refusal by its `code`.
-let limited = (err: unknown) =>
-  (err as { code?: string })?.code == 'E_RATE_LIMIT_EXCEEDED'
-
-/**
- * The binding as an @yaks/mail {@link Sender}: the seam the sending effect
- * hands one composed letter to.
- *
- * No binding is A sender that refuses — `wrangler dev` without `remote = true`,
- * the workerd stand-in, a deploy that lost the binding. A letter then comes to
- * rest as a `bounced` saying so, which someone can read off the entity, rather
- * than sitting unsent with nothing written about it.
- *
- * The binding's error carries a `code`. A rate limit is the one that knows the
- * letter never left, the binding's 429, so it rejects as `Unsent` and the
- * sending effect tries it again; any other may have left, and bounces.
- */
+/** Keep the staging sink at the sender boundary, for every provider. */
 export let posting = (
   mail?: Binding,
   env: Pick<Env, 'MAIL_SINK'> = {},
-): Sender => ({
-  send: async (m: Message): Promise<Receipt> => {
-    if (!mail) throw new Error('this deploy has no mail binding')
-    let sent = await mail.send({
-      from: m.name ? { name: m.name, email: m.from } : m.from,
+): Sender => diverted(bound(mail), env)
+
+let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
+  send: (m) =>
+    sender.send({
+      ...m,
       ...sink(env, m.to, m.subject),
-      // A sink takes the copy too: nobody but the sink is written to.
-      ...(m.cc && !env.MAIL_SINK ? { cc: m.cc } : {}),
-      text: m.text,
-      html: m.html,
-      // The threading headers carry the bracketed Message-ID; the receipt
-      // hands back the unbracketed one the next reply threads on.
-      ...(m.replyTo
-        ? {
-          headers: {
-            'In-Reply-To': `<${m.replyTo}>`,
-            References: `<${m.replyTo}>`,
-          },
-        }
-        : {}),
-    }).catch((err) => {
-      throw limited(err)
-        ? new Unsent(`not sent: ${(err as Error).message}`)
-        : err
-    })
-    let id = String(sent?.messageId ?? '').replace(/[<>]/g, '')
-    return id ? { id } : {}
+      ...(env.MAIL_SINK ? { cc: undefined } : {}),
+    }),
+})
+
+/** The host's named sender, or a built-in selected by configuration. Native
+ * platform letters default to the REST sender; apps default to the binding.
+ * A migration explicitly selects Resend only after its address passed a pilot. */
+export let transport = (env: Delivery, fallback = 'binding') =>
+  post({
+    via: env.MAIL_VIA ?? fallback,
+    account: env.MAIL_ACCOUNT || env.CF_ACCOUNT,
+    token: env.MAIL_VIA == 'resend' ? env.RESEND_TOKEN : env.MAIL_TOKEN,
+    base: env.MAIL_VIA == 'resend' ? env.RESEND_API : env.MAIL_API,
+    fetch: env.MAIL_FETCH ?? (env.MAIL_VIA == 'resend' ? undefined : resent),
+  }, { senders: { binding: bound(env.MAIL) } })
+
+export type Delivery = Pick<
+  Env,
+  | 'MAIL'
+  | 'MAIL_SINK'
+  | 'MAIL_VIA'
+  | 'RESEND_TOKEN'
+  | 'RESEND_API'
+  | 'MAIL_TOKEN'
+  | 'MAIL_ACCOUNT'
+  | 'MAIL_API'
+  | 'MAIL_FETCH'
+  | 'CF_ACCOUNT'
+>
+
+/** The capability lent to apps and Operators, with one selected transport. */
+export let outgoing = (env: Delivery): Sender => ({
+  send: (m) => {
+    let { sender, waiting } = transport(env)
+    if (!sender) throw new Unsent(waiting!, 60_000)
+    return diverted(sender, env).send(m)
   },
 })

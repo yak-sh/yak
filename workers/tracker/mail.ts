@@ -1,13 +1,28 @@
 // An ordinary wake enables mail from its first activation onward. The stored
 // date survives eviction; a trace wake never asks for this setup.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Binding, bound, post } from '@yaks/mail'
 import { platform } from './core.ts'
 
 export type Mailbox = {
-  MAIL?: unknown
+  MAIL?: Binding
+  MAIL_VIA?: string
+  RESEND_TOKEN?: string
+  RESEND_API?: string
+  MAIL_FETCH?: import('@yaks/mail').Fetch
   MAIL_FROM?: string
   MAIL_TO?: string
 }
+
+export let sender = (env: Mailbox) =>
+  post({
+    via: env.MAIL_VIA ?? 'binding',
+    token: env.RESEND_TOKEN,
+    base: env.RESEND_API,
+    fetch: env.MAIL_FETCH,
+  }, { senders: env.MAIL ? { binding: bound(env.MAIL) } : {} }).sender
+
+let enabled = (env: Mailbox) => !!(sender(env) && env.MAIL_FROM && env.MAIL_TO)
 
 export let activation = (
   env: Mailbox,
@@ -23,7 +38,7 @@ export let activation = (
         },
       }
       : {},
-    ...env.MAIL && env.MAIL_FROM && env.MAIL_TO
+    ...enabled(env)
       ? {
         to: platform,
         from: env.MAIL_FROM,
@@ -44,8 +59,7 @@ export let activate = async (
   keeping: () => Kept,
   now: () => number,
 ) => {
-  let enabled = env.MAIL && env.MAIL_FROM && env.MAIL_TO
-  let kept = enabled ? keeping() : undefined
+  let kept = enabled(env) ? keeping() : undefined
   let since = kept?.get('mail-since')
   let { recipient, ...config } = activation(env, since, now)
   if (recipient) {

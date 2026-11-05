@@ -12,6 +12,7 @@
 // in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
+import { cloudflare } from '@yaks/mail'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
@@ -20,7 +21,7 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { account, FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
+import { FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
@@ -69,7 +70,13 @@ test('one send carries every reader, from one address', async () => {
     return Promise.resolve(Response.json({ success: true }))
   }) as unknown as typeof fetch
   try {
-    let send = sending('token', 'account', 'https://api.test')
+    let send = sending(
+      cloudflare({
+        token: 'token',
+        account: 'account',
+        base: 'https://api.test',
+      }),
+    )
     await send({ to: REPLY_TO, subject: 's', body: 'b' })
     await send({ to: [REPLY_TO, 'ann@x.test'], subject: 's', body: 'b' })
     await send({ to: REPLY_TO, subject: 's', body: 'b', replyTo: 'ann@x.test' })
@@ -107,10 +114,18 @@ test('a platform letter that never left is tried again, a few times', async () =
       )
     }) as unknown as typeof fetch
     try {
-      let send = sending('token', 'account', 'https://api.test', {}, (ms) => {
-        waits.push(ms)
-        return Promise.resolve()
-      })
+      let send = sending(
+        cloudflare({
+          token: 'token',
+          account: 'account',
+          base: 'https://api.test',
+        }),
+        {},
+        (ms) => {
+          waits.push(ms)
+          return Promise.resolve()
+        },
+      )
       let failed = await send({ to: REPLY_TO, subject: 's', body: 'b' })
         .then(() => '', (e: Error) => e.name)
       return { posts, waits, failed }
@@ -136,8 +151,6 @@ test('mailable: the token is the one secret a deploy needs', () => {
   assertEquals(mailable({ MAIL_TOKEN: 't' }), false)
   assertEquals(mailable({ MAIL_TOKEN: 't', CF_ACCOUNT: 'acct' }), true)
   assertEquals(mailable({ MAIL_TOKEN: 't', MAIL_ACCOUNT: 'm' }), true)
-  assertEquals(account({ MAIL_ACCOUNT: 'm', CF_ACCOUNT: 'acct' }), 'm')
-  assertEquals(account({ CF_ACCOUNT: 'acct' }), 'acct')
 })
 
 test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', async () => {
@@ -560,3 +573,30 @@ test('no binding, no letter: the sender that refuses says why', async () => {
 })
 
 // ---- the binding itself (T-34179) -------------------------------------------
+
+test('platform mail uses the selected Resend sender without the Cloudflare account', async () => {
+  let sent: Record<string, unknown>[] = []
+  let env = {
+    MAIL_VIA: 'resend',
+    RESEND_TOKEN: 'sending-only',
+    MAIL_FETCH: (url: string, init: RequestInit) => {
+      assertEquals(url, 'https://api.resend.com/emails')
+      sent.push(JSON.parse(String(init.body)))
+      return Promise.resolve(Response.json({ id: 'provider-id' }))
+    },
+  }
+  assert(mailable(env))
+  await mail(env)({
+    to: ['jeff@example.com', 'other@example.com'],
+    subject: 's',
+    body: 'b',
+  })
+  assertEquals(sent.length, 1)
+  assertEquals(sent[0].from, `yaks.app <${FROM}>`)
+  assertEquals(sent[0].to, ['jeff@example.com', 'other@example.com'])
+  assertEquals(sent[0].reply_to, REPLY_TO)
+  assertEquals(
+    mailable({ MAIL_VIA: 'resend', MAIL_TOKEN: 'cf', CF_ACCOUNT: 'cf' }),
+    false,
+  )
+})

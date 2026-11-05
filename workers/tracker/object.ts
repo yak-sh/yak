@@ -28,7 +28,7 @@ import { billing } from './bill.ts'
 import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
-import { activate } from './mail.ts'
+import { activate, type Mailbox, sender } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import type { Explanation } from '@yaks/tracker/resolution'
@@ -76,20 +76,8 @@ export type Settings = {
   }
   TRACKER_SECRET?: string
   ERRORS?: { send: (rows: Bundle[]) => Promise<void> }
-  MAIL?: {
-    send: (
-      letter: {
-        from: string
-        to: string
-        subject: string
-        text: string
-        html: string
-      },
-    ) => Promise<{ messageId?: string }>
-  }
-  MAIL_FROM?: string
-  MAIL_TO?: string
-}
+} & Mailbox
+
 let TRACE_READY = 'trace-ceiling-v1'
 let ddl = schema(vocab, options.derived)
 // The tracker follows its vocabulary through its print, as the box and every
@@ -153,16 +141,7 @@ export class Tracker {
         get: (k) => this.#traceMeta().get(k),
         set: (k, v) => this.#traceMeta().set(k, v),
       },
-      ...env.MAIL
-        ? {
-          sender: {
-            send: async (m) => {
-              let sent = await env.MAIL!.send(m)
-              return { id: sent.messageId }
-            },
-          },
-        }
-        : {},
+      sender: sender(env),
     }
   }
   #mailReady = false

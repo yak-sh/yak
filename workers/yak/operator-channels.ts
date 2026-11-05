@@ -5,7 +5,7 @@ import { writes } from '@yaks/member'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { extractor, isPdf, supported } from './documents.ts'
-import { mailFrom, posting } from './post.ts'
+import { mailFrom, outgoing } from './post.ts'
 import { sha256 } from './versions.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
@@ -198,7 +198,7 @@ let BY: Record<string, (request: Request, id: string) => string> = {
 // against the space's mail allowance (meter.ts).
 let postOf = (env: Env, space: Space) => {
   let from = mailFrom(space.slug, null, env)
-  return { from, sender: metering(env, () => from, posting(env.MAIL, env)) }
+  return { from, sender: metering(env, () => from, outgoing(env)) }
 }
 
 let html = (text: string) => `<p>${esc(text).replaceAll('\n', '<br>')}</p>`

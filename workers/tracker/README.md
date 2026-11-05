@@ -47,6 +47,17 @@ let bugs = await fetch(`${trackerUrl}/bugs?scope=${spaceEid}&app=${appEid}`, {
 }).then((response) => response.json())
 ```
 
+Mail uses `@yaks/mail`'s named transport selection. With no `MAIL_VIA`, the
+Worker lends its `MAIL` binding. `MAIL_VIA=resend` selects the built-in Resend
+sender and requires a separate sending-only Worker secret `RESEND_TOKEN`.
+`RESEND_API` and `MAIL_FETCH` replace the HTTP boundary in probes. Missing
+Resend credentials leave queued delivery effects waiting for configuration; they
+never select the binding instead. `MAIL_FROM` and `MAIL_TO` keep their
+addresses, and switching a sender preserves the stored activation time and
+letters' delivery outcomes. Pilot `MAIL_FROM` before switching. Threaded tracker
+letters require the
+[Message-ID receipt bridge](../../packages/mail/README.md#named-transports).
+
 Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
 `/vocab`, `/ws`, and `POST /resolve`, `/archive` and `/reopen` with `{bug}`.
 `/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never

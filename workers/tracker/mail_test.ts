@@ -3,10 +3,10 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, test } from '@yaks/testing'
 import { options, platform, vocab } from './core.ts'
-import { activate } from './mail.ts'
+import { activate, sender } from './mail.ts'
 
 let env = {
-  MAIL: {},
+  MAIL: { send: () => Promise.resolve({}) },
   MAIL_FROM: 'tracker@example.test',
   MAIL_TO: 'one@example.test',
 }
@@ -68,4 +68,29 @@ test('changing a mail recipient updates delivery without resetting activation', 
   equal(writes.map((b) => b.email), [{ address: 'two@example.test' }])
   equal(saved.get('mail-since'), since)
   equal(metaWrites, 0)
+})
+
+test('switching the tracker to Resend preserves its activation and pending letters', async () => {
+  let calls = 0
+  let switched = {
+    ...env,
+    MAIL_VIA: 'resend',
+    RESEND_TOKEN: 'sending-only',
+    MAIL_FETCH: () => {
+      calls++
+      return Promise.resolve(Response.json({ id: 'provider-id' }))
+    },
+  }
+  let configured = await activate(g, switched, keeping, () => 0)
+  equal(configured.since, since)
+  equal(saved.get('mail-since'), since)
+  let selected = sender(switched)!
+  await selected.send({
+    from: env.MAIL_FROM,
+    to: env.MAIL_TO,
+    subject: 'A failure',
+    text: 'The cause',
+    html: '<p>The cause</p>',
+  })
+  equal(calls, 1)
 })

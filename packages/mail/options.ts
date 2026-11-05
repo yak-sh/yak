@@ -44,7 +44,7 @@ export type Options = {
   pull?: Pull
 }
 
-/** A sender selected by name: a host capability, Cloudflare or stash. */
+/** A sender selected by name: a host capability, Cloudflare, Resend or stash. */
 export type Transport = {
   /** a name in Host.senders, or a built-in sender */
   via: string
@@ -52,8 +52,10 @@ export type Transport = {
   account?: string
   /** an API token that may send mail — `{"secret": "…"}` in the config */
   token?: string
-  /** the Cloudflare API root, to point a test at a stub */
+  /** the selected provider's API root, to point a test at a stub */
   base?: string
+  /** the HTTP boundary, supplied by a host or test */
+  fetch?: import('./cloudflare.ts').Fetch
 }
 
 /** The arrival endpoint: where a mail edge posts a letter, and what it must

@@ -146,6 +146,51 @@ and alternate endpoints. `stash()` retains messages in `sent`, provides
 `last()`, and returns receipts named `stash-1`, `stash-2`, and so on.
 `stash({ refuse: 'reason' })` simulates delivery failure.
 
+### Named transports
+
+`post(sender, host)` selects a sender from `host.senders`, then the built-in
+`cloudflare`, `resend` or `stash` transports. Hosts supply credentials and may
+lend metered senders through the same interface.
+
+```ts
+import { post } from '@yaks/mail'
+import { equal } from '@yaks/testing'
+
+let configured = post({ via: 'resend' })
+equal(configured.sender, undefined)
+equal(
+  configured.waiting,
+  'waiting for credentials: a resend sender needs `token`',
+)
+```
+
+The configuration form is
+`sender: {"via": "resend", "token": {"secret":
+"RESEND_TOKEN"}}`. Use a separate
+Resend `sending_access` key for each service, restricted to its sending domain
+when the service sends from only one domain. `resend({token, base?, fetch?})`
+also implements `Sender` directly. Credentials are arguments; the transport
+reads no environment or vault.
+
+A message's `to` accepts an address or a list, and `replyAddress` chooses where
+replies arrive. `replyTo` remains the RFC Message-ID being answered. Both HTTP
+transports preserve those fields and `cc`. `bound(binding)` adapts Cloudflare's
+Workers Email Sending binding to the same interface.
+
+Resend's send response contains an API email id, not the RFC Message-ID. The
+sender returns an empty receipt, rather than storing that API id as
+`mail.message_id`. A mailbox that correlates replies must obtain Message-IDs
+through Resend's signed events or its retrieval API before switching transports.
+The sending-only key cannot retrieve sent or received mail. Receiving requires
+Resend MX records, an authenticated webhook, and retrieval of message bodies and
+attachments; the webhook's metadata alone is not a received letter.
+
+Selecting another transport retains the same durable delivery requests. Owed
+letters use the selected sender; `delivered`, `bounced` and `deliver.tried` keep
+preventing repeated handovers. No transport failure selects another provider. A
+connection failure known to precede sending or an HTTP 429 rejects as `Unsent`;
+an ambiguous failure retains the attempted handover.
+
 ### Local delivery
 
 For addresses whose recipients read messages directly from this graph, pass a
@@ -296,7 +341,7 @@ The CLI host resolves `{ "secret": "NAME" }` through
 [@yaks/secrets](../secrets); direct TypeScript calls receive strings.
 `sender: { "via": "platform" }` selects a sender named `platform` in
 [`Host.senders`](../host/README.md#mail-senders). A host's named sender takes
-precedence over the built-in Cloudflare and stash senders. No sender
+precedence over the built-in Cloudflare, Resend and stash senders. No sender
 configuration leaves outbound requests waiting too. Missing Cloudflare
 credentials or an unsupported transport writes `deliver.waiting` on every owed
 letter without marking it tried. In the pool, that same run remains pending and

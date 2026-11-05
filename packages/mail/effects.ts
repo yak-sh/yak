@@ -17,41 +17,12 @@
 import type { Handler, Handlers } from '@yaks/effects'
 import { after } from '@yaks/fp'
 import type { Host } from '@yaks/host'
-import type { Options, Transport } from './options.ts'
+import type { Options } from './options.ts'
 import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
-import { cloudflare } from './cloudflare.ts'
-import { stash } from './stash.ts'
+import { post } from './transport.ts'
+export { post } from './transport.ts'
 import { work } from './work.ts'
-
-/** A named sender, lent by the host or built here — or the reason there is
- * none. An unavailable sender leaves letters waiting without stopping boot. */
-export let post = (
-  said: Transport,
-  host?: Pick<Host, 'senders'> | null,
-): { sender?: Sender; waiting?: string } => {
-  if (host?.senders && Object.hasOwn(host.senders, said.via)) {
-    return { sender: host.senders[said.via] }
-  }
-  if (said.via == 'stash') return { sender: stash() }
-  if (said.via == 'cloudflare') {
-    return said.account && said.token
-      ? {
-        sender: cloudflare({
-          ...said,
-          account: said.account,
-          token: said.token,
-        }),
-      }
-      : {
-        waiting:
-          'waiting for credentials: a cloudflare sender needs `account` and `token`',
-      }
-  }
-  return {
-    waiting: `no sender called ${JSON.stringify(said.via)}`,
-  }
-}
 
 /** Keep the request owed while its sender is unavailable. */
 export let waiting = (reason: string): Handler => (event, tx, write, attempt) =>

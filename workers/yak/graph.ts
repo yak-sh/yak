@@ -310,7 +310,7 @@ import { configs } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { appTexter } from './app-texts.ts'
-import { posting } from './post.ts'
+import { outgoing } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
@@ -1282,7 +1282,7 @@ export class Store {
           worker: metering(
             this.#bind,
             () => this.#get('mail'),
-            posting(this.#bind.MAIL, this.#bind),
+            outgoing(this.#bind),
           ),
         },
         texters: {
