@@ -72,9 +72,7 @@ export let lifecycle = (
   return {
     SessionStart: [relay(door, `${yak} session context --hook -`)],
     SubagentStart: [relay(door, `${yak} session context --hook -`)],
-    UserPromptSubmit: [
-      cmd(`${yak} session context --hook - 2>/dev/null || true`, 2),
-    ],
+    UserPromptSubmit: [relay(door, `${yak} session context --hook -`, 5)],
     PreToolUse: [post(door, 'mcp__.*')],
     PostToolUse: [post(door)],
     SessionEnd: [relay(door, `${yak} session wrap --hook -`, 5)],

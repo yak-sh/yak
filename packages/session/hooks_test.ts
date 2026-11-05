@@ -29,6 +29,10 @@ test('a second install replaces the first, never doubles it', () => {
   assertEquals(twice.UserPromptSubmit.length, 2)
   assertEquals(twice.UserPromptSubmit[1], theirs)
   assert(
+    JSON.stringify(twice.UserPromptSubmit[0]).includes('box:9/session/hook'),
+    JSON.stringify(twice.UserPromptSubmit[0]),
+  )
+  assert(
     JSON.stringify(twice.SessionStart[0]).includes('/usr/local/bin/yak'),
     JSON.stringify(twice.SessionStart[0]),
   )

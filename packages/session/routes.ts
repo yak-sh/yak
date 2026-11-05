@@ -19,6 +19,7 @@ import { heard, type Hook } from './bus.ts'
 import { hear } from './announce.ts'
 import type { Runner } from '@yaks/tools'
 import { lifecycle } from './lifecycle.ts'
+import { promptContext } from './prompt.ts'
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
@@ -70,7 +71,23 @@ export let routes = (
         { status: 400 },
       )
     }
-    let edge = await lifecycle(host, request, hook as Record<string, unknown>)
+    // A prompt's context is its transcript's timing, read as the CLI reads it
+    // (./cli.ts), without waiting on the graph.
+    let event = hook as Record<string, unknown>
+    if (event.hook_event_name == 'UserPromptSubmit') {
+      let text = promptContext(event)
+      return Response.json(
+        text
+          ? {
+            hookSpecificOutput: {
+              hookEventName: 'UserPromptSubmit',
+              additionalContext: text,
+            },
+          }
+          : {},
+      )
+    }
+    let edge = await lifecycle(host, request, event)
     if (edge) return edge
     if (await hear(host.graph, hook)) return Response.json({})
     return Response.json(await heard(host.graph, hook as Hook))

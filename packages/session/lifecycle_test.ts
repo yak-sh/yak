@@ -76,6 +76,24 @@ let ended = (await host.graph.get([session], ['session']))[0]
 let held = (await host.graph.get([task], ['claim']))[0]
 let calls = await host.graph.read('.call *')
 let malformed = await run([])
+let transcript = await Deno.makeTempFile({ suffix: '.jsonl' })
+await Deno.writeTextFile(
+  transcript,
+  JSON.stringify({
+    type: 'user',
+    sessionId: session,
+    promptId: 'p1',
+    timestamp: '2026-11-05T12:00:00.000Z',
+  }) + '\n',
+)
+let calling = calls.length
+let prompt = await run({
+  hook_event_name: 'UserPromptSubmit',
+  session_id: session,
+  prompt_id: 'p1',
+  transcript_path: transcript,
+})
+let promptCalls = await host.graph.read('.call *')
 await host.close()
 
 test('HTTP start resumes the session and returns its claims as context', () => {
@@ -111,4 +129,12 @@ test('start and subagent context retain the CLI renderer output exactly', () => 
 })
 test('the lifecycle door refuses non-object hook payloads', () => {
   equal(malformed.status, 400)
+})
+test('HTTP prompt context is its transcript timing, with no tool call', () => {
+  equal(prompt.status, 200)
+  equal(
+    prompt.body.hookSpecificOutput.additionalContext,
+    'Prompt sent: 2026-11-05T12:00:00.000Z; previous reply ended: unknown.',
+  )
+  equal(promptCalls.length, calling)
 })
