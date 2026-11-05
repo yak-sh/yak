@@ -15,6 +15,7 @@ import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
 import type { Figure } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
+import { parts } from './parts.ts'
 
 /** What every view is given beside its bundle. */
 export type Ctx = {
@@ -372,32 +373,6 @@ let Doors: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak, figure }) => {
   ])
 }
 
-let Install: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
-  let body = text(e, 'doc', 'body')
-  return h('section', {
-    class: 'Band Install',
-    id: 'install',
-    'data-eid': e.entity.eid,
-  }, [
-    h('h2', null, text(e, 'doc', 'title')),
-    h(Markdown, { source: proseOf(body) }),
-    h(
-      'div',
-      { class: 'Install_Lines' },
-      scriptOf(body).sh.map((line) => h(Copy, { line })),
-    ),
-    h('footer', { class: 'Foot' }, [
-      h('span', null, 'Apache-2.0'),
-      h(
-        'a',
-        { href: 'https://github.com/yak-sh/yak' },
-        'github.com/yak-sh/yak',
-      ),
-      h('a', { href: 'https://yaks.app' }, 'yaks.app'),
-    ]),
-  ])
-}
-
 let doc = parse('.doc')
 export let views = define([
   { view: 'Page', match: parse('.layout'), Render: Page },
@@ -405,5 +380,5 @@ export let views = define([
   { view: 'Step', match: doc, Render: Step },
   { view: 'Stack', match: doc, Render: Stack },
   { view: 'Doors', match: doc, Render: Doors },
-  { view: 'Install', match: doc, Render: Install },
+  ...parts.map((p) => ({ ...p, match: doc })),
 ] as never)

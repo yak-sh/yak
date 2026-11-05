@@ -492,26 +492,225 @@ h2 {
   box-shadow: 0 0 16px var(--diagram-glow);
 }
 
-.Install {
-  display: block;
-}
-.Install p {
-  color: var(--soft);
-}
-.Install_Lines {
+/* ---------------------------------------------------------------- parts
+   Below the bands: a numbered heading on the left, what the part holds on
+   the right, a rule across the top; then the title block. */
+.Part {
+  position: relative;
   display: grid;
-  gap: .2rem;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: clamp(1.5rem, 4.5vw, 4.5rem);
+  margin: 0 clamp(1rem, 4vw, 3rem);
+  padding: 5rem 0;
+  border-top: 1px solid var(--rule);
 }
-.Install_Lines .Copy {
-  margin: .3rem 0;
+.Part::before,
+.Part::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  width: 1px;
+  height: 9px;
+  background: var(--line);
 }
-.Foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.4rem;
-  margin-top: 4rem;
-  font: .8rem var(--mono);
+.Part::before {
+  left: 0;
+}
+.Part::after {
+  right: 0;
+}
+.Part_Head {
+  align-self: start;
+  position: sticky;
+  top: 2rem;
+}
+.Part_Head p,
+.Part_Body p {
   color: var(--soft);
+  max-width: 36rem;
+}
+.Bubble {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  font: 500 .875rem/1 var(--mono);
+}
+.Bubble::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 44px;
+  height: 1px;
+  background: var(--rule);
+}
+.Part_Body > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.6rem 2.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Part_Body > ul li {
+  padding-top: .8rem;
+  border-top: 1px solid var(--line);
+  color: var(--soft);
+  font-size: .95rem;
+}
+.Part_Body > ul strong {
+  display: block;
+  margin-bottom: .3rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+.Part_Lines .Copy {
+  margin: .5rem 0;
+  max-width: none;
+}
+.Part_List {
+  margin: 0 0 0 18px;
+  padding: 0;
+  list-style: none;
+  counter-reset: n;
+  border-left: 1px solid var(--rule);
+}
+.Part_List li {
+  position: relative;
+  padding: 0 0 2rem 36px;
+  counter-increment: n;
+}
+.Part_List li:last-child {
+  padding-bottom: .3rem;
+}
+.Part_List li::before {
+  content: counter(n);
+  position: absolute;
+  left: -15px;
+  top: -1px;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  font: 500 .75rem/1 var(--mono);
+}
+.Part_List h3,
+.Part_Body > h3 {
+  margin: .1rem 0 .7rem;
+  font: 500 1.06rem/1.3 var(--sans);
+}
+.Part_Body > h3 {
+  margin-top: 2.5rem;
+}
+.Part_Body table {
+  width: 100%;
+  margin-bottom: 1.6rem;
+  border-collapse: collapse;
+}
+.Part_Body th {
+  padding-bottom: .55rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font: 500 .75rem/1 var(--mono);
+}
+.Part_Body tr {
+  border-bottom: 1px solid var(--rule);
+}
+.Part_Body td {
+  padding: .5rem 0;
+  vertical-align: top;
+  color: var(--soft);
+  font-size: .875rem;
+  line-height: 1.45;
+}
+.Part_Body td:first-child {
+  width: 1%;
+  padding-right: .9rem;
+  white-space: nowrap;
+  font: 500 .8125rem/1.45 var(--mono);
+}
+.Part_Body td:first-child a {
+  text-decoration: none;
+}
+.File {
+  margin: .8rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--plate);
+  overflow: hidden;
+}
+.File_Bar {
+  padding: .45rem .9rem;
+  border-bottom: 1px solid var(--rule);
+  font: .75rem var(--mono);
+  color: var(--soft);
+}
+.File pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  font: .8125rem/1.7 var(--mono);
+}
+.Block {
+  display: grid;
+  grid-template-columns: 2.2fr repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 3rem clamp(1rem, 4vw, 3rem) 2.5rem;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.Block > * {
+  min-width: 0;
+  margin: 0;
+  padding: .9rem 1rem;
+  background: var(--paper);
+}
+.Block_Sign strong {
+  display: block;
+  font: 500 1.125rem/1.2 var(--mono);
+}
+.Block_Sign span {
+  color: var(--soft);
+  font-size: .875rem;
+}
+.Block dt {
+  margin-bottom: .5rem;
+  font: .6875rem/1 var(--mono);
+  color: var(--soft);
+}
+.Block dd {
+  margin: 0;
+  font: 500 .875rem/1.35 var(--mono);
+  overflow-wrap: anywhere;
+}
+.Block dd p {
+  margin: 0;
+}
+.Block dd a {
+  text-decoration: none;
+}
+@media (max-width: 880px) {
+  .Part {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .Part_Head {
+    position: static;
+  }
+  .Block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .Block_Sign {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 760px) {

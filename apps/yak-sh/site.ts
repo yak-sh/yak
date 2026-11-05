@@ -22,6 +22,7 @@ export let FILES = [
   'icon.png',
   'paper.webp',
   'term.ts',
+  'parts.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
@@ -41,6 +42,23 @@ let query = (q: string) => '```query\n' + q + '\n```'
 
 export let INSTALL =
   'deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install'
+
+/** A part's body: what its heading says beside it, a rule, then what it
+ * holds. A `###` heading in what it holds starts a numbered item. */
+let part = (head: string, ...held: string[]) =>
+  [head, '---', ...held].join('\n\n')
+/** A file's code, with its name. */
+let code = (name: string, ...lines: string[]) =>
+  '```ts ' + name + '\n' + lines.join('\n') + '\n```'
+/** A group of packages as a table: each name linked to its source. */
+let packages = (group: string, rows: [string, string][]) =>
+  [
+    `| ${group} | |`,
+    '| --- | --- |',
+    ...rows.map(([name, what]) =>
+      `| [${name}](https://github.com/yak-sh/yak/tree/main/packages/${name}) | ${what} |`
+    ),
+  ].join('\n')
 
 export let HERO = '6f166202-b881-400d-84c7-dd8620dc7826'
 export let SELF = '525ab3f6-bdc3-48a6-b2f3-e88fa2d06a1b'
@@ -131,16 +149,172 @@ export let SECTIONS: Section[] = [
       'The terminal, your agents over MCP, a page in the browser and yaks.app call the same tools on one graph. `--host` points the same commands at another machine, or at yaks.app once you run `yak auth yaks.app`.',
   },
   {
+    eid: '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19',
+    pane: 'c2f4e0a1-3b6d-4f7e-8a90-5d1c2b3e4f60',
+    view: 'Part',
+    title: 'yak is a command line for the tools your graph declares',
+    body: part(
+      'A config names a SQLite file and a list of plugins. Each plugin is an `@yaks` package, and every tool it declares is a `yak` command and an MCP tool.',
+      [
+        "- **Every tool is a command.** Its arguments and help come from the tool's input schema, so a new tool needs no new release of yak.",
+        '- **No server needed.** A command opens the graph in its own process, runs one tool and exits.',
+        '- **Every call is recorded.** A call from you and a call from an agent go through the same checks, rules and effects, and each is kept in the graph.',
+        '- **`yak serve` answers HTTP.** A web canvas at `/`, the tools for agents at `/mcp`, and `/query` and `/apply` for programs, on this machine only.',
+        '- **Your agents join it.** `yak hooks install` makes each Claude Code session an entity in the graph, told its claims when it starts. Any MCP client can call the tools at `/mcp`.',
+        "- **Other graphs too.** `--config` opens the graph another config names, and `--host` calls another graph's MCP server, such as yaks.app's once you run `yak auth yaks.app`.",
+      ].join('\n'),
+    ),
+  },
+  {
     eid: 'd15f7ff7-ada4-4202-9874-f523e797d35a',
     pane: '156e61d0-9281-41ac-a1b3-19aa77f1c2be',
-    view: 'Install',
-    title: 'Install yak',
+    view: 'Part',
+    title: 'Install yak, then start your graph',
+    body: part(
+      'The installer runs on [Deno](https://deno.com) and puts `yak` on your PATH, at one release with every package it loads.',
+      '### Install yak',
+      sh(INSTALL),
+      '### Start your graph',
+      sh('yak init Ada'),
+      "Use your own name. It writes `~/.yak/yak.json`, with the graph's SQLite file beside it, and never replaces a config that is already there.",
+      '### Add a task, and list them',
+      sh("yak task new 'Buy the cake'", 'yak task list'),
+      '### Open it in a browser',
+      sh('yak serve'),
+      'Serves the web canvas, `/mcp` for agents and `/query` for programs at `http://127.0.0.1:8787`, on this machine only.',
+      '### Bring your agents',
+      sh('yak hooks install'),
+      "Each Claude Code session becomes a session entity in the graph. Any MCP client can call the graph's tools at `http://127.0.0.1:8787/mcp`.",
+      '### Reach yaks.app',
+      sh('yak auth yaks.app'),
+      'Signs you in, so the same `yak` calls your [yaks.app](https://yaks.app) account.',
+    ),
+  },
+  {
+    eid: '3e7b9c21-6a4d-4c85-b0f2-9d18e5a4c3b7',
+    pane: '7a2d5e8f-1c4b-4e93-a6d0-2f8b9c7e1d45',
+    view: 'Part',
+    title: 'Use the packages on their own',
+    body: part(
+      'yak is built from TypeScript packages on [JSR](https://jsr.io/@yaks). Many build on others, and each README says what it exports, how to set it up and where it stops.',
+      packages('The graph', [
+        [
+          'graph',
+          'Entities, components and `apply()`, which checks a batch and commits it through a storage adapter.',
+        ],
+        [
+          'vocab',
+          'Components and their properties, declared as JSON Schema and read at runtime.',
+        ],
+        [
+          'query',
+          'Query strings such as `.task.status=open`, parsed into a syntax tree.',
+        ],
+        ['id', 'Entity ids, and the short numbers people type, such as T-2.'],
+        [
+          'edge',
+          'Links between entities, stored as entities, and walks across them.',
+        ],
+        [
+          'doc',
+          '`doc{title, body}`, the text a task, a letter and a recipe share.',
+        ],
+      ]),
+      packages('Storage', [
+        [
+          'sqlite',
+          'Storage in SQLite, with the database driver supplied by the caller.',
+        ],
+        [
+          'ram',
+          'Storage in memory, for browsers and tests. The graph in this tab uses it.',
+        ],
+        ['d1', 'Storage in Cloudflare D1, each transaction sent as one batch.'],
+        ['durable-object', "Storage in a Cloudflare Durable Object's SQLite."],
+        [
+          'journal',
+          'Every committed transaction, for history, undo and a change feed.',
+        ],
+        ['fts', 'Full-text search with SQLite FTS5.'],
+      ]),
+      packages('Ways in', [
+        ['cli', "The `yak` command, whose subcommands are a graph's tools."],
+        [
+          'api',
+          'HTTP: `/apply`, `/query`, and `/ws` subscriptions that push changed results.',
+        ],
+        ['mcp', "The graph's tools for agents, at `/mcp` or over stdio."],
+        [
+          'client',
+          'A graph in the browser, connected to its server, with queries that update.',
+        ],
+        [
+          'sync',
+          'Send local changes to a server, and reconcile or revert optimistic writes.',
+        ],
+        ['workerd', 'The same HTTP handler as a Cloudflare Worker.'],
+      ]),
+      packages('Agents and work', [
+        ['task', 'Tasks, with a status computed from their marks.'],
+        [
+          'session',
+          'Agent transcripts as entities, and claims on what a session works on.',
+        ],
+        [
+          'tools',
+          'One registry of tools; each call and its result are stored in the graph.',
+        ],
+        ['effects', 'Code that runs after a commit, with retries and backoff.'],
+        [
+          'harness',
+          'A local agent: model calls, shell and graph tools, and a terminal interface.',
+        ],
+      ]),
+      '### The same graph in your own code',
+      'This example keeps a document in memory and reads it back with a query. `@yaks/sqlite` keeps the same data in a file.',
+      sh(
+        'deno add jsr:@yaks/doc jsr:@yaks/graph jsr:@yaks/ram jsr:@yaks/vocab',
+      ),
+      code(
+        'main.ts',
+        "import { docDoc } from '@yaks/doc'",
+        "import { graph } from '@yaks/graph'",
+        "import { ram } from '@yaks/ram'",
+        "import { loadVocab } from '@yaks/vocab'",
+        '',
+        'let vocab = loadVocab([docDoc])',
+        'let g = graph({ storage: ram(vocab), vocab })',
+        'await g.apply([{',
+        '  entity: { eid: crypto.randomUUID() },',
+        "  doc: { title: 'Getting started', body: 'A document stored as components.' },",
+        '}])',
+        `console.log(await g.read('.doc.title="Getting started"'))`,
+      ),
+      'Run it with `deno run main.ts`. In a Node project, add the packages with `npx jsr add`.',
+    ),
+  },
+  {
+    eid: 'f4a8c2d6-9b3e-4d71-8c05-6e2a1b9f7d38',
+    pane: 'b9e1d3c7-5a2f-4b86-9e04-8c6d2a1f3e57',
+    view: 'Block',
+    title: 'yak.sh',
     body: [
-      'It needs [Deno](https://deno.com). `yak init` starts a graph in one SQLite file on your machine.',
-      sh(INSTALL, 'yak init Ada', "yak task new 'Buy the cake'"),
-    ].join('\n\n'),
+      'The yak command line and the @yaks packages.',
+      '- runs on: [Deno](https://deno.com)',
+      '- stored in: `~/.yak/yak.db`',
+      '- license: Apache-2.0',
+      '- source: [github.com/yak-sh/yak](https://github.com/yak-sh/yak)',
+      '- packages: [jsr.io/@yaks](https://jsr.io/@yaks)',
+    ].join('\n'),
   },
 ]
+
+/** Where each part of the page is linked from: `#install` and the rest. */
+export let ANCHORS: Record<string, string> = {
+  '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19': 'yak',
+  'd15f7ff7-ada4-4202-9874-f523e797d35a': 'install',
+  '3e7b9c21-6a4d-4c85-b0f2-9d18e5a4c3b7': 'packages',
+}
 
 /** The page's own rows: the site, its layout, a pane per section in order,
  * and the sections. None takes a number, so the visitor's first task is T-1. */
