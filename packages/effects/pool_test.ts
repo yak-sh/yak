@@ -358,6 +358,29 @@ test('an error asking to be retried waits as long as it asks, unreported until i
   assertEquals(a.oops.length, 1)
 })
 
+test('an error asking to be retried that passes on its next try is never reported', async () => {
+  let t = 0
+  let a = proc(store(), { clock: { ...system, now: () => t } })
+  let tries = 0
+  a.fx.handle({
+    post_note: () => {
+      if (++tries == 1) {
+        throw Object.assign(new Error('3040: Capacity temporarily exceeded'), {
+          retry: {},
+        })
+      }
+    },
+  })
+  await a.fx.work(a.g)
+  await a.g.apply([post('p1')])
+  await a.fx.idle()
+  t = 1_000
+  await a.fx.work(a.g)
+  await a.fx.idle()
+  assertEquals([tries, a.oops], [2, []])
+  assertEquals((await a.g.read('.effect&*')).length, 0)
+})
+
 test('a run that got somewhere counts its next failure as its first', async () => {
   let t = 0
   let a = proc(store(), { clock: { ...system, now: () => t } })

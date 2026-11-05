@@ -347,7 +347,8 @@ let detailed = (e: unknown): unknown => {
 
 /**
  * What the binding threw, said the way a model's failure is said here: a rate
- * limit is a {@link ModelError} coded `busy`, credits the account has spent
+ * limit or a capacity refusal (3040) is a {@link ModelError} coded `busy` that
+ * may pass if asked again (`retry`), credits the account has spent
  * one coded `limit`, a model whose license the account has not accepted or a
  * name the binding has no model by one coded `model`, and a `ModelError` the
  * binding throws itself (one that
@@ -358,7 +359,7 @@ export let failure = (e: unknown): unknown =>
   e instanceof ModelError
     ? e
     : busy(e)
-    ? new ModelError('busy', message(e))
+    ? new ModelError('busy', message(e), {})
     : spent(e)
     ? new ModelError('limit', message(e))
     : unlicensed(e)

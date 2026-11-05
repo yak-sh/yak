@@ -135,7 +135,7 @@ test("OpenAI's answer shape is read the same", async () => {
 test('a rate limit, spent credits, an unaccepted license and an unknown model are expected; any other failure is not', async () => {
   let busy = binding(new Error('3040: Capacity temporarily exceeded'))
   let e = await assertRejects(() => busy.model(ask([])), ModelError)
-  assertEquals(e.code, 'busy')
+  assertEquals([e.code, e.retry], ['busy', {}])
   let spent = binding(new Error('2021: Insufficient AI Gateway credits'))
   let refused = await assertRejects(() => spent.model(ask([])), ModelError)
   assertEquals(refused.code, 'limit')
