@@ -12,6 +12,7 @@ import {
   type Words,
   words,
 } from './queries.ts'
+import { listed } from './queries.ts'
 import { type Reader, readerAt, type Row } from './reader.ts'
 import { type Search, type Thread, threadOf, threads } from './threads.ts'
 
@@ -133,8 +134,7 @@ let unique = (all: Row[]): Row[] => {
   }
   return [...out.values()]
 }
-let ids = (all: Row[]) =>
-  `.entity.eid=${JSON.stringify(all.map((r) => r.eid).join(','))}`
+let ids = (all: Row[]) => `.entity.eid=${listed(all.map((r) => r.eid))}`
 // Batches for identity lookups do not need stable subscription buckets.
 let batches = (all: Row[]): Row[][] => {
   let out: Row[][] = []
@@ -331,7 +331,7 @@ let conversation = async (
       .map((eid) => ({ eid, comps: {} }))
     parents.forEach((r) => queriedParents.add(r.eid))
     queries.push(...boundedReads(parents, (part) => {
-      let refs = JSON.stringify(part.map((r) => r.eid).join(','))
+      let refs = listed(part.map((r) => r.eid))
       return [
         `.entity.eid=${refs}`,
         ...['mail.message_id', 'notified.message_id'].filter(has)
@@ -354,10 +354,7 @@ let conversation = async (
       queries.push(
         ...boundedReads(
           replies,
-          (part) =>
-            `.mail.reply_to=${
-              JSON.stringify(part.map((r) => r.eid).join(','))
-            }`,
+          (part) => `.mail.reply_to=${listed(part.map((r) => r.eid))}`,
         ),
       )
     }
@@ -393,7 +390,9 @@ export let readInbox = async (
   let byId = index(all)
   let roots = [...new Set(all.map((r) => threadOf(r, who, byId)))]
     .map((eid) => ({ eid, comps: {} }))
-  let edges = await read(boundedReads(roots, (part) => requirements(part, has)))
+  let edges = await read(
+    boundedReads(roots, (part) => requirements(part, has)),
+  )
   let tasks = await read(boundedReads(edges, (part) => dependents(part, has)))
   return threads(unique([...all, ...edges, ...tasks]), who, search)
 }

@@ -10,6 +10,7 @@
     "@yaks/graph": "platform",
     "@yaks/host": "platform",
     "@yaks/id": "platform",
+    "@yaks/inbox": "platform",
     "@yaks/kernel": "platform",
     "@yaks/mail": "platform",
     "@yaks/markdown": "platform",

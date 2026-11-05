@@ -48,10 +48,13 @@ import * as effectsVocab from '@yaks/effects/vocab'
 import * as mailVocab from '@yaks/mail/vocab'
 import * as mailGraph from '@yaks/mail/graph'
 import { effects as mailEffects } from '@yaks/mail/effects'
+import { arrived } from '@yaks/mail'
+import * as inboxVocab from '@yaks/inbox/vocab'
+import { queue } from '@yaks/inbox/letters'
+import * as inboxMail from '@yaks/inbox/mail'
 import { effects, generation } from '@yaks/effects'
 import { outbox } from './outbox.ts'
 import { SHOP, shopDoc, YOURS } from './shop.ts'
-import { answer } from '@yaks/task'
 
 type Facets = {
   name: string
@@ -89,6 +92,7 @@ export let PACKAGES: Facets[] = [
   { name: '@yaks/project', vocab: projectVocab },
   { name: '@yaks/effects', vocab: effectsVocab },
   { name: '@yaks/mail', vocab: mailVocab, graph: mailGraph },
+  { name: '@yaks/inbox', vocab: inboxVocab },
 ] as Facets[]
 
 // What `yak init` leaves unnumbered (@yaks/cli init.ts), so a page's first
@@ -163,6 +167,7 @@ export let yak = async ({ retry = 1500 } = {}) => {
           ran = []
           steps = []
           for (let l of listeners) l(change)
+          void work()
         }
         return bundles
       },
@@ -185,13 +190,18 @@ export let yak = async ({ retry = 1500 } = {}) => {
       sender: { via: 'outbox' },
     }).mail_post,
   })
-  // Work what is owed after the commit that owed it, again while a run is due,
-  // then wake when the next waiting one falls due.
+  // Your inbox's email door, as @yaks/inbox's service opens it: a letter
+  // from the shop for each question that holds up work. The tab passes after
+  // every commit instead of every ten seconds, and queues no daily digest.
+  let door = { person: you, from: SHOP, base: 'http://127.0.0.1:8787' }
+  // Work what is owed after each commit: the inbox's pass, then each effect,
+  // again while a run is due, then wake when the next waiting one falls due.
   let working = Promise.resolve()
   let alarm: ReturnType<typeof setTimeout> | undefined
   let tick = () => new Promise((ok) => setTimeout(ok, 0))
   let work = (): Promise<void> =>
     working = working.then(tick).then(async () => {
+      await queue(g, vocab, door, (b) => g.apply(b), new Date().toISOString())
       for (;;) {
         await fx.work(g)
         let next = Math.min(
@@ -345,6 +355,11 @@ export let yak = async ({ retry = 1500 } = {}) => {
   }
 
   let named = human(vocab)
+  let receive = arrived({
+    graph: g,
+    domain: SHOP.split('@')[1],
+    readings: [inboxMail.reading({ person: you, from: SHOP })!],
+  })
 
   // The person was written before anything listened.
   for (let b of await g.get([you])) rows.set(b.entity.eid, b)
@@ -400,9 +415,9 @@ export let yak = async ({ retry = 1500 } = {}) => {
         : { code: 1, out: [`${persona} is no persona`] }
     },
     /** Your reply to the letter of `subject`, in `words`, arriving as the
-     * mail service hands it in: a letter from you about what the letter was
-     * about, and, where that is an open question, your words as the answer
-     * to it, as @yaks/inbox reads a reply to a question. */
+     * mail service hands it in, to the thread's address the letter gives:
+     * @yaks/mail records it, and @yaks/inbox reads it as a comment on the
+     * question, and the choice it names as your answer. */
     reply: async (subject: string, words: string): Promise<Said> => {
       let asked = [...rows.values()].find((r) =>
         r.mail && r.deliver && (r.doc as Comp | undefined)?.title == subject
@@ -411,20 +426,18 @@ export let yak = async ({ retry = 1500 } = {}) => {
       let q = rows.get(target)
       if (!asked || !q) return { code: 1, out: [`no letter ${subject}`] }
       let open = !!q.decision && !q.decided
-      await g.apply([
-        ...(open ? answer(target, words) : []),
-        {
-          entity: { eid: mint() },
-          mail: {
-            from: YOURS,
-            to: SHOP,
-            target,
-            reply_to: asked.entity.eid,
-            at: new Date().toISOString(),
-          },
-          doc: { title: `Re: ${subject}`, body: words },
-        },
-      ])
+      await g.apply(
+        await receive({
+          from: YOURS,
+          to: `${target}@${SHOP.split('@')[1]}`,
+          headers: new Headers({ From: YOURS, Subject: `Re: ${subject}` }),
+        }, {
+          eid: mint(),
+          text: words,
+          reply: asked.entity.eid,
+          verified: true,
+        }),
+      )
       return {
         code: 0,
         out: [

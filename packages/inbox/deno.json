@@ -9,6 +9,7 @@
     "./graph": "./graph.ts",
     "./read": "./read.ts",
     "./service": "./service.ts",
+    "./letters": "./letters.ts",
     "./mail": "./mail.ts",
     "./views": "./views.tsx"
   },

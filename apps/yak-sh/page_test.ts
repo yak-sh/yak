@@ -9,6 +9,7 @@ import { text } from './told.ts'
 import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
 import { SHOP, YOURS } from './shop.ts'
+import { inboxAt, rendered } from '@yaks/inbox/letters'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
 
 let dir = new URL('./', import.meta.url)
@@ -190,7 +191,7 @@ test("a band's call that fails is reported, for the tracker", async () => {
   page.page.close()
 })
 
-test('in the rules band a rule makes a question a letter with its choices, an effect hands it over and tries again on its own when the mail service refuses it, and your reply answers it', async () => {
+test('in the rules band your inbox writes a question that holds up the build as a letter, an effect hands it over and tries again on its own when the mail service refuses it, and your reply is a comment that answers it', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, steps.length)
   let band = SECTIONS.find((s) => s.view == 'Rules')!
@@ -204,6 +205,8 @@ test('in the rules band a rule makes a question a letter with its choices, an ef
       said: open.textContent!,
       happened: [...open.querySelectorAll('.Letter_Tries li')]
         .map((li) => li.textContent!),
+      choices: [...open.querySelectorAll('.Letter_Body li')]
+        .map((li) => li.textContent!),
       windows: rules.querySelectorAll('.Window').length,
       declared: [...rules.querySelectorAll('.Declared')]
         .map((d) => d.getAttribute('data-declared')),
@@ -211,37 +214,47 @@ test('in the rules band a rule makes a question a letter with its choices, an ef
       toast: rules.querySelector('.Toast')?.textContent,
     }
   }
+  let letters = () => page.yak.graph.read('.mail.target.decision .deliver *')
   let asked = await reach(1)
   // The bands above ran first, so the build's fix is T-7 and this is T-8.
   match(asked.said, /T-8 Which payments key should the build use\? open/)
-  equal(asked.declared, ['question_mail', 'letter_from'])
-  let [letter] = await page.yak.graph.read('.mail.target.decision .deliver *')
+  equal(await letters(), [])
+  await reach(2)
+  let [letter] = await letters()
   equal(
     [text(letter, 'mail', 'from'), text(letter, 'mail', 'to')],
     [SHOP, YOURS],
   )
+  let [question] = await page.yak.graph.read('.decision *')
+  // The letter is the one @yaks/inbox writes for the question.
+  equal(
+    text(letter, 'doc', 'body'),
+    rendered(
+      (await inboxAt(page.yak.graph, page.yak.vocab, page.yak.you))
+        .find((t) => t.eid == question.entity.eid)!,
+      { person: page.yak.you, from: SHOP, base: 'http://127.0.0.1:8787' },
+    ),
+  )
   // Each step of the effect shows one more thing that happened to the
   // letter, in the letter's own window.
   let [handed, refused, again, taken] = [
-    await reach(2),
     await reach(3),
     await reach(4),
     await reach(5),
+    await reach(6),
   ]
   equal([handed, refused, again, taken].map((w) => [w.door, w.windows]), [
-    ['outbox', 2],
-    ['outbox', 2],
-    ['outbox', 2],
-    ['outbox', 2],
+    ['outbox', 3],
+    ['outbox', 3],
+    ['outbox', 3],
+    ['outbox', 3],
   ])
   equal([handed.declared, handed.told], [['mail_post'], letter.entity.eid])
-  match(
-    handed.said,
-    /The test key: The build never charges a card\. \(recommended\)/,
-  )
-  match(handed.said, /The live key: The build checks the live account\./)
-  match(handed.said, /Reply with the number of a choice/)
-  equal(/on the task/.test(handed.said), false)
+  equal(handed.choices, [
+    'The test key: The build never charges a card. (recommended)',
+    'The live key: The build checks the live account.',
+  ])
+  match(handed.said, /Reply with a choice number or your own answer/)
   equal([handed, refused, again, taken].map((w) => w.happened.length), [
     1,
     2,
@@ -257,11 +270,14 @@ test('in the rules band a rule makes a question a letter with its choices, an ef
     undefined,
   ])
   equal(taken.toast, `Email sent to ${YOURS}${text(letter, 'doc', 'title')}`)
-  let replied = await reach(6)
-  let [question] = await page.yak.graph.read('.decision *')
+  let replied = await reach(7)
+  ;[question] = await page.yak.graph.read('.decision *')
+  let [reply] = await page.yak.graph.read(
+    `.comment.target=${question.entity.eid} *`,
+  )
   equal(
     [replied.door, replied.windows, replied.declared, replied.told],
-    ['reply', 3, ['decision_answered'], question.entity.eid],
+    ['reply', 4, ['decision_answered'], reply.entity.eid],
   )
   match(
     replied.said,
@@ -271,12 +287,13 @@ test('in the rules band a rule makes a question a letter with its choices, an ef
     [text(question, 'task', 'status'), text(question, 'decided', 'choice')],
     ['done', 'The test key'],
   )
-  let [reply] = await page.yak.graph.read(
-    `.mail.target=${question.entity.eid} !deliver *`,
-  )
   equal(
-    [text(reply, 'mail', 'from'), text(reply, 'doc', 'body')],
-    [YOURS, 'The test key'],
+    [
+      text(reply, 'mail', 'from'),
+      text(reply, 'mail', 'reply_to'),
+      text(reply, 'doc', 'body'),
+    ],
+    [YOURS, letter.entity.eid, 'The test key'],
   )
   page.page.close()
 })

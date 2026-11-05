@@ -16,11 +16,14 @@ export let words = (
   return path == 'entity.eid' ||
     (!!vocab.comp(name) && (!prop || vocab.props(name).includes(prop)))
 }
-let value = (items: Iterable<string | undefined>) =>
-  JSON.stringify([...new Set([...items].filter(Boolean))].sort().join(','))
+/** A query's list of values: each one quoted, so a comma or `..` inside one
+ * stays part of it, joined by the commas outside the quotes. */
+export let listed = (items: Iterable<string | undefined>) =>
+  [...new Set([...items].filter(Boolean))].sort().map((v) => JSON.stringify(v))
+    .join(',')
 let select = (prop: string, items: Iterable<string | undefined>) => {
-  let v = value(items)
-  return v == '""' ? '' : `.${prop}=${v}`
+  let v = listed(items)
+  return v ? `.${prop}=${v}` : ''
 }
 let union = (arms: string[], has: Words) =>
   arms.filter((q) => q && has(q.slice(1).split(/[&=]/)[0])).map((q) => `(${q})`)

@@ -46,17 +46,18 @@ let tool = loadTools(inboxDoc, runs())[0]
 equal(await argsFor(tool, ['Help', 'me', 'plan']), { text: 'Help me plan' })
 ```
 
-| Export      | Owns                                                                       |
-| ----------- | -------------------------------------------------------------------------- |
-| `.`         | Thread and attention policy, reader profiles, `inboxDoc`                   |
-| `./queries` | Inbox read queries                                                         |
-| `./read`    | `readInbox` and `readThread`, the server reads                             |
-| `./vocab`   | `conversation{}`, `inbox_summary`, `mail_notice` and the tool declarations |
-| `./graph`   | The `inbox_summary` view                                                   |
-| `./tools`   | `inbox_new`, `inbox_list`, `inbox_archive` and `inbox_open`                |
-| `./views`   | The Inbox a browsing app draws, and its home page                          |
-| `./service` | The email door's letters, as a duty                                        |
-| `./mail`    | The email door's reading of letters that arrive (@yaks/mail `Reading`)     |
+| Export      | Owns                                                                         |
+| ----------- | ---------------------------------------------------------------------------- |
+| `.`         | Thread and attention policy, reader profiles, `inboxDoc`                     |
+| `./queries` | Inbox read queries                                                           |
+| `./read`    | `readInbox` and `readThread`, the server reads                               |
+| `./vocab`   | `conversation{}`, `inbox_summary`, `mail_notice` and the tool declarations   |
+| `./graph`   | The `inbox_summary` view                                                     |
+| `./tools`   | `inbox_new`, `inbox_list`, `inbox_archive` and `inbox_open`                  |
+| `./views`   | The Inbox a browsing app draws, and its home page                            |
+| `./service` | The email door's letters, as a duty                                          |
+| `./letters` | The email door's letters as policy, for a host with its own clock and writes |
+| `./mail`    | The email door's reading of letters that arrive (@yaks/mail `Reading`)       |
 
 The shared policy exports remain usable without a graph or session runtime.
 
@@ -208,12 +209,12 @@ threads do not cross this door. @yaks/mail sends the letters, so the person
 needs `email.address`, and the mail plugin its sender and an inbound route or
 pull.
 
-`./letters.ts` holds the policy: `inboxAt`, `eligible`, `rendered`, `planned`
-and `queue`, for hosts supplying their own clocks and writes. It has no
-transport of its own. `mail_notice{activity, comment, thread, letter}` keeps the
-activity as rendered: on a thread letter it points to the shown comment, on a
-digest entry to its thread and digest letter. These snapshots deduplicate queued
-mail; they are not conversation or new inbox activity.
+`./letters` holds the policy: `inboxAt`, `eligible`, `rendered`, `planned` and
+`queue`, for hosts supplying their own clocks and writes. It has no transport of
+its own. `mail_notice{activity, comment, thread, letter}` keeps the activity as
+rendered: on a thread letter it points to the shown comment, on a digest entry
+to its thread and digest letter. These snapshots deduplicate queued mail; they
+are not conversation or new inbox activity.
 
 Thread letters use the previous letter's Message-ID as In-Reply-To. A digest
 contains links and a separate reply address for each thread (or shown comment),

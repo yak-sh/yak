@@ -1534,11 +1534,13 @@ h2 {
 .Letter_Body {
   margin: 0 0 .6em;
 }
-.Letter_Body p {
+.Letter_Body {
+  overflow-wrap: anywhere;
+}
+.Letter_Body :is(p, ol, ul) {
   margin: 0 0 .3em;
 }
-.Letter_Choices {
-  margin: 0 0 .3em;
+.Letter_Body :is(ol, ul) {
   padding-left: 1.5em;
 }
 .Letter_Tries {

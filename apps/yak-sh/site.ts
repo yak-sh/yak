@@ -214,11 +214,15 @@ export let SECTIONS: Section[] = [
     title: 'Rules change a write as it is made, and effects do what it leaves',
     body: [
       "You don't write code that watches the graph. A **rule** is a query a vocabulary declares, and the graph runs it inside every write, whichever door the write came through: what it matches, it changes before the write is stored, so nothing ever reads the graph without it. An **effect** is work a write leaves behind. The commit records it in the same transaction, so it can't be lost, and after the commit it runs on its own, tried again until it succeeds.",
-      '### A rule turns a question into a letter',
-      "Fixing the build, your agent needs an answer only you can give, and asks. The shop's rule matches a question for someone with an address, and writes them a letter about it in the same write, asking for a reply; `letter_from` then gives the letter its sender.",
-      declared('question_mail', 'letter_from'),
+      '### Your agent asks you',
+      'Fixing the build, your agent needs an answer only you can give, and asks.',
       mcp(
         `decision_new {"question": "${ASKED}", "choices": [{"label": "The test key", "description": "The build never charges a card."}, {"label": "The live key", "description": "The build checks the live account."}], "recommended": "The test key", "assignee": "U-1"}`,
+      ),
+      '### Your inbox writes you a letter',
+      'Your agent says the build requires your answer. A question that holds up work is one `@yaks/inbox` mails you: it writes you a letter whose text is the question, each choice with its line, and how to answer by replying.',
+      mcp(
+        'graph_apply {"bundles": [{"edge": {"from": "T-7", "to": "T-8"}, "requires": {}}]}',
       ),
       '### An effect hands it to the mail service',
       '`@yaks/mail` declares an effect for every letter written: hand it to the mail service, and record what happened. The commit owed it, so it runs after the write, on its own.',
@@ -234,7 +238,7 @@ export let SECTIONS: Section[] = [
       'This time the mail service takes the letter, and the effect records that it was sent.',
       outbox(ASKED),
       '### You answer by replying',
-      "You reply with the choice you want. The reply arrives as a letter on the question and records your answer, and `@yaks/task`'s rule finishes the question in the same write.",
+      "You reply with the choice you want. `@yaks/inbox` reads the reply as a comment on the question and records your answer, and `@yaks/task`'s rule finishes the question in the same write.",
       declared('decision_answered'),
       reply(ASKED, 'The test key'),
     ].join('\n\n'),
