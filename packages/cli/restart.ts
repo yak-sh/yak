@@ -56,10 +56,15 @@ export let ROLES: Role[] = [
 /** The supervised handover waits for readiness without holding its caller. */
 export let PATIENCE = 120_000
 
+/** One systemctl or systemd-run call only queues a job, but on a box busy with
+ * landings and restarts that alone can take seconds; a tighter bound aborted
+ * a handover halfway, leaving its ready replacements beside the old units. */
+let CALL = 30_000
+
 let run: NonNullable<RestartOptions['run']> = async (command, args) => {
   let result = await launchCommand(command, {
     args,
-    signal: AbortSignal.timeout(1_000),
+    signal: AbortSignal.timeout(CALL),
     stdout: 'piped',
     stderr: 'piped',
   }).output()
