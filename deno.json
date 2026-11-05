@@ -154,6 +154,7 @@
     "./packages/filter",
     "./packages/inspect",
     "./packages/visualize",
+    "./packages/diagram",
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",

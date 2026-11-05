@@ -1,0 +1,24 @@
+{
+  "_": "The browser gate: @yaks/diagram must type-check with only the web platform in scope, since a page mounts its drawings.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/fp": "../fp/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/id": "../id/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/trace": "../trace/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
+  },
+  "entries": [
+    "."
+  ]
+}

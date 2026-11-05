@@ -200,6 +200,10 @@ grouped approximately by function, **not** by dependency order.
   activity from the exact serving graph's shared trace channel. Agents use the
   same anatomy and capture contracts through tools and `yak visualize`; this
   standalone page does not depend on the stored-data inspector.
+- **[@yaks/diagram](./diagram)** — the entities a query selects, and the
+  references between them, drawn as SVG: a pure layout that keeps each entity's
+  place as the graph changes, the markup, and a mount that redraws a graph's
+  answer after every commit.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
   operations and declared rules are tested against SQLite, but RAM does not
