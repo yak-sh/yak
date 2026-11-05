@@ -17,7 +17,7 @@ import { granting } from './dispatch.ts'
 import { SESSION } from './session.ts'
 
 let DAY = 86_400
-import { b64u } from './mcp-probe.ts'
+import { challenge } from '@yaks/oauth'
 
 // A form a page posts, with the cookie the browser carries and the address
 // that browser has in its bar (`from`), or no `Origin` at all.
@@ -59,9 +59,7 @@ let authorizing = async (k: Kernel) => {
     client_id,
     redirect_uri: back,
     scope: 'graph',
-    code_challenge: b64u(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode('v')),
-    ),
+    code_challenge: await challenge('v'),
     code_challenge_method: 'S256',
   }).toString()
 }

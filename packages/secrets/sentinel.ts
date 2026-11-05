@@ -19,6 +19,8 @@
 // write carrying a handle is somebody writing back what they read, and changes
 // nothing), and how a swap finds a sentinel in a request.
 
+import { toBase64url } from '@yaks/fp'
+
 /** What every handle starts with. */
 export let PREFIX = 'yak_secret_'
 
@@ -28,13 +30,9 @@ export let SENTINEL = 'yak_sentinel_'
 /** Whether a string is a handle rather than a value. */
 export let isHandle = (s: string): boolean => s.startsWith(PREFIX)
 
-let b64url = (bytes: Uint8Array): string =>
-  btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_')
-    .replace(/=+$/, '')
-
 /** A new handle: the prefix and 256 random bits. */
 export let handle = (): string =>
-  PREFIX + b64url(crypto.getRandomValues(new Uint8Array(32)))
+  PREFIX + toBase64url(crypto.getRandomValues(new Uint8Array(32)))
 
 // A vault keeps its salt, so importing its HMAC key is setup shared by every
 // handle under it. Copy the bytes used for the import: callers can change a
@@ -76,7 +74,7 @@ export let sentinel = async (
   // authoritative for which handle exists and what credential it holds.
   let made = state.key.then((key) =>
     crypto.subtle.sign('HMAC', key, new TextEncoder().encode(handle))
-  ).then((mac) => SENTINEL + b64url(new Uint8Array(mac)))
+  ).then((mac) => SENTINEL + toBase64url(new Uint8Array(mac)))
   if (state.sentinels.size >= 128) {
     state.sentinels.delete(state.sentinels.keys().next().value!)
   }

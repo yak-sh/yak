@@ -376,6 +376,17 @@ export let toBase64 = (bytes: Uint8Array): string => {
 export let fromBase64 = (text: string): Uint8Array<ArrayBuffer> =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
 
+/// toBase64url(new Uint8Array([251, 255])) -> '-_8'
+/** Bytes as base64url (RFC 4648 §5), without padding: safe in a URL, a
+ * cookie or a header. */
+export let toBase64url = (bytes: Uint8Array): string =>
+  toBase64(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+
+/// fromBase64url('-_8') -> new Uint8Array([251, 255])
+/** The bytes base64url text names, padded or not. */
+export let fromBase64url = (text: string): Uint8Array<ArrayBuffer> =>
+  fromBase64(text.replaceAll('-', '+').replaceAll('_', '/'))
+
 /// wellFormed('a\uD800b') -> 'a�b'
 /// wellFormed('😀') -> '😀'
 /**

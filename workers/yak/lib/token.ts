@@ -27,6 +27,7 @@
 // Nothing here reads a cookie or an env: the kernel's session.ts reads the
 // cookie, the login page (T-32327) mints one with `sign` and sets it with
 // `cookie`.
+import { fromBase64url, toBase64url } from '@yaks/fp'
 import { COOKIE, cookieValue } from './cookie.ts'
 import { oldUse, today } from './token_legacy.ts'
 import { HMAC, hmac, kept } from './hmac.ts'
@@ -45,12 +46,6 @@ export { COOKIE, cookieValue }
 
 let enc = new TextEncoder()
 let dec = new TextDecoder()
-
-let b64u = (bytes: Uint8Array) =>
-  bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
-
-let unb64u = (s: string) =>
-  Uint8Array.fromBase64(s.replaceAll('-', '+').replaceAll('_', '/'))
 
 /** What a sealed value is for: one word per kind of token the kernel mints.
  * A new kind of token is a new word here, never a reuse of an old one. */
@@ -95,9 +90,9 @@ let key = (secret: string, use: Use) =>
   )
 
 let sealWith = async (k: CryptoKey, value: unknown) => {
-  let body = b64u(enc.encode(JSON.stringify(value)))
+  let body = toBase64url(enc.encode(JSON.stringify(value)))
   let mac = await crypto.subtle.sign('HMAC', k, enc.encode(body))
-  let sealed = `${body}.${b64u(new Uint8Array(mac))}`
+  let sealed = `${body}.${toBase64url(new Uint8Array(mac))}`
   remember(k, sealed)
   return sealed
 }
@@ -131,13 +126,13 @@ let openWith = async (k: CryptoKey, sealed: string) => {
       let ok = await crypto.subtle.verify(
         'HMAC',
         k,
-        unb64u(sealed.slice(dot + 1)),
+        fromBase64url(sealed.slice(dot + 1)),
         enc.encode(body),
       )
       if (!ok) return null
       remember(k, sealed)
     }
-    return JSON.parse(dec.decode(unb64u(body)))
+    return JSON.parse(dec.decode(fromBase64url(body)))
   } catch {
     return null
   }

@@ -1,5 +1,6 @@
 // A verified provider receipt is routed to the graph its sender named. The
 // provider's API ids stay outside those graphs; only RFC Message-IDs land.
+import { fromBase64url } from '@yaks/fp'
 import { and, eq, every, list, stringify } from '@yaks/query'
 import { notification, Unsigned } from '@yaks/resend'
 import { receipted } from '@yaks/mail'
@@ -38,7 +39,7 @@ export let receipts = async (request: Request, env: Env): Promise<Response> => {
     )
     if (!response.ok) throw new Error('Operator receipt was not recorded')
   } else if (tags?.yak_store) {
-    let name = atob(tags.yak_store.replaceAll('-', '+').replaceAll('_', '/'))
+    let name = new TextDecoder().decode(fromBase64url(tags.yak_store))
     let graph = metaOf(storeOf(env.STORE, name), KERNEL)
     await receipted({
       get: (eids) =>

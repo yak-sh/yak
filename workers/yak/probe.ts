@@ -2,7 +2,7 @@
 // owns a synthetic origin; requests to it dispatch directly to its handler.
 import * as io from '@yaks/file/io'
 import { apex } from './host.ts'
-import { b64u } from './mcp-probe.ts'
+import { challenge } from '@yaks/oauth'
 import { clock, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
@@ -1136,9 +1136,7 @@ export let bearerFor = async (
     redirect_uri: back,
     state: 'roster',
     scope: 'graph',
-    code_challenge: b64u(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
-    ),
+    code_challenge: await challenge(verifier),
     code_challenge_method: 'S256',
   }).toString()
   let allow = await allowed(k, q, cookie)

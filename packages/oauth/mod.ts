@@ -1,3 +1,5 @@
+import { toBase64url } from '@yaks/fp'
+
 /** Shared private authorization storage, expiring browser-flow attempts, and
  * the generic authorization-code client for a provider described as data
  * (./client.ts). Protocols that are not that flow — MCP discovery, OpenRouter's
@@ -13,22 +15,19 @@ export const attempt = (now: number = Date.now()): Attempt => ({
   state: crypto.randomUUID(),
   until: now + 10 * 60 * 1000,
 })
-/** PKCE S256; verifier is never sent in the authorization URL. */
-export const pkce = async (): Promise<
-  { verifier: string; challenge: string }
-> => {
-  const encode = (bytes: Uint8Array) =>
-    btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll(
-      '/',
-      '_',
-    ).replace(/=+$/, '')
-  const verifier = encode(crypto.getRandomValues(new Uint8Array(32)))
-  const challenge = encode(
+/** A verifier's PKCE S256 challenge: its SHA-256, in base64url. */
+export const challenge = async (verifier: string): Promise<string> =>
+  toBase64url(
     new Uint8Array(
       await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
     ),
   )
-  return { verifier, challenge }
+/** PKCE S256; verifier is never sent in the authorization URL. */
+export const pkce = async (): Promise<
+  { verifier: string; challenge: string }
+> => {
+  const verifier = toBase64url(crypto.getRandomValues(new Uint8Array(32)))
+  return { verifier, challenge: await challenge(verifier) }
 }
 export {
   type Client,

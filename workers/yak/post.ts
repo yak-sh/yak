@@ -17,6 +17,7 @@
 // sending effect, graph.ts) and the inbound route (`email()`, index.ts) to the
 // same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
+import { toBase64url } from '@yaks/fp'
 import {
   type Binding,
   bound,
@@ -149,8 +150,5 @@ export let outgoing = (
 
 /** A store locator as provider correlation metadata, never stored on mail. */
 export let mailTags = (store: string): Record<string, string> => ({
-  yak_store: btoa(store).replaceAll('+', '-').replaceAll('/', '_').replaceAll(
-    '=',
-    '',
-  ),
+  yak_store: toBase64url(new TextEncoder().encode(store)),
 })

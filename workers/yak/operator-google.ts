@@ -11,6 +11,7 @@
 // request needs it. Reading mail is offered only once the integration asks
 // for a scope that reads it (`READS`): asking for one is a change to gmail's
 // data alone.
+import { toBase64, toBase64url } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import {
   call,
@@ -121,12 +122,9 @@ export let eventBody = (a: {
 })
 
 let utf8 = (s: string) => new TextEncoder().encode(s)
-let base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
-let base64url = (bytes: Uint8Array) =>
-  base64(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 // A header's words, in RFC 2047's encoding where they are not plain ASCII.
 let worded = (s: string) =>
-  /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${base64(utf8(s))}?=`
+  /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${toBase64(utf8(s))}?=`
 // A header never carries a line break of its own.
 let line = (s: string) => s.replace(/[\r\n]+/g, ' ').trim()
 
@@ -145,8 +143,8 @@ export let letterOf = (a: {
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
   ]
-  let body = base64(utf8(a.text)).replace(/.{76}/g, '$&\r\n')
-  return base64url(utf8(`${headers.join('\r\n')}\r\n\r\n${body}`))
+  let body = toBase64(utf8(a.text)).replace(/.{76}/g, '$&\r\n')
+  return toBase64url(utf8(`${headers.join('\r\n')}\r\n\r\n${body}`))
 }
 
 /** A message Gmail answered, as the Operator reads it: who, when, what, and

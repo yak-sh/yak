@@ -1,3 +1,5 @@
+import { toBase64url } from '@yaks/fp'
+
 /** Short-lived tracker tickets issued by a trusted host. The tracker use has
  * its own HMAC key, matching the platform's sealed-value protocol. No ticket
  * or secret is persisted; callers issue one when they call remotely. */
@@ -10,8 +12,6 @@ export type Access = {
   mark?: boolean
 }
 let enc = new TextEncoder()
-let b64 = (bytes: Uint8Array<ArrayBuffer>) =>
-  bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
 let key = (bytes: Uint8Array<ArrayBuffer>) =>
   crypto.subtle.importKey(
     'raw',
@@ -38,7 +38,7 @@ let signingKey = async (secret: string) => {
 }
 /** Signs the same tracker ticket that the Worker's authorization opens. */
 export let sign = async (access: Access, secret: string): Promise<string> => {
-  let body = b64(enc.encode(JSON.stringify(access)))
+  let body = toBase64url(enc.encode(JSON.stringify(access)))
   let key = await signingKey(secret)
   // Signing is deterministic. An identical body (including its expiry) under
   // this key needs no new MAC; changed claims and rotated secrets always do.
@@ -48,7 +48,7 @@ export let sign = async (access: Access, secret: string): Promise<string> => {
     key,
     enc.encode(body),
   )
-  let ticket = `${body}.${b64(new Uint8Array(mac))}`
+  let ticket = `${body}.${toBase64url(new Uint8Array(mac))}`
   if (held?.key == key) Object.assign(held, { body, ticket })
   return ticket
 }

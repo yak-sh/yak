@@ -47,11 +47,6 @@ export let HELLO = {
 
 export let GUIDE = 'https://yaks.app/docs.md'
 
-// The base64url a PKCE challenge is written in.
-export let b64u = (b: ArrayBuffer) =>
-  btoa(String.fromCharCode(...new Uint8Array(b)))
-    .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
-
 // An SSE stream held open, as the text heard so far: a test asserts on what
 // has arrived, forgets it, and cancels when it is done.
 export let hearing = (res: Response) => {

@@ -17,6 +17,7 @@ import {
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { equal, ok, test, until } from '@yaks/testing'
+import { challenge } from '@yaks/oauth'
 import {
   allowed,
   connector,
@@ -67,10 +68,6 @@ let form = (
     body: new URLSearchParams(fields).toString(),
   })
 
-let b64u = (b: ArrayBuffer) =>
-  btoa(String.fromCharCode(...new Uint8Array(b)))
-    .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
-
 // The agent case owns real OAuth grants seeded before timing reads and revocation.
 let agentGrants = await (async () => {
   let k = await kernel()
@@ -110,12 +107,7 @@ let agentGrants = await (async () => {
       client_id,
       redirect_uri: back,
       scope: 'graph',
-      code_challenge: b64u(
-        await crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(verifier),
-        ),
-      ),
+      code_challenge: await challenge(verifier),
       code_challenge_method: 'S256',
     }).toString()
     let allow = await allowed(k, q, owner.cookie)
@@ -675,12 +667,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
       redirect_uri: back,
       state: 'a-probe-state',
       scope: 'graph',
-      code_challenge: b64u(
-        await crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(verifier),
-        ),
-      ),
+      code_challenge: await challenge(verifier),
       code_challenge_method: 'S256',
     }).toString()
     let linking = await form(k, '/login', { email, q, return: notes })
@@ -867,12 +854,7 @@ test('a connector keeps its door until the person closes it', async () => {
       redirect_uri: back,
       state: 's',
       scope: 'graph',
-      code_challenge: b64u(
-        await crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(verifier),
-        ),
-      ),
+      code_challenge: await challenge(verifier),
       code_challenge_method: 'S256',
     }).toString()
     let granted = await allowed(k, q, cookie)
@@ -1517,9 +1499,7 @@ test('a link signs a person in, once or until it is revoked', async () => {
       redirect_uri: back,
       state: 'a-probe-state',
       scope: 'graph',
-      code_challenge: b64u(
-        await crypto.subtle.digest('SHA-256', new TextEncoder().encode('v')),
-      ),
+      code_challenge: await challenge('v'),
       code_challenge_method: 'S256',
     }).toString()
     let received = letters(k, email).length

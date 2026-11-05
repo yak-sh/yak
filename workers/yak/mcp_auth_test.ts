@@ -23,7 +23,8 @@ import {
 } from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
-import { b64u, facing, GUIDE, HELLO } from './mcp-probe.ts'
+import { challenge as s256 } from '@yaks/oauth'
+import { facing, GUIDE, HELLO } from './mcp-probe.ts'
 
 // Nobody has signed in, and the door still says what this place is (T-33030).
 // Owner, 2026-09-03, setting up the ChatGPT connector: "i selected 'mixed
@@ -943,12 +944,7 @@ test(
         redirect_uri: back,
         state: 'a-mixed-state',
         scope: 'graph',
-        code_challenge: b64u(
-          await crypto.subtle.digest(
-            'SHA-256',
-            new TextEncoder().encode(verifier),
-          ),
-        ),
+        code_challenge: await s256(verifier),
         code_challenge_method: 'S256',
       }).toString()
       let granted = await allowed(k, q, jeff.cookie)
