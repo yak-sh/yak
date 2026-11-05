@@ -36,4 +36,4 @@ fi
 pnpm --version
 
 echo "Build commit: $(git rev-parse HEAD)"
-deno run --allow-read --allow-write --allow-env --allow-run=pnpm packages/cli/dependencies.ts
+deno run -A packages/cli/dependencies.ts

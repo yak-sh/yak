@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
