@@ -4,7 +4,7 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { atCeiling, budget, monthOf, plans } from './meter.ts'
+import { budget, monthOf, unaffordable } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
@@ -84,8 +84,13 @@ export let settled = async (
   }
 }
 
-/** Reserve against an authoritative reading with compare-and-set. Every model
- * consumer and voice lease shares the same remaining dollars. */
+/** Hold a call's most against its space's month budget before it starts, in
+ * one write: the quote is made on the caller's reading of the space, and the
+ * directory refuses the hold in the write's own transaction when it does not
+ * fit what is left (meter-graph.ts `spend`), so holds made at once neither
+ * spend past the budget nor wait on one another. Every model consumer and
+ * voice lease shares the same remaining dollars. Only a refusal reads the
+ * space again, to quote on what is left and ask once more. */
 export let reserved = async <T extends { dollars: number }>(
   env: Env,
   space: Space,
@@ -97,25 +102,21 @@ export let reserved = async <T extends { dollars: number }>(
   { value: T; settle(dollars: number, reported?: boolean): Promise<boolean> }
 > => {
   let eid = receiptEid(call)
-  while (true) {
-    let row = await read(env, space.eid)
-    if (!row?.space) throw new Error('The paying space is missing')
-    let fresh = spaceOf(row as unknown as Row)
-    let month = monthOf(now)
-    let { spent, limit } = budget(fresh, now)
-    let remaining = Math.max(0, limit - spent)
-    let value = quote(remaining)
-    if (
-      !value || !Number.isFinite(value.dollars) || value.dollars < 0 ||
-      value.dollars > remaining
-    ) {
-      throw new ModelError(
-        'limit',
-        spent >= limit
-          ? atCeiling(fresh, what)
-          : `What is left of ${fresh.slug}'s model and voice budget this ` +
-            `month is too little for this call. ${plans(fresh, {})}`,
-      )
+  let month = monthOf(now)
+  let reading = space
+  for (let attempt = 0;; attempt++) {
+    let { spent, limit } = budget(reading, now)
+    let value = quote(Math.max(0, limit - spent))
+    let fits = !!value && Number.isFinite(value.dollars) && value.dollars >= 0
+    let no = unaffordable(reading, what, fits ? value!.dollars : Infinity, now)
+    if (no) {
+      // The caller's reading may be older than a settlement that freed
+      // dollars; a fresh one decides.
+      if (attempt == 0) {
+        reading = await again(env, space.eid)
+        continue
+      }
+      throw new ModelError('limit', no)
     }
     try {
       await stamp(env, {
@@ -128,33 +129,48 @@ export let reserved = async <T extends { dollars: number }>(
           model_reservation: {
             space: space.eid,
             month,
-            dollars: value.dollars,
+            dollars: value!.dollars,
             what,
           },
         }, {
           entity: { eid: space.eid },
-          $was: guard(row, 'meter', [
-            'month',
-            'models',
-            'realtime',
-            'texts',
-            'drawn',
-          ]),
-          spend: { month, [what]: value.dollars },
+          spend: { month, [what]: value!.dollars, held: true },
         }],
       })
       return {
-        value,
+        value: value!,
         settle: (dollars, reported) => settled(env, call, dollars, reported),
       }
     } catch (error) {
-      if (!(error instanceof Stale)) throw error
-      if (error.eid == eid) {
+      if (error instanceof Stale && error.eid == eid) {
         throw new ModelError(
           'submitted',
           'This model call already holds its budget',
         )
       }
+      if (!overBudget(error)) throw error
+      // Others spent meanwhile: quote again on what is left, a few times.
+      if (attempt >= HOLDS) {
+        throw new ModelError('limit', (error as Error).message)
+      }
+      reading = await again(env, space.eid)
     }
   }
+}
+
+// How many times a hold refused for the budget is quoted again on a fresh
+// reading before the call is refused.
+let HOLDS = 3
+
+// The paying space as the directory holds it now.
+let again = async (env: Env, eid: string) => {
+  let row = await read(env, eid)
+  if (!row?.space) throw new Error('The paying space is missing')
+  return spaceOf(row as unknown as Row)
+}
+
+// A hold the directory refused for the budget (meter-graph.ts `spend`).
+let overBudget = (e: unknown) => {
+  let r = e as { name?: string; comp?: string } | null
+  return r?.name == 'Refused' && r.comp == 'spend'
 }

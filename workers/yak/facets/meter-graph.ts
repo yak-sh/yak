@@ -3,7 +3,9 @@ import type { Plugin } from '@yaks/graph'
 import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import { reporting } from '../wake.ts'
-import { added, trended } from '../meter.ts'
+import { added, trended, unaffordable } from '../meter.ts'
+import { type Row, spaceOf } from '../directory.ts'
+import { Refused } from '@yaks/graph/errors'
 
 let props = (c: unknown): Record<string, unknown> =>
   c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
@@ -31,14 +33,40 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
   }, {
     // A spend, added to the month's meter inside the write's own transaction
     // and taken off again (vocab.ts `spend`): the sum is the directory's, never
-    // a caller's, so two spends at once both count.
+    // a caller's, so two spends at once both count. A held one is checked
+    // against what is left of the month in that same transaction, so holds
+    // made at once never spend past the budget together, and none waits on
+    // another (model-spend.ts `reserved`).
     name: 'spend',
     phase: 'rules',
-    match: '+meter, +trend, *spend, #Now',
-    run: ({ meter, trend, spend, Now }) => ({
-      meter: added(props(meter), props(spend)),
-      trend: trended(props(trend), props(spend), Date.parse(Now.at)),
-      spend: null,
-    }),
+    match:
+      '+meter, +trend, *spend, +space, +plan, +comped, +budget, +starter, #Now',
+    run: (row) => {
+      let { meter, trend, spend, Now } = row
+      let said = props(spend)
+      if (said.held) {
+        if (!row.space) throw new Refused('The paying space is missing')
+        let what = said.realtime ? 'realtime' as const : 'models' as const
+        let no = unaffordable(
+          spaceOf(row as unknown as Row),
+          what,
+          Number(said[what] ?? 0),
+          new Date(Now.at),
+        )
+        if (no) {
+          throw new Refused(no, {
+            eid: (row.entity as { eid?: string } | undefined)?.eid,
+            comp: 'spend',
+            prop: what,
+          })
+        }
+      }
+      let { held: _, ...spent } = said
+      return {
+        meter: added(props(meter), spent),
+        trend: trended(props(trend), spent, Date.parse(Now.at)),
+        spend: null,
+      }
+    },
   }],
 }]

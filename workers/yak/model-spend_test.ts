@@ -11,6 +11,7 @@ import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from './meter.ts'
 import { reserved, settled } from './model-spend.ts'
+import { type Tally, tallying } from './lib/hops.ts'
 
 let p = platform('model spending')
 let dir = directoryOf(p.env.STORE)
@@ -32,6 +33,7 @@ let fixture = async (models = 0) => {
 }
 let pilot = await fixture(0.11129812)
 let concurrent = await fixture(0.05)
+let helpers = await fixture()
 let released = await fixture()
 let uncertain = await fixture()
 let rollover = await fixture()
@@ -69,6 +71,20 @@ test('model and realtime calls cannot reserve the same remaining dollars', async
   assertEquals(calls.filter((r) => r.status == 'fulfilled').length, 1)
   let fresh = (await dir.at(concurrent.space.eid))!
   assertAlmostEquals(fresh.meter!.models + fresh.meter!.realtime, 0.15)
+})
+
+// Three helpers spawned at once, each holding what fits: none is refused or
+// read again for the others, and the month counts all three (T-141004).
+test('holds made at once that fit together all hold, in one write each', async () => {
+  let tally: Tally = new Map()
+  let holds = await tallying(tally, () =>
+    Promise.all(
+      [1, 2, 3].map(() =>
+        reserved(p.env, helpers.space, () => ({ dollars: 0.05 }))
+      ),
+    ))
+  assertEquals([holds.length, tally.get('hops')], [3, 3])
+  assertAlmostEquals(await helpers.used(), 0.15)
 })
 
 test('settlement releases unused dollars and a replay never debits twice', async () => {

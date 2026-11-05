@@ -403,12 +403,16 @@ export let directoryDoc: VocabDoc = {
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at
-    // once both count, and takes it off again: it is never kept.
+    // once both count, and takes it off again: it is never kept. A `held`
+    // spend is a model call or a voice's lease holding its most before it
+    // starts (model-spend.ts `reserved`), and the write is refused when it
+    // does not fit what is left of the month's budget.
     spend: {
       component: true,
       type: 'object',
       properties: {
         month: text,
+        held: { type: 'boolean' },
         emails: num,
         builds: num,
         models: num,

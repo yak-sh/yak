@@ -298,6 +298,26 @@ export let budget = (space: Space, now = new Date()): Budget => ({
   limit: limitOf(space, now),
 })
 
+/** What refuses holding `dollars` of a space's model and voice budget this
+ * month, or null when it fits: the space at its ceiling, or too little left
+ * for this call. The directory refuses a held spend with it (meter-graph.ts
+ * `spend`), and a caller quoting a call says it before asking. */
+export let unaffordable = (
+  space: Space,
+  what: 'models' | 'realtime',
+  dollars: number,
+  now = new Date(),
+) => {
+  let { spent, limit } = budget(space, now)
+  // A quote fitted to exactly what is left is a sum of floats, so a hold may
+  // overshoot it by a rounding.
+  if (dollars <= Math.max(0, limit - spent) + 1e-9) return null
+  return spent >= limit
+    ? atCeiling(space, what)
+    : `What is left of ${space.slug}'s model and voice budget this month is ` +
+      `too little for this call. ${plans(space, {})}`
+}
+
 /** What stops this spend in this space, or null to go ahead. */
 export let refusedSpend = (
   space: Space,
