@@ -48,7 +48,6 @@ WORKDIR /home/agent/workspace
 RUN git init . \
  && git remote add origin https://github.com/yak-sh/yak.git \
  && git -c protocol.version=2 fetch --filter=blob:none --depth=1 origin "${REPO_COMMIT}" \
- && git sparse-checkout set --no-cone '/*' '!/logo-concepts*/' \
  && git checkout --detach FETCH_HEAD \
  && test "$(git rev-parse HEAD)" = "${REPO_COMMIT}"
 USER root

@@ -39,10 +39,8 @@ release.
   and lock. Its first use downloads dependencies; network access is needed.
   Dependency caches and account credentials are intentionally not baked in.
 - An agent-owned Git checkout at `/home/agent/workspace`. A shallow partial
-  clone and sparse checkout omit only the bulky `logo-concepts*` design
-  galleries, not code, tests or skills. Git can fetch those blobs when needed
-  (`git sparse-checkout disable`). The workspace is writable, can commit, and
-  retains its pinned origin and revision.
+  clone: git fetches blobs when needed. The workspace is writable, can commit,
+  and retains its pinned origin and revision.
 
 No Chrome, Chromium, compiler collection, Docker Engine, model-agent CLI,
 provider supervisor or sign-in is preinstalled. The host runs the model; this
