@@ -389,7 +389,6 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
         layout,
         progress(layout, (s) => figure.reached(s, now)),
       )
-      el.classList.toggle('is-started', figure.into(1) > 0)
       point(svg, at)
       if (figure.busy(now) && typeof requestAnimationFrame != 'undefined') {
         frame ||= requestAnimationFrame(paint)
@@ -464,11 +463,6 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       h('span', { class: 'Figure_State' }, `${yak.rows().length} entities`),
     ]),
     h('div', { class: 'Figure_Sheet', ref: sheet }),
-    h(
-      'p',
-      { class: 'Figure_Hint' },
-      'Scroll down: each command runs in this tab, and the pen draws what it writes.',
-    ),
     h('form', {
       class: 'Figure_Query',
       onSubmit: (ev: Event) => {

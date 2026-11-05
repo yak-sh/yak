@@ -364,22 +364,6 @@ h2 {
 .Diagram_Node-hex > .Diagram_Fill {
   fill: color-mix(in srgb, var(--well) 45%, var(--plate));
 }
-.Figure_Hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 52%;
-  margin: 0;
-  padding: 0 2rem;
-  text-align: center;
-  font: .8rem/1.6 var(--mono);
-  color: var(--soft);
-  pointer-events: none;
-  transition: opacity .4s;
-}
-.Figure_Sheet.is-started + .Figure_Hint {
-  opacity: 0;
-}
 .Figure_Query {
   display: flex;
   align-items: center;

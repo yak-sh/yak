@@ -137,8 +137,6 @@ export let figure = (yak: Yak, term: Term) => {
     },
     /** The reader is `p[i]` of the way past the story's command i + 1. */
     scroll: (p: number[]) => void (scrolled = p),
-    /** How far past the story's command n (from 1) the reader is. */
-    into: (n: number) => scrolled[n - 1] ?? 0,
     /** A layout was drawn at `now`: each stage it shows for the first time
      * starts drawing in. */
     saw: (layout: Layout, now: number) => {
