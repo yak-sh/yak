@@ -713,24 +713,20 @@ export let listed = (items: Worked[], href: (open: string) => string) =>
     ).join('')
   }</ul>`
 
-/** Where the Operator's settings send a person for its conversations: the
- * chat app, which lists them (`sidebar`). */
-export let talks = (space: string) =>
-  `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2><div class="Card_Actions"><a class="Button" href="${
-    esc(chatPath(space))
-  }">Open conversations</a></div></header><p>Your conversations with the Operator, and the work they start, are in its chat.</p></section>`
-
-/** The chat app's list of conversations, newest first, the one open
- * marked. */
-export let sidebar = (items: Worked[], space: string, current: string[]) =>
-  items.length
-    ? `<ul class="Talk_List">${
-      items.map((w) =>
-        `<li><a class="Talk_Item" href="${esc(chatPath(space, w.open))}"${
-          current.includes(w.open) ? ' aria-current="page"' : ''
-        }${w.busy ? ' data-pending' : ''}><span class="Talk_Title">${
-          esc(w.title)
-        }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
-      ).join('')
-    }</ul>`
-    : '<p class="Talk_None">Your chats appear here.</p>'
+/** The Operator's conversations in its settings, newest first: the person's
+ * one conversation, and the chats from before it, each opening in the chat
+ * app (T-141349). */
+export let talks = (space: string, items: Worked[]) =>
+  `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2></header>${
+    items.length
+      ? `<ul class="Talk_List">${
+        items.map((w) =>
+          `<li><a class="Talk_Item" href="${esc(chatPath(space, w.open))}"${
+            w.busy ? ' data-pending' : ''
+          }><span class="Talk_Title">${
+            esc(w.title)
+          }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
+        ).join('')
+      }</ul>`
+      : '<p class="Talk_None">Your conversations appear here.</p>'
+  }</section>`

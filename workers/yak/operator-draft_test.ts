@@ -200,6 +200,16 @@ let stored = async (place = 'operator:new') =>
     draft: { place: string; text: string }
   }[]).find((b) => b.draft.place == place)?.draft.text ?? ''
 
+let apps = {
+  apps: [
+    { eid: 'notes', slug: 'notes', title: 'Notes' },
+    { eid: 'club', slug: 'club', title: 'Club' },
+  ],
+}
+// Before the person has written, the space's address is a new chat, with ways
+// to start.
+let starting = await load(storage(), false, 'new', apps)
+
 let stash = storage()
 let first = await load(stash, true)
 await settle()
@@ -297,18 +307,12 @@ test('opening or starting a conversation puts the cursor in the message box', ()
   assertEquals(freshFocused, true)
 })
 
-let apps = {
-  apps: [
-    { eid: 'notes', slug: 'notes', title: 'Notes' },
-    { eid: 'club', slug: 'club', title: 'Club' },
-  ],
-}
 let changing = (task: string, ...changed: object[]) => ({
   operator: { task, rows: [], now: '', changed },
 })
 
-test('a way to start fills the box with its words, for the person to finish', async () => {
-  let page = await load(storage(), false, 'new', apps)
+test('a way to start fills the box with its words, for the person to finish', () => {
+  let page = starting
   page.press(page.document.querySelector('[data-say]')!)
   assertEquals(page.say.value, 'Make me an app for ')
   assertEquals(page.focused, true)

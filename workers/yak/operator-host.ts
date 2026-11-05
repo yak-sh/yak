@@ -299,7 +299,7 @@ let whose = async (session: Bundle, named: Named) =>
 
 /**
  * The Operator's work for `person`, as its conversations are listed
- * (operator-view.ts `worked`, `sidebar`): their conversation first, then,
+ * (operator-view.ts `worked`, `talks`): their conversation first, then,
  * newest first, the pieces of work it started, the requests no session has
  * taken yet, the tasks it worked on before a person had one conversation,
  * and the breaks it took up itself. Given `everyone`, what to call a person,

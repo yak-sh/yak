@@ -1,5 +1,5 @@
 // The Operator's chat app, drawn in process for a conversation whose session
-// called tools: what a person meets on the page, the list beside it, the
+// called tools: what a person meets on the page, the side beside it, the
 // address from before the chat app, Stop reaching the Operator, and a
 // conversation the provider refused, which reads as ended. Each Operator has a
 // name: a new one is given one, and a renamed one goes by its new name on the
@@ -95,12 +95,6 @@ let service = operatorService(
   ),
 )
 p.env.BUILDER = service.binding
-let request = await receive(service.store, {
-  space: eid,
-  person,
-  channel: 'chat',
-}, 'Post a special meeting Thursday at 7 about the road millage.')
-await service.drain()
 // Every message goes to the person's one conversation with the Operator.
 let task = rootOf(eid, person)
 
@@ -110,9 +104,76 @@ let drawn = async (open: string) => {
   let { document } = parseHTML(await response.text())
   return { code: response.status, document }
 }
+
+// The side as a person with six apps meets it, as the space's owner or a
+// member who may change it: each line it shows, in order, and where each goes.
+let six = [
+  'Recipe box',
+  'Holdfast',
+  'Book club',
+  'Chores',
+  'Garden log',
+  'RSVP',
+]
+  .map((title, i) => ({ eid: `app${i}`, slug: `app${i}`, title }))
+let beside = { name: '  Ada Lovelace ', apps: six }
+let sided = async (
+  role: 'owner' | 'editor',
+  open = task,
+  app?: string,
+) => {
+  let { document } = parseHTML(
+    await (await chatPage(p.env, space, { ...who, role }, open, beside, app))
+      .text(),
+  )
+  let lines = [
+    ...document.querySelectorAll(
+      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .SideNav a, .Talk_Group)',
+    ),
+  ]
+  return {
+    document,
+    said: lines.map((e) => e.textContent!.trim()),
+    to: Object.fromEntries(
+      lines.map((e) => [e.textContent!.trim(), e.getAttribute('href')]),
+    ),
+  }
+}
+let spaces = [
+  {
+    slug: 'clerk',
+    title: 'Township',
+    owner: true,
+    own: false,
+    operator: space.operator,
+  },
+  { slug: 'jeff', title: 'Jeff', owner: true, own: true, operator: 'Wren' },
+]
+// The test's Operator serves one store, so the other space shares it.
+let mill = { ...space, slug: 'mill', title: 'Mill Pond', operator: 'Fern' }
+// Until the person writes, the space's address is a new chat.
+let fresh = await drawn('new')
+let greeted = await sided('owner', 'new')
+let chosen = await sided('owner', 'new', 'app1')
+let unchosen = await Promise.all(
+  ['nope', undefined].map((other) => sided('owner', 'new', other)),
+)
+let whose = await Promise.all(
+  [space, mill].map(async (at) =>
+    parseHTML(
+      await (await chatPage(p.env, at, who, 'new', { spaces })).text(),
+    ).document
+  ),
+)
+let request = await receive(service.store, {
+  space: eid,
+  person,
+  channel: 'chat',
+}, 'Post a special meeting Thursday at 7 about the road millage.')
+await service.drain()
 let page = await drawn(task)
 let byRequest = await drawn(request)
-let fresh = await drawn('new')
+let home = await drawn('new')
 let gone = await drawn(crypto.randomUUID())
 let text = (s: string) =>
   [...page.document.querySelectorAll(s)].map((e) => e.textContent?.trim())
@@ -164,9 +225,13 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   )
 })
 
-test('the chat app lists every conversation beside the open one', () => {
-  let item = page.document.querySelector('.Talk_Item[aria-current="page"]')
-  assertEquals(item?.getAttribute('href'), chatPath('clerk', task))
+test("the space's address opens the person's one conversation, and a new chat until they have one", () => {
+  assertEquals(
+    home.document.querySelector('[data-task]')?.getAttribute('data-task'),
+    task,
+  )
+  assertEquals(home.document.querySelector('.Talk_Hello'), null)
+  assertEquals(fresh.document.querySelector('[data-task]'), null)
   assertEquals(
     byRequest.document.querySelector('[data-task]')?.getAttribute('data-task'),
     task,
@@ -174,48 +239,14 @@ test('the chat app lists every conversation beside the open one', () => {
   assertEquals(byRequest.document.querySelector('[name=task]'), null)
 })
 
-// The side as a person with six apps meets it, as the space's owner or a
-// member who may change it: each line it shows, in order, and where each goes.
-let six = [
-  'Recipe box',
-  'Holdfast',
-  'Book club',
-  'Chores',
-  'Garden log',
-  'RSVP',
-]
-  .map((title, i) => ({ eid: `app${i}`, slug: `app${i}`, title }))
-let beside = { name: '  Ada Lovelace ', apps: six }
-let sided = async (
-  role: 'owner' | 'editor',
-  open = task,
-  app?: string,
-) => {
-  let { document } = parseHTML(
-    await (await chatPage(p.env, space, { ...who, role }, open, beside, app))
-      .text(),
-  )
-  let lines = [
-    ...document.querySelectorAll(
-      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .Talk_New, .Talk_Places a, .Talk_Group, .Talk_Title, .Talk_Foot a)',
-    ),
-  ]
-  return {
-    document,
-    said: lines.map((e) => e.textContent!.trim()),
-    to: Object.fromEntries(
-      lines.map((e) => [e.textContent!.trim(), e.getAttribute('href')]),
-    ),
-  }
-}
 let owner = await sided('owner')
 let member = await sided('editor')
-test('the side holds the space, New chat, Updates, a few apps, the chats and Manage', () => {
+test('the side holds the space, the Operator, Updates, a few apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
     'yaks.app',
     'Township',
-    'New chat',
+    op,
     `Updates from ${op}`,
     'Your apps',
     'Recipe box',
@@ -223,15 +254,13 @@ test('the side holds the space, New chat, Updates, a few apps, the chats and Man
     'Book club',
     'Chores',
     'All 6 apps',
-    'Chats',
-    CONVERSATION,
     'Manage',
   ])
   // Each app opens beside the conversation on screen.
   assertEquals(owner.to, {
     'yaks.app': chatPath('clerk'),
     Township: null,
-    'New chat': chatPath('clerk'),
+    [op]: chatPath('clerk'),
     [`Updates from ${op}`]: managePath('updates', 'clerk'),
     'Your apps': null,
     'Recipe box': aboutPath('clerk', 'app0', task),
@@ -239,17 +268,20 @@ test('the side holds the space, New chat, Updates, a few apps, the chats and Man
     'Book club': aboutPath('clerk', 'app2', task),
     Chores: aboutPath('clerk', 'app3', task),
     'All 6 apps': managePath('apps', 'clerk'),
-    Chats: null,
-    [CONVERSATION]: null,
     Manage: managePath('apps', 'clerk'),
   })
+  // The conversation on screen is the side's current tab.
+  assertEquals(
+    owner.document.querySelector('.SideNav [aria-current="page"]')?.textContent,
+    op,
+  )
   // A member may open none of the settings but the Operator's.
   assertEquals(member.said.includes('All 6 apps'), false)
   assertEquals(member.to.Manage, managePath('operator', 'clerk'))
 })
 
-test('a new chat greets the person by name, with ways to start that fill the box', async () => {
-  let { document } = await sided('owner', 'new')
+test('a new chat greets the person by name, with ways to start that fill the box', () => {
+  let { document } = greeted
   assertEquals(
     document.querySelector('.Talk_Hello h2')?.textContent,
     'What can I do for you, Ada?',
@@ -289,8 +321,8 @@ test('a chat that is gone says so, with no box', () => {
   assertEquals(gone.document.querySelector('[data-needs]'), null)
 })
 
-test('an app chosen in the side opens a chat about it, with the app live beside it', async () => {
-  let { document, said } = await sided('owner', 'new', 'app1')
+test('an app chosen in the side opens a chat about it, with the app live beside it', () => {
+  let { document, said } = chosen
   let app = document.querySelector('.Talk_App')!
   assertEquals(
     app.querySelector('iframe')?.getAttribute('src'),
@@ -298,7 +330,7 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
   )
   assertEquals(app.querySelector('.Talk_AppName b')?.textContent, 'Holdfast')
   assertEquals(
-    document.querySelector('.Talk_Places [aria-current="page"]')?.textContent,
+    document.querySelector('.SideNav [aria-current="page"]')?.textContent,
     'Holdfast',
   )
   assertEquals(
@@ -322,8 +354,7 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
   assertEquals(app.querySelector('.Talk_Back')?.getAttribute('href'), '#')
   assertEquals(said.includes('Holdfast'), true)
   // An app the person may not open, or none, opens nothing beside the chat.
-  for (let other of ['nope', undefined]) {
-    let { document } = await sided('owner', 'new', other)
+  for (let { document } of unchosen) {
     assertEquals(document.querySelector('.Talk_App, #ask [name=app]'), null)
   }
 })
@@ -341,16 +372,23 @@ test("an app opens beside the person's one conversation, its words on screen fro
     document.querySelector('#ask [name=app]')?.getAttribute('value'),
     'app1',
   )
-  // From a new chat, or Updates, an app opens beside that conversation too.
-  let fresh = await sided('owner', 'new')
+  // From the space's address, or Updates, an app opens beside that
+  // conversation too.
+  let fresh = await sided('owner', 'new', 'app1')
   assertEquals(fresh.to.Holdfast, aboutPath('clerk', 'app1', task))
+  assertEquals(
+    fresh.document.querySelector('.Talk_You')?.textContent?.trim(),
+    words,
+  )
   let updates = parseHTML(
     await (await updatesPage(p.env, space, who, beside)).text(),
   ).document
+  // Updates shows no conversation, so its apps open at the space's address,
+  // which is that conversation.
   assertEquals(
-    [...updates.querySelectorAll('.Talk_Places a')]
+    [...updates.querySelectorAll('.SideNav a')]
       .find((a) => a.textContent == 'Holdfast')?.getAttribute('href'),
-    aboutPath('clerk', 'app1', task),
+    aboutPath('clerk', 'app1'),
   )
 })
 
@@ -371,7 +409,7 @@ test('Updates from the Operator opens beside the same side', async () => {
     `Updates from ${space.operator}`,
   )
   assertEquals(
-    document.querySelector('.Talk_Places [aria-current="page"]')
+    document.querySelector('.SideNav [aria-current="page"]')
       ?.getAttribute('href'),
     managePath('updates', 'clerk'),
   )
@@ -381,23 +419,13 @@ test('Updates from the Operator opens beside the same side', async () => {
   })
 })
 
-test("the chat app says whose Operator it is, and opens another space's", async () => {
-  let spaces = [
-    {
-      slug: 'clerk',
-      title: 'Township',
-      owner: true,
-      own: false,
-      operator: space.operator,
-    },
-    { slug: 'jeff', title: 'Jeff', owner: true, own: true, operator: 'Wren' },
-  ]
-  // The test's Operator serves one store, so the other space shares it.
-  let mill = { ...space, slug: 'mill', title: 'Mill Pond', operator: 'Fern' }
-  for (let [at, name] of [[space, 'Township'], [mill, 'Mill Pond']] as const) {
-    let { document } = parseHTML(
-      await (await chatPage(p.env, at, who, 'new', { spaces })).text(),
-    )
+test("the chat app says whose Operator it is, and opens another space's", () => {
+  for (
+    let [at, name, document] of [
+      [space, 'Township', whose[0]],
+      [mill, 'Mill Pond', whose[1]],
+    ] as const
+  ) {
     let said = (s: string) => document.querySelector(s)?.textContent?.trim()
     assertEquals(
       said('title'),
@@ -433,12 +461,13 @@ test("the chat app says whose Operator it is, and opens another space's", async 
 })
 
 let settings = parseHTML(await operatorBody(p.env, space, who)).document
-test('the settings page links to the chat app and lists no conversation', () => {
+test("the settings page lists the Operator's conversations, each opening in the chat app", () => {
   assertEquals(
-    [...settings.querySelectorAll('a[href^="/"]')].some((a) =>
-      a.getAttribute('href') == chatPath('clerk')
-    ),
-    true,
+    [...settings.querySelectorAll('.Talk_Item')].map((a) => [
+      a.querySelector('.Talk_Title')?.textContent,
+      a.getAttribute('href'),
+    ]),
+    [[CONVERSATION, chatPath('clerk', task)]],
   )
   assertEquals(settings.querySelector('.Rows_Name'), null)
   assertEquals(settings.querySelector('[data-task]'), null)
@@ -483,10 +512,9 @@ test('Stop from the page reaches the Operator', () => {
   assertEquals(stopped.stopped, false)
 })
 
-test('a conversation read again carries its title, its lines and the list', () => {
+test('a conversation read again carries its title and its lines', () => {
   assertEquals(talk.task, task)
   assertStringIncludes(talk.html, 'Talk_Reply')
-  assertStringIncludes(talk.side, 'aria-current="page"')
 })
 
 let broke = await receive(service.store, {
@@ -515,10 +543,6 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
   details.remove()
   assertEquals(thread.innerHTML.includes('invalid_request_error'), false)
   assertEquals(reread.html.includes('data-pending'), false)
-  assertEquals(
-    crashed.querySelector('.Talk_Item[aria-current="page"][data-pending]'),
-    null,
-  )
 })
 
 let dir = directoryOf(p.env.STORE)

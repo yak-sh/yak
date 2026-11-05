@@ -42,7 +42,6 @@ import {
   type Changed,
   PICTURES,
   reply,
-  sidebar,
   talks,
   trouble,
   type Worked,
@@ -423,13 +422,10 @@ export let operatorAnswer = async (
     }
     return watching(env, space, req, who)
   }
-  // One conversation read again, with the list beside it.
+  // One conversation read again.
   if (q.has('talk')) {
     let open = q.get('talk')!
-    let [talked, items] = await Promise.all([
-      conversationOf(env, space, who, at, open),
-      workOf(env, space, who),
-    ])
+    let talked = await conversationOf(env, space, who, at, open)
     if (!talked.title) {
       return Response.json({ message: 'That conversation is missing.' }, {
         status: 404,
@@ -439,7 +435,6 @@ export let operatorAnswer = async (
       title: talked.title,
       task: talked.task,
       html: talked.html,
-      side: sidebar(items, space.slug, [open, talked.task]),
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
 }
@@ -495,13 +490,14 @@ let conversationOf = async (
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
-// every other page (pages.ts `desk`): what it does and where, a link to its
-// conversations in the chat app (`chatPage`), and the texts it may send.
+// every other page (pages.ts `desk`): what it does and where, its
+// conversations, each opening in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [consent, { pa, beyond }] = await Promise.all([
+  let [consent, { pa, beyond }, items] = await Promise.all([
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
+    workOf(env, space, who),
   ])
   let address = mailFrom(space.slug, null, env)
   return `
@@ -518,7 +514,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   }</a> with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${
     esc(space.operator)
   } answers by email.</p></section>
-${talks(space.slug)}
+${talks(space.slug, items)}
 ${nameCard(at, space.operator)}
 ${voiceCard(at, space, offered(env, space))}
 ${textsCard(at, consent, settings(env, space.sender).number)}
@@ -614,21 +610,25 @@ export type Beside = {
 let APPS = 4
 
 // The chat app's side, the product's whole menu (T-140506): whose Operator
-// it is, in the space selector; a new chat; Updates from the Operator, with
-// how many wait on the person; the space's apps; the person's chats with it; and at
-// the foot Manage, the settings behind the product (today's dashboard pages:
-// its Apps for the space's owner, the Operator's settings for a member, the
-// only one of them they may open). `current` holds the chats this page shows,
-// or `updates`, and `app` the app open beside them. Each app opens beside
-// the conversation on screen, or else the person's one conversation, so
-// their words stay where they were (T-140509, T-141273). On a phone the bar's Menu
-// opens the side over the page (`:target`, no script).
+// it is, in the space selector; the Operator by name, which opens the
+// person's one conversation with it (T-141349); Updates from the Operator,
+// with how many wait on the person; the space's apps; and at the foot Manage,
+// the settings behind the product (today's dashboard pages: its Apps for the
+// space's owner, the Operator's settings for a member, the only one of them
+// they may open), where older chats are listed. `current` holds what this
+// page shows: a conversation, `updates`, and `app` the app open beside it.
+// Each app opens beside the conversation on screen, or else the person's one
+// conversation, so their words stay where they were (T-140509, T-141273).
+// Between the top and Manage the side scrolls on its own, so a long list
+// never runs under Manage (T-141332), and its current item is the settings'
+// tab (`SideNav`, T-141334). On a phone the bar's Menu opens the side over
+// the page (`:target`, no script).
 let side = (
   env: Env,
   space: Space,
   who: Who,
   beside: Beside,
-  at: { items: Worked[]; waiting: number; current: string[]; app?: string },
+  at: { current: string[]; waiting: number; app?: string },
 ) => {
   let owner = who.role == 'owner'
   let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
@@ -643,15 +643,15 @@ let side = (
   let apps = beside.apps ?? []
   let host = `https://${spaceHost(env, space.slug)}`
   let operator = esc(space.operator)
-  let listed = (open: string) => at.items.some((w) => w.open == open)
-  let root = rootOf(space.eid, who.person ?? '')
-  let open = at.current.find(listed) ?? (listed(root) ? root : 'new')
+  let open = at.current.find((c) => c && c != 'updates') ?? 'new'
+  let current = (on: boolean) => on ? ' aria-current="page"' : ''
   return `<aside class="Talk_Side" id="menu" aria-label="Menu">
 <div class="Talk_Top"><a class="Talk_Brand" href="${
     chatPath(space.slug)
   }"><img src="${
     url(env, '/yak.webp')
   }" width="28" height="28" alt="">yaks.app</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
+<div class="Talk_Scroll">
 <div class="Talk_Whose">${
     spaceChoice(
       here,
@@ -661,23 +661,22 @@ let side = (
       (s) => s.operator ?? '',
     )
   }</div>
-<a class="Button Button-quiet Talk_New" href="${chatPath(space.slug)}">${
-    icon('plus')
-  }New chat</a>
-<nav class="Talk_Places" aria-label="From ${operator}"><a href="${
-    managePath('updates', space.slug)
-  }"${at.current.includes('updates') ? ' aria-current="page"' : ''}>${
-    icon('bell')
-  }Updates from ${operator}${
+<nav class="SideNav" aria-label="${operator}"><a href="${
+    chatPath(space.slug)
+  }"${current(!at.app && !at.current.includes('updates'))}>${
+    icon('message-circle')
+  }${operator}</a><a href="${managePath('updates', space.slug)}"${
+    current(at.current.includes('updates'))
+  }>${icon('bell')}Updates from ${operator}${
     at.waiting ? `<span class="Talk_Count">${at.waiting}</span>` : ''
   }</a></nav>
 <h2 class="Talk_Group" id="side-apps">Your apps</h2>
 ${
     apps.length
-      ? `<nav class="Talk_Places" aria-labelledby="side-apps">${
+      ? `<nav class="SideNav" aria-labelledby="side-apps">${
         apps.slice(0, APPS).map((a) =>
           `<a href="${esc(aboutPath(space.slug, a.slug, open))}"${
-            a.slug == at.app ? ' aria-current="page"' : ''
+            current(a.slug == at.app)
           }><img class="Talk_Icon" src="${host}/${
             esc(a.slug)
           }/icon.png" width="24" height="24" alt="" loading="lazy">${
@@ -693,13 +692,10 @@ ${
       }</nav>`
       : `<p class="Talk_None">None yet. Ask ${operator} to make one.</p>`
   }
-<h2 class="Talk_Group" id="side-chats">Chats</h2>
-<nav class="Talk_Nav" aria-labelledby="side-chats" data-side>${
-    sidebar(at.items, space.slug, at.current)
-  }</nav>
-<div class="Talk_Foot"><a href="${
+</div>
+<nav class="SideNav Talk_Foot" aria-label="Settings"><a href="${
     managePath(owner ? 'apps' : 'operator', space.slug)
-  }">${icon('sliders-horizontal')}Manage</a></div>
+  }">${icon('sliders-horizontal')}Manage</a></nav>
 </aside>`
 }
 
@@ -739,7 +735,6 @@ let talkPage = (
   page: {
     title: string
     status: number
-    items: Worked[]
     // how many Updates wait on the person (updates.ts `updatesOf`)
     waiting: number
     current: string[]
@@ -763,7 +758,6 @@ let talkPage = (
 <div class="Talk${page.app ? ' Talk-app' : ''}">
 ${
       side(env, space, who, beside, {
-        items: page.items,
         waiting: page.waiting,
         current: page.current,
         app: page.app?.slug,
@@ -830,11 +824,14 @@ export let chatPage = async (
   chosen?: string | null,
 ) => {
   let at = managePath('operator', space.slug)
-  let [talked, items, news] = await Promise.all([
-    conversationOf(env, space, who, at, open),
-    workOf(env, space, who),
+  // The space's address opens the person's one conversation, and a new chat
+  // only until they have one (T-141349).
+  let root = rootOf(space.eid, who.person ?? '')
+  let [talked, news] = await Promise.all([
+    conversationOf(env, space, who, at, open == 'new' ? root : open),
     updatesOf(env, space, who),
   ])
+  if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
   let mine = (slug?: string | null) => beside.apps?.find((a) => a.slug == slug)
@@ -842,7 +839,7 @@ export let chatPage = async (
   let app = mine(chosen) ?? mine(ours.at(-1)?.app)
   let operator = esc(space.operator)
   let hello = !fresh
-    ? '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your other chats are listed beside this one.</p></div>'
+    ? '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your older chats are listed in Manage, with ${esc(space.operator)}’s settings.</p></div>'
     : app
     ? `<div class="Talk_Hello"><h2>What should change in ${
       esc(app.title || app.slug)
@@ -850,16 +847,16 @@ export let chatPage = async (
     : `<div class="Talk_Hello"><h2>What can I do for you${
       first ? `, ${esc(first)}` : ''
     }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
-  // A new chat with no app beside it is where the person lands: what needs
-  // them, and ways to start.
-  let landing = fresh && !app
+  // The person's one conversation, or a new chat until they have one, with
+  // no app beside it is where they land: what needs them waits over the box,
+  // and a new chat offers ways to start.
+  let landing = (fresh || open == root) && !app
   let needs = landing ? needing(news) : undefined
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${space.operator}`
       : talked.title || 'Not here',
     status: fresh || talked.title ? 200 : 404,
-    items,
     waiting: news.waiting,
     current: [open, talked.task],
     kind: fresh ? 'Talk_Main-new' : '',
@@ -886,7 +883,7 @@ ${
     }
 ${fresh || talked.title ? composer(env, at, space.operator, app) : ''}
 ${
-      landing
+      fresh && !app
         ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
           starts(space.operator, beside.apps)
         }</div>`
@@ -912,15 +909,13 @@ export let updatesPage = async (
   beside: Beside = {},
 ) => {
   // Opening them reads them, and the count beside them goes with it.
-  let [items, news, views] = await Promise.all([
-    workOf(env, space, who),
+  let [news, views] = await Promise.all([
     updatesOf(env, space, who, true),
     visitsOf(env, beside.apps ?? []),
   ])
   return talkPage(env, space, who, beside, {
     title: `Updates from ${space.operator}`,
     status: 200,
-    items,
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
     skip: ['#content', 'Skip to content'],
@@ -970,7 +965,6 @@ let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(rootOf(space.eid, who.person ?? ''))}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 let box = document.querySelector('[data-conversation]')
-let side = document.querySelector('[data-side]')
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
 // The app open beside the chat (T-140509) is loaded again when the Operator
@@ -1079,24 +1073,15 @@ let read = async () => {
       let got = await response.json()
       let was = near()
       if (got.html) redraw(box, got.html)
-      side.innerHTML = got.side
       if (got.title) heading.textContent = got.title
       follow(was)
     } while (again)
   })()
   try { await reading } finally { reading = undefined }
 }
-let others
-let list = () => {
-  clearTimeout(others)
-  others = setTimeout(async () => {
-    let response = await fetch('${at}?talk=' + encodeURIComponent(open))
-    if (response.ok) side.innerHTML = (await response.json()).side
-  }, 500)
-}
 // Each step the Operator takes arrives on the socket as the lines it changed,
 // put in place by id; a conversation the page has not drawn yet (a request
-// just taken up) reads the page again, and another one's step reads the list.
+// just taken up) reads the page again, and another one's step is not this page's.
 let live = false
 let hear = (frame) => {
   let o = frame.operator
@@ -1104,7 +1089,7 @@ let hear = (frame) => {
   changing(o)
   let card = thread()
   if (!card) return void read().catch(said)
-  if (card.dataset.task != o.task) return void (o.typing || list())
+  if (card.dataset.task != o.task) return
   let was = near()
   let rows = card.querySelector('[data-rows]')
   // A reply as it is written, until the step that wrote it lands.
