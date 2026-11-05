@@ -64,7 +64,12 @@
       if (!img.isConnected) return
       let name = coming
       coming = next()
-      if (still.matches) return wait()
+      // with less motion asked for, or while he is out of sight (wander.js
+      // hides him while he walks), he waits at rest
+      if (
+        still.matches ||
+        img.checkVisibility?.({ visibilityProperty: true }) === false
+      ) return wait()
       let url
       try {
         url = URL.createObjectURL(await fetched(name))
