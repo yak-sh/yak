@@ -41,7 +41,11 @@ test('the page draws its parts from the graph: numbered steps, package tables, t
     pace: { key: 0, pause: 0 },
   })
   let all = (s: string) => [...root.querySelectorAll(s)]
-  equal(all('.Part .Bubble').map((b) => b.textContent), ['1', '2', '3'])
+  equal(all('.Part .Bubble').map((b) => b.textContent), ['1', '2', '3', '4'])
+  equal(
+    all('#yaks-app h2')[0].textContent,
+    'yaks.app hosts web apps on the same packages',
+  )
   equal(all('#install .Part_List > li h3').length, 6)
   equal(
     all('#install .Copy code')[0].textContent?.includes('jsr:@yaks/cli'),

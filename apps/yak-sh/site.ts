@@ -61,6 +61,7 @@ let packages = (group: string, rows: [string, string][]) =>
 
 export let HERO = '6f166202-b881-400d-84c7-dd8620dc7826'
 export let SELF = '525ab3f6-bdc3-48a6-b2f3-e88fa2d06a1b'
+let YAKS_APP = 'a3c9e1f4-7b2d-4e68-9f05-1d8b6c4a2e93'
 
 export let SECTIONS: Section[] = [
   {
@@ -159,7 +160,23 @@ export let SECTIONS: Section[] = [
         '- **Every call is recorded.** A call from you and a call from an agent go through the same checks, rules and effects, and each is kept in the graph.',
         '- **`yak serve` answers HTTP.** A web canvas at `/`, the tools for agents at `/mcp`, and `/query` and `/apply` for programs, on this machine only.',
         '- **Your agents join it.** `yak hooks install` makes each Claude Code session an entity in the graph, told its claims when it starts. Any MCP client can call the tools at `/mcp`.',
-        "- **Other graphs too.** `--config` opens the graph another config names, and `--host` calls another graph's MCP server, such as yaks.app's once you run `yak auth yaks.app`.",
+        '- **Other graphs too.** `--config` opens the graph another config names, and `--host` calls the graph on another machine.',
+      ].join('\n'),
+    ),
+  },
+  {
+    eid: YAKS_APP,
+    pane: '0b6f3e2a-8d41-4c57-9a1e-6c2d7f9b3a84',
+    view: 'Part',
+    title: 'yaks.app hosts web apps on the same packages',
+    body: part(
+      '[yaks.app](https://yaks.app) builds, hosts and shares web apps. You ask Claude or ChatGPT for an app, and yaks.app keeps it online at its own address, with its data in a graph made of these packages.',
+      [
+        "- **One toolkit in two places.** On your machine, `yak` keeps a graph in a SQLite file. On yaks.app, the same `@yaks/graph` keeps each app's data in a Cloudflare Durable Object.",
+        '- **Your assistant builds the app.** Add yaks.app to Claude or ChatGPT and ask for what you need. It writes the app, and yaks.app serves it at an address like `yourname.yaks.app/recipes`.',
+        '- **The same `yak` reaches it.** `yak auth yaks.app` signs you in. Then `yak app_list` lists your apps and `yak app_errors --app recipes` shows what broke in one, from the command line that runs your own graph.',
+        "- **An app's commands run in your terminal.** A yaks app can declare commands of its own, and `yak <app> <command>` runs them as you.",
+        "- **Your graph passes on what it doesn't have.** A command your own graph doesn't declare goes to yaks.app, so `yak app_list` works on a machine that keeps a graph of its own.",
       ].join('\n'),
     ),
   },
@@ -310,6 +327,7 @@ export let SECTIONS: Section[] = [
 /** Where each part of the page is linked from: `#install` and the rest. */
 export let ANCHORS: Record<string, string> = {
   '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19': 'yak',
+  [YAKS_APP]: 'yaks-app',
   'd15f7ff7-ada4-4202-9874-f523e797d35a': 'install',
   '3e7b9c21-6a4d-4c85-b0f2-9d18e5a4c3b7': 'packages',
 }
