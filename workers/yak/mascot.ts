@@ -4,8 +4,9 @@
 // reader reads, so the picture is decorative (alt=""), and a person who asks
 // for less motion sees each loop's first frame.
 //
-// The files are public/mascot/<pose>.webp (80 px, 2x at the size shown) and
-// <pose>-still.webp. A new round of drawings replaces them in place.
+// The files are public/mascot/<pose>.webp and <pose>-still.webp, each at 40,
+// 80 and 120 px (`-1x`, none, `-3x`), so a screen of any density gets one it
+// shows pixel for pixel. A new round of drawings replaces them in place.
 
 /** What the yak can be seen doing. */
 export type Pose =
@@ -15,10 +16,26 @@ export type Pose =
   | 'checking'
   | 'searching'
 
+/** The srcset of one of the yak's files, `name` under `base`. */
+let srcset = (name: string, base: string) =>
+  [['-1x', '1x'], ['', '2x'], ['-3x', '3x']]
+    .map(([file, density]) => `${base}/mascot/${name}${file}.webp ${density}`)
+    .join(', ')
+
 /** The yak doing `pose`, its files under `base` (the apex's address on a page
  * served from another host, '' on the apex). */
 export let yak = (pose: Pose, base = '') =>
-  `<picture class="Working_Yak" data-pose="${pose}"><source media="(prefers-reduced-motion: reduce)" srcset="${base}/mascot/${pose}-still.webp"><img src="${base}/mascot/${pose}.webp" width="40" height="40" alt=""></picture>`
+  `<picture class="Working_Yak" data-pose="${pose}"><source media="(prefers-reduced-motion: reduce)" srcset="${
+    srcset(`${pose}-still`, base)
+  }"><img src="${base}/mascot/${pose}.webp" srcset="${
+    srcset(pose, base)
+  }" width="40" height="40" alt=""></picture>`
+
+/** The yak still, at rest in `pose`, with `className`. */
+export let still = (pose: Pose, className: string, base = '') =>
+  `<img class="${className}" src="${base}/mascot/${pose}-still.webp" srcset="${
+    srcset(`${pose}-still`, base)
+  }" width="40" height="40" alt="">`
 
 // What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking
 // cookbook for errors…"). Any other work is the yak at its keyboard.

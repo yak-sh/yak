@@ -16,6 +16,7 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
+import { still } from './mascot.ts'
 import {
   CONSENT,
   handed,
@@ -790,9 +791,9 @@ export let chatPage = async (
     ? `<div class="Talk_Hello"><h2>What should change in ${
       esc(app.title || app.slug)
     }?</h2><p>Tell ${operator}, and watch it change beside this chat.</p></div>`
-    : `<div class="Talk_Hello"><img class="Talk_Yak" src="${
-      url(env, '/mascot/thinking-still.webp')
-    }" width="64" height="64" alt=""><h2>What can I do for you${
+    : `<div class="Talk_Hello">${
+      still('thinking', 'Talk_Yak', url(env))
+    }<h2>What can I do for you${
       first ? `, ${esc(first)}` : ''
     }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
   // A new chat with no app beside it is where the person lands: what needs
@@ -967,8 +968,8 @@ let working = () => !!box.querySelector('[data-pending]')
 let pose = (card, name) => {
   let yak = card.querySelector('[data-pose]')
   if (!yak || yak.dataset.pose == name) return
-  for (let [el, at] of [[yak.querySelector('source'), 'srcset'], [yak.querySelector('img'), 'src']]) {
-    el.setAttribute(at, el.getAttribute(at).replace('/' + yak.dataset.pose, '/' + name))
+  for (let [el, at] of [[yak.querySelector('source'), 'srcset'], [yak.querySelector('img'), 'src'], [yak.querySelector('img'), 'srcset']]) {
+    el.setAttribute(at, el.getAttribute(at).replaceAll('/' + yak.dataset.pose, '/' + name))
   }
   yak.dataset.pose = name
 }

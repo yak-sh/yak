@@ -23,6 +23,13 @@ let names = () => ({
   done: 'Checked cookbook for errors',
 })
 
+// The files a srcset names, checking each density is offered.
+let srcset = (el: Element) => {
+  let given = el.getAttribute('srcset')!.split(', ').map((c) => c.split(' '))
+  assertEquals(given.map(([, d]) => d), ['1x', '2x', '3x'])
+  return given.map(([f]) => f)
+}
+
 // Each yak on a page: its pose, its words, and the files it names.
 let yaks = (html: string) =>
   [...parseHTML(`<main>${html}</main>`).document.querySelectorAll('.Working')]
@@ -38,7 +45,7 @@ let yaks = (html: string) =>
       return {
         pose: pic.getAttribute('data-pose'),
         words: p.textContent,
-        files: [img.getAttribute('src')!, still.getAttribute('srcset')!],
+        files: [img.getAttribute('src')!, ...[img, still].flatMap(srcset)],
       }
     })
 
