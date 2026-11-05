@@ -537,3 +537,23 @@ test('a cached workspace install preserves nested dependency trees', async () =>
   assertEquals(m.read(`${m.root}/${path}/package.json`), '{"version":"1"}')
   assertEquals(m.stale(m.root), false)
 })
+
+let formerWorkspace = memory()
+{
+  let m = formerWorkspace
+  m.inputs(`${m.root}/worker`)
+  m.write(`${m.root}/package.json`, JSON.stringify({ workspaces: ['worker'] }))
+  await m.installed(m.root)
+  m.tree(`${m.root}/worker`)
+  m.write(
+    `${m.root}/worker/node_modules/.yak-install`,
+    'former standalone install',
+  )
+}
+test('a workspace install replaces former standalone dependency trees', async () => {
+  let m = formerWorkspace
+  assertEquals(m.stale(m.root), true)
+  assertEquals(await m.installed(m.root), true)
+  assertEquals(m.host.exists(`${m.root}/worker/node_modules/dep`), false)
+  assertEquals(m.state(), [2, false])
+})

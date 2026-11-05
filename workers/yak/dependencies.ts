@@ -137,11 +137,18 @@ export let dependencies = (host: Host = system) => {
     ]
   }
   let remove = host.remove
+  let standalone = (root: string): string[] => {
+    let { workspaces = [] } = JSON.parse(host.read(`${root}/package.json`))
+    return workspaces.map((path: string) => `${root}/${path}/node_modules`)
+      .filter((path: string) => host.exists(`${path}/.yak-install`))
+  }
 
   let incomplete = (root: string) => {
     let read = (path: string): Lock => JSON.parse(host.read(`${root}/${path}`))
     let path = 'package-lock.json'
     try {
+      let old = standalone(root)
+      if (old.length) return `standalone workspace install: ${old.join(', ')}`
       let wanted = read(path)
       path = 'node_modules/.package-lock.json'
       let held = read(path), reason = mismatch(wanted, held)
@@ -275,6 +282,7 @@ export let dependencies = (host: Host = system) => {
       try {
         // Another installer may have finished between the read and the mkdir.
         if (!needed()) return false
+        for (let tree of standalone(root)) remove(tree)
         // The restored project's content key certifies an older complete tree.
         if (cacheKey && adopted(root, cacheKey)) return false
         let seedReason = () => {
