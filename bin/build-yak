@@ -32,6 +32,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
 
 # Workers Builds restores npm's cache, but not Deno's default directories.
 # Keep Deno's executable and module cache beside the cached npm packages so
@@ -54,7 +55,6 @@ if ! command -v deno >/dev/null 2>&1; then
 fi
 deno --version
 
-cd "$root"
 echo "Build commit: $(git rev-parse HEAD)"
 
 case "${1:-}" in
