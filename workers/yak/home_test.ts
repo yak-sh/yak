@@ -90,7 +90,7 @@ test('one side is the whole menu: your account, then the space you are in', asyn
 
 test("a space's Settings change only the space, and delete it", async () => {
   let { document } = sides(await block({ view: 'settings' }))
-  let form = document.querySelector('#content form')!
+  let form = document.querySelector('#content form.Form')!
   assertEquals(form.getAttribute('action'), managePath('settings', 'dana'))
   assertEquals(form.querySelector('[name=name]'), null)
   assert(form.querySelector('[name=space]'))
