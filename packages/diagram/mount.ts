@@ -28,8 +28,9 @@ export type MountOptions = SvgOptions & Pick<Options, 'at' | 'shapes'> & {
 
 /** A mounted drawing. */
 export type Mounted = {
-  /** Draw another query's answer, keeping the places of what both select;
-   * what it adds is stamped with `stage` (default: `MountOptions.stage`).
+  /** Draw another query's answer. What this drawing has drawn before, under
+   * any query, keeps its place, order and stage; what it adds is stamped
+   * with `stage` (default: `MountOptions.stage`).
    * Settles once drawn, and refuses as the graph refuses the query; the old
    * drawing stays then. */
   query: (query: string, stage?: number) => Promise<Layout>
@@ -39,6 +40,18 @@ export type Mounted = {
   readonly layout: Layout | undefined
   /** Stop following the graph. */
   stop: () => void
+}
+
+// A layout of everything in `seen` and `drawn`, as `drawn` has it.
+let remember = (seen: Layout | undefined, drawn: Layout): Layout => {
+  let by = <T>(old: T[] = [], now: T[], key: (x: T) => string) => [
+    ...new Map([...old, ...now].map((x) => [key(x), x])).values(),
+  ]
+  return {
+    ...drawn,
+    nodes: by(seen?.nodes, drawn.nodes, (n) => n.eid),
+    links: by(seen?.links, drawn.links, (l) => l.key),
+  }
 }
 
 // One effect hook per graph, telling every drawing mounted on it.
@@ -84,6 +97,9 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   let label = human(graph.vocab)
   let current = opts.query
   let last: Layout | undefined
+  // Everything drawn so far, under any query, as it was last drawn: what
+  // comes back after another query has been shown keeps its stage.
+  let seen: Layout | undefined
   let running: Promise<Layout> | undefined
   let again = false
   // The stage of the first commit not yet read.
@@ -95,7 +111,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   }
   let draw = (bundles: Bundle[], s: number) => {
     last = layout(bundles, {
-      was: last,
+      was: seen,
       width,
       height,
       label,
@@ -103,6 +119,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
       shapes,
       stage: s,
     })
+    seen = remember(seen, last)
     sheet.innerHTML = svg(last, opts)
     drawn?.(last)
     return last

@@ -34,6 +34,10 @@ export const PLACES: Record<string, [number, number]> = {
   'C-5': [.7, .86],
 }
 
+/** The first stage what a wider query adds is drawn in; a visitor's lines
+ * are drawn from LIVE up to it. */
+const ASKED = LIVE * 2
+
 /** How long a stage takes to draw in once it has been written, in ms. */
 const RAMP = 1100
 
@@ -75,7 +79,7 @@ export let figure = (yak: Yak) => {
     ask: (q: string) => {
       query = q
       told()
-      return LIVE * 2 + asked++
+      return ASKED + asked++
     },
     last: () => last,
     listen: (l: () => void) => {
@@ -91,13 +95,14 @@ export let figure = (yak: Yak) => {
     saw: (layout: Layout, now: number) => {
       for (let x of [...layout.nodes, ...layout.links]) {
         if (!born.has(x.stage)) born.set(x.stage, now)
-        if (x.stage >= LIVE) live = true
+        if (x.stage >= LIVE && x.stage < ASKED) live = true
       }
     },
     /** How far a stage has come in at `now`: a step as far as the reader has
      * scrolled into it, once it has been written; the start and anything the
      * visitor did as soon as it is written. Once the visitor has typed, the
-     * story stays drawn wherever they scroll. */
+     * story stays drawn wherever they scroll; widening the query does not
+     * count as typing. */
     reached: (stage: number, now: number) => {
       let t = since(stage, now)
       if (stage == 0 || stage >= LIVE || live) return t

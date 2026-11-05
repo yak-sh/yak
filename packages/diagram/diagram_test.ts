@@ -7,7 +7,7 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
-import { ink, layout, mount, progress, svg, tip } from './mod.ts'
+import { ink, type Layout, layout, mount, progress, svg, tip } from './mod.ts'
 
 let eid = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -150,6 +150,33 @@ test('a mount redraws after every commit, and takes a new query keeping places',
   await g.apply([doc(3, 'Emma')])
   await drawing.redraw()
   assert(sheet.innerHTML.includes('Emma'))
+  drawing.stop()
+})
+
+test('what a mount drew comes back from another query with its stage, place and order', async () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: { component: true, properties: { title: { type: 'string' } } },
+      note: { component: true, properties: { text: { type: 'string' } } },
+    },
+  })
+  let g = graph({ vocab, storage: ram(vocab) })
+  await g.apply([doc(1, 'Dune'), {
+    entity: { eid: eid(2) },
+    note: { text: 'a' },
+  }])
+  let drawing = mount({ innerHTML: '' }, {
+    graph: g,
+    query: '.doc',
+    stage: () => 1,
+  })
+  let first = await drawing.redraw()
+  await drawing.query('.note', 7)
+  let back = await drawing.query('.doc', 9)
+  let shown = (
+    { stage, x, y, order }: Layout['nodes'][0],
+  ) => [stage, x, y, order]
+  assertEquals(back.nodes.map(shown), first.nodes.map(shown))
   drawing.stop()
 })
 

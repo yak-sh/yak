@@ -116,6 +116,24 @@ test('the start draws at once, and each step only as far as it is scrolled into'
   equal([at(1), at(2), at(3)], [1, .5, 0])
 })
 
+test('the drawing widened and back to the demo still draws each step as far as it is scrolled', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, 4)
+  await settle()
+  let wider = (name: string) =>
+    ([...root.querySelectorAll('.Figure_Wider button')]
+      .find((b) => b.textContent == name) as unknown as { click: () => void })
+      .click()
+  wider("the site's files")
+  await settle()
+  wider('the demo')
+  await settle()
+  let at = (n: number) => page.figure.reached(n, performance.now() + 5000)
+  page.figure.scroll([1, .5])
+  equal([at(1), at(2), at(3)], [1, .5, 0])
+  page.page.close()
+})
+
 test('the stack shows the last entity written and the phases apply() ran', async () => {
   let { root, page, settle } = await open()
   await page.term.enter("task new 'Water the plants'")
