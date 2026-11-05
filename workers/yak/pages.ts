@@ -721,7 +721,7 @@ ${icon(navIcons[key])}${label}${
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side" id="menu" aria-label="Menu">
 <div class="Desk_Top"><a class="Desk_Brand" href="${url(env, '/')}"><img src="${
-    url(env, '/yaks-app.png')
+    url(env, '/yak.webp')
   }" width="36" height="36" alt="">yaks.app</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
 <div class="Desk_Section"><h2 class="Desk_Group" id="side-account">Your account</h2>
 <nav class="SideNav" aria-labelledby="side-account">

@@ -366,8 +366,8 @@ test("a card's button opens the app, and the copy steps back", () => {
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
   // The link carries the address; the card does not print it.
   assert(!html.includes('>jeff.yaks.app/recipes/<'))
-  // No picture of its own falls back to the platform's tile.
-  assertStringIncludes(html, 'connector-512.png')
+  // No picture of its own falls back to the platform's mark.
+  assertStringIncludes(html, 'yak.webp')
   assert(html.indexOf('</h3>') < html.indexOf('<form'))
   assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
   assertStringIncludes(

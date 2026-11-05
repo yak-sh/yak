@@ -516,7 +516,7 @@ export let chatPage = async (
 <div class="Talk_Top"><a class="Talk_Brand" href="${
       url(env, '/manage')
     }"><img src="${
-      url(env, '/yaks-app.png')
+      url(env, '/yak.webp')
     }" width="28" height="28" alt="">Operator</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
 <div class="Talk_Whose"><p class="Talk_Of">The Operator of</p>${
       spaceChoice(

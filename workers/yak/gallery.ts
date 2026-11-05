@@ -401,7 +401,7 @@ export let card = (a: Shown) =>
       ? `<img src="${
         esc(a.shot)
       }" alt="" loading="lazy" width="1200" height="630">`
-      : `<img class="Make_Shot-none" src="/connector-512.png" alt="" loading="lazy" width="512" height="512">`
+      : `<img class="Make_Shot-none" src="/yak.webp" alt="" loading="lazy" width="352" height="454">`
   }</a>
 ${a.about ? `<p class="Card_Sub">${esc(a.about)}</p>` : ''}
 </li>`

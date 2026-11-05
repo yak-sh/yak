@@ -396,7 +396,7 @@ let desk = (
     `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side">
 <a class="Desk_Brand" href="${url(d.env, '/')}"><img src="${
-      url(d.env, '/yaks-app.png')
+      url(d.env, '/yak.webp')
     }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Directory">${nav}</nav>
 </aside><div class="Desk_Body"><header class="Desk_Head"><div>${kicker}<h1>${
