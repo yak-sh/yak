@@ -17,6 +17,7 @@ import {
 } from '@yaks/cli/grammar'
 import { registry, show } from '@yaks/cli/answer'
 import { nameKeywords } from '@yaks/names'
+import { human } from '@yaks/id'
 import * as kernelVocab from '@yaks/kernel/vocab'
 import * as kernelGraph from '@yaks/kernel/graph'
 import * as kernelTools from '@yaks/kernel/tools'
@@ -35,6 +36,9 @@ import * as taskGraph from '@yaks/task/graph'
 import * as taskTools from '@yaks/task/tools'
 import * as taskViews from '@yaks/task/views'
 import * as personaVocab from '@yaks/persona/vocab'
+import { voice, wear } from '@yaks/persona'
+import * as memoryVocab from '@yaks/memory/vocab'
+import * as memoryTools from '@yaks/memory/tools'
 import * as provenanceVocab from '@yaks/provenance/vocab'
 import * as canvasVocab from '@yaks/canvas/vocab'
 import * as canvasGraph from '@yaks/canvas/graph'
@@ -77,6 +81,7 @@ export let PACKAGES: Facets[] = [
     views: taskViews,
   },
   { name: '@yaks/persona', vocab: personaVocab },
+  { name: '@yaks/memory', vocab: memoryVocab, tools: memoryTools },
   { name: '@yaks/provenance', vocab: provenanceVocab },
   { name: '@yaks/canvas', vocab: canvasVocab, graph: canvasGraph },
   { name: '@yaks/file', vocab: fileVocab },
@@ -102,6 +107,8 @@ export let OFFERED = new Set([
   'task_update',
   'decision_new',
   'decision_answer',
+  'memory_save',
+  'memory_recall',
 ])
 
 /** One line typed, and what it printed. */
@@ -336,6 +343,8 @@ export let yak = async ({ retry = 1500 } = {}) => {
     }
   }
 
+  let named = human(vocab)
+
   // The person was written before anything listened.
   for (let b of await g.get([you])) rows.set(b.entity.eid, b)
 
@@ -379,6 +388,16 @@ export let yak = async ({ retry = 1500 } = {}) => {
     },
     /** The outbox the mail effect delivers to. */
     outbox: box,
+    /** What a new session wearing a persona (by its short id) starts with:
+     * its text and everything it contains, as @yaks/persona says it to an
+     * agent, printed the way a command's answer is. */
+    context: async (persona: string): Promise<Said> => {
+      let row = [...rows.values()].find((b) => named(b) == persona)
+      let worn = row && await wear(storage, vocab)(row.entity.eid)
+      return worn
+        ? { code: 0, out: voice(vocab)(worn).trimEnd().split('\n') }
+        : { code: 1, out: [`${persona} is no persona`] }
+    },
     /** A rule or effect by name, as the vocabulary that declares it writes
      * it, and the package that declares it (`shop`: the page's own). */
     declared: (name: string) =>

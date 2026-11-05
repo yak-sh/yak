@@ -36,6 +36,7 @@ export const PLACES: Record<string, [number, number]> = {
   'N-5': [.18, .78],
   'T-7': [.68, .8],
   'T-8': [.42, .24],
+  'C-9': [.47, .45],
   'C-6': [.36, .93],
 }
 

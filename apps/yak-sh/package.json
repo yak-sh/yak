@@ -13,6 +13,7 @@
     "@yaks/kernel": "platform",
     "@yaks/mail": "platform",
     "@yaks/markdown": "platform",
+    "@yaks/memory": "platform",
     "@yaks/names": "platform",
     "@yaks/persona": "platform",
     "@yaks/preact": "platform",

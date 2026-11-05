@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Markdown } from '@yaks/markdown'
 import { half, type Layout, mount } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
+import { human } from '@yaks/id'
 import { placeOf, SHEET, STORY } from './figure.ts'
 import type { Ctx } from './views.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
@@ -26,6 +27,7 @@ export const WINDOWS: Record<string, { name: string; sign: string }> = {
   mcp: { name: 'agent · /mcp', sign: 'agent ▸ ' },
   sh: { name: 'terminal', sign: '$ ' },
   outbox: { name: 'outbox · mail in this tab, sent nowhere', sign: '✉ ' },
+  session: { name: 'a new agent session', sign: 'wears ' },
 }
 
 /** What the rules band draws: the story, and the letters its questions sent. */
@@ -117,13 +119,21 @@ let band = (
     })
     return () => m.stop()
   }, [])
-  // The letter an outbox beat follows, by its subject.
+  // The letter an outbox beat follows, by its subject, and the persona a
+  // session beat wears, by its short id.
   let letter = (subject: string) =>
     yak.rows().find((r) => r.mail && text(r, 'doc', 'title') == subject)
+  let id = human(yak.vocab)
+  let numbered = (short: string) =>
+    yak.rows().find((r) => id(r) == short)?.entity.eid
   let open = beats.flatMap((b, i) => {
     let d = turns.done(key, i)
     if (!d || i > upto) return []
-    let eid = b.kind == 'outbox' ? letter(b.line)?.entity.eid : d.eid
+    let eid = b.kind == 'outbox'
+      ? letter(b.line)?.entity.eid
+      : b.kind == 'session'
+      ? numbered(b.line)
+      : d.eid
     let tries = b.kind == 'outbox'
       ? yak.outbox.tries().filter((t) => t.subject == b.line)
       : []
@@ -262,6 +272,13 @@ export let Doors = band({
   query: STORY,
   no: 'Fig. 3',
   caption: 'The graph drawn above. Each window is an interface writing to it.',
+})
+
+export let Memory = band({
+  query: MAILED,
+  no: 'Fig. 5',
+  caption:
+    'The graph drawn above. The last window is what a new session wearing your agent’s persona is given.',
 })
 
 export let Rules = band({

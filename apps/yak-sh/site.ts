@@ -54,6 +54,9 @@ let declared = (...names: string[]) =>
 /** A beat that writes nothing: its window is the outbox, showing what was
  * tried with the letter of this subject. */
 let outbox = (subject: string) => '```outbox\n' + subject + '\n```'
+/** A beat that starts a session wearing a persona, by its short id: its
+ * window is what the session is given. */
+let session = (persona: string) => '```session\n' + persona + '\n```'
 
 export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
 
@@ -199,6 +202,33 @@ export let SECTIONS: Section[] = [
       "You pick an answer in the browser. `@yaks/task`'s rule finishes a question once it is answered, in the same write.",
       declared('decision_answered'),
       web('decision_answer {"decision": "T-8", "choice": "The test key"}'),
+    ].join('\n\n'),
+  },
+  {
+    eid: '6b8ad916-987c-4ae0-933b-f9b32ba39a9d',
+    pane: 'ce5827a4-c426-45f3-a720-d81c61ace6d0',
+    view: 'Memory',
+    title: 'What one agent learns, every agent after it knows',
+    body: [
+      "An agent's context is gone when its session ends, so what it learns is kept in the graph. A **memory** marks words a person said, verbatim, where they said them. A **persona** is the instructions an agent wears: it contains documents and memories by edges, and every session that wears it starts with all of them, after the personas it is built on. A **topic** holds what is known about one subject the same way, and an agent opened on a topic, the oracle, answers from it.",
+      '### You say it once',
+      'Answering the question, you say why.',
+      web(
+        'comment_new {"target": "T-8", "body": "Never put the live key in CI: it charges real cards."}',
+      ),
+      '### Your agent keeps your words',
+      'It marks your comment as a memory, with a line of context. The words stay yours, where you wrote them, and `memory_recall` finds them again.',
+      mcp(
+        'memory_save {"on": "C-9", "context": "Which payments key the build uses"}',
+      ),
+      '### Its persona carries them',
+      'It files the memory in the persona it wears.',
+      mcp(
+        'graph_apply {"bundles": [{"edge": {"from": "N-5", "to": "C-9"}, "contains": {}}]}',
+      ),
+      '### The next agent starts with them',
+      'A new session wearing the persona is given its text and everything it contains, so the next agent knows to keep the live key out of CI without being told.',
+      session('N-5'),
     ].join('\n\n'),
   },
   {
@@ -445,7 +475,8 @@ export let scriptOf = (body: string) => {
  * shows by name, and the one line it runs: typed in a terminal (`sh`),
  * called by the agent over MCP (`mcp`) or by a page in the browser (`web`).
  * An `outbox` beat runs nothing; its line is the subject of the letter whose
- * tries it shows. */
+ * tries it shows. A `session` beat starts a session wearing the persona its
+ * line names. */
 export type Beat = {
   title: string
   prose: string
@@ -455,7 +486,7 @@ export type Beat = {
 }
 
 // The blocks a section's body holds that the page acts on, not prints.
-const BLOCK = /```(sh|mcp|web|outbox|declared)\n([\s\S]*?)\n```/g
+const BLOCK = /```(sh|mcp|web|outbox|session|declared)\n([\s\S]*?)\n```/g
 
 /** A band's body: what it says first, then each `###` beat. */
 export let beatsOf = (body: string) => {

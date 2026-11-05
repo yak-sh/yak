@@ -16,7 +16,7 @@ import { type Figure, into, placeOf, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
-import { Doors, Rules } from './doors.ts'
+import { Doors, Memory, Rules } from './doors.ts'
 import type { Turns } from './turns.ts'
 import { text, useHeard, useTold } from './told.ts'
 import { clicked, Editor, opener } from './editor.ts'
@@ -479,5 +479,6 @@ export let views = define([
   { view: 'Stack', match: doc, Render: Stack },
   { view: 'Doors', match: doc, Render: Doors },
   { view: 'Rules', match: doc, Render: Rules },
+  { view: 'Memory', match: doc, Render: Memory },
   ...parts.map((p) => ({ ...p, match: doc })),
 ] as never)

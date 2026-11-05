@@ -24,9 +24,11 @@ export let turns = (yak: Yak, term: Term) => {
   let told = () => listeners.forEach((l) => l())
   // A beat through the door its block names: typed in a terminal, called by
   // the agent, or called by a page in the browser. An outbox beat writes
-  // nothing: it shows what an earlier write left to happen.
+  // nothing: it shows what an earlier write left to happen; a session beat
+  // starts a session wearing a persona, and shows what it is given.
   let run = (b: Beat) => {
     if (b.kind == 'outbox') return Promise.resolve({ code: 0, out: [] })
+    if (b.kind == 'session') return yak.context(b.line)
     if (b.kind == 'sh') return yak.run(b.line)
     let { tool, args } = called(b.line)
     return b.kind == 'mcp' ? yak.ask(tool, args) : yak.call(tool, args)

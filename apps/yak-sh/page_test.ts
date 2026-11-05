@@ -178,6 +178,35 @@ test('in the rules band a rule makes a question a letter, an effect sends it, an
   page.page.close()
 })
 
+test("in the memory band your words become a memory your agent's persona carries, and a new session starts with them", async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, steps.length)
+  let band = SECTIONS.find((s) => s.view == 'Memory')!
+  await page.turns.reach(band.eid, beatsOf(band.body).beats.length)
+  await settle()
+  let said = 'Never put the live key in CI: it charges real cards.'
+  let [kept] = await page.yak.graph.read('.memory *')
+  equal(
+    [text(kept, 'doc', 'body'), text(kept, 'created', 'by')],
+    [said, page.yak.you],
+  )
+  let memory = root.querySelector(`[data-eid="${band.eid}"]`)!
+  equal(
+    [...memory.querySelectorAll('.Window')].map((w) =>
+      w.getAttribute('data-door')
+    ),
+    ['web', 'mcp', 'mcp', 'session'],
+  )
+  let started = memory.querySelector('.Window.is-open')!
+  match(started.textContent!, /wears N-5# N-5 Your agent.*# C-9/)
+  match(started.textContent!, new RegExp(said))
+  equal(
+    memory.querySelector('.is-told')?.getAttribute('data-key'),
+    page.yak.agent,
+  )
+  page.page.close()
+})
+
 test('each thing the story draws leads back to the command whose write made it', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, 3)
