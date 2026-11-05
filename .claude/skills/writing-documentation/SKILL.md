@@ -2,9 +2,9 @@
 name: writing-documentation
 description: >
   Use for READMEs, guide pages, doc comments, opening file prose, examples,
-  titles, headings, or explaining a feature/term. Covers plain technical
-  prose and consistent defined terms. Skills are skill-writing; proposals
-  are design-docs; component names are vocabulary; marketing pages are
+  titles, headings, or explaining a feature/term. Covers plain technical prose
+  and consistent defined terms. Skills are skill-writing; proposals are
+  design-docs; component names are vocabulary; marketing pages are
   marketing-site.
 ---
 
@@ -189,6 +189,8 @@ it says why, and doesn't retell what the code already makes plain.
   assistants.
 - **Pointers, not copies.** A link to another package's documentation stays
   true when that package moves; a copy doesn't.
+- **Steps are a numbered list**, several parallel items a bulleted one, in a
+  task body or comment as much as a README.
 - **Plain and short.** One idea per paragraph, said directly (see Literal
   titles, plain sentences), nothing the reader doesn't need in order to act.
   For emphasis, the owner (M-37800, verbatim): "never use ALL CAPS for

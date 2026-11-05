@@ -1,11 +1,10 @@
 ---
 name: agent-briefs
 description: >
-  Use when delegating work, filing an agent task, sending a running agent
-  more input, stopping or rebriefing one, or reviewing its report. Covers
+  Use when delegating work, filing an agent task, sending a running agent more
+  input, stopping or rebriefing one, or reviewing its report. Covers
   Agent/SendMessage, codex exec, session_spawn and yak session new. Native
-  session operation is native-sessions; owner-facing proposals are
-  design-docs.
+  session operation is native-sessions; owner-facing proposals are design-docs.
 ---
 
 # Briefing an agent
@@ -61,7 +60,7 @@ that would serve the agent better.
 ## What a brief carries
 
 **The task as the spec.** File it first: the outcome and the pointers, short
-(M-14370), with the owner's words verbatim in it. The task body is the brief.
+(M-14370), steps as a numbered list, with the owner's words verbatim in it. The task body is the brief.
 Edit it there, then start the run with `session_spawn` with
 `{task: "T-…", provider: "codex"}` (or `provider: "claude"`). The request
 carries the body and asks the agent to read `graph_show` with `ids: ["T-…"]`
