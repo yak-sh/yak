@@ -67,9 +67,12 @@ import { addressed, sha256 } from './versions.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 
-let platform = (vars: Partial<Env> = {}) => {
+let platform = (vars: Partial<Env> = {}, physical = false) => {
   let runtime = bindings(SECRET, { BUILDER: operators, ...vars })
-  let host = lifecycleStores(runtime.env, (_name, from) => durable(from))
+  let host = lifecycleStores(
+    runtime.env,
+    physical ? (_name, from) => durable(from) : undefined,
+  )
   return {
     ...runtime,
     ...host,
@@ -926,7 +929,7 @@ test('the page wire: apply, query and search round-trip', async () => {
 })
 
 test('a store tells the directory its size within the storage allowance step', async () => {
-  await using scenario = platform()
+  await using scenario = platform({}, true)
   let { env, states } = scenario
   let { dir, space, app } = await seeded(env, 'public', scenario.dir)
   assertEquals(app.meter, null)
@@ -1158,7 +1161,7 @@ test('seen closes a whole deploy at once (T-34338)', async () => {
 })
 
 test('DELETE / empties the app store and bears it again', async () => {
-  await using scenario = platform()
+  await using scenario = platform({}, true)
   let { env, object, files } = scenario
   let { space, app } = await seeded(env, 'public', scenario.dir)
   let page = client(env, await as(ADA))
