@@ -21,6 +21,7 @@ export let FILES = [
   'package.json',
   'icon.png',
   'yak.webp',
+  'yak-880.webp',
   'og.jpg',
   'paper.webp',
   'term.ts',
@@ -425,6 +426,10 @@ export let SECTIONS: Section[] = [
 ]
 
 /** Where each part of the page is linked from: `#install` and the rest. */
+/** The painted yak's files, for an img's srcset: small for a phone's nav, large
+ * for the home page's nav and the footer's 30vw on a 2x screen. */
+export let LOGO = 'yak.webp 320w, yak-880.webp 880w'
+
 export let ANCHORS: Record<string, string> = {
   '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19': 'yak',
   [YAKS_APP]: 'yaks-app',

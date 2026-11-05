@@ -9,7 +9,7 @@ import { Prose, words } from './prose.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
 import { text } from './told.ts'
-import { ANCHORS } from './site.ts'
+import { ANCHORS, LOGO } from './site.ts'
 
 /** A command with a button that copies it. */
 export let Copy = ({ line }: { line: string }) => {
@@ -135,19 +135,25 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
       h('img', {
         class: 'Block_Logo',
         src: 'yak.webp',
-        width: 72,
-        height: 72,
+        srcset: LOGO,
+        sizes: '(max-width: 760px) 60vw, 30vw',
+        width: 440,
+        height: 440,
         alt: '',
         loading: 'lazy',
       }),
       h('strong', null, words(text(e, 'doc', 'title'))),
       h('span', null, words(line)),
     ]),
-    ...facts.map(([term, value]) =>
-      h('dl', null, [
-        h('dt', null, term),
-        h('dd', null, h(Prose, { source: value })),
-      ])
+    h(
+      'div',
+      { class: 'Block_Facts' },
+      facts.map(([term, value]) =>
+        h('dl', null, [
+          h('dt', null, term),
+          h('dd', null, h(Prose, { source: value })),
+        ])
+      ),
     ),
   ])
 }
