@@ -35,10 +35,13 @@ export let useHeard = (
   }, [])
 }
 
-/** How far into the window, from its top and from its bottom, a trigger
- * is before it is live: it starts this far after it comes in, and is done
- * this far before it goes out. */
+/** How far into the window from its bottom a trigger is before it is
+ * live: it starts this far after it comes in. */
 export const BUFFER = .1
+
+/** How far down from the window's top a trigger is done: well before it
+ * goes out, so what it plays finishes while it is still in view. */
+export const FINISH = .35
 
 let clamp = (v: number) => Math.max(0, Math.min(1, v))
 
@@ -87,13 +90,13 @@ export let allot = (
 }
 
 /** How far each trigger has played, 0 to 1, from where their tops sit in a
- * window `view` tall, given the scrolling `allot` gives it; the lines it is
- * live between are BUFFER in from the window's edges, unless `top` says the
- * window is covered above it. Scrolling back plays it backwards. */
+ * window `view` tall, given the scrolling `allot` gives it; it is live from
+ * BUFFER in from the window's bottom to FINISH down from its top, unless
+ * `top` says the window is covered above it. Scrolling back plays it backwards. */
 export let played = (
   tops: number[],
   view: number,
-  top = view * BUFFER,
+  top = view * FINISH,
 ): number[] =>
   allot(tops, top, view * (1 - BUFFER)).map(([start, end]) =>
     clamp(-start / Math.max(1, end - start))

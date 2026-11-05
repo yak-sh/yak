@@ -32,13 +32,13 @@ test('the write happens as far as the reader has scrolled, and undoes as they go
 })
 
 // Each trigger's share in a window 1000 tall, live from 100 in at its bottom
-// to 100 in at its top: how far the page scrolls before it starts and ends.
+// to 350 down from its top: how far the page scrolls before it starts and ends.
 let shares = (tops: number[]) =>
-  allot(tops, 100, 900).map(([a, b]) => [Math.round(a), Math.round(b)])
+  allot(tops, 350, 900).map(([a, b]) => [Math.round(a), Math.round(b)])
 
-test('a lone trigger plays over the window less its buffers, and backwards as the reader goes back', () => {
-  equal(shares([500]), [[-400, 400]])
-  equal([950, 900, 500, 100, 50].map((t) => played([t], 1000)[0]), [
+test('a lone trigger plays out before it is high in the window, and backwards as the reader goes back', () => {
+  equal(shares([500]), [[-400, 150]])
+  equal([950, 900, 625, 350, 50].map((t) => played([t], 1000)[0]), [
     0,
     0,
     .5,
@@ -48,23 +48,23 @@ test('a lone trigger plays over the window less its buffers, and backwards as th
 })
 
 test('triggers in view together share out the scrolling they are live for, one after another', () => {
-  equal(shares([500, 520, 540]), [[-400, -120], [-120, 160], [160, 440]])
-  equal(shares([400, 420, 440, 460, 480]), [
-    [-500, -324],
-    [-324, -148],
-    [-148, 28],
-    [28, 204],
-    [204, 380],
+  equal(shares([600, 620, 640]), [[-300, -103], [-103, 93], [93, 290]])
+  equal(shares([500, 520, 540, 560, 580]), [
+    [-400, -274],
+    [-274, -148],
+    [-148, -22],
+    [-22, 104],
+    [104, 230],
   ])
 })
 
 test('in a tall band the triggers share the whole of its scrolling, and only scrolling where none is live goes unused', () => {
-  equal(shares([0, 600, 1200]), [[-900, -233], [-233, 433], [433, 1100]])
-  equal(shares([0, 2000]), [[-900, -100], [1100, 1900]])
+  equal(shares([0, 400, 800]), [[-900, -450], [-450, 0], [0, 450]])
+  equal(shares([0, 1500]), [[-900, -350], [600, 1150]])
 })
 
 test('a trigger that must be done before it leaves gets less, and those beside it share the rest', () => {
-  equal(shares([0, 0, 700]), [[-900, -500], [-500, -100], [-100, 600]])
+  equal(shares([0, 0, 400]), [[-900, -625], [-625, -350], [-350, 50]])
 })
 
 test('each phase does its own work on the letter, and its effect delivers it after the commit', async () => {
