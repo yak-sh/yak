@@ -720,7 +720,7 @@ ${icon(navIcons[key])}${label}${
 ${link('profile', 'Profile')}${link('invite', 'Invite')}${
     link('agents', 'Agents')
   }${link('shared', 'Shared with you')}</nav></div>
-<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">Space you’re working in</h2>${
+<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">This space</h2>${
     chooser(at, view)
   }
 <nav class="SideNav" aria-label="This space">
