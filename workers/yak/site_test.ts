@@ -84,7 +84,7 @@ for (
 }
 let images = new Map([
   'og.png',
-  'yak.png',
+  'yak.webp',
   'favicon-32.png',
   'apple-touch-icon.png',
   'icon-192.png',
@@ -113,21 +113,36 @@ test('every page wears the raster yak', () => {
   }
 })
 
-// Color type 6 is RGBA and 2 is opaque truecolor: an icon meant to sit on a
-// page carries its own ground, and one meant for a home screen carries none.
-let png = (name: string, width: number, height: number, kind = 6) => {
+// An icon meant for a home screen carries no ground, and one meant to sit on
+// a page carries its own: clear is an alpha channel (color type 4 or 6) or a
+// palette with transparent entries (tRNS).
+let png = (name: string, width: number, height: number, clear = true) => {
   let bytes = images.get(name)!
   assertEquals([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
   let view = new DataView(bytes.buffer, bytes.byteOffset)
   assertEquals([view.getUint32(16), view.getUint32(20)], [width, height], name)
-  assertEquals(bytes[25], kind, `${name} has the wrong color type`)
+  let alpha = [4, 6].includes(bytes[25]) ||
+    new TextDecoder('latin1').decode(bytes).includes('tRNS')
+  assertEquals(alpha, clear, `${name} has the wrong transparency`)
+}
+
+// A lossy WebP with alpha is VP8X, its alpha flag set, and its canvas size
+// stored less one in 24 bits each.
+let webp = (name: string, width: number, height: number) => {
+  let bytes = images.get(name)!
+  let text = new TextDecoder('latin1').decode(bytes.slice(0, 16))
+  assertEquals([text.slice(0, 4), text.slice(8, 16)], ['RIFF', 'WEBPVP8X'])
+  assert(bytes[20] & 0x10, `${name} has no alpha`)
+  let size = (at: number) =>
+    1 + (bytes[at] | bytes[at + 1] << 8 | bytes[at + 2] << 16)
+  assertEquals([size(24), size(27)], [width, height], name)
 }
 
 test('the yak exports have their intended sizes and transparency', () => {
   // The opaque share card is not the yak alone: 1200×630 is what
   // every unfurler crops to, and og.svg beside it is what it is drawn from.
-  png('og.png', 1200, 630, 2)
-  png('yak.png', 768, 743)
+  png('og.png', 1200, 630, false)
+  webp('yak.webp', 352, 454)
   png('favicon-32.png', 32, 32)
   png('apple-touch-icon.png', 180, 180)
   png('icon-192.png', 192, 192)
@@ -140,7 +155,7 @@ test('the yak exports have their intended sizes and transparency', () => {
 // referenced SVG points at, so an external `href` here would render an empty
 // tile in every client that reads it.
 test('the connector icon is square, self-contained and on the ground', () => {
-  png('connector-512.png', 512, 512, 2)
+  png('connector-512.png', 512, 512, false)
   let svg = read('connector.svg').replace(/<!--[^]*?-->/g, '')
   assertStringIncludes(svg, 'viewBox="0 0 512 512"')
   for (let el of svg.matchAll(/<image[^>]*>/g)) {
@@ -884,7 +899,7 @@ test('ChatGPT gets a downloadable icon within its upload limit', async () => {
 <img src="${href}" width="56" height="56" alt=`,
   )
 
-  png('yaks-app.png', 256, 256, 3)
+  png('yaks-app.png', 256, 256, false)
   let icon = Deno.statSync(
     new URL('./public/yaks-app.png', import.meta.url),
   )
