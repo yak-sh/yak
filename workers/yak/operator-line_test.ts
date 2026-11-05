@@ -237,11 +237,9 @@ test("a fork's text goes from the person's own number, signed as their assistant
 test("a text back comes into the person's conversation as its writer's words; anyone else's stays theirs", async () => {
   assertEquals([answered.status, await answered.text()], [200, 'ok'])
   assertEquals([stranger.status, await stranger.text()], [200, 'ok'])
-  assertStringIncludes(
-    root.html,
-    'By text from +12695550142, replying to your text',
-  )
-  assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
+  assertStringIncludes(root.html, 'title="A reply to a text"')
+  assertStringIncludes(root.html, '</span>Tuesday at 3 works for us.')
+  assertEquals(root.html.includes('replying to your text'), false)
   assertStringIncludes(root.html, 'Dr Alvarez says Tuesday at 3 works.')
   assert(!root.html.includes('golf'))
   assertEquals(forged.status, 403)
