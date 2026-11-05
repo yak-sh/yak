@@ -76,6 +76,7 @@ import { registry, runner } from '@yaks/tools'
 import { tool as codeMode } from '@yaks/code-mode'
 import { translated } from '@yaks/mcp/tools'
 import {
+  connected,
   named,
   reaching,
   ROWS,
@@ -87,7 +88,7 @@ import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { ledger } from './ledger.ts'
-import { instructions, NARROW, pageFor, UNDO } from './guide.ts'
+import { instructions, pageFor } from './guide.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { instrumentEid } from './instrument.ts'
@@ -459,21 +460,13 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // request (hops.ts `recall`), and the roster reads the same declarations.
   let graph = await c.time('reaching', () => reaching(ctx, reach ?? []))
   let opts = {
-    graph,
+    // The generic tier and the platform's verbs over the caller's reach
+    // (agent.ts `connected`), as the Operator lists them too.
+    ...connected(ctx, reach ?? [], graph),
     // Where the call about to be served is recorded (ledger.ts): its own
     // in-memory graph, because the one above is a composition over other
     // people's stores and a question is not their data.
     calls: ledger(graph),
-    // And where a component is documented at length, so graph_schema hands
-    // over the page beside the properties (guide.ts `pageFor`).
-    guide: (comp: string) => pageFor(comp, ctx.env),
-    // And the way back out of a delete here, which the generic tier could not
-    // know: a store is not a place a mistake is final (recover.ts, T-34509).
-    undo: UNDO,
-    // And how a read narrows to one app, which the query grammar cannot say:
-    // `.in=` is the platform's clause (agent.ts `scope`). Signed out there is
-    // no reach to narrow, so the anonymous server below says nothing of it.
-    narrow: NARROW,
     authenticate: () => ({
       by: ctx.person,
       ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
@@ -492,7 +485,6 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
         ? `${instructions(ctx.env)}\n\n---\n\n${apps}`
         : instructions(ctx.env)
     },
-    search: searching(ctx, reach ?? []),
     // What a row here is, `kind` beside its components (agent.ts `ROWS`), so
     // a client checking an answer against its tool's listing finds it fits.
     answer: ROWS,

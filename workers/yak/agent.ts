@@ -71,6 +71,7 @@ import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
+import { NARROW, pageFor, UNDO } from './guide.ts'
 import { caught } from './defects.ts'
 
 // Keep the declared JSON Schema whole; converting through a partial Zod
@@ -580,6 +581,27 @@ export let searching =
     let hits = await read(ctx.env, reach, lined(q))
     return Array.isArray(hits) ? hits as Bundle[] : []
   }
+
+/**
+ * What the connector lists for a signed-in caller, as @yaks/mcp `listing`
+ * options over their reach: the generic tier with each component's guide
+ * page, the way back from a delete and the `.in=` clause, and the platform's
+ * verbs on the graph. The connector's door and the Operator list the same.
+ */
+export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
+  graph,
+  search: searching(ctx, reach),
+  // Where a component is documented at length, so graph_schema hands over the
+  // page beside the properties (guide.ts `pageFor`).
+  guide: (comp: string) => pageFor(comp, ctx.env),
+  // The way back out of a delete here, which the generic tier could not know:
+  // a store is not a place a mistake is final (recover.ts, T-34509).
+  undo: UNDO,
+  // How a read narrows to one app, which the query grammar cannot say: `.in=`
+  // is the platform's clause (`scope`). Signed out there is no reach to
+  // narrow, so the anonymous server (mcp.ts) says nothing of it.
+  narrow: NARROW,
+})
 
 /**
  * A Store refuses a call whose directory revision a later directory write

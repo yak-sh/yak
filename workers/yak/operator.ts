@@ -37,7 +37,7 @@ import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
 import { inReach } from './declared.ts'
-import { reaching, searching } from './agent.ts'
+import { connected, reaching } from './agent.ts'
 import { ledger } from './ledger.ts'
 import { type Args, type Ctx, refuse } from './tool.ts'
 import { bound, type Env } from './env.ts'
@@ -129,35 +129,6 @@ let told = (
     }. Name the space, or the app as space/app, to work in one of them.`
     : ''
 
-let workbench = new Set([
-  'graph_schema',
-  'graph_query',
-  'graph_show',
-  'graph_apply',
-  'search',
-  'app_list',
-  'app_new',
-  'app_files',
-  'app_deploy',
-  'app_versions',
-  'app_rollback',
-  'app_errors',
-  'app_set',
-  'commands',
-  'command',
-  'guide',
-  'about',
-  'domain_attach',
-  'domain_status',
-  'domain_detach',
-  'sandbox_shell',
-  'sandbox_wait',
-  'sandbox_read',
-  'sandbox_write',
-  'sandbox_stop',
-  'sandbox_ship',
-])
-
 // What the Operator reads of itself: its own store, where each conversation
 // and every entry in it, its forks and helpers, its memories, its persona and
 // its tasks and requests are kept. The generic reads take `self` to read it
@@ -168,6 +139,11 @@ let SELF = {
     'Read your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, and your tasks and requests.',
 }
 let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
+// The connector's tools the Operator holds as its own: memory_save and
+// memory_recall are its own memories (the space's are store_memory_save and
+// store_memory_recall), and operator_run and operator_read reach the Operator
+// itself, whose fork, spawn and reads with self are its own of them.
+let ownNamed = new Set([...mine, 'operator_run', 'operator_read'])
 // Where the Operator finds what it no longer holds in front of it, declared
 // beside the code that gives it `self` and the memory loop. The base persona
 // contains it (operator-persona.ts).
@@ -175,7 +151,7 @@ export let remembering: Declared = {
   key: 'remembering',
   title: 'What you have done, and finding it again',
   body:
-    'Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again.',
+    'Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again. What they want every agent working in the space to know, such as how they like their apps built, goes to the space with store_memory_save, and store_memory_recall finds it.',
 }
 
 // Discovery is refreshed before every ask: a deploy may add words and tools.
@@ -253,8 +229,11 @@ export let operatorRoster = async (
     parameters: inputSchemaOf(t),
     readOnly: t.readOnly,
   })
-  let apps = listing({ graph: g, search: searching(ctx, reach) })
-    .map(namedTool).filter((t) => workbench.has(t.name))
+  // Every tool the connector lists for the person (agent.ts `connected`), to
+  // the conversation and each of its forks alike: the list heads the request,
+  // so one list keeps the conversation's cached prefix for every fork.
+  let apps = listing(connected(ctx, reach, g)).map(namedTool)
+    .filter((t) => !ownNamed.has(t.name))
   return [
     ...apps.map((t): Tool => {
       let self = own.get(t.name)
