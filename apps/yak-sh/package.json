@@ -1,0 +1,25 @@
+{
+  "dependencies": {
+    "@yaks/canvas": "platform",
+    "@yaks/cli": "platform",
+    "@yaks/diagram": "platform",
+    "@yaks/doc": "platform",
+    "@yaks/edge": "platform",
+    "@yaks/file": "platform",
+    "@yaks/graph": "platform",
+    "@yaks/id": "platform",
+    "@yaks/kernel": "platform",
+    "@yaks/markdown": "platform",
+    "@yaks/names": "platform",
+    "@yaks/persona": "platform",
+    "@yaks/preact": "platform",
+    "@yaks/provenance": "platform",
+    "@yaks/query": "platform",
+    "@yaks/ram": "platform",
+    "@yaks/render": "platform",
+    "@yaks/task": "platform",
+    "@yaks/tools": "platform",
+    "@yaks/vocab": "platform",
+    "preact": "^10.29.1"
+  }
+}
