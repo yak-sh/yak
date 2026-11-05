@@ -3,7 +3,7 @@
 // carries her, and her space and her app written the way `space_new` and
 // `app_new` write them.
 import { sign } from './lib/token.ts'
-import { directory } from './directory.ts'
+import { type Directory, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { declared } from './directory-fixture.ts'
@@ -23,8 +23,11 @@ export let as = async (person: string) =>
   )}`
 
 /** Ada's space `ada` and its app `cookbook`, open to `access`. */
-export let seeded = async (env: Env, access = 'public') => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
+export let seeded = async (
+  env: Env,
+  access = 'public',
+  dir: Directory = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }),
+) => {
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },

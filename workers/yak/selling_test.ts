@@ -82,7 +82,7 @@ let shopFiles = async () => {
 let shopping = async () => {
   let scenario = platform()
   let { env, files } = scenario
-  let { dir, space } = await seeded(env)
+  let { dir, space } = await seeded(env, 'public', scenario.dir)
   await dir.apply({
     entities: [{
       entity: { eid: '$shop' },
@@ -287,7 +287,7 @@ test('with no connect secret the door says so, and nothing else breaks', async (
 test('stopping selling forgets the account and calls nothing', async () => {
   await using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
-  let { space } = await seeded(env)
+  let { space } = await seeded(env, 'public', scenario.dir)
   await stamp(env, {
     entities: [{
       entity: { eid: space.eid },
@@ -334,7 +334,7 @@ let seated = async (env: Env, dir: ReturnType<typeof directory>) =>
 test('the fee is an owner’s to set, and is charged on the next request', async () => {
   await using scenario = platform()
   let { env } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let cookie = await as(ADA)
   // Ada owns her own space and is nobody in `yak`, so the platform's rate is
@@ -369,7 +369,7 @@ test('the fee is an owner’s to set, and is charged on the next request', async
 test('the fee is whole basis points, and never more than the sale', async () => {
   await using scenario = platform()
   let { env } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let cookie = await as(ADA)
   await seated(env, dir)

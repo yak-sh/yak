@@ -22,7 +22,7 @@ let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
 let runtime = platform(SECRET, { BUILDER: operators })
 let scenario = { ...runtime, ...lifecycleStores(runtime.env) }
 let { env } = scenario
-let { dir, space } = await seeded(env)
+let { dir, space } = await seeded(env, 'public', runtime.dir)
 let ctx: Ctx = { env, dir, person: ADA }
 let run = (name: string, args: Record<string, unknown>) =>
   TOOLS.find((t) => t.name == name)!.run(ctx, args)

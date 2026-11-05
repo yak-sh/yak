@@ -1,7 +1,6 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { appStore, type Directory, directory, storeName } from './directory.ts'
-import * as dirPart from './directory.ts'
+import { appStore, type Directory, storeName } from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
@@ -19,8 +18,7 @@ import type { Reload } from '@yaks/platform'
 import { staged } from './release.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
-let fixture = async (env: Env) => {
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+let fixture = async (env: Env, dir: Directory) => {
   let ctx: Ctx = { env, dir, person: ADA }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(ctx, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
@@ -109,7 +107,7 @@ test('deploy reload marks survive recording, and pointer notices follow the comm
       },
     }),
   }
-  f = await fixture({ ...env, STORE } as Env)
+  f = await fixture({ ...env, STORE } as Env, scenario.dir)
   // The store hears a release after the answer, so each one is awaited.
   let heard = async (name: string, args: Record<string, unknown>) => {
     let n = versions.length
@@ -184,7 +182,7 @@ for (let mode of ['network', 'non-ok']) {
         },
       }),
     }
-    let f = await fixture({ ...scenario.env, STORE } as Env)
+    let f = await fixture({ ...scenario.env, STORE } as Env, scenario.dir)
     await f.write('one')
     await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
     // Retryable notices can finish several sends before the waiter resumes.
@@ -211,7 +209,7 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 // Capture every intermediate update before later releases move its pointer.
 let crossed = await (async () => {
   await using scenario = platform('reload-secret')
-  let f = await fixture(scenario.env)
+  let f = await fixture(scenario.env, scenario.dir)
   await f.kept(1, '1', 'required')
   let deploy = (n: number, reload?: Reload) => f.kept(n, String(n), reload)
   let publish = () =>
@@ -280,7 +278,7 @@ test('updates carry every crossed required source mark but exclude the installed
 let restored = await (async () => {
   await using scenario = platform('restore-words')
   let host = lifecycleStores(scenario.env)
-  let f = await fixture(scenario.env)
+  let f = await fixture(scenario.env, scenario.dir)
   // The source accepted this vocabulary before the platform reserved cost.
   // Seed its stored declaration; every release below keeps its own bytes.
   let words = JSON.stringify({
@@ -384,7 +382,7 @@ test('rollback admits a kept declaration again without changing its version or f
 // and the next release belong to the rollback case's measured work.
 let rollback = await (async () => {
   let scenario = platform('rollback-secret')
-  let f = await fixture(scenario.env)
+  let f = await fixture(scenario.env, scenario.dir)
   await f.kept(1, 'one')
   await f.kept(2, 'two', undefined, { 'main.js': "import './missing.js'" })
   let before = await f.history()
@@ -485,7 +483,7 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
   await using scenario = platform('rollback-errors')
-  let f = await fixture(scenario.env)
+  let f = await fixture(scenario.env, scenario.dir)
   await f.kept(1, 'one')
   await f.kept(2, 'two')
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
@@ -538,7 +536,7 @@ test('worker errors after rollback and an in-flight pointer move name the routed
 
 let legacyRollback = await (async () => {
   await using scenario = platform('rollback-legacy')
-  let f = await fixture(scenario.env)
+  let f = await fixture(scenario.env, scenario.dir)
   await f.kept(1, 'one')
   await f.kept(2, 'two')
   let all = await f.history()

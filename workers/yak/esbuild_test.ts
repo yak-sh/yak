@@ -78,7 +78,7 @@ let scenario = async (
         ? Promise.resolve(Response.json(catalog))
         : assets.fetch(req),
   }
-  let { dir } = await seeded(p.env)
+  let { dir } = await seeded(p.env, 'public', p.dir)
   let ctx = { env: p.env, dir, person: ADA } as Ctx
   let tool = async (name: string, args: Record<string, unknown> = {}) =>
     (await call(ctx, name, { space: 'ada', app: 'cookbook', ...args })).text

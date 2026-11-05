@@ -151,7 +151,7 @@ let served = (js: string) => {
 test('a page is served with its base and its reporter', async () => {
   await using scenario = platform()
   let { env, files } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode('<!doctype html><head></head><body>hi</body>'),
@@ -200,7 +200,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
 test("a release's module imports the client by the page's own path", async () => {
   await using scenario = platform()
   let { env } = scenario
-  let { app } = await seeded(env)
+  let { app } = await seeded(env, 'public', scenario.dir)
   let release = crypto.randomUUID()
   let source = `ada/.releases/${app.eid}/${release}`
   await released(env, source, {
@@ -227,7 +227,7 @@ test("a release's module imports the client by the page's own path", async () =>
 test('a new release serves its files beside the old cached release', async () => {
   await using scenario = platform()
   let { env } = scenario
-  let { app } = await seeded(env)
+  let { app } = await seeded(env, 'public', scenario.dir)
   let old = `ada/.releases/${app.eid}/old`
   let next = `ada/.releases/${app.eid}/next`
   await released(env, old, {
@@ -312,7 +312,7 @@ test('an app worker query can read a connected peer position', async () => {
   await using scenario = platform()
   let { env } = scenario
   let at = stores(env, positionVocab)
-  let { space, app } = await seeded(env)
+  let { space, app } = await seeded(env, 'public', scenario.dir)
   let store = at(storeName(space, app))
   let actor = await store.authenticate(
     new Request('http://store/ws', {
@@ -335,7 +335,7 @@ test('an app worker can send a stored query as one encoded filter', async () => 
   await using scenario = platform()
   let { env } = scenario
   stores(env)
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let title = 'Smith & Wren'
   await client(env, await as(ADA)).apply([{
     entity: { eid: CAKE },
@@ -365,7 +365,7 @@ test('an app worker can send a stored query as one encoded filter', async () => 
 test('an app serves audio and video with byte ranges', async () => {
   await using scenario = platform()
   let { env, files } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
   for (
     let [name, mime] of [
@@ -439,7 +439,7 @@ test('an app serves audio and video with byte ranges', async () => {
 test('an app is installable: the five tags, the icon, the manifest', async () => {
   await using scenario = platform()
   let { env, files } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode(
@@ -555,7 +555,7 @@ test('an app that wrote an icon.svg and no icon.png is served the svg drawn', as
 test("an app's own colours, set through app_set, win over the platform's", async () => {
   await using scenario = platform()
   let { env, files } = scenario
-  let { dir } = await seeded(env)
+  let { dir } = await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode('<!doctype html><head></head><body>hi'),
@@ -590,7 +590,7 @@ test("an app's own colours, set through app_set, win over the platform's", async
 test('a refresh after the page changes is sent the page, and one before is not', async () => {
   await using scenario = platform()
   let { env, files } = scenario
-  let { dir } = await seeded(env)
+  let { dir } = await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode('<!doctype html><head></head><body>hi'),
@@ -620,7 +620,7 @@ test('a page view is one data point, and it names no visitor', async () => {
   await using scenario = platform({ VIEWS: seen })
   let { env, files } = scenario
   stores(env)
-  let { app } = await seeded(env)
+  let { app } = await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode('<!doctype html><body>hi</body>'),
@@ -685,7 +685,7 @@ test("/api/stats answers the app's own people, and nobody else", async () => {
     CF_ANALYTICS_TOKEN: 'a token',
   })
   let { env } = scenario
-  let { app } = await seeded(env)
+  let { app } = await seeded(env, 'public', scenario.dir)
   let api = analytics(rowsFor(app.eid))
   try {
     let mine = await apps.fetch(
@@ -715,7 +715,7 @@ test("/api/stats answers the app's own people, and nobody else", async () => {
 test('/api/stats with no analytics token is a sentence, not a failure', async () => {
   await using scenario = platform()
   let { env } = scenario
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let door = await apps.fetch(
     visit('/cookbook/api/stats', { headers: { cookie: await as(ADA) } }),
     env,
@@ -732,7 +732,7 @@ let wireFixture = async () => {
   let scenario = platform()
   try {
     let { env } = scenario
-    let { dir, space, app } = await seeded(env)
+    let { dir, space, app } = await seeded(env, 'public', scenario.dir)
     let words = appDoc({
       $vocabulary: { 'https://yak.sh/vocab/member': true },
       $defs: {
@@ -928,7 +928,7 @@ test('the page wire: apply, query and search round-trip', async () => {
 test('a store tells the directory its size within the storage allowance step', async () => {
   await using scenario = platform()
   let { env, states } = scenario
-  let { dir, space, app } = await seeded(env)
+  let { dir, space, app } = await seeded(env, 'public', scenario.dir)
   assertEquals(app.meter, null)
   let page = client(env, await as(ADA))
   await page.apply([{
@@ -949,7 +949,7 @@ test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
   await using scenario = platform()
   let { env } = scenario
   stores(env)
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let cookie = await as(ADA)
   let page = client(env, cookie)
   // The door counts the bytes and hands the load to the store as it came: one
@@ -1015,7 +1015,7 @@ test('a subscription is that query still answering', async () => {
       getWebSockets: () => pages,
     },
   })
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   let name = 'ada/cookbook.aaa111'
   // The runtime's hibernation interface drives the production socket adapter
   // over the same graph API the page reads and writes.
@@ -1051,7 +1051,7 @@ test('a subscription is that query still answering', async () => {
 test('an open app takes a write from nobody, and a public one does not', async () => {
   await using open = platform()
   stores(open.env)
-  await seeded(open.env, 'open')
+  await seeded(open.env, 'open', open.dir)
   let stranger = client(open.env)
   let wrote = await stranger.apply([
     { entity: { eid: CAKE }, doc: { title: 'a vote' } },
@@ -1065,7 +1065,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
   // sentence a page shows its person.
   await using shut = platform()
   stores(shut.env)
-  await seeded(shut.env, 'public')
+  await seeded(shut.env, 'public', shut.dir)
   let no = await apps.fetch(
     visit('/cookbook/api/apply', {
       method: 'POST',
@@ -1083,7 +1083,7 @@ test('a break is the platform writing about the app, not in it', async () => {
   await using scenario = platform()
   let { env } = scenario
   stores(env)
-  let { space, app } = await seeded(env, 'private')
+  let { space, app } = await seeded(env, 'private', scenario.dir)
   // The report door takes anyone: a break belongs to whoever was looking.
   let filed = await apps.fetch(
     visit('/cookbook/api/report', {
@@ -1113,7 +1113,7 @@ test('draft edits leave served breaks open until deployment', async () => {
   await using scenario = platform()
   let { env } = scenario
   stores(env)
-  let { space, app } = await seeded(env)
+  let { space, app } = await seeded(env, 'public', scenario.dir)
   let who = { person: ADA, role: 'owner' as const }
   // The break the feedback letter was about: a page reporting that the script
   // it wanted never loaded, from before anyone had written that script.
@@ -1141,7 +1141,7 @@ test('seen closes a whole deploy at once (T-34338)', async () => {
   await using scenario = platform()
   let { env } = scenario
   stores(env)
-  let { space, app } = await seeded(env)
+  let { space, app } = await seeded(env, 'public', scenario.dir)
   let who = { person: ADA, role: 'owner' as const }
   for (let n of [1, 2]) {
     await apps.fetch(
@@ -1160,7 +1160,7 @@ test('seen closes a whole deploy at once (T-34338)', async () => {
 test('DELETE / empties the app store and bears it again', async () => {
   await using scenario = platform()
   let { env, object, files } = scenario
-  let { space, app } = await seeded(env)
+  let { space, app } = await seeded(env, 'public', scenario.dir)
   let page = client(env, await as(ADA))
   await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
   assertEquals((await page.query('.doc')).length, 1)
@@ -1214,7 +1214,7 @@ let router = async (worker?: Handler, first?: string[]) => {
   let scenario = platform()
   let { env, files } = scenario
   stores(env)
-  let { dir, space, app } = await seeded(env)
+  let { dir, space, app } = await seeded(env, 'public', scenario.dir)
   await dir.apply({
     entities: [
       {
@@ -1955,7 +1955,7 @@ test('a page and an upload are served where the cache hop is refused', async () 
   await using scenario = platform()
   let { env, files } = scenario
   stores(env)
-  await seeded(env)
+  await seeded(env, 'public', scenario.dir)
   files.held.set(
     'ada/cookbook/index.html',
     new TextEncoder().encode('<!doctype html><body>the page</body>'),
@@ -1994,7 +1994,7 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
   await using scenario = platform()
   let { env, files } = scenario
   stores(env)
-  let { dir, space, app } = await seeded(env)
+  let { dir, space, app } = await seeded(env, 'public', scenario.dir)
   let cookie = await as(ADA)
   env.FILES = {
     fetch: (req) =>
@@ -2120,7 +2120,7 @@ test('an open visitor cannot choose generated media, and the editor browser can'
       loadTools([builderDoc], builderRuns({ vocab }))
         .filter((tool) => tool.name == 'builder_choose'),
   })
-  let { space, app } = await seeded(p.env, 'open')
+  let { space, app } = await seeded(p.env, 'open', p.dir)
   let store = appStore(p.env.STORE, space, app, p.env)
   let run = crypto.randomUUID(), call = crypto.randomUUID()
   let first = crypto.randomUUID(), second = crypto.randomUUID()

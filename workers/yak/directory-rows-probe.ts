@@ -24,6 +24,7 @@ import { doorOf, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
 import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { vouchOf } from './app-authority.ts'
+import { directoryOf, directoryRows, part, type Row } from './directory.ts'
 import { metaOf } from './meta.ts'
 import { platformVocab } from './vocab.ts'
 import { bindings } from './binding-probe.ts'
@@ -63,6 +64,33 @@ export let rows = (
     cleanup(() => fx.stop())
   }
   let revision = 0
+  let apply = async (entities: Bundle[], req: Request, stamp = true) => {
+    let v = vouchOf(req)
+    let actor = v.person || v.via
+      ? {
+        ...(v.person ? { by: v.actor ?? v.person } : {}),
+        ...(v.via ? { via: v.via } : {}),
+      }
+      : null
+    let bundles = signed(entities, actor)
+    let write = async (at = revision) => {
+      let out = await g.apply(bundles, {
+        trusted: req.headers.get('x-yak-kernel') == '1',
+        stamp,
+      })
+      revision = at
+      return out
+    }
+    let out = copy
+      ? await fenced(copy, write, () => revision, env.CLOCK)
+      : await write()
+    if (fx) {
+      await fx.work(g)
+      await fx.idle()
+      if (failures.length) throw failures.shift()
+    }
+    return out
+  }
   let fetch = async (req: Request): Promise<Response> => {
     let url = new URL(req.url)
     let headers = { [EPOCH]: String(revision) }
@@ -107,30 +135,11 @@ export let rows = (
         })
       }
       if (url.pathname == '/apply' && req.method == 'POST') {
-        let v = vouchOf(req)
-        let actor = v.person || v.via
-          ? {
-            ...(v.person ? { by: v.actor ?? v.person } : {}),
-            ...(v.via ? { via: v.via } : {}),
-          }
-          : null
-        let bundles = signed(await req.json() as Bundle[], actor)
-        let write = async (at = revision) => {
-          let out = await g.apply(bundles, {
-            trusted: req.headers.get('x-yak-kernel') == '1',
-            stamp: url.searchParams.get('stamp') != '0',
-          })
-          revision = at
-          return out
-        }
-        let out = copy
-          ? await fenced(copy, write, () => revision, env.CLOCK)
-          : await write()
-        if (fx) {
-          await fx.work(g)
-          await fx.idle()
-          if (failures.length) throw failures.shift()
-        }
+        let out = await apply(
+          await req.json() as Bundle[],
+          req,
+          url.searchParams.get('stamp') != '0',
+        )
         return Response.json(out, { headers })
       }
       throw new Error(
@@ -140,7 +149,24 @@ export let rows = (
       return Response.json(refusal(e), { status: status(e), headers })
     }
   }
-  return { graph: g, fetch, meta: metaOf(doorOf(fetch, PLATFORM_STORE)) }
+  let local = part({
+    query: async (q) => await g.read(q),
+    apply: (entities, headers = {}, opts = {}) =>
+      apply(
+        entities,
+        new Request('http://directory/apply', { headers }),
+        opts.stamp !== false,
+      ),
+  })
+  let dir = directoryRows({
+    query: async (q) =>
+      (await g.read(q) as Row[]).map((row) => ({
+        ...row,
+        policy: { revision },
+      })),
+    apply: local.apply,
+  })
+  return { graph: g, dir, fetch, meta: metaOf(doorOf(fetch, PLATFORM_STORE)) }
 }
 
 /** Runtime bindings with the directory's decisions served by a RAM graph.
@@ -148,9 +174,11 @@ export let rows = (
 export let hosting = <T extends { env: Env }>(
   scenario: T,
   { handlers, copy, storage }: Composition = {},
-): T => {
+): T & { dir: ReturnType<typeof directoryRows> } => {
   // Copy fencing is a Store behavior; its tests retain the complete boundary.
-  if (scenario.env.SERVING_COPY && !copy) return scenario
+  if (scenario.env.SERVING_COPY && !copy) {
+    return Object.assign(scenario, { dir: directoryOf(scenario.env.STORE) })
+  }
   let stores = scenario.env.STORE
   let directory: ReturnType<typeof rows>
   scenario.env.STORE = {
@@ -169,7 +197,7 @@ export let hosting = <T extends { env: Env }>(
     storage,
   )
   scenario.env.META = directory.meta
-  return scenario
+  return Object.assign(scenario, { dir: directory.dir })
 }
 
 /** Runtime bindings with a RAM directory. */

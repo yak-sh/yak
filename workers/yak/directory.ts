@@ -1500,12 +1500,32 @@ export let directory = (
           policy: { revision },
         })),
     )
+  return directoryRows({
+    query,
+    apply: door.apply,
+    get stale() {
+      return serving.stale
+    },
+  })
+}
+
+/** Directory decisions over supplied reads and writes. The binding client
+ * above owns revisions, request caching and transport recovery. */
+export let directoryRows = (rows: {
+  query: (q: string) => Promise<ReadRow[]>
+  apply: (
+    entities: Bundle[],
+    headers: Record<string, string>,
+  ) => Promise<Bundle[]>
+  readonly stale?: boolean
+}) => {
+  let query = rows.query
   let one = async (q: string) => (await query(q))[0]
   let write = (
     mutation: { entities: Bundle[] },
     headers: Record<string, string> = {},
   ): Promise<Bundle[]> =>
-    writing(META_STORE, () => door.apply(mutation.entities, headers))
+    writing(META_STORE, () => rows.apply(mutation.entities, headers))
   // What a filter on one person answers. A filter resolves an eid to an
   // entity, so a person the meta store has never seen — someone who signed in
   // before it kept a row — makes the question itself unanswerable: no row,
@@ -1555,7 +1575,7 @@ export let directory = (
   // others: a person's own space is read, minted, and read back.
   let self = {
     get stale() {
-      return !!serving.stale
+      return !!rows.stale
     },
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.

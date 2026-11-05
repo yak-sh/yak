@@ -8,8 +8,7 @@ import {
 import * as apps from './apps.ts'
 import { provision, resourceName, SCOPES } from './bindings.ts'
 import { configured, deployWorker } from './deploy_worker.ts'
-import { directory, stamp, storeName } from './directory.ts'
-import * as dirPart from './directory.ts'
+import { stamp, storeName } from './directory.ts'
 import { platform } from './deploy-probe.ts'
 import { meta } from './meta.ts'
 import { call, type Ctx, type Listed } from './tools.ts'
@@ -63,8 +62,7 @@ let fixture = async (vault = false) => {
       }
       : {},
   })
-  let { env } = scenario
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
+  let { env, dir } = scenario
   await dir.apply({
     entities: [
       { entity: { eid: PERSON }, person: {} },
