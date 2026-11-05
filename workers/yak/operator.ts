@@ -393,6 +393,21 @@ let workingOf = async ({ g }: Store, session: string) => {
   let [row] = await g.get([session])
   return comp(row, 'operator_session') as Working | undefined
 }
+// The space an ask is charged to: its session's, or for an exchange a session
+// has on its own behalf (a compaction's summary, whose session is sourced by a
+// call from an entry of the one it compacts), the space of that session.
+let payerOf = async ({ g }: Store, ask?: string) => {
+  for (let eid = ask, hops = 0; eid && hops < 4; hops++) {
+    let [row] = await g.get([eid])
+    let session = comp(row, 'entry')?.session
+    let [held] = session ? await g.get([String(session)]) : []
+    let o = comp(held, 'operator_session') as Working | undefined
+    if (o) return o.space
+    let source = comp(held, 'session')?.source
+    let [call] = source ? await g.get([String(source)]) : []
+    eid = comp(call, 'call')?.source as string | undefined
+  }
+}
 let working = async (
   env: Env,
   store: Store,
@@ -617,9 +632,7 @@ export let operating = (
     }
     let [ask] = req.call ? await g.get([req.call]) : []
     let session = comp(ask, 'entry')?.session
-    let space = session
-      ? (await workingOf(store, String(session)))?.space
-      : null
+    let space = await payerOf(store, req.call)
     let heard = req.onText
     let reply = await accounted(
       env,

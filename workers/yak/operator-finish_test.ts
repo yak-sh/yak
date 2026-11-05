@@ -18,8 +18,9 @@ let sse = (events: Event[]) =>
       .join(''),
     { headers: { 'content-type': 'text/event-stream' } },
   )
-// One reply: its content blocks, then why it stopped.
-let reply = (stop: string, ...blocks: Event[]) =>
+// One reply: its content blocks, then why it stopped, having read `input`
+// tokens.
+let counted = (input: number, stop: string, ...blocks: Event[]) =>
   sse([
     {
       type: 'message_start',
@@ -30,7 +31,7 @@ let reply = (stop: string, ...blocks: Event[]) =>
         model: 'claude-sonnet-5-5',
         content: [],
         stop_reason: null,
-        usage: { input_tokens: 1, output_tokens: 1 },
+        usage: { input_tokens: input, output_tokens: 1 },
       },
     },
     ...blocks.flatMap((block, index) => [
@@ -44,8 +45,10 @@ let reply = (stop: string, ...blocks: Event[]) =>
     },
     { type: 'message_stop' },
   ])
+let reply = (stop: string, ...blocks: Event[]) => counted(1, stop, ...blocks)
 let TOLD = ' The people who run yaks.app have been told.'
-let text = (t: string) => reply('end_turn', { type: 'text', text: t })
+let text = (t: string, input = 1) =>
+  counted(input, 'end_turn', { type: 'text', text: t })
 
 // The API refuses a tool whose schema has a combinator at its root, as it
 // refused the Operator's first request on Claude in Jeff's space.
@@ -64,7 +67,7 @@ let fetch = (input: RequestInfo | URL, init?: RequestInit) => {
       id: name,
       display_name: name,
       created_at: '2026-01-01T00:00:00Z',
-      max_input_tokens: 10_000,
+      max_input_tokens: 200_000,
     }))
   }
   let body = JSON.parse(String(init?.body))
@@ -184,4 +187,39 @@ test('a step that throws reaches the tracker, and the conversation goes on to it
   let out = await ask('Zap it')
   assertEquals(out.text, 'Zap failed; nothing changed.')
   assertStringIncludes(out.reports, 'zap broke')
+})
+
+test("a conversation long enough to compact is summarized at its space's cost, and goes on to its answer", async () => {
+  let summaries = 0
+  answer = (body) => {
+    let system = JSON.stringify(body.system ?? '')
+    if (system.includes('Summarize this transcript')) {
+      summaries++
+      return text('Earlier, the person described their garden.')
+    }
+    return text('Noted.', JSON.stringify(body).length / 4)
+  }
+  let id = await dir.mint(owner, 'finishlong', 'Long', {
+    'x-yak-person': owner,
+    'x-yak-role': 'owner',
+  })
+  let space = (await dir.at(id))!
+  let from = reports.length
+  let task = crypto.randomUUID()
+  let out
+  for (let i = 0; i < 6; i++) {
+    out = await within(
+      env,
+      {},
+      () =>
+        operator.run({ person: owner }, space, {
+          say: `Part ${i} of my garden: ` + 'tomatoes and beans. '.repeat(4000),
+        }, { task }),
+    )
+  }
+  assertEquals([out!.text, JSON.stringify(reports.slice(from))], [
+    'Noted.',
+    '[]',
+  ])
+  assertEquals(summaries > 0, true)
 })

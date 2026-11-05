@@ -52,7 +52,7 @@ export let compactAsk = async (
   let actor = { by: model, via: conversation }
   let save = (rows: Bundle[]) =>
     g.apply(rows.map((b) => ({ ...b, $actor: actor })), { trusted: true })
-  req = { ...req, conversation }
+  req = { ...req, conversation, call: ask }
   await save([
     { entity: { eid: model }, model: { name: served.name } },
 
