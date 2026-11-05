@@ -415,24 +415,33 @@ export let start = async (
     let thread = comp(row, SESSION)?.id
     if (thread == null || !await requested(g, session)) return null
     let carried = carry(row, job, await unanswered(g, session))
-    if (!carried || !await reopen(g, row)) return null
+    if (!carried) return null
     job = carried
   }
-  let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
-  let persona = await given(g, session, cwd ?? system.cwd(), adapter)
-  let argv = adapter.argv({ ...job, persona, mcp: o.mcp })
-  // Placed before the child writes a line: a log cleaned since the last run
-  // is new, and its lines are numbered on from where the transcript stands.
-  let t = await tail(g, paths(session, o).out, { session })
-  let run = await (o.launch ?? launch)(store(g), {
-    command: argv[0],
-    args: argv.slice(1),
-    cwd,
-    env: sessionEnv(session, o.env ?? system.env.toObject()),
-  }, {
-    ...o,
-    eid: session, // one entity: the transcript is the thing running
-  })
+  let home = o.worktrees ? checkoutOf(session, o.worktrees) : o.cwd
+  if (!await take(g, session, row, home ?? system.cwd())) return null
+  let run: Run
+  let t: Tail
+  try {
+    let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
+    let persona = await given(g, session, cwd ?? system.cwd(), adapter)
+    let argv = adapter.argv({ ...job, persona, mcp: o.mcp })
+    // Placed before the child writes a line: a log cleaned since the last run
+    // is new, and its lines are numbered on from where the transcript stands.
+    t = await tail(g, paths(session, o).out, { session })
+    run = await (o.launch ?? launch)(store(g), {
+      command: argv[0],
+      args: argv.slice(1),
+      cwd,
+      env: sessionEnv(session, o.env ?? system.env.toObject()),
+    }, {
+      ...o,
+      eid: session, // one entity: the transcript is the thing running
+    })
+  } catch (e) {
+    await g.apply([{ entity: { eid: session }, ...held(row) }])
+    throw e
+  }
   // A stop can land while the wrapper starts, before its process row exists.
   // The stop effect had no pid then; now that launch has stamped one, answer it.
   if ((await ran(g, session))?.stop) down(g, session, o).catch(told(o))
@@ -442,23 +451,43 @@ export let start = async (
   return run
 }
 
-// Take a session's last ending back for its next run, in the transaction that
-// records the attempt: guarded on the ending and the pid as read, so two
-// requests start one run, and a wake landing meanwhile is refused rather than
-// missed (@yaks/session `rouse`); the run reads it with the rest. A run still
-// going has no ending to take.
-let reopen = async (g: Graph, row: Bundle): Promise<boolean> => {
-  let exit = comp(row, EXIT)
-  if (exit == null) return false
+// The run a session's row records, as it was read.
+let held = (row: Bundle | undefined) => ({
+  [PROCESS]: comp(row, PROCESS) ?? null,
+  [EXIT]: comp(row, EXIT) ?? null,
+})
+
+// Take a session for its next run before anything is cut or launched: one
+// write guarded on the run its row records as read (none yet, or one that
+// ended), which it replaces with a run that has no pid yet. Of two requests
+// that read the same row, one takes it and the other is refused, so a
+// session launches once however many requests arrive while it starts; a wake
+// landing meanwhile is refused rather than missed (@yaks/session `rouse`),
+// and the run reads it with the rest. A run still going is not taken.
+let take = async (
+  g: Graph,
+  session: string,
+  row: Bundle | undefined,
+  cwd: string,
+): Promise<boolean> => {
+  let was = held(row)
+  if (was[PROCESS] && was[EXIT] == null) return false
+  let p = was[PROCESS] ?? {}
   try {
     await g.apply([{
-      entity: row.entity,
-      [PROCESS]: { pid: null },
+      entity: { eid: session },
+      // Every claim writes over a value the last one left: a first run's
+      // `cwd`, a later run's `command`, which only a launch writes.
+      [PROCESS]: { pid: null, command: null, cwd },
       [EXIT]: null,
       brief: null,
       $was: {
-        [EXIT]: { code: token(exit.code) },
-        [PROCESS]: { pid: token(comp(row, PROCESS)?.pid) },
+        [EXIT]: { code: token(was[EXIT]?.code) },
+        [PROCESS]: {
+          pid: token(p.pid),
+          command: token(p.command),
+          cwd: token(p.cwd),
+        },
       },
     }])
     return true

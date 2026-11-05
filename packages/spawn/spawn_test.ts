@@ -16,7 +16,15 @@ import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { asked as jobOf, carry, finish, type Opts, start } from './run.ts'
 import { sessionEnv } from '@yaks/session'
-import { asking, bare, fake, host, tracked, until } from './testing.ts'
+import {
+  asking,
+  bare,
+  fake,
+  host,
+  launching,
+  tracked,
+  until,
+} from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 import { transcriptGraph } from '../session/testing.ts'
 
@@ -182,6 +190,55 @@ await stopped.g.apply([
   { entity: { eid: 'S1' }, stop: {} },
 ])
 await stopped.fx.idle()
+// Two starts of one session, as two requests' effects make them, over a
+// launch the test lends; `fail` is how many launches throw first.
+let starting = async (fail = 0) => {
+  let { g } = tracked()
+  let where = dir()
+  let l = launching()
+  let stop = new AbortController()
+  let o: Opts = {
+    cwd: where,
+    dir: where,
+    poll: 5,
+    signal: stop.signal,
+    adapters: { fake },
+    launch: (...a) =>
+      fail-- > 0 ? Promise.reject(new Error('no')) : l.launch(...a),
+  }
+  await g.apply(asking('S1', 'E1', 'do the thing'))
+  let twice = () => Promise.allSettled([start(g, 'S1', o), start(g, 'S1', o)])
+  return {
+    g,
+    started: l.started,
+    twice,
+    done: () => (stop.abort(), Deno.removeSync(where, { recursive: true })),
+  }
+}
+
+test('a session two requests start at once launches once', async () => {
+  let s = await starting()
+  try {
+    await s.twice()
+    assertEquals(s.started.length, 1)
+  } finally {
+    s.done()
+  }
+})
+
+test('a launch that fails gives the session back for the next request', async () => {
+  let s = await starting(1)
+  try {
+    await s.twice()
+    assertEquals(s.started.length, 0)
+    assertEquals(comp((await s.g.get(['S1']))[0], 'process'), undefined)
+    await s.twice()
+    assertEquals(s.started.length, 1)
+  } finally {
+    s.done()
+  }
+})
+
 test('a stop committed with a request prevents its launch', async () => {
   let g = stopped
   let where = stoppedDir
