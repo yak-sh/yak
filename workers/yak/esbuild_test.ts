@@ -13,7 +13,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
-import catalog from './public/_compiler/packages.json' with { type: 'json' }
+import type { Catalog } from '../../packages/esbuild/platform.ts'
 import * as apps from './apps.ts'
 import { writeResources } from './esbuild.ts'
 import type { Env } from './env.ts'
@@ -26,6 +26,14 @@ import { addressed, SHA, sha256 } from './versions.ts'
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
 
 let PAGE = '<script type="module" src="main.ts"></script>'
+
+let catalog: Catalog = {
+  '@yaks/client': {
+    files: { 'mod.ts': 'export let query = () => []' },
+    dependencies: {},
+    version: 'client-source-sha',
+  },
+}
 
 // An app of these files deployed, with a compiler that answers `answer`, or
 // the response it gives instead, and Cloudflare's API answering every upload.
@@ -63,6 +71,13 @@ let scenario = async (
     CF_WORKERS_TOKEN: 'a-token',
     ...(compiler ? { ESBUILD } : {}),
   } as Partial<Env>)
+  let assets = p.env.ASSETS
+  p.env.ASSETS = {
+    fetch: (req) =>
+      new URL(req.url).pathname == '/_compiler/packages.json'
+        ? Promise.resolve(Response.json(catalog))
+        : assets.fetch(req),
+  }
   let { dir } = await seeded(p.env)
   let ctx = { env: p.env, dir, person: ADA } as Ctx
   let tool = async (name: string, args: Record<string, unknown> = {}) =>
