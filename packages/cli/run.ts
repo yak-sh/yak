@@ -35,6 +35,7 @@ import { commandOf, titleOf } from './tool.ts'
 import { timed } from '@yaks/api/timing'
 import { doorUrl, type Rpc, rpc, Unauthorized } from './rpc.ts'
 import { configPath } from './config.ts'
+import type { Tty } from './answer.ts'
 import { type Env, stateDir, tokenFor } from './store.ts'
 
 // This process's environment: what every `env` seam here defaults to.
@@ -82,7 +83,7 @@ export type Ctx = {
 }
 
 /** A terminal an answer is painted on: how wide it is, and where its bytes go. */
-export type Tty = { columns: number; write: (text: string) => void }
+export type { Tty } from './answer.ts'
 
 // This process's stdout, where it is a terminal a person reads in color. A
 // terminal that reports no size (`script` run without one) is the usual 80

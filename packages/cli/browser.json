@@ -1,5 +1,5 @@
 {
-  "_": "Only the IO-free grammar export is browser-safe; the CLI runtime is not.",
+  "_": "Only the IO-free grammar and answer exports are browser-safe; the CLI runtime is not.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -12,6 +12,7 @@
     "@yaks/vocab/tools": "../vocab/tools.ts"
   },
   "entries": [
-    "./grammar"
+    "./grammar",
+    "./answer"
   ]
 }

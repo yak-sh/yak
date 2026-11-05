@@ -3,7 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
 import { compose } from '../cli/host.ts'
 import { registry, show } from '../cli/answer.ts'
-import { used } from '../cli/config.ts'
+import { pluginViews, used } from '../cli/config.ts'
 import { routes } from './routes.ts'
 import { sessionEid } from './who.ts'
 
@@ -21,7 +21,7 @@ let host = await compose({
     '@yaks/session',
   ],
 }, ['graph', 'web'])
-let views = await registry((host.config.plugins ?? []).map(used))
+let views = await registry((host.config.plugins ?? []).map(used), pluginViews)
 let prior: string[] = []
 let render = host.text!
 host.text = async (answer, tool) => {

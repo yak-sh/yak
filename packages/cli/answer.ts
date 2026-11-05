@@ -38,7 +38,7 @@ import type { ComponentRenderer } from '@yaks/preact'
 import type { ComponentChild } from 'preact'
 import { names, reversed } from '@yaks/edge/vocab'
 import { type Node, plain, safe, tree } from '@yaks/text'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
+import type { Vocab } from '@yaks/vocab/runtime'
 import type { Sheet } from '@yaks/tui/theme'
 import {
   type Related,
@@ -46,11 +46,8 @@ import {
   type Shown,
   views as generic,
 } from '@yaks/render/views'
-import { subpath, subpaths } from './config.ts'
 import type { AnatomyObserver } from '@yaks/code/anatomy'
-import { understood } from '@yaks/host/keywords'
 import { relative } from '@yaks/ui/relative'
-import type { Tty } from './run.ts'
 
 // What an answer wears in a terminal: @yaks/ui's components and these views'
 // own classes, in Everforest. Loaded with the painter, so a printed answer
@@ -60,8 +57,10 @@ let dressed = async (): Promise<Sheet> => {
   return { ...kit({ kits, theme: everforest }), ...sheet(everforest.colors) }
 }
 
-/** How one plugin's `./views` becomes a module: {@link subpath} unless a test
- * hands its modules over inline. */
+/** A terminal a held answer is drawn on: its width and how to write to it. */
+export type Tty = { columns: number; write: (text: string) => void }
+
+/** What one plugin's `./views` module offers a registry. */
 export type ViewFacet = {
   views?: Registry
   inspectViews?: unknown
@@ -71,7 +70,12 @@ export type ViewFacet = {
       | Selection<ComponentRenderer>
       | Promise<Selection<ComponentRenderer>>)
 }
-export type Views = (plugin: string) => Promise<ViewFacet | null>
+/** How one plugin's `./views` becomes a module: config.ts `pluginViews` for
+ * the plugins a config names, or modules a caller hands over inline. `warm`
+ * readies several at once before they are asked for one by one. */
+export type Views = ((plugin: string) => Promise<ViewFacet | null>) & {
+  warm?: (plugins: string[]) => Promise<unknown>
+}
 
 type Hit = {
   kind: string
@@ -150,28 +154,26 @@ let hit = <Node>(
 
 let search: Renderer = { view: 'Search.Tile', match: true, render: hit }
 
-let portable: Views = (plugin) => subpath(plugin, 'views')
-
 /** Every view the `yak` command draws with, most knowing first. */
 export function registry(
   plugins: string[],
-  load: Views | undefined,
+  load: Views,
   observe: AnatomyObserver | undefined,
   components: true,
 ): Promise<Registry<Renderer | ComponentRenderer>>
 export function registry(
   plugins: string[],
-  load?: Views,
+  load: Views,
   observe?: AnatomyObserver,
 ): Promise<Registry>
 export async function registry(
   plugins: string[],
-  load: Views = portable,
+  load: Views,
   observe?: AnatomyObserver,
   components = false,
 ): Promise<Registry<Renderer | ComponentRenderer>> {
   let named = [...new Set([...plugins, '@yaks/tools'])]
-  if (load == portable) await subpaths(named.map((p) => [p, 'views'] as const))
+  await load.warm?.(named)
   let found = await Promise.all(named.map(async (plugin) => {
     let m = await load(plugin)
     let faces = components
@@ -224,8 +226,8 @@ export type Tui = (plugin: string) => Promise<{ views?: Held } | null>
  * `./tui`, then {@link registry}'s. */
 export let terminal = async (
   plugins: string[],
-  load: Views = (plugin) => subpath(plugin, 'views'),
-  held: Tui = (plugin) => subpath<{ views?: Held }>(plugin, 'tui'),
+  load: Views,
+  held: Tui,
   observe?: AnatomyObserver,
 ): Promise<Held> => {
   let own = await Promise.all(plugins.map(async (plugin) => {
@@ -592,37 +594,6 @@ export let hold = async (
       nodes.map((n) => h('div', null, n)),
     )
   }, { sheet: dress })
-}
-
-// A package a server named that this machine has no copy of: its plugins are
-// its own, so an answer is drawn with the views that are here.
-let elsewhere = (error: unknown): boolean =>
-  error instanceof TypeError && error.message.includes('not a dependency')
-
-/** A vocabulary a server reported (`graph_schema`), read the way a host reads
- * its own — with the keywords every host understands — and the views of the
- * packages it says declared its components, where this machine has them. */
-export let reported = async (
-  doc: VocabDoc,
-): Promise<
-  { views: Registry; vocab: Vocab; components: () => Promise<Held> }
-> => {
-  let vocab = loadVocab([doc], understood())
-  let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.package ?? [])
-  let named = [...new Set(plugins)]
-  await subpaths(named.map((p) => [p, 'views'] as const)).catch((error) =>
-    elsewhere(error) ? null : Promise.reject(error)
-  )
-  let load: Views = (plugin) =>
-    subpath<ViewFacet>(plugin, 'views').catch((error) =>
-      elsewhere(error) ? null : Promise.reject(error)
-    )
-  let views = await registry(named, load)
-  return {
-    views,
-    vocab,
-    components: () => registry(named, load, undefined, true),
-  }
 }
 
 /** Where a drawing asks for what it draws beyond the answer, from wherever

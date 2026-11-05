@@ -79,12 +79,12 @@ let vocabOf = async (c: Ctx, held?: Roster): Promise<VocabDoc | null> => {
 
 type Drawing = {
   doc: VocabDoc
-  ready: Promise<Awaited<ReturnType<typeof import('./answer.ts').reported>>>
+  ready: Promise<Awaited<ReturnType<typeof import('./reported.ts').reported>>>
 }
 
 type Prepare = (doc: VocabDoc) => Drawing['ready']
 let prepare: Prepare = (doc) =>
-  import('./answer.ts').then(({ reported }) => reported(doc))
+  import('./reported.ts').then(({ reported }) => reported(doc))
 
 // A cached vocabulary and a declared entity answer let independent, pure
 // drawing preparation run beside the tool call. Its failure is reported only
@@ -149,7 +149,10 @@ export let printed = async (
   let vocab = answer && await vocabOf(c, held)
   if (answer && vocab) {
     // Imported only to draw, so a command that never does pays nothing.
-    let { reported, show } = await import('./answer.ts')
+    let [{ show }, { reported }] = await Promise.all([
+      import('./answer.ts'),
+      import('./reported.ts'),
+    ])
     let { views, vocab: read, components } =
       await (drawing?.doc == vocab ? drawing.ready : reported(vocab))
     // What the drawing asks for beyond the answer — the entities its

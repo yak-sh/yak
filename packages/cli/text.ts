@@ -2,7 +2,7 @@
 import type { Bundle } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { type Drawn, registry, show } from './answer.ts'
-import { used } from './config.ts'
+import { pluginViews, used } from './config.ts'
 
 export let text = (
   host: Pick<Host, 'config' | 'graph' | 'vocab' | 'observe'>,
@@ -11,7 +11,7 @@ export let text = (
   return async (answer: Bundle[], tool?: Drawn): Promise<string> => {
     views ??= registry(
       (host.config.plugins ?? []).map(used),
-      undefined,
+      pluginViews,
       host.observe,
     )
     let lines: string[] = []

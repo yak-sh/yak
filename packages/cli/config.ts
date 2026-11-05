@@ -23,6 +23,7 @@ import { runtimePath } from './runtime.ts'
 export type { Config, Options, Plug } from '@yaks/host'
 import type { Config, Plug } from '@yaks/host'
 import type { Eid, Graph } from '@yaks/graph'
+import type { Held, Tui, ViewFacet, Views } from './answer.ts'
 
 /** Where a machine keeps the config for its own graph. */
 export let OWN_CONFIG = '.yak/yak.json'
@@ -169,6 +170,19 @@ export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
   asked.catch(() => imported.delete(key))
   return asked
 }
+/** Each plugin's `./views`, the ones a config names: warmed as one module
+ * graph when a registry asks for several (@yaks/cli answer.ts `registry`). */
+export let pluginViews: Views = Object.assign(
+  (plugin: string) => subpath<ViewFacet>(plugin, 'views'),
+  {
+    warm: (plugins: string[]) =>
+      subpaths(plugins.map((p) => [p, 'views'] as const)),
+  },
+)
+
+/** Each plugin's `./tui`, what a held answer draws with first. */
+export let pluginTui: Tui = (plugin) => subpath<{ views?: Held }>(plugin, 'tui')
+
 /** Load selected subpaths and required modules as one module graph where the
  * resolver already knows their exports. Deno otherwise builds a separate
  * dependency graph per concurrent dynamic import, rediscovering shared

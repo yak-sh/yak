@@ -41,7 +41,14 @@ import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
 import { registry, show, terminal } from './answer.ts'
-import { type Config, exported, read, used } from './config.ts'
+import {
+  type Config,
+  exported,
+  pluginTui,
+  pluginViews,
+  read,
+  used,
+} from './config.ts'
 import { asides, hosts } from './held.ts'
 import type { Listing } from './subcommands.ts'
 import { VIA } from './rpc.ts'
@@ -327,7 +334,7 @@ let drawn = (listing: Listing, host: Served) => {
   let made = drawing.get(listing)
   if (!made) {
     let seen: AnatomyObservation[] = []
-    let views = registry(plugins(listing), undefined, (o) => seen.push(o))
+    let views = registry(plugins(listing), pluginViews, (o) => seen.push(o))
     drawing.set(listing, made = { views, seen })
   }
   for (let o of made.seen) host.observe?.(o)
@@ -418,8 +425,8 @@ export let tool = async (
         ? {
           views: await terminal(
             plugins(listing),
-            undefined,
-            undefined,
+            pluginViews,
+            pluginTui,
             host.observe,
           ),
           config: c.config,
