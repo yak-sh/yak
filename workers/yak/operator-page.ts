@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
-import { directoryOf, type Space } from './directory.ts'
+import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
@@ -413,7 +413,6 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
   ])
-  let doing = (role: string) => role == 'viewer' ? 'can look' : 'can change'
   let address = mailFrom(space.slug, null, env)
   return `
 <section class="Card"><p>${esc(space.operator)} is this space’s Operator. Ask ${
@@ -423,15 +422,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
       ? '<p>This is your own space, so its Operator can also work in your other spaces, with your role in each.</p>'
       : ''
   }${
-    beyond.length
-      ? `<p>It also works in ${
-        beyond.map((r) =>
-          `<a href="${managePath('apps', r.space.slug)}">${
-            esc(r.space.title || r.space.slug)
-          }</a> (${doing(r.role)})`
-        ).join(', ')
-      }.</p>`
-      : ''
+    elsewhere(beyond, pa)
   }<p>Email it from your member address: <a href="mailto:${esc(address)}">${
     esc(address)
   }</a></p></section>
@@ -440,6 +431,34 @@ ${nameCard(at, space.operator)}
 ${textsCard(at, consent)}
 ${settingsScript(at)}`
 }
+
+// Where else the Operator works and what it may do there, one sentence for
+// all of it: the spaces it changes things in, then those it only looks at.
+// Each space's owner sets that on its People page (pages.ts `operating`); on
+// a person's own space it follows their role in each.
+export let elsewhere = (beyond: Reach[], pa: boolean) => {
+  if (!beyond.length) return ''
+  let named = (rs: Reach[]) =>
+    LIST.format(
+      rs.map((r) =>
+        `<a href="${managePath('apps', r.space.slug)}">${
+          esc(r.space.title || r.space.slug)
+        }</a>`
+      ),
+    )
+  let changes = named(beyond.filter((r) => r.role != 'viewer'))
+  let looks = named(beyond.filter((r) => r.role == 'viewer'))
+  let said = changes && looks
+    ? `It can also change things in ${changes}, and look at ${looks} without changing anything.`
+    : changes
+    ? `It can also work in ${changes}, and change things there.`
+    : `It can also look at ${looks}, but not change anything there.`
+  return `<p>${said}${
+    pa ? '' : ' Each space’s owner chooses this on its People page.'
+  }</p>`
+}
+
+let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
 // The settings page's script: the texts choice, and the list of
 // conversations kept current from the Builder object's socket.

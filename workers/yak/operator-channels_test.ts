@@ -2,7 +2,12 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Item, Model, Request } from '@yaks/model'
-import { type Directory, directoryOf } from './directory.ts'
+import {
+  type Directory,
+  directoryOf,
+  type Role,
+  type Space,
+} from './directory.ts'
 import { declared } from './directory-fixture.ts'
 import { modelPage } from './model-probe.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -38,7 +43,12 @@ let operatorOf = (
     tools: attachmentTools(env),
   })
 import { TOOLS } from './tools.ts'
-import { conversation, operatorAnswer, operatorBody } from './operator-page.ts'
+import {
+  conversation,
+  elsewhere,
+  operatorAnswer,
+  operatorBody,
+} from './operator-page.ts'
 import { operatorDoor } from './operator-page.ts'
 import { arrived, Refused } from './inbox.ts'
 import { chatPath } from './route.ts'
@@ -264,6 +274,30 @@ let ownHtml = await operatorBody(f.env, f.space, f.held)
 test("the operator page on a person's own space says it works in their other spaces", () => {
   assertEquals(html.includes('your other spaces'), false)
   assertStringIncludes(ownHtml, 'your other spaces')
+})
+test('the operator page says once where else it works and what it may do there', () => {
+  let said = (...roles: Role[]) =>
+    parseHTML(elsewhere(
+      roles.map((role, i) => ({
+        eid: `r${i}`,
+        role,
+        space: { slug: `s${i}`, title: `S${i}` } as Space,
+      })),
+      true,
+    )).document.querySelector('p')?.textContent ?? null
+  assertEquals(said(), null)
+  assertEquals(
+    said('editor', 'editor', 'owner'),
+    'It can also work in S0, S1, and S2, and change things there.',
+  )
+  assertEquals(
+    said('viewer'),
+    'It can also look at S0, but not change anything there.',
+  )
+  assertEquals(
+    said('editor', 'viewer', 'editor'),
+    'It can also change things in S0 and S2, and look at S1 without changing anything.',
+  )
 })
 test('the operator page names its email address, opens a new conversation and draws kept answers', () => {
   assertStringIncludes(html, 'clerk@yaks.app')
