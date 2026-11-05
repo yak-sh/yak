@@ -31,6 +31,16 @@ import House from 'lucide/dist/esm/icons/house.mjs'
 // @ts-types="@yaks/ui/lucide"
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
 // @ts-types="@yaks/ui/lucide"
+import MessageCircle from 'lucide/dist/esm/icons/message-circle.mjs'
+// @ts-types="@yaks/ui/lucide"
+import MessageSquare from 'lucide/dist/esm/icons/message-square.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Mail from 'lucide/dist/esm/icons/mail.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Phone from 'lucide/dist/esm/icons/phone.mjs'
+// @ts-types="@yaks/ui/lucide"
+import TriangleAlert from 'lucide/dist/esm/icons/triangle-alert.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
@@ -75,6 +85,11 @@ export let icons = {
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   'chevrons-up-down': ChevronsUpDown,
+  'message-circle': MessageCircle,
+  'message-square': MessageSquare,
+  mail: Mail,
+  phone: Phone,
+  'triangle-alert': TriangleAlert,
 }
 export type IconName = keyof typeof icons
 

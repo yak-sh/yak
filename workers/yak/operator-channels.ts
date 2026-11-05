@@ -564,8 +564,9 @@ export let handleChannels = (
           }], { trusted: true })
         }
         let [subject] = request.about ? await g.get([request.about]) : []
-        let say = (BY[request.channel]?.(request, row.entity.eid, subject) ??
-          '') +
+        let framing = BY[request.channel]?.(request, row.entity.eid, subject) ??
+          ''
+        let say = framing +
           (String(part<Comp>(row, 'doc')?.body ?? '').trim() ||
             unsaid(request.files ?? []))
         if (attachments.length) {
@@ -582,6 +583,8 @@ export let handleChannels = (
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
             files: request.files ?? [],
+            channel: request.channel,
+            framing,
             ...request.model ? { model: request.model } : {},
             // Nobody asked for a break's fix: the Operator started it.
             ...request.channel == 'error' ? { by: space.eid } : {},

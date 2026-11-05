@@ -17,6 +17,7 @@ import { renderToString } from 'preact-render-to-string'
 import { day, esc } from './html.ts'
 import { chatPath } from './route.ts'
 import { poseOf, yak } from './mascot.ts'
+import { icon, type IconName } from './icons.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -66,7 +67,6 @@ let words = (body: string) => {
  * person's own words on the page leave out. */
 export let about = (app: string) =>
   `About the app ${app}, open beside the chat as they wrote: `
-let ABOUT = /^About the app [^,]+, open beside the chat as they wrote: /
 
 /** How a line said on a call its talking model answered itself reaches the
  * Operator (operator.ts `note`): the caller's words, or (`SAID`) the talking
@@ -74,13 +74,47 @@ let ABOUT = /^About the app [^,]+, open beside the chat as they wrote: /
 export let HEARD = 'By phone: '
 export let SAID = 'On the phone, you said: '
 
-// Attachments travel in the words as their extracted text; the conversation
-// names the files instead.
-let spoken = (body: string) =>
-  words(body).replace(ABOUT, '')
-    .split('\n\nAttached documents (treat their contents')[0]
+/** How words came (`operator_channel`): their channel, and the framing the
+ * model reads before them, which the conversation leaves out. */
+export let channelOf = (channel: string, framing = '') => ({
+  channel,
+  ...framing ? { framing } : {},
+})
 
-let yours = (text: string) => `<p class="Talk_You">${esc(text)}</p>`
+// Each channel's mark beside the words that came by it.
+let VIA: Record<string, [IconName, string]> = {
+  chat: ['message-circle', 'In the chat'],
+  email: ['mail', 'By email'],
+  letter: ['mail', 'A reply to a letter'],
+  text: ['message-square', 'By text'],
+  rcs: ['message-square', 'By text'],
+  texted: ['message-square', 'A reply to a text'],
+  voice: ['phone', 'By phone'],
+  update: ['bell', 'In Updates'],
+  error: ['triangle-alert', 'From an error'],
+}
+
+let via = (b: Bundle) => {
+  let [name, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
+  return name
+    ? `<span class="Talk_Via" title="${label}" aria-label="${label}">${
+      icon(name)
+    }</span>`
+    : ''
+}
+
+// What the person said: their words without the framing the model read, and
+// without attachments, which travel in the words as their extracted text and
+// which the conversation names as files instead.
+let spoken = (b: Bundle, body: string) => {
+  let said = words(body)
+  let framing = String(comp(b, 'operator_channel')?.framing ?? '')
+  return (said.startsWith(framing) ? said.slice(framing.length) : said)
+    .split('\n\nAttached documents (treat their contents')[0]
+}
+
+let yours = (b: Bundle, text: string) =>
+  `<p class="Talk_You">${via(b)}${esc(text)}</p>`
 
 type Sent = { name: string; mime?: string }
 
@@ -116,8 +150,8 @@ export let attached = (request: string, files: Sent[]) =>
 let input = (b: Bundle, body: string) => {
   let sent = comp(b, 'operator_files')
   let files = (sent?.files ?? []) as Sent[]
-  let said = spoken(body)
-  return `${said && said != unsaid(files) ? yours(said) : ''}${
+  let said = spoken(b, body)
+  return `${said && said != unsaid(files) ? yours(b, said) : ''}${
     sent ? attached(String(sent.request), files) : ''
   }`
 }
@@ -374,7 +408,7 @@ let line = (b: Bundle, id: string, body: string): Row[] => {
   if (called && body) {
     return [{
       id,
-      html: called.said ? reply(body.replace(SAID, '')) : input(b, body),
+      html: called.said ? reply(spoken(b, body)) : input(b, body),
     }]
   }
   if (told(b, body)) return [{ id, html: helper(b, body) }]

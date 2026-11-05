@@ -1431,6 +1431,16 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* The channel the words came by, a small mark before them. */
+  .Talk_Via {
+    margin-right: .4em;
+    color: var(--soft-ink);
+  }
+  .Talk_Via .Icon {
+    width: .95em;
+    height: .95em;
+    vertical-align: -.1em;
+  }
   .Talk_Said > div:has(> .Talk_You) {
     display: grid;
   }

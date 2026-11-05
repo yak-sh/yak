@@ -12,6 +12,7 @@ import {
   textOf,
 } from './operator-channels.ts'
 import { phoneTexts } from './phone-move.ts'
+import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
@@ -662,6 +663,7 @@ export let operatorRequest = async (
   let { person, space: spaceId } = held
   let { store } = operator
   await phoneTexts(store.g)
+  await channeled(store.g)
   let access = held
   let own = (id: string) => owns(store, id, held)
   let missing = () =>

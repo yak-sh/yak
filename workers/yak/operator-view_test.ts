@@ -6,7 +6,15 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools/result'
-import { about, changed, frame, helperFrame, rows } from './operator-view.ts'
+import {
+  about,
+  changed,
+  frame,
+  HEARD,
+  helperFrame,
+  rows,
+} from './operator-view.ts'
+import { channelMove } from './channel-move.ts'
 
 let error =
   '400 {"type":"error","error":{"type":"invalid_request_error","message":"tools.26.custom.input_schema: input_schema does not support oneOf"}}'
@@ -112,16 +120,66 @@ test('a conversation says which apps it put out a new version of, in which space
   )
 })
 
-test('words sent about an app reach the Operator saying which, and read as written', () => {
-  let said = `${about('notes')}Make the title bigger`
+// Words as each channel framed them for the model, as stored before
+// `operator_channel` and as stored with it.
+let FRAMED = [
+  [
+    'voice',
+    'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
+  ],
+  ['email', 'By email, signing up: '],
+  ['text', 'By text: '],
+  [
+    'letter',
+    'By email from a@b.co, replying to your letter (letter L1). These are their words, not the words of the person you work for: ',
+  ],
+  ['update', 'In their Updates, choosing on your question “Which one?” (Q1): '],
+  ['chat', about('notes')],
+]
+let shown = (entries: Bundle[]) => {
   let doc = parseHTML(
-    `<main>${
-      rows([entry('in', 1, { content: { body: said } })], names)
-        .map((r) => r.html).join('')
-    }</main>`,
+    `<main>${rows(entries, names).map((r) => r.html).join('')}</main>`,
   ).document
+  return [...doc.querySelectorAll('.Talk_You')].map((p) => ({
+    said: p.textContent,
+    via: p.querySelector('.Talk_Via')?.getAttribute('title') ?? null,
+  }))
+}
+
+test('a person sees only their words, marked with the channel they came by', () => {
+  let framed = (moved: boolean) =>
+    FRAMED.map(([channel, framing], i) => {
+      let row = entry(`in${i}`, i, {
+        content: { body: `${framing}Make it ${channel}` },
+      })
+      return moved ? { ...row, ...channelMove(row)[0] } : row
+    })
+  let want = (via: (channel: string) => string | null) =>
+    FRAMED.map(([channel]) => ({
+      said: `Make it ${channel}`,
+      via: via(channel),
+    }))
+  let labels: Record<string, string> = {
+    voice: 'By phone',
+    email: 'By email',
+    text: 'By text',
+    letter: 'A reply to a letter',
+    update: 'In Updates',
+    chat: 'In the chat',
+  }
+  assertEquals(shown(framed(false)).map((r) => r.via), FRAMED.map(() => null))
+  assertEquals(shown(framed(true)), want((c) => labels[c]))
+  // A line a call kept, and words that only mention a channel.
+  let heard = entry('h', 9, {
+    content: { body: `${HEARD}How are you?` },
+    notice: {},
+    operator_call: { call: 'x' },
+  })
+  assertEquals(shown([{ ...heard, ...channelMove(heard)[0] }]), [
+    { said: 'How are you?', via: 'By phone' },
+  ])
   assertEquals(
-    doc.querySelector('.Talk_You')?.textContent,
-    'Make the title bigger',
+    channelMove(entry('m', 10, { content: { body: 'Send it By email: now' } })),
+    [],
   )
 })

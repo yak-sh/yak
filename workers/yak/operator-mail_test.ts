@@ -172,10 +172,8 @@ test("a reply to the letter comes back into the person's conversation as its wri
     kept.entity.eid,
   )
   assertEquals(asking.session, rootOf(eid, person))
-  assertStringIncludes(
-    root.html,
-    'By email from alvarez@clinic.example, replying to your letter',
-  )
+  assertStringIncludes(root.html, 'title="A reply to a letter"')
+  assertEquals(root.html.includes('replying to your letter'), false)
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertStringIncludes(root.html, 'Dr Alvarez says Tuesday at 3 works.')
   // Nothing went back to Dr Alvarez but what the Operator sent.

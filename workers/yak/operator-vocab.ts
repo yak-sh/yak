@@ -69,6 +69,22 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    operator_channel: {
+      component: true,
+      description:
+        "How a person's words came into their conversation: the channel, and the framing said before them to the model, which the conversation draws as the channel's icon instead.",
+      properties: {
+        channel: {
+          type: 'string',
+          description: 'The channel they came by (operator_request.channel).',
+        },
+        framing: {
+          type: 'string',
+          description:
+            'What the model reads before their words, saying how they came; the body starts with it.',
+        },
+      },
+    },
     operator_call: {
       component: true,
       description:

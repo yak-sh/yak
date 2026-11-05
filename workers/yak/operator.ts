@@ -19,7 +19,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
-import { HEARD, SAID } from './operator-view.ts'
+import { channelOf, HEARD, SAID } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
 import { billed, type Item, type Model, type Price } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
@@ -1045,6 +1045,7 @@ export let operating = (
     ...o.request && o.files?.length
       ? { operator_files: { request: o.request, files: o.files } }
       : {},
+    ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
     using: usingOf(o.model),
     $actor: { by, via: session },
   })
@@ -1164,6 +1165,7 @@ export let operating = (
         entry: { session },
         content: { body: (o.said ? SAID : HEARD) + text },
         notice: {},
+        operator_channel: channelOf('voice', o.said ? SAID : HEARD),
         operator_call: { call: o.call, ...o.said ? { said: true } : {} },
         $actor: { by: o.said ? space.eid : held.person, via: session },
       },
@@ -1263,6 +1265,11 @@ export type Asking = {
   // The session a new task starts, for a replay to find.
   session?: string
   files?: File[]
+  // The channel the words came by, and what the model is told before them
+  // of how they came (operator-channels.ts `BY`), which the conversation
+  // leaves out of the person's words.
+  channel?: string
+  framing?: string
   // The model that answers these words, where not the Operator's own (a
   // call's, speech.ts `setupOf`); one its provider does not serve is
   // answered by the Operator's own.

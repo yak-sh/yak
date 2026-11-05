@@ -26,6 +26,7 @@ import {
 import { plugins as blobs } from '@yaks/blob/graph'
 import { phoneDoc } from '@yaks/phone'
 import { phoneTexts } from './phone-move.ts'
+import { channeled } from './channel-move.ts'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { operatorDoc } from './operator-vocab.ts'
@@ -123,6 +124,7 @@ export let drain = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
 ): Promise<number | null> => {
   await phoneTexts(g)
+  await channeled(g)
   // A pending run no handler here takes arms nothing: words declared before
   // their handler was (sessions' were, until the Operator ran on them).
   let handled = fx.slots().filter((s) => s.effect && s.run).map((s) => s.id)

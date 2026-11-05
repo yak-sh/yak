@@ -532,13 +532,15 @@ test("what a call said without asking is the caller's conversation: listed, draw
   let root = rootOf(space.eid, person)
   equal((await workOf(store, space.eid, person)).map((w) => w.open), [root])
   let { html } = await conversationOf(store, '/at', root)
-  // The model's words are drawn as the Operator's, without what says so.
+  // The caller's words are drawn as theirs, by phone, and the model's as the
+  // Operator's, without what tells the model so.
   equal(
-    ['By phone: How are you?', 'Very well, thank you.', 'you said'].map((s) =>
-      html.includes(s)
-    ),
-    [true, true, false],
+    ['>How are you?', 'Very well, thank you.', 'By phone:', 'you said'].map((
+      s,
+    ) => html.includes(s)),
+    [true, true, false, false],
   )
+  equal(html.includes('title="By phone"'), true)
   await operator.ask({ person }, space, { say: 'Any errors?' })
   await drain(store)
   equal(asked.length, 1)

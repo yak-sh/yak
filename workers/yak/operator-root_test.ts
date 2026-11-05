@@ -137,7 +137,9 @@ test('the chat app lists the conversation first and the work it started, and ope
   assertEquals(listed[1].title, 'Add a dentist reminder, Tuesday 3pm')
   assertEquals(listed[1].state, 'Done')
   assertEquals(byRequest.task, root)
-  assertStringIncludes(byRequest.html, 'By text: Remind me about the dentist')
+  assertStringIncludes(byRequest.html, 'title="By text"')
+  assertStringIncludes(byRequest.html, '</span>Remind me about the dentist')
+  assertEquals(byRequest.html.includes('By text:'), false)
   assertEquals(ofFork.task, fork.entity.eid)
   // A piece of work shows what it did, not the conversation it came from.
   assertEquals(ofFork.html.includes('Remind me about the dentist'), false)
