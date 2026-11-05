@@ -289,6 +289,21 @@ test('a call says hello, hears a turn, and speaks the reply a sentence at a time
   equal(typeof c.done[0].turns[0].answer, 'number')
 })
 
+test('a turn the Operator could not take is reported, and said plainly, differently each time', async () => {
+  let reported: unknown[] = []
+  let c = calling(undefined, {
+    ask: () => Promise.reject(new Error('refused')),
+    report: (e) => void reported.push(e),
+  })
+  c.told().end('Add a recipe to my recipe box')
+  c.told().end('Add a recipe to my recipe box')
+  await until(() => c.said.length == 3)
+  equal(reported.length, 2)
+  equal(c.call.waiting(), false)
+  equal(c.said[1] != c.said[2], true)
+  equal(c.said.some((s) => /take that|say it again|refused/.test(s)), false)
+})
+
 test('a caller who starts talking stops what is playing, and a turn is acknowledged the moment it ends', async () => {
   let c = calling('One moment.')
   // The acknowledgement is made as the call starts, and said only once.

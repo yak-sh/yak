@@ -223,6 +223,20 @@ let GOODBYE = 'I have to go now. Call me back any time.'
 
 let CALL = { request: 'operator call' }
 
+// What a caller hears when their request fails on our side, a different
+// line each time it fails again, never the error's own words.
+let SORRY = [
+  "Hmm, I'm sorry, something went wrong on our end and I couldn't do that. It's been reported.",
+  "I'm sorry, I'm still running into errors with that. Someone is looking into it.",
+  'Apologies, that failed again on our side. You could try me again a little later, or send it as a text.',
+]
+let sorry = (n: number) => SORRY[Math.min(n, SORRY.length - 1)]
+
+// What a talking model is given when the Operator could not be asked, for
+// it to tell the caller in its own words.
+let FAILED =
+  'That failed because of an error on our side, which has been reported. Tell them so in a sentence of plain words, without anything technical, and do not ask them to repeat it.'
+
 // Nothing on a call is refused to the caller: a refusal there is a write of
 // ours the platform would not take, and is reported like any failure.
 let reporter = (o: Around) => o.report ?? ((e: unknown) => defect(e, CALL))
@@ -319,7 +333,7 @@ let carry = (
  * starts; a caller who starts talking stops whatever is playing.
  */
 export let converse = (o: Talk): Call => {
-  let asked = false, streamed = false, buffer = ''
+  let asked = false, streamed = false, buffer = '', failed = 0
   // Each barge-in starts a new generation; speech of an older one is dropped.
   let generation = 0
   let chain = Promise.resolve()
@@ -381,7 +395,8 @@ export let converse = (o: Talk): Call => {
       if (ack) queue(async () => c.play(await ack, false))
       o.ask(text).catch((error) => {
         c.report(error)
-        speak('Sorry, I could not take that. Please say it again.')
+        asked = false
+        speak(sorry(failed++))
       })
     },
     lost: (why) => {
@@ -497,7 +512,7 @@ export let talking = (o: Talking): Call => {
         pending.splice(pending.indexOf(answer), 1)
         asking = false
         c.report(error)
-        throw error
+        return FAILED
       }
       return await answered
     },
