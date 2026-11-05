@@ -242,11 +242,14 @@ test("a message sent as the Operator's chat app is left comes back as its draft"
   )
 })
 
-// Two conversations, each begun by a message sent without the page's script.
+// Two conversations, each begun by a message sent without the page's script
+// and taken up by a session: the builder's alarm, delivered here, drains the
+// work the message owes, which its own nudge only starts.
 let begun = async (say: string) => {
   let body = new FormData()
   body.set('say', say)
   let sent = await serve(base, { method: 'POST', body })
+  await p.builder(eid).alarm()
   return sent.headers.get('location')!.split('/').at(-1)!
 }
 let road = await begun('Post the road millage notice')
