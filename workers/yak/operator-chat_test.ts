@@ -230,13 +230,14 @@ test("the chat app says whose Operator it is, and opens another space's", async 
 })
 
 let settings = parseHTML(await operatorBody(p.env, space, who)).document
-test('the settings page links each conversation into the chat app, and draws none', () => {
+test('the settings page links to the chat app and lists no conversation', () => {
   assertEquals(
-    [...settings.querySelectorAll('.Rows_Name')].map((a) =>
-      a.getAttribute('href')
+    [...settings.querySelectorAll('a[href^="/"]')].some((a) =>
+      a.getAttribute('href') == chatPath('clerk')
     ),
-    [chatPath('clerk', task)],
+    true,
   )
+  assertEquals(settings.querySelector('.Rows_Name'), null)
   assertEquals(settings.querySelector('[data-task]'), null)
   assertEquals(settings.querySelector('[name=say]'), null)
 })

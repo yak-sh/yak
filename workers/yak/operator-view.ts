@@ -520,16 +520,12 @@ export let listed = (items: Worked[], href: (open: string) => string) =>
     ).join('')
   }</ul>`
 
-/** The Operator's conversations on its settings page, newest first, each a
- * link to its own page in the chat app. */
-export let worked = (items: Worked[], space: string) =>
+/** Where the Operator's settings send a person for its conversations: the
+ * chat app, which lists them (`sidebar`). */
+export let talks = (space: string) =>
   `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2><div class="Card_Actions"><a class="Button" href="${
     esc(chatPath(space))
-  }">Message the Operator</a></div></header>${
-    items.length
-      ? listed(items, (open) => chatPath(space, open))
-      : '<p>Nothing yet. Your conversation with the Operator, and the work it does, appear here.</p>'
-  }</section>`
+  }">Open conversations</a></div></header><p>Your conversations with the Operator, and the work they start, are in its chat.</p></section>`
 
 /** The chat app's list of conversations, newest first, the one open
  * marked. */

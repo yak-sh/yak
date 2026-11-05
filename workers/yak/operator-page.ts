@@ -32,9 +32,9 @@ import {
   PICTURES,
   reply,
   sidebar,
+  talks,
   trouble,
   type Worked,
-  worked,
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
 
@@ -160,14 +160,6 @@ export let conversation = (rows: Bundle[]) =>
         : ''
     }</div></div>`
   }).join('')
-
-let page = (html: string) =>
-  new Response(html, {
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'private, no-store',
-    },
-  })
 
 // What the Operator's requests are answered: an attachment, a texts choice,
 // a draft, Stop, a request sent, and its conversations read again. A plain
@@ -352,9 +344,6 @@ export let operatorAnswer = async (
       side: sidebar(items, space.slug, [open, talked.task]),
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
-  if (q.has('messages')) {
-    return page(worked(await workOf(env, space, who), space.slug))
-  }
 }
 
 // The page's socket, carried to the Builder object with the kernel's vouch
@@ -405,13 +394,11 @@ let conversationOf = async (
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
-// every other page (pages.ts `desk`): what it does and where, its
-// conversations, each a link into the chat app (`chatPage`), and the texts
-// it may send.
+// every other page (pages.ts `desk`): what it does and where, a link to its
+// conversations in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [items, consent, { pa, beyond }] = await Promise.all([
-    workOf(env, space, who),
+  let [consent, { pa, beyond }] = await Promise.all([
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
   ])
@@ -430,10 +417,10 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   }</a> with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${
     esc(space.operator)
   } answers by email.</p></section>
-<div data-work aria-live="polite">${worked(items, space.slug)}</div>
+${talks(space.slug)}
 ${nameCard(at, space.operator)}
 ${textsCard(at, consent)}
-${settingsScript(at)}`
+${settingsScript}`
 }
 
 // Where else the Operator works and what it may do there, one sentence for
@@ -464,10 +451,8 @@ export let elsewhere = (beyond: Reach[], pa: boolean) => {
 
 let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
-// The settings page's script: the texts choice, and the list of
-// conversations kept current from the Builder object's socket.
-let settingsScript = (at: string) =>
-  `<script type="module">
+// The settings page's script: the name and the texts choice.
+let settingsScript = `<script type="module">
 for (let form of document.querySelectorAll('#texts, #name')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -483,17 +468,6 @@ for (let form of document.querySelectorAll('#texts, #name')) {
     } catch (error) { said.textContent = error.message }
   })
 }
-let box = document.querySelector('[data-work]')
-let read = async () => {
-  let response = await fetch('${at}?messages=1')
-  if (response.ok) box.innerHTML = await response.text()
-}
-let listen = () => {
-  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
-  socket.onmessage = (e) => { try { if (!JSON.parse(e.data).operator?.typing) read() } catch {} }
-  socket.onclose = () => setTimeout(listen, 3000)
-}
-listen()
 </script>`
 
 /**
