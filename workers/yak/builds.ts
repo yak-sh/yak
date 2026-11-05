@@ -32,7 +32,7 @@
 // catch-up reports (NotLive, packages/admin/catchup.ts).
 //
 // Builds that fail for one cause are one tracker bug, filed under the failing
-// step and error the log names (or one "unknown" cause while the log is
+// step and error the log names (or the commit/build while the log is
 // unreadable), so one cause brings one letter and one fixer however many
 // commits it breaks. Each failure is a hit under the commit it built, so a
 // build that fails after its bug was resolved brings the bug back.
@@ -187,7 +187,15 @@ let labelOf = (line: string) => {
 let NAMED = /\b\w*(?:Error|Exception):\s+\S|\bTS\d{4}\b/
 let MARKER = /^(?:✘\s*\[ERROR\]|error(?:\[[^\]]*\])?:)\s*/i
 let rank = (line: string) =>
-  NAMED.test(line) ? 2 : MARKER.test(line.trim()) ? 1 : 0
+  /Could not resolve ["']/.test(line)
+    ? 3
+    : /\bBuild failed with \d+ errors?:/.test(line)
+    ? 0
+    : NAMED.test(line)
+    ? 2
+    : MARKER.test(line.trim())
+    ? 1
+    : 0
 
 let REPO = /(?:file:\/\/)?\/opt\/buildhome\/repo\//g
 
@@ -281,7 +289,7 @@ export let logsOf = async (env: Env, uuid?: string) => {
 
 /** Enrich one failure at the reporting boundary, leaving raw logs behind.
  * Its `cause` is what its bug is filed under: the step and error the log
- * names, with volatile parts gone, or `unknown` when the log can't be read. */
+ * names, with volatile parts gone, or the commit/build when logs can't be read. */
 export let diagnosed = async (
   env: Env,
   b: Broke,
@@ -307,7 +315,7 @@ export let diagnosed = async (
   return {
     ...b,
     cause: typeof detail == 'string'
-      ? 'unknown'
+      ? `unreadable:${b.commit ?? b.build}`
       : normalize(`${detail.step}: ${detail.reason}`),
     error: new BuildFailed(
       `${b.error.message}. ${summary}. Build log: ${

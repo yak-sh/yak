@@ -3437,6 +3437,7 @@
             "npm:postal-mime@3.0.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
+            "npm:stemmer@2.0.1",
             "npm:sucrase@3.35.1",
             "npm:wrangler@4.111.0",
             "npm:zod-to-json-schema@3.25.2",

@@ -419,3 +419,29 @@ test('builds: failures of one cause are one bug, each under the commit it built'
   assertEquals(first[0] == third[0], false)
   assertEquals([first[1], second[1], third[1]], ['c0', 'c1', 'c2'])
 })
+
+test('builds: the bundler diagnostic survives its wrapper errors', () => {
+  assertEquals(
+    failure([
+      'Task deploy:yak deno run -A workers/yak/wrangler.ts deploy',
+      '✘ [ERROR] Could not resolve "stemmer"',
+      'error: Uncaught (in promise) Error: Build failed with 1 error:',
+      'error: Uncaught (in promise) Error: Kernel modules generation failed',
+    ]),
+    { step: 'deploy yak', reason: 'Could not resolve "stemmer"' },
+  )
+})
+
+test('builds: unreadable causes keep unrelated commits and hook builds apart', async () => {
+  let env = { CF_ACCOUNT: 'account' } as Env
+  let first = event('failed'), second = event('failed')
+  second.payload!.buildTriggerMetadata!.commitHash = 'another-commit'
+  let reports = await Promise.all(
+    [first, second, hooked()].map((e) => diagnosed(env, broke(e)!)),
+  )
+  assertEquals(new Set(reports.map((r) => r.cause)).size, 3)
+  assertStringIncludes(reports[2].cause, 'build-2')
+  for (let r of reports) {
+    assertStringIncludes(r.error.message, 'BUILD_LOG_TOKEN unavailable')
+  }
+})
