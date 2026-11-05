@@ -106,10 +106,12 @@ let input = (b: Bundle, body: string) => {
   }`
 }
 
-/** A reply as the Operator wrote it, in Markdown, drawn as text: markup in it
- * stays words (@yaks/markdown). */
+// Markdown drawn as formatted text: markup in it stays words (@yaks/markdown).
+let markdown = (text: string) => renderToString(render(parse(text), h))
+
+/** A reply as the Operator wrote it, in Markdown. */
 export let reply = (text: string) =>
-  `<div class="Talk_Reply">${renderToString(render(parse(text), h))}</div>`
+  `<div class="Talk_Reply">${markdown(text)}</div>`
 
 // A value a tool was given or gave back, the way a person reads it: a list
 // of what it holds under names in words, never its JSON. Bounded in depth,
@@ -232,15 +234,17 @@ export let instructed = (said: string, inside: string) =>
     esc(said)
   }</summary>${inside}</details>`
 
-let text = (body: string) => `<pre>${esc(body)}</pre>`
+// What a model was told is Markdown, drawn the way a reply is.
+let written = (body: string) =>
+  `<div class="Talk_Written">${markdown(body)}</div>`
 
 // Each tool as the model was offered it: its name, opening on its
 // description and the arguments it takes.
 let offered = (tools: Tool[]) =>
   tools.map((t) =>
-    `<details><summary>${esc(t.name)}</summary><p>${esc(t.description)}</p>${
-      text(JSON.stringify(t.parameters, null, 2))
-    }</details>`
+    `<details><summary>${esc(t.name)}</summary>${written(t.description)}<pre>${
+      esc(JSON.stringify(t.parameters, null, 2))
+    }</pre></details>`
   ).join('')
 
 /** The tool offers asks name (`sending{offer}`), by their sha. */
@@ -261,7 +265,7 @@ export let briefed = (
     if (b.prompt) {
       let body = String(comp(b, 'content')?.body ?? '')
       return body
-        ? [{ id, html: instructed(`What ${who} was told`, text(body)) }]
+        ? [{ id, html: instructed(`What ${who} was told`, written(body)) }]
         : []
     }
     let sending = comp(b, 'sending')
@@ -277,7 +281,7 @@ export let briefed = (
     let tools = offer ? offers.get(offer) : undefined
     let html = [
       said && said != was?.said
-        ? instructed(`What ${who} was told${again}`, text(said))
+        ? instructed(`What ${who} was told${again}`, written(said))
         : '',
       tools && offer != was?.offer
         ? instructed(

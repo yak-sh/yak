@@ -8,7 +8,7 @@ import { operatorMemory } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { conversationOf, frameOf } from './operator-host.ts'
-import { esc } from './html.ts'
+import { reply } from './operator-view.ts'
 import { transcript } from '@yaks/session'
 
 // On Claude the Operator runs on Sonnet and hands code to Opus in a child
@@ -113,19 +113,23 @@ test('the conversation shows what the Operator and each helper were told and off
   )
   for (let d of told) assertEquals(d.hasAttribute('open'), false)
   let helperSaid = told[2]
-  // Each in full, as the model received it.
-  for (let m of [SONNET, OPUS]) {
-    assertStringIncludes(
-      html,
-      `<pre>${esc(first(m).instructions!)}</pre>`,
-    )
+  // Each in full, as the model received it, its Markdown drawn as text.
+  let shown = (at: Element) =>
+    [...at.children].find((c) => c.classList.contains('Talk_Written'))!
+      .innerHTML
+  let drawn = (md: string) =>
+    parseHTML(reply(md)).document.querySelector('.Talk_Reply')!.innerHTML
+  for (let [i, m] of [[0, SONNET], [2, OPUS]] as const) {
+    assertEquals(shown(told[i]), drawn(first(m).instructions!))
   }
   let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
-  assertStringIncludes(
-    html,
-    `<details><summary>spawn</summary><p>${esc(spawn.description)}</p><pre>${
-      esc(JSON.stringify(spawn.parameters, null, 2))
-    }</pre></details>`,
+  let tool = [...told[1].querySelectorAll('details')].find((d) =>
+    d.querySelector('summary')!.textContent == 'spawn'
+  )!
+  assertEquals(shown(tool), drawn(spawn.description))
+  assertEquals(
+    tool.querySelector('pre')!.textContent,
+    JSON.stringify(spawn.parameters, null, 2),
   )
   // The helper's entry sits under the step that started it.
   assert(

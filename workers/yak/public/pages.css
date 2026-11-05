@@ -1115,15 +1115,18 @@
   }
   .Talk_Reply p,
   .Talk_Reply ul,
-  .Talk_Reply ol {
+  .Talk_Reply ol,
+  .Talk_Written :is(p, ul, ol, h1, h2, h3, h4) {
     margin: 0 0 .75rem;
     color: inherit;
   }
   .Talk_Reply > :last-child,
-  .Talk_Reply .Markdown > :last-child {
+  .Talk_Reply .Markdown > :last-child,
+  .Talk_Written > :last-child {
     margin-bottom: 0;
   }
-  .Talk_Reply pre {
+  .Talk_Reply pre,
+  .Talk_Written pre {
     padding: .6rem .8rem;
     background: var(--paper);
     white-space: pre-wrap;
@@ -1235,6 +1238,12 @@
   .Talk_Told > summary {
     color: var(--soft-ink);
     cursor: pointer;
+  }
+  .Talk_Written {
+    max-height: 60vh;
+    margin: .4rem 0 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
   }
   .Talk_Told pre {
     max-height: 60vh;
