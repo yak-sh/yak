@@ -2,9 +2,9 @@
 
 Baseline only for D-126429 / T-126525. No Rust, new engine, or store changes.
 The reproducible emitter, graph workload and raw samples are
-`yardstick-tree.ts`, `yardstick.ts`, and `yardstick.results.json`. This is not a
-proposed budget passing: SQLite misses load, small-edit and subtree targets on
-this shared box.
+`yardstick-tree.ts`, `yardstick.ts`, and
+`~/shared/bench/yardstick.results.json`. This is not a proposed budget passing:
+SQLite misses load, small-edit and subtree targets on this shared box.
 
 ## Corpus and composition
 
@@ -192,7 +192,7 @@ harness checkout at report time (the measurement process started earlier in the
 same branch); package code stayed unchanged throughout all four runs. No
 production code changed for this measurement; the new SQL integration tests
 exercise capabilities already present. Raw reports:
-`yardstick.coarse.results.json`.
+`~/shared/bench/yardstick.coarse.results.json`.
 
 ### What is stored
 

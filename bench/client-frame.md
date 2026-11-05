@@ -7,12 +7,12 @@ watches in a 50,008-entity world. The sample includes bundle construction,
 notifications. World construction, warmup, final verification and disposal are
 outside the sample. No network, persistence or rendering is measured.
 
-The [retained report](client-frame-report.json) records the baseline SHA,
-candidate source hashes, runtime, input manifest and raw nanoseconds per frame.
-Three fresh worlds each warm for 100 frames, then produce 300 individual
-samples. The primary pair measures the candidate before the baseline. Both use
-identical benchmark code; the baseline checkout retains its original graph and
-RAM sources. No benchmark budget is raised.
+The retained report (`~/shared/bench/client-frame-report.json`) records the
+baseline SHA, candidate source hashes, runtime, input manifest and raw
+nanoseconds per frame. Three fresh worlds each warm for 100 frames, then produce
+300 individual samples. The primary pair measures the candidate before the
+baseline. Both use identical benchmark code; the baseline checkout retains its
+original graph and RAM sources. No benchmark budget is raised.
 
 ## Reproduce
 

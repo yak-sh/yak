@@ -17,6 +17,14 @@ Jeff, verbatim:
 > never give me a link and also don't seem to be aware that it's a just a http
 > file server
 
+And, after mockups grew to 149 MB of the repo's history:
+
+> no large assets in git
+
+A mockup, render, screenshot, image or raw report made to look at goes in
+`~/shared/<name>/`, never the checkout, even while you iterate on it. The repo
+keeps what a build reads or a shipped app serves.
+
 ## What he sees
 
 `~/shared` is a plain HTTP file server (Caddy), and the owner reads it in his
