@@ -105,7 +105,7 @@ let modules = (root: string, timeout: number, quiet: boolean) =>
       system.env.get('HOME')?.concat('/.cache')
     let workspace = resolve(root, '../..')
     let changed = cache
-      ? await restored(join(cache, 'yak'), workspace, { timeout, mode: 'copy' })
+      ? await restored(join(cache, 'yak'), workspace, { timeout })
       : await installed(workspace, { timeout })
     return changed
   }, quiet)

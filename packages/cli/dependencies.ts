@@ -21,6 +21,8 @@ export type Lock = {
   }>
 }
 
+export type Inode = { dev: number; ino: number; nlink: number; mtime: number }
+
 /** The filesystem and process boundary used by the install policy. */
 export type Host = {
   read(path: string): string
@@ -33,8 +35,11 @@ export type Host = {
   /** A copy of the tree at `from` as `to`, symlinks kept verbatim. */
   copy(from: string, to: string): void
   rename(from: string, to: string): void
-  symlink(target: string, path: string): void
   link(path: string): string | undefined
+  /** The names in a directory. */
+  list(path: string): string[]
+  /** A path's inode: what hard links share, and when its entries changed. */
+  inode(path: string): Inode
   now(): number
   pid(): number
   alive(pid: number): boolean
@@ -60,9 +65,13 @@ let system: Host = {
   realpath: io.realPathSync,
   copy: (from, to) => tree(from, to),
   rename: io.renameSync,
-  symlink: (target, path) => io.symlinkSync(target, path, { type: 'dir' }),
   link: (path) =>
     io.lstatSync(path).isSymlink ? io.readLinkSync(path) : undefined,
+  list: (path) => [...io.readDirSync(path)].map((e) => e.name),
+  inode: (path) => {
+    let { dev, ino, nlink, mtime } = io.statSync(path)
+    return { dev, ino, nlink, mtime: mtime?.getTime() ?? 0 }
+  },
   now: Date.now,
   pid: () => platform.pid,
   alive: (pid) => {
@@ -116,6 +125,10 @@ let key = (inputs: string[][]) =>
     JSON.stringify([platform.build.os, platform.build.arch, inputs]),
   ).digest('hex')
 let receipt = (root: string) => `${root}/node_modules/.yak-install`
+let hidden = (root: string) => `${root}/node_modules/.package-lock.json`
+// Longer than any install holds its inputs unused: restored() rewrites them
+// into the cached project, which dates the project's directory.
+let idle = 3_600_000
 let identity = ['version', 'resolved', 'integrity', 'link'] as const
 
 /** npm may omit optional packages, including binaries for other platforms. */
@@ -149,7 +162,7 @@ export type InstallOptions = {
   cacheKey?: string
   copy?: boolean
 }
-export type RestoreOptions = { timeout?: number; mode?: 'link' | 'copy' }
+export type RestoreOptions = { timeout?: number }
 export type Dependencies = {
   stale(root?: string): boolean
   installed(root?: string, options?: InstallOptions): Promise<boolean>
@@ -245,6 +258,18 @@ export let dependencies = (host: Host = system): Dependencies => {
     }
   }
 
+  // A tree npm wrote, or a copy of its bytes, where it could share the seed's.
+  let apart = (root: string, seed?: string) => {
+    if (!seed) return false
+    try {
+      let own = host.inode(hidden(root)), shared = host.inode(hidden(seed))
+      return own.dev == shared.dev && own.ino != shared.ino
+    } catch (error) {
+      if (error instanceof io.errors.NotFound) return false
+      throw error
+    }
+  }
+
   let linked = (root: string) => {
     try {
       return host.link(`${root}/node_modules`) !== undefined
@@ -316,7 +341,8 @@ export let dependencies = (host: Host = system): Dependencies => {
     {}) => {
     let lock = `${root}/node_modules.lock`
     let due = host.now() + timeout
-    let needed = () => stale(root) || (copy && linked(root))
+    let needed = () =>
+      stale(root) || (copy && (linked(root) || apart(root, seed)))
     while (needed()) {
       let release = await acquire(lock, due, needed)
       if (!release) return false
@@ -391,18 +417,36 @@ export let dependencies = (host: Host = system): Dependencies => {
     return false
   }
 
-  /** Share an installed project through npm's restored cache. Link by default;
-   * copy when a resolver needs module URLs to remain under the checkout. */
+  /** Remove each cached project no checkout's tree links to, once it has sat
+   * unused past any install in flight. A held lock is an install in flight. */
+  let prune = (projects: string, kept: string) => {
+    for (let name of host.list(projects)) {
+      let project = `${projects}/${name}`
+      try {
+        if (
+          project == kept || host.exists(`${project}/node_modules.lock`) ||
+          host.now() - host.inode(project).mtime < idle ||
+          host.exists(hidden(project)) && host.inode(hidden(project)).nlink > 1
+        ) continue
+      } catch (error) {
+        // Another pruner removed it first.
+        if (error instanceof io.errors.NotFound) continue
+        throw error
+      }
+      remove(project)
+    }
+  }
+
+  /** Ready a checkout from npm's restored cache: its tree hard-links the cached
+   * project's files, so module URLs stay under the checkout and a project
+   * nothing links to costs only its own bytes, which prune() frees. */
   let restored = async (
     cache: string,
     root = dir(),
-    { timeout = 600_000, mode = 'link' }: {
-      timeout?: number
-      mode?: 'link' | 'copy'
-    } = {},
+    { timeout = 600_000 }: RestoreOptions = {},
   ) => {
-    let inputs = files(root)
-    let digest = key(inputs), project = resolve(cache, 'yak-installed', digest)
+    let inputs = files(root), projects = resolve(cache, 'yak-installed')
+    let digest = key(inputs), project = `${projects}/${digest}`
     host.mkdir(project, true)
     let legacy = false
     try {
@@ -419,20 +463,8 @@ export let dependencies = (host: Host = system): Dependencies => {
       seed: root,
       cacheKey: legacy ? digest : undefined,
     })
-    if (mode == 'copy') {
-      await installed(root, { timeout, seed: project, copy: true })
-      return changed
-    }
-    let modules = `${root}/node_modules`
-    try {
-      if (
-        host.link(modules) === `${project}/node_modules`
-      ) return changed
-    } catch (error) {
-      if (!(error instanceof io.errors.NotFound)) throw error
-    }
-    remove(modules)
-    host.symlink(`${project}/node_modules`, modules)
+    await installed(root, { timeout, seed: project, copy: true })
+    prune(projects, project)
     return changed
   }
 
@@ -449,7 +481,6 @@ export let ready = (
   root: string = dir(),
   cache: string | undefined = (platform.env.get('XDG_CACHE_HOME') ??
     platform.env.get('HOME')?.concat('/.cache'))?.concat('/yak'),
-): Promise<boolean> =>
-  cache ? restored(cache, root, { mode: 'copy' }) : installed(root)
+): Promise<boolean> => cache ? restored(cache, root) : installed(root)
 
 if (platform.main(import.meta.url)) await ready(undefined, platform.args[0])

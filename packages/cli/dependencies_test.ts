@@ -49,6 +49,12 @@ let memory = () => {
   type Entry = string | null | { target: string }
   let entries = new Map<string, Entry>([['/', null]])
   let links = new Map<string, string>()
+  // A file's inode is shared by its hard links; a directory's carries the time
+  // its entries last changed.
+  let inodes = new Map<string, number>(), times = new Map<string, number>()
+  let clock = 0, made = 0
+  let parent = (path: string) => path.slice(0, path.lastIndexOf('/')) || '/'
+  let touch = (path: string) => times.set(parent(path), clock)
   let missing = (_path: string): never => {
     throw notFound
   }
@@ -71,18 +77,20 @@ let memory = () => {
       if (recursive && entries.get(path) === null) return
       throw alreadyExists
     }
-    let parent = path.slice(0, path.lastIndexOf('/')) || '/'
-    if (!entries.has(parent)) {
-      if (!recursive) return missing(parent)
-      mkdir(parent, true)
+    if (!entries.has(parent(path))) {
+      if (!recursive) return missing(parent(path))
+      mkdir(parent(path), true)
     }
     entries.set(path, null)
+    times.set(path, clock)
+    touch(path)
   }
   let write = (path: string, value: string) => {
     path = resolve(path)
-    let parent = path.slice(0, path.lastIndexOf('/')) || '/'
-    if (entries.get(parent) !== null) return missing(parent)
+    if (entries.get(parent(path)) !== null) return missing(parent(path))
     entries.set(path, value)
+    inodes.set(path, ++made)
+    touch(path)
   }
   let remove = (path: string) => {
     // Follow parent links, but unlink the named link without touching its tree.
@@ -92,6 +100,7 @@ let memory = () => {
       if (name === path || name.startsWith(path + '/')) {
         entries.delete(name)
         links.delete(name)
+        inodes.delete(name)
       }
     }
   }
@@ -101,6 +110,9 @@ let memory = () => {
       if (path === from || path.startsWith(from + '/')) {
         let destination = to + path.slice(from.length)
         entries.set(destination, entry)
+        let inode = inodes.get(path)
+        if (inode) inodes.set(destination, inode)
+        if (entry === null) times.set(destination, clock)
         if (entry && typeof entry === 'object') {
           links.set(destination, entry.target)
         }
@@ -134,18 +146,28 @@ let memory = () => {
       }
       copy(from, to)
       remove(from)
-    },
-    symlink: (target, path) => {
-      if (entries.has(path)) throw alreadyExists
-      entries.set(path, { target })
-      links.set(path, target)
+      touch(to)
     },
     link: (path) => {
       let entry = entries.get(path)
       if (entry === undefined) return missing(path)
       return entry && typeof entry === 'object' ? entry.target : undefined
     },
-    now: () => 0,
+    list: (path) =>
+      [...entries.keys()].filter((name) => parent(name) == path && name != '/')
+        .map((name) => name.slice(path.length + 1)),
+    inode: (path) => {
+      path = resolve(path)
+      if (!entries.has(path)) return missing(path)
+      let ino = inodes.get(path) ?? 0
+      return {
+        dev: 1,
+        ino,
+        nlink: [...inodes.values()].filter((i) => i == ino).length,
+        mtime: times.get(path) ?? 0,
+      }
+    },
+    now: () => clock,
     pid: () => 1,
     alive: () => true,
     wait: () => {
@@ -211,6 +233,14 @@ let memory = () => {
     code: (value: number) => {
       code = value
     },
+    /** Let time pass, as an hour unused prunes a cached project. */
+    later: (ms = 3_600_000) => {
+      clock += ms
+    },
+    projects: () =>
+      host.list(`${cache}/yak-installed`).map((name) =>
+        `${cache}/yak-installed/${name}`
+      ),
   }
 }
 
@@ -311,8 +341,11 @@ for (let legacy of [false, true]) {
   test(`npm refuses ${legacy ? 'a malformed legacy cache' : 'an unreadable hidden lock'}`, async () => {
     let m = memory()
     await m.restore()
-    if (legacy) m.remove(`${m.root}/node_modules/.yak-install`)
-    m.write(`${m.root}/node_modules/.package-lock.json`, '{')
+    let at = legacy ? m.projects()[0] : m.root
+    // No checkout's tree is left to repair the malformed cache from.
+    if (legacy) m.remove(`${m.root}/node_modules`)
+    if (legacy) m.remove(`${at}/node_modules/.yak-install`)
+    m.write(`${at}/node_modules/.package-lock.json`, '{')
     assertEquals(await (legacy ? m.restore() : m.installed(m.root)), true)
     assertEquals(m.state(), [2, false])
     m.diagnostic('lockfile unreadable:')
@@ -377,11 +410,6 @@ test('a copied cache keeps module paths local and remains independent across che
   let m = memory(), copy = m.host.copy
   await m.restore()
   assertEquals(
-    m.host.realpath(`${m.root}/node_modules`).startsWith(m.cache),
-    true,
-  )
-  await m.restored(m.cache, m.root, { mode: 'copy' })
-  assertEquals(
     m.host.realpath(`${m.root}/node_modules`),
     `${m.root}/node_modules`,
   )
@@ -389,20 +417,52 @@ test('a copied cache keeps module paths local and remains independent across che
   m.host.copy = () => {
     throw Error('an unchanged local tree is not copied again')
   }
-  await m.restored(m.cache, m.root, { mode: 'copy' })
+  await m.restore()
   m.host.copy = copy
   m.remove(`${m.root}/node_modules/dep`)
   assertEquals(m.stale(m.root), true)
   let second = '/second'
   m.inputs(second, m.root)
-  await m.restored(m.cache, second, { mode: 'copy' })
+  await m.restored(m.cache, second)
   assertEquals(
     m.host.realpath(`${second}/node_modules`),
     `${second}/node_modules`,
   )
   assertEquals(m.stale(second), false)
-  await m.restored(m.cache, m.root, { mode: 'copy' })
+  await m.restore()
   assertEquals(m.state(), [1, false])
+})
+
+let hidden = (m: ReturnType<typeof memory>, root: string) =>
+  m.host.inode(`${root}/node_modules/.package-lock.json`).ino
+
+test('a checkout holding its own copy of the cached tree is relinked to it', async () => {
+  let m = memory()
+  await m.restore()
+  let [project] = m.projects(),
+    lock = `${m.root}/node_modules/.package-lock.json`
+  m.write(lock, m.read(lock))
+  assertEquals(hidden(m, m.root) == hidden(m, project), false)
+  await m.restore()
+  assertEquals(hidden(m, m.root), hidden(m, project))
+  assertEquals(m.state(), [1, false])
+})
+
+test('a cached project is pruned once no checkout links to it and it sits unused', async () => {
+  let m = memory(), second = '/second'
+  m.inputs(second, m.root)
+  await m.restore()
+  m.change()
+  await m.restore()
+  assertEquals(m.projects().length, 2, 'a project just used stays')
+  await m.restored(m.cache, second)
+  m.later()
+  await m.restore()
+  assertEquals(m.projects().length, 2, 'a project a checkout links stays')
+  m.remove(`${second}/node_modules`)
+  await m.restore()
+  assertEquals(m.projects().map((p) => hidden(m, p)), [hidden(m, m.root)])
+  assertEquals(m.state(), [2, false])
 })
 
 let orphan = memory()
@@ -496,10 +556,7 @@ test('workspace manifests travel with a cached install and invalidate it when ch
   m.host.mkdir(`${m.root}/packages/one`, true)
   m.write(`${m.root}/packages/one/package.json`, '{"name":"one","version":"1"}')
   await m.restore()
-  let project = m.host.link(`${m.root}/node_modules`)!.replace(
-    /\/node_modules$/,
-    '',
-  )
+  let [project] = m.projects()
   assertEquals(
     m.read(`${project}/packages/one/package.json`),
     '{"name":"one","version":"1"}',
@@ -533,7 +590,7 @@ test('a cached workspace install preserves nested dependency trees', async () =>
     )
     return code
   }
-  await m.restored(m.cache, m.root, { mode: 'copy' })
+  await m.restore()
   assertEquals(m.read(`${m.root}/${path}/package.json`), '{"version":"1"}')
   assertEquals(m.stale(m.root), false)
 })
