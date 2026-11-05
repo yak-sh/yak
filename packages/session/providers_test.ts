@@ -101,7 +101,7 @@ test('resolved provider snapshots dispatch retention on every reply and keeps ex
     true,
   )
   reply = await served.model({ model: served.name, items: [], tools: [] })
-  assertEquals(reply.cacheExpiresAt, null)
+  assertEquals(reply.cacheExpiresAt, undefined)
   explicit = '2026-10-03T09:00:00Z'
   reply = await served.model({ model: served.name, items: [], tools: [] })
   assertEquals(reply.cacheExpiresAt, '2026-10-03T09:00:00.000Z')

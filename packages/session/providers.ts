@@ -200,7 +200,8 @@ export let providerResolver = (
     let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
       let listing = await describe()
       // Read retention per dispatch, not at startup or completion. The answer's
-      // explicit expiry wins; unknown providers must not inherit another TTL.
+      // explicit expiry wins; a row naming no retention leaves the expiry to
+      // the provider's own mark, which knows its documented lifetime if any.
       let [providerRow] = found.provider
         ? await g.get([found.provider], ['provider'])
         : []
@@ -210,10 +211,12 @@ export let providerResolver = (
       }
       let reply = await serve(prepare(req, listing))
       await confirm(listing)
-      return {
-        ...reply,
-        cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
-      }
+      return reply.cacheExpiresAt === undefined && cache.retention == null
+        ? reply
+        : {
+          ...reply,
+          cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
+        }
     }, serve)
     let executor: Executor | undefined
     if (executorFor) {

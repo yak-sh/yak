@@ -2,6 +2,7 @@
 // share this pure logic without loading SQL derivations or tool execution.
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Computed } from '@yaks/match'
+import { cachedPrefixExpires } from '@yaks/model'
 import { stoppedNotice } from './claude-control.ts'
 import {
   ASK,
@@ -96,6 +97,24 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 /** The newest `ask` of a transcript: the model turn in force. */
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
   ordered(entries).findLast((b) => kindOf(b) == 'ask')
+
+/** The instructions a session's newest ask sent, while the prefix it cached
+ * is still in the provider's prompt cache (its provider component's
+ * `cache_expires_at`, @yaks/model `cachedPrefixExpires`). An ask of another
+ * transcript, one not answered, or one whose expiry is unknown keeps none. */
+export let cachedInstructions = (
+  entries: Bundle[],
+  session: string,
+  now: number = Date.now(),
+): string | undefined => {
+  let ask = newestAsk(entries)
+  if (!ask || (ask.entry as Comp | undefined)?.session != session) return
+  let expires = cachedPrefixExpires(ask)
+  let said = (ask.sending as Comp | undefined)?.instructions
+  return expires && Date.parse(expires) > now && typeof said == 'string'
+    ? said
+    : undefined
+}
 
 let callsIn = (all: Bundle[]): Bundle[] => {
   let answered = new Set(

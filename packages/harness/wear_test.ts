@@ -1,6 +1,7 @@
 // A runner lent `wear` says each transcript's persona at the top of every ask,
 // its base read from where bases are kept, and what the host adds after it,
-// read again each ask, so an edit reaches a transcript on its next turn.
+// read again each ask (this provider names no cache expiry, so none is held),
+// so an edit reaches a transcript on its next turn.
 import { equal, test } from '@yaks/testing'
 import { link } from '@yaks/edge'
 import type { Request } from '@yaks/model'

@@ -75,6 +75,7 @@ import {
   USING,
 } from './native.ts'
 import {
+  cachedInstructions,
   kindOf,
   newestAsk,
   openCalls,
@@ -771,10 +772,16 @@ export let react = async (
     reply: Reply,
     providerModel: Model,
     stream: Streams = new Map(),
+    // When the request was sent, for a provider that knows how long the
+    // prefix it caches lasts (@yaks/model `CacheContext`).
+    requestedAt?: number,
   ): Promise<Step> => {
     const finalAsk: Bundle = {
       ...ask,
-      ...providerModel.mark?.(reply) ?? {},
+      ...providerModel.mark?.(
+        reply,
+        requestedAt == null ? undefined : { requestedAt },
+      ) ?? {},
       ...reply.usage ? { usage: reply.usage } : {},
       ...reply.cost == null ? {} : {
         cost: { dollars: reply.cost, reported: reply.costReported ?? true },
@@ -1010,9 +1017,14 @@ export let react = async (
     : open.length
     ? (asked ? comp(asked, 'sending') : undefined) ?? sendingBefore(entries)
     : sendingBefore(entries)
+  // A prefix still in the provider's prompt cache is sent as it was: the
+  // instructions this session's newest ask sent stand while its cached prefix
+  // lasts. Once it has expired they are read again, and the conversation is
+  // replayed on whatever they now say.
+  const cached = deps.runCall ? undefined : cachedInstructions(entries, session)
   // A step that will ask the model reads its instructions while its tools are
   // found: neither waits on the other, and each may be round trips away.
-  const resolve = deps.resolveInstructions
+  const resolve = cached == null ? deps.resolveInstructions : undefined
   const instructed = !deps.runCall && !open.length && resolve
     ? Promise.resolve().then(() =>
       resolve(
@@ -1410,18 +1422,19 @@ export let react = async (
     ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
-    instructions: instructed
-      ? await instructed
-      : deps.resolveInstructions
-      ? await deps.resolveInstructions(
-        sending?.instructions == null
-          ? undefined
-          : String(sending.instructions),
-        session,
-      )
-      : sending?.instructions == null
-      ? deps.instructions
-      : String(sending.instructions),
+    instructions: cached ??
+      (instructed
+        ? await instructed
+        : deps.resolveInstructions
+        ? await deps.resolveInstructions(
+          sending?.instructions == null
+            ? undefined
+            : String(sending.instructions),
+          session,
+        )
+        : sending?.instructions == null
+        ? deps.instructions
+        : String(sending.instructions)),
     items: [
       ...dynamic,
       ...project(
@@ -1666,6 +1679,7 @@ export let react = async (
   }
   req.call = ask.entity.eid
   let reply: Reply
+  let requestedAt: number | undefined
   try {
     if (executor) {
       try {
@@ -1689,6 +1703,7 @@ export let react = async (
         cost: { dollars: receipt.cost, reported: receipt.costReported ?? true },
       }], { trusted: true })
     }
+    requestedAt = Date.now()
     reply = await providerModel(req)
     accepting = false
     await tail
@@ -1854,5 +1869,6 @@ export let react = async (
     reply,
     providerModel,
     stream,
+    requestedAt,
   )
 }

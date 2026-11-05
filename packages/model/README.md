@@ -585,10 +585,17 @@ The session provider resolver reads `provider.cache_retention` (seconds) at
 request dispatch and snapshots dispatch plus retention when no explicit expiry
 is returned. An invalid explicit expiry does not gain a fallback. Set retention
 only from documentation applicable to that provider's endpoint and models; there
-is no transport-wide default. Existing asks without expiry remain cold, so no
-backfill is needed. Consumers also require a completed ask, known
-`usage.input_tokens` and `usage.output_tokens`, and the selected
-`model.context`.
+is no transport-wide default. A row naming no retention leaves the expiry to the
+provider's own `mark`, which @yaks/session calls with the dispatch instant
+(`CacheContext.requestedAt`): @yaks/anthropic knows its documented five minutes,
+and a provider that knows none records the expiry unknown. Existing asks without
+expiry remain cold, so no backfill is needed.
+
+A session keeps the instructions its newest ask sent while that ask's expiry is
+in the future, so a context that changed mid-conversation does not rewrite a
+prefix still in the cache. Once it has expired, or where it is unknown, the
+instructions are read again and the conversation is replayed on them
+(@yaks/session `cachedInstructions`).
 
 ## Hosted inference
 
