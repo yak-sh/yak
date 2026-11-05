@@ -257,6 +257,7 @@ export let directoryConfig: Config = {
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
     'yak/git',
     { use: 'yak/wrap', facets: ['graph'] },
+    { use: 'yak/remake', facets: ['graph'] },
     { use: 'yak/kills', facets: ['graph'] },
   ]),
 }
@@ -322,5 +323,6 @@ export let domains = {
     effects: './facets/git-effects.ts',
   },
   'yak/wrap': { graph: './facets/wrap-graph.ts' },
+  'yak/remake': { graph: './facets/remake-graph.ts' },
   'yak/kills': { graph: './facets/kills-graph.ts' },
 }

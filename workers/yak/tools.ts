@@ -1769,10 +1769,9 @@ export let recoverRelease = async (
  * that has not deployed since. Its files and its draft are as they were. */
 export let recompileRelease = async (ctx: Ctx, space: Space, app: App) => {
   let current = await ctx.dir.app(space, app.slug)
-  if (
-    !current || current.eid != app.eid || current.source != app.source ||
-    current.fence
-  ) return
+  if (!current || current.eid != app.eid || current.source != app.source) {
+    return
+  }
   let live = (await versions(ctx.dir, current))
     .find((v) => v.version == current.version)
   if (!live) return

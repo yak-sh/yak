@@ -2,13 +2,28 @@
 import type { VocabDoc } from '@yaks/vocab'
 export let sweepDoc: VocabDoc = {
   $defs: {
+    release_remake: {
+      component: true,
+      type: 'object',
+      description:
+        'a release to make again as itself, compiled by the toolkit serving ' +
+        'it now (toolkit.ts), done once by the remake sweep its row wakes',
+      properties: {
+        app: { type: 'string', description: 'the app' },
+        source: {
+          type: 'string',
+          description:
+            'the release it serves that its toolkit has moved on from',
+        },
+      },
+    },
     sweep: {
       component: true,
       type: 'object',
       properties: {
         kind: {
           type: 'string',
-          enum: ['git', 'kills', 'meter', 'trash', 'wrap'],
+          enum: ['git', 'kills', 'meter', 'remake', 'trash', 'wrap'],
         },
         began: {
           type: 'string',

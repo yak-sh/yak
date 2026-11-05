@@ -21,6 +21,8 @@ import { ADA, seeded, visit } from './serving-data-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
+import { meta } from './meta.ts'
+import { remade, type Remake } from './remake.ts'
 import { addressed, SHA, sha256 } from './versions.ts'
 
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
@@ -299,7 +301,7 @@ test('a changed lock or previously plain script replans a release', async () => 
 
 // A page served from a release whose toolkit has moved on has the release
 // made again, as itself, by the toolkit serving it now (toolkit.ts).
-let remade = await (async () => {
+let remakes = await (async () => {
   let n = 0
   await using s = await scenario((ask) => ({
     pages: Object.fromEntries(ask.pages.map((p) => [p, `/* ${++n} */`])),
@@ -329,13 +331,19 @@ let remade = await (async () => {
   let assets = s.env.ASSETS
   s.env.ASSETS = { fetch: (req) => assets.fetch(req) } as typeof assets
   s.env.CF_VERSION_METADATA = { id: 'a later kernel' }
+  let asked: Remake[] = []
   try {
     await page()
+    // What the page asked for, done as the directory's alarm does it.
+    asked = (await meta(s.env).query('.release_remake'))
+      .map((row) => row.release_remake as Remake)
+    for (let job of asked) await remade(s.env, job)
   } finally {
     catalog['@yaks/client'].version = was
   }
   return {
     same,
+    asked,
     asks: s.asks.slice(1),
     release: await s.release(),
     version: (await at()).app.version,
@@ -345,8 +353,9 @@ let remade = await (async () => {
 })()
 
 test('a release compiled by an older toolkit is made again as itself', () => {
-  let { same, asks, release, version, served, draft } = remade
+  let { same, asked, asks, release, version, served, draft } = remakes
   assertEquals(same.asks, 1)
+  assertEquals(asked.map((job) => job.source.split('/').pop()), [same.release])
   assertEquals(asks.map((ask) => ask.pages), [['main.ts']])
   assertEquals(asks[0].files['main.ts'], 'let n: number = 1')
   assertEquals(release == same.release, false)

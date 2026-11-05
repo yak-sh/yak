@@ -179,15 +179,9 @@ import {
 import { broken } from '@yaks/tracker/report'
 import { flood } from './lib/flood.ts'
 import { isVerifiedBot } from './lib/bots.ts'
-import {
-  drafted,
-  fullAt,
-  hashed,
-  recompileRelease,
-  recoverRelease,
-  TOOLS,
-} from './tools.ts'
+import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { stale } from './toolkit.ts'
+import { ask } from './remake.ts'
 import { ADDRESS } from './route.ts'
 import { background, caught, refusing } from './defects.ts'
 import { invitation } from './referral.ts'
@@ -927,14 +921,11 @@ let wearing = (space: Space, app: App, env: Host, who: Who): Scripts => ({
 })
 
 // A page served from a release compiled by a toolkit this platform has moved
-// on from has that release made again as itself, after the page is answered
-// (toolkit.ts): the next page imports the shared modules the toolkit makes
-// now. Asked once per release by a kernel deployment (its assets binding). A
-// deploy or another isolate's remake arriving first, or a space out of build
-// seconds, is the remake not needed or not this one's to do; anything else is
-// a failure of ours.
+// on from asks for that release to be made again as itself (toolkit.ts,
+// remake.ts), after the page is answered: a later page imports the shared
+// modules the toolkit makes now. Asked once per release by a kernel
+// deployment (its assets binding).
 let remakes = new WeakMap<Env['ASSETS'], Map<string, Promise<void>>>()
-let EXPECTED = ['stale', 'conflict', 'limit']
 export let refresh = (
   env: Env,
   space: Space,
@@ -946,16 +937,10 @@ export let refresh = (
   remakes.set(env.ASSETS, refreshed)
   if (refreshed.has(source)) return refreshed.get(source)
   let work = (async () => {
-    if (!await stale(env, source)) return
-    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
-      copy: copyOf(env),
-      time: env.CLOCK,
-    })
-    await recompileRelease({ env, dir, person: '' }, space, app)
-  })().catch((e) => {
-    if (e instanceof CallError && EXPECTED.includes(e.code)) return
+    if (await stale(env, source)) await ask(env, { app: app.eid, source })
+  })().catch((e) =>
     caught(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
-  })
+  )
   refreshed.set(source, work)
   for (let old of refreshed.keys()) {
     if (refreshed.size <= 512) break
@@ -1043,6 +1028,7 @@ let asset = async (
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
   let base = files.baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
+  refresh(env, space, app)
   let page = await c.time('render', async () =>
     woven(
       env,
