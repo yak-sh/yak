@@ -1681,10 +1681,6 @@ export let directoryRows = (rows: {
     apply: write,
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
-    // An entity's whole row, as `at` and `appAt` read it: a compare-and-set
-    // guards its writes on what this request already read (model-spend.ts).
-    row: (eid: string): Promise<ReadRow | undefined> =>
-      one(`.entity.eid=${eid}`),
     space: async (slug: string) => {
       let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null
@@ -1994,13 +1990,13 @@ export let directoryRows = (rows: {
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {
-      let row = await self.row(eid)
+      let row = await one(`.entity.eid=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await self.row(eid)
+      let row = await one(`.entity.eid=${eid}`)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
