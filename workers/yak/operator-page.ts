@@ -7,7 +7,7 @@ import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { url } from './host.ts'
-import { chatPath, managePath } from './route.ts'
+import { chatPath, logoPath, managePath } from './route.ts'
 import {
   keepFile,
   type Request as Intake,
@@ -512,6 +512,7 @@ export let chatPage = async (
     owner: true,
     own: false,
     operator: space.operator,
+    logo: logoPath(space),
   }
   return shell(
     env,

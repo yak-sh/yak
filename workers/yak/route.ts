@@ -90,12 +90,31 @@ let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
  * `chatPage`): one opened by its task or request, or a new one. */
 export let chatPath = (space: string, open = 'new') =>
   `${managePath('operator', space)}/${open}`
+/** Where a space's logo is drawn from, or none where it has none: its bytes'
+ * own address, so the address changes with the picture and nothing is ever
+ * shown stale.
+ *
+ * ```ts
+ * import { logoPath } from './route.ts'
+ * import { assertEquals } from '@std/assert'
+ * let sha = 'a'.repeat(64)
+ * assertEquals(logoPath({ slug: 'ada', logo: { sha } }), `/manage/ada/logo/${sha}`)
+ * assertEquals(logoPath({ slug: 'ada', logo: null }), undefined)
+ * ```
+ */
+export let logoPath = (
+  space: { slug: string; logo?: { sha: string } | null },
+) =>
+  space.logo
+    ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
+    : undefined
+let SHA = /^[0-9a-f]{64}$/
 /** What a dashboard path asks for: an account page, a space's page (its home
- * when none is named), or an address from before T-136122 (`legacy`), to be
- * sent on. Null is no page. */
+ * when none is named), its logo's bytes, or an address from before T-136122
+ * (`legacy`), to be sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
-  | { space: string; view: SpaceView; open?: string }
+  | { space: string; view: SpaceView; open?: string; logo?: string }
   | { legacy: ManageView }
   | { first: true }
 export let managed = (path: string): Managed | null => {
@@ -106,6 +125,11 @@ export let managed = (path: string): Managed | null => {
   if (two == 'operator' && rest.length == 1 && SLUG.test(one)) {
     return OPEN.test(rest[0])
       ? { space: one, view: 'operator', open: rest[0] }
+      : null
+  }
+  if (two == 'logo' && rest.length == 1 && SLUG.test(one)) {
+    return SHA.test(rest[0])
+      ? { space: one, view: 'settings', logo: rest[0] }
       : null
   }
   if (rest.length) return null

@@ -461,6 +461,25 @@
     color: var(--on-accent);
     font-weight: 800;
   }
+  img.Desk_Tile {
+    object-fit: cover;
+    background: none;
+  }
+  .Desk_Logo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap);
+  }
+  .Desk_Logo .Desk_Tile {
+    width: 4rem;
+    height: 4rem;
+    font-size: 1.75rem;
+  }
+  .Desk_Logo .Drop {
+    flex: 1;
+    min-width: 12rem;
+  }
   .Desk_Name {
     display: grid;
     min-width: 0;

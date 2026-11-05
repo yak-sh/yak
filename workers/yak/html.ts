@@ -29,20 +29,31 @@ export let day = (iso: string, month: 'long' | 'short' = 'long') => {
 
 // A file input as a drop zone (controls.css `.Drop`, public/drop.js): the
 // form's own input inside a place to press or drop on, and the list of what
-// is chosen under it. `label` names the input; `hint` says what it takes.
+// is chosen under it. `label` names the input; `hint` says what it takes,
+// `accept` which kinds the chooser offers, and `size` the most bytes of one
+// file. One that `sends` sends its form the moment a file is chosen.
 export let fileDrop = (o: {
   name: string
   label: string
   hint?: string
   multiple?: boolean
   required?: boolean
+  accept?: string
+  size?: number
+  sends?: boolean
 }) =>
   `<div class="Drop"><label class="Drop_Zone"><input class="Drop_File" type="file" name="${
     esc(o.name)
   }" aria-label="${esc(o.label)}"${o.multiple ? ' multiple' : ''}${
     o.required ? ' required' : ''
+  }${o.accept ? ` accept="${esc(o.accept)}"` : ''}${
+    o.size ? ` data-size="${o.size}"` : ''
+  }${
+    o.sends ? ' data-sends' : ''
   }><span class="Drop_Say"><span class="Drop_Choose">Choose ${
     o.multiple ? 'files' : 'a file'
   }</span> or drop ${o.multiple ? 'them' : 'it'} here</span>${
     o.hint ? `<span class="Drop_Hint">${esc(o.hint)}</span>` : ''
-  }</label><ul class="Drop_Chosen" aria-live="polite"></ul></div>`
+  }</label>${
+    o.size ? '<p class="Drop_Said" role="status"></p>' : ''
+  }<ul class="Drop_Chosen" aria-live="polite"></ul></div>`

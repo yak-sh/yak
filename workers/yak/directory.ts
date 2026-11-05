@@ -194,6 +194,8 @@ export type Space = {
   title: string
   // What its Operator is called (operator-name.ts).
   operator: string
+  // The picture it wears in place of its first letter, or null for none.
+  logo?: { sha: string; type: string } | null
   sender?: import('@yaks/phone').Transport
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
@@ -590,6 +592,7 @@ export type Row = {
   }
   fee?: { bps?: number | null }
   budget?: { dollars?: number | null }
+  space_logo?: { sha?: string | null; type?: string | null }
   starter?: { dollars?: number | null }
   started?: { space?: Id | null }
   created?: { at?: string }
@@ -1004,6 +1007,7 @@ export let SPACE_PARTS = [
   'sender',
   'phone',
   'comped',
+  'space_logo',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1094,6 +1098,9 @@ export let spaceOf = (r: Row): Space => ({
   store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
+  logo: r.space_logo?.sha
+    ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
+    : null,
   ...(r.sender
     ? {
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
@@ -1851,6 +1858,17 @@ export let directoryRows = (rows: {
           ...(moving ? { space: { slug: to } } : {}),
           ...(had ? { former: addresses(had.filter((s) => s != to)) } : {}),
         }, ...claims],
+      }, headers)
+      return (await self.at(space.eid))!
+    },
+    // The space wearing the picture at `sha`, or none (apps.ts `logoed`).
+    badge: async (
+      space: Space,
+      logo: { sha: string; type: string } | null,
+      headers: Record<string, string>,
+    ): Promise<Space> => {
+      await self.apply({
+        entities: [{ entity: { eid: space.eid }, space_logo: logo }],
       }, headers)
       return (await self.at(space.eid))!
     },

@@ -30,7 +30,7 @@ import { copyOf } from './directory-copy.ts'
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host, spaceHost, url as hostUrl } from './host.ts'
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
 import { browserImmutable } from './cache.ts'
 import {
@@ -79,9 +79,11 @@ import {
 import {
   type Accepts,
   addressed,
+  broken as undecoded,
   contentType,
   fits,
   Gone,
+  mediaTypeOf,
   mimeOf,
   parts,
   representation,
@@ -104,6 +106,7 @@ import {
   type DeskPage,
   editor,
   invitedTo,
+  LOGO,
   nothingHere,
   sentence,
   spaceBinned,
@@ -118,6 +121,7 @@ import {
   type AccountView,
   accountView,
   hostOf,
+  logoPath,
   MANAGE,
   manageAt,
   managed,
@@ -2533,6 +2537,7 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     administrative,
     until,
   }
+  if (at.logo) return logoOf(env, space, who, at.logo)
   // The Operator is open to every member who may change the space; its own
   // requests are answered by it, its settings page is drawn like every
   // other, and each conversation with it opens in its chat app, which
@@ -2670,6 +2675,7 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
     own: s.own,
     whose: s.role == 'owner' ? undefined : names.get(s.owner!)?.name,
     operator: s.space.operator,
+    logo: logoPath(s.space),
   }))
 }
 
@@ -2832,6 +2838,7 @@ let desk = async (
         title: space.title,
         owner: who.role == 'owner',
         own: false,
+        logo: logoPath(space),
       },
       ...picks,
     ],
@@ -2888,7 +2895,13 @@ let mine = async (
     shared: theirs,
     referral,
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
-      { slug: own.slug, title: own.title, owner: true, own: true },
+      {
+        slug: own.slug,
+        title: own.title,
+        owner: true,
+        own: true,
+        logo: logoPath(own),
+      },
       ...picks,
     ],
     member: !picks.find((s) => s.slug == space)?.owner,
@@ -3194,6 +3207,16 @@ let saved = async (
       })
     }
   }
+  // Settings' Logo: a picture chosen, or Remove.
+  if (form.has('logo') || form.has('unlogo')) {
+    let no = await logoed(env, dir, space, who, form.get('logo'))
+    if (no) {
+      return desk(req, env, dir, space, who, 'settings', { say: no, no: true })
+    }
+    let to = sentFrom(req, env)
+    to.searchParams.set('saved', '1')
+    return redirect(to.href, 303)
+  }
   // Settings: the space's name, homepage and address, one form and one Save. A
   // refusal draws the page again with everything typed still in the fields,
   // and the address goes last because moving renames the space the homepage
@@ -3241,6 +3264,55 @@ let saved = async (
   )
   to.searchParams.set('saved', '1')
   return redirect(to.href, 303)
+}
+
+// Where a space's logo is kept: content-addressed in the bucket under the
+// space's handle, so a rename moves none of it and deleting the space sweeps
+// it with the rest (erase.ts `swept`).
+let logoKey = (space: Space, sha: string) => `${space.store}/.logo/${sha}`
+
+// The space wearing the picture `file`, or none where no file came (Remove).
+// Answers why a file cannot be its logo, or nothing once it is. The bytes it
+// wore before are deleted once the row no longer names them.
+let logoed = async (
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  who: Owner,
+  file: FormDataEntryValue | null,
+): Promise<string | undefined> => {
+  let blobs = r2RawObjects(env.BLOBS)
+  let logo = null
+  if (file instanceof File) {
+    if (file.size > LOGO.size) return 'a logo can be up to 1 MB'
+    let bytes = new Uint8Array(await file.arrayBuffer())
+    let type = mediaTypeOf(bytes)
+    if (!type || !LOGO.accept.split(',').includes(type)) {
+      return 'a logo is a PNG, JPEG, WebP or GIF picture'
+    }
+    let why = await undecoded(bytes, type)
+    if (why) return `that picture does not open: ${why}`
+    logo = { sha: await sha256(bytes), type }
+    await blobs.put(logoKey(space, logo.sha), bytes)
+  } else if (file != null) return 'choose a picture for the logo'
+  let had = space.logo?.sha
+  await dir.badge(space, logo, vouched(who))
+  if (had && had != logo?.sha) await blobs.delete(logoKey(space, had))
+}
+
+// The bytes of a space's logo, to anyone in the space, at the address only
+// these bytes have (route.ts `logoPath`), so a browser keeps them for good.
+let logoOf = async (env: Env, space: Space, who: Owner, sha: string) => {
+  if (!who.role || space.logo?.sha != sha) return nothingHere(env)
+  let bytes = await r2RawObjects(env.BLOBS).read(logoKey(space, sha))
+  if (!bytes) return nothingHere(env)
+  return new Response(bytes, {
+    headers: {
+      'content-type': space.logo.type,
+      'cache-control': browserImmutable,
+      'x-content-type-options': 'nosniff',
+    },
+  })
 }
 
 // Rung 1½ (D-34197): the home app is the space's router, and `home.first`

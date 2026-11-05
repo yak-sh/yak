@@ -126,6 +126,17 @@ export let directoryDoc: VocabDoc = {
         "The space's Operator, the assistant that works in it: the name it goes by.",
       properties: { name: text },
     },
+    // The picture a space wears where its first letter stood (pages.ts
+    // `spaceChoice`): the bytes at `sha` in the bucket under the space's
+    // handle (apps.ts `LOGO`), and their image type. Its owner sets it in
+    // the space's settings, or takes it off.
+    space_logo: {
+      component: true,
+      type: 'object',
+      description:
+        "The space's logo: the SHA-256 of its image's bytes and their type.",
+      properties: { sha: text, type: text },
+    },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
     // is the space (a seat) or the app (a grant), one property the way
     // `hostname.serves` is, and accepting is one batch that writes the

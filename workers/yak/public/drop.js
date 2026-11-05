@@ -135,6 +135,9 @@
     }
     holding.set(input, now)
     show(input)
+    if (input.hasAttribute('data-sends') && now.length) {
+      input.form?.requestSubmit()
+    }
   })
   // A form's reset empties its inputs without a change.
   addEventListener('reset', (e) => {

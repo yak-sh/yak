@@ -621,6 +621,8 @@ export type Picked = {
   whose?: string
   // What its Operator is called.
   operator?: string
+  // Where its logo is drawn from (route.ts `logoPath`), where it has one.
+  logo?: string
 }
 
 export type DeskPage = {
@@ -786,6 +788,16 @@ let chooser = (at: DeskPage, view: ManageView) =>
     `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`,
   )
 
+/** A space's logo, or where it has none its first letter. */
+export let spaceTile = (s: Picked) =>
+  s.logo
+    ? `<img class="Desk_Tile" src="${
+      esc(s.logo)
+    }" width="32" height="32" alt="" decoding="async">`
+    : `<span class="Desk_Tile" aria-hidden="true">${
+      esc(named(s).charAt(0).toUpperCase())
+    }</span>`
+
 /** The space selector over `all`, holding `here`: each space opens at `to`,
  * `make` follows the list, and `about` leads the line under each space's name
  * (the dashboard's side, and the Operator's chat app, which names each
@@ -799,9 +811,7 @@ export let spaceChoice = (
 ) => {
   let box = (s: Picked, line = '') => {
     let said = [about(s), line].filter(Boolean).join(' · ')
-    return `<span class="Desk_Tile" aria-hidden="true">${
-      esc(named(s).charAt(0).toUpperCase())
-    }</span><span class="Desk_Name"><b>${esc(named(s))}</b>${
+    return `${spaceTile(s)}<span class="Desk_Name"><b>${esc(named(s))}</b>${
       said && `<small>${esc(said)}</small>`
     }</span>`
   }
@@ -1201,12 +1211,47 @@ let newSpace = (at: DeskPage, env: Host) =>
 // then deleting it, which asks again on its own page (identity.ts
 // `closing`). A refusal draws the page again with what was typed still in
 // the fields (`at.typed`).
+/** The most bytes a space's logo may be, and the kinds it may be: pictures a
+ * browser draws as an image and nothing else, so no SVG with its scripts. */
+export let LOGO = {
+  size: 1_000_000,
+  accept: 'image/png,image/jpeg,image/webp,image/gif',
+}
+
+// Settings' Logo: the space's picture, or its letter, beside a drop zone
+// that sends its own form as soon as a file is chosen, and Remove where there
+// is one to take off.
+let logoCard = (at: DeskPage) => {
+  let here = picked(at)
+  let action = managePath('settings', at.space)
+  return `<section class="Card">${
+    heading('Logo')
+  }<p class="Card_Sub">Shown beside the space’s name. A square picture looks best.</p>
+<form class="Desk_Logo" method="post" action="${action}" enctype="multipart/form-data">${
+    spaceTile(here)
+  }${
+    fileDrop({
+      name: 'logo',
+      label: 'Logo',
+      hint: 'PNG, JPEG, WebP or GIF, up to 1 MB',
+      accept: LOGO.accept,
+      size: LOGO.size,
+      required: true,
+      sends: true,
+    })
+  }<noscript><button class="Button" type="submit">Upload</button></noscript></form>${
+    here.logo
+      ? `<form method="post" action="${action}"><button class="Button Button-quiet" type="submit" name="unlogo" value="1">Remove logo</button></form>`
+      : ''
+  }</section>`
+}
+
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   let was = at.typed ??
     { title: named(picked(at)), space: at.space, home: home?.slug ?? '' }
   let host = esc(spaceHost(env, at.space))
-  return `<form class="Form" method="post" action="${
+  return `${logoCard(at)}<form class="Form" method="post" action="${
     managePath('settings', at.space)
   }"><section class="Card">${heading('General')}<div class="Form">${
     labeled(
