@@ -2,6 +2,7 @@
 // browser exports, and captured source bytes own the compiler's provenance.
 import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
+import { toolkits } from '../packages/esbuild/plan.ts'
 import { catalog, write } from './compiler-packages.ts'
 
 let scratch = async (
@@ -112,9 +113,12 @@ test('compiler catalog is stable, content-addressed and materialized atomically'
     assertEquals(b['@yaks/a'].version == a['@yaks/a'].version, false)
     assertEquals(b['@yaks/b'].version, a['@yaks/b'].version)
     assertEquals(JSON.parse(await Deno.readTextFile(to)), b)
+    let beside = `${root}/.wrangler/toolkit.json`
+    assertEquals(JSON.parse(await Deno.readTextFile(beside)), toolkits(b))
+    // What write() materialized, and no temporary file left behind.
     assertEquals(
       [...Deno.readDirSync(`${root}/.wrangler`)].map((f) => f.name).sort(),
-      ['packages.json'],
+      ['packages.json', 'toolkit.json'],
     )
     assertEquals(
       Object.hasOwn(JSON.parse(await Deno.readTextFile(memo)), key),
