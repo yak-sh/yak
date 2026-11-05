@@ -108,9 +108,22 @@ what's still missing, is in D-131886.
 ## Price and copy
 
 A flat price per space, with every member free, says *for a person, their team
-and the things they run*. The Plus plan is $9 a month for now (T-131888; Jeff:
-"let's keep $9 for *now*"), and whether a Plus space can pay for model use past
-its budget is T-131904.
+and the things they run*. yaks.app sells three plans, and meter.ts and
+pricing.html hold what each one carries:
+
+- **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB
+  of photos and files and 100 emails a month, with a small badge, no custom
+  domain and no payments.
+- **The Plus plan** is $9 a month, for any space (T-131888; Jeff: "let's keep
+  $9 for *now*"): unlimited apps, 10 GB of app data, 50 GB of photos and
+  files, 2,500 emails a month, a custom domain, payments with Stripe and no
+  badge. Whether a Plus space can pay for model use past its budget is
+  T-131904.
+- **The Organization plan** is $49 a month or $490 a year, since an
+  organization budgets by the year (D-134567, T-135234). It carries the Plus
+  plan's allowances and adds the Operator built in, so staff ask by email or
+  chat and yaks.app makes the change, a larger model budget and support.
+  Jeff on its name: "just call it the organization plan" (T-139983).
 
 Copy is written for a stranger. "Each space is free or on the Plus plan"
 passes; "Free allowances are yours, not each space's" doesn't. How a marketing
@@ -125,7 +138,7 @@ docs are the place for explicitness and technicality!"
 (`writing-documentation`).
 
 - Define "space" before you use it.
-- Say "the Plus plan" (M-37846).
+- Say "the Plus plan" (M-37846) and "the Organization plan".
 - Use the one-liner as it stands (M-37845).
 - Show live apps from the yourname space (M-37804).
 - Let prompts start from the person's own situation (M-37856).
@@ -143,8 +156,8 @@ and an app someone shared with them.
 
 ## Where it lives
 
-- **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `LETTERS`, `BUDGET`,
-  `PRICE`, `SPACES`), and site_test.ts holds the pages to them. The plan is
+- **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `ORGANIZATION`,
+  `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to them. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
   (packages/platform/vocab.json). Checkout, the billing portal and the Stripe
   webhook are in workers/yak/billing.ts. How metering and refusals work is
