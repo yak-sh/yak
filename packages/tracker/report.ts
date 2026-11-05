@@ -345,7 +345,7 @@ export let meant = (_answer: string, status: number): boolean =>
 
 /**
  * The breaks a page's report door was sent, out of either body: the page
- * reporter's `{message, stack?, cause?, url?, line?, status?, answer?,
+ * reporter's `{message, stack?, cause?, url?, page?, line?, status?, answer?,
  * mechanism?, version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
  * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
  * a break in the page. An answer the reporter saw that `refusal` calls a no
@@ -367,6 +367,12 @@ export let meant = (_answer: string, status: number): boolean =>
  *   'x is undefined',
  *   'onerror',
  * ])
+ * let [missed] = broken(JSON.stringify({
+ *   message: 'failed to load img https://box.test/a.webp',
+ *   url: 'https://box.test/a.webp',
+ *   page: 'https://box.test/T-9',
+ * }))
+ * equal(missed.request, 'page /T-9')
  * let [wrapped] = broken(JSON.stringify({
  *   message: 'live client — Dropped: wss://box.test/ws closed (1006)',
  *   cause: 'it has not reopened: 7 attempts',
@@ -419,7 +425,9 @@ export let broken = (
     if (b.filed === true || unanswered(b)) return []
     let message = saying(b)
     if (!message) return []
-    let at = pathOf(r.url ?? b.url ?? b.documentURL)
+    // The page it broke on, which the reporter names apart from `url`, the
+    // script or file at fault; an older reporter's `url` is the best left.
+    let at = pathOf(b.page ?? r.url ?? b.url ?? b.documentURL)
     let source = b.sourceFile ?? b.url
     let breadcrumbs = crumbs(b.breadcrumbs)
     return [{

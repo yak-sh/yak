@@ -23,7 +23,14 @@
     if (sent++ >= 20) return
     try {
       let blob = new Blob([
-        JSON.stringify({ ...body, version, breadcrumbs: crumbs }),
+        // The page it happened on, beside `url`, which names where: the
+        // script that threw, or the file that would not load.
+        JSON.stringify({
+          ...body,
+          page: location.href,
+          version,
+          breadcrumbs: crumbs,
+        }),
       ], {
         type: 'application/json',
       })

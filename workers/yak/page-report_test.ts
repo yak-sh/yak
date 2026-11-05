@@ -10,6 +10,7 @@ import type { Bundle } from '@yaks/graph'
 import { within } from './defects.ts'
 import { answer, PATH } from './page-report.ts'
 import { shell } from './pages.ts'
+import { sheeted } from './sheets.ts'
 
 let reporter = await Deno.readTextFile(
   new URL('./public/report.js', import.meta.url),
@@ -21,13 +22,14 @@ let at = 'https://yaks.app/manage/ada/chat/new'
 // reporter sent is returned, as the door would receive it. A browser names
 // where each frame ran (`frame`): our page for its inline scripts, else
 // whoever put the script there.
-let ran = async (own: string, frame = at, page = at) => {
-  let html = await shell({}, 'Operator', null, 200, own).text()
+// The reporter run first in `html`, at `page`, with the server answering
+// each fetch `status`.
+let loaded = (html: string, page: string, status = 204) => {
   let { document, window } = parseHTML(html)
   let [first, ...rest] = [...document.querySelectorAll('script')]
   let sent: { url: string; body: Blob }[] = []
   Object.defineProperty(document, 'currentScript', { value: first })
-  let fetch = () => Promise.resolve(new Response(null, { status: 204 }))
+  let fetch = () => Promise.resolve(new Response(null, { status }))
   new Function(
     'document',
     'location',
@@ -52,6 +54,12 @@ let ran = async (own: string, frame = at, page = at) => {
     () => 0,
     () => {},
   )
+  return { document, window, first, rest, sent }
+}
+
+let ran = async (own: string, frame = at, page = at) => {
+  let html = await shell({}, 'Operator', null, 200, own).text()
+  let { window, first, rest, sent } = loaded(html, page)
   for (let script of rest.filter((s) => !s.src)) {
     try {
       new Function(script.textContent ?? '')()
@@ -149,4 +157,42 @@ test('the same throw on another page is the same bug', async () => {
   let [one] = await filed(await sole(throws))
   let [two] = await filed(await sole(throws, other, other))
   equal(faultOf(two), faultOf(one))
+})
+
+test('the home page files a throw and a frame that will not load, tagged with it', async () => {
+  let home = await Deno.readTextFile(
+    new URL('./public/index.html', import.meta.url),
+  )
+  let { document, window, first, sent } = loaded(
+    sheeted(home, {}),
+    'https://yaks.app/',
+    404,
+  )
+  ok(first.src.endsWith('/report.js'), 'the reporter is the first script')
+  let error = Object.assign(Error('boom'), {
+    stack: 'Error: boom\n    at start (https://yaks.app/wander.js:90:3)',
+  })
+  window.dispatchEvent(Object.assign(new window.Event('error'), {
+    error,
+    message: 'boom',
+    filename: 'https://yaks.app/wander.js',
+    lineno: 90,
+  }))
+  let frame = document.createElement('img')
+  frame.src = 'https://yaks.app/mascot/wander-down-128.webp'
+  document.body.append(frame)
+  // A load that fails is raised at its element, which the browser hands the
+  // window's listener as the event's target.
+  let missed = new window.Event('error')
+  Object.defineProperty(missed, 'target', { get: () => frame, set: () => {} })
+  window.dispatchEvent(missed)
+  await new Promise((done) => setTimeout(done, 0))
+  let rows = (await Promise.all(sent.map((s) => filed(s.body)))).flat()
+  let errors = rows.map((r) =>
+    r.error as { tags: Record<string, string>; message?: string }
+  )
+  equal(errors.map((e) => e.tags.page), ['/', '/'])
+  let said = JSON.stringify(rows)
+  ok(said.includes('boom'))
+  ok(said.includes('failed to load img https://yaks.app/mascot/wander-down'))
 })
