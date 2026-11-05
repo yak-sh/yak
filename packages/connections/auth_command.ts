@@ -22,17 +22,21 @@ export let auth: CliCommand['run'] = async (args, host, context) => {
     if (integration == 'yaks.app') {
       await yaksApp(host).prepare!(integration, as)
     }
-    authIO.say('Paste the key and press Enter (input hidden):')
-    let key = await authIO.hidden()
-    if (!key) throw new Refused('No key supplied')
+    // Whatever could refuse is asked before the paste, so a key pasted is
+    // never thrown away. A name no integration holds is kept as a key of its
+    // own, sent nowhere until whoever uses it names its hosts.
     let existing = as
       ? await pick(host.graph.read, owner, integration, as).catch(() =>
         undefined
       )
       : undefined
-    let [b] = existing ? [existing] : await host.graph.apply(
-      await need(host.graph.read, { owner, integration }),
-    )
+    let asked = existing
+      ? undefined
+      : await need(host.graph.read, { owner, integration })
+    authIO.say('Paste the key and press Enter (input hidden):')
+    let key = await authIO.hidden()
+    if (!key) throw new Refused('No key supplied')
+    let [b] = existing ? [existing] : await host.graph.apply(asked!)
     await connect({ graph: host.graph, vault: host.vault }, b.entity.eid, {
       key,
     }, as)

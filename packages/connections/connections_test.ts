@@ -377,7 +377,6 @@ test(
       let asked of [
         { app: 'other', integration: 'weather', hosts: ['evil.example'] },
         { integration: 'calendar', hosts: ['evil.example'] },
-        { integration: 'nothing' },
       ]
     ) {
       await assertRejects(() =>
@@ -393,6 +392,34 @@ test(
     })
   },
 )
+
+test('a key kept before anyone uses it is sent nowhere, until its owner names its hosts once', async () => {
+  let { g, c, needs } = await setup()
+  let eid = await needs({ app: undefined, integration: 'TELNYX' })
+  await connect(c, eid, { key: 'kept' })
+  let hostsOf = async () => (await known(g.read, 'TELNYX'))?.hosts
+  let sent = () => call(c, eid, new Request('https://api.telnyx.example/v2'))
+  assertEquals(await hostsOf(), [])
+  await assertRejects(sent)
+  await assertRejects(() =>
+    need(g.read, {
+      owner: 'ann',
+      integration: 'TELNYX',
+      hosts: ['evil.example'],
+    })
+  )
+  await needs({ integration: 'TELNYX', hosts: ['api.telnyx.example'] })
+  assertEquals(await hostsOf(), ['api.telnyx.example'])
+  assertEquals(await credential(c, eid), 'kept')
+  await sent()
+  await assertRejects(() =>
+    need(g.read, {
+      owner: 'space',
+      integration: 'TELNYX',
+      hosts: ['evil.example'],
+    })
+  )
+})
 
 // A custom integration made saying how to get its key, as its owner asked;
 // a second, for its owner to change.

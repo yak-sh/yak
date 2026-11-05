@@ -132,9 +132,40 @@ config continues to name the secret with `{"secret": "NAME"}`. Writing only an
 `op://` reference through the graph does not supply a runtime credential.
 
 A person can also enter a value where no transcript sees it: `yak auth [name]`
-takes a sign-in's return URL as masked input, `yak auth --key` takes an agent
-grant or service key the same way, and yaks.app's connections page takes a
-pasted key.
+takes a sign-in's return URL as masked input, `yak auth --key <name>` takes a
+key the same way, and yaks.app's connections page takes a pasted key.
+
+## When the owner gives us a key
+
+The owner, verbatim, after a command an agent handed him threw his paste away:
+"just let me store it and you can use it after", and "i don't think i've ever
+run this command not seen this error ... because it's always referenced before
+the agents have ever actually done the thing". Giving us a key should cost him
+one paste and nothing else to think about.
+
+- **Look before you ask.** The key he gave weeks ago is probably already here.
+  `op item list` lists 1Password's items by title alone (the Telnyx key is
+  "telnyx API"); a box secret shows with `graph_query` `.secret.name=NAME&*`,
+  and a connection with `connection_list`, his person as owner. A key found in 1Password is
+  imported the way "Writing one on the box" says, without asking him at all.
+- **The command is `yak auth --key <NAME>`, any name.** A name no integration
+  holds becomes a custom key integration of that name with no hosts yet, owned
+  by his person, and a connection holding the paste
+  (packages/connections/auth_command.ts). Anything that could refuse is asked
+  before the paste. Pasting again makes a second connection; `--as` names one
+  to replace, so a key he gave is never written over by accident.
+- **Hosts are named when the key is used, not when it is stored.** Until then
+  the key is sent nowhere: `call` and the egress refuse every host. Whoever
+  first uses it asks `connection_need` with the integration, the person as
+  owner and its `hosts`, which names them once; after that they never change.
+- **Reading it back.** Trusted code on the box reads it by name with
+  `accountCredential({graph, vault}, person, NAME)`, or sends through it with
+  `call(ctx, connection, request)`, which holds it to its hosts.
+- **Hand him only a command you have run.** Run it first, as he will type it,
+  in your own process against a throwaway vault (a temporary directory's
+  `fileVault`, never `~/.yak/secrets`), and see it do what you will tell him it
+  does. A command written from reading the code is a guess, and his paste is
+  what the guess costs.
 
 To check one: `graph_query` with q `.secret.name=NAME&*`. It wears `provisional`
 while its value is on the way to the vault, with `content` explaining a retry,

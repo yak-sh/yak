@@ -293,7 +293,9 @@ let linked = (
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs — made only
  * where no integration holds the name, so it never writes over one, and owned
- * by whoever made it. What is said about it (`About`) is written with it, or
+ * by whoever made it. Its hosts may wait: a key kept before anyone uses it is
+ * sent nowhere, and its owner names them once, asking with them, after which
+ * they never change. What is said about it (`About`) is written with it, or
  * changed by its owner asking again. An app that already uses a connection
  * through that integration is answered with it: with `each`, the one the
  * owner holds. The connection comes first. */
@@ -303,14 +305,12 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let name = a.integration
   let about = told(a)
   let i = await known(read, name)
-  if (fields.length && (i ? !i.fields?.length : !hosts.length && !a.direct)) {
+  if (fields.length && i && !i.fields?.length) {
     throw new CallError(
       'fields',
-      i
-        ? `${name} is connected with ${
-          keyed(i) ? 'one key' : 'a sign-in'
-        }, and its fields never change`
-        : 'fields are for a custom key, given with its hosts',
+      `${name} is connected with ${
+        keyed(i) ? 'one key' : 'a sign-in'
+      }, and its fields never change`,
     )
   }
   if (
@@ -328,16 +328,15 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
       `${name} is built, and sends its credential to its own hosts`,
     )
   }
-  // A direct key is handed to the app's own code and never sent by anything
-  // here, so it has no hosts to name.
-  if (!i && !hosts.length && !a.direct) {
+  // Hosts not yet named are its owner's to name, once.
+  let naming = !!i && !i.hosts?.length && hosts.length > 0
+  if (naming && i!.owner != a.owner) {
     throw new CallError(
-      'integration',
-      `no integration is named ${name}; for a custom key, name the hosts it ` +
-        `may be sent to`,
+      'hosts',
+      `only the space or person that made ${name} names its hosts`,
     )
   }
-  if (i && hosts.length && !same(i.hosts, hosts)) {
+  if (i && hosts.length && !naming && !same(i.hosts, hosts)) {
     throw new CallError(
       'hosts',
       `${name} already sends its key to ${i.hosts.join(', ')}`,
@@ -366,7 +365,17 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   }
   let u = { binding, direct: !!a.direct, each: a.each }
   // Said again of one that stands, it is its owner's change to make.
-  let retold = i && Object.keys(about).length ? await set(read, a) : []
+  let retold = [
+    ...i && Object.keys(about).length ? await set(read, a) : [],
+    ...naming
+      ? [{
+        entity: { eid: integrationEid(name) },
+        [INTEGRATION]: { hosts },
+        // Refused, rather than written over, where they were named meanwhile.
+        $was: { [INTEGRATION]: { hosts: token(i!.hosts) } },
+      }]
+      : [],
+  ]
   let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
   if (used) {
     if (a.direct) {

@@ -39,9 +39,10 @@ them.
   sign up, which page issues the key, what to paste), written for them and for
   the agent helping them; a host shows it wherever the integration is met.
   `owner` is the space or person that made a custom integration, and the only
-  one who may change its `title`, `tagline`, `site` or `instructions`; nobody
-  changes its `hosts`. A built integration has no owner, and one whose owner is
-  gone is nobody's to change.
+  one who may change its `title`, `tagline`, `site` or `instructions`. Its
+  `hosts` may wait until it is used: a key kept with none is sent nowhere, and
+  its owner names them once, after which nobody changes them. A built
+  integration has no owner, and one whose owner is gone is nobody's to change.
 - `listed{at, by, via}` marks a custom integration its owner listed in the
   **integration directory**, which anyone may read and add to a space of their
   own apart from any app; taking the mark off takes it out. Every built
@@ -119,18 +120,19 @@ caller to apply in its own name:
   binding?, direct?, title?, tagline?, site?, instructions?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
-  service with no integration, `hosts` makes a custom key integration, asking
-  for the `fields` given, owned by `owner` and saying what `title`, `tagline`,
-  `site` and `instructions` give, and hosts that differ from an existing one's
-  are refused; any of those four given for an integration that stands is `set`
-  by its owner, and refused for anyone else; a `direct` key, handed to the app's
-  code and never sent by anything here, may name none. An app that already uses
-  a connection through that integration is answered with it, and with its link
-  renamed where `binding` or `direct` was given. `need` never links an app to a
-  connection that holds a credential: giving an app a person's account is the
-  person's act. With `each`, the owner is the space asking each person, or a
-  person making their own, and an app is answered with the one that owner holds.
-  The connection comes first in what it returns.
+  service with no integration, it makes a custom key integration sent to the
+  `hosts` given, asking for the `fields` given, owned by `owner` and saying what
+  `title`, `tagline`, `site` and `instructions` give; any of those four given
+  for an integration that stands is `set` by its owner, and refused for anyone
+  else. Hosts may wait: one made with none (a key kept before anyone uses it, or
+  a `direct` key, handed to the app's code) is sent nowhere until its owner asks
+  with them, and hosts that differ from ones already named are refused. An app
+  that already uses a connection through that integration is answered with it,
+  and with its link renamed where `binding` or `direct` was given. `need` never
+  links an app to a connection that holds a credential: giving an app a person's
+  account is the person's act. With `each`, the owner is the space asking each
+  person, or a person making their own, and an app is answered with the one that
+  owner holds. The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections, the `uses` links to them,
   and the integrations they go through.
 

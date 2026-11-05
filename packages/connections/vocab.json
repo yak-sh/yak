@@ -98,7 +98,7 @@
           "items": {
             "type": "string"
           },
-          "description": "the API hosts a connection's credential may be sent to, and no others"
+          "description": "the API hosts a connection's credential may be sent to, and no others. None is sent nowhere: a custom key kept before anyone uses it, whose owner names its hosts once"
         },
         "fields": {
           "type": "array",
@@ -155,7 +155,7 @@
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "the space or person that made a custom integration: only its owner may change the integration's title, tagline, site or instructions, and nobody may change its hosts. A built integration has none, and is the host's"
+          "description": "the space or person that made a custom integration: only its owner may change the integration's title, tagline, site or instructions, and nobody may change its hosts once they are named. A built integration has none, and is the host's"
         }
       }
     },
@@ -275,7 +275,7 @@
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",
-      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them; its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key.",
+      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them. A key kept before it is used may have no hosts yet, and is sent nowhere until its owner asks again with them; once named, its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key.",
       "input": {
         "app": {
           "type": "string",
@@ -303,7 +303,7 @@
           "items": {
             "type": "string"
           },
-          "description": "for a custom key only: the hosts it may be sent to"
+          "description": "for a custom key only: the hosts it may be sent to, named once, by its owner"
         },
         "fields": {
           "type": "array",
