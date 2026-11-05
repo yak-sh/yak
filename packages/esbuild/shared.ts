@@ -466,3 +466,38 @@ export let external = (urls: Shared['urls']): Options['external'] => (spec) => {
     )
   }
 }
+
+/// flat('import"https://o/__packages/a/e.js"', { '__packages/a/e.js': 'import"./c.js"', '__packages/a/c.js': '' }, 'https://o') -> 'import"https://o/__packages/a/e.js"\nimport"https://o/__packages/a/c.js";'
+/// flat('let n = 1', {}, 'https://o') -> 'let n = 1'
+/** A page entry that also imports every shared module its own imports reach.
+ * A browser finds a module's imports only once the module arrives, so a graph
+ * five levels deep is five round trips before the page runs; named in the
+ * entry, all of it is asked for at once. The entry's own imports come first,
+ * and they already reach everything it adds, so nothing runs in another
+ * order. Dynamic imports stay lazy. */
+export let flat = (
+  code: string,
+  files: Shared['files'],
+  origin: string,
+): string => {
+  let statics = (text: string, at?: string) =>
+    parse(text)[0].flatMap((i) => {
+      if (i.d != -1 || !i.n) return []
+      try {
+        return [new URL(i.n, at).href]
+      } catch {
+        return []
+      }
+    })
+  let own = statics(code)
+  let reached = new Set(own)
+  for (let url of reached) {
+    let path = url.startsWith(`${origin}/`) ? url.slice(origin.length + 1) : ''
+    let text = files[path]
+    if (text != null) { for (let dep of statics(text, url)) reached.add(dep) }
+  }
+  let added = [...reached].filter((url) => !own.includes(url))
+  return added.length
+    ? `${code}\n${added.map((url) => `import${JSON.stringify(url)};`).join('')}`
+    : code
+}

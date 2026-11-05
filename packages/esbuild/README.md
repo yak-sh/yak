@@ -227,11 +227,14 @@ public shared output.
   the worker's path resolves against the entry, not the file that names it.
 
 A page script compiles to one minified file importing its shared modules with
-`process.env.NODE_ENV` set to `"production"`. The server source compiles to one
-module; files it reaches that esbuild does not load (text, WebAssembly) are
-named in `carry` for the host to upload beside it. An import esbuild could not
-resolve is an error naming the package to add to `package.json`, never a module
-left missing.
+`process.env.NODE_ENV` set to `"production"`. It also imports, after its own
+imports, every shared module those reach (`flat`), so a browser asks for the
+whole graph once the page script arrives instead of one level per round trip;
+its own imports already reach each one, so nothing runs in another order. The
+server source compiles to one module; files it reaches that esbuild does not
+load (text, WebAssembly) are named in `carry` for the host to upload beside it.
+An import esbuild could not resolve is an error naming the package to add to
+`package.json`, never a module left missing.
 
 ## The installer
 

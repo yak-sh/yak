@@ -119,11 +119,13 @@ carries the same header:
 
 **Module import chains.** The browser learns what a module imports only after
 that module arrives, so on a first visit each level of imports adds a round trip
-before any of your code runs. Import `./api/client.js` with a static `import`
-from the page's own script, not with `await import()`, which does not start
-until the module that calls it has run. A page made of several modules lists
-each one in its `<head>`, so the browser fetches them all in parallel with the
-page:
+before any of your code runs. A page script yaks.app compiles (TypeScript, npm
+or toolkit imports) already imports every shared module it reaches by name, so
+the browser asks for all of them as soon as the script arrives. Import
+`./api/client.js` with a static `import` from the page's own script, not with
+`await import()`, which does not start until the module that calls it has run. A
+page made of several modules lists each one in its `<head>`, so the browser
+fetches them all in parallel with the page:
 
     <link rel="modulepreload" href="./main.js">
     <link rel="modulepreload" href="./view.js">
