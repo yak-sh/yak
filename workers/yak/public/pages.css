@@ -553,6 +553,11 @@
   .Desk .SideNav {
     --nav-edge: transparent;
     margin-right: -1.25rem;
+    gap: .15rem;
+  }
+  /* The links you are not on sit close; the current one keeps its room. */
+  .Desk .SideNav a:not([aria-current='page']) {
+    padding-block: .4rem;
   }
   /* The body keeps what it raises (a selected tab, a chart) to itself, so
      the side, and a menu opened from it over the body, lies above it all. */
@@ -804,6 +809,10 @@
     }
     .Desk .SideNav {
       margin-right: 0;
+      gap: .4rem;
+    }
+    .Desk .SideNav a:not([aria-current='page']) {
+      padding-block: .6rem;
     }
     .Desk_Body {
       min-height: 0;
