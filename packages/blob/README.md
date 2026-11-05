@@ -59,7 +59,9 @@ equal(bodies(vocab), [{ comp: 'post', prop: 'body' }])
 let driver = open(':memory:')
 let bytes = sqliteBlobs(driver)
 let store = storage(driver, vocab, { derived: blobRead(vocab) })
-for (let statement of [...store.ddl(), ...blobSchema()]) driver.query(statement)
+for (let statement of [...store.ddl(), ...blobSchema()]) {
+  driver.query(statement)
+}
 let g = graph({ storage: store, vocab, plugins: [blobs(vocab, bytes)] })
 
 g.apply([{ entity: { eid: 'p1' }, post: { body: 'A long essay.' } }])
@@ -104,6 +106,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `@yaks/blob/routes`  | `routes(host, options)`, backend helpers and route settings                                                |
 | `@yaks/blob/file`    | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
 | `@yaks/blob/backend` | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
+| `@yaks/blob/store`   | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package |
 
 ## Addresses
 
@@ -511,7 +514,10 @@ import { artifactDoc, artifactStore, encode, memoryBlobs } from '@yaks/blob'
 
 let vocab = loadVocab([artifactDoc])
 let g = graph({ storage: ram(vocab), vocab })
-let artifact = await artifactStore(memoryBlobs())(encode('Hello'), 'text/plain')
+let artifact = await artifactStore(memoryBlobs())(
+  encode('Hello'),
+  'text/plain',
+)
 await g.apply([
   { entity: { eid: artifact.address }, artifact },
   {
@@ -731,7 +737,11 @@ let sql = open(':memory:')
 let db = storage(sql, vocab)
 for (let statement of [...db.ddl(), ...blobSchema()]) sql.query(statement)
 let bytes = memoryBlobs()
-let g = graph({ storage: db, vocab, plugins: plugins({ vocab, blobs: bytes }) })
+let g = graph({
+  storage: db,
+  vocab,
+  plugins: plugins({ vocab, blobs: bytes }),
+})
 let table = routes({ blobs: bytes, graph: g, artifacts: bytes })
 let upload = table.find((route) => route.method == 'PUT')!
 let read = table.find((route) => route.method == 'GET')!

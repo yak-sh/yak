@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@yaks/blob": "platform",
     "@yaks/canvas": "platform",
     "@yaks/cli": "platform",
     "@yaks/diagram": "platform",
@@ -23,6 +24,7 @@
     "@yaks/query": "platform",
     "@yaks/ram": "platform",
     "@yaks/render": "platform",
+    "@yaks/secrets": "platform",
     "@yaks/task": "platform",
     "@yaks/tools": "platform",
     "@yaks/vocab": "platform",

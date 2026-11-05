@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./backend": "./backend.ts",
+    "./store": "./store.ts",
     "./file": "./file.ts",
     "./sqlite": "./sqlite.ts",
     "./vocab": "./vocab.ts",

@@ -1,12 +1,15 @@
 // The graph this page runs in the visitor's tab: the packages `yak init` lists
-// that a page has a use for, composed from their facets over memory, and the
-// `yak` command line typed into it.
+// that a page has a use for, composed from their facets over memory by
+// @yaks/host's assembly as `yak` and yaks.app compose theirs, and the `yak`
+// command line typed into it.
 import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
-import { loadTools, tier } from '@yaks/graph/tools'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
+import { assembly, type Config, type Load } from '@yaks/host'
+import { memoryBlobs } from '@yaks/blob/store'
+import { ramVault } from '@yaks/secrets/vault'
 import { ram } from '@yaks/ram'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { answerOf, faulted, runner, toolEid } from '@yaks/tools'
+import type { VocabDoc } from '@yaks/vocab'
+import { answerOf, faulted, toolEid } from '@yaks/tools'
 import {
   argsFor,
   commandFor,
@@ -16,7 +19,6 @@ import {
   Usage,
 } from '@yaks/cli/grammar'
 import { registry, show } from '@yaks/cli/answer'
-import { nameKeywords } from '@yaks/names'
 import { human } from '@yaks/id'
 import * as kernelVocab from '@yaks/kernel/vocab'
 import * as kernelGraph from '@yaks/kernel/graph'
@@ -47,7 +49,7 @@ import * as projectVocab from '@yaks/project/vocab'
 import * as effectsVocab from '@yaks/effects/vocab'
 import * as mailVocab from '@yaks/mail/vocab'
 import * as mailGraph from '@yaks/mail/graph'
-import { effects as mailEffects } from '@yaks/mail/effects'
+import * as mailEffects from '@yaks/mail/effects'
 import { arrived } from '@yaks/mail'
 import * as inboxVocab from '@yaks/inbox/vocab'
 import { queue } from '@yaks/inbox/letters'
@@ -56,44 +58,48 @@ import { effects, generation } from '@yaks/effects'
 import { outbox } from './outbox.ts'
 import { SHOP, shopDoc, YOURS } from './shop.ts'
 
-type Facets = {
-  name: string
-  vocab: { docs?: unknown[]; keywords?: unknown[] }
-  graph?: { plugins?: (host: { vocab: Vocab }) => Plugin[] }
-  tools?: { runs?: () => Record<string, unknown> }
-  views?: unknown
-}
-
-/** Each package the page's graph is made of, with the facets it uses. */
-export let PACKAGES: Facets[] = [
-  {
-    name: '@yaks/kernel',
+/** Each package the page's graph is made of, and the facets it imports: what
+ * a config lists and a host's `load` answers, here imported up front so the
+ * page is one bundle. */
+export let PACKAGES: Record<string, Record<string, unknown>> = {
+  '@yaks/kernel': {
     vocab: kernelVocab,
     graph: kernelGraph,
     tools: kernelTools,
     views: kernelViews,
   },
-  { name: '@yaks/id', vocab: idVocab, graph: idGraph },
-  { name: '@yaks/edge', vocab: edgeVocab, graph: edgeGraph },
-  { name: '@yaks/doc', vocab: docVocab, graph: docGraph, views: docViews },
-  { name: '@yaks/tools', vocab: toolsVocab, views: toolsViews },
-  {
-    name: '@yaks/task',
+  '@yaks/id': { vocab: idVocab, graph: idGraph },
+  '@yaks/edge': { vocab: edgeVocab, graph: edgeGraph },
+  '@yaks/doc': { vocab: docVocab, graph: docGraph, views: docViews },
+  '@yaks/tools': { vocab: toolsVocab, views: toolsViews },
+  '@yaks/task': {
     vocab: taskVocab,
     graph: taskGraph,
     tools: taskTools,
     views: taskViews,
   },
-  { name: '@yaks/persona', vocab: personaVocab },
-  { name: '@yaks/memory', vocab: memoryVocab, tools: memoryTools },
-  { name: '@yaks/provenance', vocab: provenanceVocab },
-  { name: '@yaks/canvas', vocab: canvasVocab, graph: canvasGraph },
-  { name: '@yaks/file', vocab: fileVocab },
-  { name: '@yaks/project', vocab: projectVocab },
-  { name: '@yaks/effects', vocab: effectsVocab },
-  { name: '@yaks/mail', vocab: mailVocab, graph: mailGraph },
-  { name: '@yaks/inbox', vocab: inboxVocab },
-] as Facets[]
+  '@yaks/persona': { vocab: personaVocab },
+  '@yaks/memory': { vocab: memoryVocab, tools: memoryTools },
+  '@yaks/provenance': { vocab: provenanceVocab },
+  '@yaks/canvas': { vocab: canvasVocab, graph: canvasGraph },
+  '@yaks/file': { vocab: fileVocab },
+  '@yaks/project': { vocab: projectVocab },
+  '@yaks/effects': { vocab: effectsVocab },
+  '@yaks/mail': { vocab: mailVocab, graph: mailGraph, effects: mailEffects },
+  '@yaks/inbox': { vocab: inboxVocab },
+}
+
+let load =
+  ((plugin: string, facet: string) =>
+    Promise.resolve(PACKAGES[plugin]?.[facet] ?? null)) as Load
+
+// The mail effect hands a letter to the page's outbox, never to a mail
+// service: the outbox is the sender this host lends.
+let CONFIG: Config = {
+  plugins: Object.keys(PACKAGES).map((use) =>
+    use == '@yaks/mail' ? { use, with: { sender: { via: 'outbox' } } } : use
+  ),
+}
 
 // What `yak init` leaves unnumbered (@yaks/cli init.ts), so a page's first
 // task is T-1.
@@ -134,15 +140,8 @@ export type Yak = Awaited<ReturnType<typeof yak>>
 /** A graph in memory with the page's packages, a person typing into it, and
  * an agent beside them. A failed effect is tried again `retry` ms later. */
 export let yak = async ({ retry = 1500 } = {}) => {
-  let docs = [...PACKAGES.flatMap((p) => p.vocab.docs ?? []), shopDoc]
-  let keywords = [
-    ...PACKAGES.flatMap((p) => p.vocab.keywords ?? []),
-    nameKeywords,
-  ]
-  let vocab = loadVocab(docs as never, keywords as never)
   let you = mint()
   let agent = mint()
-  let host = { vocab }
   // Every phase each write runs, the batch as it left each one, and what it
   // committed, told to whoever listens: the page draws from these.
   let ran: Phase[] = []
@@ -173,23 +172,44 @@ export let yak = async ({ retry = 1500 } = {}) => {
       },
     ])),
   } as Plugin
+  let box = outbox(retry)
+  let blobs = memoryBlobs()
+  let plan = await assembly(CONFIG, ['graph', 'effects'], load, {
+    docs: [shopDoc as VocabDoc],
+  })
   // The effects the graph's packages declare, run in this tab as a store
   // runs them: each commit records the runs it owes, and the pool works them
-  // after it, trying a failed one again once its wait is up. The mail effect
-  // hands a letter to the page's outbox, never to a mail service.
-  let box = outbox(retry)
-  let fx = effects(vocab, {
-    singleOwner: true,
-    write: (b) => g.apply(b, { trusted: true }),
-    nudge: () => void work(),
-    backoff: () => retry,
-    report: (error) => globalThis.reportError(error),
+  // after it, trying a failed one again once its wait is up.
+  let { host } = plan.bind({
+    host: {
+      me: you,
+      vault: ramVault(),
+      blobs,
+      artifacts: blobs,
+      senders: { outbox: box },
+      stopping: new AbortController().signal,
+      duties: () => work(),
+      end: () => Promise.resolve(),
+      bury: () => Promise.resolve([]),
+      gone: () => Promise.resolve(false),
+      report: (error) => globalThis.reportError(error),
+    },
+    actor: { by: you },
+    storage: (host) => ram(host.vocab, { number: { except: UNNUMBERED } }),
+    effects: (host, disabled) =>
+      effects(host.vocab, {
+        disabled,
+        singleOwner: true,
+        write: (b) => host.graph.apply(b, { trusted: true }),
+        nudge: () => void work(),
+        backoff: () => retry,
+        report: (error) => globalThis.reportError(error),
+      }),
+    // The page hears each phase after every plugin has run its own.
+    graph: (options) =>
+      graph({ ...options, plugins: [...options.plugins ?? [], watch] }),
   })
-  fx.handle({
-    mail_post: mailEffects({ senders: { outbox: box } }, {
-      sender: { via: 'outbox' },
-    }).mail_post,
-  })
+  let { vocab, storage, graph: g, fx } = host
   // Your inbox's email door, as @yaks/inbox's service opens it: a letter
   // from the shop for each question that holds up work. The tab passes after
   // every commit instead of every ten seconds, and queues no daily digest.
@@ -217,17 +237,6 @@ export let yak = async ({ retry = 1500 } = {}) => {
         }
       }
     })
-  let storage = ram(vocab, { number: { except: UNNUMBERED } })
-  let g = graph({
-    storage,
-    vocab,
-    actor: { by: you },
-    plugins: [
-      fx,
-      ...PACKAGES.flatMap((p) => p.graph?.plugins?.(host) ?? []),
-      watch,
-    ],
-  })
   await g.install()
   // The person typing is in the graph from the start, with the address their
   // mail goes to; the agent joins it, writing its own row, when it first
@@ -246,22 +255,12 @@ export let yak = async ({ retry = 1500 } = {}) => {
       doc: { title: 'Your agent', body: 'Calls the same tools over MCP.' },
       $actor: { by: agent },
     }]))
-  let tools = [
-    ...tier({ keywords: vocab.keywords }),
-    ...PACKAGES.flatMap((p) =>
-      p.tools?.runs
-        ? loadTools(p.vocab.docs as never, p.tools.runs() as never)
-        : []
-    ),
-  ].filter((t) => OFFERED.has(t.name))
-  let calls = runner(g, { tools })
-  await calls.ensure()
+  let tools = host.tools.filter((t) => OFFERED.has(t.name))
+  let calls = host.runner
+  await calls.ensure(tools.map((t) => t.name))
   let views = await registry(
-    PACKAGES.filter((p) => p.views).map((p) => p.name),
-    (name) =>
-      Promise.resolve(
-        (PACKAGES.find((p) => p.name == name)?.views ?? null) as never,
-      ),
+    Object.keys(PACKAGES).filter((name) => PACKAGES[name].views),
+    (name) => Promise.resolve(PACKAGES[name].views as never),
   )
   let from = {
     lookup: (eids: string[]) => g.get(eids),
@@ -450,12 +449,17 @@ export let yak = async ({ retry = 1500 } = {}) => {
     /** A rule or effect by name, as the vocabulary that declares it writes
      * it, and the package that declares it (`shop`: the page's own). */
     declared: (name: string) =>
-      [...PACKAGES, { name: 'shop', vocab: { docs: [shopDoc] } }]
-        .flatMap((p) =>
-          (p.vocab.docs as VocabDoc[] ?? []).map((d) => ({
-            from: p.name,
-            def: d.$defs?.[name] as Record<string, unknown> | undefined,
-          }))
-        ).find((d) => d.def),
+      [
+        ...Object.entries(PACKAGES).map(([from, p]) => ({
+          from,
+          docs: (p.vocab as { docs?: VocabDoc[] }).docs ?? [],
+        })),
+        { from: 'shop', docs: [shopDoc as VocabDoc] },
+      ].flatMap(({ from, docs }) =>
+        docs.map((d) => ({
+          from,
+          def: d.$defs?.[name] as Record<string, unknown> | undefined,
+        }))
+      ).find((d) => d.def),
   }
 }
