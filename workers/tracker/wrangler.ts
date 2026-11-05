@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run -A
-// The independent build door reuses the workspace's dependencies and pinned
-// Wrangler, but never deploys yak or its sibling Workers.
+// The independent build door uses the workspace's pinned Wrangler package
+// and deploys the tracker alone.
 import { WRANGLER } from '../yak/wrangler.ts'
 import { fileURLToPath } from 'node:url'
 import { installed } from '@yaks/cli/dependencies'

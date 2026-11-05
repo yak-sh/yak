@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // Each executor release keeps its Worker and Workflow names. A changed bundle
 // gets another release, leaving accepted calls on the Worker that accepted them.
-import { WRANGLER } from '../yak/wrangler.ts'
+import { WRANGLER, WRANGLER_VERSION } from '../yak/wrangler.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'smol-toml'
@@ -45,7 +45,7 @@ export let fingerprint = async (directory: string): Promise<string> => {
     chunks.push(encoder.encode(`${file}\0${bytes.length}\0`), bytes)
   }
   chunks.push(
-    encoder.encode(JSON.stringify(WRANGLER)),
+    encoder.encode(WRANGLER_VERSION),
     await Deno.readFile(`${root}/wrangler.toml`),
   )
   let bytes = new Uint8Array(chunks.reduce((n, chunk) => n + chunk.length, 0))

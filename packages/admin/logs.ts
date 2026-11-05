@@ -189,8 +189,7 @@ let live = async (
   signal: AbortSignal,
   start = spawn,
 ) => {
-  // npx starts Wrangler as a child of its own, so stopping npx alone leaves
-  // Wrangler alive with the pipe open. The tail is a process group of its own
+  // Wrangler may start children with the pipe open. The tail is a process group of its own
   // (`detached`), and stopping it signals the whole group: SIGINT, so Wrangler
   // can close its tail session, then SIGKILL for whatever is still there after
   // GRACE. It runs until the command stops (the host's `stopping`).

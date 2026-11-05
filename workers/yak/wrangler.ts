@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-run=deno,npm,npx,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-run=deno,node,npm,npx,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
@@ -7,7 +7,7 @@
 // npm installs the repository workspace before bundling. Package manifests
 // own dependencies and exports, so esbuild follows the same names as Deno.
 
-// The pin. `--yes` so a cold npx cache installs it instead of asking.
+// The workspace pins Wrangler; every caller runs that installed package.
 //
 // It has a floor, not just a version: `send_email` is Email Sending's binding
 // now, whose `send()` takes `{from, to, subject, text, html}` and answers
@@ -19,7 +19,7 @@
 // And not the newest either: 4.128.0 boots the same probes three times slower
 // and drops kernels under parallel load (`Network connection lost`), where
 // 4.111.0 runs them at the old pin's pace. Measure before moving.
-// Exact pins can reuse npm's restored cache without registry revalidation.
+// Installation is shared with the rest of the npm workspace.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -29,7 +29,7 @@ import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { stripVTControlCharacters } from 'node:util'
 import { parse, stringify } from 'smol-toml'
-import packages from './package.json' with { type: 'json' }
+import pinned from 'wrangler/package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
 import { installed, restored } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
@@ -37,11 +37,12 @@ import { from as sources, plan } from './sheet-assets.ts'
 import { sleep } from '@yaks/fp'
 export { stale } from '@yaks/cli/dependencies'
 
+export let WRANGLER_VERSION = pinned.version
 export let WRANGLER = [
-  'npx',
-  '--yes',
-  '--prefer-offline',
-  `wrangler@${packages.devDependencies.wrangler}`,
+  'node',
+  fileURLToPath(
+    new URL(pinned.bin.wrangler, import.meta.resolve('wrangler/package.json')),
+  ),
 ]
 
 export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
@@ -1333,9 +1334,6 @@ if (system.main(import.meta.url)) {
   let began = new Date()
   let started = performance.now()
   let argv = [...system.args]
-  // npm ci pins this executable already. npx adds an npm process and package
-  // resolution to every read/upload even when the exact package is installed.
-  let executable = join(dir, 'node_modules/.bin/wrangler')
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded
@@ -1363,10 +1361,9 @@ if (system.main(import.meta.url)) {
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
-  // child is npx, which does not pass a signal to the wrangler it spawned, so
-  // the whole subtree is signalled, deepest first. Through kill(1), not
+  // whole subtree is signalled, deepest first. Through kill(1), not
   // system.kill: that needs the unrestricted run permission, and this door
-  // runs with an allowlist (npm, npx, git, pgrep, kill, docker, env).
+  // runs with an allowlist (node, npm, npx, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     system.addSignalListener(signal, () => {
       stopped.abort()
@@ -1460,7 +1457,6 @@ if (system.main(import.meta.url)) {
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after npm has installed: a cold checkout has this pin now too.
-    wrangler = ['env', executable]
   })
   let inspected = inspect()
   let uploads = new Map(
