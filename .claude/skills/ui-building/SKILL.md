@@ -101,11 +101,15 @@ under the second theme. That's why Rosé Pine sits beside Everforest: its palett
 has no green and two pinks, so a hue posing as a role shows at once.
 
 - A **theme** is custom properties only: a CSS file of `--` names and the same
-  colors for the terminal (packages/ui/everforest.css and .ts, rosepine.css and
-  .ts; `themes` in kit.ts).
-- A **skin** replaces the CSS and optional terminal entries of the parts it
-  names; the rest fall back to their kit. packages/ui/ledger.ts is one,
-  deliberately partial so the guide shows both.
+  colors for the terminal (packages/ui/gouache.css and .ts, the default and
+  yak.sh's own; everforest and rosepine beside it; `themes` in kit.ts).
+- A **skin** replaces (`css`) or lays CSS over (`over`) the parts it names, with
+  optional terminal entries; the rest fall back to their kit.
+  packages/ui/paper.ts, the default, lays yak.sh's grain over `base`;
+  packages/ui/ledger.ts replaces four parts, deliberately partial so the guide
+  shows both.
+- A tool or app that has no look of its own wears `composition` (the defaults),
+  never a theme by name; naming one pins it.
 - A **kit** is a set of parts. A plugin contributes kits, themes, skins and UX
   specimens through its `./ui` facet (`Contributions` in theme.ts).
 
@@ -252,7 +256,7 @@ slow platform tier; checks start no server, workerd or child process.
   Fill it with rows copied from the live graph, long titles and old data
   included; a specimen's tidy sample hides what the owner's rows do to a screen.
 - **How it looks:** the style guide,
-  `/ui?theme=everforest|rosepine&scheme=light|dark` (add `&skin=ledger`), and
+  `/ui?theme=gouache|everforest|rosepine&scheme=light|dark&skin=paper|ledger|base`, and
   `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
   seen on the live box once the change lands. Both themes, light and dark, phone
   width and the terminal: each one catches what the others hide, and faint text

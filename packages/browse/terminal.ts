@@ -6,7 +6,7 @@ import { install, quit, run, Scroll, useKeys } from '@yaks/tui'
 import { interaction } from '@yaks/tui/interaction'
 import { terminalHistory } from '@yaks/tui/history'
 import { installHistory } from '@yaks/ui/history'
-import { everforest, installViewport, kits, sheet } from '@yaks/ui'
+import { composition, installViewport, sheet } from '@yaks/ui'
 import { h } from 'preact'
 import type { Connection } from './remote.ts'
 import { learn } from './types.ts'
@@ -138,12 +138,12 @@ export let open = async (url: string, opts: {
       h(App, {}),
     )
   }
-  let c = everforest.colors
+  let c = composition.theme.colors
   try {
     await run(Terminal, {
       screen,
       sheet: {
-        ...sheet({ kits, theme: everforest }),
+        ...sheet(composition),
         'Button-quiet': { block: true },
         Status: { block: true, fg: c.muted },
         Status_Mode: { bold: true, fg: c.text },

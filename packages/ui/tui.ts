@@ -26,7 +26,7 @@ import { Tabs } from './Tabs.ts'
 export let terminalGuide = () => {
   let names = Object.keys(themes)
   let skinNames = ['base', ...Object.keys(skins)]
-  let skin = signal(0)
+  let skin = signal(1) // the default, the first after the kit's own
   let dressed = () => ({
     kits,
     theme: themes[names[theme.value]],

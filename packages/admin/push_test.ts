@@ -514,13 +514,16 @@ await Deno.writeTextFile(`${dir}/index.html`, '<p>hi')
 await Deno.writeTextFile(`${dir}/js/app.js`, 'let a = 1')
 await Deno.writeFile(`${dir}/icon.png`, new Uint8Array([0x89, 0x50, 0xff]))
 await Deno.writeTextFile(`${dir}/.DS_Store`, 'x')
+await Deno.symlink('js/app.js', `${dir}/linked.js`)
+await Deno.symlink('js', `${dir}/api`)
 let directoryFiles = await read(dir)
 await Deno.remove(dir, { recursive: true })
-test('a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles', () => {
+test('a directory reads as text, bytes that are not UTF-8 as base64, linked files as theirs, and no dotfiles or linked directories', () => {
   assertEquals(directoryFiles, [
     { path: 'icon.png', base64: 'iVD/' },
     { path: 'index.html', content: '<p>hi' },
     { path: 'js/app.js', content: 'let a = 1' },
+    { path: 'linked.js', content: 'let a = 1' },
   ])
 })
 

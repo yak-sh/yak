@@ -29,7 +29,7 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
 export let page = async (
   theme: string = Object.keys(themes)[0],
   scheme = 'system',
-  skin = 'base',
+  skin: string = Object.keys(skins)[0],
   contributed: Contributions = base,
 ): Promise<string> => {
   let available = {
@@ -53,7 +53,7 @@ export let page = async (
     `?${new URLSearchParams({
       theme,
       scheme,
-      ...(skin != 'base' && { skin }),
+      skin,
     })}`
   let switches = h(
     Pairs,

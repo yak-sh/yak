@@ -1,0 +1,62 @@
+/* Gouache, the default theme: the colours of yak.sh's painted yak. Light is
+   the sheet it is painted on: cotton paper, Payne's grey ink, slate lines,
+   the teal in its mane for what is lit, burnt sienna for a fault, umber and
+   bone from its coat. Dark is yak.sh's terminal windows: their slate ground,
+   their cream ink, and the teal's pale pigment where it sits on them. A page
+   that paints a dark window on a light sheet gives the window
+   `color-scheme: dark`, and every name below turns in it. gouache.ts holds
+   the dark colours for a terminal.
+
+   The palette has five pigments and a theme has more roles than that, so
+   roles share them: teal is what is lit, what went well and who; sienna a
+   fault and the language's words; slate a link, something to know, and a
+   moment. yak.sh's own stylesheet wears this theme (apps/yak-sh/style.css). */
+:root {
+  color-scheme: light dark;
+  --gap: 0.75rem;
+  --radius: 8px;
+  --measure: 90ch;
+  --shadow: 0 12px 32px -16px light-dark(rgba(43, 43, 51, .4), rgba(0, 0, 0, .6));
+
+  --font: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bg: light-dark(#f6f1e7, #272b35); /* paper; the window's ground */
+  --surface: light-dark(#ece3d3, #33363f);
+  --card: light-dark(#fcf9f3, #3b3e45);
+  --border: light-dark(#d7d6ce, #434856); /* slate at a sixth, on paper */
+  --border2: light-dark(#34474d, #5e5f62); /* slate, the lines drawn */
+
+  --text: light-dark(#2b2b33, #ece4d4); /* Payne's grey; cream */
+  --muted: light-dark(#605a55, #cbc4b6);
+  --dim: light-dark(#96918a, #96918a);
+
+  --accent: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --link: light-dark(#34474d, #8cc5c3); /* slate; teal */
+  --heading: light-dark(#2b2b33, #ece4d4); /* the text's own ink */
+
+  --info: light-dark(#34474d, #a19b90); /* slate */
+  --active: light-dark(#c4a070, #c4a070); /* bone */
+  --positive: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --negative: light-dark(#9a4f30, #e5a888); /* sienna */
+  --caution: light-dark(#7a5634, #e5a888); /* umber; sienna */
+  --special: light-dark(#605a55, #cbc4b6);
+
+  --number: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --literal: light-dark(#9a4f30, #e5a888); /* sienna */
+  --time: light-dark(#34474d, #a19b90); /* slate */
+  --who: light-dark(#1a6f7b, #8cc5c3); /* teal */
+
+  --keyword: light-dark(#9a4f30, #e5a888); /* sienna */
+  --string: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --fn: light-dark(#34474d, #faf6ee); /* slate; the window's brightest ink */
+  --type: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --attr: light-dark(#605a55, #cbc4b6);
+
+  --hue-0: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --hue-1: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --hue-2: light-dark(#34474d, #a19b90); /* slate */
+  --hue-3: light-dark(#9a4f30, #e5a888); /* sienna */
+  --hue-4: light-dark(#c4a070, #cbc4b6); /* bone */
+  --hue-5: light-dark(#605a55, #faf6ee);
+}

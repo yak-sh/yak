@@ -151,8 +151,8 @@ test("a pasted link's preview is a file the app serves, on the page's paper", as
   let meta = (key: string) =>
     document.querySelector(`meta[property="${key}"], meta[name="${key}"]`)
       ?.getAttribute('content')
-  let css = await Deno.readTextFile(new URL('style.css', dir))
-  equal(meta('theme-color'), /--paper:\s*([^;]+);/.exec(css)?.[1])
+  let css = await Deno.readTextFile(new URL('gouache.css', dir))
+  equal(meta('theme-color'), /--bg:\s*light-dark\(([^,]+),/.exec(css)?.[1])
   let image = new URL(meta('og:image') ?? '').pathname.slice(1)
   let icon = document.querySelector('link[rel="icon"]')?.getAttribute('href')
   equal([FILES.includes(image), FILES.includes(icon ?? '')], [true, true])

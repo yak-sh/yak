@@ -258,10 +258,13 @@ equal(html.includes('class="Table_Cell Table_Cell-num">412'), true)
 A **theme** supplies a CSS URL defining custom properties and the same colors as
 values for terminal sheets (`Theme`). `Colors` names color roles: background,
 ink, links, headings, states, stored values and code syntax; `hues` holds six
-colors for `Chip`. `themes` names `everforest` and `rosepine`; `everforest` is
-the default. Browser themes offer light and dark schemes selected by
-`color-scheme`; terminal colors use the dark scheme. Themes also set fonts,
-spacing, reading measure, radius and shadow.
+colors for `Chip`. `themes` names `gouache`, `everforest` and `rosepine`;
+`gouache`, the colours of yak.sh's painted yak, is the default. Browser themes
+offer light and dark schemes selected by `color-scheme`; terminal colors use the
+dark scheme. Gouache's light scheme is yak.sh's paper and ink, its dark scheme
+yak.sh's terminal windows, so a page that sets `color-scheme: dark` on one
+element paints that element dark. Themes also set fonts, spacing, reading
+measure, radius and shadow.
 
 The CSS custom properties use the same names as `Colors`:
 
@@ -285,18 +288,21 @@ uses `--size` and `--small`, defaulting to 14px and 12px; spacing uses `--gap`,
 `--radius` and `--measure`; raised boxes use `--shadow`. The base CSS derives
 `--half-gap`, `--soft` and the touch target floor `--tap`.
 
-A **skin** supplies CSS replacements by piece name and optional terminal sheet
-replacements (`Skin`). A missing replacement uses the kit's rendering. `ledger`
-replaces Button, Tabs, Head and Tile with printed labels and ruled records;
-other pieces retain the kit's rendering.
+A **skin** supplies CSS by piece name and optional terminal sheet replacements
+(`Skin`). An entry's `css` replaces the piece's own; its `over` is laid on top
+of whichever the piece wears, so a skin adds to a piece without copying it. A
+missing entry uses the kit's rendering. `paper`, the default, lays yak.sh's
+paper grain, fine link underlines and medium headings over the document's
+defaults (`base`); `ledger` replaces Button, Tabs, Head and Tile with printed
+labels and ruled records. Other pieces retain the kit's rendering.
 
 A **composition** supplies `{ kits, theme, skin?, ux? }` to render a page and
-its guide (`Composition`). `composition` is the base kits with `everforest`.
-`parts` flattens its kits and refuses duplicate piece names. `stylesheet` loads
-the theme, then one CSS rendering per piece in kit order; it resolves relative
-CSS `url()` and quoted `@import` addresses against each CSS URL. `sheet`
-combines the selected terminal entries, including the base entries for
-[@yaks/tui](../tui/README.md)'s widgets.
+its guide (`Composition`). `composition` is the base kits in `gouache` and
+`paper`; a host that names no theme wears it. `parts` flattens its kits and
+refuses duplicate piece names. `stylesheet` loads the theme, then one CSS
+rendering per piece in kit order; it resolves relative CSS `url()` and quoted
+`@import` addresses against each CSS URL. `sheet` combines the selected terminal
+entries, including the base entries for [@yaks/tui](../tui/README.md)'s widgets.
 
 ```ts
 import { composition, ledger, sheet, stylesheet } from '@yaks/ui'

@@ -50,11 +50,11 @@ import type { AnatomyObserver } from '@yaks/code/anatomy'
 import { relative } from '@yaks/ui/relative'
 
 // What an answer wears in a terminal: @yaks/ui's components and these views'
-// own classes, in Everforest. Loaded with the painter, so a printed answer
-// never pays for it.
+// own classes, in its default theme. Loaded with the painter, so a printed
+// answer never pays for it.
 let dressed = async (): Promise<Sheet> => {
-  let { everforest, kits, sheet: kit } = await import('@yaks/ui')
-  return { ...kit({ kits, theme: everforest }), ...sheet(everforest.colors) }
+  let { composition, sheet: kit } = await import('@yaks/ui')
+  return { ...kit(composition), ...sheet(composition.theme.colors) }
 }
 
 /** A terminal a held answer is drawn on: its width and how to write to it. */

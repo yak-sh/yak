@@ -13,8 +13,8 @@ import { type Application, application } from './app.ts'
 // `/ws` and every other plugin's route stay theirs.
 //
 // `/web/*` is what that page loads: the app bundled from main.tsx (@yaks/cli
-// `bundle`), its stylesheet (@yaks/ui's in Everforest, then this package's
-// own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
+// `bundle`), its stylesheet (@yaks/ui's in its default theme and skin, then this
+// package's own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 //
 // The page carries the tracker's page reporter (@yaks/tracker/page) inline,
 // ahead of its own code, as yaks.app weaves it into every app's page
@@ -27,7 +27,7 @@ import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
-import { everforest, kits, stylesheet } from '@yaks/ui'
+import { composition, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { preload } from './preload.ts'
@@ -84,7 +84,7 @@ let html = async () => {
 
 let styles = async (app: Application) =>
   (await Promise.all([
-    stylesheet({ kits, theme: everforest }),
+    stylesheet(composition),
     app.styles ? fetch(app.styles).then((r) => r.text()) : '',
   ]))
     .join('\n')

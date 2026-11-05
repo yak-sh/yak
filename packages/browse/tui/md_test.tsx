@@ -5,6 +5,7 @@ import './doc.ts'
 import { render } from 'preact'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { ansi, TElement } from '@yaks/tui'
+import { composition } from '@yaks/ui'
 import { Md } from './md.tsx'
 import { pane } from './testing.ts'
 
@@ -15,18 +16,21 @@ let painted = (text: string) => {
 }
 
 // A token wears its colour, on whatever ground the code is set on.
-let wears = (out: string, rgb: string, token: string) =>
+let wears = (out: string, hex: string, token: string) => {
+  let rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(';')
   assert(
     new RegExp(`\x1b\\[38;2;${rgb}[;\\d]*m${token}\x1b\\[0m`).test(out),
     token,
   )
+}
+let { keyword, string } = composition.theme.colors
 
 // Every case here renders <Md> through preact and highlights the fence with
 // hljs (grammar compile, and auto-detection when no language is named).
 test('terminal markdown highlights specified fenced code', () => {
   let out = painted("```ts\nlet name: string = 'Ada'\n```")
-  wears(out, '230;126;128', 'let')
-  wears(out, '167;192;128', "'Ada'")
+  wears(out, keyword, 'let')
+  wears(out, string, "'Ada'")
   let visible = out.split('\x1b').map((part, i) =>
     i ? part.replace(/^\[[\d;]+m/, '') : part
   ).join('')
@@ -40,14 +44,14 @@ test('terminal markdown detects unlabelled tilde fences', () => {
   let out = painted(
     '~~~\n#!/usr/bin/env python3\ndef greet(name):\n    print(name)\n~~~',
   )
-  wears(out, '230;126;128', 'def')
+  wears(out, keyword, 'def')
 })
 
 test('terminal markdown detects indented code blocks', () => {
   let out = painted(
     '    #!/usr/bin/env python3\n    def greet(name):\n        print(name)',
   )
-  wears(out, '230;126;128', 'def')
+  wears(out, keyword, 'def')
 })
 
 test('terminal highlighted code cannot speak ANSI', () => {

@@ -48,6 +48,21 @@ test('external parts carry their own CSS; a partial skin replaces only named par
   assertEquals(sheet(terminal).Dot, sheet({ kits, theme: everforest }).Dot)
 })
 
+test("a skin's over lays its CSS on the part's rendering, the kit's or its own", async () => {
+  let over = (skin: Composition['skin']) =>
+    stylesheet({ kits: { external }, theme: everforest, skin })
+  let kit = await over({ Extra: { over: css('.Extra { font-weight: 500 }') } })
+  assert(kit.indexOf('color: red') < kit.indexOf('font-weight: 500'))
+  let own = await over({
+    Extra: {
+      css: css('.Extra { color: blue }'),
+      over: css('.Extra { font-weight: 500 }'),
+    },
+  })
+  assert(!own.includes('color: red'))
+  assert(own.indexOf('color: blue') < own.indexOf('font-weight: 500'))
+})
+
 test('the same guide renders external UI and UX specimens and skin coverage in both places', () => {
   let dressed: Composition = {
     ...c,

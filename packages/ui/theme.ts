@@ -99,10 +99,13 @@ export type Piece = {
 /** A kit names a set of parts, not one part. Names are shared with skins. */
 export type Kit = Record<string, Piece>
 
-/** Another rendering of just the parts it changes. Missing entries fall back
+/** Another rendering of just the parts it changes. An entry's `css` replaces
+ * the part's own, and its `over` is laid on top of whichever the part wears,
+ * so a skin can add to a part without copying it. Missing entries fall back
  * to the kit; a missing terminal sheet keeps the kit's terminal rendering. */
 export type Skin = Record<string, {
-  css: URL
+  css?: URL
+  over?: URL
   sheet?: (c: Colors) => Sheet
 }>
 

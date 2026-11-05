@@ -7,7 +7,7 @@ test('terminal guide switches skins and themes without losing its place', async 
   let guide = terminalGuide()
   let app = await mount(guide.App, 100, 35, guide.sheet())
   try {
-    assert(app.text().includes('s skin (base)'))
+    assert(app.text().includes('s skin (paper)'))
     assertEquals(guide.sheet().Button.bold, undefined)
     await app.send('s')
     assert(app.text().includes('s skin (ledger)'))

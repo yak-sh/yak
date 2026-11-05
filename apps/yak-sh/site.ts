@@ -13,6 +13,8 @@ let ROOT = '90e19de2-e19c-4490-81cf-561edd349718'
  * (workers/yak/files.ts `inside`). */
 export let FILES = [
   'index.html',
+  'gouache.css',
+  'paper.css',
   'style.css',
   'main.ts',
   'page.ts',
@@ -24,7 +26,6 @@ export let FILES = [
   'yak.webp',
   'yak-880.webp',
   'og.jpg',
-  'paper.webp',
   'term.ts',
   'parts.ts',
   'bands.ts',

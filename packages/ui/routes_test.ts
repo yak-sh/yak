@@ -34,15 +34,18 @@ test('/ui switches theme and scheme by link', async () => {
   assert(page.includes('#191724')) // Rosé Pine's floor
   assert(!page.includes('#232a2e')) // not Everforest's
   // Each tab keeps the other choice; the one showing is on.
-  assert(page.includes('href="?theme=everforest&amp;scheme=light"'))
-  assert(page.includes('href="?theme=rosepine&amp;scheme=dark"'))
-  assert(page.includes('scheme=light" class="Tabs_Tab Tabs_Tab-on">rosepine<'))
-  // What names nothing is the default: the first theme, the system's scheme.
+  assert(
+    page.includes('href="?theme=everforest&amp;scheme=light&amp;skin=paper"'),
+  )
+  assert(page.includes('href="?theme=rosepine&amp;scheme=dark&amp;skin=paper"'))
+  assert(page.includes('skin=paper" class="Tabs_Tab Tabs_Tab-on">rosepine<'))
+  // What names nothing is the default: gouache on paper, the system's scheme.
   let fallback = await get('?theme=nope&scheme=sepia')
   assert(
-    fallback.includes('#232a2e') &&
+    fallback.includes('#272b35') && fallback.includes('image/webp;base64') &&
       fallback.startsWith('<!doctype html><html><head>'),
   )
+  assert(!(await get('?skin=base')).includes('image/webp;base64'))
 })
 
 test('/ui keeps the base beside installed kits, skins and UX specimens', async () => {

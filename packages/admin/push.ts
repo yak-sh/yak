@@ -120,7 +120,10 @@ let shaOf = async (file: File) => {
   return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Every file under `dir`, paths relative to it, dotfiles left out, sorted. */
+/** Every file under `dir`, paths relative to it, dotfiles left out, sorted.
+ * A link to a file is that file's bytes, so an app can serve a file kept in a
+ * package (apps/yak-sh's gouache.css is @yaks/ui's); a link to a directory is
+ * not walked, as an app's `api` link points at what the platform serves. */
 export let read = async (dir: string): Promise<File[]> => {
   let files: File[] = []
   let walk = async (rel: string) => {
@@ -128,7 +131,9 @@ export let read = async (dir: string): Promise<File[]> => {
       if (e.name.startsWith('.')) continue
       let path = rel ? `${rel}/${e.name}` : e.name
       if (e.isDirectory) await walk(path)
-      else if (e.isFile) {
+      else if (
+        e.isFile || e.isSymlink && (await fs.stat(`${dir}/${path}`)).isFile
+      ) {
         files.push(fileOf(path, await fs.readFile(`${dir}/${path}`)))
       }
     }

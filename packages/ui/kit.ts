@@ -53,7 +53,9 @@ import * as tip from './Tip.ts'
 import * as turns from './Turns.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
+import { gouache } from './gouache.ts'
 import { ledger } from './ledger.ts'
+import { paper } from './paper.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
 import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
@@ -130,9 +132,10 @@ export let groups: Record<string, Kit> = Object.fromEntries(
 /** Every base part, document defaults first. */
 export let kit: Kit = Object.assign({}, ...Object.values(groups))
 export let kits: Record<string, Kit> = { base: kit }
-export let themes: Record<string, Theme> = { everforest, rosepine }
-export let skins: NonNullable<Contributions['skins']> = { ledger }
-export let composition: Composition = { kits, theme: everforest }
+/** Gouache and paper, yak.sh's design, are the default: the first of each. */
+export let themes: Record<string, Theme> = { gouache, everforest, rosepine }
+export let skins: NonNullable<Contributions['skins']> = { paper, ledger }
+export let composition: Composition = { kits, theme: gouache, skin: paper }
 
 export { gather } from './contributions.ts'
 
@@ -180,11 +183,13 @@ let read = async (url: URL) => {
     )
 }
 
-/** Theme first, then one rendering per part: skin where named, kit otherwise. */
+/** Theme first, then one rendering per part: the skin's where it replaces
+ * one, the kit's otherwise, and whatever the skin lays over it. */
 export let stylesheet = async (c: Composition): Promise<string> =>
   (await Promise.all([
     c.theme.css,
-    ...Object.entries(parts(c)).map(([name, part]) =>
-      c.skin?.[name]?.css ?? part.css
-    ),
+    ...Object.entries(parts(c)).flatMap(([name, part]) => {
+      let { css = part.css, over } = c.skin?.[name] ?? {}
+      return over ? [css, over] : [css]
+    }),
   ].map(read))).join('\n')

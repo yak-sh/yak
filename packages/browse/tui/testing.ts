@@ -1,8 +1,8 @@
 // Tests read the kit's terminal paint without a tty.
 import { lay, place, screenful, type TElement } from '@yaks/tui'
-import { everforest, kits, sheet as dress } from '@yaks/ui'
+import { composition, sheet as dress } from '@yaks/ui'
 let sheet = {
-  ...dress({ kits, theme: everforest }),
+  ...dress(composition),
   Entry_Speaker: { block: true },
   Md_B: { bold: true },
 }

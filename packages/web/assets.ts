@@ -4,7 +4,7 @@ import type { Application } from './app.ts'
 // Build the same page and stylesheet the routes facet serves, into a static
 // host's asset directory. The runtime only supplies mounts and authentication.
 import { bundle } from '@yaks/cli/page'
-import { everforest, kits, stylesheet } from '@yaks/ui'
+import { composition, stylesheet } from '@yaks/ui'
 
 export let assets = async (to: string, app: Application) => {
   await io.mkdir(to, { recursive: true })
@@ -21,7 +21,7 @@ export let assets = async (to: string, app: Application) => {
     ),
     io.writeTextFile(
       `${to}/styles.css`,
-      (await stylesheet({ kits, theme: everforest })) + '\n' +
+      (await stylesheet(composition)) + '\n' +
         (app.styles ? await io.readTextFile(app.styles) : ''),
     ),
     ...[

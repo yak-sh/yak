@@ -1,10 +1,11 @@
 // What the harness wears in a terminal: @yaks/ui's components and @yaks/tui's
 // widgets, the portable views' classes, and its own (its text tones, its
-// composer's border, its panels' selections), all in Everforest.
+// composer's border, its panels' selections), all in @yaks/ui's default
+// theme.
 
 import * as generic from '@yaks/render/views'
 import type { Sheet } from '@yaks/tui'
-import { type Colors, everforest, kits, sheet } from '@yaks/ui'
+import { type Colors, composition, sheet } from '@yaks/ui'
 
 let own = (c: Colors): Sheet => ({
   Title: { bold: true },
@@ -24,7 +25,7 @@ let own = (c: Colors): Sheet => ({
 // Frozen, so the painter composes it with its widgets' defaults once rather
 // than on every paint (@yaks/tui's `compose`).
 export let dress: Sheet = Object.freeze({
-  ...sheet({ kits, theme: everforest }),
-  ...generic.sheet(everforest.colors),
-  ...own(everforest.colors),
+  ...sheet(composition),
+  ...generic.sheet(composition.theme.colors),
+  ...own(composition.theme.colors),
 })

@@ -183,8 +183,8 @@ grouped approximately by function, **not** by dependency order.
   `Button`, `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
   `Shell`, `Edit`) built with `el` and `block`, each a Preact component, a CSS
   file and terminal sheet entries, so it paints in a browser and in @yaks/tui
-  alike. Themes (Everforest first), `relative` for a moment in words, and the
-  style guide at `/ui`.
+  alike. Themes and skins (yak.sh's gouache and paper the default), `relative`
+  for a moment in words, and the style guide at `/ui`.
 - **[@yaks/filter](./filter)** — the query field: completion wherever a query is
   typed, in a browser and in a terminal. A domain component built of @yaks/ui's
   `Field` and `Choices`, its state the `filter` component in the page's own

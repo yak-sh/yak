@@ -1,32 +1,19 @@
+/* yak.sh wears @yaks/ui's default theme and skin: gouache.css (the painted
+   yak's colours, by role) and paper.css (its grain), the kit's own files
+   (packages/ui). The sheet is light; its terminal windows are dark
+   (`color-scheme: dark`), and every colour turns in them. */
 :root {
-  /* The painted yak's colours: cotton paper, Payne's grey ink, slate lines,
-     the teal in its mane for what is lit, burnt sienna for a fault. */
-  --paper: #f6f1e7;
-  --plate: #fcf9f3;
-  --side: #ece3d3;
-  --well: #e0d4bf;
-  --ink: #2b2b33;
-  --soft: #605a55;
-  --line: #34474d;
-  --rule: rgba(52, 71, 77, .16);
-  /* What is lit or done, and its pigment where it sits on a dark ground. */
-  --meadow: #1a6f7b;
-  --moss: #8cc5c3;
+  color-scheme: light;
   /* A wash of the lit colour, laid under what it marks. */
-  --wash: rgba(26, 111, 123, .13);
-  --brick: #9a4f30;
-  --term: #272b35;
-  --term-ink: #ece4d4;
-  --sans: 'Geist', system-ui, sans-serif;
-  --mono: 'Geist Mono', ui-monospace, monospace;
+  --wash: color-mix(in srgb, var(--accent) 13%, transparent);
   /* The page's one side margin: the nav, the story, the bands, the parts and
      the title block all keep it. */
   --gutter: clamp(1rem, 4vw, 3rem);
-  --diagram-line: var(--line);
-  --diagram-soft: var(--soft);
-  --diagram-fill: var(--plate);
-  --diagram-paper: var(--paper);
-  --diagram-glow: var(--meadow);
+  --diagram-line: var(--border2);
+  --diagram-soft: var(--muted);
+  --diagram-fill: var(--card);
+  --diagram-paper: var(--bg);
+  --diagram-glow: var(--accent);
   --diagram-font: var(--mono);
 }
 
@@ -34,51 +21,40 @@
   box-sizing: border-box;
 }
 html {
-  position: relative;
-  min-height: 100%;
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
-/* yaks.app's paper grain, over the whole page and scrolling with it. */
-html::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2147483647;
-  background: url(paper.webp) 0 0 / 256px;
-  opacity: .08;
-  pointer-events: none;
-}
 body {
   margin: 0;
-  color: var(--ink);
-  font: 400 16px/1.6 var(--sans);
-  background-color: var(--paper);
+  color: var(--text);
+  font: 400 16px/1.6 var(--font);
+  background-color: var(--bg);
   /* Two washes at the top of the sheet, teal behind the drawing and bone
      behind the words, fading out before the story starts. */
   background-image:
-    radial-gradient(52rem 34rem at 78% 4rem, rgba(26, 111, 123, .09),
-    rgba(26, 111, 123, .04) 45%, transparent 72%),
+    radial-gradient(52rem 34rem at 78% 4rem,
+    color-mix(in srgb, var(--accent) 9%, transparent),
+    color-mix(in srgb, var(--accent) 4%, transparent) 45%, transparent 72%),
     radial-gradient(44rem 30rem at 8% 0, rgba(196, 160, 112, .16),
     rgba(196, 160, 112, .06) 50%, transparent 75%);
   background-repeat: no-repeat;
   -webkit-font-smoothing: antialiased;
 }
 a {
-  color: var(--line);
+  color: var(--link);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 a:hover {
-  color: var(--meadow);
+  color: var(--accent);
 }
 code {
   font: 500 .88em/1.4 var(--mono);
 }
 p code,
 li code {
-  background: var(--plate);
-  border: 1px solid var(--rule);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: .05em .35em;
 }
@@ -117,7 +93,7 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: clamp(.6rem, 1.5vw, 1.2rem);
-  color: var(--ink);
+  color: var(--text);
   font-size: clamp(1.1rem, 2.4vw, 2rem);
 }
 /* The painted yak fills the top of the page, down to the kicker. */
@@ -129,7 +105,7 @@ h2 {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--meadow);
+  background: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
 .Nav_Links {
@@ -146,17 +122,17 @@ h2 {
   align-items: center;
   gap: .6rem;
   font: 500 .8rem var(--mono);
-  color: var(--soft);
+  color: var(--muted);
   text-transform: lowercase;
 }
 .Lead {
   font-size: 1.15rem;
-  color: var(--soft);
+  color: var(--muted);
   max-width: 38rem;
 }
 .Hint {
   font: .8rem var(--mono);
-  color: var(--soft);
+  color: var(--muted);
   margin-top: 2.5rem;
 }
 
@@ -165,9 +141,9 @@ h2 {
   align-items: stretch;
   max-width: 40rem;
   margin: 1.4rem 0 .5rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 8px;
-  background: var(--plate);
+  background: var(--card);
   overflow: hidden;
 }
 .Copy code {
@@ -177,19 +153,19 @@ h2 {
   white-space: nowrap;
 }
 .Copy_Sign {
-  color: var(--meadow);
+  color: var(--accent);
 }
 .Copy button {
   border: 0;
   padding: 0 1.1rem;
-  font: 500 .85rem var(--sans);
-  color: var(--plate);
-  background: var(--meadow);
+  font: 500 .85rem var(--font);
+  color: var(--card);
+  background: var(--accent);
   cursor: pointer;
   transition: background .2s;
 }
 .Copy button:hover {
-  background: var(--line);
+  background: var(--border2);
 }
 
 /* ---------------------------------------------------------------- plot */
@@ -213,7 +189,7 @@ h2 {
   position: relative;
   min-height: 70vh;
   padding: clamp(1.8rem, 4vw, 2.8rem) 0 0 58px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
 }
 .Step::before {
   content: '';
@@ -222,7 +198,7 @@ h2 {
   top: -5px;
   width: 1px;
   height: 9px;
-  background: var(--line);
+  background: var(--border2);
 }
 .Step_No {
   position: absolute;
@@ -232,16 +208,16 @@ h2 {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   font: 500 .8rem var(--mono);
   transition: border-color .3s, color .3s, background .3s, box-shadow .3s;
 }
 .Step.is-on .Step_No {
-  border-color: var(--meadow);
-  color: var(--meadow);
-  background: var(--plate);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--card);
   box-shadow: 0 0 0 5px var(--wash);
 }
 .Step h2 {
@@ -249,7 +225,7 @@ h2 {
   margin: .2rem 0 .9rem;
 }
 .Step p {
-  color: var(--soft);
+  color: var(--muted);
   max-width: 33em;
 }
 .Step_Lines {
@@ -264,20 +240,20 @@ h2 {
   display: block;
   margin-bottom: .2rem;
   font: 400 .8125rem/1.5 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Step_Lines code {
   display: block;
   background: none;
   border: 0;
   padding: 0;
-  color: var(--line);
+  color: var(--link);
   white-space: pre-wrap;
   word-break: break-all;
 }
 .Step_Lines code::before {
   content: '$ ';
-  color: var(--meadow);
+  color: var(--accent);
 }
 .Step_Lines .is-agent code::before {
   content: 'agent → ';
@@ -288,7 +264,7 @@ h2 {
   transition: color .3s, background .3s, box-shadow .3s;
 }
 .Step_Lines .is-led code {
-  color: var(--meadow);
+  color: var(--accent);
   background: var(--wash);
   box-shadow: 0 0 0 4px var(--wash);
 }
@@ -312,11 +288,11 @@ h2 {
   display: flex;
   flex-direction: column;
   margin: 0;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
   /* The figure's ground, opaque, so the halo behind the drawing's words is
      the colour they sit on. */
-  --ground: color-mix(in srgb, var(--plate) 80%, var(--paper));
+  --ground: color-mix(in srgb, var(--card) 80%, var(--bg));
   background: var(--ground);
   overflow: hidden;
   --diagram-paper: var(--ground);
@@ -326,13 +302,13 @@ h2 {
   justify-content: space-between;
   gap: 1rem;
   padding: .7rem .9rem .5rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font: .75rem var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Figure_Bar b {
   font-weight: 500;
-  color: var(--ink);
+  color: var(--text);
 }
 .Figure_State::before {
   content: '';
@@ -342,7 +318,7 @@ h2 {
   margin-right: .45rem;
   border-radius: 50%;
   vertical-align: .08em;
-  background: var(--meadow);
+  background: var(--accent);
 }
 .Figure_Sheet {
   flex: 1 1 auto;
@@ -353,34 +329,34 @@ h2 {
   height: 100%;
 }
 .Figure_Sheet .Diagram_Title {
-  font-family: var(--sans);
+  font-family: var(--font);
 }
 /* The drawing's shapes in washes of the painting's colours: what is done in
    teal, a person or an agent in bone. */
 .Diagram .is-done > .Diagram_Fill {
-  fill: color-mix(in srgb, var(--meadow) 8%, var(--plate));
+  fill: color-mix(in srgb, var(--accent) 8%, var(--card));
 }
 .Diagram_Node-round > .Diagram_Fill,
 .Diagram_Node-hex > .Diagram_Fill {
-  fill: color-mix(in srgb, var(--well) 45%, var(--plate));
+  fill: color-mix(in srgb, #e0d4bf 45%, var(--card));
 }
 .Figure_Query {
   display: flex;
   align-items: center;
   gap: .6rem;
   padding: .55rem .9rem 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   font: .75rem var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Figure_Query input {
   flex: 1;
   min-width: 0;
   padding: .35rem .55rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--plate);
-  color: var(--ink);
+  background: var(--card);
+  color: var(--text);
   font: inherit;
 }
 .Figure_Wider {
@@ -392,24 +368,24 @@ h2 {
 }
 .Figure_Wider button {
   padding: .3rem .55rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(252, 249, 243, .6);
-  color: var(--soft);
+  color: var(--muted);
   font: .72rem var(--mono);
   cursor: pointer;
 }
 .Figure_Wider button:hover,
 .Figure_Wider button.is-on {
-  border-color: var(--meadow);
+  border-color: var(--accent);
   background: var(--wash);
-  color: var(--ink);
+  color: var(--text);
 }
 .Figure_Fault {
   margin: 0;
   padding: 0 .9rem .6rem;
   font: .75rem var(--mono);
-  color: var(--brick);
+  color: var(--negative);
 }
 
 /* The leader: a line from the step being drawn to the pen drawing it. */
@@ -429,24 +405,25 @@ h2 {
 }
 .Leader_Line {
   fill: none;
-  stroke: var(--meadow);
+  stroke: var(--accent);
   stroke-width: 1.2;
   stroke-linejoin: round;
   stroke-linecap: round;
   opacity: .75;
 }
 .Leader_Dot {
-  fill: var(--meadow);
+  fill: var(--accent);
 }
 
 .Prompt {
+  color-scheme: dark;
   flex: none;
   display: flex;
   flex-direction: column;
   height: clamp(190px, 30vh, 300px);
   border-radius: 10px;
-  background: var(--term);
-  color: var(--term-ink);
+  background: var(--bg);
+  color: var(--text);
   font: .8rem/1.5 var(--mono);
   box-shadow: 0 10px 28px -14px rgba(39, 43, 53, .55);
   overflow: hidden;
@@ -463,7 +440,7 @@ h2 {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #434856;
+  background: var(--border);
 }
 .Prompt_Bar span {
   margin-left: .5rem;
@@ -484,27 +461,27 @@ h2 {
   margin-top: .45rem;
 }
 .Prompt_Line.is-out {
-  color: #cbc4b6;
+  color: var(--muted);
 }
 .Prompt_Line.is-fault {
-  color: #e5a888;
+  color: var(--negative);
 }
 .Prompt_Line.is-note {
-  color: #96918a;
+  color: var(--dim);
   margin-top: .45rem;
 }
 .Prompt_Line.is-note + .Prompt_Line {
   margin-top: 0;
 }
 .Prompt_Sign {
-  color: var(--moss);
+  color: var(--accent);
 }
 .Caret {
   display: inline-block;
   width: .55em;
   height: 1.1em;
   vertical-align: text-bottom;
-  background: var(--moss);
+  background: var(--accent);
   animation: blink 1s steps(2) infinite;
 }
 @keyframes blink {
@@ -542,7 +519,7 @@ h2 {
     gap: .5rem;
     height: auto;
     margin: 0 calc(6px - var(--gutter));
-    background: var(--paper);
+    background: var(--bg);
   }
   /* On a phone the drawing and the terminal stay at the top in well under
      half the screen, so the step and its commands have the rest. */
@@ -580,9 +557,9 @@ h2 {
   width: min(25rem, calc(100vw - 2rem));
   max-height: min(70vh, 40rem);
   overflow: auto;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--plate);
+  background: var(--card);
   box-shadow: 0 12px 32px -16px rgba(43, 43, 51, .4);
   font: .8125rem/1.45 var(--mono);
 }
@@ -593,14 +570,14 @@ h2 {
   align-items: center;
   gap: .6rem;
   padding: .6rem .5rem .6rem .9rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--plate);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
 .Editor_Bar span {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--soft);
+  color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -608,15 +585,15 @@ h2 {
   border: 0;
   padding: 0 .45rem;
   background: none;
-  color: var(--soft);
+  color: var(--muted);
   font-size: 1.2rem;
   cursor: pointer;
 }
 .Editor_Hint {
   margin: 0;
   padding: .5rem .9rem 0;
-  color: var(--soft);
-  font: .75rem/1.45 var(--sans);
+  color: var(--muted);
+  font: .75rem/1.45 var(--font);
 }
 .Editor_Comp {
   padding: .6rem .9rem .2rem;
@@ -624,7 +601,7 @@ h2 {
 .Editor_Comp h3 {
   margin: 0 0 .35rem;
   font: 500 .8125rem/1.3 var(--mono);
-  color: var(--ink);
+  color: var(--text);
 }
 .Editor_Comp dl {
   margin: 0;
@@ -637,7 +614,7 @@ h2 {
 }
 .Editor_Prop dt {
   padding-top: .3rem;
-  color: var(--soft);
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .Editor_Prop dd {
@@ -648,21 +625,21 @@ h2 {
 .Editor_Prop code {
   display: block;
   padding-top: .3rem;
-  color: var(--soft);
+  color: var(--muted);
 }
 .Editor_Field {
   width: 100%;
   padding: .25rem .4rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--bg);
+  color: var(--text);
   font: inherit;
   resize: vertical;
 }
 .Editor_Field:focus {
   outline: none;
-  border-color: var(--meadow);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
 .Editor_Ref,
@@ -679,13 +656,13 @@ h2 {
 }
 .Editor_Ref {
   padding-top: .3rem;
-  color: var(--line);
+  color: var(--link);
 }
 .Prompt_Id:hover {
-  color: var(--moss);
+  color: var(--accent);
 }
 .Editor_Ref:hover {
-  color: var(--meadow);
+  color: var(--accent);
 }
 .Doors_Drawing [data-eid],
 .Window,
@@ -700,10 +677,10 @@ h2 {
   gap: clamp(1rem, 4vw, 3rem);
   align-items: center;
   padding: 5rem var(--gutter);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
 }
 .Band_Text p {
-  color: var(--soft);
+  color: var(--muted);
   max-width: 34rem;
 }
 
@@ -738,14 +715,14 @@ h2 {
 .Stack_Figure figcaption,
 .Doors_Figure figcaption {
   font-size: .875rem;
-  color: var(--soft);
+  color: var(--muted);
   margin-top: .6rem;
   padding-top: .5rem;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
 }
 .No {
   font: 500 .75rem/1 var(--mono);
-  color: var(--ink);
+  color: var(--text);
   margin-right: .5rem;
 }
 .Phases {
@@ -768,19 +745,19 @@ h2 {
   top: .95rem;
   width: 9px;
   height: 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   transition: background .3s, border-color .3s, box-shadow .3s;
 }
 .Phases b {
   display: block;
   font: 500 .875rem/1.3 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
   transition: color .3s;
 }
 .Phases [data-phase] > :not(.Dot, b, .Skip) {
-  color: var(--soft);
+  color: var(--muted);
   font-size: .90625rem;
   line-height: 1.5;
   margin-top: .2rem;
@@ -795,7 +772,7 @@ h2 {
   position: relative;
   margin: 1.1rem -.7rem 1.1rem calc(-2.1rem - .7rem);
   padding: .45rem .7rem .3rem calc(2.1rem + .7rem);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 8px;
 }
 .Phases .Tx > ol {
@@ -811,9 +788,9 @@ h2 {
   top: -.45rem;
   left: .5rem;
   padding: 0 .4rem;
-  background: var(--paper);
+  background: var(--bg);
   font: 500 .6875rem/1 var(--mono);
-  color: var(--ink);
+  color: var(--text);
 }
 /* The write the phases follow: the command it came from, its dot green once
    the reader has passed it and it has been made. */
@@ -825,7 +802,7 @@ h2 {
   display: block;
   margin-top: .3rem;
   font: 400 .75rem/1.5 var(--mono);
-  color: var(--ink);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -835,12 +812,12 @@ h2 {
   background: linear-gradient(90deg, var(--wash), transparent 70%);
 }
 .Phases li.on .Dot {
-  background: var(--meadow);
-  border-color: var(--meadow);
+  background: var(--accent);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
 .Phases li.on b {
-  color: var(--ink);
+  color: var(--text);
 }
 .Phases li.skip .Dot {
   border-style: dashed;
@@ -851,7 +828,7 @@ h2 {
 .Phases li.skip .Skip {
   display: block;
   font: 400 .75rem/1.5 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 
 /* The bundle as its source, annotated (bundle mockup 8): the code on the
@@ -860,7 +837,7 @@ h2 {
 .Source {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(252, 249, 243, .6);
   padding: clamp(.8rem, 2vw, 1.6rem) 0;
@@ -878,13 +855,13 @@ h2 {
   white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-right: 1px solid var(--rule);
+  border-right: 1px solid var(--border);
 }
 .Source .n {
   position: relative;
   padding-left: 26px !important;
-  font: 400 .8125rem/1.5 var(--sans);
-  color: var(--soft);
+  font: 400 .8125rem/1.5 var(--font);
+  color: var(--muted);
 }
 .Source .n:not(:empty)::before {
   content: '';
@@ -893,24 +870,24 @@ h2 {
   top: 13px;
   width: 18px;
   height: 1px;
-  background: var(--line);
+  background: var(--border2);
 }
 .Source .n code {
   font-size: .75rem;
-  color: var(--ink);
+  color: var(--text);
 }
 .Source .k,
 .Source .pn {
-  color: var(--soft);
+  color: var(--muted);
 }
 .Source .s {
   color: #7a5634;
 }
 .Source .num {
-  color: var(--brick);
+  color: var(--negative);
 }
 .Source .ok {
-  color: var(--meadow);
+  color: var(--accent);
   opacity: 0;
   transition: opacity .4s;
 }
@@ -951,41 +928,41 @@ h2 {
   background: rgba(26, 111, 123, calc(.16 * var(--p, 1)));
 }
 .Source .is-now .n {
-  color: var(--ink);
+  color: var(--text);
 }
 .Source .n b {
   font: 500 .75rem/1 var(--mono);
 }
 .Source.now-mutate .body > .c {
   background: rgba(252, 249, 243, .9);
-  box-shadow: inset 3px 0 0 var(--meadow);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 .Source .stamp .c {
-  color: var(--meadow);
+  color: var(--accent);
 }
 .Source .brace {
   transition: color .4s;
 }
 .Source.p-commit .brace {
-  color: var(--meadow);
+  color: var(--accent);
   font-weight: 600;
 }
 /* The mail service the letter's effect hands it to: each try it made. */
 .Outbox {
   margin-top: .8rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(252, 249, 243, .6);
   font: 400 .75rem/1.5 var(--mono);
 }
 .Outbox_Bar {
   padding: 4px 12px;
-  border-bottom: 1px solid var(--rule);
-  color: var(--soft);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
 }
 .Outbox_Bar b {
   font-weight: 500;
-  color: var(--ink);
+  color: var(--text);
   margin-right: .4rem;
 }
 .Outbox ol {
@@ -998,15 +975,15 @@ h2 {
 }
 .Outbox li::before {
   content: '→ ';
-  color: var(--soft);
+  color: var(--muted);
 }
 .Outbox li.is-sent::before {
   content: '✓ ';
-  color: var(--meadow);
+  color: var(--accent);
 }
 .Outbox li.is-refused::before {
   content: '✗ ';
-  color: var(--brick);
+  color: var(--negative);
 }
 /* The letter was sent: a notice in the corner of the window, which goes
    by itself. */
@@ -1019,9 +996,9 @@ h2 {
   gap: .15rem;
   max-width: min(22rem, calc(100vw - 2.4rem));
   padding: .7rem 1rem .75rem 2.4rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--plate);
+  background: var(--card);
   box-shadow: 0 12px 30px -14px rgba(43, 43, 51, .4);
   font-size: .875rem;
   animation: toast 6s both;
@@ -1034,14 +1011,14 @@ h2 {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--meadow);
+  background: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
 .Toast b {
   font-weight: 500;
 }
 .Toast span {
-  color: var(--soft);
+  color: var(--muted);
 }
 @keyframes toast {
   0% {
@@ -1108,11 +1085,11 @@ h2 {
 .Beats li > b {
   display: block;
   font: 500 .875rem/1.3 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
   transition: color .3s;
 }
 .Beats li > :not(.Dot, b, code) {
-  color: var(--soft);
+  color: var(--muted);
   font-size: .90625rem;
   line-height: 1.5;
   margin-top: .2rem;
@@ -1126,7 +1103,7 @@ h2 {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--line);
+  color: var(--link);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -1136,9 +1113,9 @@ h2 {
   top: 1.1rem;
   width: 9px;
   height: 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   transition: background .3s, border-color .3s, box-shadow .3s;
 }
 .Beats li.on {
@@ -1146,18 +1123,18 @@ h2 {
     2.6rem no-repeat;
 }
 .Beats li.on .Dot {
-  background: var(--meadow);
-  border-color: var(--meadow);
+  background: var(--accent);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
 .Beats li.on > b {
-  color: var(--ink);
+  color: var(--text);
 }
 /* The doors' desk: a column of windows left of the drawing, one slot for
    each beat (doors.ts DESK), every window that has run open in its slot. */
 .Doors {
   grid-template-columns: minmax(0, .8fr) minmax(0, 1.5fr);
-  --card: color-mix(in srgb, var(--paper), #fff 60%);
+  --pane: color-mix(in srgb, var(--bg), #fff 60%);
 }
 .Doors_Desk {
   position: relative;
@@ -1180,13 +1157,13 @@ h2 {
   height: 100%;
 }
 .Doors_Drawing .Diagram_Title {
-  font-family: var(--sans);
+  font-family: var(--font);
 }
 .Doors_Drawing .is-told > .Diagram_Fill {
-  fill: color-mix(in srgb, var(--meadow) 14%, var(--plate));
+  fill: color-mix(in srgb, var(--accent) 14%, var(--card));
 }
 .Doors_Drawing .is-told .Diagram_Stroke {
-  stroke: var(--meadow);
+  stroke: var(--accent);
   stroke-width: 2;
 }
 .Doors_Wire {
@@ -1195,7 +1172,7 @@ h2 {
 }
 .Doors_Wire path {
   fill: none;
-  stroke: var(--meadow);
+  stroke: var(--accent);
   stroke-width: 1.4;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -1222,15 +1199,15 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--card);
-  color: var(--ink);
+  background: var(--pane);
+  color: var(--text);
   box-shadow: 0 1px 2px rgba(43, 43, 51, .06), 0 6px 18px rgba(43, 43, 51, .1);
 }
 .Window.is-last {
-  border-color: var(--meadow);
-  box-shadow: 0 0 0 1px var(--meadow), 0 8px 22px rgba(43, 43, 51, .16);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 22px rgba(43, 43, 51, .16);
 }
 /* The newest window comes in as the reader scrolls past its beat, and goes
    back out as they scroll back (`--p`, told.ts). */
@@ -1256,19 +1233,20 @@ h2 {
   mask-image: linear-gradient(#000 calc(100% - 1.4em), transparent);
 }
 .Window .is-fault {
-  color: var(--brick);
+  color: var(--negative);
 }
 
 /* The terminal: dark glass, the command after its prompt. */
 .Term,
 .Tui {
+  color-scheme: dark;
   border-color: transparent;
-  background: var(--term);
-  color: var(--term-ink);
+  background: var(--bg);
+  color: var(--text);
 }
 .Term .is-fault,
 .Tui .is-fault {
-  color: #e5a888;
+  color: var(--negative);
 }
 .Term_Bar {
   display: flex;
@@ -1298,39 +1276,40 @@ h2 {
   color: #faf6ee;
 }
 .Term_In span {
-  color: var(--moss);
+  color: var(--accent);
 }
 
 /* Your agent's chat: the tool it called as a card, its arguments and what
    came back, and the box you'd reply in. */
 .Chat {
-  font-family: var(--sans);
+  font-family: var(--font);
 }
 .Chat_Head {
   display: flex;
   align-items: center;
   gap: .5em;
   padding: .5em .8em;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
 }
 .Chat_Face {
   flex: none;
   width: 1.3em;
   height: 1.3em;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--moss), var(--meadow));
+  background: radial-gradient(circle at 35% 35%,
+    color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
 }
 .Chat_Head b {
   font-weight: 500;
 }
 .Chat_Head span:last-child {
-  color: var(--soft);
+  color: var(--muted);
 }
 .Chat_Call {
   margin: .6em .8em;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--paper);
+  background: var(--bg);
   font-family: var(--mono);
 }
 .Chat_Tool {
@@ -1338,21 +1317,21 @@ h2 {
   align-items: center;
   gap: .45em;
   padding: .35em .6em;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
 }
 .Chat_Tool svg {
   flex: none;
   width: 1.05em;
   height: 1.05em;
   fill: none;
-  stroke: var(--meadow);
+  stroke: var(--accent);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .Chat_Tool code {
   font: 500 1em var(--mono);
-  color: var(--ink);
+  color: var(--text);
 }
 .Chat_Call dl {
   display: grid;
@@ -1362,7 +1341,7 @@ h2 {
   padding: .35em .6em;
 }
 .Chat_Call dt {
-  color: var(--soft);
+  color: var(--muted);
 }
 .Chat_Call dd {
   margin: 0;
@@ -1372,8 +1351,8 @@ h2 {
 }
 .Chat_Result {
   padding: .35em .6em .45em;
-  border-top: 1px dashed var(--rule);
-  color: var(--soft);
+  border-top: 1px dashed var(--border);
+  color: var(--muted);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1381,36 +1360,36 @@ h2 {
   flex: none;
   margin: 0 .8em .6em;
   padding: .35em .8em;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--soft);
+  color: var(--muted);
   opacity: .75;
 }
 
 /* The web canvas in a browser: the address bar, the entity the call changed
    as the canvas draws it, and the call in the status line. */
 .Page {
-  font-family: var(--sans);
+  font-family: var(--font);
 }
 .Page_Bar {
   display: flex;
   align-items: center;
   gap: .7em;
   padding: .4em .7em;
-  border-bottom: 1px solid var(--rule);
-  background: color-mix(in srgb, var(--paper), var(--line) 5%);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg), var(--border2) 5%);
 }
 .Page_Nav {
-  color: var(--soft);
+  color: var(--muted);
 }
 .Page_Address {
   flex: 1;
   padding: .1em .8em;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--card);
+  background: var(--pane);
   font-family: var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Page_Body {
   padding: .8em 1em;
@@ -1427,7 +1406,7 @@ h2 {
 .Page_Id {
   flex: none;
   font-family: var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Page_Box {
   position: relative;
@@ -1435,12 +1414,12 @@ h2 {
   align-self: center;
   width: 1.05em;
   height: 1.05em;
-  border: 1.5px solid var(--line);
+  border: 1.5px solid var(--border2);
   border-radius: 3px;
 }
 .Page_Box.is-on {
-  border-color: var(--meadow);
-  background: var(--meadow);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 .Page_Box.is-on::after {
   content: '';
@@ -1449,13 +1428,13 @@ h2 {
   top: 6%;
   width: 28%;
   height: 58%;
-  border: solid var(--paper);
+  border: solid var(--bg);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 .Page_State {
   margin-top: .4em;
-  color: var(--soft);
+  color: var(--muted);
 }
 .Page_Choices {
   display: grid;
@@ -1466,23 +1445,23 @@ h2 {
 }
 .Page_Choices li {
   padding: .3em .7em;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--soft);
+  color: var(--muted);
 }
 .Page_Choices li.is-on {
-  border-color: var(--meadow);
-  background: color-mix(in srgb, var(--moss), transparent 80%);
-  color: var(--ink);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
 }
 .Page_Comment {
   margin-top: .6em;
   padding: .45em .7em;
-  border-left: 2px solid var(--moss);
-  background: color-mix(in srgb, var(--moss), transparent 88%);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, #fff);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .Page_Comment span {
-  color: var(--soft);
+  color: var(--muted);
   font-family: var(--mono);
 }
 .Page_Comment p {
@@ -1491,9 +1470,9 @@ h2 {
 .Page_Status {
   flex: none;
   padding: .25em .8em;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   font-family: var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 
 /* The letter: who it is from and to under a stamp, what it says, and each
@@ -1502,7 +1481,7 @@ h2 {
   position: relative;
   padding: .8em 1em .7em;
   border-radius: 2px;
-  font-family: var(--sans);
+  font-family: var(--font);
 }
 .Letter_Stamp {
   position: absolute;
@@ -1510,9 +1489,9 @@ h2 {
   right: .8em;
   width: 2.2em;
   height: 2.6em;
-  border: 2px dotted var(--card);
-  outline: 1px solid var(--moss);
-  background: color-mix(in srgb, var(--moss), transparent 55%);
+  border: 2px dotted var(--pane);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, #fff);
+  background: color-mix(in srgb, var(--accent) 19%, transparent);
 }
 .Letter_Head {
   display: grid;
@@ -1520,10 +1499,10 @@ h2 {
   gap: .05em .7em;
   margin: 0 3.4em .5em 0;
   padding-bottom: .5em;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
 }
 .Letter_Head dt {
-  color: var(--soft);
+  color: var(--muted);
 }
 .Letter_Head dd {
   margin: 0;
@@ -1546,10 +1525,10 @@ h2 {
 .Letter_Tries {
   margin: auto 0 0;
   padding: .4em 0 0;
-  border-top: 1px dashed var(--rule);
+  border-top: 1px dashed var(--border);
   list-style: none;
   font-family: var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 
 /* A new session's terminal UI: inverse bars above and below, and the
@@ -1562,8 +1541,8 @@ h2 {
   padding: .15em .7em;
 }
 .Tui_Bar {
-  background: var(--moss);
-  color: var(--term);
+  background: var(--accent);
+  color: var(--bg);
 }
 .Tui_Bar b {
   font-weight: 500;
@@ -1576,7 +1555,7 @@ h2 {
   word-break: break-word;
 }
 .Tui_Screen .is-head {
-  color: var(--moss);
+  color: var(--accent);
 }
 .Tui_Foot {
   background: rgba(236, 228, 212, .1);
@@ -1591,25 +1570,25 @@ h2 {
   margin-top: .8rem;
 }
 .Declared {
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(252, 249, 243, .6);
 }
 .Declared_Bar {
   padding: 4px 12px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font: 400 .75rem/1.5 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Declared_Bar b {
   font-weight: 500;
-  color: var(--ink);
+  color: var(--text);
 }
 .Declared pre {
   margin: 0;
   padding: 8px 12px;
   font: 400 .75rem/1.55 var(--mono);
-  color: var(--ink);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1617,7 +1596,7 @@ h2 {
   margin: 0;
   padding: 0 12px 8px;
   font-size: .8125rem;
-  color: var(--soft);
+  color: var(--muted);
 }
 /* ---------------------------------------------------------------- parts
    Below the bands: a numbered heading on the left, what the part holds on
@@ -1629,7 +1608,7 @@ h2 {
   gap: clamp(1.5rem, 4.5vw, 4.5rem);
   margin: 0 var(--gutter);
   padding: 5rem 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
 }
 .Part::before,
 .Part::after {
@@ -1638,7 +1617,7 @@ h2 {
   top: -5px;
   width: 1px;
   height: 9px;
-  background: var(--line);
+  background: var(--border2);
 }
 .Part::before {
   left: 0;
@@ -1653,7 +1632,7 @@ h2 {
 }
 .Part_Head p,
 .Part_Body p {
-  color: var(--soft);
+  color: var(--muted);
   max-width: 36rem;
 }
 .Bubble {
@@ -1663,9 +1642,9 @@ h2 {
   width: 40px;
   height: 40px;
   margin-bottom: 1.1rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   font: 500 .875rem/1 var(--mono);
 }
 .Bubble::after {
@@ -1675,7 +1654,7 @@ h2 {
   top: 50%;
   width: 44px;
   height: 1px;
-  background: var(--rule);
+  background: var(--border);
 }
 .Part_Body > ul {
   display: grid;
@@ -1687,14 +1666,14 @@ h2 {
 }
 .Part_Body > ul li {
   padding-top: .8rem;
-  border-top: 1px solid var(--line);
-  color: var(--soft);
+  border-top: 1px solid var(--border2);
+  color: var(--muted);
   font-size: .95rem;
 }
 .Part_Body > ul strong {
   display: block;
   margin-bottom: .3rem;
-  color: var(--ink);
+  color: var(--text);
   font-weight: 500;
 }
 .Part_Lines .Copy {
@@ -1706,7 +1685,7 @@ h2 {
   padding: 0;
   list-style: none;
   counter-reset: n;
-  border-left: 1px solid var(--rule);
+  border-left: 1px solid var(--border);
 }
 .Part_List li {
   position: relative;
@@ -1725,15 +1704,15 @@ h2 {
   place-items: center;
   width: 29px;
   height: 29px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   font: 500 .75rem/1 var(--mono);
 }
 .Part_List h3,
 .Part_Body > h3 {
   margin: .1rem 0 .7rem;
-  font: 500 1.06rem/1.3 var(--sans);
+  font: 500 1.06rem/1.3 var(--font);
 }
 .Part_Body > h3 {
   margin-top: 2.5rem;
@@ -1745,17 +1724,17 @@ h2 {
 }
 .Part_Body th {
   padding-bottom: .55rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border2);
   text-align: left;
   font: 500 .75rem/1 var(--mono);
 }
 .Part_Body tr {
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
 }
 .Part_Body td {
   padding: .5rem 0;
   vertical-align: top;
-  color: var(--soft);
+  color: var(--muted);
   font-size: .875rem;
   line-height: 1.45;
 }
@@ -1770,16 +1749,16 @@ h2 {
 }
 .File {
   margin: .8rem 0;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--plate);
+  background: var(--card);
   overflow: hidden;
 }
 .File_Bar {
   padding: .45rem .9rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font: .75rem var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .File pre {
   margin: 0;
@@ -1792,9 +1771,9 @@ h2 {
   grid-template-columns: 30vw minmax(0, 1fr);
   gap: 1px;
   margin: 3rem var(--gutter) 2.5rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--rule);
+  background: var(--border);
   overflow: hidden;
 }
 .Block_Sign,
@@ -1802,7 +1781,7 @@ h2 {
   min-width: 0;
   margin: 0;
   padding: .9rem 1rem;
-  background: var(--paper);
+  background: var(--bg);
 }
 .Block_Sign {
   display: flex;
@@ -1824,13 +1803,13 @@ h2 {
   font: 500 1.125rem/1.2 var(--mono);
 }
 .Block_Sign span {
-  color: var(--soft);
+  color: var(--muted);
   font-size: .875rem;
 }
 .Block dt {
   margin-bottom: .5rem;
   font: .6875rem/1 var(--mono);
-  color: var(--soft);
+  color: var(--muted);
 }
 .Block dd {
   margin: 0;
